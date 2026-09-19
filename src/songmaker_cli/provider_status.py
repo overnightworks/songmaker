@@ -46,7 +46,10 @@ def provider_snapshots() -> dict[str, ProviderSnapshot]:
 
 def refresh_provider_snapshot(provider: str) -> ProviderSnapshot:
     """Refresh one provider's reachability and model catalog."""
-    routes = {route: probe_provider_route(provider, route) for route in ProviderRoute}
+    routes = {
+        route: probe_provider_route(provider, route)
+        for route in ProviderRoute
+    }
     snapshot = ProviderSnapshot(
         probed_at=datetime.now(timezone.utc),
         routes=routes,

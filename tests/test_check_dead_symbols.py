@@ -1,4 +1,4 @@
-"""Behavior of the production-only, external-reference gate."""
+"""Behavior of the production-reference gate."""
 
 from __future__ import annotations
 
@@ -40,18 +40,19 @@ def run_gate(tmp_path, monkeypatch, capsys):
         ("ORPHAN: int = 1", "value = ORPHAN"),
     ],
 )
-def test_same_file_and_test_references_do_not_keep_a_symbol_alive(
-    run_gate, definition, same_file_use
+@pytest.mark.parametrize("used_locally", [True, False])
+def test_same_file_use_keeps_alive_but_test_only_use_does_not(
+    run_gate, definition, same_file_use, used_locally
 ):
     status, output = run_gate(
         {
-            "owner.py": f"{definition}\n{same_file_use}\n",
+            "owner.py": f"{definition}\n{same_file_use if used_locally else ''}\n",
             "tests/consumer.py": "from owner import orphan, ORPHAN\n",
             "test_owner.py": "from owner import orphan, ORPHAN\n",
         }
     )
-    assert status == 1
-    assert "owner.py:" in output
+    assert status == (0 if used_locally else 1)
+    assert ("owner.py:" in output) is not used_locally
 
 
 @pytest.mark.parametrize(
@@ -87,7 +88,7 @@ def test_allow_entry_is_exact_and_requires_a_reason(run_gate):
     )
     assert status == 1
     assert "other.py:endpoint" in output
-    assert "No external production reference: routes.py:endpoint" not in output
+    assert "No production reference: routes.py:endpoint" not in output
 
 
 @pytest.mark.parametrize("allow", ["owner.py:unused", "owner.py:unused # ", "*:unused # wildcard"])
@@ -119,3 +120,14 @@ def test_duplicate_allow_entries_fail(run_gate):
     )
     assert status == 1
     assert "expected unique path:name # reason" in output
+
+
+@pytest.mark.parametrize("use", ['"unused"', "text = 'unused'", "getattr(owner, 'unused')"])
+def test_same_file_strings_and_docstrings_do_not_keep_a_symbol_alive(run_gate, use):
+    status, output = run_gate({"owner.py": f"{use}\ndef unused(): pass\n"})
+    assert status == 1
+    assert "owner.py:unused" in output
+
+
+def test_same_file_attribute_reference_keeps_a_symbol_alive(run_gate):
+    assert run_gate({"owner.py": "def alive(): pass\nowner.alive()\n"})[0] == 0

@@ -92,82 +92,46 @@ def cover_media_type(variant: str, cover_key: str) -> str:
 
 def album_cover_file_exists(audio_dir: Path, album_id: str, cover_key: str | None) -> bool:
     return _cover_file_exists(
-        audio_dir,
-        COVER_DIRNAME,
-        album_id,
-        cover_key,
-        COVER_INVALID_ALBUM_ID,
+        audio_dir, COVER_DIRNAME, album_id, cover_key, COVER_INVALID_ALBUM_ID,
     )
 
 
 def song_cover_file_exists(audio_dir: Path, song_id: str, cover_key: str | None) -> bool:
     return _cover_file_exists(
-        audio_dir,
-        SONG_COVER_DIRNAME,
-        song_id,
-        cover_key,
-        COVER_INVALID_SONG_ID,
+        audio_dir, SONG_COVER_DIRNAME, song_id, cover_key, COVER_INVALID_SONG_ID,
     )
 
 
 def playlist_cover_file_exists(
-    audio_dir: Path,
-    playlist_id: str,
-    cover_key: str | None,
+    audio_dir: Path, playlist_id: str, cover_key: str | None,
 ) -> bool:
     return _cover_file_exists(
-        audio_dir,
-        PLAYLIST_COVER_DIRNAME,
-        playlist_id,
-        cover_key,
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, cover_key,
         COVER_INVALID_PLAYLIST_ID,
     )
 
 
 def resolve_cover_file(
-    audio_dir: Path,
-    album_id: str,
-    cover_key: str | None,
-    variant: str,
+    audio_dir: Path, album_id: str, cover_key: str | None, variant: str,
 ) -> Path:
     return _resolve_cover_file(
-        audio_dir,
-        COVER_DIRNAME,
-        album_id,
-        cover_key,
-        variant,
-        COVER_INVALID_ALBUM_ID,
+        audio_dir, COVER_DIRNAME, album_id, cover_key, variant, COVER_INVALID_ALBUM_ID,
     )
 
 
 def resolve_song_cover_file(
-    audio_dir: Path,
-    song_id: str,
-    cover_key: str | None,
-    variant: str,
+    audio_dir: Path, song_id: str, cover_key: str | None, variant: str,
 ) -> Path:
     return _resolve_cover_file(
-        audio_dir,
-        SONG_COVER_DIRNAME,
-        song_id,
-        cover_key,
-        variant,
-        COVER_INVALID_SONG_ID,
+        audio_dir, SONG_COVER_DIRNAME, song_id, cover_key, variant, COVER_INVALID_SONG_ID,
     )
 
 
 def resolve_playlist_cover_file(
-    audio_dir: Path,
-    playlist_id: str,
-    cover_key: str | None,
-    variant: str,
+    audio_dir: Path, playlist_id: str, cover_key: str | None, variant: str,
 ) -> Path:
     return _resolve_cover_file(
-        audio_dir,
-        PLAYLIST_COVER_DIRNAME,
-        playlist_id,
-        cover_key,
-        variant,
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, cover_key, variant,
         COVER_INVALID_PLAYLIST_ID,
     )
 
@@ -206,30 +170,21 @@ def decode_cover_image(payload: bytes) -> tuple[Image.Image, str]:
 
 def write_album_cover(audio_dir: Path, album_id: str, payload: bytes) -> str:
     return write_cover(
-        audio_dir,
-        COVER_DIRNAME,
-        album_id,
-        payload,
+        audio_dir, COVER_DIRNAME, album_id, payload,
         invalid_id_message=COVER_INVALID_ALBUM_ID,
     )
 
 
 def write_song_cover(audio_dir: Path, song_id: str, payload: bytes) -> str:
     return write_cover(
-        audio_dir,
-        SONG_COVER_DIRNAME,
-        song_id,
-        payload,
+        audio_dir, SONG_COVER_DIRNAME, song_id, payload,
         invalid_id_message=COVER_INVALID_SONG_ID,
     )
 
 
 def write_playlist_cover(audio_dir: Path, playlist_id: str, payload: bytes) -> str:
     return write_cover(
-        audio_dir,
-        PLAYLIST_COVER_DIRNAME,
-        playlist_id,
-        payload,
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id, payload,
         invalid_id_message=COVER_INVALID_PLAYLIST_ID,
     )
 
@@ -250,14 +205,10 @@ def write_cover(
     covers_root = parent.resolve()
     final = _confine_cover_path(final_raw, covers_root, invalid_id_message)
     old = _confine_cover_path(
-        parent / _cover_old_name(entity_id),
-        covers_root,
-        invalid_id_message,
+        parent / _cover_old_name(entity_id), covers_root, invalid_id_message,
     )
     staging = _confine_cover_path(
-        parent / _cover_staging_name(entity_id),
-        covers_root,
-        invalid_id_message,
+        parent / _cover_staging_name(entity_id), covers_root, invalid_id_message,
     )
     _restore_cover_if_orphaned(final, old, covers_root, invalid_id_message)
     staging.mkdir()
@@ -281,37 +232,25 @@ def write_cover(
 
 def remove_album_cover_files(audio_dir: Path, album_id: str) -> None:
     remove_cover_files(
-        audio_dir,
-        COVER_DIRNAME,
-        album_id,
-        invalid_id_message=COVER_INVALID_ALBUM_ID,
+        audio_dir, COVER_DIRNAME, album_id, invalid_id_message=COVER_INVALID_ALBUM_ID,
     )
 
 
 def remove_song_cover_files(audio_dir: Path, song_id: str) -> None:
     remove_cover_files(
-        audio_dir,
-        SONG_COVER_DIRNAME,
-        song_id,
-        invalid_id_message=COVER_INVALID_SONG_ID,
+        audio_dir, SONG_COVER_DIRNAME, song_id, invalid_id_message=COVER_INVALID_SONG_ID,
     )
 
 
 def remove_playlist_cover_files(audio_dir: Path, playlist_id: str) -> None:
     remove_cover_files(
-        audio_dir,
-        PLAYLIST_COVER_DIRNAME,
-        playlist_id,
+        audio_dir, PLAYLIST_COVER_DIRNAME, playlist_id,
         invalid_id_message=COVER_INVALID_PLAYLIST_ID,
     )
 
 
 def remove_cover_files(
-    audio_dir: Path,
-    dirname: str,
-    entity_id: str,
-    *,
-    invalid_id_message: str,
+    audio_dir: Path, dirname: str, entity_id: str, *, invalid_id_message: str,
 ) -> None:
     try:
         final = _cover_entity_dir(audio_dir, dirname, entity_id, invalid_id_message)
@@ -343,11 +282,7 @@ def _cover_file_exists(
         return False
     try:
         path = _resolve_cover_file(
-            audio_dir,
-            dirname,
-            entity_id,
-            cover_key,
-            COVER_VARIANT_ORIGINAL,
+            audio_dir, dirname, entity_id, cover_key, COVER_VARIANT_ORIGINAL,
             invalid_id_message,
         )
     except (CoverRejectedError, OSError):
@@ -369,12 +304,7 @@ def _resolve_cover_file(
         raise FileNotFoundError
     try:
         path = _cover_variant_path(
-            audio_dir,
-            dirname,
-            entity_id,
-            cover_key,
-            variant,
-            invalid_id_message,
+            audio_dir, dirname, entity_id, cover_key, variant, invalid_id_message,
         ).resolve()
     except CoverRejectedError as exc:
         raise FileNotFoundError from exc
@@ -389,10 +319,7 @@ def _resolve_cover_file(
 
 
 def _cover_entity_dir(
-    audio_dir: Path,
-    dirname: str,
-    entity_id: str,
-    invalid_id_message: str,
+    audio_dir: Path, dirname: str, entity_id: str, invalid_id_message: str,
 ) -> Path:
     _require_safe_cover_id(entity_id, invalid_id_message)
     return audio_dir / dirname / entity_id
@@ -446,10 +373,7 @@ def _save_variants(dest: Path, image: Image.Image, fmt: str) -> None:
     original_path = dest / original_name
     if fmt == COVER_FORMAT_JPEG:
         image.save(
-            original_path,
-            format="JPEG",
-            quality=COVER_JPEG_QUALITY,
-            optimize=True,
+            original_path, format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
         )
     else:
         image.save(original_path, format="PNG", optimize=True)
@@ -457,15 +381,11 @@ def _save_variants(dest: Path, image: Image.Image, fmt: str) -> None:
     detail = _square_derivative(image, COVER_DETAIL_MAX_EDGE)
     card.save(
         dest / f"{COVER_VARIANT_CARD}{COVER_JPEG_EXTENSION}",
-        format="JPEG",
-        quality=COVER_JPEG_QUALITY,
-        optimize=True,
+        format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
     )
     detail.save(
         dest / f"{COVER_VARIANT_DETAIL}{COVER_JPEG_EXTENSION}",
-        format="JPEG",
-        quality=COVER_JPEG_QUALITY,
-        optimize=True,
+        format="JPEG", quality=COVER_JPEG_QUALITY, optimize=True,
     )
 
 
@@ -509,10 +429,7 @@ def _confine_cover_path(path: Path, covers_root: Path, invalid_id_message: str) 
 
 
 def _rename_confined(
-    source: Path,
-    dest: Path,
-    covers_root: Path,
-    invalid_id_message: str,
+    source: Path, dest: Path, covers_root: Path, invalid_id_message: str,
 ) -> None:
     confined_source = _confine_cover_path(source, covers_root, invalid_id_message)
     confined_dest = _confine_cover_path(dest, covers_root, invalid_id_message)
@@ -520,10 +437,7 @@ def _rename_confined(
 
 
 def _restore_cover_if_orphaned(
-    final: Path,
-    old: Path,
-    covers_root: Path,
-    invalid_id_message: str,
+    final: Path, old: Path, covers_root: Path, invalid_id_message: str,
 ) -> None:
     if not final.exists() and old.exists():
         _rename_confined(old, final, covers_root, invalid_id_message)
@@ -535,10 +449,7 @@ def _discard_leftover_cover_old(final: Path, old: Path, covers_root: Path) -> No
 
 
 def _rmtree_confined_cover_dir(
-    path: Path,
-    covers_root: Path,
-    *,
-    ignore_errors: bool = False,
+    path: Path, covers_root: Path, *, ignore_errors: bool = False,
 ) -> None:
     try:
         resolved = path.resolve()

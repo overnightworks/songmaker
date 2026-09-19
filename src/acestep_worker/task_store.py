@@ -98,7 +98,9 @@ class TaskStore:
         )
 
     async def complete(self, task_id: str, result: TaskResult) -> None:
-        await self._update(task_id, state="done", progress=1.0, result=result, terminal=True)
+        await self._update(
+            task_id, state="done", progress=1.0, result=result, terminal=True
+        )
 
     async def fail(self, task_id: str, message: str) -> None:
         await self._update(task_id, state="error", error=message, terminal=True)

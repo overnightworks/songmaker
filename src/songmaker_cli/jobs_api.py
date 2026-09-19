@@ -127,9 +127,7 @@ def _fetch_job_response(ctx: AppContext, job_id: str) -> JobResponse | None:
 
 
 async def _fetch_job_response_before(
-    ctx: AppContext,
-    job_id: str,
-    deadline: float,
+    ctx: AppContext, job_id: str, deadline: float,
 ) -> JobResponse | None:
     """Bound one poll to the remaining stream lifetime.
 
@@ -206,7 +204,6 @@ def _get_job_stream_lease_limiter(request: Request) -> RedisConcurrentLeaseLimit
             max_global=settings.job_stream_lease_max_global,
             lease_seconds=JOB_STREAM_LEASE_SECONDS,
         )
-
     return get_cached_limiter(request, "_job_stream_lease_limiter", _build)
 
 

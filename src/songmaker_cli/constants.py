@@ -23,7 +23,9 @@ JOB_ERROR_JUDGE_FAILED: Final[str] = "Lyrical coherence judge failed"
 JOB_ERROR_SONG_NOT_FOUND: Final[str] = "Song not found"
 JOB_ERROR_VERSION_NOT_FOUND: Final[str] = "Version not found"
 JOB_ERROR_REFERENCE_AUDIO_NOT_FOUND: Final[str] = "Reference audio not found"
-JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = "Selected voice is unavailable for this generation"
+JOB_ERROR_USER_LORA_UNAVAILABLE: Final[str] = (
+    "Selected voice is unavailable for this generation"
+)
 JOB_ERROR_COVER_CLI_LOGIN: Final[str] = (
     "Codex CLI is not logged in. Sign in on the operator host, then try again."
 )
@@ -52,22 +54,18 @@ JOB_ERROR_GENERATION_CANCELLED: Final[str] = (
 # The two PWA icon files SvelteKit's static build emits. Shared by
 # server.py (SPA-fallback 404 exclusion, see `_pwa_exact_paths`) and
 # rate_limit.py (per-IP budget exemption) so the two never drift.
-PWA_ICON_PATHS: Final[frozenset[str]] = frozenset(
-    {
-        "/icon-192.png",
-        "/icon-512.png",
-    }
-)
+PWA_ICON_PATHS: Final[frozenset[str]] = frozenset({
+    "/icon-192.png",
+    "/icon-512.png",
+})
 
-MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset(
-    {
-        "turbo",
-        "sft",
-        "xl-turbo",
-        "xl-sft",
-        "xl-base",
-    }
-)
+MODEL_AVAILABLE_MODES: Final[frozenset[str]] = frozenset({
+    "turbo",
+    "sft",
+    "xl-turbo",
+    "xl-sft",
+    "xl-base",
+})
 MODEL_DEFAULT_MODE: Final[str] = "sft"
 LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
@@ -85,25 +83,21 @@ PAGE_ADMIN_MAX_LIMIT = 500
 LIBRARY_SORT_NEWEST: Final[str] = "newest"
 LIBRARY_SORT_OLDEST: Final[str] = "oldest"
 LIBRARY_SORT_TITLE: Final[str] = "title"
-LIBRARY_SORTS: Final[frozenset[str]] = frozenset(
-    {
-        LIBRARY_SORT_NEWEST,
-        LIBRARY_SORT_OLDEST,
-        LIBRARY_SORT_TITLE,
-    }
-)
+LIBRARY_SORTS: Final[frozenset[str]] = frozenset({
+    LIBRARY_SORT_NEWEST,
+    LIBRARY_SORT_OLDEST,
+    LIBRARY_SORT_TITLE,
+})
 LIBRARY_ITEM_ALBUM: Final[str] = "album"
 LIBRARY_ITEM_SONG: Final[str] = "song"
 LIBRARY_ITEM_GENERATION: Final[str] = "generation"
 LIBRARY_ITEM_PLAYLIST: Final[str] = "playlist"
-SHARE_INVENTORY_TYPES: Final[frozenset[str]] = frozenset(
-    {
-        LIBRARY_ITEM_ALBUM,
-        LIBRARY_ITEM_SONG,
-        LIBRARY_ITEM_GENERATION,
-        LIBRARY_ITEM_PLAYLIST,
-    }
-)
+SHARE_INVENTORY_TYPES: Final[frozenset[str]] = frozenset({
+    LIBRARY_ITEM_ALBUM,
+    LIBRARY_ITEM_SONG,
+    LIBRARY_ITEM_GENERATION,
+    LIBRARY_ITEM_PLAYLIST,
+})
 SHARE_PUBLIC_PATH_ALBUM: Final[str] = "/share/{slug}"
 SHARE_PUBLIC_PATH_SONG: Final[str] = "/share/song/{slug}"
 SHARE_PUBLIC_PATH_GENERATION: Final[str] = "/share/gen/{slug}"
@@ -217,13 +211,11 @@ COWRITER_MAX_SUMMARY_CHARS = 12_000
 # and scoring_model has no further effect. The co-writer reads its live
 # catalog instead (agent_providers/catalog.py). Retire this list with chat_api.py's
 # cleanup.
-MODEL_ALLOWED_CLAUDE = frozenset(
-    {
-        "claude-opus-4-6",
-        "claude-sonnet-4-6",
-        "claude-haiku-4-5-20251001",
-    }
-)
+MODEL_ALLOWED_CLAUDE = frozenset({
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5-20251001",
+})
 
 # Whisper hallucination detection
 HALLUCINATION_MIN_LINES = 5
@@ -328,7 +320,8 @@ SCORE_BACKFILL_TRACKED_SET_KEY = f"{REDIS_KEY_PREFIX}:score_backfill:tracked"
 
 # Startup error messages
 REDIS_STARTUP_ERROR = (
-    "Cannot connect to Redis at {url}. Redis is required — set REDIS_URL in .env or start Redis."
+    "Cannot connect to Redis at {url}. "
+    "Redis is required — set REDIS_URL in .env or start Redis."
 )
 # Prometheus metric names
 PROM_HTTP_REQUESTS_TOTAL = "songmaker_http_requests_total"
@@ -380,15 +373,13 @@ SETTING_CHAT_RATE_LIMIT = "chat_rate_limit"
 SETTING_MAX_QUEUE_DEPTH = "max_queue_depth"
 SETTING_MAX_USER_ACTIVE_JOBS = "max_user_active_jobs"
 
-RATE_LIMIT_SETTING_KEYS = frozenset(
-    {
-        SETTING_GENERATION_RATE_LIMIT,
-        SETTING_SCORING_RATE_LIMIT,
-        SETTING_CHAT_RATE_LIMIT,
-        SETTING_MAX_QUEUE_DEPTH,
-        SETTING_MAX_USER_ACTIVE_JOBS,
-    }
-)
+RATE_LIMIT_SETTING_KEYS = frozenset({
+    SETTING_GENERATION_RATE_LIMIT,
+    SETTING_SCORING_RATE_LIMIT,
+    SETTING_CHAT_RATE_LIMIT,
+    SETTING_MAX_QUEUE_DEPTH,
+    SETTING_MAX_USER_ACTIVE_JOBS,
+})
 
 # Response compression
 GZIP_MINIMUM_SIZE_BYTES: Final[int] = 1024
@@ -510,13 +501,11 @@ COVER_UPLOAD_BODY_MAX_BYTES: Final[int] = COVER_MAX_BYTES + MULTIPART_ENVELOPE_M
 COVER_VARIANT_ORIGINAL: Final[str] = "original"
 COVER_VARIANT_CARD: Final[str] = "card"
 COVER_VARIANT_DETAIL: Final[str] = "detail"
-COVER_VARIANTS: Final[frozenset[str]] = frozenset(
-    {
-        COVER_VARIANT_ORIGINAL,
-        COVER_VARIANT_CARD,
-        COVER_VARIANT_DETAIL,
-    }
-)
+COVER_VARIANTS: Final[frozenset[str]] = frozenset({
+    COVER_VARIANT_ORIGINAL,
+    COVER_VARIANT_CARD,
+    COVER_VARIANT_DETAIL,
+})
 COVER_KEY_JPEG: Final[str] = "jpg"
 COVER_KEY_PNG: Final[str] = "png"
 COVER_KEYS: Final[frozenset[str]] = frozenset({COVER_KEY_JPEG, COVER_KEY_PNG})
@@ -567,14 +556,12 @@ class JobStatus(StrEnum):
 
 
 JOB_ACTIVE_STATUSES = frozenset({JobStatus.QUEUED, JobStatus.RUNNING})
-JOB_TERMINAL_STATUSES = frozenset(
-    {
-        JobStatus.COMPLETED,
-        JobStatus.FAILED,
-        JobStatus.PARTIAL,
-        JobStatus.CANCELLED,
-    }
-)
+JOB_TERMINAL_STATUSES = frozenset({
+    JobStatus.COMPLETED,
+    JobStatus.FAILED,
+    JobStatus.PARTIAL,
+    JobStatus.CANCELLED,
+})
 
 
 class JobType(StrEnum):
@@ -777,14 +764,12 @@ class LoraStatus(StrEnum):
     FAILED = "failed"
 
 
-LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset(
-    {
-        LoraStatus.QUEUED,
-        LoraStatus.PREPROCESSING,
-        LoraStatus.TRAINING,
-        LoraStatus.EXPORTING,
-    }
-)
+LORA_ACTIVE_STATUSES: Final[frozenset[LoraStatus]] = frozenset({
+    LoraStatus.QUEUED,
+    LoraStatus.PREPROCESSING,
+    LoraStatus.TRAINING,
+    LoraStatus.EXPORTING,
+})
 
 
 class LimiterFailurePolicy(StrEnum):

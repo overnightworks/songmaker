@@ -52,10 +52,10 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cover_suggestions import (
     CoverSuggestionRequestError,
-    _utc_day_start,
     remove_cover_suggestion_files,
     request_cover_suggestions,
     resolve_suggestion_png,
+    utc_day_start,
 )
 from songmaker_cli.covers import (
     COVER_RESPONSE_HEADERS,
@@ -129,29 +129,20 @@ def api_list_albums(
     uid = owner_filter(user)
     total = count_albums(session, user_id=uid, q=query, archived=archived)
     albums = list_albums(
-        session,
-        user_id=uid,
-        offset=page.offset,
-        limit=page.limit,
-        q=query,
-        sort=sort,
-        archived=archived,
+        session, user_id=uid, offset=page.offset, limit=page.limit,
+        q=query, sort=sort, archived=archived,
     )
     picked_counts = count_picked_songs_by_album(session, [a.id for a in albums])
     song_counts = count_songs_by_album(session, [a.id for a in albums])
     items = [
         AlbumResponse.from_orm(
-            a,
-            song_count=song_counts.get(a.id, 0),
-            picked_count=picked_counts.get(a.id, 0),
+            a, song_count=song_counts.get(a.id, 0), picked_count=picked_counts.get(a.id, 0),
         )
         for a in albums
     ]
     return PaginatedResponse(
         items=items,
-        total=total,
-        offset=page.offset,
-        limit=page.limit,
+        total=total, offset=page.offset, limit=page.limit,
         has_more=page_has_more(offset=page.offset, fetched=len(items), total=total),
     )
 
@@ -185,9 +176,7 @@ def api_create_album(
     album_id = unique_album_id(session, title)
     try:
         album = create_album(
-            session,
-            album_id,
-            title,
+            session, album_id, title,
             artist=data.artist,
             created_by=user.id,
         )
@@ -207,8 +196,7 @@ def api_create_album(
     },
 )
 def api_update_album(
-    album_id: str,
-    req: AlbumUpdateRequest,
+    album_id: str, req: AlbumUpdateRequest,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> AlbumResponse:
@@ -325,12 +313,8 @@ def api_cleanup_album(
     check_album_access(album, user)
     count, paths = cleanup_album(session, album_id)
     record_audit(
-        session,
-        user.id,
-        AuditAction.CLEANUP,
-        ResourceType.ALBUM,
-        album_id,
-        f"deleted={count}",
+        session, user.id, AuditAction.CLEANUP, ResourceType.ALBUM,
+        album_id, f"deleted={count}",
     )
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
@@ -371,7 +355,6 @@ def api_unshare_album(
     record_audit(session, user.id, AuditAction.UNSHARE, ResourceType.ALBUM, album_id)
     session.commit()
     return StatusResponse()
-
 
 @router.get(
     "/albums/{album_id}/cover",
@@ -442,7 +425,10 @@ async def api_create_cover_suggestions(
     settings = get_settings()
     try:
         request = request_cover_suggestions(session, album_id, user)
-        if settings.cover_executor is CoverExecutor.MUSIC and not await is_music_worker_healthy():
+        if (
+            settings.cover_executor is CoverExecutor.MUSIC
+            and not await is_music_worker_healthy()
+        ):
             raise HTTPException(503, "Worker not running")
         session.commit()
     except CoverSuggestionRequestError as exc:
@@ -485,7 +471,7 @@ def api_list_cover_suggestions(
     return CoverSuggestionsResponse.from_orm(
         job=get_last_cover_job_for_album(session, album.id),
         suggestions=list_album_cover_suggestions(session, album.id),
-        used_today=count_cover_jobs_since(session, album.id, _utc_day_start()),
+        used_today=count_cover_jobs_since(session, album.id, utc_day_start()),
         daily_limit=settings.cover_suggestions_daily_limit,
     )
 
@@ -534,10 +520,7 @@ def api_select_album_cover_suggestion(
         raise HTTPException(404, COVER_SUGGESTION_NOT_FOUND)
     try:
         payload = resolve_suggestion_png(
-            ctx.audio_dir,
-            album.id,
-            suggestion.id,
-            suggestion.png_path,
+            ctx.audio_dir, album.id, suggestion.id, suggestion.png_path,
         ).read_bytes()
         cover_key = write_album_cover(ctx.audio_dir, album.id, payload)
     except (FileNotFoundError, HTTPException):

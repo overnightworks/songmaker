@@ -128,7 +128,8 @@ class ModelCache:
 
     def snapshot(self) -> CacheStateSnapshot:
         loaded_tuple = tuple(
-            LoadedModelInfo(mode=m, size_gb=self._sizes.get(m, 0.0)) for m in self._loaded
+            LoadedModelInfo(mode=m, size_gb=self._sizes.get(m, 0.0))
+            for m in self._loaded
         )
         used_gb, total_gb, measured = self._current_usage()
         return CacheStateSnapshot(
@@ -152,7 +153,8 @@ class ModelCache:
             target_size = self._sizes[mode]
             if target_size > self._budget_gb:
                 raise CapacityError(
-                    f"Model {mode} requires {target_size:.1f}GB > budget {self._budget_gb:.1f}GB"
+                    f"Model {mode} requires {target_size:.1f}GB > "
+                    f"budget {self._budget_gb:.1f}GB"
                 )
             self._target_loading = mode
             self._loading_started_at = utcnow()
@@ -173,7 +175,8 @@ class ModelCache:
                 return []
             if self._in_use.get(mode, 0) > 0:
                 raise CapacityError(
-                    f"Cannot evict {mode}: in use by {self._in_use[mode]} in-flight tasks",
+                    f"Cannot evict {mode}: in use by "
+                    f"{self._in_use[mode]} in-flight tasks",
                 )
             await self._unloader(self._loaded[mode])
             del self._loaded[mode]
@@ -230,9 +233,7 @@ class ModelCache:
         return max(used_gb, self._declared_used_gb()), measured
 
     def _build_eviction_plan(
-        self,
-        planning_used_gb: float,
-        incoming_size_gb: float,
+        self, planning_used_gb: float, incoming_size_gb: float,
     ) -> tuple[list[str], float]:
         plan: list[str] = []
         projected_used_gb = planning_used_gb
@@ -246,11 +247,8 @@ class ModelCache:
         return plan, projected_used_gb
 
     def _capacity_error(
-        self,
-        incoming_size_gb: float,
-        planning_used_gb: float,
-        projected_used_gb: float,
-        measured: bool,
+        self, incoming_size_gb: float, planning_used_gb: float,
+        projected_used_gb: float, measured: bool,
     ) -> CapacityError:
         used_label = "measured" if measured else "estimated from declared sizes"
         if not self._loaded:
@@ -273,15 +271,11 @@ class ModelCache:
     async def _evict_to_fit(self, incoming_size_gb: float) -> list[str]:
         planning_used_gb, measured = self._planning_used_gb()
         plan, projected_used_gb = self._build_eviction_plan(
-            planning_used_gb,
-            incoming_size_gb,
+            planning_used_gb, incoming_size_gb,
         )
         if projected_used_gb + incoming_size_gb > self._budget_gb:
             raise self._capacity_error(
-                incoming_size_gb,
-                planning_used_gb,
-                projected_used_gb,
-                measured,
+                incoming_size_gb, planning_used_gb, projected_used_gb, measured,
             )
 
         evicted: list[str] = []
@@ -294,7 +288,6 @@ class ModelCache:
             del self._loaded[mode]
             evicted.append(mode)
             running_used_gb = min(
-                self._planning_used_gb()[0],
-                running_used_gb - self._sizes.get(mode, 0.0),
+                self._planning_used_gb()[0], running_used_gb - self._sizes.get(mode, 0.0),
             )
         return evicted

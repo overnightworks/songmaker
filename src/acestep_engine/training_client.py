@@ -172,12 +172,8 @@ class AceStepTrainingClient:
         return urljoin(self.base_url + "/", path.lstrip("/"))
 
     def _request_json(
-        self,
-        path: str,
-        payload: dict | None = None,
-        *,
-        method: str = "POST",
-        timeout: float | None = None,
+        self, path: str, payload: dict | None = None,
+        *, method: str = "POST", timeout: float | None = None,
         retries: int = TRAINING_SUBMIT_RETRIES,
     ) -> dict:
         body = json.dumps(payload).encode() if payload is not None else None
@@ -199,9 +195,7 @@ class AceStepTrainingClient:
                     ]
                     log.warning(
                         "Training request to %s failed (%s), retry in %.1fs",
-                        path,
-                        exc,
-                        delay,
+                        path, exc, delay,
                     )
                     time.sleep(delay)
             except (json.JSONDecodeError, PydanticValidationError) as exc:
@@ -235,14 +229,10 @@ class AceStepTrainingClient:
             )
 
     def start_preprocess(
-        self,
-        tensor_dir: str,
-        *,
-        skip_existing: bool = False,
+        self, tensor_dir: str, *, skip_existing: bool = False,
     ) -> PreprocessTaskHandle:
         payload = _PreprocessRequestPayload(
-            output_dir=tensor_dir,
-            skip_existing=skip_existing,
+            output_dir=tensor_dir, skip_existing=skip_existing,
         ).model_dump()
         data = self._request_json("/v1/dataset/preprocess_async", payload)
         task_id = data.get("task_id")
@@ -251,8 +241,7 @@ class AceStepTrainingClient:
                 f"Preprocess did not return task_id: {data}",
             )
         return PreprocessTaskHandle(
-            task_id=str(task_id),
-            total=int(data.get("total", 0)),
+            task_id=str(task_id), total=int(data.get("total", 0)),
         )
 
     def poll_preprocess(self, task_id: str) -> PreprocessStatus:
@@ -270,9 +259,8 @@ class AceStepTrainingClient:
             total=int(data.get("total", 0)),
             error=data.get("error"),
             num_tensors=(
-                int(result["num_tensors"])
-                if isinstance(result, dict) and "num_tensors" in result
-                else None
+                int(result["num_tensors"]) if isinstance(result, dict)
+                and "num_tensors" in result else None
             ),
         )
 
@@ -315,7 +303,8 @@ class AceStepTrainingClient:
             current_step=int(data.get("current_step", 0)),
             current_epoch=int(data.get("current_epoch", 0)),
             current_loss=(
-                float(data["current_loss"]) if data.get("current_loss") is not None else None
+                float(data["current_loss"])
+                if data.get("current_loss") is not None else None
             ),
             status=str(data.get("status", "")),
             steps_per_second=float(data.get("steps_per_second", 0.0)),
@@ -328,13 +317,10 @@ class AceStepTrainingClient:
         self._request_json("/v1/training/stop")
 
     def export_training(
-        self,
-        lora_output_dir: str,
-        export_path: str,
+        self, lora_output_dir: str, export_path: str,
     ) -> ExportResult:
         payload = _ExportRequestPayload(
-            export_path=export_path,
-            lora_output_dir=lora_output_dir,
+            export_path=export_path, lora_output_dir=lora_output_dir,
         ).model_dump()
         data = self._request_json("/v1/training/export", payload)
         return ExportResult(

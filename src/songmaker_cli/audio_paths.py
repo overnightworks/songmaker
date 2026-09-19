@@ -34,7 +34,11 @@ def require_canonical_audio_filename(filename: str) -> None:
     """Require a canonical relative filename without inspecting the filesystem."""
     audio_path = PurePosixPath(filename)
     canonical_filename = audio_path.as_posix()
-    if audio_path.is_absolute() or ".." in audio_path.parts or canonical_filename != filename:
+    if (
+        audio_path.is_absolute()
+        or ".." in audio_path.parts
+        or canonical_filename != filename
+    ):
         log.warning("non-canonical audio path rejected")
         raise HTTPException(404, NOT_FOUND_DETAIL)
 

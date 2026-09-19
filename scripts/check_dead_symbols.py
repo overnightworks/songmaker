@@ -1,9 +1,9 @@
-"""Find module symbols without a reference in another production Python file.
+"""Find module symbols without a reference in production Python files.
 
 This conservative name scan is not a reachability proof: same-name references,
-including forward annotations and dynamic lookup strings, can keep a symbol alive.
+including external forward annotations and lookup strings, can keep a symbol alive.
 Allow entries are exact src-relative path:name pairs followed by # and a reason.
-Local helpers also need an entry because same-file uses do not satisfy this gate.
+Same-file uses count only as AST name/attribute references, never strings/docstrings.
 """
 
 from __future__ import annotations
@@ -30,16 +30,16 @@ def declarations(tree: ast.Module) -> set[str]:
     return names
 
 
-def references(tree: ast.AST) -> set[str]:
+def references(tree: ast.AST, *, external: bool = False) -> set[str]:
     names = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
         elif isinstance(node, ast.Attribute):
             names.add(node.attr)
-        elif isinstance(node, ast.ImportFrom):
+        elif external and isinstance(node, ast.ImportFrom):
             names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.Constant) and isinstance(node.value, str):
+        elif external and isinstance(node, ast.Constant) and isinstance(node.value, str):
             names.update(re.findall(r"\b[A-Za-z_]\w*\b", node.value))
     return names
 
@@ -56,8 +56,8 @@ def unreferenced_symbols(source: Path) -> set[str]:
         raise ValueError(f"No production Python files found in {source}")
     for path in paths:
         tree = ast.parse(path.read_text(), filename=str(path))
-        symbols[path] = declarations(tree)
-        for name in references(tree):
+        symbols[path] = declarations(tree) - references(tree)
+        for name in references(tree, external=True):
             users[name].add(path)
     return {
         f"{path.relative_to(source).as_posix()}:{name}"
@@ -92,7 +92,7 @@ def main() -> int:
         print(error)
         return 1
     for symbol in sorted(missing):
-        print(f"No external production reference: {symbol}")
+        print(f"No production reference: {symbol}")
     if missing:
         return 1
     print("Dead-symbol gate passed.")
