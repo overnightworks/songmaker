@@ -1,7 +1,8 @@
+import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
-import type { SongItem } from '$lib/api/types';
+
 import { ApiError } from '$lib/api/fetch';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
@@ -44,27 +45,6 @@ afterEach(async () => {
 	streamCoWriterTurn.mockReset();
 });
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'open-song',
-		title: 'Open Song',
-		album_id: 'a1',
-		album_title: 'Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		version_count: 1,
-		generation_count: 0,
-		is_shared: false,
-		created_at: '2026-01-01T00:00:00+00:00',
-		generations: [],
-		...overrides
-	};
-}
-
 async function* turnEvents(events: CoWriterStreamEvent[]) {
 	for (const event of events) yield event;
 }
@@ -95,7 +75,7 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 				currentSongId: 's1',
 				currentAlbumId: 'a1',
 				currentAlbumTitle: 'Album',
-				allSongs: [song()],
+				allSongs: [song({ slug: 'open-song', title: 'Open Song', generation_count: 0 })],
 				...overrides
 			}
 		})
@@ -289,7 +269,10 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 		const target = await render({
-			allSongs: [song({ id: 's1', title: 'Open Song' }), song({ id: 's2', title: 'Other Song' })]
+			allSongs: [
+				song({ slug: 'open-song', title: 'Open Song', generation_count: 0 }),
+				song({ slug: 'open-song', generation_count: 0, id: 's2', title: 'Other Song' })
+			]
 		});
 
 		await sendMessage(target, 'update the other song');
@@ -328,7 +311,7 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 		const target = await render({
-			allSongs: [song({ id: 's1', title: 'Open Song' })]
+			allSongs: [song({ slug: 'open-song', title: 'Open Song', generation_count: 0 })]
 		});
 
 		await sendMessage(target, 'darken it');

@@ -1,3 +1,4 @@
+import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -28,35 +29,14 @@ import {
 	takesPerGenerate
 } from './recipe';
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
+function requestedRecipeDefaults(): Partial<GenerationItem> {
 	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
 		generation_params: {
 			inference_steps: 8,
 			guidance_scale: 1.5,
 			task_type: 'text2music',
 			seed: 7
-		},
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
+		}
 	};
 }
 
@@ -147,7 +127,11 @@ describe('recipeChips', () => {
 	});
 
 	it('shows the mode and source take when a source is picked', () => {
-		const gen = generation({ version_number: 2, generation_number: 3 });
+		const gen = generation({
+			...requestedRecipeDefaults(),
+			version_number: 2,
+			generation_number: 3
+		});
 		const base = {
 			model: 'turbo',
 			takes: 1,
@@ -232,7 +216,7 @@ describe('recipe session state', () => {
 	});
 
 	it('setSourceFromGeneration opens the Recipe panel and resets a repaint range', () => {
-		const gen = generation();
+		const gen = generation(requestedRecipeDefaults());
 		setSourceFromGeneration(gen, 'repaint');
 		expect(get(sourceGeneration)).toBe(gen);
 		expect(get(sourceMode)).toBe('repaint');
@@ -240,13 +224,13 @@ describe('recipe session state', () => {
 	});
 
 	it('clearSource removes the picked take', () => {
-		setSourceFromGeneration(generation(), 'cover');
+		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'cover');
 		clearSource();
 		expect(get(sourceGeneration)).toBeNull();
 	});
 
 	it('applyAgainFromGeneration stages reusable params and the seed without picking a source', () => {
-		applyAgainFromGeneration(generation());
+		applyAgainFromGeneration(generation(requestedRecipeDefaults()));
 		expect(get(sourceGeneration)).toBeNull();
 		expect(applyGenerationSettings).toHaveBeenCalledWith({
 			inference_steps: 8,
@@ -259,7 +243,7 @@ describe('recipe session state', () => {
 	it('resetRecipeSourceForSong clears the source and closes both views but keeps the model', () => {
 		recipeModel.set('turbo');
 		takesPerGenerate.set(3);
-		setSourceFromGeneration(generation(), 'repaint');
+		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'repaint');
 		coWriterOpen.set(true);
 		resetRecipeSourceForSong();
 		expect(get(sourceGeneration)).toBeNull();

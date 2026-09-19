@@ -1,3 +1,4 @@
+import { makePlaylist, makePlaylistDetail as makeDetail } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
@@ -55,35 +56,6 @@ vi.mock('$lib/api/client', () => ({
 	uploadPlaylistCover: vi.fn()
 }));
 
-function makeDetail(id: string, overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
-	return {
-		id,
-		title: id,
-		slug: id,
-		entry_count: 0,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '',
-		entries: [],
-		...overrides
-	};
-}
-
-function makePlaylist(id: string, overrides: Partial<PlaylistItem> = {}): PlaylistItem {
-	return {
-		id,
-		title: id,
-		slug: id,
-		entry_count: 0,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '',
-		...overrides
-	};
-}
-
 const albumMutationResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
 
 beforeEach(() => {
@@ -111,12 +83,30 @@ describe('loadPlaylistDetail', () => {
 					resolveA = resolve;
 				})
 		);
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('b'));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'b',
+				title: 'b',
+				slug: 'b'
+			})
+		);
 
 		const first = loadPlaylistDetail('a');
 		const second = loadPlaylistDetail('b');
 		await second;
-		resolveA?.(makeDetail('a'));
+		resolveA?.(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 		await first;
 
 		expect(get(selectedPlaylistId)).toBe('b');
@@ -124,7 +114,16 @@ describe('loadPlaylistDetail', () => {
 	});
 
 	it('dedupes concurrent opens of the same playlist into a single fetch', async () => {
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 
 		await Promise.all([loadPlaylistDetail('a'), loadPlaylistDetail('a')]);
 
@@ -135,7 +134,16 @@ describe('loadPlaylistDetail', () => {
 
 	it('reuses a still-fresh detail instead of refetching on reopen', async () => {
 		vi.useFakeTimers();
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 
 		await loadPlaylistDetail('a');
 		vi.advanceTimersByTime(1_000);
@@ -147,7 +155,16 @@ describe('loadPlaylistDetail', () => {
 
 	it('refetches once the cached detail goes stale', async () => {
 		vi.useFakeTimers();
-		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+		vi.mocked(fetchPlaylist).mockResolvedValue(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 
 		await loadPlaylistDetail('a');
 		vi.advanceTimersByTime(16_000);
@@ -157,7 +174,16 @@ describe('loadPlaylistDetail', () => {
 	});
 
 	it('forceRefresh bypasses a still-fresh cached detail', async () => {
-		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('a'));
+		vi.mocked(fetchPlaylist).mockResolvedValue(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 
 		await loadPlaylistDetail('a');
 		await loadPlaylistDetail('a', { forceRefresh: true });
@@ -177,12 +203,30 @@ describe('loadPlaylistDetail', () => {
 					resolveFirst = resolve;
 				})
 		);
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				slug: 'a',
+				title: 'Second'
+			})
+		);
 
 		const first = loadPlaylistDetail('a', { forceRefresh: true });
 		const second = loadPlaylistDetail('a', { forceRefresh: true });
 		await second;
-		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		resolveFirst?.(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				slug: 'a',
+				title: 'First'
+			})
+		);
 		await first;
 
 		expect(fetchPlaylist).toHaveBeenCalledTimes(2);
@@ -200,12 +244,30 @@ describe('loadPlaylistDetail', () => {
 					resolveFirst = resolve;
 				})
 		);
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a', { title: 'Second' }));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				slug: 'a',
+				title: 'Second'
+			})
+		);
 
 		const first = loadPlaylistDetail('a', { forceRefresh: true });
 		const second = loadPlaylistDetail('a', { forceRefresh: true });
 		await second;
-		resolveFirst?.(makeDetail('a', { title: 'First' }));
+		resolveFirst?.(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				slug: 'a',
+				title: 'First'
+			})
+		);
 		await first;
 
 		await loadPlaylistDetail('a');
@@ -228,7 +290,16 @@ describe('loadPlaylistDetail', () => {
 	});
 
 	it('never leaves the previous playlist rows under a rate-limited open', async () => {
-		vi.mocked(fetchPlaylist).mockResolvedValueOnce(makeDetail('a'));
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				id: 'a',
+				title: 'a',
+				slug: 'a'
+			})
+		);
 		await loadPlaylistDetail('a');
 		expect(get(selectedPlaylistDetail)?.id).toBe('a');
 
@@ -310,15 +381,27 @@ describe('loadPlaylists', () => {
 
 describe('playlist mutations', () => {
 	it('mirrors an uploaded and removed cover into the list and open detail', async () => {
-		const original = makePlaylist('p1');
+		const original = makePlaylist({ share_slug: null, created_at: '', title: 'p1', slug: 'p1' });
 		const customCover = {
 			card: '/api/playlists/p1/cover?variant=card&v=custom.png',
 			detail: '/api/playlists/p1/cover?variant=detail&v=custom.png'
 		};
 		playlistList.set([original]);
-		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('p1'));
-		vi.mocked(uploadPlaylistCoverApi).mockResolvedValue(makePlaylist('p1', { cover: customCover }));
-		vi.mocked(deletePlaylistCoverApi).mockResolvedValue(makePlaylist('p1', { cover: null }));
+		vi.mocked(fetchPlaylist).mockResolvedValue(
+			makeDetail({ entry_count: 0, share_slug: null, created_at: '', title: 'p1', slug: 'p1' })
+		);
+		vi.mocked(uploadPlaylistCoverApi).mockResolvedValue(
+			makePlaylist({
+				share_slug: null,
+				created_at: '',
+				title: 'p1',
+				slug: 'p1',
+				cover: customCover
+			})
+		);
+		vi.mocked(deletePlaylistCoverApi).mockResolvedValue(
+			makePlaylist({ share_slug: null, created_at: '', title: 'p1', slug: 'p1', cover: null })
+		);
 
 		await loadPlaylistDetail('p1');
 		const file = new File(['cover'], 'cover.png', { type: 'image/png' });
@@ -336,10 +419,34 @@ describe('playlist mutations', () => {
 	});
 
 	it('mirrors creating, renaming, and deleting a selected playlist in library state', async () => {
-		const original = makePlaylist('p1', { title: 'Original' });
-		const created = makePlaylist('p2', { title: 'New playlist' });
-		const renamed = makePlaylist('p1', { title: 'Renamed' });
-		vi.mocked(fetchPlaylist).mockResolvedValue(makeDetail('p1', { title: 'Original' }));
+		const original = makePlaylist({
+			share_slug: null,
+			created_at: '',
+			slug: 'p1',
+			title: 'Original'
+		});
+		const created = makePlaylist({
+			share_slug: null,
+			created_at: '',
+			id: 'p2',
+			slug: 'p2',
+			title: 'New playlist'
+		});
+		const renamed = makePlaylist({
+			share_slug: null,
+			created_at: '',
+			slug: 'p1',
+			title: 'Renamed'
+		});
+		vi.mocked(fetchPlaylist).mockResolvedValue(
+			makeDetail({
+				entry_count: 0,
+				share_slug: null,
+				created_at: '',
+				slug: 'p1',
+				title: 'Original'
+			})
+		);
 		vi.mocked(createPlaylist).mockResolvedValue(created);
 		vi.mocked(updatePlaylist).mockResolvedValue(renamed);
 		vi.mocked(deletePlaylistApi).mockResolvedValue(undefined);
@@ -392,7 +499,13 @@ describe('playlist mutations', () => {
 	])(
 		'$description refreshes the library summary',
 		async ({ mutate, assertRequest, expectedResult }) => {
-			const refreshed = makePlaylist('p1', { entry_count: 4 });
+			const refreshed = makePlaylist({
+				share_slug: null,
+				created_at: '',
+				title: 'p1',
+				slug: 'p1',
+				entry_count: 4
+			});
 			vi.mocked(fetchPlaylists).mockResolvedValue([refreshed]);
 			vi.mocked(addAlbumToPlaylist).mockResolvedValue(albumMutationResult);
 
@@ -406,9 +519,15 @@ describe('playlist mutations', () => {
 
 	it('reloads the open playlist detail after an entry mutation', async () => {
 		vi.mocked(fetchPlaylist)
-			.mockResolvedValueOnce(makeDetail('p1', { entry_count: 1 }))
-			.mockResolvedValueOnce(makeDetail('p1', { entry_count: 2 }));
-		vi.mocked(fetchPlaylists).mockResolvedValue([makePlaylist('p1', { entry_count: 2 })]);
+			.mockResolvedValueOnce(
+				makeDetail({ share_slug: null, created_at: '', title: 'p1', slug: 'p1', entry_count: 1 })
+			)
+			.mockResolvedValueOnce(
+				makeDetail({ share_slug: null, created_at: '', title: 'p1', slug: 'p1', entry_count: 2 })
+			);
+		vi.mocked(fetchPlaylists).mockResolvedValue([
+			makePlaylist({ share_slug: null, created_at: '', title: 'p1', slug: 'p1', entry_count: 2 })
+		]);
 
 		await loadPlaylistDetail('p1');
 		await addGeneration('p1', 'g1');

@@ -1,7 +1,7 @@
+import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AlbumItem, SongItem } from '$lib/api/types';
 import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -37,44 +37,6 @@ import LibraryWorkspace from './LibraryWorkspace.svelte';
 
 const ALBUM_TITLE = 'Anfield';
 
-function album(): AlbumItem {
-	return {
-		id: 'anfield',
-		title: ALBUM_TITLE,
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 0,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false
-	};
-}
-
-function song(): SongItem {
-	return {
-		id: 'stadion-lauf-a',
-		slug: 'stadion-lauf-a',
-		title: 'Stadionlauf A',
-		album_id: 'anfield',
-		album_title: ALBUM_TITLE,
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		version_count: 0,
-		generation_count: 0,
-		is_shared: false,
-		created_at: '2026-01-01T00:00:00+00:00',
-		generations: []
-	};
-}
-
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 function renderWorkspace(): HTMLElement {
@@ -94,7 +56,9 @@ beforeEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetCollectionForTests();
-	albumList.set([album()]);
+	albumList.set([
+		album({ id: 'anfield', title: ALBUM_TITLE, song_count: 0, share_slug: null, cover: null })
+	]);
 	songList.set([]);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
@@ -161,7 +125,17 @@ describe('the library workspace', () => {
 	it('starts song and take content at the editor header without a sibling collection row', async () => {
 		streamLive();
 		openCollection.set({ kind: 'album', id: 'anfield' });
-		songList.set([song()]);
+		songList.set([
+			song({
+				id: 'stadion-lauf-a',
+				slug: 'stadion-lauf-a',
+				title: 'Stadionlauf A',
+				album_id: 'anfield',
+				album_title: ALBUM_TITLE,
+				version_count: 0,
+				generation_count: 0
+			})
+		]);
 		selectedSongId.set('stadion-lauf-a');
 		const target = renderWorkspace();
 		await tick();

@@ -1,8 +1,8 @@
+import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
@@ -33,46 +33,17 @@ import LibraryWall from './LibraryWall.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a-local',
-		title: 'Local Album',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function playlist(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
-	return {
-		id: 'p-local',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 2,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
 beforeEach(() => {
 	fetchPlaylists.mockReset().mockResolvedValue([]);
-	fetchPlaylist.mockReset().mockResolvedValue({ ...playlist(), entries: [] });
+	fetchPlaylist.mockReset().mockResolvedValue({
+		...playlist({ id: 'p-local', entry_count: 2, share_slug: null }),
+		entries: []
+	});
 	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
-	albumList.set([album()]);
+	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
 	history.replaceState(null, '', '/');
@@ -103,7 +74,9 @@ function tileTitles(root: ParentNode): string[] {
 describe('LibraryWall', () => {
 	it('loads playlists when the wall mounts', async () => {
 		playlistLoad.set({ status: 'idle', error: null });
-		fetchPlaylists.mockResolvedValueOnce([playlist()]);
+		fetchPlaylists.mockResolvedValueOnce([
+			playlist({ id: 'p-local', entry_count: 2, share_slug: null })
+		]);
 
 		const root = await render();
 
@@ -116,10 +89,12 @@ describe('LibraryWall', () => {
 	it('shows albums and playlists in one chronological grid without filter chips', async () => {
 		albumList.set([
 			album({ id: 'a-new', title: 'New Album', created_at: '2026-03-03T00:00:00+00:00' }),
-			album({ id: 'a-old', title: 'Old Album', created_at: '2026-01-01T00:00:00+00:00' })
+			album({ id: 'a-old', title: 'Old Album' })
 		]);
 		playlistList.set([
 			playlist({
+				entry_count: 2,
+				share_slug: null,
 				id: 'p-middle',
 				title: 'Middle Playlist',
 				created_at: '2026-02-02T00:00:00+00:00'
@@ -135,6 +110,9 @@ describe('LibraryWall', () => {
 	it('uses a playlist cover before its album-cover mosaic', async () => {
 		playlistList.set([
 			playlist({
+				id: 'p-local',
+				entry_count: 2,
+				share_slug: null,
 				cover: { card: '/covers/night-drive.jpg', detail: '/covers/night-drive.jpg' },
 				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
 			})
@@ -149,7 +127,12 @@ describe('LibraryWall', () => {
 
 	it('uses the 6B playlist mosaic when a playlist has no own cover', async () => {
 		playlistList.set([
-			playlist({ album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }] })
+			playlist({
+				id: 'p-local',
+				entry_count: 2,
+				share_slug: null,
+				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
+			})
 		]);
 		const root = await render();
 
@@ -158,7 +141,7 @@ describe('LibraryWall', () => {
 	});
 
 	it('opens the matching collection through the navigation store', async () => {
-		playlistList.set([playlist()]);
+		playlistList.set([playlist({ id: 'p-local', entry_count: 2, share_slug: null })]);
 		const root = await render();
 		const albumTile = root.querySelector<HTMLButtonElement>(
 			'[aria-label="Open album Local Album"]'
