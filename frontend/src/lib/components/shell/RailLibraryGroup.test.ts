@@ -11,7 +11,7 @@ import {
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
-import { railTreeQuery } from '$lib/stores/filter';
+import { railTreeQuery } from '$lib/stores/librarySearch';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import {

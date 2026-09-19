@@ -8,7 +8,7 @@ import { librarySurface, resetLibraryContextForTests } from '$lib/stores/library
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { railTreeQuery } from '$lib/stores/filter';
+import { railTreeQuery } from '$lib/stores/librarySearch';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,

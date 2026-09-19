@@ -10,7 +10,7 @@
 		songList
 	} from '$lib/stores/libraryData';
 	import { selectedSongId } from '$lib/stores/player';
-	import { railTreeQuery } from '$lib/stores/filter';
+	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		compareAlbumTracks,
 		openAlbum,

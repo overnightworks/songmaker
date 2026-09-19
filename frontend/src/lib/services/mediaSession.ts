@@ -21,18 +21,6 @@ export function setupMediaSessionHandlers(handlers: MediaHandlers): () => void {
 	};
 }
 
-export function pushMediaSessionHandlers(handlers: MediaHandlers): () => void {
-	const previous = activeHandlers;
-	activeHandlers = handlers;
-	applyMediaSessionHandlers(handlers);
-	return () => {
-		if (activeHandlers !== handlers) return;
-		activeHandlers = previous;
-		if (previous) applyMediaSessionHandlers(previous);
-		else clearMediaSessionHandlers();
-	};
-}
-
 export function updateMediaSessionMetadata(info: PlaybackInfo | null): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 	if (!info) {
@@ -44,15 +32,6 @@ export function updateMediaSessionMetadata(info: PlaybackInfo | null): void {
 		title: info.songTitle,
 		artist: info.artist,
 		album: info.albumTitle
-	});
-}
-
-export function updateMediaSessionTitle(title: string, artist?: string): void {
-	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
-	if (typeof MediaMetadata === 'undefined') return;
-	navigator.mediaSession.metadata = new MediaMetadata({
-		title,
-		artist: artist ?? ''
 	});
 }
 

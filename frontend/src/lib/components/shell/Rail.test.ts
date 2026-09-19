@@ -5,7 +5,7 @@ import { get } from 'svelte/store';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
-import { railTreeQuery } from '$lib/stores/filter';
+import { railTreeQuery } from '$lib/stores/librarySearch';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {

@@ -1,12 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-	pushMediaSessionHandlers,
 	setupMediaSessionHandlers,
 	updateMediaSessionMetadata,
 	updateMediaSessionPlaybackState,
-	updateMediaSessionPositionState,
-	updateMediaSessionTitle
+	updateMediaSessionPositionState
 } from './mediaSession';
 
 type Action = 'play' | 'pause' | 'stop' | 'nexttrack' | 'previoustrack' | 'seekto';
@@ -103,33 +101,6 @@ describe('Media Session handlers', () => {
 		remove();
 	});
 
-	it('restores the previous owner when a temporary owner leaves', () => {
-		const session = installMediaSession();
-		const calls: string[] = [];
-		const removeBase = setupMediaSessionHandlers(callbacks('base', calls));
-		const removeTemporary = pushMediaSessionHandlers(callbacks('temporary', calls));
-
-		invoke(session, 'play');
-		removeTemporary();
-		invoke(session, 'play');
-		removeBase();
-		invoke(session, 'play');
-
-		expect(calls).toEqual(['temporary:play', 'base:play']);
-	});
-
-	it('removes a temporary owner when it has no previous owner to restore', () => {
-		const session = installMediaSession();
-		const calls: string[] = [];
-		const removeTemporary = pushMediaSessionHandlers(callbacks('temporary', calls));
-
-		invoke(session, 'play');
-		removeTemporary();
-		invoke(session, 'play');
-
-		expect(calls).toEqual(['temporary:play']);
-	});
-
 	it('leaves the currently active owner in place when an older owner is removed', () => {
 		const session = installMediaSession();
 		const calls: string[] = [];
@@ -163,7 +134,6 @@ describe('Media Session handlers', () => {
 			const remove = setupMediaSessionHandlers(callbacks('player', calls));
 			remove();
 			updateMediaSessionMetadata(null);
-			updateMediaSessionTitle('Song');
 			updateMediaSessionPlaybackState('playing');
 			updateMediaSessionPositionState(1, 2);
 		}).not.toThrow();
@@ -188,17 +158,6 @@ describe('Media Session state', () => {
 		});
 		updateMediaSessionMetadata(null);
 		expect(session.metadata).toBeNull();
-	});
-
-	it.each([
-		['Interlude', undefined, { title: 'Interlude', artist: '' }],
-		['Interlude', 'The Makers', { title: 'Interlude', artist: 'The Makers' }]
-	])('publishes title metadata with %s and %s', (title, artist, expected) => {
-		const session = installMediaSession();
-
-		updateMediaSessionTitle(title, artist);
-
-		expect((session.metadata as unknown as { values: MediaMetadataInit }).values).toEqual(expected);
 	});
 
 	it.each(['none', 'paused', 'playing'] as const)('publishes the %s playback state', (state) => {
