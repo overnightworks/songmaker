@@ -14,7 +14,7 @@ type Theme = 'dark' | 'light';
 
 const STORAGE_KEY = 'theme';
 const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
-export const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
+const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
 const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
 export const RAIL_MIN_WIDTH_PX = 220;
 export const RAIL_MAX_WIDTH_PX = 360;

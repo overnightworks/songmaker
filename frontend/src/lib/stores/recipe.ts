@@ -83,7 +83,7 @@ const RECIPE_PARAM_KEYS: (keyof VersionGenerationParams)[] = [
 	'user_lora_id'
 ];
 
-export function recipeParamsFromTake(
+function recipeParamsFromTake(
 	params: GenerationParams | null | undefined
 ): VersionGenerationParams {
 	const filtered: VersionGenerationParams = {};

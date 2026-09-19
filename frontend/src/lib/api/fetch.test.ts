@@ -24,15 +24,7 @@ vi.mock('$lib/stores/auth', () => {
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import {
-	API_TIMEOUT_MS,
-	apiFetch,
-	sseFetch,
-	ApiError,
-	isRateLimited,
-	safeInternalPath,
-	handleSessionLost
-} from './fetch';
+import { apiFetch, sseFetch, ApiError, handleSessionLost } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { clearAuth, currentUser } from '$lib/stores/auth';
@@ -227,7 +219,6 @@ describe('apiFetch 429 classification', () => {
 		expect(err).toBeInstanceOf(ApiError);
 		expect((err as ApiError).status).toBe(429);
 		expect((err as ApiError).retryAfterSeconds).toBe(60);
-		expect(isRateLimited(err)).toBe(true);
 	});
 
 	it('leaves retryAfterSeconds null when the header is absent', async () => {
@@ -241,7 +232,6 @@ describe('apiFetch 429 classification', () => {
 		const err = await apiFetch('/api/library/pool-queue').catch((e: unknown) => e);
 
 		expect((err as ApiError).retryAfterSeconds).toBeNull();
-		expect(isRateLimited(err)).toBe(false);
 	});
 });
 
@@ -340,12 +330,12 @@ describe('apiFetch abort signal', () => {
 		expect(signalPassedToFetch().aborted).toBe(true);
 	});
 
-	it('still times out when the caller never aborts', () => {
+	it('times out after 30 seconds when the caller never aborts', () => {
 		vi.useFakeTimers();
 		neverResolvingFetch();
 		const caller = new AbortController();
 		void apiFetch('/api/library/pool-queue', { signal: caller.signal }).catch(() => {});
-		vi.advanceTimersByTime(API_TIMEOUT_MS - 1);
+		vi.advanceTimersByTime(29_999);
 		expect(signalPassedToFetch().aborted).toBe(false);
 		vi.advanceTimersByTime(1);
 		expect(signalPassedToFetch().aborted).toBe(true);
@@ -446,31 +436,26 @@ describe('session lost (401)', () => {
 	});
 });
 
-describe('safeInternalPath', () => {
+describe('session-lost redirect target', () => {
+	afterEach(() => {
+		history.replaceState(null, '', '/');
+	});
+
 	it.each([
-		[
-			'an already-safe local path, kept with its query and hash',
-			'/album/a1/song-1?tab=lyrics#top',
-			'/album/a1/song-1?tab=lyrics#top'
-		],
-		['a scheme-relative escape (resolves to a foreign origin)', '//attacker.example/x', '/'],
-		['a full cross-origin URL', 'https://attacker.example', '/'],
-		[
-			'a leading backslash (a host separator for http(s), same as a browser)',
-			'/\\attacker.example',
-			'/'
-		],
-		['a javascript: URL', 'javascript:alert(1)', '/'],
-		['a data: URL', 'data:text/html,hi', '/'],
-		['a leading newline hiding a scheme-relative escape', '\n//attacker.example', '/'],
-		['an embedded newline hiding a host separator', '/\n/attacker', '/'],
-		[
-			'percent-encoded slashes, which stay literal path characters, not a host escape',
-			'%2F%2Fattacker.example/x',
-			'/%2F%2Fattacker.example/x'
-		],
-		['an empty string', '', '/']
-	])('resolves %s to the safe redirect target', (_label, input, expected) => {
-		expect(safeInternalPath(input)).toBe(expected);
+		['/album/a1/song-1?tab=lyrics#top', '/album/a1/song-1?tab=lyrics'],
+		['//attacker.example/x', '/'],
+		['///attacker.example/x', '/'],
+		['/%2F%2Fattacker.example/x', '/%2F%2Fattacker.example/x'],
+		['/', '/']
+	])('returns from %s only to a same-origin path', async (path, expected) => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
+		vi.mocked(goto).mockClear();
+		history.replaceState(null, '', `${window.location.origin}${path}`);
+
+		await handleSessionLost();
+
+		expect(get(currentUser)).toBeNull();
+		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent(expected)}`);
 	});
 });

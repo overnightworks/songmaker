@@ -8,4 +8,3 @@ const store = createPollingStore<HealthSummary>(fetchHealth, HEALTH_POLL_INTERVA
 export const health = store.data;
 export const startHealthPolling = store.start;
 export const stopHealthPolling = store.stop;
-export const refreshHealth = store.refresh;

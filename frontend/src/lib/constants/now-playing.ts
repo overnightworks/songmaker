@@ -23,7 +23,7 @@ export function nowPlayingTakeLabel(
 	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
 }
 
-export interface TakeMetaParts {
+interface TakeMetaParts {
 	artist: string | null;
 	versionNumber: number | null;
 	generationNumber: number;

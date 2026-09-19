@@ -467,10 +467,6 @@ export function navigateToSongTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
-export function switchTab(tab: DetailTab): void {
-	detailTab.set(tab);
-}
-
 export function openWriteTab(): void {
 	detailTab.set('write');
 }

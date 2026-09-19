@@ -83,7 +83,6 @@ import {
 	playPlaylistEntry,
 	playPlaylistEntryAndShowNowPlaying,
 	registerNowPlayingTrigger,
-	toPlaybackInfo,
 	chooseLibraryTakePool,
 	playStartNotice,
 	libraryQueueSkipped,
@@ -282,7 +281,14 @@ function makePoolQueue(overrides: Partial<LibraryPoolQueue> = {}): LibraryPoolQu
 }
 
 function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
-	return toPlaybackInfo(gen, song);
+	return {
+		generation: gen,
+		songId: song.id,
+		songTitle: song.title,
+		artist: song.artist,
+		albumTitle: song.album_title,
+		lyrics: gen.version_lyrics
+	};
 }
 
 beforeEach(() => {
@@ -2716,7 +2722,7 @@ describe('playTake', () => {
 	it('toggles pause instead of restarting when the row take is already playing', async () => {
 		const gen = makeGen();
 		const song = makeSong();
-		audioPlayer.current = toPlaybackInfo(gen, song);
+		audioPlayer.current = makePlayback(gen, song);
 		audioPlayer.status = 'playing';
 		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
 

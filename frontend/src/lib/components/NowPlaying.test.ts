@@ -21,8 +21,7 @@ import {
 	queueContext,
 	selectedSongId,
 	setShuffle,
-	shuffleEnabled,
-	toPlaybackInfo
+	shuffleEnabled
 } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
@@ -582,7 +581,10 @@ describe('NowPlaying curation mode (#228)', () => {
 		const s2 = albumSong('s2', 'g2', 2);
 		songList.set([s1, s2]);
 		albumList.set([album()]);
-		const takes = [toPlaybackInfo(s1.generations[0], s1), toPlaybackInfo(s2.generations[0], s2)];
+		const takes = [
+			info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title }),
+			info({ generation: s2.generations[0], songId: s2.id, songTitle: s2.title })
+		];
 		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
 		curationActive.set(true);
 		return takes;
@@ -663,7 +665,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const s1 = albumSong('s1', 'g1', 1);
 		songList.set([s1]);
 		albumList.set([album()]);
-		const takes = [toPlaybackInfo(s1.generations[0], s1)];
+		const takes = [info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title })];
 		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
 		curationActive.set(true);
 

@@ -244,7 +244,7 @@ function libraryStreamFailureToast(err: unknown): string {
 
 // --- Playback dispatch ---
 
-export function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
+function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	return {
 		generation: gen,
 		songId: song.id,

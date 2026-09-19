@@ -70,21 +70,15 @@ describe('railWidth', () => {
 	});
 
 	it('clamps and persists width changes at the store boundary', async () => {
-		const {
-			railWidth,
-			setRailWidth,
-			RAIL_MAX_WIDTH_PX,
-			RAIL_MIN_WIDTH_PX,
-			RAIL_WIDTH_STORAGE_KEY
-		} = await import('./ui');
+		const { railWidth, setRailWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } = await import('./ui');
 
 		setRailWidth(RAIL_MAX_WIDTH_PX + 20);
 		expect(get(railWidth)).toBe(RAIL_MAX_WIDTH_PX);
-		expect(localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe(String(RAIL_MAX_WIDTH_PX));
+		expect(localStorage.getItem('songmaker.rail-width')).toBe(String(RAIL_MAX_WIDTH_PX));
 
 		setRailWidth(RAIL_MIN_WIDTH_PX - 20);
 		expect(get(railWidth)).toBe(RAIL_MIN_WIDTH_PX);
-		expect(localStorage.getItem(RAIL_WIDTH_STORAGE_KEY)).toBe(String(RAIL_MIN_WIDTH_PX));
+		expect(localStorage.getItem('songmaker.rail-width')).toBe(String(RAIL_MIN_WIDTH_PX));
 	});
 
 	it('restores a clamped browser preference after a reload', async () => {
