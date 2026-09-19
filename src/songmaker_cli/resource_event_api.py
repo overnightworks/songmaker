@@ -41,7 +41,6 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_STREAM_POLL_SECONDS,
     SSE_HEARTBEAT_COMMENT,
     SSE_HEARTBEAT_SECONDS,
-    LimiterFailurePolicy,
     ResourceEventKind,
 )
 from songmaker_cli.db.queries import (
@@ -341,14 +340,6 @@ async def _wait_for_next_resource_poll(deadline: float) -> bool:
     return True
 
 
-# The resource-event SSE stream fails closed: it holds a DB connection for
-# its whole (long) lifetime, so an unenforced connection lease could starve
-# the pool. Unlike the simple is_allowed limiters, this policy is enforced
-# by _acquire_stream_lease's own try/except below (open-limiter check and
-# lease acquisition share one failure path), not by api_helpers.enforce_rate_limit.
-_STREAM_LEASE_FAILURE_POLICY = LimiterFailurePolicy.FAIL_CLOSED
-
-
 def _get_open_limiter(request: Request) -> RedisRateLimitBackend:
     def _build() -> RedisRateLimitBackend:
         ctx: AppContext = request.app.state.ctx
@@ -387,8 +378,7 @@ def _acquire_stream_lease(
 ) -> tuple[RedisConcurrentLeaseLimiter, str]:
     """Check the open-connection rate limit, then acquire a lease.
 
-    Enforces ``_STREAM_LEASE_FAILURE_POLICY`` (FAIL_CLOSED): either the
-    limiter itself erroring out, or the limiter deliberately saying no,
+    Fails closed: either the limiter itself erroring out or saying no
     rejects the request rather than letting an unmetered stream through.
     """
     try:
