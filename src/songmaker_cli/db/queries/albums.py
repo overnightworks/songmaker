@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
-from songmaker_cli.db.models import Album, Generation, Song
+from songmaker_cli.db.models import Album, Generation, Song, aware_timestamp
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.db.queries.sharing import disable_sharing, enable_sharing
@@ -256,9 +256,7 @@ def restore_album(session: Session, album_id: str) -> Album:
         raise ValueError(f"Album not found: {album_id}")
     if album.deleted_at is None:
         return album
-    deleted_at = album.deleted_at
-    if deleted_at.tzinfo is None:
-        deleted_at = deleted_at.replace(tzinfo=timezone.utc)
+    deleted_at = aware_timestamp(album.deleted_at)
     age = datetime.now(timezone.utc) - deleted_at
     window = timedelta(days=get_settings().soft_delete_retention_days)
     if age > window:
@@ -266,7 +264,6 @@ def restore_album(session: Session, album_id: str) -> Album:
             f"Album {album_id} was deleted {age.days} days ago, "
             f"past the {window.days}-day restore window",
         )
-    cascade_ts = album.deleted_at
     album.deleted_at = None
     with include_deleted(session):
         songs = session.query(Song).filter_by(album_id=album_id).all()
@@ -274,12 +271,7 @@ def restore_album(session: Session, album_id: str) -> Album:
             song_ts = song.deleted_at
             if song_ts is None:
                 continue
-            if song_ts.tzinfo is None:
-                song_ts = song_ts.replace(tzinfo=timezone.utc)
-            cascade_norm = cascade_ts
-            if cascade_norm.tzinfo is None:
-                cascade_norm = cascade_norm.replace(tzinfo=timezone.utc)
-            if song_ts == cascade_norm:
+            if aware_timestamp(song_ts) == deleted_at:
                 song.deleted_at = None
     session.flush()
     log.info("Restored album %s", album_id)
