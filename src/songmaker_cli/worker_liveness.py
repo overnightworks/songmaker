@@ -22,7 +22,7 @@ from songmaker_cli.constants import (
     WorkerLivenessSignal,
     worker_restart_grace_seconds,
 )
-from songmaker_cli.timestamps import aware_timestamp
+from songmaker_cli.timestamps import aware_timestamp, utcnow
 
 log = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ def read_worker_liveness(
     """Read each execution signal without taking ownership of database access."""
     from songmaker_cli.settings import get_settings
 
-    observed_at = aware_timestamp(now or datetime.now(timezone.utc))
+    observed_at = aware_timestamp(now or utcnow())
     return worker_liveness_by_job_type(
         acestep=acestep_worker_liveness(redis, acestep_worker_ids, now=observed_at),
         music=arq_worker_liveness(
