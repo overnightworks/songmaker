@@ -575,19 +575,20 @@ class TitleUpdateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 
 
+def _validate_model_mode(value: str) -> str:
+    if value not in _VALID_MODEL_MODES:
+        msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
+        raise ValueError(msg)
+    return value
+
+
 class GenerateRequest(BaseModel):
     count: int = Field(1, ge=1, le=10)
     model: str
     version_id: str | None = None
     seed: int | None = Field(None, ge=-1)
 
-    @field_validator("model")
-    @classmethod
-    def _validate_model(cls, v: str) -> str:
-        if v not in _VALID_MODEL_MODES:
-            msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
-            raise ValueError(msg)
-        return v
+    _validate_model = field_validator("model")(_validate_model_mode)
 
 
 class RepaintRequest(BaseModel):
@@ -605,13 +606,7 @@ class RepaintRequest(BaseModel):
     repaint_latent_crossfade_frames: int | None = Field(None, ge=0)
     repaint_wav_crossfade_sec: float | None = Field(None, ge=0)
 
-    @field_validator("model")
-    @classmethod
-    def _validate_model(cls, v: str) -> str:
-        if v not in _VALID_MODEL_MODES:
-            msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
-            raise ValueError(msg)
-        return v
+    _validate_model = field_validator("model")(_validate_model_mode)
 
     @field_validator("repaint_mode")
     @classmethod
@@ -633,13 +628,7 @@ class CoverRequest(BaseModel):
     model: str
     seed: int | None = Field(None, ge=-1)
 
-    @field_validator("model")
-    @classmethod
-    def _validate_model(cls, v: str) -> str:
-        if v not in _VALID_MODEL_MODES:
-            msg = f"model must be one of {sorted(_VALID_MODEL_MODES)}"
-            raise ValueError(msg)
-        return v
+    _validate_model = field_validator("model")(_validate_model_mode)
 
 
 class ScoreRequest(BaseModel):

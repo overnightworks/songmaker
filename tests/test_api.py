@@ -1170,10 +1170,22 @@ def test_generate_song_missing_model_rejected(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
-def test_generate_song_invalid_model(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        pytest.param("/api/songs/s1/generate", {}, id="generate"),
+        pytest.param("/api/generations/g1/cover", {"src_generation_id": "g1"}, id="cover"),
+        pytest.param(
+            "/api/generations/g1/repaint",
+            {"src_generation_id": "g1", "repainting_start": 0.1, "repainting_end": 0.5},
+            id="repaint",
+        ),
+    ],
+)
+def test_generate_song_invalid_model(client: TestClient, path: str, payload: dict) -> None:
     resp = client.post(
-        "/api/songs/s1/generate",
-        json={"count": 1, "model": "invalid"},
+        path,
+        json={"count": 1, "model": "invalid", **payload},
     )
     assert resp.status_code == 422
 
