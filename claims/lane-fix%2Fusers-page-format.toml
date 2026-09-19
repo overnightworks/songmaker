@@ -1,0 +1,7 @@
+claim_id = "e46b66d21fe242438d30d642e135108f"
+agent = "claude-head"
+role = "builder"
+base = "76e8b4517168faee7f849fbd3059558ed1771858"
+branch = "fix/users-page-format"
+scope = ["frontend/src/routes/settings/users/+page.svelte"]
+opened_commit = "670340335f5bbe9d4cf8b4dd120fe3b98050da97"
