@@ -1,0 +1,1116 @@
+# Exact exceptions to the external-reference rule; no wildcards.
+# Local-use entries preserve module encapsulation. New symbols still require review.
+# Framework entries name the dispatcher; migrations retain their frozen schema history.
+
+acestep_engine/client.py:ALLOWED_AUDIO_PATH_RE # Used within this module by validate_audio_path
+acestep_engine/client.py:DOWNLOAD_DEADLINE_SECONDS # Used within this module by AceStepClient
+acestep_engine/client.py:SUBMIT_RETRIES # Used within this module by AceStepClient
+acestep_engine/client.py:SUBMIT_RETRY_DELAYS # Used within this module by AceStepClient
+acestep_engine/client.py:_AUDIO_UPLOAD_FIELDS # Used within this module by _encode_multipart_submit_payload
+acestep_engine/client.py:_DOWNLOAD_CHUNK_SIZE # Used within this module by AceStepClient
+acestep_engine/client.py:_JSON_CONTENT_TYPE # Used within this module by AceStepClient
+acestep_engine/client.py:_MAX_CAUSE_CHARS # Used within this module by _shorten_cause
+acestep_engine/client.py:_NO_FAILURE_DETAIL # Used within this module by _failure_cause
+acestep_engine/client.py:_PollResult # Used within this module by _completed_poll_result
+acestep_engine/client.py:_TASK_STATUS_COMPLETE # Used within this module by AceStepClient
+acestep_engine/client.py:_TASK_STATUS_FAILED # Used within this module by AceStepClient
+acestep_engine/client.py:_build_submit_payload # Used within this module by AceStepClient
+acestep_engine/client.py:_completed_poll_result # Used within this module by AceStepClient
+acestep_engine/client.py:_cover_submit_payload # Used within this module by _optional_submit_payload
+acestep_engine/client.py:_default_host # Used within this module by is_acestep_available
+acestep_engine/client.py:_default_port # Used within this module by is_acestep_available
+acestep_engine/client.py:_encode_multipart_submit_payload # Used within this module by AceStepClient
+acestep_engine/client.py:_failure_cause # Used within this module by AceStepClient
+acestep_engine/client.py:_optional_submit_payload # Used within this module by _build_submit_payload
+acestep_engine/client.py:_repaint_submit_payload # Used within this module by _optional_submit_payload
+acestep_engine/client.py:_report_poll_progress # Used within this module by AceStepClient
+acestep_engine/client.py:_shorten_cause # Used within this module by _failure_cause
+acestep_engine/client.py:validate_audio_path # Used within this module by AceStepClient
+acestep_engine/models.py:ResultItem # Used within this module by TaskQueryEntry
+acestep_engine/models.py:TaskSubmitData # Used within this module by TaskSubmitResponse
+acestep_engine/training_client.py:ExportResult # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:PreprocessStatus # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:PreprocessTaskHandle # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:ScanDatasetResult # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TRAINING_DEFAULT_TIMEOUT_SECONDS # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TRAINING_STATUS_TIMEOUT_SECONDS # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TRAINING_SUBMIT_RETRIES # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TRAINING_SUBMIT_RETRY_DELAYS # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TrainingRequestError # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TrainingResponseError # Used within this module by _unwrap_data
+acestep_engine/training_client.py:TrainingStartedHandle # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:TrainingStatus # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_ExportRequestPayload # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_InitializeModelRequestPayload # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_PreprocessRequestPayload # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_ScanRequestPayload # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_StartLoKRRequestPayload # Used within this module by AceStepTrainingClient
+acestep_engine/training_client.py:_unwrap_data # Used within this module by AceStepTrainingClient
+acestep_worker/__main__.py:DEFAULT_MODEL_SIZES_GB # Used within this module by build_deps
+acestep_worker/__main__.py:JsonFormatter # Used within this module by configure_logging
+acestep_worker/__main__.py:_AcestepWorkerLogHandler # Used within this module by configure_logging
+acestep_worker/__main__.py:build_deps # Used within this module by main
+acestep_worker/downloads.py:ESTIMATED_MODEL_SIZE_BYTES # Used within this module by run_download
+acestep_worker/downloads.py:PROGRESS_POLL_SECONDS # Used within this module by _poll_progress
+acestep_worker/downloads.py:REQUIRED_CONFIG # Used within this module by is_model_downloaded
+acestep_worker/downloads.py:SHARDED_INDEX_FILENAME # Used within this module by is_model_downloaded
+acestep_worker/downloads.py:SINGLE_WEIGHTS_FILENAME # Used within this module by is_model_downloaded
+acestep_worker/downloads.py:_poll_progress # Used within this module by run_download
+acestep_worker/downloads.py:directory_size_bytes # Used within this module by _poll_progress
+acestep_worker/downloads.py:hf_snapshot_download # Used within this module by run_download
+acestep_worker/downloads.py:is_model_downloaded # Used within this module by list_available_modes
+acestep_worker/downloads.py:model_dir # Used within this module by is_model_downloaded
+acestep_worker/downloads.py:run_download # Used within this module by start_download
+acestep_worker/gpu_util.py:_BYTES_PER_GB # Used within this module by _query_nvml
+acestep_worker/gpu_util.py:_NvmlQuery # Used within this module by _query_nvml
+acestep_worker/gpu_util.py:_query_nvml # Used within this module by read_gpu_vram_stats
+acestep_worker/model_cache.py:CacheStateSnapshot # Used within this module by ModelCache
+acestep_worker/model_cache.py:LoadResult # Used within this module by ModelCache
+acestep_worker/model_cache.py:LoadedModelInfo # Used within this module by CacheStateSnapshot
+acestep_worker/progress.py:_diffusion_steps # Used within this module by parse_step_fraction
+acestep_worker/registry_client.py:DEFAULT_TIMEOUT_SECONDS # Used within this module by RegistryClient
+acestep_worker/registry_client.py:INDEFINITE_BACKOFF_SECONDS # Used within this module by default_retry_delays
+acestep_worker/registry_client.py:INITIAL_BACKOFF_SCHEDULE # Used within this module by default_retry_delays
+acestep_worker/registry_client.py:JITTER_FRACTION # Used within this module by default_retry_delays
+acestep_worker/registry_client.py:REGISTER_PATH # Used within this module by RegistryClient
+acestep_worker/registry_client.py:RegistrationFailedError # Used within this module by RegistryClient
+acestep_worker/registry_client.py:default_retry_delays # Used within this module by RegistryClient
+acestep_worker/settings.py:DEFAULT_CONTAINER_BIND_HOST # Used within this module by WorkerSettings
+acestep_worker/subprocess_runner.py:MODEL_INNER_PORT_OFFSETS # Used within this module by inner_port_for_mode
+acestep_worker/subprocess_runner.py:SUBPROCESS_BIND_HOST # Used within this module by build_env
+acestep_worker/subprocess_runner.py:SubprocessHandle # Used within this module by wait_for_health
+acestep_worker/subprocess_runner.py:_as_env_flag # Used within this module by build_env
+acestep_worker/subprocess_runner.py:_open_log_file # Used within this module by start_acestep_subprocess
+acestep_worker/subprocess_runner.py:_read_stderr_tail # Used within this module by wait_for_health
+acestep_worker/subprocess_runner.py:_stream_subprocess_logs # Used within this module by start_acestep_subprocess
+acestep_worker/subprocess_runner.py:find_uv # Used within this module by start_acestep_subprocess
+acestep_worker/subprocess_runner.py:inner_port_for_mode # Used within this module by make_acestep_runner
+acestep_worker/subprocess_runner.py:is_acestep_healthy # Used within this module by wait_for_health
+acestep_worker/subprocess_runner.py:start_acestep_subprocess # Used within this module by make_acestep_runner
+acestep_worker/subprocess_runner.py:stop_acestep_subprocess # Used within this module by start_acestep_subprocess
+acestep_worker/subprocess_runner.py:wait_for_health # Used within this module by start_acestep_subprocess
+acestep_worker/task_store.py:TERMINAL_RETENTION_SECONDS # Used within this module by TaskStore
+acestep_worker/task_store.py:_TERMINAL_STATES # Used within this module by TaskStore
+acestep_worker/task_store.py:_Task # Used within this module by TaskStore
+acestep_worker/wrapper.py:GPU_HOLD_REJECTED_DETAIL # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_LoraTrainingPaths # Used within this module by _lora_training_paths
+acestep_worker/wrapper.py:_TrainLoraResources # Used within this module by _acquire_train_lora_resources
+acestep_worker/wrapper.py:_WorkerRoutes # Used within this module by build_router
+acestep_worker/wrapper.py:_acquire_train_lora_resources # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_acquire_training_model # Used within this module by _acquire_train_lora_resources
+acestep_worker/wrapper.py:_await_lora_training # Used within this module by _run_lora_training
+acestep_worker/wrapper.py:_await_preprocessing # Used within this module by _run_lora_training
+acestep_worker/wrapper.py:_await_training_or_renewal # Used within this module by _run_train_lora_with_cleanup
+acestep_worker/wrapper.py:_cancel_gpu_hold_renewal # Used within this module by _clean_up_train_lora_setup
+acestep_worker/wrapper.py:_cancel_training_task # Used within this module by _run_train_lora_with_cleanup
+acestep_worker/wrapper.py:_claim_training_handover # Used within this module by _acquire_train_lora_resources
+acestep_worker/wrapper.py:_clean_up_train_lora_run # Used within this module by _spawn_train_lora_runner
+acestep_worker/wrapper.py:_clean_up_train_lora_setup # Used within this module by _acquire_train_lora_resources
+acestep_worker/wrapper.py:_configured_train_lora_runner # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_copytree_before_cleanup # Used within this module by _stage_lora_dataset
+acestep_worker/wrapper.py:_create_gpu_hold_handover_task # Used within this module by _claim_training_handover
+acestep_worker/wrapper.py:_export_lora_adapter # Used within this module by _run_lora_training
+acestep_worker/wrapper.py:_format_sse # Used within this module by _task_event_source
+acestep_worker/wrapper.py:_lokr_training_config # Used within this module by _start_lora_training
+acestep_worker/wrapper.py:_lora_training_paths # Used within this module by default_train_lora_runner
+acestep_worker/wrapper.py:_register_worker_routes # Used within this module by build_router
+acestep_worker/wrapper.py:_release_generation_task # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_release_gpu_hold_handover # Used within this module by _clean_up_train_lora_setup
+acestep_worker/wrapper.py:_remove_lora_workspace # Used within this module by default_train_lora_runner
+acestep_worker/wrapper.py:_renew_gpu_hold_until_done # Used within this module by _start_gpu_hold_renewal
+acestep_worker/wrapper.py:_renew_training_hold # Used within this module by _acquire_train_lora_resources
+acestep_worker/wrapper.py:_reserve_generation_task # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_run_generation_with_release # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_run_train_lora_with_cleanup # Used within this module by _spawn_train_lora_runner
+acestep_worker/wrapper.py:_shared_audio_path # Used within this module by _validate_train_lora_request
+acestep_worker/wrapper.py:_spawn_train_lora_runner # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_stage_lora_dataset # Used within this module by _run_lora_training
+acestep_worker/wrapper.py:_start_gpu_hold_renewal # Used within this module by _renew_training_hold
+acestep_worker/wrapper.py:_start_lora_training # Used within this module by _run_lora_training
+acestep_worker/wrapper.py:_stop_training_after_cancel # Used within this module by default_train_lora_runner
+acestep_worker/wrapper.py:_stop_training_after_failure # Used within this module by default_train_lora_runner
+acestep_worker/wrapper.py:_task_event_source # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:_validate_train_lora_request # Used within this module by _validated_train_lora_request
+acestep_worker/wrapper.py:_validated_train_lora_request # Used within this module by _WorkerRoutes
+acestep_worker/wrapper.py:build_router # Used within this module by create_app
+audio_engine/audio_io.py:_interleave_to_int16 # Used within this module by _stereo_to_wav_bytes
+audio_engine/audio_io.py:_stereo_to_wav_bytes # Used within this module by encode_mp3
+audio_engine/audio_io.py:build_ffmpeg_cmd # Used within this module by encode_mp3
+audio_engine/audio_io.py:sanitize_metadata # Used within this module by build_ffmpeg_cmd
+audio_engine/mastering.py:_compress_signal # Used within this module by multiband_compress
+audio_engine/mastering.py:_envelope_follower_python # Used within this module by try:
+audio_engine/mastering.py:_extract_band # Used within this module by multiband_compress
+audio_engine/mastering.py:_high_shelf_sos # Used within this module by parametric_eq
+audio_engine/mastering.py:_master_chain # Used within this module by master_stereo
+audio_engine/mastering.py:_peaking_eq_sos # Used within this module by parametric_eq
+audio_engine/mastering.py:measure_lufs # Used within this module by _master_chain
+audio_engine/mastering.py:multiband_compress # Used within this module by _master_chain
+audio_engine/mastering.py:normalize_to_lufs # Used within this module by _master_chain
+audio_engine/mastering.py:parametric_eq # Used within this module by _master_chain
+audio_engine/mastering.py:soft_clip # Used within this module by _master_chain
+audio_engine/mastering.py:widen_stereo # Used within this module by _master_chain
+songmaker_cli/acestep_capabilities.py:GUIDANCE_SCALE_NOTE # Used within this module by _make_sft_or_base
+songmaker_cli/acestep_capabilities.py:ParamSupport # Used within this module by AceStepProfile
+songmaker_cli/acestep_capabilities.py:_TURBO_CFG_INTERVAL_END_OFF # Used within this module by _make_turbo
+songmaker_cli/acestep_capabilities.py:_TURBO_CFG_INTERVAL_START_OFF # Used within this module by _make_turbo
+songmaker_cli/acestep_capabilities.py:_TURBO_GUIDANCE_OFF # Used within this module by _make_turbo
+songmaker_cli/acestep_capabilities.py:_TURBO_USE_ADG_OFF # Used within this module by _make_turbo
+songmaker_cli/acestep_capabilities.py:_make_sft_or_base # Used within this module by ACESTEP_PROFILES: Final[dict[str, AceStepProfile]] = {'turbo': _make_turbo(mode='turbo', is_xl=False
+songmaker_cli/acestep_capabilities.py:_make_turbo # Used within this module by ACESTEP_PROFILES: Final[dict[str, AceStepProfile]] = {'turbo': _make_turbo(mode='turbo', is_xl=False
+songmaker_cli/acestep_capabilities.py:_shared_profile_params # Used within this module by _make_turbo
+songmaker_cli/acestep_state.py:ADMIT_GENERATION_SCRIPT # Used within this module by admit_generation
+songmaker_cli/acestep_state.py:DOWNLOAD_KEY_PREFIX # Used within this module by download_key
+songmaker_cli/acestep_state.py:DOWNLOAD_TTL_SECONDS # Used within this module by set_download_in_progress
+songmaker_cli/acestep_state.py:download_key # Used within this module by set_download_in_progress
+songmaker_cli/admin_api.py:LAST_ADMIN_DETAIL # Used within this module by update_user_endpoint
+songmaker_cli/admin_api.py:SELF_DEACTIVATION_DETAIL # Used within this module by update_user_endpoint
+songmaker_cli/admin_api.py:_clear_user_session_cache # Used within this module by hard_delete_user_endpoint
+songmaker_cli/admin_api.py:_derive_worker_status # Used within this module by list_workers_endpoint
+songmaker_cli/admin_api.py:_loaded_modes # Used within this module by _registry_model
+songmaker_cli/admin_api.py:_post_to_worker # Used within this module by evict_model_on_worker_endpoint
+songmaker_cli/admin_api.py:_registry_model # Used within this module by _registry_models
+songmaker_cli/admin_api.py:_registry_models # Used within this module by get_registry_endpoint
+songmaker_cli/admin_api.py:_registry_worker_states # Used within this module by get_registry_endpoint
+songmaker_cli/admin_api.py:_retention_report_response # Used within this module by generation_retention_preview
+songmaker_cli/admin_api.py:_state_from_dict # Used within this module by list_workers_endpoint
+songmaker_cli/admin_api.py:audit_log_endpoint # HTTP dispatcher: router.get('/audit-log')
+songmaker_cli/admin_api.py:create_user_endpoint # HTTP dispatcher: router.post('/users', responses={409: {'description': 'User already exists'}})
+songmaker_cli/admin_api.py:deactivate_user_endpoint # HTTP dispatcher: router.delete('/users/{user_id}', responses={400: {'description': 'User cannot be deactivated'}, 404: {'description': 'User does not exist'}})
+songmaker_cli/admin_api.py:download_model_endpoint # HTTP dispatcher: router.post('/registry/{mode}/download', responses={400: {'description': 'Requested model mode is invalid'}, 409: {'description': 'Model is already downloaded or downloading'}, 503: {'description': 'Model registry or job queue is unavailable'}})
+songmaker_cli/admin_api.py:evict_model_on_worker_endpoint # HTTP dispatcher: router.post('/workers/{worker_id}/evict_model', responses={400: {'description': 'Model eviction request is invalid'}, 404: {'description': 'Worker does not exist'}, 502: {'description': 'Worker rejected model eviction'}})
+songmaker_cli/admin_api.py:force_logout_endpoint # HTTP dispatcher: router.delete('/sessions/{session_hash}', responses={404: {'description': 'Session does not exist'}})
+songmaker_cli/admin_api.py:generation_retention_preview # HTTP dispatcher: router.get('/generation-retention/preview')
+songmaker_cli/admin_api.py:generation_retention_run # HTTP dispatcher: router.post('/generation-retention/run')
+songmaker_cli/admin_api.py:get_registry_endpoint # HTTP dispatcher: router.get('/registry')
+songmaker_cli/admin_api.py:hard_delete_user_endpoint # HTTP dispatcher: router.delete('/users/{user_id}/permanent', responses={400: {'description': 'User cannot be permanently deleted'}, 404: {'description': 'User does not exist'}})
+songmaker_cli/admin_api.py:list_users_endpoint # HTTP dispatcher: router.get('/users')
+songmaker_cli/admin_api.py:list_voices_endpoint # HTTP dispatcher: router.get('/voices')
+songmaker_cli/admin_api.py:list_workers_endpoint # HTTP dispatcher: router.get('/workers')
+songmaker_cli/admin_api.py:load_model_on_worker_endpoint # HTTP dispatcher: router.post('/workers/{worker_id}/load_model', responses={400: {'description': 'Model load request is invalid'}, 404: {'description': 'Worker does not exist'}, 503: {'description': 'Worker is unavailable'}})
+songmaker_cli/admin_api.py:login_attempts_endpoint # HTTP dispatcher: router.get('/login-attempts')
+songmaker_cli/admin_api.py:pin_model_on_worker_endpoint # HTTP dispatcher: router.post('/workers/{worker_id}/pin_model', responses={400: {'description': 'Model pin request is invalid'}, 404: {'description': 'Worker does not exist'}, 409: {'description': 'Model cannot be pinned'}, 502: {'description': 'Worker rejected model pinning'}})
+songmaker_cli/admin_api.py:restart_worker_endpoint # HTTP dispatcher: router.post('/workers/{worker_id}/restart', responses={404: {'description': 'Worker does not exist'}, 502: {'description': 'Worker restart failed'}})
+songmaker_cli/admin_api.py:sessions_endpoint # HTTP dispatcher: router.get('/sessions')
+songmaker_cli/admin_api.py:unpin_model_on_worker_endpoint # HTTP dispatcher: router.post('/workers/{worker_id}/unpin_model', responses={400: {'description': 'Model unpin request is invalid'}, 404: {'description': 'Worker does not exist'}, 502: {'description': 'Worker rejected model unpinning'}})
+songmaker_cli/admin_api.py:update_user_endpoint # HTTP dispatcher: router.put('/users/{user_id}', responses={400: {'description': 'User update is invalid'}, 404: {'description': 'User does not exist'}})
+songmaker_cli/agent_runtime.py:CLAUDE_CLI_VSCODE_BINARY_GLOB # Used within this module by configure_agent_providers
+songmaker_cli/agent_runtime.py:GROK_CLI_SESSION_ROOT # Used within this module by configure_agent_providers
+songmaker_cli/album_api.py:_single_album_response # Used within this module by api_get_album
+songmaker_cli/album_api.py:api_archive_album # HTTP dispatcher: router.post('/albums/{album_id}/archive')
+songmaker_cli/album_api.py:api_cleanup_album # HTTP dispatcher: router.post('/albums/{album_id}/cleanup')
+songmaker_cli/album_api.py:api_create_album # HTTP dispatcher: router.post('/albums', responses={409: {'description': 'Album ID already exists'}, 422: {'description': 'Album title is required'}})
+songmaker_cli/album_api.py:api_create_cover_suggestions # HTTP dispatcher: router.post('/albums/{album_id}/cover-suggestions', responses={404: {'description': 'Album not found'}, 409: {'description': 'Cover suggestions are already running'}, 429: {'description': 'Daily suggestion limit reached'}, 503: {'description': 'Cover suggestions are unavailable'}})
+songmaker_cli/album_api.py:api_delete_album # HTTP dispatcher: router.delete('/albums/{album_id}')
+songmaker_cli/album_api.py:api_delete_album_cover # HTTP dispatcher: router.delete('/albums/{album_id}/cover')
+songmaker_cli/album_api.py:api_delete_cover_suggestions # HTTP dispatcher: router.delete('/albums/{album_id}/cover-suggestions')
+songmaker_cli/album_api.py:api_get_album # HTTP dispatcher: router.get('/albums/{album_id}')
+songmaker_cli/album_api.py:api_get_album_cover # HTTP dispatcher: router.get('/albums/{album_id}/cover', responses={404: {'description': 'Album or cover not found'}})
+songmaker_cli/album_api.py:api_get_cover_suggestion # HTTP dispatcher: router.get('/albums/{album_id}/cover-suggestions/{suggestion_id}', responses={404: {'description': 'Album or cover suggestion not found'}})
+songmaker_cli/album_api.py:api_list_albums # HTTP dispatcher: router.get('/albums')
+songmaker_cli/album_api.py:api_list_cover_suggestions # HTTP dispatcher: router.get('/albums/{album_id}/cover-suggestions')
+songmaker_cli/album_api.py:api_restore_album # HTTP dispatcher: router.post('/albums/{album_id}/restore', responses={410: {'description': 'Album restore window has expired'}})
+songmaker_cli/album_api.py:api_select_album_cover_suggestion # HTTP dispatcher: router.put('/albums/{album_id}/cover', responses={404: {'description': 'Album or cover suggestion not found'}, 422: {'description': 'Cover suggestion cannot be used'}})
+songmaker_cli/album_api.py:api_share_album # HTTP dispatcher: router.post('/albums/{album_id}/share')
+songmaker_cli/album_api.py:api_unarchive_album # HTTP dispatcher: router.post('/albums/{album_id}/unarchive')
+songmaker_cli/album_api.py:api_unshare_album # HTTP dispatcher: router.delete('/albums/{album_id}/share')
+songmaker_cli/album_api.py:api_update_album # HTTP dispatcher: router.put('/albums/{album_id}', responses={404: {'description': 'Album not found'}, 422: {'description': 'Album title is required'}})
+songmaker_cli/album_api.py:api_upload_album_cover # HTTP dispatcher: router.post('/albums/{album_id}/cover')
+songmaker_cli/api_helpers.py:LORA_NOT_FOUND_DETAIL # Used within this module by check_lora_access
+songmaker_cli/api_helpers.py:LORA_SAMPLE_NOT_FOUND_DETAIL # Used within this module by check_lora_sample_access
+songmaker_cli/api_helpers.py:PageParams # Used within this module by _page_params
+songmaker_cli/api_helpers.py:_ALBUM_ID_LOCK_ID # Used within this module by unique_album_id
+songmaker_cli/api_helpers.py:_ALBUM_SLUG_BASE_MAX_LENGTH # Used within this module by unique_album_id
+songmaker_cli/api_helpers.py:_LORA_CAPACITY_LOCK_ID # Used within this module by lock_lora_capacity
+songmaker_cli/api_helpers.py:_LORA_SLUG_BASE_MAX_LENGTH # Used within this module by unique_lora_slug
+songmaker_cli/api_helpers.py:_LORA_SLUG_LOCK_ID # Used within this module by unique_lora_slug
+songmaker_cli/api_helpers.py:_PLAYLIST_SLUG_BASE_MAX_LENGTH # Used within this module by unique_playlist_slug
+songmaker_cli/api_helpers.py:_PLAYLIST_SLUG_LOCK_ID # Used within this module by unique_playlist_slug
+songmaker_cli/api_helpers.py:_PUBLIC_BASE_URL_HOSTNAME # Used within this module by _PUBLIC_BASE_URL_NETLOC_RE = re.compile(f'^(?:{_PUBLIC_BASE_URL_HOSTNAME}|{_PUBLIC_BASE_URL_IPV6})(?
+songmaker_cli/api_helpers.py:_PUBLIC_BASE_URL_IPV6 # Used within this module by _PUBLIC_BASE_URL_NETLOC_RE = re.compile(f'^(?:{_PUBLIC_BASE_URL_HOSTNAME}|{_PUBLIC_BASE_URL_IPV6})(?
+songmaker_cli/api_helpers.py:_PUBLIC_BASE_URL_NETLOC_RE # Used within this module by resolve_public_base_url
+songmaker_cli/api_helpers.py:_PUBLIC_BASE_URL_SCHEMES # Used within this module by resolve_public_base_url
+songmaker_cli/api_helpers.py:_QUEUEABLE_JOB_TYPES # Used within this module by create_job_with_rate_limit
+songmaker_cli/api_helpers.py:_RATE_LIMIT_LOCK_ID # Used within this module by _begin_exclusive
+songmaker_cli/api_helpers.py:_SONG_SLUG_BASE_MAX_LENGTH # Used within this module by unique_song_slug
+songmaker_cli/api_helpers.py:_SONG_SLUG_LOCK_ID # Used within this module by unique_song_slug
+songmaker_cli/api_helpers.py:_UNBOUNDED_SLUG_LENGTH # Used within this module by slugify
+songmaker_cli/api_helpers.py:_acquire_unique_slug # Used within this module by unique_album_id
+songmaker_cli/api_helpers.py:_admin_page_params # Used within this module by AdminPagination = Annotated[PageParams, Depends(_admin_page_params)]
+songmaker_cli/api_helpers.py:_job_type_rate_limits # Used within this module by create_job_with_rate_limit
+songmaker_cli/api_helpers.py:_page_params # Used within this module by Pagination = Annotated[PageParams, Depends(_page_params)]
+songmaker_cli/api_helpers.py:unique_lora_slug # Pre-existing uncalled helper outside the enumerated deletions; residual tracked by #928
+songmaker_cli/api_models/generation_params.py:_GEN_PARAM_MAX_STRING_LENGTH # Used within this module by BaseGenerationParams
+songmaker_cli/api_models/jobs.py:REMAINING_TIME_ESTIMATE_CALCULATING # Used within this module by _remaining_time_estimate
+songmaker_cli/api_models/jobs.py:_remaining_time_estimate # Used within this module by JobResponse
+songmaker_cli/api_models/library.py:_require_share_slug # Used within this module by ShareInventoryItem
+songmaker_cli/api_models/playlists.py:_playlist_entries # Used within this module by PlaylistResponse
+songmaker_cli/api_models/playlists.py:_shared_playlist_cover_urls_at # Used within this module by shared_playlist_cover_urls
+songmaker_cli/api_models/playlists.py:playlist_cover_urls # Used within this module by PlaylistResponse
+songmaker_cli/api_models/resource_events.py:_DECIMAL_PATTERN # Used within this module by ResourceHelloEvent
+songmaker_cli/api_models/songs.py:ALBUM_YEAR_MAX # Used within this module by AlbumUpdateRequest
+songmaker_cli/api_models/songs.py:ALBUM_YEAR_MIN # Used within this module by AlbumUpdateRequest
+songmaker_cli/api_models/songs.py:SharePickMedia # Used within this module by _NO_SHARE_PICK_MEDIA = SharePickMedia(generation_id=None, audio_duration=None, lyrics=None, whisper_
+songmaker_cli/api_models/songs.py:_NO_SHARE_PICK_MEDIA # Used within this module by share_pick_media
+songmaker_cli/api_models/songs.py:_VALID_REPAINT_MODES # Used within this module by RepaintRequest
+songmaker_cli/api_models/songs.py:_add_user_rating # Used within this module by _generation_scores
+songmaker_cli/api_models/songs.py:_audiobox_quality # Used within this module by _best_generation
+songmaker_cli/api_models/songs.py:_best_generation # Used within this module by SongResponse
+songmaker_cli/api_models/songs.py:_generation_scores # Used within this module by GenerationResponse
+songmaker_cli/api_models/songs.py:_safe_json_dict # Used within this module by GenerationResponse
+songmaker_cli/api_models/songs.py:_score_values # Used within this module by _generation_scores
+songmaker_cli/api_models/songs.py:generation_expiry # Used within this module by GenerationResponse
+songmaker_cli/api_models/whisper.py:TimedTranscriptSpan # Used within this module by WhisperWordCue
+songmaker_cli/audio_paths.py:_resolved_audio_root # Used within this module by _resolved_within_root
+songmaker_cli/audio_paths.py:_resolved_within_root # Used within this module by canonical_audio_filename
+songmaker_cli/auth_api.py:SETUP_ALREADY_COMPLETED_DETAIL # Used within this module by setup
+songmaker_cli/auth_api.py:_authenticate_login # Used within this module by login
+songmaker_cli/auth_api.py:_cache_session # Used within this module by setup
+songmaker_cli/auth_api.py:change_password # HTTP dispatcher: router.put('/password', responses={401: {'description': 'Current password is incorrect'}, 429: {'description': 'Too many password change attempts'}})
+songmaker_cli/auth_api.py:logout # HTTP dispatcher: router.delete('/session')
+songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
+songmaker_cli/auth_api.py:setup_required # HTTP dispatcher: router.get('/setup-required')
+songmaker_cli/auth_dependencies.py:_bind_user_to_log_context # Used within this module by _auth_dependencies = current_user_dependency(session_store=_session_record_store, audit_sink=_audit_
+songmaker_cli/auth_dependencies.py:_session_record_store # Used within this module by _auth_dependencies = current_user_dependency(session_store=_session_record_store, audit_sink=_audit_
+songmaker_cli/auth_stores.py:AUDITED_SESSION_ID_CHARS # Used within this module by DatabaseAuditSink
+songmaker_cli/auth_stores.py:USER_AGENT_CHANGE_DETAIL # Used within this module by _identity_change_detail
+songmaker_cli/auth_stores.py:_AUDIT_ACTIONS # Used within this module by DatabaseAuditSink
+songmaker_cli/auth_stores.py:_identity_change_detail # Used within this module by DatabaseAuditSink
+songmaker_cli/chat_api.py:CHAT_ROLE # Used within this module by SYSTEM_PROMPT = f'{CHAT_ROLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL_PROMPT}'
+songmaker_cli/chat_api.py:CONTEXT_TAG # Used within this module by UNTRUSTED_DATA_NOTICE = f'User messages may contain <{CONTEXT_TAG}> blocks with song lyrics and meta
+songmaker_cli/chat_api.py:STRUCTURAL_PROMPT # Used within this module by SYSTEM_PROMPT = f'{CHAT_ROLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL_PROMPT}'
+songmaker_cli/chat_api.py:SYSTEM_PROMPT # Used within this module by api_song_chat
+songmaker_cli/chat_api.py:UNTRUSTED_DATA_NOTICE # Used within this module by SYSTEM_PROMPT = f'{CHAT_ROLE}\n\n{UNTRUSTED_DATA_NOTICE}\n\n{STRUCTURAL_PROMPT}'
+songmaker_cli/chat_api.py:_accessible_mentioned_songs # Used within this module by _build_song_context
+songmaker_cli/chat_api.py:_build_song_context # Used within this module by api_song_chat
+songmaker_cli/chat_api.py:_format_referenced_version # Used within this module by _referenced_versions
+songmaker_cli/chat_api.py:_format_song_context # Used within this module by _build_song_context
+songmaker_cli/chat_api.py:_referenced_versions # Used within this module by _build_song_context
+songmaker_cli/chat_api.py:_version_metadata # Used within this module by _format_referenced_version
+songmaker_cli/chat_api.py:api_capabilities # HTTP dispatcher: router.get('/capabilities')
+songmaker_cli/chat_api.py:api_recent_chats # HTTP dispatcher: router.get('/chat/recent')
+songmaker_cli/chat_api.py:api_song_chat # HTTP dispatcher: router.post('/songs/{song_id}/chat', responses={503: {'description': 'Claude is currently unavailable'}})
+songmaker_cli/chat_api.py:api_song_chat_clear # HTTP dispatcher: router.delete('/songs/{song_id}/chat')
+songmaker_cli/chat_api.py:api_song_chat_history # HTTP dispatcher: router.get('/songs/{song_id}/chat')
+songmaker_cli/cleanup.py:GenerationRetentionReport # Used within this module by run_generation_retention
+songmaker_cli/cli_client.py:AUTHENTICATION_REQUIRED_DETAIL # Used within this module by api_get
+songmaker_cli/cli_client.py:SESSION_DIR # Used within this module by SESSION_FILE = SESSION_DIR / 'session.json'
+songmaker_cli/cli_client.py:SESSION_FILE # Used within this module by _load_session
+songmaker_cli/cli_client.py:_build_client # Used within this module by cli_logout
+songmaker_cli/cli_client.py:_clear_session # Used within this module by cli_logout
+songmaker_cli/cli_client.py:_extract_cookies # Used within this module by cli_login
+songmaker_cli/cli_client.py:_load_session # Used within this module by _build_client
+songmaker_cli/cli_client.py:_print_progress # Used within this module by poll_job
+songmaker_cli/cli_client.py:_save_session # Used within this module by cli_login
+songmaker_cli/config.py:_ACE_STEP_CONFIG_FIELDS # Used within this module by build_ace_config
+songmaker_cli/config.py:_DEFAULTS_FILENAME # Used within this module by _defaults_path
+songmaker_cli/config.py:_MODEL_NAME_TO_MODE # Used within this module by resolve_model_mode
+songmaker_cli/config.py:_SHARED_DEFAULTS # Used within this module by _BUILTIN_DEFAULTS: dict[str, dict[str, object]] = {'turbo': {'inference_steps': 8, 'guidance_scale':
+songmaker_cli/config.py:_coerce_to_params # Used within this module by build_ace_config
+songmaker_cli/config.py:_defaults_path # Used within this module by _migrate_file_defaults
+songmaker_cli/config.py:_merge_layers # Used within this module by build_ace_config
+songmaker_cli/config.py:_migrate_file_defaults # Used within this module by load_generation_defaults
+songmaker_cli/constants.py:ACESTEP_SSE_READ_TIMEOUT_MARGIN_SECONDS # Used within this module by acestep_sse_read_timeout_seconds
+songmaker_cli/constants.py:COVER_WEB_QUEUED_STALE_THRESHOLD_SECONDS # Used within this module by stale_job_thresholds
+songmaker_cli/constants.py:DOWNLOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:GENERATE_JOB_HEARTBEAT_TICK_RESERVE_SECONDS # Used within this module by generate_job_heartbeat_stale_threshold_seconds
+songmaker_cli/constants.py:GENERATE_PRE_FIRST_EVENT_TIMEOUT_SECONDS # Used within this module by generate_job_heartbeat_stale_threshold_seconds
+songmaker_cli/constants.py:JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:LOAD_MODEL_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:MULTIPART_ENVELOPE_MAX_BYTES # Used within this module by AUDIO_UPLOAD_BODY_MAX_BYTES = AUDIO_UPLOAD_FILE_MAX_BYTES + MULTIPART_ENVELOPE_MAX_BYTES
+songmaker_cli/constants.py:QUEUED_JOB_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:SCORE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:WORKER_JOB_QUEUED_STALE_THRESHOLD_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/constants.py:WORKER_RESTART_GRACE_SECONDS # Used within this module by STALE_JOB_THRESHOLDS: Final[dict[JobType, JobStaleThresholds]] = {JobType.COVER: JobStaleThresholds(
+songmaker_cli/conversation_api.py:COWRITER_MEMORY_INSTRUCTIONS # Used within this module by build_cowriter_system_prompt
+songmaker_cli/conversation_api.py:COWRITER_ROLE # Used within this module by build_cowriter_system_prompt
+songmaker_cli/conversation_api.py:COWRITER_TEXT_ONLY_INSTRUCTIONS # Used within this module by build_cowriter_system_prompt
+songmaker_cli/conversation_api.py:COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS # Used within this module by build_cowriter_system_prompt
+songmaker_cli/conversation_api.py:COWRITER_UNTRUSTED_NOTICE # Used within this module by build_cowriter_system_prompt
+songmaker_cli/conversation_api.py:ChatTurnFailureFrame # Used within this module by _chat_failure_event
+songmaker_cli/conversation_api.py:ChatTurnLifecycle # Used within this module by api_chat_turn
+songmaker_cli/conversation_api.py:ChatTurnRouteErrorFrame # Used within this module by _provider_unavailable_event
+songmaker_cli/conversation_api.py:PreparedChatTurn # Used within this module by _prepare_chat_turn
+songmaker_cli/conversation_api.py:SSE_MEDIA_TYPE # Used within this module by api_chat_turn
+songmaker_cli/conversation_api.py:TurnContextBlock # Used within this module by TurnContextEnvelope
+songmaker_cli/conversation_api.py:TurnContextEnvelope # Used within this module by compose_turn_context
+songmaker_cli/conversation_api.py:_CHAT_COMPLETION_FAILED # Used within this module by _chat_completion_failure_event
+songmaker_cli/conversation_api.py:_CHAT_REQUEST_FAILED # Used within this module by _chat_failure_event
+songmaker_cli/conversation_api.py:_ChatStreamingResponse # Used within this module by api_chat_turn
+songmaker_cli/conversation_api.py:_PROVIDER_UNAVAILABLE_STATUS # Used within this module by _provider_unavailable_event
+songmaker_cli/conversation_api.py:_TURN_FAILED_STATUS # Used within this module by _chat_failure_event
+songmaker_cli/conversation_api.py:_chat_completion_failure_event # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_chat_event_generator # Used within this module by api_chat_turn
+songmaker_cli/conversation_api.py:_chat_failure_event # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_chat_turn_context # Used within this module by _prepare_chat_turn
+songmaker_cli/conversation_api.py:_chat_turn_provider # Used within this module by _prepare_chat_turn
+songmaker_cli/conversation_api.py:_complete_chat_turn # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_format_current_song # Used within this module by compose_turn_context
+songmaker_cli/conversation_api.py:_format_take # Used within this module by resolve_take_block
+songmaker_cli/conversation_api.py:_format_version # Used within this module by _mentioned_version_block
+songmaker_cli/conversation_api.py:_generation_is_playable # Used within this module by resolve_take_block
+songmaker_cli/conversation_api.py:_log_chat_turn # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_mentioned_album_block # Used within this module by resolve_mention_blocks
+songmaker_cli/conversation_api.py:_mentioned_song_blocks # Used within this module by resolve_mention_blocks
+songmaker_cli/conversation_api.py:_mentioned_version_block # Used within this module by resolve_mention_blocks
+songmaker_cli/conversation_api.py:_prepare_chat_messages # Used within this module by _prepare_chat_turn
+songmaker_cli/conversation_api.py:_prepare_chat_turn # Used within this module by api_chat_turn
+songmaker_cli/conversation_api.py:_provider_unavailable_event # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_save_compacted_summary # Used within this module by _prepare_chat_messages
+songmaker_cli/conversation_api.py:_sse_format # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:_unique_ids # Used within this module by _mentioned_song_blocks
+songmaker_cli/conversation_api.py:_verify_owns_conversation # Used within this module by api_conversation_messages
+songmaker_cli/conversation_api.py:api_chat_turn # HTTP dispatcher: router.post('/chat/turn', responses={404: {'description': 'Mentioned album or version does not exist'}, 422: {'description': 'Chat context or co-writer configuration is invalid'}})
+songmaker_cli/conversation_api.py:api_conversation_messages # HTTP dispatcher: router.get('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
+songmaker_cli/conversation_api.py:api_delete_conversation # HTTP dispatcher: router.delete('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
+songmaker_cli/conversation_api.py:api_get_memory # HTTP dispatcher: router.get('/memory')
+songmaker_cli/conversation_api.py:api_list_conversations # HTTP dispatcher: router.get('/conversations')
+songmaker_cli/conversation_api.py:api_new_conversation # HTTP dispatcher: router.post('/conversations/new')
+songmaker_cli/conversation_api.py:api_put_album_memory # HTTP dispatcher: router.put('/memory/albums/{album_id}')
+songmaker_cli/conversation_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
+songmaker_cli/conversation_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
+songmaker_cli/conversation_api.py:build_cowriter_system_prompt # Used within this module by _chat_event_generator
+songmaker_cli/conversation_api.py:compose_turn_context # Used within this module by _chat_turn_context
+songmaker_cli/conversation_api.py:load_memory_for_turn # Used within this module by _chat_turn_context
+songmaker_cli/conversation_api.py:resolve_mention_blocks # Used within this module by _chat_turn_context
+songmaker_cli/conversation_api.py:resolve_take_block # Used within this module by _chat_turn_context
+songmaker_cli/cover_runner.py:COVER_IMAGE_POLICY # Used within this module by _generate_cover_image
+songmaker_cli/cover_runner.py:COVER_RUNNER_POLL_INTERVAL_SECONDS # Used within this module by cover_runner_loop
+songmaker_cli/cover_runner.py:_CODEX_COVER_IMAGE_GENERATOR # Used within this module by _generate_cover_image
+songmaker_cli/cover_runner.py:_await_generation_completion # Used within this module by _generate_cover_image
+songmaker_cli/cover_runner.py:_claim_next_cover_job # Used within this module by run_next_cover_job
+songmaker_cli/cover_runner.py:_generate_cover_image # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_keep_heartbeats # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_load_cover_image_dispatch # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_load_cover_prompt # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_publish_suggestion_group # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_remove_partial_suggestions # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_staging_directory # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_staging_path # Used within this module by recover_web_cover_jobs
+songmaker_cli/cover_runner.py:_stop_heartbeats # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_unstartable_route_error # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:_write_staged_png # Used within this module by run_claimed_cover_suggestion_job
+songmaker_cli/cover_runner.py:run_next_cover_job # Used within this module by cover_runner_loop
+songmaker_cli/cover_suggestions.py:ALBUM_NOT_FOUND # Used within this module by CoverSuggestionAlbumNotFoundError
+songmaker_cli/cover_suggestions.py:COVER_SUGGESTIONS_ALREADY_RUNNING # Used within this module by CoverSuggestionAlreadyRunningError
+songmaker_cli/cover_suggestions.py:CoverSuggestionActor # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:CoverSuggestionAlbumNotFoundError # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:CoverSuggestionAlreadyRunningError # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:CoverSuggestionDailyLimitReachedError # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:CoverSuggestionRequest # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:DAILY_COVER_SUGGESTION_LIMIT_REACHED # Used within this module by CoverSuggestionDailyLimitReachedError
+songmaker_cli/cover_suggestions.py:_COVER_SUGGESTIONS_LOCK_ID # Used within this module by _lock_cover_suggestion_request
+songmaker_cli/cover_suggestions.py:_expected_relative_path # Used within this module by suggestion_png_path
+songmaker_cli/cover_suggestions.py:_lock_cover_suggestion_request # Used within this module by request_cover_suggestions
+songmaker_cli/cover_suggestions.py:_remove_empty_parents # Used within this module by remove_cover_suggestion_files
+songmaker_cli/covers.py:_COVER_PATH_TRAVERSAL_LOG # Used within this module by remove_cover_files
+songmaker_cli/covers.py:_COVER_REJECTED_IDS # Used within this module by _is_unsafe_cover_id
+songmaker_cli/covers.py:_confine_cover_path # Used within this module by write_cover
+songmaker_cli/covers.py:_cover_entity_dir # Used within this module by write_cover
+songmaker_cli/covers.py:_cover_file_exists # Used within this module by album_cover_file_exists
+songmaker_cli/covers.py:_cover_old_name # Used within this module by write_cover
+songmaker_cli/covers.py:_cover_staging_name # Used within this module by write_cover
+songmaker_cli/covers.py:_cover_staging_prefix # Used within this module by remove_cover_files
+songmaker_cli/covers.py:_cover_variant_path # Used within this module by _resolve_cover_file
+songmaker_cli/covers.py:_covers_root # Used within this module by remove_cover_files
+songmaker_cli/covers.py:_discard_leftover_cover_old # Used within this module by write_cover
+songmaker_cli/covers.py:_is_unsafe_cover_id # Used within this module by _require_safe_cover_id
+songmaker_cli/covers.py:_normalized_original # Used within this module by decode_cover_image
+songmaker_cli/covers.py:_rename_confined # Used within this module by write_cover
+songmaker_cli/covers.py:_require_safe_cover_id # Used within this module by _cover_entity_dir
+songmaker_cli/covers.py:_resolve_cover_file # Used within this module by resolve_cover_file
+songmaker_cli/covers.py:_restore_cover_if_orphaned # Used within this module by write_cover
+songmaker_cli/covers.py:_rmtree_confined_cover_dir # Used within this module by write_cover
+songmaker_cli/covers.py:_save_variants # Used within this module by write_cover
+songmaker_cli/covers.py:_square_derivative # Used within this module by _save_variants
+songmaker_cli/covers.py:cover_key_extension # Used within this module by cover_media_type
+songmaker_cli/covers.py:decode_cover_image # Used within this module by write_cover
+songmaker_cli/covers.py:new_cover_key # Used within this module by write_cover
+songmaker_cli/covers.py:remove_cover_files # Used within this module by remove_album_cover_files
+songmaker_cli/covers.py:sniff_cover_format # Used within this module by decode_cover_image
+songmaker_cli/covers.py:write_cover # Used within this module by write_album_cover
+songmaker_cli/cowriter/history.py:CompactedHistory # Used within this module by compact_conversation
+songmaker_cli/cowriter/history.py:_message_tokens # Used within this module by compact_conversation
+songmaker_cli/cowriter/history.py:_newest_fitting_tail # Used within this module by compact_conversation
+songmaker_cli/cowriter/history.py:_unsummarized_messages # Used within this module by compact_conversation
+songmaker_cli/cowriter/mcp_spec.py:MCP_CONFIG_FILE_PREFIX # Used within this module by songmaker_mcp_server
+songmaker_cli/cowriter/mcp_spec.py:MCP_SERVER_NAME # Used within this module by songmaker_mcp_server
+songmaker_cli/cowriter/mcp_spec.py:MCP_TOOL_NAMES # Used within this module by "Songmaker's own MCP server, as the provider layer needs to see it.\n\nEverything below is a literal
+songmaker_cli/cowriter/mcp_spec.py:MCP_USER_ID_ENVIRONMENT_VARIABLE # Used within this module by songmaker_mcp_server
+songmaker_cli/cowriter/mcp_spec.py:_UNUSED_IN_MCP_SUBPROCESS # Used within this module by songmaker_mcp_server
+songmaker_cli/cowriter/routing.py:_cowriter_executor # Used within this module by stream_cowriter_turn
+songmaker_cli/cowriter/routing.py:_tool_catalog # Used within this module by stream_cowriter_turn
+songmaker_cli/cowriter/tools.py:COWRITER_TOOLS # Used within this module by _TOOLS_BY_NAME = {tool.name: tool for tool in COWRITER_TOOLS}
+songmaker_cli/cowriter/tools.py:CowriterTool # Used within this module by "Canonical songmaker tool catalog for every co-writer provider.\n\nClaude reaches these functions th
+songmaker_cli/cowriter/tools.py:_INT # Used within this module by COWRITER_TOOLS: tuple[CowriterTool, ...] = (CowriterTool('list_albums', 'List all albums owned by th
+songmaker_cli/cowriter/tools.py:_STRING # Used within this module by COWRITER_TOOLS: tuple[CowriterTool, ...] = (CowriterTool('list_albums', 'List all albums owned by th
+songmaker_cli/cowriter/tools.py:_TOOLS_BY_NAME # Used within this module by execute_cowriter_tool
+songmaker_cli/cowriter/tools.py:_object # Used within this module by COWRITER_TOOLS: tuple[CowriterTool, ...] = (CowriterTool('list_albums', 'List all albums owned by th
+songmaker_cli/cowriter/tools.py:_serialize # Used within this module by execute_cowriter_tool
+songmaker_cli/db/engine.py:MIGRATIONS_DIR # Used within this module by _run_migrations
+songmaker_cli/db/engine.py:_DEFAULT_SQLITE_TIMEOUT # Used within this module by init_test_db
+songmaker_cli/db/engine.py:_enable_sqlite_pragmas # Used within this module by init_test_db
+songmaker_cli/db/engine.py:_run_migrations # Used within this module by init_db
+songmaker_cli/db/engine.py:_seed_available_models # Used within this module by init_test_db
+songmaker_cli/db/engine.py:connect_db # Used within this module by init_db
+songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/conftest.py and database tests
+songmaker_cli/db/migration_logging.py:_MigrationLogHandler # Used within this module by configure_migration_logging
+songmaker_cli/db/migrations/env.py:MIGRATION_LOCK_ID # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/env.py:_resolve_db_url # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/env.py:run_migrations_offline # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/env.py:run_migrations_online # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_JSON_TARGETS # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_KEY_RENAMES_FORWARD # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_KEY_RENAMES_REVERSE # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_json_mapping # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_migrate_json_column # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_migrate_json_keys # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_migrate_thinking_value # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8c9d1e2f3a4_acestep_canonical_names.py:_rename_json_keys # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8e3f1c07a25_add_slug_to_songs.py:_SELECT_SONGS # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/b8e3f1c07a25_add_slug_to_songs.py:_backfill_song_slugs # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/bb091d53ebd4_add_src_generation_id_to_generations.py:FK_NAME # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/c9d4a2f18e37_unique_song_slug_index.py:_SELECT_EMPTY_SLUG_SONGS # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/c9d4a2f18e37_unique_song_slug_index.py:_SELECT_TAKEN_SLUGS # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/c9d4a2f18e37_unique_song_slug_index.py:_backfill_empty_slugs # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/d0e1f2a3b4c5_add_conversations.py:backfill_conversations # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py:_SELECT_PLAYLISTS # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/d5f8a3b21c46_add_slug_to_playlists.py:_backfill_playlist_slugs # Alembic migration protocol; frozen schema history
+songmaker_cli/db/migrations/versions/f41ebd8f5103_add_model_mode_to_user_loras.py:_MODEL_MODE_CHECK # Alembic migration protocol; frozen schema history
+songmaker_cli/db/models.py:ALBUMS_ID # Used within this module by Song
+songmaker_cli/db/models.py:DELETE_ORPHANS # Used within this module by Album
+songmaker_cli/db/models.py:GENERATIONS_ID # Used within this module by Generation
+songmaker_cli/db/models.py:SONGS_ID # Used within this module by Version
+songmaker_cli/db/models.py:_session_token # Used within this module by UserSession
+songmaker_cli/db/models.py:_uuid # Used within this module by Song
+songmaker_cli/db/models.py:_validate_base_generation_params # Used within this module by Version
+songmaker_cli/db/models.py:_validate_stored_generation_params # Used within this module by Generation
+songmaker_cli/db/queries/albums.py:_album_query # Used within this module by list_albums
+songmaker_cli/db/queries/auth.py:_album_audio_paths # Used within this module by hard_delete_user
+songmaker_cli/db/queries/generations.py:INITIAL_GENERATION_NUMBER # Used within this module by create_generation
+songmaker_cli/db/queries/generations.py:_GENERATION_FILE_SUFFIXES # Used within this module by delete_generation_files
+songmaker_cli/db/queries/generations.py:_probe_audio_duration_or_none # Used within this module by measure_generation_audio_duration
+songmaker_cli/db/queries/jobs.py:QueuedJobVerdict # Used within this module by _queued_verdict
+songmaker_cli/db/queries/jobs.py:_active_jobs_with_thresholds # Used within this module by recover_stale_jobs_by_age_and_type
+songmaker_cli/db/queries/jobs.py:_before_stale_job_recovery_update # Used within this module by _recover_stale_job
+songmaker_cli/db/queries/jobs.py:_duration_seconds_expr # Used within this module by job_duration_stats
+songmaker_cli/db/queries/jobs.py:_is_heartbeat_stale # Used within this module by _stale_job_verdict
+songmaker_cli/db/queries/jobs.py:_is_started_stale # Used within this module by _queued_verdict
+songmaker_cli/db/queries/jobs.py:_queued_verdict # Used within this module by _stale_job_verdict
+songmaker_cli/db/queries/jobs.py:_recover_stale_job # Used within this module by recover_stale_jobs_by_age_and_type
+songmaker_cli/db/queries/jobs.py:_recover_stale_job_if_unchanged # Used within this module by _recover_stale_job
+songmaker_cli/db/queries/jobs.py:_stale_job_verdict # Used within this module by _recover_stale_job
+songmaker_cli/db/queries/library.py:LibrarySearchPage # Used within this module by search_library
+songmaker_cli/db/queries/library.py:_SONG_LIST_OPTIONS # Used within this module by _matching_songs
+songmaker_cli/db/queries/library.py:_ascending_keyset_clause # Used within this module by _keyset_clause
+songmaker_cli/db/queries/library.py:_dedupe_hits # Used within this module by search_library
+songmaker_cli/db/queries/library.py:_descending_keyset_clause # Used within this module by _keyset_clause
+songmaker_cli/db/queries/library.py:_hit_before # Used within this module by _merge_hits
+songmaker_cli/db/queries/library.py:_hit_type # Used within this module by _hit_before
+songmaker_cli/db/queries/library.py:_keyset_clause # Used within this module by _matching_albums
+songmaker_cli/db/queries/library.py:_matching_albums # Used within this module by search_library
+songmaker_cli/db/queries/library.py:_matching_songs # Used within this module by search_library
+songmaker_cli/db/queries/library.py:_merge_hits # Used within this module by search_library
+songmaker_cli/db/queries/library.py:_parse_sort_datetime # Used within this module by _keyset_clause
+songmaker_cli/db/queries/loras.py:_reorder_sample # Used within this module by update_user_lora_sample
+songmaker_cli/db/queries/loras.py:_validate_lora_training_model_mode # Used within this module by create_user_lora
+songmaker_cli/db/queries/playlists.py:INITIAL_PLAYLIST_POSITION # Used within this module by _next_position
+songmaker_cli/db/queries/playlists.py:PLAYLIST_SKIP_MISSING_AUDIO # Used within this module by add_album_to_playlist
+songmaker_cli/db/queries/playlists.py:PLAYLIST_SKIP_NO_PLAYABLE # Used within this module by add_album_to_playlist
+songmaker_cli/db/queries/playlists.py:PlaylistAlbumAddResult # Used within this module by add_album_to_playlist
+songmaker_cli/db/queries/playlists.py:PlaylistAlbumSkip # Used within this module by PlaylistAlbumAddResult
+songmaker_cli/db/queries/playlists.py:_next_position # Used within this module by add_generation_to_playlist
+songmaker_cli/db/queries/settings.py:_PROVIDER_ROUTES # Used within this module by _parse_provider_routes
+songmaker_cli/db/queries/settings.py:_ROUTE_VALUES # Used within this module by _parse_provider_routes
+songmaker_cli/db/queries/settings.py:_clear_default # Used within this module by create_preset
+songmaker_cli/db/queries/settings.py:_cowriter_default_model # Used within this module by get_cowriter_model
+songmaker_cli/db/queries/settings.py:_get_claude_model_row # Used within this module by get_claude_chat_model
+songmaker_cli/db/queries/settings.py:_legacy_default_provider_routes # Used within this module by get_effective_provider_routes
+songmaker_cli/db/queries/settings.py:_parse_provider_routes # Used within this module by get_effective_provider_routes
+songmaker_cli/db/queries/settings.py:_provider_routes_row # Used within this module by get_effective_provider_routes
+songmaker_cli/db/queries/sharing.py:_count_shared_inventory # Used within this module by count_shared_inventory
+songmaker_cli/db/queries/sharing.py:_inventory_type # Used within this module by list_shared_inventory
+songmaker_cli/db/queries/sharing.py:_load_shared_entities # Used within this module by list_shared_inventory
+songmaker_cli/db/queries/sharing.py:_shared_albums_query # Used within this module by _count_shared_inventory
+songmaker_cli/db/queries/sharing.py:_shared_generations_query # Used within this module by _count_shared_inventory
+songmaker_cli/db/queries/sharing.py:_shared_pick_audio_filename_is_presented # Used within this module by shared_album_audio_filename_is_presented
+songmaker_cli/db/queries/sharing.py:_shared_playlists_query # Used within this module by _count_shared_inventory
+songmaker_cli/db/queries/sharing.py:_shared_songs_query # Used within this module by _count_shared_inventory
+songmaker_cli/db/queries/songs.py:CONTINUE_MAX_ITEMS # Used within this module by list_continue_candidates
+songmaker_cli/db/queries/songs.py:INITIAL_TRACK_NUMBER # Used within this module by create_song
+songmaker_cli/db/queries/songs.py:_apply_song_filters # Used within this module by list_songs
+songmaker_cli/db/queries/songs.py:_continue_sort_key # Used within this module by list_continue_candidates
+songmaker_cli/db/queries/songs.py:_version_value # Used within this module by update_song
+songmaker_cli/db/soft_delete.py:INCLUDE_DELETED_OPTION # Used within this module by _filter_soft_deleted
+songmaker_cli/db/soft_delete.py:_SESSION_FLAG # Used within this module by _filter_soft_deleted
+songmaker_cli/db/soft_delete.py:_filter_soft_deleted # Used within this module by install_soft_delete_filter
+songmaker_cli/generate.py:CROSSFADE_SECONDS # Used within this module by _splice_repaint_raw
+songmaker_cli/generate.py:DecodedAudio # Used within this module by _decode_audio
+songmaker_cli/generate.py:_read_source_wav # Used within this module by _splice_repaint_raw
+songmaker_cli/generate.py:_repaint_fade_lengths # Used within this module by _splice_repaint_raw
+songmaker_cli/generation_api.py:NO_ONLINE_WORKER_DETAIL # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:ReferenceAudioResponse # Used within this module by api_upload_reference_audio
+songmaker_cli/generation_api.py:WORKER_NOT_RUNNING_DETAIL # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:_check_model_active # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:_check_version_lora_ready # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:_fail_job # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:_generation_version_or_error # Used within this module by api_repaint_generation
+songmaker_cli/generation_api.py:_has_online_acestep_worker # Used within this module by api_generate_song
+songmaker_cli/generation_api.py:_resolve_source_wav # Used within this module by api_repaint_generation
+songmaker_cli/generation_api.py:_toggle_generation # Used within this module by api_pick_generation
+songmaker_cli/generation_api.py:api_bulk_delete_generations # HTTP dispatcher: router.post('/generations/bulk-delete', responses={404: {'description': 'One or more generations do not exist'}})
+songmaker_cli/generation_api.py:api_cover_generation # HTTP dispatcher: router.post('/generations/{gen_id}/cover', responses={400: {'description': 'Cover request or source audio is invalid'}, 404: {'description': 'Version does not exist'}, 500: {'description': 'Source audio conversion failed'}, 503: {'description': 'Generation worker or job queue is unavailable'}})
+songmaker_cli/generation_api.py:api_delete_generation # HTTP dispatcher: router.delete('/generations/{gen_id}', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_generate_song # HTTP dispatcher: router.post('/songs/{song_id}/generate', responses={400: {'description': 'Generation request is invalid'}, 404: {'description': 'Version does not exist'}, 503: {'description': 'Generation worker or job queue is unavailable'}})
+songmaker_cli/generation_api.py:api_get_generation # HTTP dispatcher: router.get('/generations/{gen_id}')
+songmaker_cli/generation_api.py:api_keep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/keep', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_pick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/pick', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_rate_generation # HTTP dispatcher: router.post('/generations/{gen_id}/rate')
+songmaker_cli/generation_api.py:api_remaster_generation # HTTP dispatcher: router.post('/generations/{gen_id}/remaster', responses={404: {'description': 'Raw WAV does not exist for this generation'}})
+songmaker_cli/generation_api.py:api_repaint_generation # HTTP dispatcher: router.post('/generations/{gen_id}/repaint', responses={400: {'description': 'Repaint request or source audio is invalid'}, 404: {'description': 'Version does not exist'}, 500: {'description': 'Source audio conversion failed'}, 503: {'description': 'Generation worker or job queue is unavailable'}})
+songmaker_cli/generation_api.py:api_score_generation # HTTP dispatcher: router.post('/generations/{gen_id}/score', responses={503: {'description': 'Scoring worker or job queue is unavailable'}})
+songmaker_cli/generation_api.py:api_scoring_schema # HTTP dispatcher: router.get('/scoring/schema')
+songmaker_cli/generation_api.py:api_share_generation # HTTP dispatcher: router.post('/generations/{gen_id}/share', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_unarchive_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unarchive', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_unkeep_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unkeep', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_unpick_generation # HTTP dispatcher: router.post('/generations/{gen_id}/unpick', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_unshare_generation # HTTP dispatcher: router.delete('/generations/{gen_id}/share', responses={404: {'description': 'Generation does not exist'}})
+songmaker_cli/generation_api.py:api_upload_reference_audio # HTTP dispatcher: router.post('/audio/upload', responses={400: {'description': 'Reference audio upload is invalid'}})
+songmaker_cli/health_api.py:BackgroundLoopResponse # Used within this module by _background_loop_response_adapter = TypeAdapter(dict[BackgroundLoopName, BackgroundLoopResponse])
+songmaker_cli/health_api.py:_PrometheusMetrics # Used within this module by _format_prometheus
+songmaker_cli/health_api.py:_check_db # Used within this module by health_check
+songmaker_cli/health_api.py:_format_prometheus # Used within this module by metrics_endpoint
+songmaker_cli/health_api.py:health_check # HTTP dispatcher: router.get('/health')
+songmaker_cli/health_api.py:metrics_endpoint # HTTP dispatcher: router.get('/metrics')
+songmaker_cli/internal_api.py:register_worker_endpoint # HTTP dispatcher: router.post('/workers/register')
+songmaker_cli/jobs/_runtime.py:_ERROR_SANITIZERS # Used within this module by _sanitize_error
+songmaker_cli/jobs/_runtime.py:_GENERATION_SETUP_MESSAGES # Used within this module by _sanitize_generation_setup_error
+songmaker_cli/jobs/_runtime.py:_USER_FACING_ERRORS # Used within this module by _default_error_message
+songmaker_cli/jobs/_runtime.py:_default_error_message # Used within this module by _sanitize_error
+songmaker_cli/jobs/_runtime.py:_sanitize_codex_image_cli_error # Used within this module by _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = ((WorkerTaskFail
+songmaker_cli/jobs/_runtime.py:_sanitize_codex_image_quota_error # Used within this module by _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = ((WorkerTaskFail
+songmaker_cli/jobs/_runtime.py:_sanitize_generation_setup_error # Used within this module by _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = ((WorkerTaskFail
+songmaker_cli/jobs/_runtime.py:_sanitize_judge_failure_error # Used within this module by _ERROR_SANITIZERS: tuple[tuple[type[Exception], Callable[[Exception], str]], ...] = ((WorkerTaskFail
+songmaker_cli/jobs/_runtime.py:_write_chat_job_heartbeat # Used within this module by _keep_chat_job_heartbeat
+songmaker_cli/jobs/generation.py:GENERATION_JOB_TERMINAL_LOG # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_DecodedAudioInput # Used within this module by post_process_generation
+songmaker_cli/jobs/generation.py:_PROGRESS_THROTTLE_SECONDS # Used within this module by _make_generation_progress_callback
+songmaker_cli/jobs/generation.py:_admit_generation_worker_or_requeue # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_apply_generation_task_overrides # Used within this module by _build_generation_job_context
+songmaker_cli/jobs/generation.py:_apply_user_lora_path # Used within this module by _build_generation_context
+songmaker_cli/jobs/generation.py:_build_generation_job_context # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_copy_to_shared_tmp # Used within this module by _apply_repaint_overrides
+songmaker_cli/jobs/generation.py:_discard_worker_audio # Used within this module by _generate_variant
+songmaker_cli/jobs/generation.py:_extract_user_lora_id # Used within this module by _stored_generation_params
+songmaker_cli/jobs/generation.py:_generate_variant # Used within this module by _generate_variants
+songmaker_cli/jobs/generation.py:_generate_variants # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_remove_temporary_generation_audio # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_resolve_raw_wav # Used within this module by _apply_repaint_overrides
+songmaker_cli/jobs/generation.py:_shared_tmp_dir # Used within this module by _copy_to_shared_tmp
+songmaker_cli/jobs/generation.py:_stored_batch_options # Used within this module by _stored_generation_params
+songmaker_cli/jobs/generation.py:_stored_generation_options # Used within this module by _stored_generation_params
+songmaker_cli/jobs/generation.py:_stored_generation_params # Used within this module by _persist_generation_row
+songmaker_cli/jobs/generation.py:_stored_task_options # Used within this module by _stored_generation_params
+songmaker_cli/jobs/generation.py:_temporary_generation_audio_paths # Used within this module by run_generation_job
+songmaker_cli/jobs/generation.py:_unless_close # Used within this module by _stored_generation_options
+songmaker_cli/jobs/generation.py:_with_ace_config_overrides # Used within this module by _apply_repaint_overrides
+songmaker_cli/jobs/generation.py:_with_generation_context_overrides # Used within this module by _apply_repaint_overrides
+songmaker_cli/jobs/lora_training.py:CompletedLoraTrainingModeRecord # Used within this module by _record_completed_training_model_mode
+songmaker_cli/jobs/lora_training.py:LORA_ADAPTER_DESCRIPTION # Used within this module by _recover_recorded_lora_adapter
+songmaker_cli/jobs/lora_training.py:LoraTrainingModelModeError # Used within this module by _sanitize_training_error
+songmaker_cli/jobs/lora_training.py:LoraTrainingModelModeMismatchError # Used within this module by _validate_completed_training_model_mode
+songmaker_cli/jobs/lora_training.py:PreviousAdapterRestoredError # Used within this module by run_lora_training_job
+songmaker_cli/jobs/lora_training.py:TrainLoraTaskResultDTO # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:UnsupportedLoraTrainingModelModeError # Used within this module by _validate_completed_training_model_mode
+songmaker_cli/jobs/lora_training.py:WORKER_PROGRESS_INVALID_TRAINING_START_DETAIL # Used within this module by _worker_training_started_at
+songmaker_cli/jobs/lora_training.py:_COMPLETED_TRAINING_MODE_FILENAME # Used within this module by _completed_training_mode_path
+songmaker_cli/jobs/lora_training.py:_LORA_PROGRESS_THROTTLE_SECONDS # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_LORA_SUBMIT_TIMEOUT_SECONDS # Used within this module by _submit_lora_training
+songmaker_cli/jobs/lora_training.py:_LoraHandoverProbe # Used within this module by _worker_claimed_lora_handover
+songmaker_cli/jobs/lora_training.py:_LoraHoldHandover # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_LoraSubmissionAttempt # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_WorkerHandle # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_await_lora_callback # Used within this module by _read_lora_training_events
+songmaker_cli/jobs/lora_training.py:_cleanup_failed_lora_paths # Used within this module by cleanup_failed_lora_with_factory
+songmaker_cli/jobs/lora_training.py:_clear_completed_training_model_mode # Used within this module by reconcile_crashed_loras
+songmaker_cli/jobs/lora_training.py:_completed_model_mode_for_lora # Used within this module by reconcile_crashed_loras
+songmaker_cli/jobs/lora_training.py:_completed_training_mode_path # Used within this module by _completed_training_mode_tmp_path
+songmaker_cli/jobs/lora_training.py:_completed_training_mode_tmp_path # Used within this module by _record_completed_training_model_mode
+songmaker_cli/jobs/lora_training.py:_dataset_dir # Used within this module by _materialize_dataset
+songmaker_cli/jobs/lora_training.py:_defer_lora_training_for_generation # Used within this module by _run_lora_training
+songmaker_cli/jobs/lora_training.py:_fail_lora_training # Used within this module by run_lora_training_job
+songmaker_cli/jobs/lora_training.py:_find_orphaned_lora_work_dirs # Used within this module by log_orphaned_lora_work_dirs
+songmaker_cli/jobs/lora_training.py:_handle_cancelled_lora_training # Used within this module by run_lora_training_job
+songmaker_cli/jobs/lora_training.py:_handle_lora_training_event # Used within this module by _read_lora_training_events
+songmaker_cli/jobs/lora_training.py:_keep_restored_lora_adapter # Used within this module by run_lora_training_job
+songmaker_cli/jobs/lora_training.py:_load_lora_training_model # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_load_lora_training_samples # Used within this module by _run_lora_training
+songmaker_cli/jobs/lora_training.py:_log_failed_lora_cleanup # Used within this module by cleanup_failed_lora_with_factory
+songmaker_cli/jobs/lora_training.py:_lora_queue_wait_seconds # Used within this module by _defer_lora_training_for_generation
+songmaker_cli/jobs/lora_training.py:_lora_root # Used within this module by _dataset_dir
+songmaker_cli/jobs/lora_training.py:_mark_lora_training_complete # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_materialize_dataset # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_move_lora_adapter # Used within this module by _replace_lora_adapter
+songmaker_cli/jobs/lora_training.py:_next_reconcilable_lora # Used within this module by reconcile_crashed_loras
+songmaker_cli/jobs/lora_training.py:_orphaned_lora_work_dirs # Used within this module by _find_orphaned_lora_work_dirs
+songmaker_cli/jobs/lora_training.py:_output_dir # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_persist_crashed_lora_reconciliation # Used within this module by reconcile_crashed_loras
+songmaker_cli/jobs/lora_training.py:_pick_and_call_worker # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_prepare_and_submit_lora # Used within this module by _submit_lora_training_job
+songmaker_cli/jobs/lora_training.py:_race_with_renewal # Used within this module by _load_lora_training_model
+songmaker_cli/jobs/lora_training.py:_read_completed_training_model_mode # Used within this module by _completed_model_mode_for_lora
+songmaker_cli/jobs/lora_training.py:_read_lora_training_epochs # Used within this module by _report_lora_training_progress
+songmaker_cli/jobs/lora_training.py:_read_lora_training_events # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_read_lora_training_result # Used within this module by _handle_lora_training_event
+songmaker_cli/jobs/lora_training.py:_record_completed_training_model_mode # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_recover_complete_lora_adapter # Used within this module by reconcile_crashed_loras
+songmaker_cli/jobs/lora_training.py:_recover_lora_submission # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_recover_recorded_lora_adapter # Used within this module by _recover_complete_lora_adapter
+songmaker_cli/jobs/lora_training.py:_release_lora_hold # Used within this module by _recover_lora_submission
+songmaker_cli/jobs/lora_training.py:_remove_replaced_lora_paths # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_renew_lora_hold # Used within this module by _start_lora_hold_renewal
+songmaker_cli/jobs/lora_training.py:_replace_lora_adapter # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_report_lora_training_progress # Used within this module by _handle_lora_training_event
+songmaker_cli/jobs/lora_training.py:_require_lora_adapter_directory # Used within this module by _recover_recorded_lora_adapter
+songmaker_cli/jobs/lora_training.py:_reserve_lora_worker # Used within this module by _run_lora_training
+songmaker_cli/jobs/lora_training.py:_restore_previous_lora_adapter # Used within this module by _recover_complete_lora_adapter
+songmaker_cli/jobs/lora_training.py:_sanitize_training_error # Used within this module by _keep_restored_lora_adapter
+songmaker_cli/jobs/lora_training.py:_save_lora_model_mode # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_stage_current_lora_adapter # Used within this module by _replace_lora_adapter
+songmaker_cli/jobs/lora_training.py:_start_lora_hold_renewal # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_stop_lora_renewal # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_submit_lora_training # Used within this module by _pick_and_call_worker
+songmaker_cli/jobs/lora_training.py:_submit_lora_training_job # Used within this module by _run_lora_training
+songmaker_cli/jobs/lora_training.py:_tmp_training_dir # Used within this module by _prepare_and_submit_lora
+songmaker_cli/jobs/lora_training.py:_validate_completed_training_model_mode # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_validate_export_path # Used within this module by _validated_lora_adapter_handoff
+songmaker_cli/jobs/lora_training.py:_validated_lora_adapter_handoff # Used within this module by _complete_lora_training
+songmaker_cli/jobs/lora_training.py:_worker_claimed_lora_handover # Used within this module by _recover_lora_submission
+songmaker_cli/jobs/lora_training.py:_worker_training_started_at # Used within this module by _report_lora_training_progress
+songmaker_cli/jobs/lora_training.py:cleanup_failed_lora_with_factory # Used within this module by _defer_lora_training_for_generation
+songmaker_cli/jobs/lora_training.py:log_orphaned_lora_work_dirs # Used within this module by _log_failed_lora_cleanup
+songmaker_cli/jobs/model_lifecycle.py:_acquire_download_slot # Used within this module by download_model_on_worker
+songmaker_cli/jobs/model_lifecycle.py:_run_download_attempt # Used within this module by download_model_on_worker
+songmaker_cli/jobs/model_lifecycle.py:_valid_download_mode # Used within this module by download_model_on_worker
+songmaker_cli/jobs/scoring.py:SCORING_JOB_TERMINAL_LOG # Used within this module by run_scoring_job
+songmaker_cli/jobs/scoring.py:ScoringInput # Used within this module by _load_scoring_input
+songmaker_cli/jobs/scoring.py:_finish_scoring_job # Used within this module by run_scoring_job
+songmaker_cli/jobs/scoring.py:_judge_failure_reason # Used within this module by run_scoring_job
+songmaker_cli/jobs/scoring.py:_load_scoring_input # Used within this module by run_scoring_job
+songmaker_cli/jobs/scoring.py:_persist_scores # Used within this module by run_scoring_job
+songmaker_cli/jobs/scoring.py:_score_meta # Used within this module by _load_scoring_input
+songmaker_cli/jobs/scoring.py:_split_by_host # Used within this module by run_scoring_job
+songmaker_cli/jobs_api.py:_acquire_job_stream_lease # Used within this module by api_stream_job
+songmaker_cli/jobs_api.py:_check_job_access # Used within this module by api_get_job
+songmaker_cli/jobs_api.py:_fetch_job_response # Used within this module by _fetch_job_response_before
+songmaker_cli/jobs_api.py:_fetch_job_response_before # Used within this module by _job_event_generator
+songmaker_cli/jobs_api.py:_get_job_stream_lease_limiter # Used within this module by _acquire_job_stream_lease
+songmaker_cli/jobs_api.py:_job_event_generator # Used within this module by _leased_job_event_generator
+songmaker_cli/jobs_api.py:_leased_job_event_generator # Used within this module by api_stream_job
+songmaker_cli/jobs_api.py:_release_job_stream_lease # Used within this module by _schedule_job_stream_lease_release
+songmaker_cli/jobs_api.py:_schedule_job_stream_lease_release # Used within this module by _leased_job_event_generator
+songmaker_cli/jobs_api.py:api_cancel_job # HTTP dispatcher: router.post('/jobs/{job_id}/cancel', responses={404: {'description': 'Job does not exist'}, 409: {'description': 'Job is not queued or running'}})
+songmaker_cli/jobs_api.py:api_get_job # HTTP dispatcher: router.get('/jobs/{job_id}', responses={404: {'description': 'Job does not exist'}})
+songmaker_cli/jobs_api.py:api_stream_job # HTTP dispatcher: router.get('/jobs/{job_id}/stream', responses={404: {'description': 'Job does not exist'}, 429: {'description': 'Too many open job streams'}, 503: {'description': 'Job stream limiter is unavailable'}})
+songmaker_cli/library_api.py:api_library_continue # HTTP dispatcher: router.get('/library/continue')
+songmaker_cli/library_api.py:api_library_pool_queue # HTTP dispatcher: router.get('/library/pool-queue')
+songmaker_cli/library_api.py:api_library_search # HTTP dispatcher: router.get('/library/search', responses={422: {'description': 'Search cursor is invalid or does not match the query'}})
+songmaker_cli/library_api.py:api_library_shares # HTTP dispatcher: router.get('/library/shares')
+songmaker_cli/library_cursor.py:_CURSOR_KEYS # Used within this module by _cursor_from_payload
+songmaker_cli/library_cursor.py:_ITEM_TYPES # Used within this module by _cursor_from_payload
+songmaker_cli/library_cursor.py:_TIME_SORTS # Used within this module by _cursor_from_payload
+songmaker_cli/library_cursor.py:_b64url_decode # Used within this module by _parse_signed_cursor
+songmaker_cli/library_cursor.py:_cursor_from_payload # Used within this module by _parse_signed_cursor
+songmaker_cli/library_cursor.py:_parse_cursor_datetime # Used within this module by _cursor_from_payload
+songmaker_cli/library_cursor.py:_parse_signed_cursor # Used within this module by decode_library_cursor
+songmaker_cli/lifecycle.py:BackfillResult # Used within this module by backfill_unscored_generations
+songmaker_cli/lifecycle.py:BackgroundLoopHealth # Used within this module by BackgroundLoopRegistry
+songmaker_cli/lifecycle.py:JOB_REAPER_LOCK_KEY # Used within this module by stale_job_reaper_loop
+songmaker_cli/lifecycle.py:JOB_REAPER_LOCK_TTL_SECONDS # Used within this module by stale_job_reaper_loop
+songmaker_cli/lifecycle.py:QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS # Used within this module by _QUEUE_STREAM_CLEANUP_EVERY_N_TICKS: Final = max(1, QUEUE_STREAM_CLEANUP_INTERVAL_SECONDS // RESOURC
+songmaker_cli/lifecycle.py:_CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS # Used within this module by bubblewrap_startup_probe_command
+songmaker_cli/lifecycle.py:_CODEX_STARTUP_PROBE_BWRAP_ARGUMENTS # Used within this module by _codex_image_sandbox_runtime_error
+songmaker_cli/lifecycle.py:_QUEUE_STREAM_CLEANUP_EVERY_N_TICKS # Used within this module by resource_event_cleanup_loop
+songmaker_cli/lifecycle.py:_backfill_attempt_key # Used within this module by _record_backfill_attempt
+songmaker_cli/lifecycle.py:_clear_resolved_backfill_attempts # Used within this module by backfill_unscored_generations
+songmaker_cli/lifecycle.py:_codex_image_sandbox_runtime_error # Used within this module by report_codex_image_sandbox_runtime
+songmaker_cli/lifecycle.py:_decode_redis_value # Used within this module by _exhausted_backfill_ids
+songmaker_cli/lifecycle.py:_exhausted_backfill_ids # Used within this module by backfill_unscored_generations
+songmaker_cli/lifecycle.py:_pick_unscored_generations # Used within this module by backfill_unscored_generations
+songmaker_cli/lifecycle.py:_record_backfill_attempt # Used within this module by backfill_unscored_generations
+songmaker_cli/lifecycle.py:_run_stale_job_reaper_tick # Used within this module by stale_job_reaper_loop
+songmaker_cli/lifecycle.py:_sync_sessions # Used within this module by session_sync_loop
+songmaker_cli/lifecycle.py:backfill_unscored_generations # Used within this module by score_backfill_loop
+songmaker_cli/lifecycle.py:bubblewrap_startup_probe_command # Operational caller scripts/prove_codex_image_sandbox.py outside src
+songmaker_cli/lifecycle.py:record_codex_image_sandbox_runtime_health # Used within this module by report_codex_image_sandbox_runtime
+songmaker_cli/logging_config.py:_SongmakerCliLogHandler # Used within this module by configure_cli_logging
+songmaker_cli/logging_config.py:_SongmakerLogHandler # Used within this module by configure_logging
+songmaker_cli/logging_config.py:_replace_songmaker_handlers # Used within this module by configure_cli_logging
+songmaker_cli/lora_api.py:_fail_training_job # Used within this module by api_train_lora
+songmaker_cli/lora_api.py:_lora_capacity_error # Used within this module by api_create_lora
+songmaker_cli/lora_api.py:_reject_if_active_or_deleted # Used within this module by api_add_sample_from_generation
+songmaker_cli/lora_api.py:_sample_dir # Used within this module by api_add_sample
+songmaker_cli/lora_api.py:api_add_sample # HTTP dispatcher: router.post('/loras/{lora_id}/samples', responses={409: {'description': 'LoRA cannot accept another sample'}, 413: {'description': 'Sample file is too large'}, 422: {'description': 'Sample upload is invalid'}})
+songmaker_cli/lora_api.py:api_add_sample_from_generation # HTTP dispatcher: router.post('/loras/{lora_id}/samples/from-generation', responses={404: {'description': 'Generation does not exist'}, 409: {'description': 'LoRA cannot accept another sample'}, 422: {'description': 'Generation cannot be used as a sample'}})
+songmaker_cli/lora_api.py:api_create_lora # HTTP dispatcher: router.post('/loras', response_model=UserLoraResponse, responses={409: {'description': 'LoRA capacity is unavailable', 'model': LoraCapacityErrorResponse}, 422: {'description': 'LoRA request is invalid'}})
+songmaker_cli/lora_api.py:api_delete_lora # HTTP dispatcher: router.delete('/loras/{lora_id}', responses={409: {'description': 'LoRA cannot be deleted'}})
+songmaker_cli/lora_api.py:api_delete_sample # HTTP dispatcher: router.delete('/loras/{lora_id}/samples/{sample_id}', responses={404: {'description': 'Sample does not exist'}, 409: {'description': 'LoRA cannot be modified during training'}})
+songmaker_cli/lora_api.py:api_get_lora # HTTP dispatcher: router.get('/loras/{lora_id}')
+songmaker_cli/lora_api.py:api_list_loras # HTTP dispatcher: router.get('/loras')
+songmaker_cli/lora_api.py:api_list_own_playable_takes # HTTP dispatcher: router.get('/loras/own-takes')
+songmaker_cli/lora_api.py:api_patch_sample # HTTP dispatcher: router.patch('/loras/{lora_id}/samples/{sample_id}', responses={404: {'description': 'Sample does not exist'}, 409: {'description': 'LoRA cannot be modified during training'}, 422: {'description': 'Sample update is invalid'}})
+songmaker_cli/lora_api.py:api_train_lora # HTTP dispatcher: router.post('/loras/{lora_id}/train', response_model=UserLoraResponse, responses={409: {'description': 'LoRA capacity is unavailable', 'model': LoraCapacityErrorResponse}, 422: {'description': 'LoRA training request is invalid'}, 503: {'description': 'Training worker or job queue is unavailable'}})
+songmaker_cli/main.py:_launcher # HTTP dispatcher: app.meta.default
+songmaker_cli/main.py:_server # Used within this module by login
+songmaker_cli/main.py:list_users_cmd # HTTP dispatcher: app.command(name='list-users')
+songmaker_cli/main.py:reset_password # HTTP dispatcher: app.command(name='reset-password')
+songmaker_cli/mcp_server/auth.py:MCPAuthError # Used within this module by require_user_id
+songmaker_cli/mcp_server/auth.py:USER_ID_ENV # Used within this module by require_user_id
+songmaker_cli/mcp_server/server.py:SERVER_INSTRUCTIONS # Used within this module by build_server
+songmaker_cli/mcp_server/server.py:SERVER_NAME # Used within this module by build_server
+songmaker_cli/mcp_server/server.py:_default_factory # Used within this module by build_server
+songmaker_cli/mcp_server/tools.py:MAX_SEARCH_RESULTS # Used within this module by tool_search_songs
+songmaker_cli/mcp_server/tools.py:_not_found # Used within this module by tool_get_version
+songmaker_cli/mcp_server/tools.py:_reload_song # Used within this module by tool_create_song
+songmaker_cli/mcp_server/tools.py:_to_tool_error # Used within this module by tool_list_songs
+songmaker_cli/middleware/gzip.py:_COMPRESSIBLE_CONTENT_TYPE_PREFIXES # Used within this module by _is_compressible_content_type
+songmaker_cli/middleware/gzip.py:_CompressionResponder # Used within this module by 'Raw ASGI middleware: gzip-compress JSON/text/JS responses only.\n\nStarlette\'s `GZipMiddleware` de
+songmaker_cli/middleware/gzip.py:_DEFAULT_QVALUE # Used within this module by _accepts_gzip
+songmaker_cli/middleware/gzip.py:_GZIP_CODING # Used within this module by _accepts_gzip
+songmaker_cli/middleware/gzip.py:_HTTP_OK # Used within this module by _is_variable_by_encoding
+songmaker_cli/middleware/gzip.py:_NEVER_COMPRESS_CONTENT_TYPE_PREFIXES # Used within this module by _is_compressible_content_type
+songmaker_cli/middleware/gzip.py:_QVALUE_PARAM_PREFIX # Used within this module by _accepts_gzip
+songmaker_cli/middleware/gzip.py:_REJECTED_QVALUE # Used within this module by _qvalue
+songmaker_cli/middleware/gzip.py:_WILDCARD_CODING # Used within this module by _accepts_gzip
+songmaker_cli/middleware/gzip.py:_accepts_gzip # Used within this module by SelectiveGZipMiddleware
+songmaker_cli/middleware/gzip.py:_is_compressible_content_type # Used within this module by _is_variable_by_encoding
+songmaker_cli/middleware/gzip.py:_is_variable_by_encoding # Used within this module by _CompressionResponder
+songmaker_cli/middleware/gzip.py:_qvalue # Used within this module by _accepts_gzip
+songmaker_cli/middleware/gzip.py:_unattached_send # Used within this module by _CompressionResponder
+songmaker_cli/middleware/resource_stream_deadline.py:_SYNTHETIC_TERMINAL_SEND_TIMEOUT_SECONDS # Used within this module by ResourceStreamDeadlineMiddleware
+songmaker_cli/music_worker.py:MusicWorkerSettings # Used within this module by 'arq music worker — runs GPU-bound generation jobs.\n\nStarted as a separate process:\n    arq songm
+songmaker_cli/music_worker.py:_music_worker_functions # Used within this module by MusicWorkerSettings
+songmaker_cli/playlist_api.py:ALBUM_NOT_FOUND_DETAIL # Used within this module by api_add_album_to_playlist
+songmaker_cli/playlist_api.py:PLAYLIST_NOT_FOUND_DETAIL # Used within this module by _check_playlist_access
+songmaker_cli/playlist_api.py:_check_playlist_access # Used within this module by api_get_playlist
+songmaker_cli/playlist_api.py:api_add_album_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/album', responses={404: {'description': 'Playlist or album not found'}})
+songmaker_cli/playlist_api.py:api_add_generation_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/generation', responses={404: {'description': 'Playlist or generation not found'}})
+songmaker_cli/playlist_api.py:api_add_song_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/song', responses={400: {'description': 'Song has no playable take'}, 404: {'description': 'Playlist or song not found'}})
+songmaker_cli/playlist_api.py:api_create_playlist # HTTP dispatcher: router.post('/playlists')
+songmaker_cli/playlist_api.py:api_delete_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_delete_playlist_cover # HTTP dispatcher: router.delete('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_get_playlist # HTTP dispatcher: router.get('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_get_playlist_cover # HTTP dispatcher: router.get('/playlists/{playlist_id}/cover', responses={404: {'description': 'Playlist or cover not found'}})
+songmaker_cli/playlist_api.py:api_list_playlists # HTTP dispatcher: router.get('/playlists')
+songmaker_cli/playlist_api.py:api_remove_from_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/entries/{entry_id}', responses={404: {'description': 'Playlist or entry not found'}})
+songmaker_cli/playlist_api.py:api_reorder_playlist_entry # HTTP dispatcher: router.patch('/playlists/{playlist_id}/entries/{entry_id}/position', responses={404: {'description': 'Playlist or entry not found'}})
+songmaker_cli/playlist_api.py:api_share_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_unshare_playlist # HTTP dispatcher: router.delete('/playlists/{playlist_id}/share', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_update_playlist # HTTP dispatcher: router.put('/playlists/{playlist_id}', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/playlist_api.py:api_upload_playlist_cover # HTTP dispatcher: router.put('/playlists/{playlist_id}/cover', responses={404: {'description': PLAYLIST_NOT_FOUND_DETAIL}})
+songmaker_cli/queue_stream_api.py:LIBRARY_QUEUE_STREAM_SCAN_LIMIT # Used within this module by _scan_library_candidates
+songmaker_cli/queue_stream_api.py:LibraryPoolMembership # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:_QUEUE_STREAM_LIMITER_FAILURE_POLICY # Used within this module by check_queue_stream_rate_limit
+songmaker_cli/queue_stream_api.py:_get_queue_stream_limiter # Used within this module by check_queue_stream_rate_limit
+songmaker_cli/queue_stream_api.py:_library_candidate_sources # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:_library_skip # Used within this module by _scan_library_candidates
+songmaker_cli/queue_stream_api.py:_order_library_candidates # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:_raise_empty_library_pool # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:_rotate_sources_to_start # Used within this module by _order_library_candidates
+songmaker_cli/queue_stream_api.py:_scan_library_candidates # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:_take_sort_key # Used within this module by collect_library_pool_generations
+songmaker_cli/queue_stream_api.py:api_create_library_queue_stream # HTTP dispatcher: router.post('/queue-streams/library', responses={422: {'description': 'Library has no playable starting take'}})
+songmaker_cli/queue_stream_api.py:api_create_queue_stream # HTTP dispatcher: router.post('/queue-streams')
+songmaker_cli/queue_stream_api.py:api_get_queue_stream_audio # HTTP dispatcher: router.get('/queue-streams/{snapshot_id}/audio', responses={404: {'description': 'Queue stream does not exist'}})
+songmaker_cli/queue_stream_api.py:api_pin_queue_stream # HTTP dispatcher: router.post('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}, 409: {'description': 'Pinned storage cap is reached'}})
+songmaker_cli/queue_stream_api.py:api_unpin_queue_stream # HTTP dispatcher: router.delete('/queue-streams/{snapshot_id}/pin', responses={404: {'description': 'Queue stream does not exist'}})
+songmaker_cli/queue_stream_api.py:collect_library_pool_generations # Used within this module by resolve_library_pool_membership
+songmaker_cli/queue_stream_api.py:generation_matches_pool # Used within this module by collect_library_pool_generations
+songmaker_cli/queue_stream_api.py:shuffle_library_sources # Used within this module by _order_library_candidates
+songmaker_cli/queue_streams.py:FFMPEG_TIMEOUT_SECONDS # Used within this module by queue_stream_duration_fits_ffmpeg_timeout
+songmaker_cli/queue_streams.py:QUEUE_STREAM_AUDIO_NOT_FOUND_DETAIL # Used within this module by load_queue_stream_manifest
+songmaker_cli/queue_streams.py:QUEUE_STREAM_CONCAT_SUFFIX # Used within this module by delete_snapshot_files
+songmaker_cli/queue_streams.py:QUEUE_STREAM_DIRNAME # Used within this module by _stream_dir
+songmaker_cli/queue_streams.py:QUEUE_STREAM_DURATION_LIMIT_DETAIL # Used within this module by prepare_queue_stream_admission
+songmaker_cli/queue_streams.py:QUEUE_STREAM_FFMPEG_MIN_AUDIO_SECONDS_PER_WALL_SECOND # Used within this module by queue_stream_ffmpeg_timeout_seconds
+songmaker_cli/queue_streams.py:QUEUE_STREAM_FFMPEG_TIMEOUT_RESERVE_SECONDS # Used within this module by queue_stream_ffmpeg_timeout_seconds
+songmaker_cli/queue_streams.py:QUEUE_STREAM_MANIFEST_GLOB # Used within this module by _find_reusable_snapshot
+songmaker_cli/queue_streams.py:QUEUE_STREAM_MANIFEST_SUFFIX # Used within this module by delete_snapshot_files
+songmaker_cli/queue_streams.py:QUEUE_STREAM_MAX_CACHE_BYTES # Used within this module by _enforce_cache_quota
+songmaker_cli/queue_streams.py:QUEUE_STREAM_MAX_DURATION_SECONDS # Used within this module by FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
+songmaker_cli/queue_streams.py:QUEUE_STREAM_ORPHAN_MAX_AGE # Used within this module by _remove_expired_queue_stream_orphans
+songmaker_cli/queue_streams.py:QUEUE_STREAM_PINNED_MAX_BYTES # Used within this module by pin_snapshot
+songmaker_cli/queue_streams.py:QUEUE_STREAM_PIN_MAX_AGE # Used within this module by _is_active_pin
+songmaker_cli/queue_streams.py:QUEUE_STREAM_TEMP_AUDIO_SUFFIX # Used within this module by delete_snapshot_files
+songmaker_cli/queue_streams.py:QUEUE_STREAM_TTL # Used within this module by _build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:QueueStreamAdmission # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:QueueStreamPreparedSource # Used within this module by QueueStreamAdmission
+songmaker_cli/queue_streams.py:_BuildLockEntry # Used within this module by _build_locks: dict[str, _BuildLockEntry] = {}
+songmaker_cli/queue_streams.py:_build_lock # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_build_queue_stream_snapshot # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_content_hash # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_enforce_cache_quota # Used within this module by _build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_escape_concat_path # Used within this module by write_concat_file
+songmaker_cli/queue_streams.py:_find_reusable_snapshot # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_is_active_pin # Used within this module by load_queue_stream_manifest
+songmaker_cli/queue_streams.py:_pinned_snapshot_ids # Used within this module by _enforce_cache_quota
+songmaker_cli/queue_streams.py:_remove_expired_queue_stream_orphans # Used within this module by cleanup_expired_queue_streams
+songmaker_cli/queue_streams.py:_remove_expired_queue_stream_snapshots # Used within this module by cleanup_expired_queue_streams
+songmaker_cli/queue_streams.py:_snapshot_id_from_cache_file # Used within this module by _remove_expired_queue_stream_orphans
+songmaker_cli/queue_streams.py:_stream_dir # Used within this module by build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_sum_pinned_bytes # Used within this module by pin_snapshot
+songmaker_cli/queue_streams.py:_track_response # Used within this module by _build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:_valid_snapshot_id # Used within this module by load_queue_stream_manifest
+songmaker_cli/queue_streams.py:delete_snapshot_files # Used within this module by load_queue_stream_manifest
+songmaker_cli/queue_streams.py:delete_snapshot_files_from_dir # Used within this module by _enforce_cache_quota
+songmaker_cli/queue_streams.py:queue_stream_duration_fits_ffmpeg_timeout # Used within this module by prepare_queue_stream_admission
+songmaker_cli/queue_streams.py:queue_stream_ffmpeg_timeout_seconds # Used within this module by FFMPEG_TIMEOUT_SECONDS = queue_stream_ffmpeg_timeout_seconds(QUEUE_STREAM_MAX_DURATION_SECONDS)
+songmaker_cli/queue_streams.py:run_ffmpeg_concat # Used within this module by _build_queue_stream_snapshot
+songmaker_cli/queue_streams.py:write_concat_file # Used within this module by _build_queue_stream_snapshot
+songmaker_cli/reference_audio.py:REFERENCE_AUDIO_NOT_OWNED_DETAIL # Used within this module by resolve_owned_reference_audio
+songmaker_cli/reimport.py:_SEED_PATTERN # Used within this module by _extract_seed
+songmaker_cli/reimport.py:_extract_seed # Used within this module by reimport_files
+songmaker_cli/reimport_api.py:_ALLOWED_CONTENT_TYPES # Used within this module by _validate_upload
+songmaker_cli/reimport_api.py:_validate_upload # Used within this module by api_reimport
+songmaker_cli/reimport_api.py:api_reimport # HTTP dispatcher: router.post('/songs/{song_id}/reimport', responses={413: {'description': 'Uploaded audio file is too large'}, 422: {'description': 'Reimport upload is invalid'}})
+songmaker_cli/request_policies.py:ALBUM_COVER_ROUTE # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:API_CACHE_CONTROL # Used within this module by build_security_headers_policy
+songmaker_cli/request_policies.py:API_PATH_PREFIX # Used within this module by build_csrf_policy
+songmaker_cli/request_policies.py:AUDIO_ROUTE_PATTERNS # Used within this module by build_rate_limit_policy
+songmaker_cli/request_policies.py:AUDIO_UPLOAD_PATH # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:COVER_UPLOAD_METHODS # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:CSRF_TOKEN_EXEMPT_PATHS # Used within this module by build_csrf_policy
+songmaker_cli/request_policies.py:CSRF_TOKEN_EXEMPT_PREFIXES # Used within this module by build_csrf_policy
+songmaker_cli/request_policies.py:IP_RATE_LIMIT_WINDOW_SECONDS # Used within this module by build_rate_limit_policy
+songmaker_cli/request_policies.py:JOB_STREAM_PATH # Used within this module by build_rate_limit_policy
+songmaker_cli/request_policies.py:LORA_SAMPLE_ROUTE # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:MEDIA_PATH_PREFIX # Used within this module by build_rate_limit_policy
+songmaker_cli/request_policies.py:PLAYLIST_COVER_ROUTE # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:RATE_LIMIT_EXEMPT_PATHS # Used within this module by build_rate_limit_policy
+songmaker_cli/request_policies.py:RESOURCE_EVENT_STREAM_CACHE_CONTROL # Used within this module by build_security_headers_policy
+songmaker_cli/request_policies.py:SONG_COVER_ROUTE # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:SONG_REIMPORT_ROUTE # Used within this module by build_body_size_policy
+songmaker_cli/request_policies.py:STATIC_ASSET_PREFIX # Used within this module by build_rate_limit_policy
+songmaker_cli/resource_event_api.py:ResourceEventPage # Used within this module by _read_event_page
+songmaker_cli/resource_event_api.py:ResourceEventStreamState # Used within this module by _initialize_resource_stream
+songmaker_cli/resource_event_api.py:_AHEAD_BIGINT_SENTINEL # Used within this module by parse_last_event_id
+songmaker_cli/resource_event_api.py:_ROUTE_PATH # Used within this module by api_stream_resource_events
+songmaker_cli/resource_event_api.py:_SSE_HEADERS # Used within this module by api_stream_resource_events
+songmaker_cli/resource_event_api.py:_STREAM_LEASE_FAILURE_POLICY # Used within this module by _acquire_stream_lease
+songmaker_cli/resource_event_api.py:_acquire_stream_lease # Used within this module by api_stream_resource_events
+songmaker_cli/resource_event_api.py:_finish_replay # Used within this module by _resource_event_frames
+songmaker_cli/resource_event_api.py:_get_lease_limiter # Used within this module by _acquire_stream_lease
+songmaker_cli/resource_event_api.py:_get_open_limiter # Used within this module by _acquire_stream_lease
+songmaker_cli/resource_event_api.py:_initialize_resource_stream # Used within this module by _resource_event_generator
+songmaker_cli/resource_event_api.py:_is_contiguous # Used within this module by _resource_page_has_gap
+songmaker_cli/resource_event_api.py:_leased_resource_event_generator # Used within this module by api_stream_resource_events
+songmaker_cli/resource_event_api.py:_release_stream_lease # Used within this module by _schedule_stream_lease_release
+songmaker_cli/resource_event_api.py:_resource_event_frames # Used within this module by _resource_page_frames
+songmaker_cli/resource_event_api.py:_resource_event_generator # Used within this module by _leased_resource_event_generator
+songmaker_cli/resource_event_api.py:_resource_gap_frame # Used within this module by _resource_page_frames
+songmaker_cli/resource_event_api.py:_resource_heartbeat # Used within this module by _resource_idle_frames
+songmaker_cli/resource_event_api.py:_resource_idle_frames # Used within this module by _resource_page_frames
+songmaker_cli/resource_event_api.py:_resource_page_frames # Used within this module by _resource_event_generator
+songmaker_cli/resource_event_api.py:_resource_page_has_gap # Used within this module by _resource_page_frames
+songmaker_cli/resource_event_api.py:_resource_target_high # Used within this module by _resource_page_frames
+songmaker_cli/resource_event_api.py:_resync_resource_stream # Used within this module by _initialize_resource_stream
+songmaker_cli/resource_event_api.py:_schedule_stream_lease_release # Used within this module by _leased_resource_event_generator
+songmaker_cli/resource_event_api.py:_wait_for_next_resource_poll # Used within this module by _resource_event_generator
+songmaker_cli/resource_event_api.py:api_stream_resource_events # HTTP dispatcher: router.get(_ROUTE_PATH, responses={400: {'description': 'Last event ID is invalid'}, 429: {'description': 'Too many open resource event streams'}, 503: {'description': 'Resource event stream capacity is unavailable'}})
+songmaker_cli/resource_event_api.py:format_sse # Used within this module by _initialize_resource_stream
+songmaker_cli/resource_event_api.py:has_replay_gap # Used within this module by _initialize_resource_stream
+songmaker_cli/resource_event_api.py:parse_last_event_id # Used within this module by api_stream_resource_events
+songmaker_cli/scheduler.py:DownloadTaskResultDTO # Used within this module by consume_download_task_stream
+songmaker_cli/scheduler.py:GenerationTaskResultDTO # Used within this module by consume_task_stream
+songmaker_cli/scheduler.py:NO_ONLINE_ACESTEP_WORKERS_DETAIL # Used within this module by _pick_from
+songmaker_cli/scheduler.py:WORKER_STREAM_WENT_SILENT # Used within this module by WorkerGenerationFailed
+songmaker_cli/scheduler.py:WorkerGenerationFailed # Used within this module by consume_task_stream
+songmaker_cli/scheduler.py:_PickedWorker # Used within this module by _list_online_workers
+songmaker_cli/scheduler.py:_consume_stream_event # Used within this module by _consume_task_stream
+songmaker_cli/scheduler.py:_consume_task_stream # Used within this module by consume_task_stream
+songmaker_cli/scheduler.py:_ensure_loaded # Used within this module by dispatch_generation_on_worker
+songmaker_cli/scheduler.py:_list_online_workers # Used within this module by pick_worker
+songmaker_cli/scheduler.py:_maybe_invoke # Used within this module by _consume_task_stream
+songmaker_cli/scheduler.py:_parse_sse_event # Used within this module by _worker_task_events
+songmaker_cli/scheduler.py:_pick_from # Used within this module by pick_worker
+songmaker_cli/scheduler.py:_raise_worker_event_error # Used within this module by _consume_stream_event
+songmaker_cli/scheduler.py:_sse_reconnect_delay # Used within this module by _iterate_task_events
+songmaker_cli/scheduler.py:_submit_generation # Used within this module by dispatch_generation_on_worker
+songmaker_cli/scheduler.py:_validate_task_result # Used within this module by _consume_stream_event
+songmaker_cli/scheduler.py:_worker_response_cause # Used within this module by _ensure_loaded
+songmaker_cli/scheduler.py:_worker_task_events # Used within this module by _iterate_task_events
+songmaker_cli/scheduler.py:consume_task_stream # Used within this module by dispatch_generation_on_worker
+songmaker_cli/scoring/audiobox_aesthetics.py:_CUDA_VISIBLE_DEVICES # Used within this module by _force_cpu_env
+songmaker_cli/scoring/audiobox_aesthetics.py:_force_cpu_env # Used within this module by _get_predictor
+songmaker_cli/scoring/audiobox_aesthetics.py:_get_predictor # Used within this module by score_audiobox
+songmaker_cli/scoring/audiobox_aesthetics.py:clear_cache # GPU cache cleanup seam used by tests/test_scorers_extended.py
+songmaker_cli/scoring/audiobox_aesthetics.py:score_audiobox # Scorer registry: register('audiobox')
+songmaker_cli/scoring/bpm_accuracy.py:_closest_octave_match # Used within this module by score_bpm
+songmaker_cli/scoring/bpm_accuracy.py:_detect_bpm # Used within this module by score_bpm
+songmaker_cli/scoring/bpm_accuracy.py:_extract_requested_bpm # Used within this module by score_bpm
+songmaker_cli/scoring/bpm_accuracy.py:score_bpm # Scorer registry: register('bpm_accuracy')
+songmaker_cli/scoring/emotional_dynamics.py:_normalize_contrast # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:_normalize_cv # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:_onset_rate_coefficient_of_variation # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:_pitch_coefficient_of_variation # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:_rms_contrast_ratio # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:_safe_cv # Used within this module by _pitch_coefficient_of_variation
+songmaker_cli/scoring/emotional_dynamics.py:_section_median_pitch # Used within this module by _pitch_coefficient_of_variation
+songmaker_cli/scoring/emotional_dynamics.py:_split_into_sections # Used within this module by score_emotional_dynamics
+songmaker_cli/scoring/emotional_dynamics.py:score_emotional_dynamics # Scorer registry: register('emotional_dynamics')
+songmaker_cli/scoring/lyrical_coherence.py:JUDGE_PROMPT # Used within this module by _judge
+songmaker_cli/scoring/lyrical_coherence.py:_judge # Used within this module by judge_lyrical_coherence
+songmaker_cli/scoring/models.py:_SCORE_FIELD_NAMES # Used within this module by assert frozenset(SCORE_TYPES) == _SCORE_FIELD_NAMES == frozenset(SCORERS.keys()), 'SCORE_TYPES, the 
+songmaker_cli/scoring/models.py:_TO_DICT_ORDER # Used within this module by SongScores
+songmaker_cli/scoring/pipeline.py:JUDGE_OUTER_WATCHDOG_HEADROOM_SECONDS # Used within this module by judge_watchdog_timeout
+songmaker_cli/scoring/pipeline.py:_ScorerTimeout # Used within this module by _call_with_timeout
+songmaker_cli/scoring/pipeline.py:_aggregate # Used within this module by run_scoring_pipeline
+songmaker_cli/scoring/pipeline.py:_call_with_timeout # Used within this module by run_scorer
+songmaker_cli/scoring/pipeline.py:_collect_futures # Used within this module by run_scoring_pipeline
+songmaker_cli/scoring/pipeline.py:_ended # Used within this module by run_scorer
+songmaker_cli/scoring/pipeline.py:_scorer_call # Used within this module by _submit_scorers
+songmaker_cli/scoring/pipeline.py:_submit_scorers # Used within this module by run_scoring_pipeline
+songmaker_cli/scoring/pipeline.py:_unrunnable # Used within this module by run_scoring_pipeline
+songmaker_cli/scoring/registry.py:ScorerSpec # Used within this module by SCORERS: dict[str, ScorerSpec] = {TEXT_ACCURACY_SCORER: ScorerSpec(name=TEXT_ACCURACY_SCORER, output
+songmaker_cli/scoring/silence_detection.py:_find_gaps # Used within this module by score_silence
+songmaker_cli/scoring/silence_detection.py:score_silence # Scorer registry: register('silence')
+songmaker_cli/scoring/spectral_quality.py:score_spectral_quality # Scorer registry: register('spectral_quality')
+songmaker_cli/scoring/subprocess_runner.py:EnvProbeRequest # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:EnvProbeResponse # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:ScoreProgressUpdate # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:ScoreResponse # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:ShutdownRequest # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:_child_main # Used within this module by EnvProbeRequest
+songmaker_cli/scoring/subprocess_runner.py:_cleanup_gpu_and_exit # Used within this module by _child_main
+songmaker_cli/scoring/subprocess_runner.py:_scrub_secret_env_vars # Used within this module by EnvProbeRequest
+songmaker_cli/scoring/text_accuracy.py:_HALLUCINATION_PHRASES # Used within this module by _is_hallucination
+songmaker_cli/scoring/text_accuracy.py:_REPEATED_VOCALIZATION_PATTERN # Used within this module by _is_vocalization_word
+songmaker_cli/scoring/text_accuracy.py:_VOCALIZATION_WORDS # Used within this module by _is_vocalization_word
+songmaker_cli/scoring/text_accuracy.py:_as_seconds # Used within this module by _word_cue_from_whisper_word
+songmaker_cli/scoring/text_accuracy.py:_cue_from_whisper_segment # Used within this module by _transcribe
+songmaker_cli/scoring/text_accuracy.py:_get_whisper_model # Used within this module by score_text_accuracy
+songmaker_cli/scoring/text_accuracy.py:_is_hallucination # Used within this module by score_text_accuracy
+songmaker_cli/scoring/text_accuracy.py:_is_vocalization # Used within this module by _word_level_accuracy
+songmaker_cli/scoring/text_accuracy.py:_is_vocalization_word # Used within this module by _is_vocalization
+songmaker_cli/scoring/text_accuracy.py:_transcribe # Used within this module by score_text_accuracy
+songmaker_cli/scoring/text_accuracy.py:_word_cue_from_whisper_word # Used within this module by _word_cues_from_whisper_segment
+songmaker_cli/scoring/text_accuracy.py:_word_cues_from_whisper_segment # Used within this module by _cue_from_whisper_segment
+songmaker_cli/scoring/text_accuracy.py:_word_level_accuracy # Used within this module by score_text_accuracy
+songmaker_cli/scoring/text_accuracy.py:clean_lyrics # Used within this module by _is_vocalization
+songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/test_scorers_extended.py
+songmaker_cli/scoring/text_accuracy.py:score_text_accuracy # Scorer registry: register('text_accuracy')
+songmaker_cli/scoring_worker.py:ScoringWorkerSettings # Used within this module by 'arq scoring worker — runs scoring jobs.\n\nStarted as a separate process:\n    arq songmaker_cli.sc
+songmaker_cli/server.py:_cors_middleware_kwargs # Used within this module by create_app
+songmaker_cli/server.py:_create_default_context # Used within this module by create_app
+songmaker_cli/server.py:_lifespan # Used within this module by create_app
+songmaker_cli/server.py:_record_background_loop_completion # Used within this module by _lifespan
+songmaker_cli/server.py:parse_allowed_hosts # Used within this module by _create_default_context
+songmaker_cli/settings.py:_find_env_file # Used within this module by Settings
+songmaker_cli/settings_api.py:PRESET_NAME_EXISTS_DETAIL # Used within this module by api_create_preset
+songmaker_cli/settings_api.py:PRESET_NOT_FOUND_DETAIL # Used within this module by api_update_preset
+songmaker_cli/settings_api.py:PROVIDER_MODEL_CATALOG_UNVERIFIED # Used within this module by _models_from_route_snapshot
+songmaker_cli/settings_api.py:VALID_BUILTIN_CONFIGS # Used within this module by api_set_default_config
+songmaker_cli/settings_api.py:_build_model_response # Used within this module by api_list_active_models
+songmaker_cli/settings_api.py:_cover_response # Used within this module by api_get_cover_settings
+songmaker_cli/settings_api.py:_cover_route_readiness # Used within this module by api_get_provider_status
+songmaker_cli/settings_api.py:_cowriter_response # Used within this module by api_get_cowriter_settings
+songmaker_cli/settings_api.py:_cowriter_routes # Used within this module by api_set_cowriter_settings
+songmaker_cli/settings_api.py:_get_env_defaults # Used within this module by api_get_rate_limits
+songmaker_cli/settings_api.py:_judge_response # Used within this module by api_get_judge_settings
+songmaker_cli/settings_api.py:_live_catalogue # Used within this module by api_set_cowriter_settings
+songmaker_cli/settings_api.py:_model_the_provider_row_shows # Used within this module by api_set_cowriter_settings
+songmaker_cli/settings_api.py:_models_from_route_snapshot # Used within this module by _live_catalogue
+songmaker_cli/settings_api.py:_provider_probe_times # Used within this module by _cowriter_response
+songmaker_cli/settings_api.py:_require_selectable_model # Used within this module by api_set_cowriter_settings
+songmaker_cli/settings_api.py:_route_statuses # Used within this module by api_get_provider_status
+songmaker_cli/settings_api.py:_surface_status_from_snapshot # Used within this module by api_get_provider_status
+songmaker_cli/settings_api.py:api_create_preset # HTTP dispatcher: router.post('/settings/presets', responses={400: {'description': 'Requested model is not available'}, 409: {'description': PRESET_NAME_EXISTS_DETAIL}})
+songmaker_cli/settings_api.py:api_delete_preset # HTTP dispatcher: router.delete('/settings/presets/{preset_id}', responses={404: {'description': 'Preset does not exist'}})
+songmaker_cli/settings_api.py:api_delete_user_rate_limits # HTTP dispatcher: router.delete('/settings/rate-limits/user/{user_id}', responses={404: {'description': 'User does not exist'}})
+songmaker_cli/settings_api.py:api_get_builtins # HTTP dispatcher: router.get('/settings/generation-builtins')
+songmaker_cli/settings_api.py:api_get_claude_models # HTTP dispatcher: router.get('/settings/claude-models')
+songmaker_cli/settings_api.py:api_get_cover_settings # HTTP dispatcher: router.get('/settings/cover')
+songmaker_cli/settings_api.py:api_get_cowriter_settings # HTTP dispatcher: router.get('/settings/cowriter', responses={422: {'description': 'Stored co-writer configuration is invalid'}})
+songmaker_cli/settings_api.py:api_get_default_config # HTTP dispatcher: router.get('/settings/default-config')
+songmaker_cli/settings_api.py:api_get_generation_defaults # HTTP dispatcher: router.get('/settings/generation-defaults')
+songmaker_cli/settings_api.py:api_get_judge_settings # HTTP dispatcher: router.get('/settings/judge', responses={422: {'description': 'Stored judge configuration is invalid'}})
+songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.get('/settings/providers', responses={422: {'description': 'Stored judge route is invalid'}})
+songmaker_cli/settings_api.py:api_get_rate_limits # HTTP dispatcher: router.get('/settings/rate-limits')
+songmaker_cli/settings_api.py:api_get_user_rate_limits # HTTP dispatcher: router.get('/settings/rate-limits/user/{user_id}', responses={404: {'description': 'User does not exist'}})
+songmaker_cli/settings_api.py:api_list_active_models # HTTP dispatcher: router.get('/settings/models')
+songmaker_cli/settings_api.py:api_list_all_models # HTTP dispatcher: router.get('/settings/models/all')
+songmaker_cli/settings_api.py:api_list_presets # HTTP dispatcher: router.get('/settings/presets')
+songmaker_cli/settings_api.py:api_set_claude_models # HTTP dispatcher: router.put('/settings/claude-models', responses={400: {'description': 'Selected Claude model is not allowed'}})
+songmaker_cli/settings_api.py:api_set_cover_settings # HTTP dispatcher: router.put('/settings/cover', responses={422: {'description': 'Unknown cover provider or route'}})
+songmaker_cli/settings_api.py:api_set_cowriter_settings # HTTP dispatcher: router.put('/settings/cowriter', responses={422: {'description': 'Co-writer provider, route, or model is unknown'}})
+songmaker_cli/settings_api.py:api_set_default_config # HTTP dispatcher: router.put('/settings/default-config', responses={400: {'description': 'Default configuration is invalid'}, 404: {'description': 'User does not exist'}})
+songmaker_cli/settings_api.py:api_set_default_preset # HTTP dispatcher: router.post('/settings/presets/{preset_id}/set-default', responses={404: {'description': 'Preset does not exist'}})
+songmaker_cli/settings_api.py:api_set_generation_defaults # HTTP dispatcher: router.put('/settings/generation-defaults')
+songmaker_cli/settings_api.py:api_set_judge_settings # HTTP dispatcher: router.put('/settings/judge', responses={422: {'description': 'Judge provider, route, or model is unknown'}})
+songmaker_cli/settings_api.py:api_toggle_model # HTTP dispatcher: router.put('/settings/models/{model_id}', responses={404: {'description': 'Model does not exist'}})
+songmaker_cli/settings_api.py:api_update_preset # HTTP dispatcher: router.put('/settings/presets/{preset_id}', responses={404: {'description': 'Preset does not exist'}, 409: {'description': PRESET_NAME_EXISTS_DETAIL}})
+songmaker_cli/settings_api.py:api_update_rate_limits # HTTP dispatcher: router.put('/settings/rate-limits', responses={400: {'description': 'Rate-limit setting or value is invalid'}})
+songmaker_cli/settings_api.py:api_update_user_rate_limits # HTTP dispatcher: router.put('/settings/rate-limits/user/{user_id}', responses={400: {'description': 'Rate-limit setting or value is invalid'}, 404: {'description': 'User does not exist'}})
+songmaker_cli/sharing_api.py:DEFAULT_AUDIO_MEDIA_TYPE # Used within this module by get_audio
+songmaker_cli/sharing_api.py:_SHARED_LIMITER_FAILURE_POLICY # Used within this module by _check_rate_limit
+songmaker_cli/sharing_api.py:_check_rate_limit # Used within this module by _check_shared_rate_limit
+songmaker_cli/sharing_api.py:_check_shared_rate_limit # Used within this module by get_shared_album
+songmaker_cli/sharing_api.py:_check_shared_stream_rate_limit # Used within this module by get_shared_album_stream
+songmaker_cli/sharing_api.py:_entry_album # Used within this module by _shared_playlist_album_covers
+songmaker_cli/sharing_api.py:_get_shared_limiter # Used within this module by _check_shared_rate_limit
+songmaker_cli/sharing_api.py:_get_shared_stream_limiter # Used within this module by _check_shared_stream_rate_limit
+songmaker_cli/sharing_api.py:_is_uncovered_album # Used within this module by _shared_playlist_album_covers
+songmaker_cli/sharing_api.py:_shared_album_cover_response # Used within this module by get_shared_album_cover
+songmaker_cli/sharing_api.py:_shared_audio_url # Used within this module by get_shared_album
+songmaker_cli/sharing_api.py:_shared_audio_url_for_filename # Used within this module by _shared_audio_url
+songmaker_cli/sharing_api.py:_shared_playlist_album_covers # Used within this module by get_shared_playlist
+songmaker_cli/sharing_api.py:_shared_playlist_cover # Used within this module by get_shared_playlist
+songmaker_cli/sharing_api.py:_shared_playlist_entries # Used within this module by get_shared_playlist
+songmaker_cli/sharing_api.py:_validate_shared_queue_manifest # Used within this module by get_shared_queue_stream_audio
+songmaker_cli/sharing_api.py:get_audio # HTTP dispatcher: router.get('/audio/{owner_id}/{filename}', responses={404: {'description': 'Audio file not found'}})
+songmaker_cli/sharing_api.py:get_shared_album # HTTP dispatcher: router.get('/shared/{slug}', responses={404: {'description': 'Shared album not found'}})
+songmaker_cli/sharing_api.py:get_shared_album_cover # HTTP dispatcher: router.get('/shared/{slug}/cover', responses={404: {'description': 'Shared album or cover not found'}})
+songmaker_cli/sharing_api.py:get_shared_album_stream # HTTP dispatcher: router.post('/shared/{slug}/stream', responses={404: {'description': 'Shared album not found'}})
+songmaker_cli/sharing_api.py:get_shared_audio # HTTP dispatcher: router.get('/shared/{slug}/audio/{filename:path}', responses={404: {'description': 'Shared audio file not found'}})
+songmaker_cli/sharing_api.py:get_shared_gen_audio # HTTP dispatcher: router.get('/shared/gen/{slug}/audio/{filename:path}', responses={404: {'description': 'Shared audio file not found'}})
+songmaker_cli/sharing_api.py:get_shared_generation # HTTP dispatcher: router.get('/shared/gen/{slug}', responses={404: {'description': 'Shared generation not found'}})
+songmaker_cli/sharing_api.py:get_shared_generation_album_cover # HTTP dispatcher: router.get('/shared/gen/{slug}/album-cover', responses={404: {'description': 'Shared generation, album, or cover not found'}})
+songmaker_cli/sharing_api.py:get_shared_playlist # HTTP dispatcher: router.get('/shared/playlist/{slug}', responses={404: {'description': 'Shared playlist not found'}})
+songmaker_cli/sharing_api.py:get_shared_playlist_album_cover # HTTP dispatcher: router.get('/shared/playlist/{slug}/album-cover/{album_id}', responses={404: {'description': 'Shared playlist, album, or cover not found'}})
+songmaker_cli/sharing_api.py:get_shared_playlist_audio # HTTP dispatcher: router.get('/shared/playlist/{slug}/audio/{filename:path}', responses={404: {'description': 'Shared audio file not found'}})
+songmaker_cli/sharing_api.py:get_shared_playlist_cover # HTTP dispatcher: router.get('/shared/playlist/{slug}/cover', responses={404: {'description': 'Shared playlist or cover not found'}})
+songmaker_cli/sharing_api.py:get_shared_playlist_stream # HTTP dispatcher: router.post('/shared/playlist/{slug}/stream', responses={404: {'description': 'Shared playlist not found'}})
+songmaker_cli/sharing_api.py:get_shared_queue_stream_audio # HTTP dispatcher: router.get('/shared/queue-streams/{snapshot_id}/audio', responses={404: {'description': QUEUE_STREAM_NOT_FOUND_DETAIL}})
+songmaker_cli/sharing_api.py:get_shared_song # HTTP dispatcher: router.get('/shared/song/{slug}', responses={404: {'description': 'Shared song not found'}})
+songmaker_cli/sharing_api.py:get_shared_song_album_cover # HTTP dispatcher: router.get('/shared/song/{slug}/album-cover', responses={404: {'description': 'Shared song, album, or cover not found'}})
+songmaker_cli/sharing_api.py:get_shared_song_audio # HTTP dispatcher: router.get('/shared/song/{slug}/audio/{filename:path}', responses={404: {'description': 'Shared audio file not found'}})
+songmaker_cli/sharing_api.py:get_shared_song_cover # HTTP dispatcher: router.get('/shared/song/{slug}/cover', responses={404: {'description': 'Shared song or cover not found'}})
+songmaker_cli/song_api.py:_require_owned_reference_audio # Used within this module by api_create_song
+songmaker_cli/song_api.py:api_cleanup_song # HTTP dispatcher: router.post('/songs/{song_id}/cleanup')
+songmaker_cli/song_api.py:api_create_song # HTTP dispatcher: router.post('/songs', responses={404: {'description': 'Album or reference audio not found'}})
+songmaker_cli/song_api.py:api_delete_song # HTTP dispatcher: router.delete('/songs/{song_id}', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
+songmaker_cli/song_api.py:api_delete_song_cover # HTTP dispatcher: router.delete('/songs/{song_id}/cover')
+songmaker_cli/song_api.py:api_delete_version # HTTP dispatcher: router.delete('/versions/{version_id}', responses={404: {'description': 'Version not found'}})
+songmaker_cli/song_api.py:api_get_song # HTTP dispatcher: router.get('/songs/{song_id}')
+songmaker_cli/song_api.py:api_get_song_cover # HTTP dispatcher: router.get('/songs/{song_id}/cover', responses={404: {'description': 'Song or cover not found'}})
+songmaker_cli/song_api.py:api_list_songs # HTTP dispatcher: router.get('/songs')
+songmaker_cli/song_api.py:api_move_song # HTTP dispatcher: router.put('/songs/{song_id}/album', responses={404: {'description': 'Song or album not found'}})
+songmaker_cli/song_api.py:api_record_song_listen # HTTP dispatcher: router.post('/songs/{song_id}/listen', responses={422: {'description': 'Song has no playable take'}})
+songmaker_cli/song_api.py:api_rename_song # HTTP dispatcher: router.put('/songs/{song_id}/title', responses={404: {'description': SONG_NOT_FOUND_DETAIL}, 422: {'description': 'Song title is required'}})
+songmaker_cli/song_api.py:api_restore_song # HTTP dispatcher: router.post('/songs/{song_id}/restore', responses={404: {'description': SONG_NOT_FOUND_DETAIL}, 410: {'description': 'Song restore window has expired'}})
+songmaker_cli/song_api.py:api_share_song # HTTP dispatcher: router.post('/songs/{song_id}/share', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
+songmaker_cli/song_api.py:api_song_versions # HTTP dispatcher: router.get('/songs/{song_id}/versions')
+songmaker_cli/song_api.py:api_unshare_song # HTTP dispatcher: router.delete('/songs/{song_id}/share', responses={404: {'description': SONG_NOT_FOUND_DETAIL}})
+songmaker_cli/song_api.py:api_update_song # HTTP dispatcher: router.put('/songs/{song_id}', responses={404: {'description': 'Song or reference audio not found'}})
+songmaker_cli/song_api.py:api_upload_song_cover # HTTP dispatcher: router.post('/songs/{song_id}/cover')
+songmaker_cli/worker_liveness.py:ACESTEP_LAST_ALIVE_KEY # Used within this module by acestep_worker_liveness
+songmaker_cli/worker_liveness.py:MUSIC_LAST_ALIVE_KEY # Used within this module by read_worker_liveness
+songmaker_cli/worker_liveness.py:SCORING_LAST_ALIVE_KEY # Used within this module by read_worker_liveness
+songmaker_cli/worker_liveness.py:_PROCESS_STARTED_AT # Used within this module by _missing_signal_liveness
+songmaker_cli/worker_liveness.py:_last_alive_key # Used within this module by ACESTEP_LAST_ALIVE_KEY = _last_alive_key('acestep')
+songmaker_cli/worker_liveness.py:_missing_signal_liveness # Used within this module by acestep_worker_liveness
+songmaker_cli/worker_liveness.py:_model_execution_liveness # Used within this module by worker_liveness_by_job_type
+songmaker_cli/worker_liveness.py:_record_alive # Used within this module by acestep_worker_liveness
+songmaker_cli/worker_liveness.py:acestep_worker_liveness # Used within this module by read_worker_liveness
+songmaker_cli/worker_liveness.py:arq_worker_liveness # Used within this module by read_worker_liveness
+songmaker_cli/worker_liveness.py:worker_liveness_by_job_type # Used within this module by read_worker_liveness

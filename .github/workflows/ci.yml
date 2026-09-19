@@ -54,6 +54,9 @@ jobs:
       - name: No silent-fallback smell check
         run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
 
+      - name: No unreferenced backend symbols
+        run: uv run --no-sync --frozen --no-build python scripts/check_dead_symbols.py
+
       - name: Repository root layout
         run: uv run --no-sync --frozen --no-build python scripts/check_root_layout.py
 
