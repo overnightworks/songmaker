@@ -1,0 +1,8 @@
+claim_id = "23b3a7ef426248a3937bc0a6670d18e5"
+agent = "claude-head"
+role = "builder"
+base = "76e8b4517168faee7f849fbd3059558ed1771858"
+branch = "claude/issue-931-test-builders"
+scope = [".github/workflows/ci.yml", "docs/testing.md", "scripts/test_helper_ratchet.sh", "scripts/test_helper_ratchet.txt", "tests"]
+opened_commit = "ae4d90850b7a4f8dd0903a0f692580557939bf7a"
+whole_reason = "Löschungen und Umstellungen eines Audits gehören zusammen; die Pfade sind Verzeichnisse, weil tote Dateien verschwinden"
