@@ -51,6 +51,9 @@ jobs:
       - name: Ruff lint
         run: uv run --no-sync --frozen --no-build ruff check src/ tests/
 
+      - name: Test helper duplication ratchet
+        run: scripts/test_helper_ratchet.sh
+
       - name: No silent-fallback smell check
         run: uv run --no-sync --frozen --no-build python scripts/check_no_silent_fallbacks.py src/
 
