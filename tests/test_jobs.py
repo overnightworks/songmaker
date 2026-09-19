@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import fakeredis.aioredis
+import httpx
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
@@ -51,7 +52,13 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_scoring_job,
 )
-from songmaker_cli.scheduler import GenerationTaskResultDTO, WorkerTaskFailed
+from songmaker_cli.scheduler import (
+    WORKER_STREAM_WENT_SILENT,
+    GenerationTaskResultDTO,
+    WorkerGenerationFailed,
+    WorkerProtocolError,
+    WorkerTaskFailed,
+)
 from songmaker_cli.scoring.models import (
     EmotionalDynamicsScore,
     ScorerOutcome,
@@ -769,55 +776,27 @@ def test_generation_job_no_capacity(seeded_db, tmp_path: Path) -> None:
         assert job.error == "No ACE-Step workers available"
 
 
-def test_generation_job_hides_worker_internal_details(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.scheduler import WorkerGenerationFailed
-
-    cause = "/opt/acestep/worker.py: insufficient VRAM for the configured model"
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        WorkerGenerationFailed(cause),
-    )
-    with dispatch, post_process, defaults:
-        _run(
-            run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=tmp_path / "audio",
-                data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-            )
-        )
-
-    with seeded_db() as session:
-        job = get_job(session, "j1")
-        assert job.status == "failed"
-        assert job.error == "Worker generation failed"
-        assert cause not in job.error
-
-
-def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path) -> None:
-    from songmaker_cli.scheduler import WORKER_STREAM_WENT_SILENT, WorkerGenerationFailed
-
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
+@pytest.mark.parametrize(
+    "failure",
+    [
+        WorkerTaskFailed(
+            "Insufficient free VRAM: need ~2.9 GB, only 1.7 GB available. "
+            "Reduce batch size or audio duration",
+        ),
+        WorkerGenerationFailed("  ACE-Step failed: insufficient VRAM\nTry a shorter duration.  "),
         WorkerGenerationFailed(WORKER_STREAM_WENT_SILENT),
-    )
+        WorkerProtocolError("Worker done event missing 'result' field"),
+    ],
+    ids=["vram-preflight", "generation-cause", "silent-stream", "protocol-error"],
+)
+def test_generation_job_preserves_worker_cause(seeded_db, tmp_path: Path, failure) -> None:
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(failure)
     with dispatch, post_process, defaults:
         _run(
             run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=tmp_path / "audio",
-                data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
+                "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+                redis=MagicMock(), target_model="sft",
             )
         )
 
@@ -825,40 +804,48 @@ def test_generation_job_records_a_silent_worker_stream(seeded_db, tmp_path: Path
         job = get_job(session, "j1")
         assert job.status == "failed"
         assert job.error_type == "generation_error"
-        assert job.error == WORKER_STREAM_WENT_SILENT
+        assert job.error == str(failure)
 
 
-def test_generation_job_keeps_worker_protocol_failures_generic(
-    seeded_db,
-    tmp_path: Path,
+@pytest.mark.parametrize("status_code", [409, 502])
+@pytest.mark.parametrize("response_format", ["text", "json"])
+def test_generation_job_preserves_auto_load_response(
+    seeded_db, tmp_path: Path, status_code: int, response_format: str,
 ) -> None:
-    """Only ACE-Step's own cause reaches the user; a broken worker event
-    is our bug and stays behind the generic message."""
-    from songmaker_cli.scheduler import WorkerProtocolError
+    from songmaker_cli.acestep_state import read_queue_depth, worker_state_key
 
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(
-        WorkerProtocolError("Worker done event missing 'result' field"),
+    cause = "Model sft requires 12.0GB > budget 8.0GB"
+    response = httpx.Response(
+        status_code,
+        **({"json": {"detail": cause}} if response_format == "json" else {"text": cause}),
     )
-    with dispatch, post_process, defaults:
-        _run(
-            run_generation_job(
-                "j1",
-                "s1",
-                "v1",
-                1,
-                "u1",
-                db_factory=seeded_db,
-                audio_dir=tmp_path / "audio",
-                data_dir=tmp_path / "data",
-                redis=MagicMock(),
-                target_model="sft",
-            )
-        )
 
+    def worker_response(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/load_model"
+        return response
+
+    async def exercise() -> None:
+        async with fakeredis.aioredis.FakeRedis() as redis:
+            await _seed_healthy_worker(redis, seeded_db)
+            await redis.set(worker_state_key("w1"), json.dumps({"gpu_healthy": True, "loaded": []}))
+            client = httpx.AsyncClient(transport=httpx.MockTransport(worker_response))
+            with (
+                patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client),
+                patch("songmaker_cli.jobs.load_generation_defaults", return_value={}),
+            ):
+                await run_generation_job(
+                    "j1", "s1", "v1", 1, "u1", db_factory=seeded_db,
+                    audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
+                    redis=redis, target_model="sft",
+                )
+            assert await read_queue_depth(redis, "w1") == 0
+
+    _run(exercise())
     with seeded_db() as session:
         job = get_job(session, "j1")
         assert job.status == "failed"
-        assert job.error == "Worker generation failed"
+        assert job.error_type == "generation_error"
+        assert job.error == cause
 
 
 def test_generation_job_exception(seeded_db, tmp_path: Path) -> None:
@@ -2483,7 +2470,6 @@ def test_load_model_on_worker_unreachable(seeded_db) -> None:
 def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
     from unittest.mock import AsyncMock
 
-    from songmaker_cli.constants import JOB_ERROR_WORKER_GENERATION_FAILED
     from songmaker_cli.jobs import load_model_on_worker
 
     _seed_worker_row(seeded_db)
@@ -2503,8 +2489,7 @@ def test_load_model_on_worker_returns_5xx(seeded_db) -> None:
         job = get_job(session, "w1-job")
         assert job.status == "failed"
         assert job.error_type == "worker_error"
-        assert job.error == JOB_ERROR_WORKER_GENERATION_FAILED
-        assert worker_response not in job.error
+        assert job.error == f"Worker returned 500: {worker_response}"
 
 
 def test_load_model_on_worker_5xx_logs_response_body_with_job_id(seeded_db, caplog) -> None:
@@ -2704,7 +2689,6 @@ async def _instant_sleep(_seconds: float) -> None:
 def test_download_model_on_worker_sse_error(seeded_db) -> None:
     from unittest.mock import AsyncMock
 
-    from songmaker_cli.constants import JOB_ERROR_WORKER_GENERATION_FAILED
     from songmaker_cli.jobs import download_model_on_worker
     from songmaker_cli.scheduler import WorkerTaskFailed
 
@@ -2739,7 +2723,7 @@ def test_download_model_on_worker_sse_error(seeded_db) -> None:
         job = get_job(session, "dl6")
         assert job.status == "failed"
         assert job.error_type == "download_error"
-        assert job.error == JOB_ERROR_WORKER_GENERATION_FAILED
+        assert job.error == "HF 401 unauthorized"
     assert consume_calls["count"] == 3
 
 
