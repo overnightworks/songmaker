@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.models import AceStepWorker
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from songmaker_cli.db.models import AceStepWorker, _utcnow
 
 
 def register_worker(

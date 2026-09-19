@@ -74,7 +74,6 @@ _LORA_SLUG_LOCK_ID = 3
 _SESSION_CAP_LOCK_ID = 4
 _SONG_SLUG_LOCK_ID = 5
 _PLAYLIST_SLUG_LOCK_ID = 6
-COVER_SUGGESTIONS_LOCK_ID = 7
 _LORA_CAPACITY_LOCK_ID = 8
 _USER_MANAGEMENT_LOCK_ID = 9
 
@@ -276,7 +275,10 @@ def create_job_with_rate_limit(
     is_admin = user.role == ROLE_ADMIN
     settings = get_settings()
     max_queue_depth = resolve_rate_limit(
-        session, user.id, SETTING_MAX_QUEUE_DEPTH, settings.max_queue_depth,
+        session,
+        user.id,
+        SETTING_MAX_QUEUE_DEPTH,
+        settings.max_queue_depth,
     )
     recover_stale_jobs_by_age_and_type(
         session,
@@ -291,7 +293,10 @@ def create_job_with_rate_limit(
             raise HTTPException(429, "Queue is full. Try again later.")
         if not is_admin:
             max_active = resolve_rate_limit(
-                session, user.id, SETTING_MAX_USER_ACTIVE_JOBS, settings.max_user_active_jobs,
+                session,
+                user.id,
+                SETTING_MAX_USER_ACTIVE_JOBS,
+                settings.max_user_active_jobs,
             )
             if count_user_active_jobs(session, user.id, job_type) >= max_active:
                 session.rollback()
@@ -355,17 +360,23 @@ def _acquire_unique_slug(
 
 def unique_album_id(session: Session, title: str) -> str:
     """Find an album ID unique across all albums, including deleted ones."""
+
     def is_taken(candidate: str) -> bool:
         return get_album(session, candidate, include_deleted_rows=True) is not None
 
     base_slug = slugify(title, max_length=_ALBUM_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_album_id", _ALBUM_ID_LOCK_ID, base_slug, is_taken,
+        session,
+        "unique_album_id",
+        _ALBUM_ID_LOCK_ID,
+        base_slug,
+        is_taken,
     )
 
 
 def unique_lora_slug(session: Session, user_id: str, name: str) -> str:
     """Find a LoRA slug unique within one user's LoRAs."""
+
     def is_taken(candidate: str) -> bool:
         return (
             session.query(UserLora)
@@ -375,12 +386,18 @@ def unique_lora_slug(session: Session, user_id: str, name: str) -> str:
 
     base_slug = slugify(name, max_length=_LORA_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_lora_slug", _LORA_SLUG_LOCK_ID, base_slug, is_taken,
+        session,
+        "unique_lora_slug",
+        _LORA_SLUG_LOCK_ID,
+        base_slug,
+        is_taken,
     )
 
 
 def unique_lora_slug_under_capacity_lock(
-    session: Session, user_id: str, name: str,
+    session: Session,
+    user_id: str,
+    name: str,
 ) -> str:
     """Find a free LoRA slug while ``lock_lora_capacity`` is held.
 
@@ -415,6 +432,7 @@ def unique_song_slug(
     with a song created in the meantime. Pass exclude_song_id when the song
     already owns a row, so a rename or a move does not collide with itself.
     """
+
     def is_taken(candidate: str) -> bool:
         query = (
             session.query(Song)
@@ -427,7 +445,11 @@ def unique_song_slug(
 
     base_slug = slugify(title, max_length=_SONG_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_song_slug", _SONG_SLUG_LOCK_ID, base_slug, is_taken,
+        session,
+        "unique_song_slug",
+        _SONG_SLUG_LOCK_ID,
+        base_slug,
+        is_taken,
     )
 
 
@@ -442,6 +464,7 @@ def unique_playlist_slug(
     is global (the album precedent from #268). Pass exclude_playlist_id when
     the playlist already owns a row, so a rename does not collide with itself.
     """
+
     def is_taken(candidate: str) -> bool:
         query = session.query(Playlist).filter(Playlist.slug == candidate)
         if exclude_playlist_id is not None:
@@ -450,7 +473,11 @@ def unique_playlist_slug(
 
     base_slug = slugify(title, max_length=_PLAYLIST_SLUG_BASE_MAX_LENGTH)
     return _acquire_unique_slug(
-        session, "unique_playlist_slug", _PLAYLIST_SLUG_LOCK_ID, base_slug, is_taken,
+        session,
+        "unique_playlist_slug",
+        _PLAYLIST_SLUG_LOCK_ID,
+        base_slug,
+        is_taken,
     )
 
 
@@ -469,7 +496,9 @@ def check_album_access(album: Album | None, user: AuthenticatedUser) -> Album:
 
 
 def check_song_access(
-    session: Session, song_id: str, user: AuthenticatedUser,
+    session: Session,
+    song_id: str,
+    user: AuthenticatedUser,
 ) -> Song:
     """Load a song and verify ownership. Returns the song or raises 404."""
     song = get_song(session, song_id)
@@ -483,7 +512,9 @@ def check_song_access(
 
 
 def check_song_access_including_deleted(
-    session: Session, song_id: str, user: AuthenticatedUser,
+    session: Session,
+    song_id: str,
+    user: AuthenticatedUser,
 ) -> Song:
     """Load a song (even soft-deleted) and verify ownership.
 
@@ -510,7 +541,9 @@ def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLor
 
 
 def check_lora_ready_for_generation(
-    session: Session, user_lora_id: str | None, user: AuthenticatedUser,
+    session: Session,
+    user_lora_id: str | None,
+    user: AuthenticatedUser,
 ) -> UserLora | None:
     """Validate a user_lora_id referenced by a generation request.
 
@@ -532,13 +565,15 @@ def check_lora_ready_for_generation(
         raise HTTPException(422, "LoRA is deleted")
     if lora.status != LoraStatus.READY:
         raise HTTPException(
-            422, f"LoRA is not ready (status={lora.status})",
+            422,
+            f"LoRA is not ready (status={lora.status})",
         )
     return lora
 
 
 def check_lora_sample_access(
-    sample: UserLoraSample | None, user: AuthenticatedUser,
+    sample: UserLoraSample | None,
+    user: AuthenticatedUser,
 ) -> UserLoraSample:
     if not sample:
         raise HTTPException(404, LORA_SAMPLE_NOT_FOUND_DETAIL)
@@ -551,7 +586,9 @@ def check_lora_sample_access(
 
 
 def check_generation_access(
-    session: Session, gen_id: str, user: AuthenticatedUser,
+    session: Session,
+    gen_id: str,
+    user: AuthenticatedUser,
 ) -> Generation:
     """Load a generation and verify ownership. Returns the generation or raises 404."""
     gen = get_generation(session, gen_id)
@@ -565,7 +602,9 @@ def check_generation_access(
 
 
 def check_own_generation_access(
-    session: Session, gen_id: str, user: AuthenticatedUser,
+    session: Session,
+    gen_id: str,
+    user: AuthenticatedUser,
 ) -> Generation:
     """Load a generation and require its album to belong to the caller.
 
@@ -595,6 +634,7 @@ def cleanup_generation_files(audio_dir: Path, paths: list[str]) -> None:
 
 
 # ── Rate limiting ────────────────────────────────────────────────────
+
 
 def get_cached_limiter[LimiterT](
     request: Request,
@@ -643,7 +683,8 @@ def enforce_rate_limit(
         raise HTTPException(503, unavailable_detail or reject_detail) from exc
     if not allowed:
         raise HTTPException(
-            429, reject_detail,
+            429,
+            reject_detail,
             headers={"Retry-After": str(window_seconds)},
         )
 

@@ -49,10 +49,12 @@ def _seed_albums(session) -> None:
     admin = User(username="admin", password_hash=hash_password("adminpass1"), role="admin")
     session.add_all([alice, bob, admin])
     session.flush()
-    session.add_all([
-        Album(id="alice-album", title="Alice", artist="Alice", created_by=alice.id),
-        Album(id="bob-album", title="Bob", artist="Bob", created_by=bob.id),
-    ])
+    session.add_all(
+        [
+            Album(id="alice-album", title="Alice", artist="Alice", created_by=alice.id),
+            Album(id="bob-album", title="Bob", artist="Bob", created_by=bob.id),
+        ]
+    )
 
 
 @pytest.fixture
@@ -94,14 +96,14 @@ def _add_suggestion(factory, audio_dir: Path, *, album_id: str = "alice-album") 
         job = Job(type=JobType.COVER, user_id=album.created_by, album_id=album.id)
         session.add(job)
         session.flush()
-        session.add(AlbumCoverSuggestion(
-            id=suggestion_id,
-            album_id=album.id,
-            job_id=job.id,
-            png_path=(
-                f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album.id}/{suggestion_id}.png"
-            ),
-        ))
+        session.add(
+            AlbumCoverSuggestion(
+                id=suggestion_id,
+                album_id=album.id,
+                job_id=job.id,
+                png_path=(f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album.id}/{suggestion_id}.png"),
+            )
+        )
         session.commit()
     return suggestion_id
 
@@ -149,7 +151,8 @@ def test_cover_suggestion_request_owner_creates_one_job_and_replaces_stale_sugge
 
 
 def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
     _add_cover_job(factory)
@@ -174,7 +177,8 @@ def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
 
 
 def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_job(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    alice_app: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
     get_settings.cache_clear()
@@ -184,9 +188,7 @@ def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_jo
 
     assert response.status_code == 503
     assert response.json() == {"detail": "Worker not running"}
-    operation = client.app.openapi()["paths"][
-        "/api/albums/{album_id}/cover-suggestions"
-    ]["post"]
+    operation = client.app.openapi()["paths"]["/api/albums/{album_id}/cover-suggestions"]["post"]
     assert "200" in operation["responses"]
     assert operation["responses"]["503"]["description"] == "Cover suggestions are unavailable"
     with factory() as session:
@@ -194,7 +196,8 @@ def test_create_cover_suggestions_rejects_a_missing_worker_without_creating_a_jo
 
 
 def test_create_cover_suggestions_enqueues_a_music_worker_job(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    alice_app: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
     get_settings.cache_clear()
@@ -226,7 +229,8 @@ def test_create_cover_suggestions_enqueues_a_music_worker_job(
 
 
 def test_web_cover_executor_leaves_the_job_for_the_web_runner(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    alice_app: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, factory = alice_app
     monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.WEB)
@@ -281,7 +285,8 @@ def test_create_cover_suggestions_replaces_stale_suggestions(
 
 
 def test_create_cover_suggestions_marks_a_queue_failure_terminal(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    alice_app: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
     get_settings.cache_clear()
@@ -308,7 +313,8 @@ def test_create_cover_suggestions_marks_a_queue_failure_terminal(
 
 
 def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
 ) -> None:
     client, factory = alice_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
@@ -329,26 +335,34 @@ def test_cover_suggestion_list_and_selection_use_the_existing_cover_writer(
     assert body["job"]["error"] is None
     assert body["used_today"] == 2
     assert body["daily_limit"] == 10
-    assert body["suggestions"] == [{
-        "id": suggestion_id,
-        "url": f"/api/albums/alice-album/cover-suggestions/{suggestion_id}",
-    }]
+    assert body["suggestions"] == [
+        {
+            "id": suggestion_id,
+            "url": f"/api/albums/alice-album/cover-suggestions/{suggestion_id}",
+        }
+    ]
     assert client.get(body["suggestions"][0]["url"]).content == _png_bytes()
     selected = client.put(
-        "/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id},
+        "/api/albums/alice-album/cover",
+        json={"suggestion_id": suggestion_id},
     )
     assert selected.status_code == 200
     assert selected.json()["cover"] is not None
 
 
 def test_discard_suggestions_keeps_the_selected_cover(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
 ) -> None:
     client, factory = alice_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
-    assert client.put(
-        "/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id},
-    ).status_code == 200
+    assert (
+        client.put(
+            "/api/albums/alice-album/cover",
+            json={"suggestion_id": suggestion_id},
+        ).status_code
+        == 200
+    )
     cover_dir = tmp_path / "audio" / "covers" / "alice-album"
     assert cover_dir.is_dir()
 
@@ -357,31 +371,38 @@ def test_discard_suggestions_keeps_the_selected_cover(
     assert discarded.status_code == 200
     assert client.get("/api/albums/alice-album").json()["cover"] is not None
     assert cover_dir.is_dir()
-    assert not (
-        tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
-    ).exists()
+    assert not (tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
 
 
 def test_delete_selected_cover_keeps_suggestions(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
 ) -> None:
     client, factory = alice_app
     suggestion_id = _add_suggestion(factory, tmp_path / "audio")
-    assert client.put(
-        "/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id},
-    ).status_code == 200
+    assert (
+        client.put(
+            "/api/albums/alice-album/cover",
+            json={"suggestion_id": suggestion_id},
+        ).status_code
+        == 200
+    )
 
     deleted = client.delete("/api/albums/alice-album/cover")
 
     assert deleted.status_code == 200
     assert (
-        tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
+        tmp_path
+        / "audio"
+        / ALBUM_COVER_SUGGESTIONS_DIRNAME
+        / "alice-album"
         / f"{suggestion_id}.png"
     ).is_file()
 
 
 def test_put_cover_rejects_an_upload_without_changing_the_cover(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
 ) -> None:
     client, factory = alice_app
 
@@ -402,10 +423,12 @@ def test_put_cover_keeps_json_requests_within_the_standard_body_budget(
     alice_app: tuple[TestClient, object],
 ) -> None:
     client, _ = alice_app
-    payload = json.dumps({
-        "suggestion_id": "a" * 36,
-        "padding": "x" * JSON_REQUEST_BODY_MAX_BYTES,
-    })
+    payload = json.dumps(
+        {
+            "suggestion_id": "a" * 36,
+            "padding": "x" * JSON_REQUEST_BODY_MAX_BYTES,
+        }
+    )
 
     response = client.put(
         "/api/albums/alice-album/cover",
@@ -503,7 +526,8 @@ def test_active_cover_job_blocks_a_new_request_before_unavailable_response(
 
 
 def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
-    alice_app: tuple[TestClient, object], monkeypatch: pytest.MonkeyPatch,
+    alice_app: tuple[TestClient, object],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     client, factory = alice_app
     monkeypatch.setenv("COVER_SUGGESTIONS_DAILY_LIMIT", "1")
@@ -516,7 +540,6 @@ def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
             assert tz == timezone.utc
             return utc_midnight + timedelta(microseconds=1)
 
-    monkeypatch.setattr("songmaker_cli.album_api.datetime", FixedUtcDateTime)
     monkeypatch.setattr("songmaker_cli.cover_suggestions.datetime", FixedUtcDateTime)
     _add_cover_job(
         factory,
@@ -538,7 +561,8 @@ def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
 
 
 def test_hard_delete_cleanup_removes_suggestions_from_expired_albums(
-    alice_app: tuple[TestClient, object], tmp_path: Path,
+    alice_app: tuple[TestClient, object],
+    tmp_path: Path,
 ) -> None:
     client, factory = alice_app
     _add_suggestion(factory, tmp_path / "audio")
