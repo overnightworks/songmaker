@@ -1,0 +1,8 @@
+claim_id = "2af9da66264842679d2b533e89552598"
+agent = "claude-head"
+role = "builder"
+base = "74b4623aa9ae7931f8438c8969719a027aab9081"
+branch = "claude/issue-954-review-followups"
+scope = ["docs/architecture.md", "scripts/check_no_silent_fallbacks.py", "scripts/dead-symbols.allow", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries", "src/songmaker_cli/jobs/lora_training.py", "src/songmaker_cli/lifecycle.py", "src/songmaker_cli/redis_client.py", "src/songmaker_cli/resource_event_api.py", "tests/test_api.py", "tests/test_db.py", "tests/test_resource_event_api.py", "tests/test_scoring_persistence.py"]
+opened_commit = "75e441f6ef7ee8d78149ae48e12f9b575c229fc3"
+whole_reason = "Fünf kleine Review-Folgen quer über db/queries; landen als eine Lane"
