@@ -147,6 +147,8 @@
 		tab = next;
 		if (next === 'ratelimits') {
 			void loadGlobalLimits();
+		} else if (next === 'sessions') {
+			void loadAll();
 		} else if (next === 'voices') {
 			void loadVoices();
 		} else if (next === 'generation' || next === 'acestep') {
@@ -785,6 +787,8 @@
 				<h2>Create User</h2>
 				<form
 					class="create-form"
+					oninput={() => (error = '')}
+					onchange={() => (error = '')}
 					onsubmit={(e) => {
 						e.preventDefault();
 						handleCreate();
@@ -841,14 +845,23 @@
 								>
 								<td class="actions">
 									{#if me && user.id !== me.id}
-										<button class="small" onclick={() => handleToggleRole(user)}>
+										<button
+											class="small"
+											data-hitbox="frequent"
+											onclick={() => handleToggleRole(user)}
+										>
 											{user.role === 'admin' ? 'Demote' : 'Promote'}
 										</button>
-										<button class="small" onclick={() => handleToggleActive(user)}>
+										<button
+											class="small"
+											data-hitbox="frequent"
+											onclick={() => handleToggleActive(user)}
+										>
 											{user.is_active ? 'Disable' : 'Enable'}
 										</button>
 										<button
 											class="small"
+											data-hitbox="frequent"
 											onclick={() => {
 												resetPasswordUserId = resetPasswordUserId === user.id ? null : user.id;
 												resetPasswordValue = '';
@@ -858,6 +871,7 @@
 										</button>
 										<button
 											class="small danger"
+											data-hitbox="frequent"
 											onclick={() => {
 												deleteUserId = deleteUserId === user.id ? null : user.id;
 												deleteConfirmInput = '';
@@ -1025,7 +1039,11 @@
 									>{sess.expires_at ? new Date(sess.expires_at).toLocaleString() : ''}</td
 								>
 								<td class="actions">
-									<button class="small danger" onclick={() => handleForceLogout(sess.id)}>
+									<button
+										class="small danger"
+										data-hitbox="frequent"
+										onclick={() => handleForceLogout(sess.id)}
+									>
 										Revoke
 									</button>
 								</td>

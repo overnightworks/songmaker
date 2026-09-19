@@ -36,7 +36,8 @@ import {
 } from '@playwright/test';
 
 import { AUTH_SESSION_EXPIRED_MESSAGE } from '../src/lib/constants/auth';
-import { FlowGuard, openRailNav, shellOf, workspace } from './helpers';
+import { ADMIN_TABS_LABEL, HITBOX_FREQUENT_PX } from '../src/lib/constants';
+import { FlowGuard, MOBILE_VIEWPORT, openRailNav, shellOf, workspace } from './helpers';
 import {
 	BASE_URL,
 	STORAGE_STATE_FILE,
@@ -211,6 +212,45 @@ async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise
 	await page.screenshot({ path, fullPage: true });
 	await testInfo.attach(name, { path, contentType: 'image/png' });
 }
+
+test.describe('admin row actions', () => {
+	test.use({ storageState: STORAGE_STATE_FILE });
+
+	test('user and session row actions have touch-sized hitboxes at 390px', async ({
+		page,
+		isMobile
+	}, testInfo) => {
+		test.skip(!isMobile, 'Touch targets are measured by the mobile project.');
+		await page.setViewportSize(MOBILE_VIEWPORT);
+		await page.goto(ADMIN_PAGE_PATH);
+		const userRow = page.getByRole('row').filter({ hasText: account.username });
+		const actions = userRow.getByRole('button');
+		await expect(actions).toHaveText(['Promote', 'Disable', 'Reset PW', 'Delete']);
+		const heights = await actions.evaluateAll((buttons) =>
+			buttons.map((button) => ({
+				label: button.textContent?.trim(),
+				height: button.getBoundingClientRect().height
+			}))
+		);
+		await attachShot(page, testInfo, 'admin-user-actions-390');
+
+		const [sessionsResponse] = await Promise.all([
+			page.waitForResponse((response) => new URL(response.url()).pathname === ADMIN_SESSIONS_PATH),
+			page.getByRole('combobox', { name: ADMIN_TABS_LABEL }).selectOption('sessions')
+		]);
+		expect(sessionsResponse.status()).toBe(200);
+		const revoke = page.getByRole('button', { name: 'Revoke', exact: true }).first();
+		await expect(revoke).toBeVisible();
+		heights.push({
+			label: 'Revoke',
+			height: await revoke.evaluate((button) => button.getBoundingClientRect().height)
+		});
+		for (const { label, height } of heights) {
+			expect(height, `${label} touch target height`).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+		}
+		await attachShot(page, testInfo, 'admin-session-actions-390');
+	});
+});
 
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall.
