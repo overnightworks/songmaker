@@ -52,6 +52,7 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_scoring_job,
 )
+from songmaker_cli.jobs.generation import GenerationJobRequest
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     GenerationTaskResultDTO,
@@ -290,6 +291,97 @@ def test_generation_hold_defers_before_building_temporary_context(
         job = get_job(session, "j1")
         assert job.status == "queued"
         assert job.queue_reason == "Waiting for LoRA training on this GPU."
+
+
+@pytest.mark.parametrize(
+    ("seed", "repaint_params", "cover_params"),
+    [
+        (None, None, None),
+        (
+            17,
+            RepaintTaskParams(
+                src_wav_path="/audio/source.wav",
+                src_generation_id="source-generation",
+                repainting_start=0.2,
+                repainting_end=0.8,
+                lyrics="Replacement lyrics",
+                prompt="Replacement prompt",
+                repaint_mode="aggressive",
+                repaint_strength=0.7,
+                repaint_latent_crossfade_frames=4,
+                repaint_wav_crossfade_sec=0.15,
+            ),
+            None,
+        ),
+        (
+            0,
+            None,
+            CoverTaskParams(
+                src_wav_path="/audio/cover.wav",
+                src_generation_id="cover-generation",
+                audio_cover_strength=0.6,
+                lyrics="Cover lyrics",
+                prompt="Cover prompt",
+                cover_noise_strength=0.4,
+            ),
+        ),
+    ],
+    ids=["generate", "repaint", "cover"],
+)
+def test_generation_request_roundtrip_and_requeue_preserve_values(
+    seeded_db, tmp_path: Path, seed, repaint_params, cover_params,
+) -> None:
+    from dataclasses import FrozenInstanceError
+
+    from arq.jobs import deserialize_job, serialize_job
+
+    from songmaker_cli.music_worker import MusicWorker
+    from songmaker_cli.scheduler import AllWorkersHeld
+
+    request = GenerationJobRequest(
+        job_id="j1",
+        song_id="s1",
+        version_id="v1",
+        count=2,
+        user_id="u1",
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        seed=seed,
+        target_model="sft",
+        repaint_params=repaint_params,
+        cover_params=cover_params,
+    )
+    with pytest.raises(FrozenInstanceError):
+        request.count = 3
+
+    redis = MagicMock()
+    redis.enqueue_job = AsyncMock()
+    worker = MusicWorker()
+    expected_args = (
+        "j1", "s1", "v1", 2, "u1", seed, "sft",
+        repaint_params.model_dump() if repaint_params is not None else None,
+        cover_params.model_dump() if cover_params is not None else None,
+    )
+    queued_args = request.queue_args()
+    with (
+        patch.object(worker, "get_db_factory", return_value=seeded_db),
+        patch.object(worker, "audio_dir", return_value=request.audio_dir),
+        patch.object(worker, "data_dir", return_value=request.data_dir),
+        patch(
+            "songmaker_cli.jobs.admit_generation_worker",
+            AsyncMock(side_effect=AllWorkersHeld("held")),
+        ),
+    ):
+        for _ in range(2):
+            payload = serialize_job(JobFunction.GENERATE, queued_args, {}, None, 0)
+            decoded = deserialize_job(payload)
+            assert decoded.function == JobFunction.GENERATE
+            assert decoded.args == expected_args
+            _run(worker.generate({"redis": redis}, *decoded.args, **decoded.kwargs))
+            queued = redis.enqueue_job.await_args.args
+            assert queued[0] == JobFunction.GENERATE
+            queued_args = queued[1:]
+            assert queued_args == expected_args
 
 
 def test_generation_runs_after_a_hold_release_reentry(seeded_db, tmp_path: Path) -> None:

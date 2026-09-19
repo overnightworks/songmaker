@@ -6,8 +6,9 @@ import asyncio
 import logging
 import os
 import shutil
+import time
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
@@ -80,6 +81,54 @@ LORA_ADAPTER_DESCRIPTION: Final = "LoRA adapter"
 _LORA_PROGRESS_THROTTLE_SECONDS = 2.0
 _LORA_SUBMIT_TIMEOUT_SECONDS = 30.0
 _COMPLETED_TRAINING_MODE_FILENAME = "training_tmp.model_mode"
+
+
+@dataclass
+class _LoraProgressThrottle:
+    db_factory: sessionmaker[Session]
+    job_id: str
+    lora_id: str
+    last_update: float = field(default=0.0, init=False)
+    last_epoch: int | None = field(default=None, init=False)
+    last_training_started_at: datetime | None = field(default=None, init=False)
+    last_status_name: str = field(default=LoraStatus.PREPROCESSING, init=False)
+
+    def report(
+        self,
+        fraction: float,
+        current_epoch: int,
+        train_epochs: int,
+        training_started_at: datetime | None,
+    ) -> None:
+        now = time.monotonic()
+        if (
+            current_epoch == self.last_epoch
+            and training_started_at == self.last_training_started_at
+            and now - self.last_update < _LORA_PROGRESS_THROTTLE_SECONDS
+        ):
+            return
+        self.last_update = now
+        self.last_epoch = current_epoch
+        self.last_training_started_at = training_started_at
+        new_status = LoraStatus.PREPROCESSING
+        if fraction >= 0.90:
+            new_status = LoraStatus.EXPORTING
+        elif fraction >= 0.20:
+            new_status = LoraStatus.TRAINING
+        if new_status != self.last_status_name:
+            with self.db_factory() as session:
+                update_user_lora(session, self.lora_id, status=new_status)
+                session.commit()
+            self.last_status_name = new_status
+        _update_job(
+            self.db_factory,
+            self.job_id,
+            JobStatus.RUNNING,
+            progress=fraction,
+            current_epoch=current_epoch,
+            train_epochs=train_epochs,
+            training_started_at=training_started_at,
+        )
 
 
 class TrainLoraTaskResultDTO(BaseModel):
@@ -665,49 +714,7 @@ async def _prepare_and_submit_lora(
         if tmp_output.exists():
             shutil.rmtree(tmp_output)
 
-        last_update = 0.0
-        last_epoch: int | None = None
-        last_training_started_at: datetime | None = None
-        last_status_name: str = LoraStatus.PREPROCESSING
-
-        def on_progress(
-            fraction: float,
-            current_epoch: int,
-            train_epochs: int,
-            training_started_at: datetime | None,
-        ) -> None:
-            nonlocal last_epoch, last_training_started_at, last_update, last_status_name
-            import time as _t
-
-            now = _t.monotonic()
-            if (
-                current_epoch == last_epoch
-                and training_started_at == last_training_started_at
-                and now - last_update < _LORA_PROGRESS_THROTTLE_SECONDS
-            ):
-                return
-            last_update = now
-            last_epoch = current_epoch
-            last_training_started_at = training_started_at
-            new_status = LoraStatus.PREPROCESSING
-            if fraction >= 0.90:
-                new_status = LoraStatus.EXPORTING
-            elif fraction >= 0.20:
-                new_status = LoraStatus.TRAINING
-            if new_status != last_status_name:
-                with db_factory() as session:
-                    update_user_lora(session, lora_id, status=new_status)
-                    session.commit()
-                last_status_name = new_status
-            _update_job(
-                db_factory,
-                job_id,
-                JobStatus.RUNNING,
-                progress=fraction,
-                current_epoch=current_epoch,
-                train_epochs=train_epochs,
-                training_started_at=training_started_at,
-            )
+        progress = _LoraProgressThrottle(db_factory, job_id, lora_id)
 
         def on_heartbeat() -> None:
             _touch_heartbeat(db_factory, job_id)
@@ -725,7 +732,7 @@ async def _prepare_and_submit_lora(
             hold_token=hold_token,
             renew_task=renew_task,
             handover=handover,
-            on_progress=on_progress,
+            on_progress=progress.report,
             on_heartbeat=on_heartbeat,
         )
         return worker_result, dataset_dir, tmp_output
