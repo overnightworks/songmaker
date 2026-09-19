@@ -6,7 +6,9 @@ import {
 } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
+import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
 import {
@@ -24,7 +26,7 @@ import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/s
 import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
-import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
+import { LIBRARY_RETRY_LABEL, SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -61,7 +63,14 @@ vi.mock('$lib/api/songs', () => ({
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
-vi.mock('$lib/api/client', () => ({
+vi.mock('$lib/api/loras', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/loras')>()),
+	listLoras: vi.fn().mockResolvedValue([])
+}));
+vi.mock('$lib/api/client', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/client')>()),
+	fetchHealth: vi.fn().mockResolvedValue({ status: 'ok' }),
+	fetchActiveModels: vi.fn().mockResolvedValue([]),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi
 		.fn()
@@ -735,17 +744,29 @@ describe('song selection (dead song link, issue #237)', () => {
 		[new Error('Network unavailable'), 'Network unavailable'],
 		[null, TAKES_ERROR]
 	])(
-		'shows a context-loading error without clearing the selected song (%s)',
+		'shows the context-loading error with retry in Takes without a toast or clearing selection (%s)',
 		async (error, message) => {
-			songList.set([song({ ...navigableSongDefaults(), generation_count: 2 })]);
+			songList.set([song({ ...navigableSongDefaults(), generations: [], generation_count: 2 })]);
 			fetchSong.mockRejectedValue(error);
+			const target = document.createElement('div');
+			document.body.append(target);
+			const view = mount(SongDetailView, { target });
+			try {
+				await selectSong('s1');
+				await tick();
 
-			await selectSong('s1');
-
-			await vi.waitFor(() =>
-				expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message })])
-			);
-			expect(get(selectedSongId)).toBe('s1');
+				await vi.waitFor(() => {
+					const alerts = target.querySelectorAll('[role="alert"]');
+					expect(alerts).toHaveLength(1);
+					expect(alerts[0]).toHaveTextContent(message);
+					expect(alerts[0].querySelector('button')).toHaveTextContent(LIBRARY_RETRY_LABEL);
+				});
+				expect(get(toasts)).toEqual([]);
+				expect(get(selectedSongId)).toBe('s1');
+			} finally {
+				await unmount(view);
+				target.remove();
+			}
 		}
 	);
 

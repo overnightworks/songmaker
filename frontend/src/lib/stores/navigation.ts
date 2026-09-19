@@ -26,7 +26,7 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
@@ -341,18 +341,16 @@ export function albumTrackNeighbors(
 // A dead songId (deleted between the link being shared/saved and it being
 // opened, issue #237) is a permanent, expected condition, not a transient
 // failure: it clears only the dead selection. Other failures leave the
-// selection available for retry and surface through the shared error toast.
-async function loadSongContext(songId: string): Promise<void> {
+// selection available for retry and surface through SongDetailView.refreshTakes.
+function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
-	try {
-		await ensureGenerationsLoaded(songId);
-	} catch (err) {
+	return ensureGenerationsLoaded(songId).catch(function acknowledgeOwnedFailure(err: unknown) {
 		if (isNotFound(err)) {
 			reportSongLinkNotFound(songId);
-		} else {
-			addToast(err instanceof Error ? err.message : TAKES_ERROR, 'error');
 		}
-	}
+		// refreshTakes owns the shared load's error and retry; this background
+		// caller must consume its rejection without reporting it a second time.
+	});
 }
 
 // Only clears the selection if it still names the dead song: a caller may
