@@ -1,8 +1,0 @@
-claim_id = "fd7028edac724f2d8e017facbe266da5"
-agent = "claude-head"
-role = "builder"
-base = "d775b1dfd123d02c85874d178d26e50a6fa232e8"
-branch = "claude/issue-946-cover-seam"
-scope = ["src/songmaker_cli/cover_runner.py", "src/songmaker_cli/jobs/cover_suggestions.py", "tests/test_album_cover_suggestions.py", "tests/test_cover_runner.py", "tests/test_cover_suggestion_job.py"]
-opened_commit = "29a9d62296e22bccfc16575b7fea96f9a677b012"
-whole_reason = "Die Worker-Tests monkeypatchen dieselbe Naht; sie gehören zur Änderung"
