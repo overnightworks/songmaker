@@ -18,6 +18,7 @@ from agent_providers.errors import (
     SafeRouteReasonCode,
     normalize_route_failure,
 )
+from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
@@ -266,7 +267,7 @@ def test_cover_job_names_a_saved_claude_selection_without_calling_codex(
         set_cover_settings(session, "claude", "cli", "")
         session.commit()
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",
+        "songmaker_cli.cover_runner.generate_codex_cover_image",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
     )
 
@@ -289,7 +290,7 @@ def test_cover_job_asks_the_selected_codex_route_to_sign_in(
         "agent_providers.dispatch.codex_cli_access_token_is_present", lambda: False,
     )
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",
+        "songmaker_cli.cover_runner.generate_codex_cover_image",
         lambda **_kwargs: (_ for _ in ()).throw(AssertionError("Codex must not run")),
     )
 
@@ -694,7 +695,14 @@ def test_cancelled_cover_job_removes_its_staging_group(
     started = threading.Event()
     release = threading.Event()
 
-    def delayed_image(_prompt: str, *, deadline: float, model: str) -> bytes:
+    def delayed_image(
+        _prompt: str,
+        *,
+        policy: ImagePolicy,
+        deadline: float,
+        abort_signal: threading.Event | None,
+        model: str,
+    ) -> bytes:
         started.set()
         assert release.wait(timeout=1)
         return _png_bytes()
@@ -704,7 +712,7 @@ def test_cancelled_cover_job_removes_its_staging_group(
         lambda _session: _codex_cover_dispatch(),
     )
     monkeypatch.setattr(
-        "songmaker_cli.jobs.cover_suggestions.generate_codex_cover_image",
+        "songmaker_cli.cover_runner.generate_codex_cover_image",
         delayed_image,
     )
 

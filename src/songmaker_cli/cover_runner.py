@@ -8,7 +8,6 @@ import logging
 import shutil
 import time
 import uuid
-from collections.abc import Callable
 from contextlib import suppress
 from pathlib import Path
 from threading import Event, Lock
@@ -56,7 +55,6 @@ from songmaker_cli.settings import CoverExecutor, Settings, get_settings
 log = logging.getLogger(__name__)
 
 COVER_RUNNER_POLL_INTERVAL_SECONDS = 1.0
-_CODEX_COVER_IMAGE_GENERATOR = generate_codex_cover_image
 COVER_IMAGE_POLICY: Final[ImagePolicy] = ImagePolicy(
     maximum_source_bytes=COVER_MAX_BYTES,
     maximum_pixels=COVER_MAX_PIXELS,
@@ -213,7 +211,6 @@ async def run_claimed_cover_suggestion_job(
     db_factory,
     audio_dir: Path,
     settings: Settings | None = None,
-    image_generator: Callable[..., bytes] | None = None,
     abort_signal: Event | None = None,
 ) -> None:
     """Produce and publish one already-running group of three suggestions.
@@ -223,7 +220,6 @@ async def run_claimed_cover_suggestion_job(
     heartbeats, images, atomic publish, cleanup, and terminal status.
     """
     settings = settings or get_settings()
-    image_generator = image_generator or generate_codex_cover_image
     await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
     heartbeat_task = asyncio.create_task(_keep_heartbeats(db_factory, job_id))
     created_paths: list[str] = []
@@ -246,7 +242,6 @@ async def run_claimed_cover_suggestion_job(
             if remaining <= 0:
                 raise CodexImageTimeoutError()
             payload = await _generate_cover_image(
-                image_generator,
                 prompt,
                 deadline=time.monotonic() + min(settings.cover_cli_deadline_seconds, remaining),
                 abort_signal=abort_signal,
@@ -430,7 +425,6 @@ async def _keep_heartbeats(db_factory, job_id: str) -> None:
 
 
 async def _generate_cover_image(
-    image_generator: Callable[..., bytes],
     prompt: str,
     *,
     deadline: float,
@@ -438,24 +432,17 @@ async def _generate_cover_image(
     model: str,
 ) -> bytes:
     """Await one image generation and reap its CLI before task cancellation escapes."""
-    if image_generator is not _CODEX_COVER_IMAGE_GENERATOR:
-        return await asyncio.to_thread(image_generator, prompt, deadline=deadline, model=model)
-    if abort_signal is None:
-        return await asyncio.to_thread(
-            image_generator,
-            prompt,
-            policy=COVER_IMAGE_POLICY,
-            deadline=deadline,
-            model=model,
-        )
-    generation = asyncio.create_task(asyncio.to_thread(
-        image_generator,
+    image_generation = asyncio.to_thread(
+        generate_codex_cover_image,
         prompt,
         policy=COVER_IMAGE_POLICY,
         deadline=deadline,
         abort_signal=abort_signal,
         model=model,
-    ))
+    )
+    if abort_signal is None:
+        return await image_generation
+    generation = asyncio.create_task(image_generation)
     try:
         return await asyncio.shield(generation)
     except asyncio.CancelledError:
