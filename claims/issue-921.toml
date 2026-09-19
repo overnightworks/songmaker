@@ -1,0 +1,7 @@
+claim_id = "76b1058b93d542e8aade4e30f051a76a"
+agent = "claude-head"
+role = "builder"
+base = "20f5ef40021f5fb244c2e4631847fbe3ef9467b0"
+branch = "claude/issue-921-admin-sessions"
+scope = ["frontend/e2e/auth-flows.spec.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
+opened_commit = "540a47d4f2b3b95204f7c440f3cff555dace4d63"
