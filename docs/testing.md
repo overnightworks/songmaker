@@ -26,6 +26,40 @@ pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_en
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
+## Finding similar functions
+
+`uv run --extra similarity python scripts/similar_functions.py src/ --report /tmp/similar.md`
+finds potential Python duplicates using local code embeddings and separate
+embeddings of one-sentence Claude summaries. This is an advisory audit.
+Methods are included; initializers, pure delegation, and bodies shorter than
+three normalized lines are excluded. Nested functions are not paired with their
+enclosing functions. `--include-tests` also scans `tests/`.
+`--code-threshold` and `--summary-threshold` select pairs by cosine similarity
+(both default to 0.90); either signal qualifies unless `--require-both` is set.
+Pairs are sorted by their mean score. `--fail-above N` exits with status 1 when
+a reported pair exceeds N; without this flag, the audit is not a gate.
+
+`--model` selects the local model (default `jinaai/jina-embeddings-v2-base-code`).
+The default model and its external Python implementation are pinned to commit
+revisions recorded in `DEFAULT_MODEL_REVISION` and `DEFAULT_MODEL_CODE_REVISION`
+in [the script](../scripts/similar_functions.py), so cold runs cannot execute a
+moving Hub revision. The first run downloads weights and computes embeddings on
+CPU. Each distinct uncached function content requires one Claude call.
+Before any model or Claude call, the audit prints the summary cache-miss count
+and aborts if it exceeds `--max-summaries N` (default 400); rerun with a higher
+limit or `--no-summaries` to proceed.
+
+`ANTHROPIC_API_KEY` selects the SDK (install the `api` extra); otherwise the audit
+uses `claude -p` without tools, MCP, or project settings. `SONGMAKER_CLAUDE_CLI`
+overrides the executable path. `--claude-model` or `CLAUDE_SCORING_MODEL` selects
+the summary model (default `claude-haiku-4-5-20251001`). `--summary-workers`
+limits concurrent Claude calls (default 4). The ignored content-hash cache at
+`.cache/similar_functions/` separates summaries and vectors by model and prompt;
+an unchanged repeat run needs neither Claude nor a model startup.
+`--no-summaries` explicitly disables the second signal. Otherwise unavailable
+models or Claude failures produce named errors (exit status 2).
+The [logic tests](../tests/test_similar_functions.py) use fakes and load no model.
+
 ## Static analysis (SonarCloud)
 
 GitHub CI runs SonarCloud analysis from the repository-root [`sonar-project.properties`](../sonar-project.properties). The `backend` and `frontend` jobs produce pytest XML and Vitest lcov coverage reports; the advisory `sonar` job downloads both reports and scans the same commit. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.

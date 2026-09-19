@@ -19,6 +19,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+similarity = ["sentence-transformers>=3,<6"]
 scoring = [
     "librosa>=0.10,<2",
     "soundfile",
