@@ -89,6 +89,7 @@ class _LoraProgressThrottle:
     db_factory: sessionmaker[Session]
     job_id: str
     lora_id: str
+    clock: Callable[[], float] = time.monotonic
     last_update: float = field(default=0.0, init=False)
     last_epoch: int | None = field(default=None, init=False)
     last_training_started_at: datetime | None = field(default=None, init=False)
@@ -101,7 +102,7 @@ class _LoraProgressThrottle:
         train_epochs: int,
         training_started_at: datetime | None,
     ) -> None:
-        now = time.monotonic()
+        now = self.clock()
         if (
             current_epoch == self.last_epoch
             and training_started_at == self.last_training_started_at
