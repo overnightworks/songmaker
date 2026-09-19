@@ -10,7 +10,6 @@ import threading
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
-from enum import StrEnum
 from typing import Final, Literal
 
 from arq.connections import ArqRedis
@@ -28,6 +27,12 @@ from songmaker_cli.constants import (
     RESOURCE_EVENT_RETENTION_DAYS,
     JobType,
 )
+from songmaker_cli.health_types import (
+    BackgroundLoopHealth,
+    BackgroundLoopName,
+    CodexImageSandboxRuntimeHealth,
+)
+from songmaker_cli.health_types import BackgroundLoopStatus as BackgroundLoopStatus
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals
@@ -66,36 +71,6 @@ _CODEX_PER_RUN_STARTUP_PROBE_BWRAP_ARGUMENTS: Final = (
 # The web process owns stale-job recovery for every job type.
 JOB_REAPER_LOCK_KEY: Final = f"{REDIS_KEY_PREFIX}:job_reaper_lock"
 JOB_REAPER_LOCK_TTL_SECONDS: Final = 60
-
-class BackgroundLoopName(StrEnum):
-    COVER_RUNNER = "cover_runner"
-    SESSION_SYNC = "session_sync"
-    RESOURCE_EVENT_CLEANUP = "resource_event_cleanup"
-    SCORE_BACKFILL = "score_backfill"
-    STALE_JOB_REAPER = "stale_job_reaper"
-    PROVIDER_STATUS_REFRESH = "provider_status_refresh"
-
-
-class BackgroundLoopStatus(StrEnum):
-    OK = "ok"
-    FAILING = "failing"
-    DEAD = "dead"
-
-
-@dataclass
-class BackgroundLoopHealth:
-    name: BackgroundLoopName
-    consecutive_failures: int = 0
-    last_error: str | None = None
-    is_alive: bool = True
-
-    @property
-    def status(self) -> BackgroundLoopStatus:
-        if not self.is_alive:
-            return BackgroundLoopStatus.DEAD
-        if self.consecutive_failures >= BACKGROUND_LOOP_FAILURE_THRESHOLD:
-            return BackgroundLoopStatus.FAILING
-        return BackgroundLoopStatus.OK
 
 
 class BackgroundLoopRegistry:
@@ -166,8 +141,6 @@ def _codex_image_sandbox_runtime_error() -> str | None:
         return "bubblewrap user namespaces are unavailable"
     return None
 
-
-type CodexImageSandboxRuntimeHealth = Literal["ready", "not_set_up", "unverified"]
 
 # The boot report's most recent verdict, for /health's
 # codex_image_sandbox_runtime field -- mirrors claude.provider's
