@@ -26,6 +26,33 @@ pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_en
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
+## Ähnliche Funktionen finden
+
+`uv run --extra similarity python scripts/similar_functions.py src/ --report /tmp/similar.md`
+findet mögliche Python-Duplikate beratend: lokale Code-Embeddings und separat
+Embeddings einer Claude-Einzeilen-Zusammenfassung. Methoden sind enthalten;
+`__init__`, reine Delegation und Körper unter drei normalisierten Zeilen nicht.
+`--include-tests` nimmt zusätzlich `tests/` auf. `--code-threshold` und
+`--summary-threshold` wählen Paare ab dem jeweiligen Cosinuswert (je 0.90);
+standardmäßig genügt eines der Signale, `--require-both` verlangt beide.
+Die Sortierung verwendet deren Mittelwert. `--fail-above N` liefert Exitcode 1,
+wenn ein berichtetes Paar diesen Wert überschreitet; ohne Flag ist dies kein Gate.
+`--model` wählt das lokale Modell (Default `jinaai/jina-embeddings-v2-base-code`,
+mit dem vom Modell gelieferten Python-Code). Der erste Lauf lädt dessen Gewichte
+und berechnet Embeddings auf der CPU; pro neuem Funktionsinhalt kostet die
+Zusammenfassung einen Claude-Aufruf. Der CLI-Weg entspricht dem Provider:
+`claude -p`, ohne Tools, MCP oder Projekt-Settings; `SONGMAKER_CLAUDE_CLI`
+überschreibt den Binärpfad. `--claude-model` bzw. `CLAUDE_SCORING_MODEL`
+wählt das Modell (Scoring-Default `claude-opus-4-6`); einen abweichenden
+DB-Modellwert explizit übergeben. `--summary-workers` begrenzt parallele
+Claude-Aufrufe (Default 4). Der gitignorierte Inhalts-Hash-Cache unter
+`.cache/similar_functions/` hält Zusammenfassungen und Vektoren getrennt nach
+Modell und Prompt: ein unveränderter Folgelauf braucht weder Claude noch einen
+Modellstart. `--no-summaries` verzichtet ausdrücklich auf das zweite Signal;
+sonst sind fehlende Modelle oder Claude-Fehler benannte Abbrüche (Exitcode 2).
+Die [Logiktests](../tests/test_similar_functions.py) verwenden ausschließlich
+Fakes und laden kein Modell.
+
 ## Static analysis (SonarCloud)
 
 GitHub CI runs SonarCloud analysis from the repository-root [`sonar-project.properties`](../sonar-project.properties). The `backend` and `frontend` jobs produce pytest XML and Vitest lcov coverage reports; the advisory `sonar` job downloads both reports and scans the same commit. The [SonarCloud project page](https://sonarcloud.io/project/overview?id=overnightworks_songmaker) shows the resulting analysis and coverage.
