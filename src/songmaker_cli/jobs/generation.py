@@ -81,6 +81,36 @@ GENERATION_JOB_TERMINAL_LOG: Final = "Generation job %s stopping because job is 
 _PROGRESS_THROTTLE_SECONDS = 2.0
 
 
+@dataclass(frozen=True)
+class GenerationJobRequest:
+    job_id: str
+    song_id: str
+    version_id: str
+    count: int
+    user_id: str
+    audio_dir: Path
+    data_dir: Path
+    seed: int | None
+    target_model: str
+    repaint_params: RepaintTaskParams | None
+    cover_params: CoverTaskParams | None
+
+    def queue_args(
+        self,
+    ) -> tuple[str, str, str, int, str, int | None, str, dict | None, dict | None]:
+        return (
+            self.job_id,
+            self.song_id,
+            self.version_id,
+            self.count,
+            self.user_id,
+            self.seed,
+            self.target_model,
+            self.repaint_params.model_dump() if self.repaint_params is not None else None,
+            self.cover_params.model_dump() if self.cover_params is not None else None,
+        )
+
+
 @dataclass
 class GenerationContext:
     song_id: str
@@ -795,36 +825,29 @@ async def run_generation_job(
     log.info("Generation job %s: song=%s, count=%d, task=%s", job_id, song_id, count, task_type)
 
     admitted_worker = None
+    request = GenerationJobRequest(
+        job_id=job_id,
+        song_id=song_id,
+        version_id=version_id,
+        count=count,
+        user_id=user_id,
+        audio_dir=audio_dir,
+        data_dir=data_dir,
+        seed=seed,
+        target_model=target_model,
+        repaint_params=repaint_params,
+        cover_params=cover_params,
+    )
 
     try:
         admitted_worker = await _admit_generation_worker_or_requeue(
-            redis,
-            db_factory,
-            job_id,
-            song_id,
-            version_id,
-            count,
-            user_id,
-            seed,
-            target_model,
-            repaint_params,
-            cover_params,
+            request, redis, db_factory,
         )
         if admitted_worker is None:
             return
 
         ctx = await _build_generation_job_context(
-            db_factory,
-            job_id,
-            song_id,
-            version_id,
-            audio_dir,
-            data_dir,
-            user_id,
-            seed,
-            target_model,
-            repaint_params,
-            cover_params,
+            request, db_factory,
         )
         if ctx is None:
             return
@@ -873,45 +896,29 @@ async def run_generation_job(
 
 
 async def _admit_generation_worker_or_requeue(
+    request: GenerationJobRequest,
     redis: ArqRedis,
     db_factory: sessionmaker[Session],
-    job_id: str,
-    song_id: str,
-    version_id: str,
-    count: int,
-    user_id: str,
-    seed: int | None,
-    target_model: str,
-    repaint_params: RepaintTaskParams | None,
-    cover_params: CoverTaskParams | None,
 ):
-    if _job_is_terminal(db_factory, job_id):
-        log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
+    if _job_is_terminal(db_factory, request.job_id):
+        log.info(GENERATION_JOB_TERMINAL_LOG, request.job_id)
         return None
     try:
         return await jobs.admit_generation_worker(
-            target_mode=target_model,
+            target_mode=request.target_model,
             redis=redis,
             db_factory=db_factory,
         )
     except AllWorkersHeld:
         _update_job(
             db_factory,
-            job_id,
+            request.job_id,
             JobStatus.QUEUED,
             queue_reason=GENERATION_WAITING_FOR_LORA_QUEUE_REASON,
         )
         await redis.enqueue_job(
             JobFunction.GENERATE,
-            job_id,
-            song_id,
-            version_id,
-            count,
-            user_id,
-            seed,
-            target_model,
-            repaint_params.model_dump() if repaint_params is not None else None,
-            cover_params.model_dump() if cover_params is not None else None,
+            *request.queue_args(),
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
             _defer_by=GPU_HOLD_POLL_INTERVAL_SECONDS,
         )
@@ -919,37 +926,30 @@ async def _admit_generation_worker_or_requeue(
 
 
 async def _build_generation_job_context(
+    request: GenerationJobRequest,
     db_factory: sessionmaker[Session],
-    job_id: str,
-    song_id: str,
-    version_id: str,
-    audio_dir: Path,
-    data_dir: Path,
-    user_id: str,
-    seed: int | None,
-    target_model: str,
-    repaint_params: RepaintTaskParams | None,
-    cover_params: CoverTaskParams | None,
 ) -> GenerationContext | None:
     try:
         ctx = await asyncio.to_thread(
             _build_generation_context,
-            song_id,
-            version_id,
+            request.song_id,
+            request.version_id,
             db_factory,
-            audio_dir,
-            data_dir,
-            user_id=user_id,
-            seed=seed,
-            target_model=target_model,
+            request.audio_dir,
+            request.data_dir,
+            user_id=request.user_id,
+            seed=request.seed,
+            target_model=request.target_model,
         )
-        return _apply_generation_task_overrides(ctx, repaint_params, cover_params)
+        return _apply_generation_task_overrides(
+            ctx, request.repaint_params, request.cover_params,
+        )
     except GenerationSetupError as exc:
         _update_job(
             db_factory,
-            job_id,
+            request.job_id,
             JobStatus.FAILED,
-            error=_sanitize_error(exc, job_id),
+            error=_sanitize_error(exc, request.job_id),
             error_type="setup_error",
         )
         return None
