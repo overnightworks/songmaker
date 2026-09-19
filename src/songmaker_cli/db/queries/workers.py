@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
-from songmaker_cli.db.models import AceStepWorker
-
-
-def _utcnow() -> datetime:
-    return datetime.now(timezone.utc)
+from songmaker_cli.db.models import AceStepWorker, utcnow
 
 
 def register_worker(
@@ -28,7 +22,7 @@ def register_worker(
         existing.port = port
         existing.gpu_id = gpu_id
         existing.vram_total_gb = vram_total_gb
-        existing.last_register_at = _utcnow()
+        existing.last_register_at = utcnow()
         session.flush()
         return existing
     worker = AceStepWorker(

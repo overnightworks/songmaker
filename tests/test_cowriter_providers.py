@@ -136,16 +136,16 @@ def test_provider_routes_are_compact_complete_and_reject_malformed_values(tmp_pa
 
 
 @pytest.fixture(autouse=True)
-def _clear_agent_cli_caches():
+def _clear_agent_cli_caches(monkeypatch):
     from agent_providers.process import clear_agent_cli_caches
 
-    from songmaker_cli.provider_status import clear_provider_snapshots
+    from songmaker_cli import provider_status
+
+    monkeypatch.setattr(provider_status, "_provider_snapshots", {})
 
     clear_agent_cli_caches()
-    clear_provider_snapshots()
     yield
     clear_agent_cli_caches()
-    clear_provider_snapshots()
 
 
 def _stream_events(response) -> list[dict]:

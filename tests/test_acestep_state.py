@@ -22,7 +22,6 @@ from songmaker_cli.acestep_state import (
     decr_queue_depth,
     download_key,
     gpu_hold_key,
-    incr_queue_depth,
     queue_depth_key,
     read_download_in_progress,
     read_queue_depth,
@@ -257,9 +256,8 @@ def test_read_queue_depth_missing_returns_zero(redis, event_loop) -> None:
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 0
 
 
-def test_incr_decr_queue_depth(redis, event_loop) -> None:
-    assert event_loop.run_until_complete(incr_queue_depth(redis, "w1")) == 1
-    assert event_loop.run_until_complete(incr_queue_depth(redis, "w1")) == 2
+def test_decr_queue_depth(redis, event_loop) -> None:
+    event_loop.run_until_complete(redis.set(queue_depth_key("w1"), 2))
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 2
     assert event_loop.run_until_complete(decr_queue_depth(redis, "w1")) == 1
     assert event_loop.run_until_complete(read_queue_depth(redis, "w1")) == 1

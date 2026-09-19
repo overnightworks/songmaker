@@ -516,7 +516,6 @@ def test_failed_cover_jobs_since_utc_midnight_count_toward_the_daily_limit(
             assert tz == timezone.utc
             return utc_midnight + timedelta(microseconds=1)
 
-    monkeypatch.setattr("songmaker_cli.album_api.datetime", FixedUtcDateTime)
     monkeypatch.setattr("songmaker_cli.cover_suggestions.datetime", FixedUtcDateTime)
     _add_cover_job(
         factory,

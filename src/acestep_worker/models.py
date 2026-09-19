@@ -168,7 +168,3 @@ class TrainLoraRequest(BaseModel):
     training_seed: int
     gradient_checkpointing: bool
     poll_interval_seconds: float
-
-
-class TrainLoraResponse(BaseModel):
-    task_id: str

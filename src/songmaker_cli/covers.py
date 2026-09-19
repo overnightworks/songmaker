@@ -84,26 +84,6 @@ def new_cover_key(fmt: str) -> str:
     return f"{uuid.uuid4().hex}.{ext}"
 
 
-def cover_album_dir(audio_dir: Path, album_id: str) -> Path:
-    return _cover_entity_dir(
-        audio_dir, COVER_DIRNAME, album_id, COVER_INVALID_ALBUM_ID,
-    )
-
-
-def cover_song_dir(audio_dir: Path, song_id: str) -> Path:
-    return _cover_entity_dir(
-        audio_dir, SONG_COVER_DIRNAME, song_id, COVER_INVALID_SONG_ID,
-    )
-
-
-def cover_variant_path(
-    audio_dir: Path, album_id: str, cover_key: str, variant: str,
-) -> Path:
-    return _cover_variant_path(
-        audio_dir, COVER_DIRNAME, album_id, cover_key, variant, COVER_INVALID_ALBUM_ID,
-    )
-
-
 def cover_media_type(variant: str, cover_key: str) -> str:
     if variant == COVER_VARIANT_ORIGINAL and cover_key_extension(cover_key) == COVER_KEY_PNG:
         return COVER_MEDIA_TYPE_PNG
