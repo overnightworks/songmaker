@@ -1,8 +1,0 @@
-claim_id = "d755bfda071c47e09afbedaffb0851fe"
-agent = "claude-head"
-role = "builder"
-base = "d31a54257ca89a724b97e23deb627f14f1f0806f"
-branch = "claude/issue-949-test-factories"
-scope = ["frontend/src/lib", "frontend/src/lib/test-utils", "frontend/src/routes", "scripts/test_helper_ratchet.txt"]
-opened_commit = "f676d570df67d5b67cff93ae64de431a8ef1db3e"
-whole_reason = "Mechanische Konsolidierung quer über alle Frontend-Tests; Verzeichnisse, weil Kopien in ~20 Dateien verschwinden"
