@@ -31,7 +31,7 @@ vi.mock('$lib/stores/auth', () => {
 vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
 
 import { currentUser } from '$lib/stores/auth';
-import type { AuthUser } from './types';
+import type { AuthUser, HealthResponse } from './types';
 import {
 	deleteAlbumCover,
 	deleteSongCover,
@@ -206,18 +206,36 @@ describe('API client', () => {
 		expect(result.status).toBe('completed');
 	});
 
-	it('fetchHealth returns the queue cap flag', async () => {
-		mockOk({
+	it('fetchHealth returns the complete health response', async () => {
+		const response: HealthResponse = {
 			status: 'ok',
+			music_worker: 'running',
+			scoring_worker: 'running',
+			db: 'ok',
+			redis: 'ok',
+			redis_session_cache_failures: 0,
+			acestep: 'healthy',
+			uptime_seconds: 60,
+			claude_cli_tool_surface: 'ok',
+			codex_image_sandbox_runtime: 'ready',
+			background_loops: {
+				cover_runner: { state: 'ok', consecutive_failures: 0, last_error: null },
+				session_sync: { state: 'ok', consecutive_failures: 0, last_error: null },
+				resource_event_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
+				score_backfill: { state: 'ok', consecutive_failures: 0, last_error: null },
+				stale_job_reaper: { state: 'ok', consecutive_failures: 0, last_error: null },
+				provider_status_refresh: { state: 'ok', consecutive_failures: 0, last_error: null }
+			},
 			queue_depth_cap_reached: true,
 			music_queue_depth: 3,
 			scoring_queue_depth: 2,
 			acestep_workers_online: 1,
 			acestep_workers_total: 1
-		});
+		};
+		mockOk(response);
 		const result = await fetchHealth();
 		expect(mockFetch.mock.calls[0][0]).toBe('/health');
-		expect(result.queue_depth_cap_reached).toBe(true);
+		expect(result).toEqual(response);
 	});
 
 	it('pickGeneration sends POST', async () => {
