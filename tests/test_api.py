@@ -734,15 +734,24 @@ def test_pick_generation_api(client: TestClient) -> None:
 
 
 @pytest.mark.acceptance("ACC-CURATION-02")
-def test_pick_replaces_previous(client: TestClient) -> None:
-    first = client.post("/api/generations/g1/pick")
+@pytest.mark.parametrize(
+    ("action", "flag", "previous_remains"),
+    [
+        pytest.param("pick", "is_picked", False, id="pick-replaces-previous"),
+        pytest.param("keep", "is_kept", True, id="keep-is-additive"),
+    ],
+)
+def test_pick_replaces_previous_while_keep_is_additive(
+    client: TestClient, action: str, flag: str, previous_remains: bool,
+) -> None:
+    first = client.post(f"/api/generations/g1/{action}")
     assert first.status_code == 200
-    second = client.post("/api/generations/g2/pick")
+    second = client.post(f"/api/generations/g2/{action}")
     assert second.status_code == 200
     resp = client.get("/api/generations/g1")
-    assert resp.json()["is_picked"] is False
+    assert resp.json()[flag] is previous_remains
     resp = client.get("/api/generations/g2")
-    assert resp.json()["is_picked"] is True
+    assert resp.json()[flag] is True
 
 
 def test_unpick_generation_api(client: TestClient) -> None:
