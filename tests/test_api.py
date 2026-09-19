@@ -3568,12 +3568,13 @@ def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
         with pytest.raises(HTTPException) as exc_info:
             check_lora_sample_access(sample, user)
     else:
+        admin = make_authenticated_user("admin", role="admin")
         generation = SimpleNamespace(
             song=SimpleNamespace(album=SimpleNamespace(created_by="other")),
         )
         with patch("songmaker_cli.api_helpers.get_generation", return_value=generation):
             with pytest.raises(HTTPException) as exc_info:
-                check_own_generation_access(object(), "g1", user)
+                check_own_generation_access(object(), "g1", admin)
 
     assert exc_info.value.status_code == 404
     assert exc_info.value.detail == detail
