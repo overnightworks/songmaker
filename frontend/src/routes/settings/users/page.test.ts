@@ -483,6 +483,90 @@ describe('admin settings compact layout', () => {
 		expect(target.querySelector('.tabs button')).toBeNull();
 	});
 
+	it.each([true, false])(
+		'refetches sessions on every opening without a reload (compact: %s)',
+		async (compact) => {
+			const target = await renderPage(compact);
+			for (const [index, label] of ['Sessions', 'Users', 'Sessions'].entries()) {
+				const newSession = {
+					...SESSION,
+					id: `new-session-${index}`,
+					username: `new-user-${index}`
+				};
+				api.fetchSessions.mockClear();
+				api.fetchSessions.mockResolvedValue(pageOf([newSession]));
+				if (compact) {
+					await selectTab(target, label.toLowerCase());
+				} else {
+					const button = Array.from(
+						target.querySelectorAll<HTMLButtonElement>('.tabs button')
+					).find((button) => button.textContent?.trim() === label);
+					if (!button) throw new Error(`Expected ${label} tab`);
+					button.click();
+					await flush();
+				}
+				if (label === 'Sessions') {
+					expect(api.fetchSessions).toHaveBeenCalledTimes(1);
+					expect(sectionByHeading(target, 'Active Sessions').textContent).not.toContain('jane');
+					expect(sectionByHeading(target, 'Active Sessions').textContent).toContain(
+						newSession.username
+					);
+					expect(target.textContent).toContain('Revoke');
+				}
+			}
+		}
+	);
+
+	it.each([
+		{
+			action: 'editing the username',
+			selector: 'input[placeholder="Username"]',
+			value: '',
+			event: 'input'
+		},
+		{
+			action: 'editing the password',
+			selector: 'input[placeholder="Password"]',
+			value: '',
+			event: 'input'
+		},
+		{ action: 'changing the role', selector: 'select', value: 'admin', event: 'change' },
+		{ action: 'submitting again', selector: null, value: '', event: 'submit' }
+	])('clears a create-user refusal on $action', async ({ selector, value, event }) => {
+		api.createUser.mockRejectedValueOnce(new Error('Username already exists'));
+		const target = await renderPage(true);
+		const form = requireElement<HTMLFormElement>(target, '.create-form');
+		for (const [placeholder, value] of [
+			['Username', 'jane'],
+			['Password', 'example-password']
+		]) {
+			const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
+			input.value = value;
+			input.dispatchEvent(new Event('input', { bubbles: true }));
+		}
+		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+		await flush();
+		expect(target.textContent).toContain('Username already exists');
+
+		if (selector) {
+			const field = requireElement<HTMLInputElement | HTMLSelectElement>(form, selector);
+			field.value = value;
+			field.dispatchEvent(new Event(event, { bubbles: true }));
+		} else {
+			api.createUser.mockImplementationOnce(() => new Promise(() => {}));
+			form.dispatchEvent(new Event(event, { bubbles: true, cancelable: true }));
+		}
+		await flush();
+
+		expect(target.querySelector('.error')).toBeNull();
+		if (selector?.startsWith('input')) {
+			expect(form.checkValidity()).toBe(false);
+			form.requestSubmit();
+			await flush();
+			expect(target.querySelector('.error')).toBeNull();
+		}
+	});
+
 	it('shows every voice as read-only operational state', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'voices');
