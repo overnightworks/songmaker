@@ -6,6 +6,7 @@ import subprocess
 import sys
 from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -45,6 +46,12 @@ class UnavailablePort:
 
     def summarize(self, text):
         pytest.fail("A warm cache must not call Claude")
+
+
+@pytest.fixture(autouse=True)
+def _no_live_provider_credentials(monkeypatch):
+    """Provider-boundary tests must not inherit a developer's API credentials."""
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
 
 
 @pytest.fixture
@@ -351,3 +358,46 @@ def test_generic_signature_keeps_type_parameters():
     source = SOURCE.replace("choose(value: int) -> int", "choose[T](value: T) -> T")
     function = audit.extract_functions(source, Path("generic.py"))[0]
     assert function.signature == "def choose[T](value: T) -> T"
+
+
+@pytest.mark.parametrize("api_fails", [False, True])
+def test_configured_api_uses_model_or_reports_provider_failure(monkeypatch, api_fails):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-placeholder")
+
+    class FakeClient:
+        def __init__(self, **kwargs):
+            assert kwargs["api_key"] == "test-placeholder"
+            assert kwargs["max_retries"] == 0
+            self.messages = self
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def create(self, **kwargs):
+            assert kwargs["model"] == "configured-model"
+            assert kwargs["messages"] == [
+                {"role": "user", "content": audit.SUMMARY_PROMPT + SOURCE}
+            ]
+            if api_fails:
+                raise OSError("private provider output")
+            return SimpleNamespace(content=[SimpleNamespace(type="text", text="Chooses a value.")])
+
+    monkeypatch.setitem(
+        sys.modules, "anthropic", SimpleNamespace(Anthropic=FakeClient, APIError=OSError)
+    )
+    if api_fails:
+        with pytest.raises(audit.AuditError, match="Claude summary API failed") as error:
+            audit.ClaudeSummarizer("configured-model").summarize(SOURCE)
+        assert "private provider output" not in str(error.value)
+    else:
+        assert audit.ClaudeSummarizer("configured-model").summarize(SOURCE) == "Chooses a value."
+
+
+def test_configured_api_without_sdk_fails_instead_of_switching_provider(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-placeholder")
+    monkeypatch.setitem(sys.modules, "anthropic", None)
+    with pytest.raises(audit.AuditError, match="SDK is missing"):
+        audit.ClaudeSummarizer("model").summarize(SOURCE)

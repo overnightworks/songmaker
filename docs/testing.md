@@ -40,7 +40,9 @@ wenn ein berichtetes Paar diesen Wert überschreitet; ohne Flag ist dies kein Ga
 `--model` wählt das lokale Modell (Default `jinaai/jina-embeddings-v2-base-code`,
 mit dem vom Modell gelieferten Python-Code). Der erste Lauf lädt dessen Gewichte
 und berechnet Embeddings auf der CPU; pro neuem Funktionsinhalt kostet die
-Zusammenfassung einen Claude-Aufruf. Der CLI-Weg entspricht dem Provider:
+Zusammenfassung einen Claude-Aufruf. Wie beim vorhandenen Provider hat
+`ANTHROPIC_API_KEY` Vorrang und verwendet das SDK (zusätzlich Extra `api`
+installieren); ohne API-Key folgt der CLI-Weg:
 `claude -p`, ohne Tools, MCP oder Projekt-Settings; `SONGMAKER_CLAUDE_CLI`
 überschreibt den Binärpfad. `--claude-model` bzw. `CLAUDE_SCORING_MODEL`
 wählt das Modell (Scoring-Default `claude-opus-4-6`); einen abweichenden
