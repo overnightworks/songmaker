@@ -1065,9 +1065,9 @@ async def run_lora_training_job(
     lora_id: str,
     user_id: str,
     *,
-    db_factory: sessionmaker[Session] | None = None,
-    audio_dir: Path | None = None,
-    redis: Redis | None = None,
+    db_factory: sessionmaker[Session],
+    audio_dir: Path,
+    redis: Redis,
     target_mode: str = MODEL_DEFAULT_MODE,
     training_config: LoraTrainingJobConfig,
 ) -> None:
@@ -1087,11 +1087,6 @@ async def run_lora_training_job(
         job_type=JobType.LORA_TRAINING,
         lora_id=lora_id,
     )
-
-    if db_factory is None or audio_dir is None or redis is None:
-        raise RuntimeError(
-            "run_lora_training_job requires db_factory, audio_dir, redis",
-        )
 
     try:
         await _run_lora_training(
