@@ -1,6 +1,7 @@
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
+	makeHealthResponse,
 	makeSong as song,
 	makeVersion as version
 } from '$lib/test-utils/factories';
@@ -8,7 +9,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { GenerationItem, HealthResponse, JobItem, SongItem } from '$lib/api/types';
+import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
@@ -211,35 +212,6 @@ class MockEventSource {
 	}
 }
 
-function healthResponse(overrides: Partial<HealthResponse> = {}): HealthResponse {
-	return {
-		status: 'ok',
-		music_worker: 'running',
-		scoring_worker: 'running',
-		db: 'ok',
-		redis: 'ok',
-		redis_session_cache_failures: 0,
-		acestep: 'healthy',
-		uptime_seconds: 60,
-		claude_cli_tool_surface: 'ok',
-		codex_image_sandbox_runtime: 'ready',
-		background_loops: {
-			cover_runner: { state: 'ok', consecutive_failures: 0, last_error: null },
-			session_sync: { state: 'ok', consecutive_failures: 0, last_error: null },
-			resource_event_cleanup: { state: 'ok', consecutive_failures: 0, last_error: null },
-			score_backfill: { state: 'ok', consecutive_failures: 0, last_error: null },
-			stale_job_reaper: { state: 'ok', consecutive_failures: 0, last_error: null },
-			provider_status_refresh: { state: 'ok', consecutive_failures: 0, last_error: null }
-		},
-		queue_depth_cap_reached: false,
-		music_queue_depth: 0,
-		scoring_queue_depth: 0,
-		acestep_workers_online: 1,
-		acestep_workers_total: 1,
-		...overrides
-	};
-}
-
 async function renderView(options: { widthPx?: number } = {}): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	if (options.widthPx !== undefined) {
@@ -338,7 +310,7 @@ beforeEach(() => {
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
 	fetchHealth.mockReset();
-	fetchHealth.mockResolvedValue(healthResponse());
+	fetchHealth.mockResolvedValue(makeHealthResponse());
 	generateSong.mockReset();
 	listLoras.mockReset();
 	listLoras.mockResolvedValue([]);
@@ -621,7 +593,7 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 	}
 
 	it('disables Generate with a reason when no ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(healthResponse({ acestep_workers_online: 0 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 		const target = await renderView();
 
 		const btn = generateBtn(target);
@@ -631,7 +603,7 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 	});
 
 	it('keeps Generate enabled when at least one ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(healthResponse({ acestep_workers_online: 2 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 2 }));
 		const target = await renderView();
 
 		const btn = generateBtn(target);
@@ -641,11 +613,11 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 
 	it('re-enables Generate without a reload once a worker comes back online', async () => {
 		vi.useFakeTimers();
-		fetchHealth.mockResolvedValue(healthResponse({ acestep_workers_online: 0 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 		const target = await renderView();
 		expect(generateBtn(target)?.disabled).toBe(true);
 
-		fetchHealth.mockResolvedValue(healthResponse({ acestep_workers_online: 1 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 1 }));
 		await vi.advanceTimersByTimeAsync(15_000);
 		await tick();
 

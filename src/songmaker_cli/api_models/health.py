@@ -7,7 +7,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.lifecycle import (
+from songmaker_cli.health_types import (
     BackgroundLoopHealth,
     BackgroundLoopName,
     BackgroundLoopStatus,

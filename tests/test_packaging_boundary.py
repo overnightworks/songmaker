@@ -267,6 +267,22 @@ sys.meta_path.insert(0, BlockedOptionalImport())
     )
 
 
+def test_health_api_models_import_without_server_runtime() -> None:
+    result = subprocess.run(
+        [
+            sys.executable, "-c",
+            "import sys; import songmaker_cli.api_models; "
+            "assert not {'arq', 'sqlalchemy'} & sys.modules.keys()",
+        ],
+        env={**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)},
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+
+
 def test_container_extras_match_every_uv_sync_line() -> None:
     for name, spec in CONTAINERS.items():
         sync_extras = _sync_extras(REPOSITORY_ROOT / spec.dockerfile)

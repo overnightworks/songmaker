@@ -89,6 +89,10 @@ def _gauge(name: str, help_text: str, value: int | float) -> list[str]:
     return [f"# HELP {name} {help_text}", f"# TYPE {name} gauge", f"{name} {value}"]
 
 
+def _counter(name: str, help_text: str, value: int | float) -> list[str]:
+    return [f"# HELP {name} {help_text}", f"# TYPE {name} counter", f"{name} {value}"]
+
+
 def _labelled_gauge(
     name: str, help_text: str, samples: Iterable[tuple[str, int | float]],
 ) -> list[str]:
@@ -110,11 +114,11 @@ def _format_prometheus(metrics: _PrometheusMetrics) -> str:
             f'{PROM_HTTP_REQUESTS_TOTAL}{{method="{method}",status="{status}"}} {count}'
         )
 
-    duration_help = "Cumulative HTTP request duration in milliseconds."
-    lines.append(f"# HELP {PROM_HTTP_REQUEST_DURATION_MS} {duration_help}")
-    lines.append(f"# TYPE {PROM_HTTP_REQUEST_DURATION_MS} counter")
-    duration_total = metrics.http_snapshot["http_request_duration_total_ms"]
-    lines.append(f"{PROM_HTTP_REQUEST_DURATION_MS} {duration_total}")
+    lines.extend(_counter(
+        PROM_HTTP_REQUEST_DURATION_MS,
+        "Cumulative HTTP request duration in milliseconds.",
+        metrics.http_snapshot["http_request_duration_total_ms"],
+    ))
 
     lines.extend(_gauge(
         PROM_ACTIVE_SESSIONS, "Number of active user sessions.", metrics.active_sessions,

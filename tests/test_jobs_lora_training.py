@@ -217,7 +217,8 @@ def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
     seeded, db_factory,
 ) -> None:
     started_at = datetime(2026, 9, 19, 12, tzinfo=timezone.utc)
-    throttle = _LoraProgressThrottle(db_factory, "job-1", seeded["lora_id"])
+    now = 0.0
+    throttle = _LoraProgressThrottle(db_factory, "job-1", seeded["lora_id"], clock=lambda: now)
     with db_factory() as session:
         lora = get_user_lora(session, seeded["lora_id"])
         lora.status = LoraStatus.PREPROCESSING
@@ -236,11 +237,7 @@ def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
     ]
     expected = None
     for now, fraction, epoch, start, published, status in reports:
-        with patch(
-            "songmaker_cli.jobs.lora_training.time",
-            SimpleNamespace(monotonic=lambda: now),
-        ):
-            throttle.report(fraction, epoch, 500, start)
+        throttle.report(fraction, epoch, 500, start)
         if published:
             expected = (fraction, epoch, start)
         with db_factory() as session:
