@@ -2001,6 +2001,13 @@ def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient
             "/api/songs/s1/share", "/shared/song/{slug}/cover", id="song",
         ),
         pytest.param(
+            "/api/songs/s1/share", "/shared/song/{slug}/album-cover", id="song-album",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share",
+            "/shared/playlist/{slug}/album-cover/test_album", id="playlist-album",
+        ),
+        pytest.param(
             "/api/generations/g1/share",
             "/shared/gen/{slug}/album-cover",
             id="generation-album",

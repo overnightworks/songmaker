@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
@@ -69,7 +70,7 @@ from songmaker_cli.covers import (
     resolve_song_cover_file,
     song_cover_file_exists,
 )
-from songmaker_cli.db.models import Album
+from songmaker_cli.db.models import Album, Playlist, Song
 from songmaker_cli.db.queries import (
     get_album_by_slug,
     get_generation_by_slug,
@@ -193,23 +194,29 @@ def _shared_audio_url_for_filename(
     return f"{route}/{stored_filename}"
 
 
-def _shared_album_cover_response(
-    album: Album,
+def _shared_cover_response(
+    request: Request,
+    resolve_entity: Callable[[], Album | Song | Playlist | None],
     audio_dir: Path,
     variant: str,
     version: str | None,
+    resolve_file: Callable[[Path, str, str | None, str], Path] = resolve_cover_file,
 ) -> FileResponse:
-    if version is not None and version != album.cover_key:
+    _check_shared_rate_limit(request)
+    entity = resolve_entity()
+    if entity is None:
+        raise HTTPException(404, NOT_FOUND_DETAIL)
+    if version is not None and version != entity.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
-        path = resolve_cover_file(audio_dir, album.id, album.cover_key, variant)
+        path = resolve_file(audio_dir, entity.id, entity.cover_key, variant)
     except CoverRejectedError as exc:
         raise HTTPException(exc.status_code, str(exc)) from exc
     except FileNotFoundError:
         raise HTTPException(404, COVER_NOT_FOUND)
     return FileResponse(
         path,
-        media_type=cover_media_type(variant, album.cover_key or ""),
+        media_type=cover_media_type(variant, entity.cover_key or ""),
         headers=COVER_RESPONSE_HEADERS,
     )
 
@@ -320,11 +327,9 @@ async def get_shared_album_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    album = get_album_by_slug(db, slug)
-    if not album:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
+    return _shared_cover_response(
+        request, lambda: get_album_by_slug(db, slug), ctx.audio_dir, variant, v,
+    )
 
 
 @router.post(
@@ -457,12 +462,11 @@ async def get_shared_song_album_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    song = get_song_by_slug(db, slug)
-    album = song.album if song else None
-    if not album:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
+    def resolve_album() -> Album | None:
+        song = get_song_by_slug(db, slug)
+        return song.album if song else None
+
+    return _shared_cover_response(request, resolve_album, ctx.audio_dir, variant, v)
 
 
 @router.get(
@@ -477,22 +481,9 @@ async def get_shared_song_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    song = get_song_by_slug(db, slug)
-    if not song:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    if v is not None and v != song.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_song_cover_file(ctx.audio_dir, song.id, song.cover_key, variant)
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, song.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
+    return _shared_cover_response(
+        request, lambda: get_song_by_slug(db, slug), ctx.audio_dir, variant, v,
+        resolve_song_cover_file,
     )
 
 
@@ -578,12 +569,11 @@ async def get_shared_generation_album_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    generation = get_generation_by_slug(db, slug)
-    album = generation.song.album if generation and generation.song else None
-    if not album:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    return _shared_album_cover_response(album, ctx.audio_dir, variant, v)
+    def resolve_album() -> Album | None:
+        generation = get_generation_by_slug(db, slug)
+        return generation.song.album if generation and generation.song else None
+
+    return _shared_cover_response(request, resolve_album, ctx.audio_dir, variant, v)
 
 
 @router.get(
@@ -702,24 +692,9 @@ async def get_shared_playlist_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    playlist = get_playlist_by_slug(db, slug)
-    if not playlist:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    if v is not None and v != playlist.cover_key:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_playlist_cover_file(
-            ctx.audio_dir, playlist.id, playlist.cover_key, variant,
-        )
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, playlist.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
+    return _shared_cover_response(
+        request, lambda: get_playlist_by_slug(db, slug), ctx.audio_dir, variant, v,
+        resolve_playlist_cover_file,
     )
 
 
@@ -736,29 +711,21 @@ async def get_shared_playlist_album_cover(
     db: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    _check_shared_rate_limit(request)
-    playlist = get_playlist_by_slug(db, slug)
-    if not playlist:
-        raise HTTPException(404, NOT_FOUND_DETAIL)
-    album = next((
-        entry.generation.song.album
-        for entry in playlist.entries
-        if entry.generation and entry.generation.song and entry.generation.song.album
-        and entry.generation.song.album.id == album_id
-    ), None)
-    if album is None or (v is not None and v != album.cover_key):
-        raise HTTPException(404, COVER_NOT_FOUND)
-    try:
-        path = resolve_cover_file(ctx.audio_dir, album.id, album.cover_key, variant)
-    except CoverRejectedError as exc:
-        raise HTTPException(exc.status_code, str(exc)) from exc
-    except FileNotFoundError:
-        raise HTTPException(404, COVER_NOT_FOUND)
-    return FileResponse(
-        path,
-        media_type=cover_media_type(variant, album.cover_key or ""),
-        headers=COVER_RESPONSE_HEADERS,
-    )
+    def resolve_album() -> Album:
+        playlist = get_playlist_by_slug(db, slug)
+        if not playlist:
+            raise HTTPException(404, NOT_FOUND_DETAIL)
+        album = next((
+            entry.generation.song.album
+            for entry in playlist.entries
+            if entry.generation and entry.generation.song and entry.generation.song.album
+            and entry.generation.song.album.id == album_id
+        ), None)
+        if album is None:
+            raise HTTPException(404, COVER_NOT_FOUND)
+        return album
+
+    return _shared_cover_response(request, resolve_album, ctx.audio_dir, variant, v)
 
 
 @router.post(
