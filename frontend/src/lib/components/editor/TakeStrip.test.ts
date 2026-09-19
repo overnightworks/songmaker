@@ -14,8 +14,6 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 import { playTake } from '$lib/stores/player';
 import TakeStrip from './TakeStrip.svelte';
 
-const genDefaults = { version_number: 3, generation_number: 3 } satisfies Partial<GenerationItem>;
-
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 afterEach(async () => {
@@ -53,9 +51,9 @@ async function render(generations: GenerationItem[]) {
 describe('TakeStrip', () => {
 	it('renders one chip per take, newest version and take first', async () => {
 		const { target } = await render([
-			gen({ ...genDefaults, version_number: 2, generation_number: 1 }),
-			gen({ ...genDefaults, id: 'g2', generation_number: 2 }),
-			gen({ ...genDefaults, id: 'g3', generation_number: 1 })
+			gen({ version_number: 2, generation_number: 1 }),
+			gen({ version_number: 3, id: 'g2', generation_number: 2 }),
+			gen({ version_number: 3, id: 'g3', generation_number: 1 })
 		]);
 		const labels = Array.from(target.querySelectorAll('.take-chip-label')).map(
 			(el) => el.textContent
@@ -64,13 +62,13 @@ describe('TakeStrip', () => {
 	});
 
 	it('shows a pick or keep badge', async () => {
-		const picked = gen({ ...genDefaults, is_picked: true });
+		const picked = gen({ version_number: 3, generation_number: 3, is_picked: true });
 		const { target } = await render([picked]);
 		expect(target.querySelector('.badge.picked')).not.toBeNull();
 	});
 
 	it('plays the take on click instead of opening Now Playing', async () => {
-		const picked = gen({ ...genDefaults, is_picked: true });
+		const picked = gen({ version_number: 3, generation_number: 3, is_picked: true });
 		const { target } = await render([picked]);
 		target.querySelector<HTMLButtonElement>('.take-chip')?.click();
 		await tick();

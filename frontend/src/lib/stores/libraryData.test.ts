@@ -1,7 +1,7 @@
 import { makeAlbum, makeGeneration as makeGen, makeSong } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, GenerationItem, PaginatedResponse, SongItem } from '$lib/api/types';
+import type { AlbumItem, PaginatedResponse, SongItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
 
@@ -43,35 +43,22 @@ import {
 	upsertSongInList
 } from './libraryData';
 
-const genDefaults = {
-	mp3_path: 'a1/song_v1.mp3',
-	wav_path: 'a1/song_v1.wav',
-	seed: 42,
-	model_mode: 'sft',
-	created_at: '',
-	share_slug: null
-} satisfies Partial<GenerationItem>;
-
-const albumDefaults = {
-	title: 'Album',
-	song_count: 0,
-	share_slug: null,
-	created_at: ''
-} satisfies Partial<AlbumItem>;
-
-const songDefaults = {
-	slug: 'song',
-	title: 'Song',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	best_scores: null,
-	best_rating: null,
-	generations: [makeGen(genDefaults)],
-	created_at: '',
-	share_slug: null
-} satisfies Partial<SongItem>;
+function loadedSongDefaults(): Partial<SongItem> {
+	return {
+		slug: 'song',
+		title: 'Song',
+		generations: [
+			makeGen({
+				mp3_path: 'a1/song_v1.mp3',
+				wav_path: 'a1/song_v1.wav',
+				seed: 42,
+				model_mode: 'sft',
+				created_at: ''
+			})
+		],
+		created_at: ''
+	};
+}
 
 beforeEach(() => {
 	resetLibraryContinueItems();
@@ -132,11 +119,20 @@ afterEach(() => {
 describe('song list mutations', () => {
 	it('replaceSongInList applies an authoritative empty generation list', () => {
 		songList.set([
-			makeSong({ ...structuredClone(songDefaults), generations: [makeGen(genDefaults)] })
+			makeSong({
+				...loadedSongDefaults(),
+				generations: [
+					makeGen({
+						mp3_path: 'a1/song_v1.mp3',
+						wav_path: 'a1/song_v1.wav',
+						seed: 42,
+						model_mode: 'sft',
+						created_at: ''
+					})
+				]
+			})
 		]);
-		replaceSongInList(
-			makeSong({ ...structuredClone(songDefaults), generation_count: 0, generations: [] })
-		);
+		replaceSongInList(makeSong({ ...loadedSongDefaults(), generation_count: 0, generations: [] }));
 		expect(get(songList)[0].generations).toEqual([]);
 		expect(get(songList)[0].generation_count).toBe(0);
 	});
@@ -152,7 +148,7 @@ describe('song list mutations', () => {
 		const pending = loadSongsForAlbum('a1');
 		cancelAlbumSongLoads();
 		resolvePage?.({
-			items: [makeSong({ ...structuredClone(songDefaults), id: 's-stale' })],
+			items: [makeSong({ ...loadedSongDefaults(), id: 's-stale' })],
 			total: 1,
 			offset: 0,
 			limit: 200,
@@ -178,11 +174,11 @@ describe('song list mutations', () => {
 	});
 
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
-		songList.set([makeSong({ ...structuredClone(songDefaults), id: 's-page' })]);
+		songList.set([makeSong({ ...loadedSongDefaults(), id: 's-page' })]);
 		vi.mocked(fetchSongs).mockResolvedValueOnce({
 			items: [
-				makeSong({ ...structuredClone(songDefaults), id: 's-page', title: 'Page' }),
-				makeSong({ ...structuredClone(songDefaults), id: 's-hidden', title: 'Hidden' })
+				makeSong({ ...loadedSongDefaults(), id: 's-page', title: 'Page' }),
+				makeSong({ ...loadedSongDefaults(), id: 's-hidden', title: 'Hidden' })
 			],
 			total: 2,
 			offset: 0,
@@ -201,7 +197,7 @@ describe('song list mutations', () => {
 	it('follows album-song pages and stops after an empty page even when the server says more exists', async () => {
 		vi.mocked(fetchSongs)
 			.mockResolvedValueOnce({
-				items: [makeSong(structuredClone(songDefaults))],
+				items: [makeSong(loadedSongDefaults())],
 				total: 2,
 				offset: 0,
 				limit: 200,
@@ -224,7 +220,7 @@ describe('song list mutations', () => {
 
 	it('dedupes concurrent requests for the same album songs', async () => {
 		vi.mocked(fetchSongs).mockResolvedValueOnce({
-			items: [makeSong(structuredClone(songDefaults))],
+			items: [makeSong(loadedSongDefaults())],
 			total: 1,
 			offset: 0,
 			limit: 200,
@@ -238,11 +234,19 @@ describe('song list mutations', () => {
 
 	it('overlaySongList keeps loaded takes when a summary arrives later', () => {
 		const loaded = makeSong({
-			...structuredClone(songDefaults),
-			generations: [makeGen(genDefaults)]
+			...loadedSongDefaults(),
+			generations: [
+				makeGen({
+					mp3_path: 'a1/song_v1.mp3',
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: ''
+				})
+			]
 		});
 		const summary = makeSong({
-			...structuredClone(songDefaults),
+			...loadedSongDefaults(),
 			title: 'Updated title',
 			generation_count: 0,
 			generations: []
@@ -255,11 +259,19 @@ describe('song list mutations', () => {
 
 	it('overlaySongList raises generation_count without dropping loaded takes', () => {
 		const loaded = makeSong({
-			...structuredClone(songDefaults),
-			generations: [makeGen(genDefaults)]
+			...loadedSongDefaults(),
+			generations: [
+				makeGen({
+					mp3_path: 'a1/song_v1.mp3',
+					wav_path: 'a1/song_v1.wav',
+					seed: 42,
+					model_mode: 'sft',
+					created_at: ''
+				})
+			]
 		});
 		const summary = makeSong({
-			...structuredClone(songDefaults),
+			...loadedSongDefaults(),
 			generation_count: 2,
 			generations: []
 		});
@@ -270,18 +282,27 @@ describe('song list mutations', () => {
 
 	it('overlaySongList preserves loaded takes across a browse reset', () => {
 		const existing = [
-			makeSong({ ...structuredClone(songDefaults), generations: [makeGen(genDefaults)] })
+			makeSong({
+				...loadedSongDefaults(),
+				generations: [
+					makeGen({
+						mp3_path: 'a1/song_v1.mp3',
+						wav_path: 'a1/song_v1.wav',
+						seed: 42,
+						model_mode: 'sft',
+						created_at: ''
+					})
+				]
+			})
 		];
-		const incoming = [
-			makeSong({ ...structuredClone(songDefaults), generation_count: 0, generations: [] })
-		];
+		const incoming = [makeSong({ ...loadedSongDefaults(), generation_count: 0, generations: [] })];
 		expect(overlaySongList(existing, incoming)[0].generations).toHaveLength(1);
 	});
 
 	it('upsertSongInList appends an absent song and replaces a present one', () => {
-		songList.set([makeSong({ ...structuredClone(songDefaults), id: 'a' })]);
-		upsertSongInList(makeSong({ ...structuredClone(songDefaults), id: 'b', title: 'B' }));
-		upsertSongInList(makeSong({ ...structuredClone(songDefaults), id: 'a', title: 'A2' }));
+		songList.set([makeSong({ ...loadedSongDefaults(), id: 'a' })]);
+		upsertSongInList(makeSong({ ...loadedSongDefaults(), id: 'b', title: 'B' }));
+		upsertSongInList(makeSong({ ...loadedSongDefaults(), id: 'a', title: 'A2' }));
 		const byId = new Map(get(songList).map((s) => [s.id, s.title]));
 		expect([byId.get('a'), byId.get('b')]).toEqual(['A2', 'B']);
 	});
@@ -291,14 +312,17 @@ describe('ensureAllAlbumsLoaded', () => {
 	it('follows has_more across pages until the full list is loaded', async () => {
 		vi.mocked(fetchAlbums)
 			.mockResolvedValueOnce({
-				items: [makeAlbum(albumDefaults), makeAlbum({ ...albumDefaults, id: 'a2' })],
+				items: [
+					makeAlbum({ title: 'Album', song_count: 0, created_at: '' }),
+					makeAlbum({ title: 'Album', song_count: 0, created_at: '', id: 'a2' })
+				],
 				total: 3,
 				offset: 0,
 				limit: 2,
 				has_more: true
 			})
 			.mockResolvedValueOnce({
-				items: [makeAlbum({ ...albumDefaults, id: 'a3' })],
+				items: [makeAlbum({ title: 'Album', song_count: 0, created_at: '', id: 'a3' })],
 				total: 3,
 				offset: 2,
 				limit: 2,
@@ -316,7 +340,7 @@ describe('ensureAllAlbumsLoaded', () => {
 
 	it('does not refetch once the list is loaded', async () => {
 		vi.mocked(fetchAlbums).mockResolvedValueOnce({
-			items: [makeAlbum(albumDefaults)],
+			items: [makeAlbum({ title: 'Album', song_count: 0, created_at: '' })],
 			total: 1,
 			offset: 0,
 			limit: 50,
@@ -329,7 +353,7 @@ describe('ensureAllAlbumsLoaded', () => {
 
 	it('dedupes concurrent requests for all albums', async () => {
 		vi.mocked(fetchAlbums).mockResolvedValueOnce({
-			items: [makeAlbum(albumDefaults)],
+			items: [makeAlbum({ title: 'Album', song_count: 0, created_at: '' })],
 			total: 1,
 			offset: 0,
 			limit: 50,
@@ -350,9 +374,11 @@ describe('ensureAllAlbumsLoaded', () => {
 				})
 		);
 		const pending = ensureAllAlbumsLoaded();
-		albumList.set([makeAlbum({ ...albumDefaults, id: 'a-from-grid' })]);
+		albumList.set([
+			makeAlbum({ title: 'Album', song_count: 0, created_at: '', id: 'a-from-grid' })
+		]);
 		resolvePage?.({
-			items: [makeAlbum(albumDefaults)],
+			items: [makeAlbum({ title: 'Album', song_count: 0, created_at: '' })],
 			total: 1,
 			offset: 0,
 			limit: 50,

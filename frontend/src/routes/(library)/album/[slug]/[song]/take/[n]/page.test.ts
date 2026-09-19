@@ -7,7 +7,7 @@ import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -82,23 +82,12 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import TakeAddressHarness from './harness.svelte';
 
-const generationDefaults = {
-	song_id: 'song-1',
-	mp3_path: '/audio/g1.mp3',
-	seed: 1
-} satisfies Partial<GenerationItem>;
-
-const songDefaults = {
-	id: 'song-1',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	best_scores: null,
-	best_rating: null,
-	generations: [generation(generationDefaults)],
-	share_slug: null
-} satisfies Partial<SongItem>;
+function routedTakeSongDefaults(): Partial<SongItem> {
+	return {
+		id: 'song-1',
+		generations: [generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 })]
+	};
+}
 
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
@@ -191,7 +180,7 @@ beforeEach(() => {
 	api.fetchSongs.mockReset().mockResolvedValue(
 		page([
 			song({
-				...structuredClone(songDefaults),
+				...routedTakeSongDefaults(),
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
 				album_id: ALBUM_SLUG,
@@ -201,7 +190,7 @@ beforeEach(() => {
 	);
 	api.fetchSong.mockReset().mockResolvedValue(
 		song({
-			...structuredClone(songDefaults),
+			...routedTakeSongDefaults(),
 			slug: SONG_SLUG,
 			title: TRACK_TITLE,
 			album_id: ALBUM_SLUG,
@@ -247,27 +236,33 @@ describe('/album/<slug>/<song-slug>/take/<n> opened cold', () => {
 		api.fetchSongs.mockResolvedValue(
 			page([
 				song({
-					...structuredClone(songDefaults),
+					...routedTakeSongDefaults(),
 					slug: SONG_SLUG,
 					title: TRACK_TITLE,
 					album_id: ALBUM_SLUG,
 					album_title: ALBUM_TITLE,
 					generation_count: 2,
-					generations: [generation(generationDefaults)]
+					generations: [generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 })]
 				})
 			])
 		);
 		api.fetchSong.mockResolvedValue(
 			song({
-				...structuredClone(songDefaults),
+				...routedTakeSongDefaults(),
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
 				album_id: ALBUM_SLUG,
 				album_title: ALBUM_TITLE,
 				generation_count: 2,
 				generations: [
-					generation(generationDefaults),
-					generation({ ...generationDefaults, id: 'g2', generation_number: 2 })
+					generation({ song_id: 'song-1', mp3_path: '/audio/g1.mp3', seed: 1 }),
+					generation({
+						song_id: 'song-1',
+						mp3_path: '/audio/g1.mp3',
+						seed: 1,
+						id: 'g2',
+						generation_number: 2
+					})
 				]
 			})
 		);

@@ -7,13 +7,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type {
-	AlbumItem,
-	CoverSuggestionsResponse,
-	GenerationItem,
-	JobItem,
-	SongItem
-} from '$lib/api/types';
+import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
@@ -102,29 +96,6 @@ import { playAlbumSong } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 
-const generationDefaults = { song_id: 's-local' } satisfies Partial<GenerationItem>;
-
-const albumDefaults = {
-	id: 'a-local',
-	title: 'Night Drive',
-	share_slug: null,
-	cover: null
-} satisfies Partial<AlbumItem>;
-
-const songDefaults = {
-	id: 's-local',
-	album_id: 'a-local',
-	album_title: 'Night Drive',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	share_slug: null
-} satisfies Partial<SongItem>;
-
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 class FakeJobEventSource {
@@ -167,8 +138,10 @@ async function renderDetail(): Promise<HTMLElement> {
 }
 
 beforeEach(() => {
-	albumList.set([album(albumDefaults)]);
-	songList.set([song(songDefaults)]);
+	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
+	songList.set([
+		song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+	]);
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
 	updateAlbum.mockReset();
@@ -215,8 +188,8 @@ async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
 describe('AlbumDetailView header', () => {
 	it('renders the albumId prop instead of the selected album', async () => {
 		albumList.set([
-			album(albumDefaults),
-			album({ ...albumDefaults, id: 'a-other', title: 'Other Night' })
+			album({ id: 'a-local', title: 'Night Drive' }),
+			album({ id: 'a-other', title: 'Other Night' })
 		]);
 		selectedAlbumId.set('a-other');
 		const target = document.createElement('div');
@@ -267,7 +240,13 @@ describe('AlbumDetailView header', () => {
 
 	it('opens curation mode from the menu', async () => {
 		songList.set([
-			song({ ...songDefaults, generation_count: 1, generations: [generation(generationDefaults)] })
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generation_count: 1,
+				generations: [generation({ song_id: 's-local' })]
+			})
 		]);
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
@@ -283,7 +262,8 @@ describe('AlbumDetailView header', () => {
 	it('uploads a cover from the menu action', async () => {
 		uploadAlbumCover.mockResolvedValue(
 			album({
-				...albumDefaults,
+				id: 'a-local',
+				title: 'Night Drive',
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=abc.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=abc.jpg'
@@ -333,7 +313,9 @@ describe('AlbumDetailView header', () => {
 	});
 
 	it('archives the album through the menu without a confirmation dialog', async () => {
-		archiveAlbum.mockResolvedValue(album({ ...albumDefaults, is_archived: true }));
+		archiveAlbum.mockResolvedValue(
+			album({ id: 'a-local', title: 'Night Drive', is_archived: true })
+		);
 		openCollection.set({ kind: 'album', id: 'a-local' });
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
@@ -387,8 +369,8 @@ describe('AlbumDetailView cover suggestions', () => {
 	it('keeps a delayed previous album response from replacing the current album state', async () => {
 		const firstResponse = deferred<CoverSuggestionsResponse>();
 		albumList.set([
-			album(albumDefaults),
-			album({ ...albumDefaults, id: 'a-other', title: 'Other Night' })
+			album({ id: 'a-local', title: 'Night Drive' }),
+			album({ id: 'a-other', title: 'Other Night' })
 		]);
 		fetchAlbumCoverSuggestions.mockImplementationOnce(() => firstResponse.promise);
 		fetchAlbumCoverSuggestions.mockResolvedValueOnce(
@@ -448,7 +430,11 @@ describe('AlbumDetailView cover suggestions', () => {
 			})
 		);
 		selectAlbumCoverSuggestion.mockResolvedValue(
-			album({ ...albumDefaults, cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
 		);
 		const target = await renderDetail();
 
@@ -512,7 +498,11 @@ describe('AlbumDetailView cover suggestions', () => {
 
 	it('puts replacement by suggestion beside upload and removal in the existing overflow', async () => {
 		albumList.set([
-			album({ ...albumDefaults, cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
 		]);
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
@@ -534,7 +524,11 @@ describe('AlbumDetailView cover suggestions', () => {
 
 	it('replaces stale suggestions before a new request and keeps its failure visible', async () => {
 		albumList.set([
-			album({ ...albumDefaults, cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
 		]);
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({
@@ -573,7 +567,11 @@ describe('AlbumDetailView cover suggestions', () => {
 
 	it('keeps replacement suggestions reachable when the album already has a cover', async () => {
 		albumList.set([
-			album({ ...albumDefaults, cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' } })
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
 		]);
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({ suggestions: [{ id: 'replacement', url: '/replacement.png' }] })
@@ -587,16 +585,20 @@ describe('AlbumDetailView cover suggestions', () => {
 
 describe('AlbumDetailView subtitle and year', () => {
 	it('shows the album subtitle and year under the title', async () => {
-		albumList.set([album({ ...albumDefaults, subtitle: 'Live at the Roxy', year: '1994' })]);
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'Live at the Roxy', year: '1994' })
+		]);
 		const target = await renderDetail();
 		expect(target.querySelector('.album-meta')?.textContent).toContain('Live at the Roxy');
 		expect(target.querySelector('.album-meta')?.textContent).toContain('1994');
 	});
 
 	it('saves an edited subtitle through updateAlbum and updates the store', async () => {
-		albumList.set([album({ ...albumDefaults, subtitle: 'Old Subtitle', year: '1999' })]);
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'Old Subtitle', year: '1999' })
+		]);
 		updateAlbum.mockResolvedValue(
-			album({ ...albumDefaults, subtitle: 'New Subtitle', year: '1999' })
+			album({ id: 'a-local', title: 'Night Drive', subtitle: 'New Subtitle', year: '1999' })
 		);
 		const target = await renderDetail();
 		requireElement<HTMLButtonElement>(target, '.album-meta .editable-title-display').click();
@@ -613,8 +615,8 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('saves an edited year as a number through updateAlbum', async () => {
-		albumList.set([album({ ...albumDefaults, year: '1999' })]);
-		updateAlbum.mockResolvedValue(album({ ...albumDefaults, year: '2005' }));
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
+		updateAlbum.mockResolvedValue(album({ id: 'a-local', title: 'Night Drive', year: '2005' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -630,8 +632,8 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('clears the year through updateAlbum when emptied', async () => {
-		albumList.set([album({ ...albumDefaults, year: '1999' })]);
-		updateAlbum.mockResolvedValue(album(albumDefaults));
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
+		updateAlbum.mockResolvedValue(album({ id: 'a-local', title: 'Night Drive' }));
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -647,7 +649,7 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('rejects a non-numeric year without calling updateAlbum', async () => {
-		albumList.set([album({ ...albumDefaults, year: '1999' })]);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -664,7 +666,7 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 
 	it('rejects a year outside the plausible range without calling updateAlbum', async () => {
-		albumList.set([album({ ...albumDefaults, year: '1999' })]);
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', year: '1999' })]);
 		const target = await renderDetail();
 		const displays = target.querySelectorAll<HTMLButtonElement>(
 			'.album-meta .editable-title-display'
@@ -685,7 +687,9 @@ describe('AlbumDetailView song row Play', () => {
 	it('plays the row inside the open album, letting the player resolve the take', async () => {
 		// The row knows the song, not which take to play — a song whose takes
 		// are not loaded yet (just switched albums, #141/4) still plays.
-		songList.set([song({ ...songDefaults, generation_count: 2 })]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-play').click();
@@ -698,7 +702,9 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('counts takes, not gens, on a song row', async () => {
-		songList.set([song({ ...songDefaults, generation_count: 2 })]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
+		]);
 		const target = await renderDetail();
 		expect(requireElement(target, '.item-meta').textContent?.trim()).toBe('2 takes');
 	});
@@ -706,9 +712,11 @@ describe('AlbumDetailView song row Play', () => {
 	it('names the row play action after the song it starts', async () => {
 		songList.set([
 			song({
-				...songDefaults,
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
 				title: 'Tide',
-				generations: [generation(generationDefaults)],
+				generations: [generation({ song_id: 's-local' })],
 				generation_count: 1
 			})
 		]);
@@ -720,7 +728,9 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('disables Play when the song has no generations', async () => {
-		songList.set([song(songDefaults)]);
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+		]);
 		const target = await renderDetail();
 
 		const playBtn = requireElement<HTMLButtonElement>(target, '.item-play');
@@ -728,8 +738,16 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('does not open the song when Play is clicked', async () => {
-		const first = generation({ ...generationDefaults, id: 'g-first' });
-		songList.set([song({ ...songDefaults, generations: [first], generation_count: 1 })]);
+		const first = generation({ song_id: 's-local', id: 'g-first' });
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generations: [first],
+				generation_count: 1
+			})
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-play').click();
@@ -739,8 +757,16 @@ describe('AlbumDetailView song row Play', () => {
 	});
 
 	it('opens the song when the row body is clicked, not Play', async () => {
-		const first = generation({ ...generationDefaults, id: 'g-first' });
-		songList.set([song({ ...songDefaults, generations: [first], generation_count: 1 })]);
+		const first = generation({ song_id: 's-local', id: 'g-first' });
+		songList.set([
+			song({
+				id: 's-local',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				generations: [first],
+				generation_count: 1
+			})
+		]);
 		const target = await renderDetail();
 
 		requireElement<HTMLButtonElement>(target, '.item-body').click();

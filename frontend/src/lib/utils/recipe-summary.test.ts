@@ -1,21 +1,12 @@
 import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { describe, expect, it, vi } from 'vitest';
-import type { GenerationItem, SongItem } from '$lib/api/types';
-
-const generationDefaults = { seed: null, model_mode: '' } satisfies Partial<GenerationItem>;
-
-const songDefaults = {
-	album_id: 'a-local',
-	album_title: 'Local Album',
-	vocal_language: ''
-} satisfies Partial<SongItem>;
+import type { GenerationItem } from '$lib/api/types';
 
 describe('buildTakeRecipe', () => {
 	it.each([
 		{
 			name: 'a fully-parameterized take',
 			generation: generation({
-				...generationDefaults,
 				model_mode: 'xl-sft',
 				seed: 48113,
 				generation_params: {
@@ -33,7 +24,7 @@ describe('buildTakeRecipe', () => {
 					cover_noise_strength: 0.4
 				}
 			}),
-			song: song({ ...songDefaults, vocal_language: 'en' }),
+			song: song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: 'en' }),
 			groups: [
 				{
 					label: 'Model & Sampling',
@@ -67,14 +58,14 @@ describe('buildTakeRecipe', () => {
 		},
 		{
 			name: 'a sparse take that carries only its model',
-			generation: generation({ ...generationDefaults, model_mode: 'turbo' }),
-			song: song(songDefaults),
+			generation: generation({ seed: null, model_mode: 'turbo' }),
+			song: song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' }),
 			groups: [{ label: 'Model & Sampling', entries: [{ label: 'Model', value: 'turbo' }] }]
 		},
 		{
 			name: 'a take with nothing set at all',
-			generation: generation(generationDefaults),
-			song: song(songDefaults),
+			generation: generation({ seed: null, model_mode: '' }),
+			song: song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' }),
 			groups: []
 		}
 	])('groups $name', async ({ generation: gen, song: s, groups }) => {
@@ -110,12 +101,13 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
 			generation({
-				...generationDefaults,
+				seed: null,
+				model_mode: '',
 				generation_params: {
 					chroma_alignment: 4.2
 				} as unknown as GenerationItem['generation_params']
 			}),
-			song(songDefaults)
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 
 		expect(groups).toEqual([
@@ -133,10 +125,11 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
 			generation({
-				...generationDefaults,
+				seed: null,
+				model_mode: '',
 				generation_params: { repaint_wav_crossfade_sec: 0.25 }
 			}),
-			song(songDefaults)
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
 			{ label: 'Other', entries: [{ label: 'Repaint Wav Crossfade Sec', value: '0.25' }] }
@@ -147,13 +140,14 @@ describe('buildTakeRecipe reading the shared param registry', () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
 			generation({
-				...generationDefaults,
+				seed: null,
+				model_mode: '',
 				generation_params: {
 					timesteps: '1000,500,0',
 					task_type: 'repaint'
 				}
 			}),
-			song(songDefaults)
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
 			{
@@ -172,11 +166,11 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
 			generation({
-				...generationDefaults,
+				seed: null,
 				model_mode: 'xl-sft',
 				generation_params: { acestep_model: 'xl-sft' }
 			}),
-			song(songDefaults)
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
 			{ label: 'Model & Sampling', entries: [{ label: 'Model', value: 'xl-sft' }] }
@@ -204,8 +198,8 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 		async ({ seed, requestedSeed, reproducibilityEntries }) => {
 			const { buildTakeRecipe } = await import('./recipe-summary');
 			const groups = buildTakeRecipe(
-				generation({ ...generationDefaults, seed, generation_params: { seed: requestedSeed } }),
-				song(songDefaults)
+				generation({ model_mode: '', seed, generation_params: { seed: requestedSeed } }),
+				song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 			);
 			expect(groups).toEqual([{ label: 'Reproducibility', entries: reproducibilityEntries }]);
 		}
@@ -215,10 +209,11 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
 			generation({
-				...generationDefaults,
+				seed: null,
+				model_mode: '',
 				generation_params: { batch_size: 2, delivered_batch_size: 1 }
 			}),
-			song(songDefaults)
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
 			{
@@ -234,8 +229,8 @@ describe('buildTakeRecipe deduplicating what the take already shows', () => {
 	it('shows no Delivered Batch Size row when the take carries none', async () => {
 		const { buildTakeRecipe } = await import('./recipe-summary');
 		const groups = buildTakeRecipe(
-			generation({ ...generationDefaults, generation_params: { batch_size: 2 } }),
-			song(songDefaults)
+			generation({ seed: null, model_mode: '', generation_params: { batch_size: 2 } }),
+			song({ album_id: 'a-local', album_title: 'Local Album', vocal_language: '' })
 		);
 		expect(groups).toEqual([
 			{ label: 'Model & Sampling', entries: [{ label: 'Batch Size', value: '2' }] }

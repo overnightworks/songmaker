@@ -43,22 +43,13 @@ import { selectedSongId } from '$lib/stores/player';
 import { resetLibraryContinueItems } from '$lib/stores/libraryData';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
-const generationDefaults = { seed: null, created_at: '' } satisfies Partial<GenerationItem>;
-
 const songDefaults = {
 	slug: 'test',
 	title: 'Test',
 	lyrics: 'hello',
 	prompt: 'rock',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
 	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	created_at: '',
-	share_slug: null
+	created_at: ''
 } satisfies Partial<SongItem>;
 
 describe('editGenParams dirty tracking', () => {
@@ -189,7 +180,7 @@ describe('discardDraft', () => {
 describe('computeDraftVersionNumber', () => {
 	it('predicts version_number + 1 for a normal save onto a version that already has takes', () => {
 		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
-		const generations = [makeGeneration({ ...generationDefaults, version_number: 2 })];
+		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 2 })];
 
 		expect(computeDraftVersionNumber(versions, generations)).toBe(3);
 	});
@@ -208,8 +199,8 @@ describe('computeDraftVersionNumber', () => {
 		// would now read 2, but the next save must land on v4.
 		const versions = [makeVersion({ id: 'v3', version_number: 3 }), makeVersion()];
 		const generations = [
-			makeGeneration({ ...generationDefaults, version_number: 3 }),
-			makeGeneration({ ...generationDefaults, id: 'g2' })
+			makeGeneration({ seed: null, created_at: '', version_number: 3 }),
+			makeGeneration({ seed: null, created_at: '', id: 'g2' })
 		];
 
 		expect(computeDraftVersionNumber(versions, generations)).toBe(4);

@@ -1,7 +1,7 @@
 import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 
 vi.mock('$lib/api/client', () => ({
 	fetchSong: vi.fn(),
@@ -29,23 +29,25 @@ import { toasts } from '$lib/stores/toast';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
 
-const generationDefaults = {
-	mp3_path: 'a.mp3',
-	seed: 42,
-	model_mode: 'sft',
-	version_lyrics: 'la la',
-	created_at: ''
-} satisfies Partial<GenerationItem>;
-
-const songDefaults = {
-	slug: 'tide',
-	title: 'Tide',
-	album_title: 'Nachtstrom',
-	lyrics: 'la la',
-	prompt: 'dreamy',
-	created_at: '',
-	generations: [generation(generationDefaults)]
-} satisfies Partial<SongItem>;
+function actionSongDefaults(): Partial<SongItem> {
+	return {
+		slug: 'tide',
+		title: 'Tide',
+		album_title: 'Nachtstrom',
+		lyrics: 'la la',
+		prompt: 'dreamy',
+		created_at: '',
+		generations: [
+			generation({
+				mp3_path: 'a.mp3',
+				seed: 42,
+				model_mode: 'sft',
+				version_lyrics: 'la la',
+				created_at: ''
+			})
+		]
+	};
+}
 
 // The score job's progress arrives over a server-sent event stream jsdom does
 // not implement, so the store gets an EventSource that records nothing.
@@ -87,8 +89,17 @@ describe('setPick', () => {
 	it('picks a generation and refreshes the song into songList', async () => {
 		vi.mocked(fetchSong).mockResolvedValue(
 			song({
-				...structuredClone(songDefaults),
-				generations: [generation({ ...generationDefaults, is_picked: true })]
+				...actionSongDefaults(),
+				generations: [
+					generation({
+						mp3_path: 'a.mp3',
+						seed: 42,
+						model_mode: 'sft',
+						version_lyrics: 'la la',
+						created_at: '',
+						is_picked: true
+					})
+				]
 			})
 		);
 
@@ -100,7 +111,7 @@ describe('setPick', () => {
 	});
 
 	it('unpicks a generation', async () => {
-		vi.mocked(fetchSong).mockResolvedValue(song(structuredClone(songDefaults)));
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await setPick('s1', 'g1', false);
 
@@ -110,12 +121,12 @@ describe('setPick', () => {
 
 	it('toasts and leaves songList unchanged when the API call fails', async () => {
 		vi.mocked(pickGeneration).mockRejectedValue(new Error('boom'));
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(actionSongDefaults())]);
 
 		await setPick('s1', 'g1', true);
 
 		expect(fetchSong).not.toHaveBeenCalled();
-		expect(get(songList)).toEqual([song(structuredClone(songDefaults))]);
+		expect(get(songList)).toEqual([song(actionSongDefaults())]);
 		expect(get(toasts)).toEqual([expect.objectContaining({ message: 'boom', type: 'error' })]);
 	});
 });
@@ -124,8 +135,17 @@ describe('setKeep', () => {
 	it('keeps a generation and refreshes the song into songList', async () => {
 		vi.mocked(fetchSong).mockResolvedValue(
 			song({
-				...structuredClone(songDefaults),
-				generations: [generation({ ...generationDefaults, is_kept: true })]
+				...actionSongDefaults(),
+				generations: [
+					generation({
+						mp3_path: 'a.mp3',
+						seed: 42,
+						model_mode: 'sft',
+						version_lyrics: 'la la',
+						created_at: '',
+						is_kept: true
+					})
+				]
 			})
 		);
 
@@ -136,7 +156,7 @@ describe('setKeep', () => {
 	});
 
 	it('unkeeps a generation', async () => {
-		vi.mocked(fetchSong).mockResolvedValue(song(structuredClone(songDefaults)));
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await setKeep('s1', 'g1', false);
 
@@ -154,19 +174,19 @@ describe('setKeep', () => {
 
 describe('rate', () => {
 	it('rates a generation, refreshes songList, and confirms via toast', async () => {
-		vi.mocked(fetchSong).mockResolvedValue(song(structuredClone(songDefaults)));
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await rate('s1', 'g1', 80, 'great take');
 
 		expect(rateGeneration).toHaveBeenCalledWith('g1', 80, 'great take');
-		expect(get(songList)).toEqual([song(structuredClone(songDefaults))]);
+		expect(get(songList)).toEqual([song(actionSongDefaults())]);
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: 'Rating saved', type: 'success' })
 		]);
 	});
 
 	it('defaults notes to an empty string', async () => {
-		vi.mocked(fetchSong).mockResolvedValue(song(structuredClone(songDefaults)));
+		vi.mocked(fetchSong).mockResolvedValue(song(actionSongDefaults()));
 
 		await rate('s1', 'g1', 50);
 
@@ -175,7 +195,7 @@ describe('rate', () => {
 
 	it('toasts on failure and leaves songList unchanged', async () => {
 		vi.mocked(rateGeneration).mockRejectedValue(new Error('rating failed'));
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(actionSongDefaults())]);
 
 		await rate('s1', 'g1', 80);
 

@@ -26,6 +26,13 @@ export function makeSong(overrides: Partial<SongItem> = {}): SongItem {
 		is_shared: false,
 		created_at: '2026-01-01T00:00:00+00:00',
 		generations: [],
+		bpm: 120,
+		audio_duration: 180,
+		key_scale: 'Am',
+		generation_params: null,
+		best_scores: null,
+		best_rating: null,
+		share_slug: null,
 		...overrides
 	};
 }
@@ -53,6 +60,7 @@ export function makeGeneration(overrides: Partial<GenerationItem> = {}): Generat
 		generation_params: null,
 		audio_duration_sec: null,
 		created_at: '2026-01-01T00:00:00+00:00',
+		share_slug: null,
 		...overrides
 	};
 }
@@ -70,6 +78,8 @@ export function makeAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
 		is_shared: false,
 		created_at: '2026-01-01T00:00:00+00:00',
 		is_archived: false,
+		share_slug: null,
+		cover: null,
 		...overrides
 	};
 }

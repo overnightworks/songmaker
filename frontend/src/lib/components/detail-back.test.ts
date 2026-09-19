@@ -76,18 +76,9 @@ import PlaylistDetailView from './PlaylistDetailView.svelte';
 import SongDetailView from './SongDetailView.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
 
-const songDefaults = {
-	album_id: 'a-local',
-	album_title: 'Local Album',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	best_scores: null,
-	best_rating: null,
-	generations: [generation()],
-	share_slug: null
-} satisfies Partial<SongItem>;
+function detailSongDefaults(): Partial<SongItem> {
+	return { album_id: 'a-local', album_title: 'Local Album', generations: [generation()] };
+}
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -105,7 +96,7 @@ async function renderView(
 
 beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Local Album', share_slug: null })]);
-	songList.set([song(structuredClone(songDefaults))]);
+	songList.set([song(detailSongDefaults())]);
 	selectedAlbumId.set('a-local');
 	selectedSongId.set('s1');
 	selectedGenerationId.set('g1');
@@ -190,7 +181,7 @@ describe('song editor survives list revalidation', () => {
 		expect(get(isDirty)).toBe(true);
 		songList.set([
 			song({
-				...structuredClone(songDefaults),
+				...detailSongDefaults(),
 				generation_count: 2,
 				generations: [generation(), generation({ id: 'g2' })]
 			})
@@ -207,9 +198,9 @@ describe('song editor survives list revalidation', () => {
 		const { setDraftLyrics, editLyrics } = await import('$lib/stores/editor');
 		setDraftLyrics('unsaved verse');
 		songList.set([
-			song(structuredClone(songDefaults)),
+			song(detailSongDefaults()),
 			song({
-				...structuredClone(songDefaults),
+				...detailSongDefaults(),
 				id: 's2',
 				lyrics: 'other lyrics',
 				generation_count: 0,

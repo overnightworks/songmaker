@@ -37,15 +37,6 @@ const generationDefaults = {
 	created_at: ''
 } satisfies Partial<GenerationItem>;
 
-const songDefaults = {
-	slug: 'tide',
-	title: 'Tide',
-	album_title: 'Nachtstrom',
-	lyrics: 'la la',
-	prompt: 'dreamy',
-	created_at: ''
-} satisfies Partial<SongItem>;
-
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
@@ -69,7 +60,16 @@ async function render(
 		target,
 		props: {
 			generation: overrides.generation ?? generation(generationDefaults),
-			song: overrides.song ?? song(songDefaults),
+			song:
+				overrides.song ??
+				song({
+					slug: 'tide',
+					title: 'Tide',
+					album_title: 'Nachtstrom',
+					lyrics: 'la la',
+					prompt: 'dreamy',
+					created_at: ''
+				}),
 			lyrics
 		}
 	});
@@ -395,7 +395,14 @@ describe('NowPlayingTake', () => {
 		async (label, mode) => {
 			nowPlayingSurface.set('full');
 			const gen = generation(generationDefaults);
-			const withSong = song(songDefaults);
+			const withSong = song({
+				slug: 'tide',
+				title: 'Tide',
+				album_title: 'Nachtstrom',
+				lyrics: 'la la',
+				prompt: 'dreamy',
+				created_at: ''
+			});
 			await render({ generation: gen, song: withSong });
 
 			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action'))
@@ -431,7 +438,14 @@ describe('NowPlayingTake recipe section', () => {
 					key_scale: 'Am'
 				}
 			}),
-			song: song(songDefaults)
+			song: song({
+				slug: 'tide',
+				title: 'Tide',
+				album_title: 'Nachtstrom',
+				lyrics: 'la la',
+				prompt: 'dreamy',
+				created_at: ''
+			})
 		});
 
 		const groupLabels = Array.from(target.querySelectorAll('.recipe-group-label')).map(
@@ -458,7 +472,15 @@ describe('NowPlayingTake recipe section', () => {
 				seed: null,
 				generation_params: { repaint_wav_crossfade_sec: 0.25 }
 			}),
-			song: song({ ...songDefaults, vocal_language: '' })
+			song: song({
+				slug: 'tide',
+				title: 'Tide',
+				album_title: 'Nachtstrom',
+				lyrics: 'la la',
+				prompt: 'dreamy',
+				created_at: '',
+				vocal_language: ''
+			})
 		});
 		expect(
 			Array.from(target.querySelectorAll('.recipe-group-label')).map((el) => el.textContent)
@@ -469,7 +491,15 @@ describe('NowPlayingTake recipe section', () => {
 	it('shows no recipe section for a take that carries nothing to show', async () => {
 		await render({
 			generation: generation({ ...generationDefaults, model_mode: '', seed: null }),
-			song: song({ ...songDefaults, vocal_language: '' })
+			song: song({
+				slug: 'tide',
+				title: 'Tide',
+				album_title: 'Nachtstrom',
+				lyrics: 'la la',
+				prompt: 'dreamy',
+				created_at: '',
+				vocal_language: ''
+			})
 		});
 		expect(target.querySelector('.recipe-section')).toBeNull();
 	});

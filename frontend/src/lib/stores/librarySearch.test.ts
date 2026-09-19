@@ -38,21 +38,6 @@ import {
 	restoreLibrarySearch
 } from './librarySearch';
 
-const albumDefaults = { share_slug: null } satisfies Partial<AlbumItem>;
-
-const songDefaults = {
-	album_id: 'a-local',
-	album_title: 'Local Album',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	share_slug: null
-} satisfies Partial<SongItem>;
-
 beforeEach(() => {
 	vi.useFakeTimers();
 	searchLibrary.mockReset();
@@ -61,8 +46,8 @@ beforeEach(() => {
 	resetLibrarySearchForTests();
 	searchQuery.set('');
 	selectedSongId.set(null);
-	albumList.set([album({ ...albumDefaults, id: 'a-local', title: 'Local Album' })]);
-	songList.set([song(songDefaults)]);
+	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
+	songList.set([song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 })]);
 });
 
 afterEach(() => {
@@ -75,14 +60,12 @@ describe('restoreLibrarySearch', () => {
 	it('restoreLibrarySearch replays pages until the saved count is loaded', async () => {
 		searchLibrary
 			.mockResolvedValueOnce({
-				items: [{ type: 'album', album: album(albumDefaults) }],
+				items: [{ type: 'album', album: album() }],
 				next_cursor: 'cursor-1',
 				has_more: true
 			})
 			.mockResolvedValueOnce({
-				items: [
-					{ type: 'album', album: album({ ...albumDefaults, id: 'a2', title: 'Catalog 2' }) }
-				],
+				items: [{ type: 'album', album: album({ id: 'a2', title: 'Catalog 2' }) }],
 				next_cursor: null,
 				has_more: false
 			});
@@ -96,14 +79,14 @@ describe('restoreLibraryBrowse', () => {
 	it('replays pages until the saved offsets are loaded', async () => {
 		fetchAlbums
 			.mockResolvedValueOnce({
-				items: [album(albumDefaults)],
+				items: [album()],
 				total: 2,
 				offset: 0,
 				limit: 50,
 				has_more: true
 			})
 			.mockResolvedValueOnce({
-				items: [album({ ...albumDefaults, id: 'a2', title: 'Second' })],
+				items: [album({ id: 'a2', title: 'Second' })],
 				total: 2,
 				offset: 1,
 				limit: 50,
@@ -111,7 +94,7 @@ describe('restoreLibraryBrowse', () => {
 			});
 		fetchSongs
 			.mockResolvedValueOnce({
-				items: [song(songDefaults)],
+				items: [song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 })],
 				total: 1,
 				offset: 0,
 				limit: 200,
@@ -132,7 +115,7 @@ describe('restoreLibraryBrowse', () => {
 
 	it('stops paging a resource once it is exhausted even if the other target remains', async () => {
 		fetchAlbums.mockResolvedValue({
-			items: [album(albumDefaults)],
+			items: [album()],
 			total: 1,
 			offset: 0,
 			limit: 50,
@@ -140,7 +123,7 @@ describe('restoreLibraryBrowse', () => {
 		});
 		fetchSongs
 			.mockResolvedValueOnce({
-				items: [song(songDefaults)],
+				items: [song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 })],
 				total: 1,
 				offset: 0,
 				limit: 200,
@@ -172,7 +155,7 @@ describe('loadLibraryBrowse', () => {
 					})
 			)
 			.mockResolvedValueOnce({
-				items: [album({ ...albumDefaults, id: 'new-album' })],
+				items: [album({ id: 'new-album' })],
 				has_more: false
 			});
 		fetchSongs
@@ -183,18 +166,32 @@ describe('loadLibraryBrowse', () => {
 					})
 			)
 			.mockResolvedValueOnce({
-				items: [song({ ...songDefaults, id: 'new-song' })],
+				items: [
+					song({
+						album_id: 'a-local',
+						album_title: 'Local Album',
+						generation_count: 0,
+						id: 'new-song'
+					})
+				],
 				has_more: false
 			});
 
 		const first = loadLibraryBrowse({ reset: true });
 		await loadLibraryBrowse({ reset: true });
 		resolveFirstAlbums?.({
-			items: [album({ ...albumDefaults, id: 'old-album' })],
+			items: [album({ id: 'old-album' })],
 			has_more: false
 		});
 		resolveFirstSongs?.({
-			items: [song({ ...songDefaults, id: 'old-song' })],
+			items: [
+				song({
+					album_id: 'a-local',
+					album_title: 'Local Album',
+					generation_count: 0,
+					id: 'old-song'
+				})
+			],
 			has_more: false
 		});
 
@@ -205,14 +202,16 @@ describe('loadLibraryBrowse', () => {
 
 	it('keeps browse offsets independent of songs appended from search', async () => {
 		fetchAlbums.mockResolvedValue({
-			items: [album({ ...albumDefaults, id: 'a-page' })],
+			items: [album({ id: 'a-page' })],
 			total: 2,
 			offset: 0,
 			limit: 50,
 			has_more: true
 		});
 		fetchSongs.mockResolvedValue({
-			items: [song({ ...songDefaults, id: 's-page' })],
+			items: [
+				song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's-page' })
+			],
 			total: 2,
 			offset: 0,
 			limit: 200,
@@ -221,7 +220,15 @@ describe('loadLibraryBrowse', () => {
 		await loadLibraryBrowse({ reset: true });
 		expect(get(libraryBrowse).songOffset).toBe(1);
 
-		songList.update((songs) => [...songs, song({ ...songDefaults, id: 's-search-only' })]);
+		songList.update((songs) => [
+			...songs,
+			song({
+				album_id: 'a-local',
+				album_title: 'Local Album',
+				generation_count: 0,
+				id: 's-search-only'
+			})
+		]);
 		fetchAlbums.mockResolvedValue({
 			items: [],
 			total: 2,
@@ -230,7 +237,14 @@ describe('loadLibraryBrowse', () => {
 			has_more: false
 		});
 		fetchSongs.mockResolvedValue({
-			items: [song({ ...songDefaults, id: 's-page-2' })],
+			items: [
+				song({
+					album_id: 'a-local',
+					album_title: 'Local Album',
+					generation_count: 0,
+					id: 's-page-2'
+				})
+			],
 			total: 2,
 			offset: 1,
 			limit: 200,
@@ -246,7 +260,8 @@ describe('loadLibraryBrowse', () => {
 	it('keeps loaded generations when browse resets over a summary page', async () => {
 		songList.set([
 			song({
-				...songDefaults,
+				album_id: 'a-local',
+				album_title: 'Local Album',
 				id: 's-page',
 				generation_count: 1,
 				generations: [
@@ -278,14 +293,16 @@ describe('loadLibraryBrowse', () => {
 			})
 		]);
 		fetchAlbums.mockResolvedValue({
-			items: [album(albumDefaults)],
+			items: [album()],
 			total: 1,
 			offset: 0,
 			limit: 50,
 			has_more: false
 		});
 		fetchSongs.mockResolvedValue({
-			items: [song({ ...songDefaults, id: 's-page' })],
+			items: [
+				song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's-page' })
+			],
 			total: 1,
 			offset: 0,
 			limit: 200,
@@ -299,7 +316,12 @@ describe('loadLibraryBrowse', () => {
 
 describe('applySyncedSong', () => {
 	it('updates selected and listed browse songs and loaded search hits', () => {
-		const listed = song({ ...songDefaults, title: 'Listed' });
+		const listed = song({
+			album_id: 'a-local',
+			album_title: 'Local Album',
+			generation_count: 0,
+			title: 'Listed'
+		});
 		const searchHit = searchSong({
 			slug: 'local-only',
 			album_id: 'a-local',
@@ -326,9 +348,22 @@ describe('applySyncedSong', () => {
 			hasMore: false,
 			nextCursor: null
 		});
-		applySyncedSong(song({ ...songDefaults, title: 'Listed Updated', generation_count: 2 }));
 		applySyncedSong(
-			song({ ...songDefaults, id: 's-search', title: 'Search Updated', generation_count: 1 })
+			song({
+				album_id: 'a-local',
+				album_title: 'Local Album',
+				title: 'Listed Updated',
+				generation_count: 2
+			})
+		);
+		applySyncedSong(
+			song({
+				album_id: 'a-local',
+				album_title: 'Local Album',
+				id: 's-search',
+				title: 'Search Updated',
+				generation_count: 1
+			})
 		);
 		expect(get(songList)[0].title).toBe('Listed Updated');
 		expect(get(librarySearch).items[0]).toMatchObject({
@@ -344,7 +379,10 @@ describe('applySyncedSong', () => {
 	});
 
 	it('forgetSyncedSong removes browse, search, and selection', () => {
-		songList.set([song(songDefaults), song({ ...songDefaults, id: 's2' })]);
+		songList.set([
+			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 }),
+			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's2' })
+		]);
 		selectedSongId.set('s1');
 		librarySearch.set({
 			q: 'Tide',
@@ -382,9 +420,17 @@ describe('applySyncedSong', () => {
 	});
 
 	it('does not insert an unlisted unselected song into browse', () => {
-		songList.set([song(songDefaults)]);
+		songList.set([song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0 })]);
 		selectedSongId.set(null);
-		applySyncedSong(song({ ...songDefaults, id: 's-other', title: 'Other' }));
+		applySyncedSong(
+			song({
+				album_id: 'a-local',
+				album_title: 'Local Album',
+				generation_count: 0,
+				id: 's-other',
+				title: 'Other'
+			})
+		);
 		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
 	});
 
@@ -393,7 +439,9 @@ describe('applySyncedSong', () => {
 		const stop = watchLoadedSongIds(() => seen.push(1));
 		expect(seen.length).toBeGreaterThanOrEqual(1);
 		const afterSubscribe = seen.length;
-		songList.set([song({ ...songDefaults, id: 's-watch' })]);
+		songList.set([
+			song({ album_id: 'a-local', album_title: 'Local Album', generation_count: 0, id: 's-watch' })
+		]);
 		expect(seen.length).toBeGreaterThan(afterSubscribe);
 		stop();
 		const afterStop = seen.length;

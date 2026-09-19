@@ -6,7 +6,6 @@ import {
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { PlaylistEntryItem } from '$lib/api/types';
 import {
 	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
@@ -141,15 +140,6 @@ import breadcrumbSource from './Breadcrumb.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
 import railSearchSource from './shell/RailSearch.svelte?raw';
-
-const playlistEntryDefaults = {
-	id: 'e1',
-	song_title: 'First Track',
-	album_title: 'Local Album',
-	mp3_path: 'g1.mp3',
-	seed: 7,
-	model_mode: 'turbo'
-} satisfies Partial<PlaylistEntryItem>;
 
 // Every target below is styled by exactly one of these components — never a
 // generic wrapper — so injecting that component's own compiled stylesheet
@@ -353,16 +343,29 @@ beforeEach(() => {
 		entry_count: 3,
 		share_slug: null,
 		entries: [
-			playlistEntry(playlistEntryDefaults),
 			playlistEntry({
-				...playlistEntryDefaults,
+				id: 'e1',
+				song_title: 'First Track',
+				album_title: 'Local Album',
+				mp3_path: 'g1.mp3',
+				seed: 7,
+				model_mode: 'turbo'
+			}),
+			playlistEntry({
+				album_title: 'Local Album',
+				mp3_path: 'g1.mp3',
+				seed: 7,
+				model_mode: 'turbo',
 				id: 'e2',
 				position: 1,
 				generation_id: 'g2',
 				song_title: 'Second Track'
 			}),
 			playlistEntry({
-				...playlistEntryDefaults,
+				album_title: 'Local Album',
+				mp3_path: 'g1.mp3',
+				seed: 7,
+				model_mode: 'turbo',
 				id: 'e3',
 				position: 2,
 				generation_id: 'g3',

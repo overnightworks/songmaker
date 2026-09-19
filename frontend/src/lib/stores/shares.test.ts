@@ -2,7 +2,7 @@ import { makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { ShareInventoryItem, SongItem } from '$lib/api/types';
+import type { ShareInventoryItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { API_ERROR_GENERIC_MESSAGE, LIBRARY_SHARES_ERROR } from '$lib/constants';
 
@@ -29,21 +29,6 @@ import {
 	watchShareStatus,
 	watchShareView
 } from './shares';
-
-const songDefaults = {
-	slug: 'tide',
-	title: 'Tide',
-	album_title: 'Nachtstrom',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	is_shared: true,
-	share_slug: 'slug-s'
-} satisfies Partial<SongItem>;
 
 function page(
 	overrides: Partial<{
@@ -362,7 +347,11 @@ describe('shares view and patches', () => {
 		await loadShareInventory({ reset: true });
 		patchSharesFromSong(
 			song({
-				...songDefaults,
+				slug: 'tide',
+				album_title: 'Nachtstrom',
+				generation_count: 0,
+				is_shared: true,
+				share_slug: 'slug-s',
 				title: 'Tide Updated',
 				generations: [
 					{
@@ -392,7 +381,17 @@ describe('shares view and patches', () => {
 				]
 			})
 		);
-		patchSharesFromSong(song({ ...songDefaults, id: 's-other', title: 'Other' }));
+		patchSharesFromSong(
+			song({
+				slug: 'tide',
+				album_title: 'Nachtstrom',
+				generation_count: 0,
+				is_shared: true,
+				share_slug: 'slug-s',
+				id: 's-other',
+				title: 'Other'
+			})
+		);
 		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['s1', 'g1']);
 		expect(get(shareInventory).items[0]?.title).toBe('Tide Updated');
 		expect(get(shareInventory).items[1]).toMatchObject({
@@ -422,7 +421,16 @@ describe('shares view and patches', () => {
 		);
 		await loadShareInventory({ reset: true });
 
-		patchSharesFromSong(song({ ...songDefaults, title: 'Renamed', share_slug: null }));
+		patchSharesFromSong(
+			song({
+				slug: 'tide',
+				album_title: 'Nachtstrom',
+				generation_count: 0,
+				is_shared: true,
+				title: 'Renamed',
+				share_slug: null
+			})
+		);
 
 		expect(get(shareInventory).items).toMatchObject([
 			{ id: 's1', title: 'Renamed', share_slug: 'existing-song' },

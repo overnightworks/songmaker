@@ -2,7 +2,7 @@ import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
-import type { SongItem } from '$lib/api/types';
+
 import { ApiError } from '$lib/api/fetch';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
@@ -32,12 +32,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import CoWriterPanel from './CoWriterPanel.svelte';
 import { startNewConversation } from '$lib/api/client';
-
-const songDefaults = {
-	slug: 'open-song',
-	title: 'Open Song',
-	generation_count: 0
-} satisfies Partial<SongItem>;
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -81,7 +75,7 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 				currentSongId: 's1',
 				currentAlbumId: 'a1',
 				currentAlbumTitle: 'Album',
-				allSongs: [song(songDefaults)],
+				allSongs: [song({ slug: 'open-song', title: 'Open Song', generation_count: 0 })],
 				...overrides
 			}
 		})
@@ -275,7 +269,10 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 		const target = await render({
-			allSongs: [song(songDefaults), song({ ...songDefaults, id: 's2', title: 'Other Song' })]
+			allSongs: [
+				song({ slug: 'open-song', title: 'Open Song', generation_count: 0 }),
+				song({ slug: 'open-song', generation_count: 0, id: 's2', title: 'Other Song' })
+			]
 		});
 
 		await sendMessage(target, 'update the other song');
@@ -314,7 +311,7 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 		const target = await render({
-			allSongs: [song(songDefaults)]
+			allSongs: [song({ slug: 'open-song', title: 'Open Song', generation_count: 0 })]
 		});
 
 		await sendMessage(target, 'darken it');

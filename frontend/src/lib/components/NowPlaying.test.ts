@@ -7,7 +7,7 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
 	NOW_PLAYING_CLOSE,
@@ -67,30 +67,37 @@ vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 import { setKeep, setPick } from '$lib/stores/takeActions';
 import NowPlaying from './NowPlaying.svelte';
 
-const generationDefaults = {
-	generation_number: 2,
-	mp3_path: 'a.mp3',
-	seed: 1,
-	model_mode: 'sft',
-	version_lyrics: 'old verse',
-	created_at: ''
-} satisfies Partial<GenerationItem>;
-
-const albumDefaults = { created_at: '' } satisfies Partial<AlbumItem>;
-
-const songDefaults = {
-	slug: 'tide',
-	title: 'Tide',
-	album_title: 'Nachtstrom',
-	lyrics: 'old verse',
-	prompt: 'dreamy',
-	created_at: '',
-	generations: [generation(generationDefaults)]
-} satisfies Partial<SongItem>;
+function playingSongDefaults(): Partial<SongItem> {
+	return {
+		slug: 'tide',
+		title: 'Tide',
+		album_title: 'Nachtstrom',
+		lyrics: 'old verse',
+		prompt: 'dreamy',
+		created_at: '',
+		generations: [
+			generation({
+				generation_number: 2,
+				mp3_path: 'a.mp3',
+				seed: 1,
+				model_mode: 'sft',
+				version_lyrics: 'old verse',
+				created_at: ''
+			})
+		]
+	};
+}
 
 function info(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	return {
-		generation: generation(generationDefaults),
+		generation: generation({
+			generation_number: 2,
+			mp3_path: 'a.mp3',
+			seed: 1,
+			model_mode: 'sft',
+			version_lyrics: 'old verse',
+			created_at: ''
+		}),
 		songId: 's1',
 		songTitle: 'Tide',
 		artist: 'Artist',
@@ -189,7 +196,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('shows the playing take and its version lyrics, not a later draft', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info({ lyrics: 'old verse' }));
 		expect(target.textContent).toContain(NOW_PLAYING_LABEL);
 		expect(target.textContent).toContain('Tide');
@@ -207,10 +214,15 @@ describe('NowPlaying', () => {
 
 	it('follows the lyrics with the resolved take once whisper_cues are loaded (#45)', async () => {
 		const gen = generation({
-			...generationDefaults,
+			generation_number: 2,
+			mp3_path: 'a.mp3',
+			seed: 1,
+			model_mode: 'sft',
+			version_lyrics: 'old verse',
+			created_at: '',
 			whisper_cues: [{ start: 0, end: 1, text: 'old verse' }]
 		});
-		songList.set([song({ ...structuredClone(songDefaults), generations: [gen] })]);
+		songList.set([song({ ...playingSongDefaults(), generations: [gen] })]);
 		await renderSurface(info({ lyrics: 'old verse', generation: gen }));
 
 		expect(target.querySelectorAll('.lyrics-line')).toHaveLength(1);
@@ -252,7 +264,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('goes to the playing song and leaves Now Playing behind', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 
 		const go = Array.from(target.querySelectorAll('button')).find(
@@ -265,8 +277,8 @@ describe('NowPlaying', () => {
 	});
 
 	it('offers Previous and Next only as far as the playing queue reaches', async () => {
-		albumList.set([album(albumDefaults)]);
-		songList.set([song(structuredClone(songDefaults))]);
+		albumList.set([album({ created_at: '' })]);
+		songList.set([song(playingSongDefaults())]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		expect(
@@ -274,8 +286,8 @@ describe('NowPlaying', () => {
 		).toBe(true);
 
 		songList.set([
-			song(structuredClone(songDefaults)),
-			song({ ...structuredClone(songDefaults), id: 's2', title: 'Second' })
+			song(playingSongDefaults()),
+			song({ ...playingSongDefaults(), id: 's2', title: 'Second' })
 		]);
 		await tick();
 
@@ -344,7 +356,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('hides the trio and names the album for an album queue context', async () => {
-		albumList.set([album(albumDefaults)]);
+		albumList.set([album({ created_at: '' })]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
@@ -374,7 +386,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('toggles between Queue and This take', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		expect(tabs).toHaveLength(2);
@@ -389,7 +401,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('keeps the This take tab present and selected when a take is playing', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
 		const takeTab = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -402,7 +414,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('wires the panel tabs to their panel via aria-controls/role=tabpanel', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		const panel = target.querySelector('[role="tabpanel"]');
@@ -414,7 +426,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('moves the panel tab selection and focus with the arrow keys', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		tabs[0]?.focus();
@@ -450,7 +462,7 @@ describe('NowPlaying', () => {
 
 	it('renders the docked panel inline, with no transport and no sheet to open', async () => {
 		nowPlayingDockable.set(true);
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 		nowPlayingSurface.set('docked');
 		await tick();
@@ -485,7 +497,7 @@ describe('NowPlaying', () => {
 
 	it('seeds the sheet open from a take-row request on a stacked layout, never labelling the trigger Queue', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
 
@@ -498,7 +510,7 @@ describe('NowPlaying', () => {
 
 	it('moves focus into the mobile sheet when it opens', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
@@ -527,12 +539,21 @@ describe('NowPlaying', () => {
 describe('NowPlaying curation mode (#228)', () => {
 	function albumSong(id: string, genId: string, trackNumber: number): SongItem {
 		return song({
-			...structuredClone(songDefaults),
+			...playingSongDefaults(),
 			id,
 			title: `Song ${trackNumber}`,
 			track_number: trackNumber,
 			generations: [
-				generation({ ...generationDefaults, id: genId, song_id: id, mp3_path: `${id}.mp3` })
+				generation({
+					generation_number: 2,
+					seed: 1,
+					model_mode: 'sft',
+					version_lyrics: 'old verse',
+					created_at: '',
+					id: genId,
+					song_id: id,
+					mp3_path: `${id}.mp3`
+				})
 			]
 		});
 	}
@@ -543,7 +564,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const s1 = albumSong('s1', 'g1', 1);
 		const s2 = albumSong('s2', 'g2', 2);
 		songList.set([s1, s2]);
-		albumList.set([album(albumDefaults)]);
+		albumList.set([album({ created_at: '' })]);
 		const takes = [
 			info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title }),
 			info({ generation: s2.generations[0], songId: s2.id, songTitle: s2.title })
@@ -560,7 +581,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	});
 
 	it('does not render the curation bar outside curation mode', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		await renderSurface(info());
 		expect(target.querySelector('.curation-bar')).toBeNull();
 	});
@@ -627,7 +648,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		// only a single-song queue has nowhere to skip to.
 		const s1 = albumSong('s1', 'g1', 1);
 		songList.set([s1]);
-		albumList.set([album(albumDefaults)]);
+		albumList.set([album({ created_at: '' })]);
 		const takes = [info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title })];
 		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
 		curationActive.set(true);
@@ -687,7 +708,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	});
 
 	it('ignores the P/K/S keys outside curation mode', async () => {
-		songList.set([song(structuredClone(songDefaults))]);
+		songList.set([song(playingSongDefaults())]);
 		queueContext.set({ type: 'library' });
 		await renderSurface(info());
 

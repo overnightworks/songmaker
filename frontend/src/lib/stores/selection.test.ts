@@ -2,7 +2,6 @@ import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { GenerationItem } from '$lib/api/types';
 import {
 	clearSelection,
 	selectAllUnkept,
@@ -11,14 +10,6 @@ import {
 	selectionMode,
 	toggleSelection
 } from './selection';
-
-const generationDefaults = {
-	mp3_path: '/audio/g1.mp3',
-	seed: 1,
-	status: 'complete',
-	share_slug: null,
-	model_mode: 'base'
-} satisfies Partial<GenerationItem>;
 
 beforeEach(() => {
 	clearSelection();
@@ -50,8 +41,14 @@ describe('selection', () => {
 	it('keeps existing selections when adding all ids and clears them when selection mode exits', () => {
 		toggleSelection('g1');
 		selectAllUnkept([
-			generation(generationDefaults),
-			generation({ ...generationDefaults, id: 'g2' })
+			generation({ mp3_path: '/audio/g1.mp3', seed: 1, status: 'complete', model_mode: 'base' }),
+			generation({
+				mp3_path: '/audio/g1.mp3',
+				seed: 1,
+				status: 'complete',
+				model_mode: 'base',
+				id: 'g2'
+			})
 		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1', 'g2']));
@@ -65,9 +62,29 @@ describe('selection', () => {
 
 	it('selects only generations that are neither picked nor kept', () => {
 		selectAllUnkept([
-			generation({ ...generationDefaults, id: 'available' }),
-			generation({ ...generationDefaults, id: 'picked', is_picked: true }),
-			generation({ ...generationDefaults, id: 'kept', is_kept: true })
+			generation({
+				mp3_path: '/audio/g1.mp3',
+				seed: 1,
+				status: 'complete',
+				model_mode: 'base',
+				id: 'available'
+			}),
+			generation({
+				mp3_path: '/audio/g1.mp3',
+				seed: 1,
+				status: 'complete',
+				model_mode: 'base',
+				id: 'picked',
+				is_picked: true
+			}),
+			generation({
+				mp3_path: '/audio/g1.mp3',
+				seed: 1,
+				status: 'complete',
+				model_mode: 'base',
+				id: 'kept',
+				is_kept: true
+			})
 		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['available']));

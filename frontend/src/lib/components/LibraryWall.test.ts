@@ -3,7 +3,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
@@ -32,28 +31,19 @@ vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 import LibraryWall from './LibraryWall.svelte';
 
-const playlistDefaults = {
-	id: 'p-local',
-	entry_count: 2,
-	share_slug: null
-} satisfies Partial<PlaylistItem>;
-
-const albumDefaults = {
-	id: 'a-local',
-	title: 'Local Album',
-	share_slug: null
-} satisfies Partial<AlbumItem>;
-
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	fetchPlaylists.mockReset().mockResolvedValue([]);
-	fetchPlaylist.mockReset().mockResolvedValue({ ...playlist(playlistDefaults), entries: [] });
+	fetchPlaylist.mockReset().mockResolvedValue({
+		...playlist({ id: 'p-local', entry_count: 2, share_slug: null }),
+		entries: []
+	});
 	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
-	albumList.set([album(albumDefaults)]);
+	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
 	history.replaceState(null, '', '/');
@@ -84,7 +74,9 @@ function tileTitles(root: ParentNode): string[] {
 describe('LibraryWall', () => {
 	it('loads playlists when the wall mounts', async () => {
 		playlistLoad.set({ status: 'idle', error: null });
-		fetchPlaylists.mockResolvedValueOnce([playlist(playlistDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([
+			playlist({ id: 'p-local', entry_count: 2, share_slug: null })
+		]);
 
 		const root = await render();
 
@@ -96,17 +88,13 @@ describe('LibraryWall', () => {
 
 	it('shows albums and playlists in one chronological grid without filter chips', async () => {
 		albumList.set([
-			album({
-				...albumDefaults,
-				id: 'a-new',
-				title: 'New Album',
-				created_at: '2026-03-03T00:00:00+00:00'
-			}),
-			album({ ...albumDefaults, id: 'a-old', title: 'Old Album' })
+			album({ id: 'a-new', title: 'New Album', created_at: '2026-03-03T00:00:00+00:00' }),
+			album({ id: 'a-old', title: 'Old Album' })
 		]);
 		playlistList.set([
 			playlist({
-				...playlistDefaults,
+				entry_count: 2,
+				share_slug: null,
 				id: 'p-middle',
 				title: 'Middle Playlist',
 				created_at: '2026-02-02T00:00:00+00:00'
@@ -122,7 +110,9 @@ describe('LibraryWall', () => {
 	it('uses a playlist cover before its album-cover mosaic', async () => {
 		playlistList.set([
 			playlist({
-				...playlistDefaults,
+				id: 'p-local',
+				entry_count: 2,
+				share_slug: null,
 				cover: { card: '/covers/night-drive.jpg', detail: '/covers/night-drive.jpg' },
 				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
 			})
@@ -138,7 +128,9 @@ describe('LibraryWall', () => {
 	it('uses the 6B playlist mosaic when a playlist has no own cover', async () => {
 		playlistList.set([
 			playlist({
-				...playlistDefaults,
+				id: 'p-local',
+				entry_count: 2,
+				share_slug: null,
 				album_covers: [{ card: '/covers/album.jpg', detail: '/covers/album.jpg' }]
 			})
 		]);
@@ -149,7 +141,7 @@ describe('LibraryWall', () => {
 	});
 
 	it('opens the matching collection through the navigation store', async () => {
-		playlistList.set([playlist(playlistDefaults)]);
+		playlistList.set([playlist({ id: 'p-local', entry_count: 2, share_slug: null })]);
 		const root = await render();
 		const albumTile = root.querySelector<HTMLButtonElement>(
 			'[aria-label="Open album Local Album"]'

@@ -7,7 +7,6 @@ import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { PlaylistItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -71,8 +70,6 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 }));
 
 import PlaylistAddressHarness from './harness.svelte';
-
-const playlistItemDefaults = { entry_count: 1, share_slug: null } satisfies Partial<PlaylistItem>;
 
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
@@ -156,7 +153,7 @@ beforeEach(() => {
 	api.fetchPlaylists
 		.mockReset()
 		.mockResolvedValue([
-			playlistItem({ ...playlistItemDefaults, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
 		]);
 	api.fetchPlaylist.mockReset().mockResolvedValue(
 		playlistDetail({
@@ -230,7 +227,7 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
 		api.fetchPlaylists.mockResolvedValue([
-			playlistItem({ ...playlistItemDefaults, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
 		]);
 
 		requireElement(target, 'button.address-action').click();
@@ -245,7 +242,7 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
 		api.fetchPlaylists.mockResolvedValue([
-			playlistItem({ ...playlistItemDefaults, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
 		]);
 		requireElement(target, 'button.address-action').click();
 
@@ -258,7 +255,7 @@ describe('/playlist/<slug> naming no playlist', () => {
 	beforeEach(() => {
 		coldTabAt('/playlist/ghost');
 		api.fetchPlaylists.mockResolvedValue([
-			playlistItem({ ...playlistItemDefaults, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
 		]);
 	});
 

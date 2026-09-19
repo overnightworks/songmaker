@@ -27,26 +27,21 @@ import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
 import takeStripSource from './TakeStrip.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
-const songDefaults = {
-	slug: 'test',
-	title: 'Test',
-	lyrics: 'verse one',
-	prompt: 'rock',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	best_scores: null,
-	best_rating: null,
-	generations: [generation()],
-	created_at: '',
-	share_slug: null
-} satisfies Partial<SongItem>;
+function draftSongDefaults(): Partial<SongItem> {
+	return {
+		slug: 'test',
+		title: 'Test',
+		lyrics: 'verse one',
+		prompt: 'rock',
+		generations: [generation()],
+		created_at: ''
+	};
+}
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
-	loadSongData(song(structuredClone(songDefaults)));
+	loadSongData(song(draftSongDefaults()));
 });
 
 afterEach(async () => {
@@ -59,8 +54,8 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
 	const props = {
-		song: song(structuredClone(songDefaults)),
-		allSongs: [song(structuredClone(songDefaults))],
+		song: song(draftSongDefaults()),
+		allSongs: [song(draftSongDefaults())],
 		coWriterOpen: false,
 		compact: false,
 		onturncompleted: vi.fn(),
@@ -132,7 +127,7 @@ describe('WriteColumn Co-Writer mode', () => {
 		});
 		try {
 			const gen = generation({ id: 'g9' });
-			const targetSong = song({ ...structuredClone(songDefaults), generations: [gen] });
+			const targetSong = song({ ...draftSongDefaults(), generations: [gen] });
 			const { target } = await render({
 				coWriterOpen: true,
 				song: targetSong

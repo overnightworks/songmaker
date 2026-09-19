@@ -25,7 +25,7 @@ import { generationFailures } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
 import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-import type { PlaylistItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
 const fetchAlbum = vi.fn();
@@ -106,20 +106,9 @@ import { updateSong } from '$lib/api/client';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
 
-const playlistItemDefaults = { share_slug: null } satisfies Partial<PlaylistItem>;
-
-const songDefaults = {
-	title: 'Tide',
-	album_title: 'Nachtstrom',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	best_scores: null,
-	best_rating: null,
-	generations: [generation()],
-	share_slug: null
-} satisfies Partial<SongItem>;
+function navigableSongDefaults(): Partial<SongItem> {
+	return { title: 'Tide', album_title: 'Nachtstrom', generations: [generation()] };
+}
 
 beforeEach(() => {
 	fetchSong.mockReset();
@@ -151,7 +140,7 @@ beforeEach(() => {
 		album({ share_slug: null }),
 		album({ id: 'a2', title: 'Other', share_slug: null })
 	]);
-	songList.set([song({ ...structuredClone(songDefaults), slug: 's1' })]);
+	songList.set([song({ ...navigableSongDefaults(), slug: 's1' })]);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	// Must run after selectedSongId is cleared: the album/song-list reset
@@ -234,11 +223,9 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 	it('keeps a second write behind the crossing one it follows', async () => {
 		history.replaceState(null, '', '/album/a1');
-		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1', generations: [generation()] })
-		]);
+		songList.set([song({ ...navigableSongDefaults(), slug: 's1', generations: [generation()] })]);
 
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
 
@@ -256,7 +243,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		await openAlbum('a1');
 		vi.mocked(goto).mockClear();
 
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 
 		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', {
 			replaceState: false,
@@ -271,14 +258,14 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// frequent-churn case, not a crossing.
 	it('writes a song-to-song move inside the same album straight to history', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 		await openAlbum('a1');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		vi.mocked(goto).mockClear();
 
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 		expect(window.location.pathname).toBe('/album/a1/s2');
@@ -291,15 +278,15 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// route.id shape decides a crossing, never which resource it names.
 	it('writes a song-to-song move across album boundaries straight to history too', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2', album_id: 'a2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		]);
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		vi.mocked(goto).mockClear();
 
 		await selectSong(
 			's2',
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2', album_id: 'a2' })
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		);
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
@@ -311,8 +298,8 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// same isSongRoutePath boolean stays true on both sides, so this crossing
 	// check must tell song and take apart too, not just album and song.
 	it('crosses through the router from a song address to one of its takes', async () => {
-		songList.set([song({ ...structuredClone(songDefaults), slug: 's1' })]);
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		songList.set([song({ ...navigableSongDefaults(), slug: 's1' })]);
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		vi.mocked(goto).mockClear();
 
 		selectedGenerationId.set('g1');
@@ -333,12 +320,12 @@ describe('history writes across the route boundary (issue #269)', () => {
 	it('writes a take-to-take move inside the same song straight to history', async () => {
 		songList.set([
 			song({
-				...structuredClone(songDefaults),
+				...navigableSongDefaults(),
 				slug: 's1',
 				generations: [generation(), generation({ id: 'g2', generation_number: 2 })]
 			})
 		]);
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		selectedGenerationId.set('g1');
 		persistLibraryHistory();
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
@@ -358,7 +345,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 	it('crosses through the router from an album address to a playlist', async () => {
 		await openAlbum('a1');
 		vi.mocked(goto).mockClear();
-		fetchPlaylists.mockResolvedValueOnce([playlistItem(playlistItemDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 
 		await openPlaylist('p1');
 
@@ -377,8 +364,8 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// not cross).
 	it('writes a playlist-to-playlist move straight to history, not through the router', async () => {
 		fetchPlaylists.mockResolvedValue([
-			playlistItem(playlistItemDefaults),
-			playlistItem({ ...playlistItemDefaults, id: 'p2', slug: 'morning-run', title: 'Morning Run' })
+			playlistItem({ share_slug: null }),
+			playlistItem({ share_slug: null, id: 'p2', slug: 'morning-run', title: 'Morning Run' })
 		]);
 		await openPlaylist('p1');
 		vi.mocked(goto).mockClear();
@@ -398,7 +385,7 @@ describe('the address an open album carries (issue #269)', () => {
 
 	it('sets the song address when a song is opened, and the album address when it is left', async () => {
 		await openAlbum('a1');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		expect(window.location.pathname).toBe('/album/a1/s1');
 		backToCollection();
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1'));
@@ -413,13 +400,13 @@ describe('the address an open album carries (issue #269)', () => {
 
 describe('the address an open playlist carries (issue #286)', () => {
 	it('sets the playlist address when a playlist is opened', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem(playlistItemDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
 		expect(window.location.pathname).toBe('/playlist/night-drive');
 	});
 
 	it('gives the wall back the home address when the playlist is only the rail context', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem(playlistItemDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
@@ -434,7 +421,7 @@ describe('the address an open playlist carries (issue #286)', () => {
 describe("a rename pulls the open song's address along (issue #275)", () => {
 	it('replaces the address when the open song is renamed', async () => {
 		await openAlbum('a1');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		const indexBeforeRename = history.state.index;
 		vi.mocked(goto).mockClear();
 
@@ -446,7 +433,7 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 
 	it('leaves the address alone for an edit that is not a rename', async () => {
 		await openAlbum('a1');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		vi.mocked(goto).mockClear();
 
 		updateSongInList('s1', (s) => ({ ...s, lyrics: 'a new verse' }));
@@ -472,7 +459,7 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 // via updatePlaylistInList, the playlist equivalent of updateSongInList.
 describe("a rename pulls the open playlist's address along (issue #286)", () => {
 	it('replaces the address when the open playlist is renamed', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem(playlistItemDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
 		const indexBeforeRename = history.state.index;
 		vi.mocked(goto).mockClear();
@@ -484,7 +471,7 @@ describe("a rename pulls the open playlist's address along (issue #286)", () => 
 	});
 
 	it('leaves the address alone for an edit that is not a rename', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem(playlistItemDefaults)]);
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
 		vi.mocked(goto).mockClear();
 
@@ -612,14 +599,14 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 
 	it('switches the collection when the open collection is a different album', async () => {
 		await openAlbum('a2');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 	});
 
 	it('switches the collection when a playlist was open (song open beats playlist context)', async () => {
 		await openPlaylist('p1');
 		expect(get(openCollection)?.kind).toBe('playlist');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 		expect(get(selectedPlaylistId)).toBeNull();
 	});
@@ -627,7 +614,7 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 	it('leaves the collection untouched when it already matches the song album', async () => {
 		await openAlbum('a1');
 		const stateBefore = get(openCollection);
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		expect(get(openCollection)).toBe(stateBefore);
 	});
 
@@ -647,39 +634,39 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 
 	it('pushes a new history entry when opening the first song from the album interior', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 		await openAlbum('a1');
 		const afterOpen = history.state.index;
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		expect(history.state.index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
 	it('replaces the current history entry when moving to another song already inside the open collection', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 		await openAlbum('a1');
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		const afterFirstSong = history.state.index;
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 		expect(history.state.index).toBe(afterFirstSong);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
 	it('pushes a new history entry when the song is outside the open collection', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2', album_id: 'a2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		]);
 		await openAlbum('a1');
 		const afterOpen = history.state.index;
 		await selectSong(
 			's2',
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2', album_id: 'a2' })
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		);
 		expect(history.state.index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s2');
@@ -687,17 +674,17 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 
 	it('lands back on the album, not the wall, after opening two tracks in a row (issue #99)', async () => {
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 		const wallIndex = history.state?.index ?? 0;
 		await openAlbum('a1');
 		const albumIndex = history.state.index;
 		expect(albumIndex).toBe(wallIndex + 1);
-		await selectSong('s1', song({ ...structuredClone(songDefaults), slug: 's1' }));
+		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 		const track1Index = history.state.index;
 		expect(track1Index).toBe(albumIndex + 1);
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 		expect(history.state.index).toBe(track1Index);
 	});
 });
@@ -745,7 +732,7 @@ describe('song selection (dead song link, issue #237)', () => {
 
 	it('leaves a valid song selection untouched', async () => {
 		selectedSongId.set('s2');
-		fetchSong.mockResolvedValue(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		fetchSong.mockResolvedValue(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		await selectSong('s2');
 
@@ -757,7 +744,7 @@ describe('song selection (dead song link, issue #237)', () => {
 		let rejectLookup: ((reason: Error) => void) | undefined;
 		songList.set([
 			song({
-				...structuredClone(songDefaults),
+				...navigableSongDefaults(),
 				slug: 's1',
 				generation_count: 2,
 				generations: [generation()]
@@ -790,7 +777,7 @@ describe('selectNeighborSong', () => {
 	it('replaces the current history entry instead of pushing', async () => {
 		await selectSong('s1');
 		const afterFirst = history.state.index;
-		await selectNeighborSong(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectNeighborSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 		expect(history.state.index).toBe(afterFirst);
 		expect(get(selectedSongId)).toBe('s2');
 	});
@@ -822,10 +809,10 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('defers selectSong instead of switching while the draft is dirty', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
@@ -834,14 +821,14 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('runs the deferred switch on Discard', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 		songList.set([
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 		discardDraft();
 		await get(pendingDirtyNavigation)?.();
 		pendingDirtyNavigation.set(null);
@@ -852,10 +839,10 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('stays put on Cancel', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 		pendingDirtyNavigation.set(null);
 
 		expect(get(selectedSongId)).toBe('s1');
@@ -865,7 +852,7 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('defers backToCollection and openLibraryWall the same way', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
 		backToCollection();
@@ -881,10 +868,10 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('defers selectNeighborSong the same way', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await selectNeighborSong(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectNeighborSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
@@ -894,10 +881,10 @@ describe('a dirty draft guards song switch / leave', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await revealPlayingSong(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }), 'g2');
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }), 'g2');
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBeNull();
@@ -915,12 +902,12 @@ describe('a dirty draft guards song switch / leave', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 		history.replaceState(null, '', '/settings/voices');
 		vi.mocked(goto).mockClear();
 
-		await revealPlayingSong(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }), 'g2');
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }), 'g2');
 
 		expect(window.location.pathname).toBe('/settings/voices');
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
@@ -935,10 +922,10 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('defers revealing a playing take the same way, without pinning the take against the old song', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await revealPlayingSong(song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }), 'g2');
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }), 'g2');
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBeNull();
@@ -948,9 +935,9 @@ describe('a dirty draft guards song switch / leave', () => {
 	it('never prompts when the draft is clean', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 
-		await selectSong('s2', song({ ...structuredClone(songDefaults), slug: 's2', id: 's2' }));
+		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(pendingDirtyNavigation)).toBeNull();
@@ -1013,7 +1000,7 @@ describe('goBack', () => {
 describe('revealPlayingSong', () => {
 	it('opens the song at its own address, then crosses again to the take', async () => {
 		history.replaceState(null, '', '/');
-		await revealPlayingSong(song({ ...structuredClone(songDefaults), slug: 's1' }), 'g1');
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		// The song's own address crosses the route boundary once; the take is
 		// its own route file too (issue #281), so pinning it crosses a second
 		// time, queued behind the first.
@@ -1036,7 +1023,7 @@ describe('revealPlayingSong', () => {
 	// stopping at '/' first.
 	it('crosses directly from another route to the song address, with no detour through /', async () => {
 		history.replaceState(null, '', '/settings');
-		await revealPlayingSong(song({ ...structuredClone(songDefaults), slug: 's1' }), 'g1');
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		await vi.waitFor(() =>
 			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
 		);
@@ -1057,10 +1044,10 @@ describe('initNavigation', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 		vi.mocked(updateSong).mockResolvedValue(
-			song({ ...structuredClone(songDefaults), slug: 's1', lyrics: 'unsaved edit' })
+			song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
 		);
 
 		const cleanup = initNavigation();
@@ -1078,7 +1065,7 @@ describe('initNavigation', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 		let resolveSave: (value: SongItem) => void = () => undefined;
 		vi.mocked(updateSong).mockReturnValue(
@@ -1092,7 +1079,7 @@ describe('initNavigation', () => {
 		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
 		await vi.waitFor(() => expect(updateSong).toHaveBeenCalledTimes(1));
 		expect(get(selectedSongId)).toBe('s1');
-		resolveSave(song({ ...structuredClone(songDefaults), slug: 's1', lyrics: 'unsaved edit' }));
+		resolveSave(song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' }));
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
 		expect(updateSong).toHaveBeenCalledTimes(1);
@@ -1103,7 +1090,7 @@ describe('initNavigation', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 		vi.mocked(updateSong).mockRejectedValue(new Error('Network error'));
 
@@ -1119,7 +1106,7 @@ describe('initNavigation', () => {
 		history.replaceState(null, '', '/');
 		await openAlbum('a1');
 		await selectSong('s1');
-		loadSongData(song({ ...structuredClone(songDefaults), slug: 's1' }));
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 
 		const cleanup = initNavigation();
 		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
@@ -1189,9 +1176,9 @@ describe('openRailSearchTarget', () => {
 describe('album track neighbors', () => {
 	it('orders same-album tracks by track number without wrapping', () => {
 		const songs = [
-			song({ ...structuredClone(songDefaults), slug: 's1' }),
-			song({ ...structuredClone(songDefaults), slug: 's2', id: 's2', track_number: 2 }),
-			song({ ...structuredClone(songDefaults), slug: 's3', id: 's3', track_number: 3 })
+			song({ ...navigableSongDefaults(), slug: 's1' }),
+			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', track_number: 2 }),
+			song({ ...navigableSongDefaults(), slug: 's3', id: 's3', track_number: 3 })
 		];
 		expect(albumTrackNeighbors('s2', songs)).toEqual({ previous: songs[0], next: songs[2] });
 		expect(albumTrackNeighbors('s1', songs)).toEqual({ previous: null, next: songs[1] });

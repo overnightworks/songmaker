@@ -35,12 +35,14 @@ import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
 
-const playlistItemDefaults = {
-	share_slug: null,
-	entries: [
-		makePlaylistEntry({ song_title: 'Tide', album_title: 'Nachtstrom', mp3_path: 'tide.mp3' })
-	]
-} satisfies Partial<PlaylistDetailItem>;
+function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
+	return {
+		share_slug: null,
+		entries: [
+			makePlaylistEntry({ song_title: 'Tide', album_title: 'Nachtstrom', mp3_path: 'tide.mp3' })
+		]
+	};
+}
 
 class FakeAudio {
 	paused = true;
@@ -191,7 +193,7 @@ describe('PlayerBar stream boundaries', () => {
 	it('idle Play copy follows an open playlist interior', async () => {
 		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedSongId.set(null);
-		selectedPlaylistDetail.set(playlistItem(structuredClone(playlistItemDefaults)));
+		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
 		vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
 		await tick();
@@ -203,7 +205,7 @@ describe('PlayerBar stream boundaries', () => {
 		openCollection.set({ kind: 'playlist', id: 'p1' });
 		selectedSongId.set(null);
 		selectedPlaylistDetail.set(
-			playlistItem({ ...structuredClone(playlistItemDefaults), entry_count: 0, entries: [] })
+			playlistItem({ ...playablePlaylistDefaults(), entry_count: 0, entries: [] })
 		);
 		component = mount(PlayerBar, { target });
 		await tick();
@@ -213,7 +215,7 @@ describe('PlayerBar stream boundaries', () => {
 		expect(target.textContent).toContain('Night Drive');
 		expect(audioPlayer.current).toBeNull();
 
-		selectedPlaylistDetail.set(playlistItem(structuredClone(playlistItemDefaults)));
+		selectedPlaylistDetail.set(playlistItem(playablePlaylistDefaults()));
 		target.querySelector<HTMLButtonElement>('button[aria-label="Play"]')?.click();
 		await vi.waitFor(() => expect(audioPlayer.current?.songTitle).toBe('Tide'));
 		expect(target.textContent).not.toContain(LIBRARY_QUEUE_EMPTY_TITLE);

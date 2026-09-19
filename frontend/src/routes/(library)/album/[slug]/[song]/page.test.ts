@@ -75,20 +75,6 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import SongAddressHarness from './harness.svelte';
 
-const albumDefaults = { share_slug: null, cover: null } satisfies Partial<AlbumItem>;
-
-const songDefaults = {
-	id: 'song-1',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	share_slug: null
-} satisfies Partial<SongItem>;
-
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
 // the cold start below exercises the production restore path instead of a
@@ -171,14 +157,13 @@ function coldTabAt(pathname: string, search = ''): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
-	api.fetchAlbum
-		.mockReset()
-		.mockResolvedValue(album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE }));
+	api.fetchAlbum.mockReset().mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
 	api.fetchSongs.mockReset().mockResolvedValue(
 		page([
 			song({
-				...songDefaults,
+				id: 'song-1',
+				generation_count: 0,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
 				album_id: ALBUM_SLUG,
@@ -188,7 +173,8 @@ beforeEach(() => {
 	);
 	api.fetchSong.mockReset().mockResolvedValue(
 		song({
-			...songDefaults,
+			id: 'song-1',
+			generation_count: 0,
 			slug: SONG_SLUG,
 			title: TRACK_TITLE,
 			album_id: ALBUM_SLUG,
@@ -233,7 +219,8 @@ describe('/album/<slug>/<song-slug> opened cold', () => {
 		api.fetchSongs.mockResolvedValue(
 			page([
 				song({
-					...songDefaults,
+					id: 'song-1',
+					generation_count: 0,
 					slug: SONG_SLUG,
 					title: TRACK_TITLE,
 					album_id: ALBUM_SLUG,
@@ -308,9 +295,7 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 	it('shows the song after Try again once the failure is over', async () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		api.fetchAlbum.mockResolvedValue(
-			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
-		);
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 
 		requireElement(target, 'button.address-action').click();
 
@@ -322,9 +307,7 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
-		api.fetchAlbum.mockResolvedValue(
-			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
-		);
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));

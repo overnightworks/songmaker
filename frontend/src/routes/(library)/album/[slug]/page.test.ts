@@ -65,8 +65,6 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import AlbumAddressHarness from './harness.svelte';
 
-const albumDefaults = { share_slug: null, cover: null } satisfies Partial<AlbumItem>;
-
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
 // the cold start below exercises the production restore path instead of a
@@ -145,9 +143,7 @@ function coldTabAt(pathname: string): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
-	api.fetchAlbum
-		.mockReset()
-		.mockResolvedValue(album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE }));
+	api.fetchAlbum.mockReset().mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
 	api.fetchSongs.mockReset().mockResolvedValue(
 		page([
@@ -232,9 +228,7 @@ describe('/album/<slug> opened cold', () => {
 	});
 
 	it('opens the addressed album even when the browse listing does not carry it', async () => {
-		api.fetchAlbums.mockResolvedValue(
-			page([album({ ...albumDefaults, id: 'other', title: 'Other Album' })])
-		);
+		api.fetchAlbums.mockResolvedValue(page([album({ id: 'other', title: 'Other Album' })]));
 
 		const target = openAddress();
 
@@ -258,9 +252,7 @@ describe('/album/<slug> whose album cannot be reached', () => {
 	it('shows the album after Try again once the failure is over', async () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		api.fetchAlbum.mockResolvedValue(
-			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
-		);
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 
 		requireElement(target, 'button.address-action').click();
 
@@ -273,9 +265,7 @@ describe('/album/<slug> whose album cannot be reached', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
-		api.fetchAlbum.mockResolvedValue(
-			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
-		);
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));

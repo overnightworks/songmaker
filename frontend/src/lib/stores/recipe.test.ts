@@ -29,14 +29,16 @@ import {
 	takesPerGenerate
 } from './recipe';
 
-const generationDefaults = {
-	generation_params: {
-		inference_steps: 8,
-		guidance_scale: 1.5,
-		task_type: 'text2music',
-		seed: 7
-	}
-} satisfies Partial<GenerationItem>;
+function requestedRecipeDefaults(): Partial<GenerationItem> {
+	return {
+		generation_params: {
+			inference_steps: 8,
+			guidance_scale: 1.5,
+			task_type: 'text2music',
+			seed: 7
+		}
+	};
+}
 
 describe('recipeChips', () => {
 	it('projects the ten labeled chips from editor and recipe state', () => {
@@ -126,7 +128,7 @@ describe('recipeChips', () => {
 
 	it('shows the mode and source take when a source is picked', () => {
 		const gen = generation({
-			...structuredClone(generationDefaults),
+			...requestedRecipeDefaults(),
 			version_number: 2,
 			generation_number: 3
 		});
@@ -214,7 +216,7 @@ describe('recipe session state', () => {
 	});
 
 	it('setSourceFromGeneration opens the Recipe panel and resets a repaint range', () => {
-		const gen = generation(structuredClone(generationDefaults));
+		const gen = generation(requestedRecipeDefaults());
 		setSourceFromGeneration(gen, 'repaint');
 		expect(get(sourceGeneration)).toBe(gen);
 		expect(get(sourceMode)).toBe('repaint');
@@ -222,13 +224,13 @@ describe('recipe session state', () => {
 	});
 
 	it('clearSource removes the picked take', () => {
-		setSourceFromGeneration(generation(structuredClone(generationDefaults)), 'cover');
+		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'cover');
 		clearSource();
 		expect(get(sourceGeneration)).toBeNull();
 	});
 
 	it('applyAgainFromGeneration stages reusable params and the seed without picking a source', () => {
-		applyAgainFromGeneration(generation(structuredClone(generationDefaults)));
+		applyAgainFromGeneration(generation(requestedRecipeDefaults()));
 		expect(get(sourceGeneration)).toBeNull();
 		expect(applyGenerationSettings).toHaveBeenCalledWith({
 			inference_steps: 8,
@@ -241,7 +243,7 @@ describe('recipe session state', () => {
 	it('resetRecipeSourceForSong clears the source and closes both views but keeps the model', () => {
 		recipeModel.set('turbo');
 		takesPerGenerate.set(3);
-		setSourceFromGeneration(generation(structuredClone(generationDefaults)), 'repaint');
+		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'repaint');
 		coWriterOpen.set(true);
 		resetRecipeSourceForSong();
 		expect(get(sourceGeneration)).toBeNull();

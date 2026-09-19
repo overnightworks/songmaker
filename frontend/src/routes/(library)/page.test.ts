@@ -82,18 +82,6 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import { goto } from '$app/navigation';
 import LegacySongQueryHarness from './harness.svelte';
 
-const songDefaults = {
-	album_title: 'Anfield',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	share_slug: null
-} satisfies Partial<SongItem>;
-
 // The live stream the workspace bootstrap waits for -- same fake as the
 // sibling address suites (issue #276): emitting `hello` is all it takes to
 // make the real ResourceSyncController run its snapshot load.
@@ -182,7 +170,8 @@ beforeEach(() => {
 	api.fetchSongs.mockReset().mockResolvedValue(page([]));
 	api.fetchSong.mockReset().mockResolvedValue(
 		song({
-			...songDefaults,
+			album_title: 'Anfield',
+			generation_count: 0,
 			id: SONG_ID,
 			slug: SONG_SLUG,
 			title: TRACK_TITLE,
@@ -221,7 +210,8 @@ describe('a legacy /?song= address redirects', () => {
 	it('resolves the id and replaces the address with the canonical song address', async () => {
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -245,7 +235,7 @@ describe('a legacy /?song= address redirects', () => {
 		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -304,7 +294,8 @@ describe('a legacy /?song= address redirects', () => {
 
 		resolveFetch?.(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -359,7 +350,8 @@ describe('a legacy /?song= address whose history.state already carries the answe
 		);
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -425,7 +417,8 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Song service is down'));
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -451,7 +444,8 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -469,7 +463,8 @@ describe('a legacy /?song=&gen= address whose take is gone', () => {
 		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
+				generation_count: 0,
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,
@@ -514,7 +509,7 @@ describe('a legacy /?song=&gen= address whose take is gone', () => {
 		coldTabAt(`?song=${SONG_ID}&gen=${GENERATION_ID}`);
 		api.fetchSong.mockResolvedValue(
 			song({
-				...songDefaults,
+				album_title: 'Anfield',
 				id: SONG_ID,
 				slug: SONG_SLUG,
 				title: TRACK_TITLE,

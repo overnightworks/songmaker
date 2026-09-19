@@ -30,12 +30,7 @@ import { ApiError } from '$lib/api/fetch';
 import { clearAuth, currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
-import type {
-	AuthUser,
-	GenerationCreatedResourceEvent,
-	GenerationItem,
-	SongItem
-} from '$lib/api/types';
+import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
@@ -57,25 +52,6 @@ import {
 	stopLibraryResourceSync,
 	waitForResourceReady
 } from './resourceSync';
-
-const genDefaults = {
-	seed: 1,
-	share_slug: null,
-	model_mode: 'sft'
-} satisfies Partial<GenerationItem>;
-
-const songDefaults = {
-	slug: 'track',
-	title: 'Track',
-	bpm: 120,
-	audio_duration: 180,
-	key_scale: 'Am',
-	generation_params: null,
-	generation_count: 0,
-	best_scores: null,
-	best_rating: null,
-	share_slug: null
-} satisfies Partial<SongItem>;
 
 type ResourceSyncDeps = ConstructorParameters<typeof ResourceSyncController>[0];
 type ResourceEventSource = ReturnType<ResourceSyncDeps['createEventSource']>;
@@ -189,10 +165,13 @@ function setup(options?: {
 		options?.fetchSong ??
 		(async (songId: string) =>
 			song({
-				...songDefaults,
+				slug: 'track',
+				title: 'Track',
 				id: songId,
 				generation_count: 1,
-				generations: [gen({ ...genDefaults, id: 'g-from-server', mp3_path: 'g-from-server.mp3' })]
+				generations: [
+					gen({ seed: 1, model_mode: 'sft', id: 'g-from-server', mp3_path: 'g-from-server.mp3' })
+				]
 			}));
 	const controller = new ResourceSyncController(
 		{
@@ -278,9 +257,12 @@ describe('resource sync interleavings', () => {
 			loadSnapshot: async () => {
 				snapshotSongs.push(
 					song({
-						...songDefaults,
+						slug: 'track',
+						title: 'Track',
 						generation_count: 1,
-						generations: [gen({ ...genDefaults, id: 'g-before', mp3_path: 'g-before.mp3' })]
+						generations: [
+							gen({ seed: 1, model_mode: 'sft', id: 'g-before', mp3_path: 'g-before.mp3' })
+						]
 					})
 				);
 				return true;
@@ -304,9 +286,10 @@ describe('resource sync interleavings', () => {
 			loadSnapshot: () => gate.promise,
 			fetchSong: async () =>
 				song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-mid', mp3_path: 'g-mid.mp3' })]
+					generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-mid', mp3_path: 'g-mid.mp3' })]
 				})
 		});
 		controller.start();
@@ -327,9 +310,12 @@ describe('resource sync interleavings', () => {
 			loadSnapshot: () => gate.promise,
 			fetchSong: async () =>
 				song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-during', mp3_path: 'g-during.mp3' })]
+					generations: [
+						gen({ seed: 1, model_mode: 'sft', id: 'g-during', mp3_path: 'g-during.mp3' })
+					]
 				})
 		});
 		controller.start();
@@ -354,11 +340,14 @@ describe('resource sync interleavings', () => {
 			fetchSong: async () =>
 				snapshotDone
 					? song({
-							...songDefaults,
+							slug: 'track',
+							title: 'Track',
 							generation_count: 1,
-							generations: [gen({ ...genDefaults, id: 'g-live', mp3_path: 'g-live.mp3' })]
+							generations: [
+								gen({ seed: 1, model_mode: 'sft', id: 'g-live', mp3_path: 'g-live.mp3' })
+							]
 						})
-					: song(songDefaults)
+					: song({ slug: 'track', title: 'Track', generation_count: 0 })
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -451,18 +440,28 @@ describe('resource sync owner', () => {
 			listLoadedSongIds: () => loaded,
 			fetchSong: async (songId) =>
 				song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
 					id: songId,
 					generations:
 						songId === seenSongId
 							? Array.from({ length: RESOURCE_SYNC_TRACKED_EVENT_LIMIT + 1 }, (_, index) =>
 									gen({
-										...genDefaults,
+										seed: 1,
+										model_mode: 'sft',
 										id: `g-seen-${index + 1}`,
 										mp3_path: `g-seen-${index + 1}.mp3`
 									})
 								)
-							: [gen({ ...genDefaults, id: `g-${songId}`, mp3_path: `g-${songId}.mp3` })]
+							: [
+									gen({
+										seed: 1,
+										model_mode: 'sft',
+										id: `g-${songId}`,
+										mp3_path: `g-${songId}.mp3`
+									})
+								]
 				})
 		});
 		controller.start();
@@ -502,11 +501,12 @@ describe('resource sync owner', () => {
 			fetchSong: async () =>
 				snapshotDone
 					? song({
-							...songDefaults,
+							slug: 'track',
+							title: 'Track',
 							generation_count: 1,
-							generations: [gen({ ...genDefaults, id: 'g-dup', mp3_path: 'g-dup.mp3' })]
+							generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-dup', mp3_path: 'g-dup.mp3' })]
 						})
-					: song(songDefaults)
+					: song({ slug: 'track', title: 'Track', generation_count: 0 })
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -529,9 +529,10 @@ describe('resource sync owner', () => {
 				calls += 1;
 				if (calls === 1) return first.promise;
 				return song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
 					generation_count: 1,
-					generations: [gen({ ...genDefaults, id: 'g-new', mp3_path: 'g-new.mp3' })]
+					generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-new', mp3_path: 'g-new.mp3' })]
 				});
 			}
 		});
@@ -546,9 +547,10 @@ describe('resource sync owner', () => {
 		await flush();
 		first.resolve(
 			song({
-				...songDefaults,
+				slug: 'track',
+				title: 'Track',
 				generation_count: 1,
-				generations: [gen({ ...genDefaults, id: 'g-old', mp3_path: 'g-old.mp3' })]
+				generations: [gen({ seed: 1, model_mode: 'sft', id: 'g-old', mp3_path: 'g-old.mp3' })]
 			})
 		);
 		await flush();
@@ -704,11 +706,14 @@ describe('resource sync owner', () => {
 			if (!response) throw new Error(`Missing response for ${songId}`);
 			response.resolve(
 				song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
 					id: songId,
 					generations: [
 						gen({
-							...genDefaults,
+							seed: 1,
+							model_mode: 'sft',
 							id: `g-${songId}`,
 							mp3_path: `g-${songId}.mp3`,
 							song_id: songId
@@ -723,11 +728,14 @@ describe('resource sync owner', () => {
 			if (!response) throw new Error(`Missing response for ${songId}`);
 			response.resolve(
 				song({
-					...songDefaults,
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
 					id: songId,
 					generations: [
 						gen({
-							...genDefaults,
+							seed: 1,
+							model_mode: 'sft',
 							id: `g-${songId}`,
 							mp3_path: `g-${songId}.mp3`,
 							song_id: songId
@@ -774,8 +782,10 @@ describe('resource sync owner', () => {
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
 				return song({
-					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
@@ -802,7 +812,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		const retry = controller.retry();
 		controller.stop();
-		pending.resolve(song(songDefaults));
+		pending.resolve(song({ slug: 'track', title: 'Track', generation_count: 0 }));
 
 		expect(await retry).toBe(false);
 	});
@@ -1001,8 +1011,10 @@ describe('resource sync owner', () => {
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
 				return song({
-					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
@@ -1053,8 +1065,10 @@ describe('resource sync owner', () => {
 			fetchSong: async () => {
 				if (fail) throw new Error('boom');
 				return song({
-					...songDefaults,
-					generations: [gen({ ...genDefaults, mp3_path: 'g1.mp3' })]
+					slug: 'track',
+					title: 'Track',
+					generation_count: 0,
+					generations: [gen({ seed: 1, model_mode: 'sft', mp3_path: 'g1.mp3' })]
 				});
 			}
 		});
@@ -1228,7 +1242,8 @@ describe('library resource sync wiring', () => {
 					if (path === '/api/songs/selected-song') {
 						return {
 							ok: true,
-							json: async () => song({ ...songDefaults, id: 'selected-song' })
+							json: async () =>
+								song({ slug: 'track', title: 'Track', generation_count: 0, id: 'selected-song' })
 						};
 					}
 					throw new Error(`Unexpected request: ${path}`);
