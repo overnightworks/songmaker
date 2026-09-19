@@ -299,7 +299,7 @@ export async function openLibraryWall(): Promise<void> {
 	});
 }
 
-export interface AlbumTrackNeighbors {
+interface AlbumTrackNeighbors {
 	previous: SongItem | null;
 	next: SongItem | null;
 }
@@ -344,7 +344,7 @@ export function albumTrackNeighbors(
 // caller (none of which await this) leaking an unhandled rejection. Any
 // other failure (network, 5xx) is not this function's to swallow and
 // propagates to the caller.
-export async function loadSongContext(songId: string): Promise<void> {
+async function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
 	try {
 		await ensureGenerationsLoaded(songId);
@@ -443,14 +443,6 @@ export function selectNeighborSong(song: SongItem): Promise<void> {
 // the switch (see the note on selectSong above). Unlike revealPlayingSong,
 // the row carries only the song's id, not a hydrated SongItem, matching
 // selectSong's own knownSong-optional shape.
-export function revealSharedTake(songId: string, generationId: string): Promise<void> {
-	const historyMode = selectSongHistoryMode(songId, undefined);
-	return guardDirtyNavigation(async () => {
-		await applySelectedSong(songId, undefined, historyMode, 'write');
-		selectedGenerationId.set(generationId);
-		persistLibraryHistory();
-	});
-}
 
 function hydrateSongIntoLibrary(song: SongItem): void {
 	if (!get(songList).some((item) => item.id === song.id)) {
@@ -466,19 +458,6 @@ function hydrateSongIntoLibrary(song: SongItem): void {
 		.catch(() => undefined);
 }
 
-export function deselectSong(): void {
-	goBack();
-}
-
-export function backToSong(): void {
-	suppressPush = true;
-	playerClearGeneration();
-	openTakesTab();
-	setLibrarySurface('detail');
-	suppressPush = false;
-	void replaceLibraryHistory();
-}
-
 export function clearGenerationSelection(): void {
 	playerClearGeneration();
 }
@@ -488,15 +467,11 @@ export function navigateToSongTab(tab: DetailTab): void {
 	detailTab.set(tab);
 }
 
-export function switchTab(tab: DetailTab): void {
-	detailTab.set(tab);
-}
-
 export function openWriteTab(): void {
 	detailTab.set('write');
 }
 
-export function openTakesTab(): void {
+function openTakesTab(): void {
 	detailTab.set('takes');
 }
 

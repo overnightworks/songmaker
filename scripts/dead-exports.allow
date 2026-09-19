@@ -1,44 +1,14 @@
 # Patterns match repository-relative path:export; every exception needs an owner/reason.
 *:*ForTests # Deliberate reset/control seams for isolated tests.
-frontend/src/lib/utils/lyrics-align.worker.ts:* # Worker entry reached through new Worker(new URL(...)).
-frontend/src/routes/*:load # SvelteKit route entry point.
 frontend/src/routes/*:ssr # SvelteKit route configuration.
 frontend/src/routes/*:prerender # SvelteKit route configuration.
 
-# Existing exports outside A1; keep entries exact so new names fail the gate.
-frontend/src/lib/actions/kineticScroll.ts:KineticScrollAxis # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/actions/kineticScroll.ts:KineticScrollOptions # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/actions/kineticScroll.ts:DRAG_THRESHOLD_PX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/api/fetch.ts:API_TIMEOUT_MS # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/api/fetch.ts:isRateLimited # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/api/fetch.ts:safeInternalPath # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/api/generations.ts:RepaintOptions # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/api/generations.ts:CoverOptions # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/api/queue-streams.ts:QueueStreamPinState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/constants.ts:LORA_TRAINING_QUEUE_POSITION_TEMPLATE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:LORA_TRAINING_EPOCH_TEMPLATE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:LORA_TRAINING_REMAINING_TEMPLATE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:COLLECTION_ROW_PLAY_ACTION # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:COLLECTION_ROW_PAUSE_ACTION # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:EDITOR_TABS_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:EDITOR_TAB_WRITE_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:RECIPE_SAVE_AS_PRESET_NAME_PROMPT # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_SEARCH_ERROR # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_LOAD_MORE # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:ALBUM_COVER_REPLACE_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:ALBUM_COVER_REMOVE_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_ROW_COLLAPSE_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_ROW_EXPAND_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_ROW_COMPACT_MAX_PX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/constants.ts:LIBRARY_ROW_COMPACT_MEDIA # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_ALBUMS_EMPTY # #928 A2: existing const without a production consumer; removal is outside A1.
+# Deferred shares/archive slice (#928 C); keep entries exact so new names fail the gate.
 frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_TOGGLE_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_LOADING # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_ERROR # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_UNARCHIVE_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_PLAYLISTS_EMPTY # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:PLAYLIST_ENTRY_OVERFLOW_LABEL # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
 frontend/src/lib/constants.ts:LIBRARY_SHARES_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_SHARES_COUNT_SEP # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_SHARED_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
@@ -52,131 +22,8 @@ frontend/src/lib/constants.ts:LIBRARY_SHARES_FILTER_LABEL # #928 C / finding 1: 
 frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPES # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPE_LABELS # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPE_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_NEW_PLAYLIST_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/constants.ts:LIBRARY_NEW_ALBUM_LABEL # #928 A2: existing const without a production consumer; removal is outside A1.
 frontend/src/lib/constants.ts:librarySharesStatusLabel # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants/acestep-params.ts:ParamDescription # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/constants/now-playing.ts:TakeMetaParts # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/contexts/generation-actions.ts:GENERATION_ACTIONS_KEY # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/routes/addresses.ts:isTakeRoutePath # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/audioPlayer.svelte.ts:PlayerStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/audioPlayer.svelte.ts:StreamEndReason # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/httpRange.ts:ByteRange # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/offline.ts:OFFLINE_STREAM_PATH_PREFIX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:OFFLINE_MANIFEST_PATH_PREFIX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:OFFLINE_PLAYLIST_META_PATH_PREFIX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:OFFLINE_STREAM_META_VERSION # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:OfflinePlaylistStreamMeta # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/offline.ts:CacheProgressMessage # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/offline.ts:manifestCacheKey # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:offlinePlaylistMetaKey # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:isOfflinePlaylistStreamMeta # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:playlistOfflineMeta # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:isLiveAudioPath # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/services/offline.ts:isOfflineAudioPath # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:isOfflineManifestPath # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:buildCacheStreamMessage # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:buildUncacheStreamMessage # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/offline.ts:ProgressCallback # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/offline.ts:PinCallback # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/services/offline.ts:isStreamSaved # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/services/queueStreamEngine.ts:streamTrackToPlaybackInfo # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/share/sharedCollection.ts:SharedCollectionKind # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/adminPolling.ts:PollingStore # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/adminPolling.ts:PollingOptions # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/auth.ts:AuthFailureKind # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/auth.ts:AuthNotice # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/editor.ts:SongData # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/editor.ts:editorState # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/editor.ts:loadVersions # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/health.ts:refreshHealth # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/jobs.ts:ActiveJob # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/jobs.ts:stopTracking # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/libraryContext.ts:LibrarySurface # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:isLibrarySort # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/libraryContext.ts:HistoryWriteMode # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:AlbumAddress # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:SongAddress # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:TakeAddress # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:PlaylistAddress # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:LegacySongQueryAddress # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryContext.ts:albumIsExpanded # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/libraryData.ts:retainRicherSong # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/libraryData.ts:AlbumSongsLoadStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryData.ts:AlbumSongsLoadState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryData.ts:AllAlbumsLoadStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryData.ts:AllAlbumsLoadState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/libraryData.ts:updateGenerationScores # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/librarySearch.ts:LibrarySearchStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/librarySearch.ts:LibrarySearchState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/librarySearch.ts:LibraryBrowseState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/librarySearch.ts:LibraryAlbumGroup # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/librarySearch.ts:groupSearchHits # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/librarySearch.ts:syncLibrarySearch # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/librarySearch.ts:retryLibrarySearch # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/librarySearch.ts:loadMoreLibrarySearch # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/librarySearch.ts:changeLibrarySort # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_DRAFT # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_QUEUED # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_PREPROCESSING # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_TRAINING # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_EXPORTING # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_READY # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:LORA_STATUS_FAILED # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/loras.ts:LORA_ACTIVE_STATUSES # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/loras.ts:readyLoras # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/loras.ts:applyLoraUpdate # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/loras.ts:getLoraById # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/navigation.ts:AlbumTrackNeighbors # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/navigation.ts:loadSongContext # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/navigation.ts:revealSharedTake # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/navigation.ts:deselectSong # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/navigation.ts:backToSong # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/navigation.ts:switchTab # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/navigation.ts:openTakesTab # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/playbackSettings.ts:DEFAULT_LIBRARY_TAKE_POOL # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/playbackSettings.ts:DEFAULT_DESKTOP_NOW_PLAYING_SURFACE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:selectedGeneration # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/player.ts:filteredSongs # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/stores/player.ts:selectAlbum # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/player.ts:PlaylistQueueSource # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:QueueContext # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:PlayStartNotice # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:toPlaybackInfo # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:playGeneration # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:playLibraryFromGeneration # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:playLibrary # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:IdlePlayTarget # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:currentPlaylistIndex # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:NowPlayingSurface # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:NowPlayingPanel # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/player.ts:playAlbumFromGeneration # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:playPlaylistFrom # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/player.ts:handlePlaybackEnded # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/playlists.ts:PlaylistLoadStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/playlists.ts:PlaylistLoadState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchPageHref # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchPage # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchResult # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchGroup # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RailSearchState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/railSearch.ts:RAIL_SEARCH_PAGES # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/recipe.ts:PendingSource # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/recipe.ts:recipeParamsFromTake # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/recipe.ts:RecipeChipInput # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceSyncStatus # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceAuthProbe # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceSyncState # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceSyncTrackedSizes # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceEventSource # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceSyncDeps # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # #928 A2: existing internally referenced class; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/resourceSync.ts:probeResourceAuth # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/selection.ts:enterSelectionMode # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/selection.ts:exitSelectionMode # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/stores/selection.ts:selectAll # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/selection.ts:isSelected # #928 A2: existing function without a production consumer; removal is outside A1.
+frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # Dependency-injected sync controller: isolated race, reconnect, authorization and bounded-buffer tests without the singleton browser/network owner.
 frontend/src/lib/stores/shares.ts:ShareLoadStatus # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:ShareCountState # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:ShareInventoryState # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
@@ -192,48 +39,3 @@ frontend/src/lib/stores/shares.ts:refreshShareCount # #928 C / finding 1: shares
 frontend/src/lib/stores/shares.ts:loadShareInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:loadMoreShares # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:setShareTypeFilter # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/toast.ts:ToastType # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/toast.ts:ToastAction # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/toast.ts:Toast # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/ui.ts:Theme # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/stores/ui.ts:RAIL_COLLAPSED_STORAGE_KEY # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/ui.ts:RAIL_WIDTH_STORAGE_KEY # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/ui.ts:LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/stores/ui.ts:clampRailWidth # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/styles/compact-ui.ts:COMPACT_UI_STYLE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/compact-layout.ts:readCompactLayout # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/contrast.ts:WCAG_AA_NORMAL_TEXT_RATIO # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/utils/contrast.ts:WCAG_AA_NON_TEXT_RATIO # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/utils/contrast.ts:hexToRgb # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/contrast.ts:relativeLuminance # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/contrast.ts:contrastRatio # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/utils/cowriter-ui.ts:CowriterToolCallTarget # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/diff.ts:DiffLine # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/diff.ts:DiffIndex # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/diff.ts:computeDiff # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/escape-level-up.ts:hasOpenOverlay # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/escape-level-up.ts:EscapeLevelUpTarget # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/focus-trap.ts:focusableElements # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/format.ts:songCountLabel # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/lyrics-align.ts:LyricLineInterval # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/memory-proposals.ts:parseMemoryProposals # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/memory-proposals.ts:memoryItemForScope # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/recency.ts:CREATED_SORT_LABELS # #928 A2: existing const without a production consumer; removal is outside A1.
-frontend/src/lib/utils/recency.ts:parseCreatedAt # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/recency.ts:CREATED_AGE_PREFIX # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/recency.ts:formatRelativeAge # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/recency.ts:formatCreatedAge # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/utils/recency.ts:formatExactLocalTime # #928 A2: existing function without a production consumer; removal is outside A1.
-frontend/src/lib/utils/recipe-summary.ts:RecipeEntry # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/recipe-summary.ts:RecipeGroup # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/scores.ts:ScoreThreshold # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/scores.ts:SCORE_THRESHOLDS # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/scores.ts:ScoreKey # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/scores.ts:ScoreMetric # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/scores.ts:SCORE_METRICS # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/scores.ts:ScoreReading # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/scores.ts:QUALITY_FLAG_SILENCE_SECONDS # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/scores.ts:QUALITY_FLAG_VOCAL_FAILURE_COHERENCE # #928 A2: existing internally referenced const; defer de-exporting to the live-module cleanup.
-frontend/src/lib/utils/scores.ts:QualityFlag # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/visualizer.ts:Particle # #928 A2: existing module-local type; review removing its export with the other live-module exports.
-frontend/src/lib/utils/visualizer.ts:lerpColor # #928 A2: existing internally referenced function; defer de-exporting to the live-module cleanup.

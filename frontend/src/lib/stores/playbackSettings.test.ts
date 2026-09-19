@@ -1,8 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import {
-	DEFAULT_DESKTOP_NOW_PLAYING_SURFACE,
-	DEFAULT_LIBRARY_TAKE_POOL,
 	LIBRARY_TAKE_POOL_LABELS,
 	LIBRARY_TAKE_POOLS,
 	setDesktopNowPlayingSurface,
@@ -28,8 +26,10 @@ describe('library take pool trio', () => {
 		expect(LIBRARY_TAKE_POOL_LABELS.all).toBe('All takes');
 	});
 
-	it('defaults to Picks', () => {
-		expect(DEFAULT_LIBRARY_TAKE_POOL).toBe('picks');
+	it('defaults to Picks', async () => {
+		vi.resetModules();
+		const fresh = await import('./playbackSettings');
+		expect(get(fresh.libraryTakePool)).toBe('picks');
 	});
 
 	it('reads a legacy stored "keeps" pool as "mix" and rewrites storage', async () => {
@@ -54,8 +54,10 @@ describe('library take pool trio', () => {
 });
 
 describe('remembered desktop Now Playing surface', () => {
-	it('defaults to the docked panel', () => {
-		expect(DEFAULT_DESKTOP_NOW_PLAYING_SURFACE).toBe('docked');
+	it('defaults to the docked panel', async () => {
+		vi.resetModules();
+		const fresh = await import('./playbackSettings');
+		expect(get(fresh.desktopNowPlayingSurface)).toBe('docked');
 	});
 
 	it('persists the chosen surface', () => {

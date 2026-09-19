@@ -7,7 +7,7 @@ import {
 } from '$lib/constants';
 import { addToast, toasts } from '$lib/stores/toast';
 
-export const API_TIMEOUT_MS = 30_000;
+const API_TIMEOUT_MS = 30_000;
 
 export class ApiError extends Error {
 	constructor(
@@ -39,10 +39,6 @@ async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
 	} catch {
 		return { detail: '', responseDetail: '' };
 	}
-}
-
-export function isRateLimited(err: unknown): boolean {
-	return err instanceof ApiError && err.status === 429;
 }
 
 export function isNotFound(err: unknown): boolean {
@@ -104,12 +100,10 @@ function isSessionLostResponse(status: number, path: string): boolean {
 
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
 
-// The one owner of "is this a safe internal path" -- write and read sides
-// (a future login page reading SESSION_LOST_REDIRECT_PARAM back) must both
-// call this. An origin check catches a scheme-relative escape and a
-// leading backslash (URL parsing treats `\` as `/` for http(s)) in one
-// pass, where a slash-pattern regex would miss them.
-export function safeInternalPath(candidate: string): string {
+// Normalize the current address before carrying it through the login redirect.
+// A pathname can start with //; resolving it catches that foreign-origin escape
+// as well as backslashes, which URL parsing treats as host separators.
+function safeInternalPath(candidate: string): string {
 	try {
 		const resolved = new URL(candidate, window.location.origin);
 		if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;

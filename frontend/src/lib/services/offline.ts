@@ -4,16 +4,14 @@ import { parseRangeHeader } from './httpRange';
 /** Cache name shared with the service worker's fetch handler. */
 export const OFFLINE_STREAMS_CACHE = 'offline-streams';
 
-const LIVE_AUDIO_PATH_PREFIX = '/audio/';
-const QUEUE_STREAM_AUDIO_PATH = /^\/api\/queue-streams\/[^/]+\/audio\/?$/;
 const SERVICE_WORKER_INACTIVE = 'Service worker not active — cannot save for offline';
-export const OFFLINE_STREAM_PATH_PREFIX = '/offline/stream/';
-export const OFFLINE_MANIFEST_PATH_PREFIX = '/offline/manifest/';
-export const OFFLINE_PLAYLIST_META_PATH_PREFIX = '/offline/meta/playlist/';
-export const OFFLINE_STREAM_META_VERSION = 1;
+const OFFLINE_STREAM_PATH_PREFIX = '/offline/stream/';
+const OFFLINE_MANIFEST_PATH_PREFIX = '/offline/manifest/';
+const OFFLINE_PLAYLIST_META_PATH_PREFIX = '/offline/meta/playlist/';
+const OFFLINE_STREAM_META_VERSION = 1;
 const OFFLINE_UNAVAILABLE_STATUS = 503;
 
-export interface OfflinePlaylistStreamMeta {
+interface OfflinePlaylistStreamMeta {
 	playlist_id: string;
 	snapshot_id: string;
 	stream_url: string;
@@ -37,7 +35,7 @@ export interface UncacheStreamMessage {
 	manifestUrl: string;
 }
 
-export interface CacheProgressMessage {
+interface CacheProgressMessage {
 	type: 'CACHE_PROGRESS';
 	cached: number;
 	total: number | null;
@@ -48,7 +46,7 @@ export interface CacheProgressMessage {
 // ── Pure message builders (testable without browser APIs) ──────────────────
 
 /** Derives the cache key used to store a stream's manifest JSON. */
-export function manifestCacheKey(snapshotId: string): string {
+function manifestCacheKey(snapshotId: string): string {
 	return `${OFFLINE_MANIFEST_PATH_PREFIX}${snapshotId}`;
 }
 
@@ -57,11 +55,11 @@ export function offlineStreamUrl(snapshotId: string): string {
 	return `${OFFLINE_STREAM_PATH_PREFIX}${snapshotId}`;
 }
 
-export function offlinePlaylistMetaKey(playlistId: string): string {
+function offlinePlaylistMetaKey(playlistId: string): string {
 	return `${OFFLINE_PLAYLIST_META_PATH_PREFIX}${playlistId}`;
 }
 
-export function isOfflinePlaylistStreamMeta(value: unknown): value is OfflinePlaylistStreamMeta {
+function isOfflinePlaylistStreamMeta(value: unknown): value is OfflinePlaylistStreamMeta {
 	if (value === null || typeof value !== 'object') return false;
 	const record = value as Record<string, unknown>;
 	return (
@@ -77,10 +75,7 @@ export function isOfflinePlaylistStreamMeta(value: unknown): value is OfflinePla
 	);
 }
 
-export function playlistOfflineMeta(
-	playlistId: string,
-	snapshotId: string
-): OfflinePlaylistStreamMeta {
+function playlistOfflineMeta(playlistId: string, snapshotId: string): OfflinePlaylistStreamMeta {
 	return {
 		playlist_id: playlistId,
 		snapshot_id: snapshotId,
@@ -103,18 +98,14 @@ export function requestPathname(url: string): string {
 	}
 }
 
-export function isLiveAudioPath(pathname: string): boolean {
-	return pathname.startsWith(LIVE_AUDIO_PATH_PREFIX) || QUEUE_STREAM_AUDIO_PATH.test(pathname);
-}
-
-export function isOfflineAudioPath(pathname: string): boolean {
+function isOfflineAudioPath(pathname: string): boolean {
 	return (
 		pathname.startsWith(OFFLINE_STREAM_PATH_PREFIX) &&
 		pathname.length > OFFLINE_STREAM_PATH_PREFIX.length
 	);
 }
 
-export function isOfflineManifestPath(pathname: string): boolean {
+function isOfflineManifestPath(pathname: string): boolean {
 	return (
 		pathname.startsWith(OFFLINE_MANIFEST_PATH_PREFIX) &&
 		pathname.length > OFFLINE_MANIFEST_PATH_PREFIX.length
@@ -158,7 +149,7 @@ export async function responseForOfflineCacheHit(
 }
 
 /** Builds the CACHE_STREAM message posted to the service worker. */
-export function buildCacheStreamMessage(manifest: QueueStreamManifest): CacheStreamMessage {
+function buildCacheStreamMessage(manifest: QueueStreamManifest): CacheStreamMessage {
 	return {
 		type: 'CACHE_STREAM',
 		manifestUrl: manifestCacheKey(manifest.snapshot_id),
@@ -169,10 +160,7 @@ export function buildCacheStreamMessage(manifest: QueueStreamManifest): CacheStr
 }
 
 /** Builds the UNCACHE_STREAM message posted to the service worker. */
-export function buildUncacheStreamMessage(
-	streamUrl: string,
-	snapshotId: string
-): UncacheStreamMessage {
+function buildUncacheStreamMessage(streamUrl: string, snapshotId: string): UncacheStreamMessage {
 	return {
 		type: 'UNCACHE_STREAM',
 		streamUrl,
@@ -189,19 +177,19 @@ export interface StreamProgress {
 	error?: string;
 }
 
-export type ProgressCallback = (progress: StreamProgress) => void;
+type ProgressCallback = (progress: StreamProgress) => void;
 
 /**
  * Seam for server-side pin/unpin (later phase — Story B backend integration).
  * Called after the stream body is fully cached; absence is safe — the cached
  * MP3 remains usable offline regardless of server-side snapshot TTL.
  */
-export type PinCallback = (snapshotId: string) => Promise<void>;
+type PinCallback = (snapshotId: string) => Promise<void>;
 
 // ── Cache API helpers ──────────────────────────────────────────────────────
 
 /** Returns true when the stream URL is present in the offline-streams cache. */
-export async function isStreamSaved(streamUrl: string): Promise<boolean> {
+async function isStreamSaved(streamUrl: string): Promise<boolean> {
 	if (!('caches' in globalThis)) return false;
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
 	const match = await cache.match(streamUrl);

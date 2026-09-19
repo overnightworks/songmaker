@@ -7,7 +7,7 @@
 // never used in this codebase, so the junk-callback branches from cpython
 // (which are no-ops when isjunk is None) are omitted.
 
-export interface Match {
+interface Match {
 	a: number;
 	b: number;
 	size: number;

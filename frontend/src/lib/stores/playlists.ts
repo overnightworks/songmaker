@@ -19,9 +19,9 @@ import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { addToast } from '$lib/stores/toast';
 
-export type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
 
-export interface PlaylistLoadState {
+interface PlaylistLoadState {
 	status: PlaylistLoadStatus;
 	error: string | null;
 }

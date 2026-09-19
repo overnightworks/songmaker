@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
-import { GENERATION_ACTIONS_KEY, type GenerationActions } from '$lib/contexts/generation-actions';
+import type { GenerationActions } from '$lib/contexts/generation-actions';
 import {
 	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
@@ -58,7 +58,7 @@ import { addToast } from '$lib/stores/toast';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import { playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
-import TakesList from './TakesList.svelte';
+import TakesListHarness from './tests/TakesListHarness.svelte';
 
 const playlist = {
 	id: 'p1',
@@ -238,10 +238,9 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		...overrides
 	};
 	mounted.push(
-		mount(TakesList, {
+		mount(TakesListHarness, {
 			target,
-			props,
-			context: new Map([[GENERATION_ACTIONS_KEY, mockActions()]])
+			props: { ...props, actions: mockActions() }
 		})
 	);
 	await tick();

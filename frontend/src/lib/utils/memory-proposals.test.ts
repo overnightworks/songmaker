@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
 	collectPendingProposals,
 	proposalTargetForMemory,
-	parseMemoryProposals,
 	proposalKey,
 	shouldReplaceMemoryDraft,
 	stripMemoryProposals
@@ -22,7 +21,7 @@ Thanks.`;
 
 describe('memory proposals', () => {
 	it('parses scope, target, current, and proposed bodies', () => {
-		const proposals = parseMemoryProposals(SAMPLE);
+		const proposals = collectPendingProposals([SAMPLE], []);
 		expect(proposals).toHaveLength(1);
 		expect(proposals[0]).toEqual({
 			scope: 'song',
@@ -45,7 +44,7 @@ prefer German
 prefer German, no auto-rhyme
 </proposed>
 </memory_proposal>`;
-		expect(parseMemoryProposals(text)[0]).toEqual({
+		expect(collectPendingProposals([text], [])[0]).toEqual({
 			scope: 'user',
 			targetId: null,
 			currentBody: 'prefer German',
@@ -54,7 +53,7 @@ prefer German, no auto-rhyme
 	});
 
 	it('returns no proposals for ordinary assistant text', () => {
-		expect(parseMemoryProposals('just a reply')).toEqual([]);
+		expect(collectPendingProposals(['just a reply'], [])).toEqual([]);
 		expect(stripMemoryProposals('just a reply')).toBe('just a reply');
 	});
 
@@ -71,7 +70,7 @@ prefer German, no auto-rhyme
 			song: { scope: 'song' as const, target_id: 's1', body: 'old', updated_at: null },
 			album: null
 		};
-		const proposal = parseMemoryProposals(SAMPLE)[0];
+		const proposal = collectPendingProposals([SAMPLE], [])[0];
 
 		expect(proposalTargetForMemory(proposal, bundle)).toBeNull();
 		expect(proposalTargetForMemory({ ...proposal, currentBody: 'old' }, bundle)).toBe('s1');

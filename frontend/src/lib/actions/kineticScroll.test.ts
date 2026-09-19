@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { DRAG_THRESHOLD_PX, kineticScroll, type KineticScrollAxis } from './kineticScroll';
+import { kineticScroll } from './kineticScroll';
+
+type StripAxis = 'x' | 'y';
 
 // jsdom performs no layout (clientWidth/scrollWidth are always 0) and ships
 // neither requestAnimationFrame timing nor matchMedia by default. These
@@ -56,7 +58,7 @@ function stubReducedMotion(matches: boolean) {
 	return () => onChange?.();
 }
 
-function buildStrip(axis: KineticScrollAxis, itemCount = 4) {
+function buildStrip(axis: StripAxis, itemCount = 4) {
 	const container = document.createElement('div');
 	const items: HTMLButtonElement[] = [];
 	for (let i = 0; i < itemCount; i++) {
@@ -87,7 +89,7 @@ function buildStrip(axis: KineticScrollAxis, itemCount = 4) {
 // `visible` overflow paired with a scrolling sibling axis is itself computed
 // as `auto`, so those two properties can't tell the axes apart for this
 // row/column toggle — see the reasoning on `readAxis` in kineticScroll.ts.
-function setStripAxis(container: HTMLElement, axis: KineticScrollAxis) {
+function setStripAxis(container: HTMLElement, axis: StripAxis) {
 	container.style.display = 'flex';
 	container.style.flexDirection = axis === 'y' ? 'column' : 'row';
 }
@@ -97,7 +99,7 @@ function firePointer(
 	type: 'pointerdown' | 'pointermove' | 'pointerup' | 'pointercancel',
 	opts: {
 		pos: number;
-		axis: KineticScrollAxis;
+		axis: StripAxis;
 		t: number;
 		pointerId?: number;
 		pointerType?: string;
@@ -168,7 +170,7 @@ describe('kineticScroll', () => {
 		expect(onOpen).toHaveBeenCalledExactlyOnceWith(items[1]);
 	});
 
-	it.each<KineticScrollAxis>(['x', 'y'])(
+	it.each<StripAxis>(['x', 'y'])(
 		'drags the %s axis 1:1 with the pointer once past the threshold',
 		(axis) => {
 			stubBrowserTiming();
@@ -178,11 +180,9 @@ describe('kineticScroll', () => {
 			kineticScroll(container, { itemSelector: '.item', onOpen: vi.fn() });
 
 			firePointer(container, 'pointerdown', { pos: 200, axis, t: 1000 });
-			firePointer(container, 'pointermove', { pos: 200 - (DRAG_THRESHOLD_PX + 4), axis, t: 1010 });
+			firePointer(container, 'pointermove', { pos: 190, axis, t: 1010 });
 			expect(container.classList.contains('is-dragging')).toBe(true);
-			expect(axis === 'x' ? container.scrollLeft : container.scrollTop).toBe(
-				100 + (DRAG_THRESHOLD_PX + 4)
-			);
+			expect(axis === 'x' ? container.scrollLeft : container.scrollTop).toBe(110);
 
 			firePointer(container, 'pointermove', { pos: 150, axis, t: 1040 });
 			expect(axis === 'x' ? container.scrollLeft : container.scrollTop).toBe(150);
@@ -197,11 +197,11 @@ describe('kineticScroll', () => {
 
 		firePointer(container, 'pointerdown', { pos: 200, axis: 'x', t: 1000 });
 		firePointer(container, 'pointermove', {
-			pos: 200 - (DRAG_THRESHOLD_PX - 1),
+			pos: 195,
 			axis: 'x',
 			t: 1010
 		});
-		firePointer(container, 'pointerup', { pos: 200 - (DRAG_THRESHOLD_PX - 1), axis: 'x', t: 1010 });
+		firePointer(container, 'pointerup', { pos: 195, axis: 'x', t: 1010 });
 
 		expect(container.scrollLeft).toBe(0);
 		fireClick(items[0]);
@@ -299,12 +299,12 @@ describe('kineticScroll', () => {
 
 		firePointer(container, 'pointerdown', { pos: 150, axis: 'x', t: 1100 });
 		firePointer(container, 'pointermove', {
-			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			pos: 140,
 			axis: 'x',
 			t: 1110
 		});
 		firePointer(container, 'pointerup', {
-			pos: 150 - (DRAG_THRESHOLD_PX + 4),
+			pos: 140,
 			axis: 'x',
 			t: 1110
 		});

@@ -10,7 +10,7 @@ function pluralize(count: number, noun: string): string {
 	return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-export function songCountLabel(songCount: number): string {
+function songCountLabel(songCount: number): string {
 	return pluralize(songCount, 'song');
 }
 
