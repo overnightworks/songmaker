@@ -1,8 +1,0 @@
-claim_id = "ed90b8f197d74ed4a0dbf3bd0985d7bc"
-agent = "claude-head"
-role = "builder"
-base = "9c0ca96aa72966c78d870c83a98e3a60eecf0a8f"
-branch = "claude/issue-951-job-shapes"
-scope = ["src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs/lora_training.py", "tests/test_generation_lora_integration.py", "tests/test_jobs.py", "tests/test_jobs_lora_training.py"]
-opened_commit = "990e79b6334e4bac5482518ec75093c7249e7e61"
-whole_reason = "Zwei kleine Refactors eines Audits, fünf Dateien, eine Lane"
