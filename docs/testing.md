@@ -26,34 +26,39 @@ pytest tests/ -n auto -q --cov=songmaker_cli --cov=audio_engine --cov=acestep_en
 cd frontend && pnpm check && pnpm lint && pnpm test:coverage && pnpm build
 ```
 
-## Ähnliche Funktionen finden
+## Finding similar functions
 
 `uv run --extra similarity python scripts/similar_functions.py src/ --report /tmp/similar.md`
-findet mögliche Python-Duplikate beratend: lokale Code-Embeddings und separat
-Embeddings einer Claude-Einzeilen-Zusammenfassung. Methoden sind enthalten;
-`__init__`, reine Delegation und Körper unter drei normalisierten Zeilen nicht.
-`--include-tests` nimmt zusätzlich `tests/` auf. `--code-threshold` und
-`--summary-threshold` wählen Paare ab dem jeweiligen Cosinuswert (je 0.90);
-standardmäßig genügt eines der Signale, `--require-both` verlangt beide.
-Die Sortierung verwendet deren Mittelwert. `--fail-above N` liefert Exitcode 1,
-wenn ein berichtetes Paar diesen Wert überschreitet; ohne Flag ist dies kein Gate.
-`--model` wählt das lokale Modell (Default `jinaai/jina-embeddings-v2-base-code`,
-mit dem vom Modell gelieferten Python-Code). Der erste Lauf lädt dessen Gewichte
-und berechnet Embeddings auf der CPU; pro neuem Funktionsinhalt kostet die
-Zusammenfassung einen Claude-Aufruf. Wie beim vorhandenen Provider hat
-`ANTHROPIC_API_KEY` Vorrang und verwendet das SDK (zusätzlich Extra `api`
-installieren); ohne API-Key folgt der CLI-Weg:
-`claude -p`, ohne Tools, MCP oder Projekt-Settings; `SONGMAKER_CLAUDE_CLI`
-überschreibt den Binärpfad. `--claude-model` bzw. `CLAUDE_SCORING_MODEL`
-wählt das Modell (Scoring-Default `claude-opus-4-6`); einen abweichenden
-DB-Modellwert explizit übergeben. `--summary-workers` begrenzt parallele
-Claude-Aufrufe (Default 4). Der gitignorierte Inhalts-Hash-Cache unter
-`.cache/similar_functions/` hält Zusammenfassungen und Vektoren getrennt nach
-Modell und Prompt: ein unveränderter Folgelauf braucht weder Claude noch einen
-Modellstart. `--no-summaries` verzichtet ausdrücklich auf das zweite Signal;
-sonst sind fehlende Modelle oder Claude-Fehler benannte Abbrüche (Exitcode 2).
-Die [Logiktests](../tests/test_similar_functions.py) verwenden ausschließlich
-Fakes und laden kein Modell.
+finds potential Python duplicates using local code embeddings and separate
+embeddings of one-sentence Claude summaries. This is an advisory audit.
+Methods are included; initializers, pure delegation, and bodies shorter than
+three normalized lines are excluded. Nested functions are not paired with their
+enclosing functions. `--include-tests` also scans `tests/`.
+`--code-threshold` and `--summary-threshold` select pairs by cosine similarity
+(both default to 0.90); either signal qualifies unless `--require-both` is set.
+Pairs are sorted by their mean score. `--fail-above N` exits with status 1 when
+a reported pair exceeds N; without this flag, the audit is not a gate.
+
+`--model` selects the local model (default `jinaai/jina-embeddings-v2-base-code`).
+The default model and its external Python implementation are pinned to commit
+revisions recorded in `DEFAULT_MODEL_REVISION` and `DEFAULT_MODEL_CODE_REVISION`
+in [the script](../scripts/similar_functions.py), so cold runs cannot execute a
+moving Hub revision. The first run downloads weights and computes embeddings on
+CPU. Each distinct uncached function content requires one Claude call.
+Before any model or Claude call, the audit prints the summary cache-miss count
+and aborts if it exceeds `--max-summaries N` (default 400); rerun with a higher
+limit or `--no-summaries` to proceed.
+
+`ANTHROPIC_API_KEY` selects the SDK (install the `api` extra); otherwise the audit
+uses `claude -p` without tools, MCP, or project settings. `SONGMAKER_CLAUDE_CLI`
+overrides the executable path. `--claude-model` or `CLAUDE_SCORING_MODEL` selects
+the summary model (default `claude-haiku-4-5-20251001`). `--summary-workers`
+limits concurrent Claude calls (default 4). The ignored content-hash cache at
+`.cache/similar_functions/` separates summaries and vectors by model and prompt;
+an unchanged repeat run needs neither Claude nor a model startup.
+`--no-summaries` explicitly disables the second signal. Otherwise unavailable
+models or Claude failures produce named errors (exit status 2).
+The [logic tests](../tests/test_similar_functions.py) use fakes and load no model.
 
 ## Static analysis (SonarCloud)
 

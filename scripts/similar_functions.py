@@ -23,7 +23,10 @@ from pathlib import Path
 from typing import Protocol
 
 DEFAULT_MODEL = "jinaai/jina-embeddings-v2-base-code"
-DEFAULT_CLAUDE_MODEL = "claude-opus-4-6"
+DEFAULT_MODEL_REVISION = "516f4baf13dec4ddddda8631e019b5737c8bc250"
+DEFAULT_MODEL_CODE_REVISION = "3baf9e3ac750e76e8edd3019170176884695fb94"
+DEFAULT_CLAUDE_MODEL = "claude-haiku-4-5-20251001"
+DEFAULT_MAX_SUMMARIES = 400
 DEFAULT_CODE_THRESHOLD = 0.90
 DEFAULT_SUMMARY_THRESHOLD = 0.90
 DEFAULT_CACHE = Path(".cache/similar_functions")
@@ -245,27 +248,40 @@ def collect_signals(
     model: str,
     summary_model: str,
     summary_workers: int = DEFAULT_SUMMARY_WORKERS,
+    max_summaries: int = DEFAULT_MAX_SUMMARIES,
 ) -> list[FunctionSignals]:
     texts = {function.key: function.text for function in functions}
+    namespace = f"summary-v1:{summary_model}:{SUMMARY_PROMPT}"
+    summaries = {}
+    missing = []
+    if summarizer is not None:
+        for key in texts:
+            sentence = cache.read(namespace, key)
+            if sentence is None:
+                missing.append(key)
+            elif not isinstance(sentence, str) or not sentence.strip():
+                raise AuditError("Cached summary must be a nonempty string")
+            else:
+                summaries[key] = sentence
+        print(f"Summary cache misses: {len(missing)} (limit: {max_summaries})", file=sys.stderr)
+        if len(missing) > max_summaries:
+            raise AuditError(
+                f"{len(missing)} missing summaries exceed --max-summaries {max_summaries}; "
+                "rerun with a higher --max-summaries N or --no-summaries"
+            )
     code = cached_vectors(texts, embedder, cache, f"code-v1:{model}")
     if summarizer is None:
         return [FunctionSignals(function, code[function.key]) for function in functions]
-    namespace = f"summary-v1:{summary_model}:{SUMMARY_PROMPT}"
 
     def summarize(key: str) -> tuple[str, str]:
-        sentence = cache.read(namespace, key)
-        if sentence is None:
-            sentence = " ".join(summarizer.summarize(texts[key]).split())
-            if not sentence:
-                raise AuditError("Claude returned an empty summary")
-            cache.write(namespace, key, sentence)
-        if not isinstance(sentence, str) or not sentence.strip():
-            raise AuditError("Cached summary must be a nonempty string")
+        sentence = " ".join(summarizer.summarize(texts[key]).split())
+        if not sentence:
+            raise AuditError("Claude returned an empty summary")
+        cache.write(namespace, key, sentence)
         return key, sentence
 
     with ThreadPoolExecutor(max_workers=summary_workers) as executor:
-        summaries = {}
-        for batch in itertools.batched(texts, summary_workers):
+        for batch in itertools.batched(missing, summary_workers):
             summaries.update(executor.map(summarize, batch))
     summary_vectors = cached_vectors(summaries, embedder, cache, f"{namespace}:embedding:{model}")
     return [
@@ -291,6 +307,11 @@ def find_pairs(
     pairs = []
     for left, right in itertools.combinations(signals, 2):
         if (left.function.path, left.function.line) == (right.function.path, right.function.line):
+            continue
+        if left.function.path == right.function.path and (
+            left.function.name.startswith(right.function.name + ".")
+            or right.function.name.startswith(left.function.name + ".")
+        ):
             continue
         code = cosine(left.code, right.code)
         summary = None
@@ -370,6 +391,17 @@ class LocalEmbedder:
                     self.model_name,
                     device="cpu",
                     trust_remote_code=self.model_name == DEFAULT_MODEL,
+                    revision=DEFAULT_MODEL_REVISION if self.model_name == DEFAULT_MODEL else None,
+                    model_kwargs=(
+                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
+                        if self.model_name == DEFAULT_MODEL
+                        else {}
+                    ),
+                    config_kwargs=(
+                        {"code_revision": DEFAULT_MODEL_CODE_REVISION}
+                        if self.model_name == DEFAULT_MODEL
+                        else {}
+                    ),
                 )
             except (ImportError, OSError, ValueError) as error:
                 raise AuditError(
@@ -472,6 +504,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--claude-model", default=os.environ.get("CLAUDE_SCORING_MODEL", DEFAULT_CLAUDE_MODEL)
     )
     parser.add_argument("--no-summaries", action="store_true")
+    parser.add_argument("--max-summaries", type=positive_integer, default=DEFAULT_MAX_SUMMARIES)
     parser.add_argument("--summary-workers", type=positive_integer, default=DEFAULT_SUMMARY_WORKERS)
     parser.add_argument(
         "--code-threshold", type=similarity_threshold, default=DEFAULT_CODE_THRESHOLD
@@ -503,6 +536,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.model,
             args.claude_model,
             args.summary_workers,
+            args.max_summaries,
         )
         pairs = find_pairs(signals, args.code_threshold, args.summary_threshold, args.require_both)
         report = render_report(

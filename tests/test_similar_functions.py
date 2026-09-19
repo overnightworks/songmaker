@@ -401,3 +401,98 @@ def test_configured_api_without_sdk_fails_instead_of_switching_provider(monkeypa
     monkeypatch.setitem(sys.modules, "anthropic", None)
     with pytest.raises(audit.AuditError, match="SDK is missing"):
         audit.ClaudeSummarizer("model").summarize(SOURCE)
+
+
+def test_summary_limit_aborts_before_any_model_call(tmp_path, functions, capsys):
+    changed = replace(functions[0], text="different content")
+    with pytest.raises(audit.AuditError, match="2 missing summaries.*--no-summaries"):
+        audit.collect_signals(
+            [*functions, changed],
+            UnavailablePort(),
+            UnavailablePort(),
+            audit.Cache(tmp_path),
+            "code",
+            "claude",
+            max_summaries=1,
+        )
+    assert "Summary cache misses: 2" in capsys.readouterr().err
+
+
+def test_summary_limit_counts_only_unique_misses_and_allows_exact_limit(
+    tmp_path, functions, capsys
+):
+    cache = audit.Cache(tmp_path)
+    audit.collect_signals(
+        functions, FakeEmbedder(), FakeSummarizer(), cache, "code", "claude", max_summaries=1
+    )
+    assert "Summary cache misses: 1" in capsys.readouterr().err
+    changed = replace(functions[0], text="different content")
+    audit.collect_signals(
+        [*functions, changed],
+        FakeEmbedder(),
+        FakeSummarizer(),
+        cache,
+        "code",
+        "claude",
+        max_summaries=1,
+    )
+    assert "Summary cache misses: 1" in capsys.readouterr().err
+    audit.collect_signals(
+        [*functions, changed],
+        UnavailablePort(),
+        UnavailablePort(),
+        cache,
+        "code",
+        "claude",
+        max_summaries=1,
+    )
+    assert "Summary cache misses: 0" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    ("name", "path", "expected"),
+    [
+        ("Judge.choose.adjust", "src/one.py", 0),
+        ("Judge.choose.adjust", "src/two.py", 1),
+        ("Judge.chooser", "src/one.py", 1),
+    ],
+)
+def test_pairs_skip_only_enclosing_functions_in_same_file(functions, name, path, expected):
+    outer = replace(functions[0], name="Judge.choose")
+    other = replace(outer, name=name, path=Path(path), line=10)
+    signals = [audit.FunctionSignals(f, (1, 0)) for f in (outer, other)]
+    assert len(audit.find_pairs(signals)) == expected
+    assert len(audit.find_pairs(signals[::-1])) == expected
+
+
+@pytest.mark.parametrize("model", [audit.DEFAULT_MODEL, "other-model"])
+def test_embedding_loader_pins_default_weights_and_external_code(monkeypatch, model):
+    def load(name, **kwargs):
+        assert name == model
+        is_default = model == audit.DEFAULT_MODEL
+        assert kwargs["trust_remote_code"] is is_default
+        assert kwargs["revision"] == (audit.DEFAULT_MODEL_REVISION if is_default else None)
+        for key in ("model_kwargs", "config_kwargs"):
+            assert kwargs[key] == (
+                {"code_revision": audit.DEFAULT_MODEL_CODE_REVISION} if is_default else {}
+            )
+        return SimpleNamespace(
+            encode=lambda *args, **kwargs: SimpleNamespace(tolist=lambda: [[1, 0]])
+        )
+
+    monkeypatch.setitem(sys.modules, "torch", SimpleNamespace(set_num_threads=lambda count: None))
+    monkeypatch.setitem(
+        sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=load)
+    )
+    assert audit.LocalEmbedder(model).embed(["code"]) == [[1, 0]]
+
+
+def test_cli_applies_summary_limit_before_calling_ports(tmp_path, capsys):
+    (tmp_path / "source.py").write_text(
+        SOURCE + SOURCE.replace("choose", "other").replace("+ 1", "+ 2")
+    )
+    assert (
+        audit.main([str(tmp_path), "--cache-dir", str(tmp_path / "cache"), "--max-summaries", "1"])
+        == 2
+    )
+    assert "2 missing summaries exceed --max-summaries 1" in capsys.readouterr().err
