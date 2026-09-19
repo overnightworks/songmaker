@@ -450,34 +450,52 @@ def seed_judge_route(session) -> None:
     set_claude_model(session, SETTING_JUDGE_ROUTE, "api")
 
 
-def make_router_app(
+def make_authenticated_user(
+    user_id: str,
+    *,
+    role: str = "user",
+    username: str | None = None,
+) -> AuthenticatedUser:
+    """Build an active user, using the ID as the default username."""
+    return AuthenticatedUser(
+        id=user_id,
+        username=user_id if username is None else username,
+        role=role,
+        is_active=True,
+    )
+
+
+def make_router_ctx(
     tmp_path: Path,
     *,
-    user: AuthenticatedUser | None = None,
-    seed_db: Callable[[Session], None] | None = None,
     db: sessionmaker[Session] | None = None,
-    ctx: AppContext | None = None,
-) -> FastAPI:
-    """Build the API router without server middleware or lifecycle hooks.
-
-    Existing databases (including custom pools) and shared contexts retain
-    their identity. Without a user, requests exercise real authentication.
-    A seed callback is committed before the router becomes available.
-    """
-    from songmaker_cli.api import router
-    from songmaker_cli.auth_dependencies import get_current_user
+    seed_db: Callable[[Session], None] | None = None,
+) -> AppContext:
+    """Build a router context, preserving an existing DB and committing seed data."""
     from songmaker_cli.db.engine import init_test_db
 
-    if ctx is None:
-        ctx = AppContext(
-            db=db if db is not None else init_test_db(tmp_path / "test.db"),
-            audio_dir=tmp_path / "audio", data_dir=tmp_path / "data",
-            signing_key=TEST_SECRET, redis=make_fake_redis(),
-        )
+    ctx = AppContext(
+        db=db if db is not None else init_test_db(tmp_path / "test.db"),
+        audio_dir=tmp_path / "audio",
+        data_dir=tmp_path / "data",
+        signing_key=TEST_SECRET,
+        redis=make_fake_redis(),
+    )
     if seed_db is not None:
         with ctx.db() as session:
             seed_db(session)
             session.commit()
+    return ctx
+
+
+def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -> FastAPI:
+    """Mount the API router on an existing context, without middleware or lifecycle.
+
+    Without a user override, requests exercise real authentication.
+    """
+    from songmaker_cli.api import router
+    from songmaker_cli.auth_dependencies import get_current_user
+
     app = FastAPI()
     install_app_context(app, ctx)
     if user is not None:

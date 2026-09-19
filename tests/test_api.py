@@ -9,10 +9,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
@@ -50,10 +49,8 @@ def client(tmp_path: Path) -> TestClient:
     (wav_dir / "g1.wav").write_bytes(b"RIFF" + b"\x00" * 40)
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=_DEFAULT_USER_ID, username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(_DEFAULT_USER_ID, username="test_user"),
     )
     yield TestClient(app)
 
@@ -64,7 +61,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
     with factory() as session:
         _seed_db(session)
 
-    app = make_router_app(tmp_path, db=factory)
+    app = make_router_app(make_router_ctx(tmp_path, db=factory))
     yield TestClient(app)
 
 
@@ -115,10 +112,8 @@ def gzip_client(tmp_path: Path) -> TestClient:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=_DEFAULT_USER_ID, username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(_DEFAULT_USER_ID, username="test_user"),
     )
     app.add_middleware(
         SelectiveGZipMiddleware,
@@ -159,10 +154,8 @@ def _make_authed_client(
         _seed_db(session, owner_id=user_id if role != "admin" else None)
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=user_id, username=f"test_{role}", role=role, is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(user_id, role=role, username=f"test_{role}"),
     )
     return TestClient(app)
 
@@ -432,10 +425,8 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test_user"),
     )
     tc = TestClient(app)
 
@@ -528,10 +519,8 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test_user"),
     )
     tc = TestClient(app)
 
@@ -670,10 +659,8 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test_user"),
     )
     tc = TestClient(app)
 
@@ -2043,12 +2030,7 @@ def test_song_chat_marks_job_cancelled_when_request_is_cancelled(
             await _stop_chat_job_heartbeat(*args, **kwargs)
 
         request = Request({"type": "http", "app": client.app})
-        user = AuthenticatedUser(
-            id=_DEFAULT_USER_ID,
-            username="test_user",
-            role="user",
-            is_active=True,
-        )
+        user = make_authenticated_user(_DEFAULT_USER_ID, username="test_user")
         with factory() as session:
             with patch(
                 "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
@@ -2949,7 +2931,7 @@ def _make_pool_capacity_limited_client(
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True, exist_ok=True)
-    app = make_router_app(tmp_path, db=factory)
+    app = make_router_app(make_router_ctx(tmp_path, db=factory))
     # No app.dependency_overrides[get_current_user] here on purpose (#331
     # Findings 1/2, review round 2): api_stream_job calls get_current_user
     # directly, not through Depends(), so an override would never reach it
@@ -3547,7 +3529,7 @@ def test_access_helpers_hide_resources_that_disappear_or_lose_ownership(
         check_song_access_including_deleted,
     )
 
-    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
+    user = make_authenticated_user("owner")
     if case == "deleted-song":
         with patch("songmaker_cli.api_helpers.get_song", return_value=None):
             with pytest.raises(HTTPException) as exc_info:
@@ -3715,10 +3697,8 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     factory = init_db(tmp_path / "test.db")
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test"),
     )
     app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
 
@@ -4216,10 +4196,8 @@ def test_bulk_delete_other_user(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test_user"),
     )
     tc = TestClient(app)
 
@@ -4252,10 +4230,8 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
     (gen_dir / "g2.mp3").write_bytes(b"fake")
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="test_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="test_user"),
     )
     tc = TestClient(app)
 

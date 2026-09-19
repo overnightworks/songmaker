@@ -10,14 +10,15 @@ from unittest.mock import patch
 import pytest
 from conftest import (
     login_and_csrf,
+    make_authenticated_user,
     make_router_app,
+    make_router_ctx,
     make_test_app,
 )
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
 
 from songmaker_cli.api_helpers import slugify
@@ -136,10 +137,8 @@ def client(tmp_path: Path) -> TestClient:
     for name in ("g1.mp3", "g2.mp3", "g3.mp3"):
         (owner_dir / name).write_bytes(b"source")
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=_DEFAULT_USER_ID, username="test", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(_DEFAULT_USER_ID, username="test"),
     )
     yield TestClient(app)
 

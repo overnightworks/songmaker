@@ -3,10 +3,9 @@
 from pathlib import Path
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.db.models import Album, User
 
@@ -20,8 +19,10 @@ def test_seeded_router_data_is_committed_before_authenticated_requests(
         session.flush()
         session.add(Album(id="album", title="Seeded album", artist="Artist", created_by="owner"))
 
-    user = AuthenticatedUser(id="owner", username="owner", role="user", is_active=True)
-    app = make_router_app(tmp_path, user=user if authenticated else None, seed_db=seed_album)
+    user = make_authenticated_user("owner")
+    app = make_router_app(
+        make_router_ctx(tmp_path, seed_db=seed_album), user=user if authenticated else None
+    )
 
     with app.state.ctx.db() as session:
         assert session.get(Album, "album").title == "Seeded album"

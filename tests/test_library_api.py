@@ -7,13 +7,11 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event
-from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     LIBRARY_CURSOR_INVALID,
     LIBRARY_CURSOR_MISMATCH,
@@ -92,22 +90,13 @@ def _library_env(tmp_path: Path) -> tuple[object, object]:
         _seed_library(session)
         session.commit()
 
-    ctx = AppContext(
-        db=factory,
-        audio_dir=tmp_path / "audio",
-        data_dir=tmp_path / "data",
-        signing_key=TEST_SECRET,
-        redis=make_fake_redis(),
-    )
+    ctx = make_router_ctx(tmp_path, db=factory)
     return factory, ctx
 
 
 def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
     app = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=user_id, username=f"test-{user_id}", role=role, is_active=True,
-        ),
+        ctx, user=make_authenticated_user(user_id, role=role, username=f"test-{user_id}")
     )
     return TestClient(app)
 

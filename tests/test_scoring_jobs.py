@@ -17,12 +17,13 @@ from unittest.mock import MagicMock, patch
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 from conftest import (
+    make_authenticated_user,
     make_router_app,
+    make_router_ctx,
     override_provider_runtime,
     refresh_provider_snapshots,
 )
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.constants import (
@@ -181,10 +182,8 @@ def admin_client(tmp_path: Path, monkeypatch):
         session.add(User(id="u-test", username="user-u-test", password_hash="x", role="admin"))
         session.commit()
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="u-u-test", role="admin", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
     yield TestClient(app), factory
 

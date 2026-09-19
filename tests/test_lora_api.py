@@ -7,10 +7,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
@@ -60,10 +59,7 @@ def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=USER_A, username=USER_A, role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_A)
     )
     ctx = app.state.ctx
     return TestClient(app), ctx
@@ -290,12 +286,7 @@ def test_cross_user_access_is_404(client_and_ctx: tuple[TestClient, AppContext])
         session.commit()
         lora_id = lora_a.id
 
-    app_b = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=USER_B, username=USER_B, role="user", is_active=True,
-        ),
-    )
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
 
     assert client_b.get(f"/api/loras/{lora_id}").status_code == 404
@@ -431,12 +422,7 @@ def _make_take(
 
 
 def _client_for_user(ctx: AppContext, user_id: str, role: str = "user") -> TestClient:
-    app = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=user_id, username=user_id, role=role, is_active=True,
-        ),
-    )
+    app = make_router_app(ctx, user=make_authenticated_user(user_id, role=role))
     return TestClient(app)
 
 
@@ -810,12 +796,7 @@ def test_add_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]
     client_a, ctx = client_and_ctx
     lora_id = _make_lora(ctx, USER_A)
 
-    app_b = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=USER_B, username=USER_B, role="user", is_active=True,
-        ),
-    )
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.post(
         f"/api/loras/{lora_id}/samples",
@@ -972,12 +953,7 @@ def test_patch_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContex
         session.commit()
         sample_id = sample.id
 
-    app_b = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=USER_B, username=USER_B, role="user", is_active=True,
-        ),
-    )
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.patch(
         f"/api/loras/{lora_id}/samples/{sample_id}",
@@ -1081,12 +1057,7 @@ def test_delete_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppConte
         session.commit()
         sample_id = sample.id
 
-    app_b = make_router_app(
-        ctx.data_dir.parent, ctx=ctx,
-        user=AuthenticatedUser(
-            id=USER_B, username=USER_B, role="user", is_active=True,
-        ),
-    )
+    app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
     client_b = TestClient(app_b)
     resp = client_b.delete(f"/api/loras/{lora_id}/samples/{sample_id}")
     assert resp.status_code == 404

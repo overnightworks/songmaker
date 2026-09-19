@@ -368,13 +368,15 @@ lyrical-coherence judge, and the tool-surface health it republishes on
 
 `scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
 than one test module: module-level private Python functions in `tests/`, and
-named functions or `const` function expressions in `frontend/src/**/*.test.ts`.
+top-level named functions or `const` function expressions in `frontend/src/**/*.test.ts`.
 Calls and repeated definitions within one file do not increase the count.
 The backend CI job compares both counts with `scripts/test_helper_ratchet.txt`;
 a growth fails, including with `--update`. After consolidation, run
 `scripts/test_helper_ratchet.sh --update` to commit the smaller baseline; normal
-checks never rewrite it. Router-only API tests use `make_router_app` from
-`tests/conftest.py`, with an optional user and database seed callback; full
+checks never rewrite it. Router-only API tests use `make_router_ctx` from
+`tests/conftest.py` to prepare a context with an optional database and seed callback,
+then `make_router_app(ctx, user=...)` to mount the router. `make_authenticated_user`
+builds active users with an explicit ID and optional role and username. Full
 middleware and lifecycle tests continue to use `make_test_app`.
 
 ### Python

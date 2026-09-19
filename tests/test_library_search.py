@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
@@ -65,10 +65,8 @@ def _client_with_title(
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=searcher or AuthenticatedUser(
-            id=OWNER_ID, username="owner", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=searcher or make_authenticated_user(OWNER_ID, username="owner"),
     )
     return TestClient(app)
 
@@ -143,7 +141,7 @@ def test_admin_search_stays_empty_for_another_users_title(tmp_path: Path, query:
     searcher's own titles even for admins (commit 7a05e1e) — admins only see
     other users' content in the browse/list endpoints, never in search.
     """
-    admin = AuthenticatedUser(id=ADMIN_ID, username="admin", role=ROLE_ADMIN, is_active=True)
+    admin = make_authenticated_user(ADMIN_ID, role=ROLE_ADMIN, username="admin")
     client = _client_with_title(
         tmp_path, album_title=ALBUM_236, song_title=SONG_236, searcher=admin,
     )

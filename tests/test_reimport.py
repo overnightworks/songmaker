@@ -6,27 +6,19 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 from webauth.passwords import hash_password
 
-from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
 from songmaker_cli.db.queries import get_generation
 from songmaker_cli.reimport import _extract_seed, reimport_files
 
-TEST_SECRET = b"a" * 64
 USER_ID = "u-reimport"
 SONG_ID = "s-reimport"
 PASSWORD = "Test1234!"
-
-
-def _make_fake_redis():
-    import fakeredis
-    return fakeredis.FakeRedis()
 
 
 def _seed_db(session: Session) -> None:
@@ -213,15 +205,9 @@ def reimport_client(tmp_path: Path):
         _seed_db(session)
         session.commit()
 
-    ctx = AppContext(
-        db=factory, audio_dir=audio_dir, data_dir=data_dir,
-        signing_key=TEST_SECRET, redis=_make_fake_redis(),
-    )
+    ctx = make_router_ctx(tmp_path, db=factory)
     app = make_router_app(
-        tmp_path, ctx=ctx,
-        user=AuthenticatedUser(
-            id=USER_ID, username="reimporter", role="admin", is_active=True,
-        ),
+        ctx, user=make_authenticated_user(USER_ID, role="admin", username="reimporter")
     )
     return TestClient(app)
 

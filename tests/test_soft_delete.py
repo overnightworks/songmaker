@@ -6,10 +6,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -338,10 +337,8 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=_DEFAULT_USER_ID, username=f"u_{role}", role=role, is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(_DEFAULT_USER_ID, role=role, username=f"u_{role}"),
     )
     return TestClient(app)
 
@@ -397,16 +394,13 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
         session.commit()
 
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u1", username="u_user", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory), user=make_authenticated_user("u1", username="u_user")
     )
     c1 = TestClient(app)
     c1.delete("/api/albums/rock")
 
-    app.dependency_overrides[get_current_user] = lambda: AuthenticatedUser(
-        id="u2", username="u_user", role="user", is_active=True,
+    app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
+        "u2", username="u_user"
     )
     c2 = TestClient(app)
     r = c2.post("/api/albums/rock/restore")

@@ -8,9 +8,8 @@ from unittest.mock import patch
 
 import pytest
 from agent_providers.events import AssistantTextEvent, FinalEvent
-from conftest import make_router_app
+from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
-from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.constants import (
     TURN_BLOCK_ALBUM_NOTES,
@@ -73,10 +72,8 @@ def client(tmp_path: Path) -> TestClient:
     with factory() as session:
         _seed(session, "u-test")
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-test", username="u-u-test", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-test", username="u-u-test"),
     )
     yield TestClient(app), factory
 
@@ -89,10 +86,8 @@ def stranger_client(tmp_path: Path) -> TestClient:
         session.add(User(id="u-spy", username="spy", password_hash="x", role="user"))
         session.commit()
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id="u-spy", username="u-u-spy", role="user", is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
     yield TestClient(app), factory
 

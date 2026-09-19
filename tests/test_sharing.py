@@ -13,8 +13,10 @@ import pytest
 from conftest import (
     TEST_SECRET,
     login_and_csrf,
+    make_authenticated_user,
     make_fake_redis,
     make_router_app,
+    make_router_ctx,
     make_test_app,
 )
 from fastapi.testclient import TestClient
@@ -1638,14 +1640,10 @@ def _seed_inventory(session) -> None:
 
 
 def _inventory_client(tmp_path: Path, user_id: str, role: str = "user"):
-    from webauth.dependencies import AuthenticatedUser
-
     factory = _inventory_factory(tmp_path)
     app = make_router_app(
-        tmp_path, db=factory,
-        user=AuthenticatedUser(
-            id=user_id, username=f"test-{user_id}", role=role, is_active=True,
-        ),
+        make_router_ctx(tmp_path, db=factory),
+        user=make_authenticated_user(user_id, role=role, username=f"test-{user_id}"),
     )
     return TestClient(app), factory
 
