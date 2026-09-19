@@ -847,21 +847,21 @@
 									{#if me && user.id !== me.id}
 										<button
 											class="small"
-											data-hitbox="frequent"
+											data-hitbox="text"
 											onclick={() => handleToggleRole(user)}
 										>
 											{user.role === 'admin' ? 'Demote' : 'Promote'}
 										</button>
 										<button
 											class="small"
-											data-hitbox="frequent"
+											data-hitbox="text"
 											onclick={() => handleToggleActive(user)}
 										>
 											{user.is_active ? 'Disable' : 'Enable'}
 										</button>
 										<button
 											class="small"
-											data-hitbox="frequent"
+											data-hitbox="text"
 											onclick={() => {
 												resetPasswordUserId = resetPasswordUserId === user.id ? null : user.id;
 												resetPasswordValue = '';
@@ -871,7 +871,7 @@
 										</button>
 										<button
 											class="small danger"
-											data-hitbox="frequent"
+											data-hitbox="text"
 											onclick={() => {
 												deleteUserId = deleteUserId === user.id ? null : user.id;
 												deleteConfirmInput = '';
@@ -1041,7 +1041,7 @@
 								<td class="actions">
 									<button
 										class="small danger"
-										data-hitbox="frequent"
+										data-hitbox="text"
 										onclick={() => handleForceLogout(sess.id)}
 									>
 										Revoke

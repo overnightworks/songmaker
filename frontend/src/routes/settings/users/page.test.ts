@@ -506,7 +506,7 @@ describe('admin settings compact layout', () => {
 					await flush();
 				}
 				if (label === 'Sessions') {
-					expect(api.fetchSessions).toHaveBeenCalled();
+					expect(api.fetchSessions).toHaveBeenCalledTimes(1);
 					expect(sectionByHeading(target, 'Active Sessions').textContent).not.toContain('jane');
 					expect(sectionByHeading(target, 'Active Sessions').textContent).toContain(
 						newSession.username
