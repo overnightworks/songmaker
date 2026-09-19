@@ -1,8 +1,0 @@
-claim_id = "86176d86bb5342419bd1d43d492c036c"
-agent = "claude-head"
-role = "builder"
-base = "d31a54257ca89a724b97e23deb627f14f1f0806f"
-branch = "claude/issue-948-whisper-query"
-scope = ["src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/jobs/scoring.py", "tests/test_db.py", "tests/test_scoring_jobs.py", "tests/test_scoring_persistence.py"]
-opened_commit = "8ad6483cf689f412ccdab36d6cbf05847c9fccc9"
-whole_reason = "Test-zuerst-Scheibe eines Audits; sieben Dateien"
