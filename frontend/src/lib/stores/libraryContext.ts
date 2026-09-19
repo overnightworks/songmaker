@@ -8,13 +8,13 @@ import { fetchSong, fetchSongs } from '$lib/api/songs';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import { LIBRARY_HISTORY_KIND, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
 import { type OpenCollection, openCollection, setOpenCollection } from '$lib/stores/collection';
-import { searchQuery } from '$lib/stores/filter';
 import {
 	libraryBrowse,
 	librarySearch,
 	librarySort,
 	restoreLibraryBrowse,
-	restoreLibrarySearch
+	restoreLibrarySearch,
+	searchQuery
 } from '$lib/stores/librarySearch';
 import { albumList, loadSongsForAlbum, songList, upsertSongInList } from '$lib/stores/libraryData';
 import { ensureGenerationsLoaded, selectedGenerationId, selectedSongId } from '$lib/stores/player';

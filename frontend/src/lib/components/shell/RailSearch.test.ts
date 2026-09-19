@@ -4,7 +4,7 @@ import { get } from 'svelte/store';
 
 import { RAIL_SEARCH_LABEL } from '$lib/constants';
 import type { SongSummaryResponse } from '$lib/api/types';
-import { railTreeQuery } from '$lib/stores/filter';
+import { railTreeQuery } from '$lib/stores/librarySearch';
 import { railSearch, resetRailSearchForTests } from '$lib/stores/railSearch';
 import { playlistList } from '$lib/stores/playlists';
 import { createComponentMount, requireElement } from './rail-test-fixtures';

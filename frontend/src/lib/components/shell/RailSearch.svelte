@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { RAIL_SEARCH_LABEL } from '$lib/constants';
 	import { isAdmin } from '$lib/stores/auth';
-	import { railTreeQuery } from '$lib/stores/filter';
+	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		firstRailSearchTarget,
 		groupRailSearchResults,
