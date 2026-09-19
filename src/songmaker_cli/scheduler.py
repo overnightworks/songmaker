@@ -73,7 +73,7 @@ class AllWorkersHeld(RuntimeError):
 
 
 class WorkerTaskFailed(RuntimeError):
-    """Raised when the worker emits an `error` SSE event."""
+    """Raised when a worker request or task fails, preserving its cause."""
 
 
 class WorkerGenerationFailed(WorkerTaskFailed):
@@ -81,8 +81,7 @@ class WorkerGenerationFailed(WorkerTaskFailed):
 
     Its message is ACE-Step's own cause from an ``error`` event, or the
     scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
-    The job layer logs the raw cause and stores a fixed musician-facing message;
-    only the silent-stream cause keeps its dedicated fixed message.
+    The job layer logs and stores this cause verbatim for the musician.
     """
 
 
@@ -232,6 +231,16 @@ def _parse_sse_event(buffer: str) -> tuple[str, dict] | None:
     return event_type, data
 
 
+def _worker_response_cause(response: httpx.Response) -> str:
+    try:
+        body = json.loads(response.text)
+    except json.JSONDecodeError:
+        return response.text
+    if isinstance(body, dict) and isinstance(body.get("detail"), str):
+        return body["detail"]
+    return response.text
+
+
 async def _ensure_loaded(
     worker: _PickedWorker,
     target_mode: str,
@@ -250,7 +259,10 @@ async def _ensure_loaded(
             json={"mode": target_mode},
             headers=_internal_headers(),
         )
-        resp.raise_for_status()
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise WorkerTaskFailed(_worker_response_cause(resp)) from exc
 
 
 async def _submit_generation(
