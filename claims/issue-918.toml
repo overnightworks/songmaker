@@ -1,7 +1,0 @@
-claim_id = "aec84042fc5a4c3a898df86e248fd55b"
-agent = "claude-head"
-role = "builder"
-base = "7767850bb38dc1acc1c7723c71d8c9586c21e33f"
-branch = "claude/issue-918-anyio-bump"
-scope = ["uv.lock"]
-opened_commit = "000d54299f6c8d2f16daff0d49181d2cd2efa928"
