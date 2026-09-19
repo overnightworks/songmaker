@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.db.queries import save_scores
@@ -163,6 +164,28 @@ def test_timed_out_text_accuracy_keeps_the_stored_transcript(
         assert gen.whisper_text == "hallo welt"
         assert gen.whisper_cues == [{"start": 0.0, "end": 1.0, "text": "hallo welt"}]
         assert session.query(Job).filter_by(id=JOB_ID).one().status == "completed"
+
+
+def test_successful_scoring_persists_the_transcript_and_cues(
+    scored_generation, tmp_path: Path,
+) -> None:
+    result = SongScores(
+        text_accuracy=TextAccuracyScore(
+            similarity_ratio=1.0,
+            intended_line_texts=("hello world",),
+            transcribed_line_texts=("hello world",),
+            whisper_cues=(WhisperCue(start=0.0, end=1.0, text="hello world"),),
+        ),
+        runs=(_run("text_accuracy", ScorerOutcome.OK),),
+    )
+
+    _score(scored_generation, result, tmp_path / "audio")
+
+    with scored_generation() as session:
+        generation = session.get(Generation, GENERATION_ID)
+        assert generation.whisper_text == "hello world"
+        assert generation.whisper_cues == [{"start": 0.0, "end": 1.0, "text": "hello world"}]
+        assert session.get(Job, JOB_ID).status == "completed"
 
 
 def test_successful_scorer_overwrites_the_stored_score(
