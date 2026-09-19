@@ -22,6 +22,7 @@ from songmaker_cli.constants import (
     WorkerLivenessSignal,
     worker_restart_grace_seconds,
 )
+from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -41,10 +42,6 @@ def _last_alive_key(signal: str) -> str:
 ACESTEP_LAST_ALIVE_KEY = _last_alive_key("acestep")
 MUSIC_LAST_ALIVE_KEY = _last_alive_key("music")
 SCORING_LAST_ALIVE_KEY = _last_alive_key("scoring")
-
-
-def _as_utc(now: datetime) -> datetime:
-    return now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
 
 
 def _record_alive(redis: Any, key: str, now: datetime) -> None:
@@ -71,8 +68,8 @@ def _missing_signal_liveness(
         log.warning("Could not read worker liveness", exc_info=True)
         return WorkerLiveness.UNKNOWN
     grace = timedelta(seconds=worker_restart_grace_seconds(signal))
-    now = _as_utc(now)
-    if now - _as_utc(last_alive_at) <= grace:
+    now = aware_timestamp(now)
+    if now - aware_timestamp(last_alive_at) <= grace:
         return WorkerLiveness.ALIVE
     if now - _PROCESS_STARTED_AT > grace:
         return WorkerLiveness.DEAD
@@ -108,12 +105,12 @@ def acestep_worker_liveness(
             malformed_state = True
             continue
         if worker_is_online(parsed_state):
-            _record_alive(redis, ACESTEP_LAST_ALIVE_KEY, _as_utc(now))
+            _record_alive(redis, ACESTEP_LAST_ALIVE_KEY, aware_timestamp(now))
             return WorkerLiveness.ALIVE
     if malformed_state:
         return WorkerLiveness.UNKNOWN
     return _missing_signal_liveness(
-        redis, ACESTEP_LAST_ALIVE_KEY, WorkerLivenessSignal.MODEL_EXECUTION, _as_utc(now),
+        redis, ACESTEP_LAST_ALIVE_KEY, WorkerLivenessSignal.MODEL_EXECUTION, aware_timestamp(now),
     )
 
 
@@ -132,9 +129,9 @@ def arq_worker_liveness(
         log.warning("Could not read arq worker liveness", exc_info=True)
         return WorkerLiveness.UNKNOWN
     if signal_is_alive:
-        _record_alive(redis, last_alive_key, _as_utc(now))
+        _record_alive(redis, last_alive_key, aware_timestamp(now))
         return WorkerLiveness.ALIVE
-    return _missing_signal_liveness(redis, last_alive_key, signal, _as_utc(now))
+    return _missing_signal_liveness(redis, last_alive_key, signal, aware_timestamp(now))
 
 
 def read_worker_liveness(
@@ -146,7 +143,7 @@ def read_worker_liveness(
     """Read each execution signal without taking ownership of database access."""
     from songmaker_cli.settings import get_settings
 
-    observed_at = _as_utc(now or datetime.now(timezone.utc))
+    observed_at = aware_timestamp(now or datetime.now(timezone.utc))
     return worker_liveness_by_job_type(
         acestep=acestep_worker_liveness(redis, acestep_worker_ids, now=observed_at),
         music=arq_worker_liveness(
