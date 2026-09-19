@@ -14,10 +14,10 @@ from conftest import make_test_app, override_provider_runtime
 import songmaker_cli.lifecycle as lifecycle
 import songmaker_cli.server as server
 from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
+from songmaker_cli.health_types import BackgroundLoopStatus
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
-    BackgroundLoopStatus,
 )
 
 
