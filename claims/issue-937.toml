@@ -1,8 +1,0 @@
-claim_id = "620b9e983dd7487eb6bb61e5ed1007ae"
-agent = "claude-head"
-role = "builder"
-base = "d306e86efaf290be017e9b42b9fb12654450f4b5"
-branch = "claude/issue-937-dead-backend"
-scope = [".github/workflows/ci.yml", "scripts/check_dead_symbols.py", "scripts/dead-symbols.allow", "src/acestep_engine", "src/acestep_worker", "src/songmaker_cli", "tests"]
-opened_commit = "f941b451769e0df7457c6548e521903af06b8c71"
-whole_reason = "Löschungen eines Audits über viele kleine Dateien; Verzeichnisse, weil Dateien verschwinden"
