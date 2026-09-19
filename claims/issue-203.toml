@@ -1,8 +1,0 @@
-claim_id = "a5b5bb6d3c0c4b3d81de5d66fa2ba3a7"
-agent = "claude-head"
-role = "builder"
-base = "7767850bb38dc1acc1c7723c71d8c9586c21e33f"
-branch = "claude/issue-203-error-cause"
-scope = ["docs/acestep.md", "frontend/src/lib/components/editor/TakesList.svelte", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/_runtime.py", "src/songmaker_cli/scheduler.py", "tests/test_jobs.py", "tests/test_scheduler.py"]
-opened_commit = "7a4b0c12e16064762ef2bcfcf89314026fbcb11a"
-whole_reason = "Das Durchreichen der Ursache berührt Job-Schicht, Scheduler, Doku und deren Tests in einem Satz; ein Schnitt ergäbe halbe Fehlermeldungen"
