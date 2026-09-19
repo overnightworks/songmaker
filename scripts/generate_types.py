@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from types import UnionType
-from typing import Annotated, Any, Literal, Union, cast, get_args, get_origin
+from typing import Annotated, Any, Literal, TypeAliasType, Union, cast, get_args, get_origin
 
 from fastapi import APIRouter
 from fastapi.routing import APIRoute
@@ -393,6 +393,8 @@ def _ts_name(model: type[BaseModel]) -> str:
 
 
 def _py_type_to_ts(annotation: Any) -> str:
+    if isinstance(annotation, TypeAliasType):
+        return _py_type_to_ts(annotation.__value__)
     origin = get_origin(annotation)
     if origin is Annotated:
         return _py_type_to_ts(get_args(annotation)[0])

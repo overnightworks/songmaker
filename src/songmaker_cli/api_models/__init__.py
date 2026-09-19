@@ -31,6 +31,7 @@ from songmaker_cli.api_models.generation_params import (
     RepaintTaskParams,
     StoredGenerationParams,
 )
+from songmaker_cli.api_models.health import HealthResponse
 from songmaker_cli.api_models.jobs import JobResponse
 from songmaker_cli.api_models.library import (
     LIBRARY_SORT_VALUES,
@@ -273,6 +274,7 @@ __all__ = [
     "GenerationParams",
     "GenerationResponse",
     "GenerationRetentionReportResponse",
+    "HealthResponse",
     "JobResponse",
     "JudgeSettingsRequest",
     "JudgeSettingsResponse",
