@@ -1,6 +1,7 @@
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
+	makeHealthResponse,
 	makeSong as song,
 	makeVersion as version
 } from '$lib/test-utils/factories';
@@ -9,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
-import type { HealthSummary } from '$lib/api/client';
 import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
@@ -212,18 +212,6 @@ class MockEventSource {
 	}
 }
 
-function healthSummary(overrides: Partial<HealthSummary> = {}): HealthSummary {
-	return {
-		status: 'ok',
-		queue_depth_cap_reached: false,
-		music_queue_depth: 0,
-		scoring_queue_depth: 0,
-		acestep_workers_online: 1,
-		acestep_workers_total: 1,
-		...overrides
-	};
-}
-
 async function renderView(options: { widthPx?: number } = {}): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	if (options.widthPx !== undefined) {
@@ -322,7 +310,7 @@ beforeEach(() => {
 	deleteSongCover.mockReset();
 	deleteAlbumCover.mockReset();
 	fetchHealth.mockReset();
-	fetchHealth.mockResolvedValue(healthSummary());
+	fetchHealth.mockResolvedValue(makeHealthResponse());
 	generateSong.mockReset();
 	listLoras.mockReset();
 	listLoras.mockResolvedValue([]);
@@ -605,7 +593,7 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 	}
 
 	it('disables Generate with a reason when no ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 0 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 		const target = await renderView();
 
 		const btn = generateBtn(target);
@@ -615,7 +603,7 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 	});
 
 	it('keeps Generate enabled when at least one ACE-Step worker is online', async () => {
-		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 2 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 2 }));
 		const target = await renderView();
 
 		const btn = generateBtn(target);
@@ -625,11 +613,11 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 
 	it('re-enables Generate without a reload once a worker comes back online', async () => {
 		vi.useFakeTimers();
-		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 0 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 		const target = await renderView();
 		expect(generateBtn(target)?.disabled).toBe(true);
 
-		fetchHealth.mockResolvedValue(healthSummary({ acestep_workers_online: 1 }));
+		fetchHealth.mockResolvedValue(makeHealthResponse({ acestep_workers_online: 1 }));
 		await vi.advanceTimersByTimeAsync(15_000);
 		await tick();
 

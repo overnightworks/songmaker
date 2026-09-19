@@ -83,6 +83,8 @@ _PROGRESS_THROTTLE_SECONDS = 2.0
 
 @dataclass(frozen=True)
 class GenerationJobRequest:
+    """Keep audio_dir/data_dir out of queue_args() because the worker supplies its local paths."""
+
     job_id: str
     song_id: str
     version_id: str
@@ -841,13 +843,16 @@ async def run_generation_job(
 
     try:
         admitted_worker = await _admit_generation_worker_or_requeue(
-            request, redis, db_factory,
+            request,
+            redis,
+            db_factory,
         )
         if admitted_worker is None:
             return
 
         ctx = await _build_generation_job_context(
-            request, db_factory,
+            request,
+            db_factory,
         )
         if ctx is None:
             return
@@ -942,7 +947,9 @@ async def _build_generation_job_context(
             target_model=request.target_model,
         )
         return _apply_generation_task_overrides(
-            ctx, request.repaint_params, request.cover_params,
+            ctx,
+            request.repaint_params,
+            request.cover_params,
         )
     except GenerationSetupError as exc:
         _update_job(

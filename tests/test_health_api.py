@@ -13,6 +13,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import replace
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
@@ -25,7 +27,7 @@ from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker
 from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
-from songmaker_cli.lifecycle import BackgroundLoopName
+from songmaker_cli.health_types import BackgroundLoopName
 
 _ALL_SONGMAKER_TOOLS = sorted(f"mcp__songmaker__{name}" for name in MCP_TOOL_NAMES)
 
@@ -354,6 +356,70 @@ def health_client(tmp_path, mock_arq_pool):
         yield client
 
 
+@pytest.fixture
+def health_json_before_refactor() -> bytes:
+    return (
+        b'{"status":"$status","music_worker":"running","scoring_worker":"running",'
+        b'"music_queue_depth":3,"scoring_queue_depth":2,"db":"ok","redis":"ok",'
+        b'"redis_session_cache_failures":0,"acestep":"$acestep",'
+        b'"acestep_workers_total":1,"acestep_workers_online":$online,'
+        b'"queue_depth_cap_reached":false,"uptime_seconds":123,'
+        b'"claude_cli_tool_surface":"$surface","codex_image_sandbox_runtime":"unverified",'
+        b'"background_loops":{'
+        b'"cover_runner":{"state":"ok","consecutive_failures":0,"last_error":null},'
+        b'"session_sync":{"state":"dead","consecutive_failures":0,"last_error":"task ended"},'
+        b'"resource_event_cleanup":{"state":"ok","consecutive_failures":0,"last_error":null},'
+        b'"score_backfill":{"state":"failing","consecutive_failures":3,"last_error":"RuntimeError"},'
+        b'"stale_job_reaper":{"state":"ok","consecutive_failures":0,"last_error":null},'
+        b'"provider_status_refresh":{"state":"ok","consecutive_failures":0,"last_error":null}}}'
+    )
+
+
+@pytest.mark.parametrize("tool_surface", ["ok", "drift", "unverified"])
+@pytest.mark.parametrize(
+    ("worker_online", "overall_status", "acestep_status"),
+    [(True, "ok", "healthy"), (False, "degraded", "unhealthy")],
+    ids=["worker-online", "worker-offline"],
+)
+def test_health_preserves_response_bytes(
+    health_client, health_json_before_refactor, monkeypatch,
+    tool_surface, worker_online, overall_status, acestep_status,
+) -> None:
+    import songmaker_cli.arq_pool as arq_mod
+
+    now = datetime(2026, 9, 20, tzinfo=timezone.utc)
+    health_client.app.state.startup_time = now - timedelta(seconds=123)
+    arq_mod._pool.get = AsyncMock(
+        return_value=json.dumps({"loaded": [], "gpu_healthy": True}).encode()
+        if worker_online else None,
+    )
+    monkeypatch.setattr(provider, "claude_cli_tool_surface_health", lambda: tool_surface)
+    registry = health_client.app.state.background_loop_registry
+    registry.mark_dead(BackgroundLoopName.SESSION_SYNC, None)
+    for _ in range(BACKGROUND_LOOP_FAILURE_THRESHOLD):
+        registry.record_failure(BackgroundLoopName.SCORE_BACKFILL, RuntimeError("no pool"))
+
+    with (
+        patch("songmaker_cli.health_api.datetime", wraps=datetime) as clock,
+        patch.object(arq_mod, "is_music_worker_healthy", AsyncMock(return_value=True)),
+        patch.object(arq_mod, "is_scoring_worker_healthy", AsyncMock(return_value=True)),
+        patch.object(arq_mod, "get_music_queue_depth", AsyncMock(return_value=3)),
+        patch.object(arq_mod, "get_scoring_queue_depth", AsyncMock(return_value=2)),
+    ):
+        clock.now.return_value = now
+        response = health_client.get("/health")
+
+    expected = (
+        health_json_before_refactor
+        .replace(b"$status", overall_status.encode())
+        .replace(b"$acestep", acestep_status.encode())
+        .replace(b"$online", str(int(worker_online)).encode())
+        .replace(b"$surface", tool_surface.encode())
+    )
+    assert response.status_code == 200
+    assert response.content == expected
+
+
 def test_worker_with_broken_gpu_is_not_counted_online(health_client) -> None:
     body = _get_health(health_client, gpu_healthy=False)
     assert body["acestep_workers_total"] == 1
@@ -403,8 +469,57 @@ def test_metrics_excludes_broken_gpu_worker_from_online_count(health_client) -> 
 
 
 @pytest.fixture
-def prometheus_output_before_refactor() -> bytes:
-    """Literal output captured from the formatter before issue #942."""
+def prometheus_output_before_refactor(without_probes) -> bytes:
+    """Literal output captured before the formatter refactors, including absent probes."""
+    if without_probes:
+        return (
+            b'# HELP songmaker_http_requests_total Total HTTP requests by method and status.\n'
+            b'# TYPE songmaker_http_requests_total counter\n'
+            b'songmaker_http_requests_total{method="POST",status="201"} 3\n'
+            b'songmaker_http_requests_total{method="GET",status="200"} 10\n'
+            b'# HELP songmaker_http_request_duration_milliseconds_total Cumulative HTTP '
+            b'request duration in milliseconds.\n'
+            b'# TYPE songmaker_http_request_duration_milliseconds_total counter\n'
+            b'songmaker_http_request_duration_milliseconds_total 456.7\n'
+            b'# HELP songmaker_active_sessions Number of active user sessions.\n'
+            b'# TYPE songmaker_active_sessions gauge\n'
+            b'songmaker_active_sessions 3\n'
+            b'# HELP songmaker_jobs_total Total jobs by type and status.\n'
+            b'# TYPE songmaker_jobs_total gauge\n'
+            b'songmaker_jobs_total{type="generate",status="completed"} 5\n'
+            b'songmaker_jobs_total{type="generate",status="failed"} 1\n'
+            b'songmaker_jobs_total{type="score",status="queued"} 2\n'
+            b'# HELP songmaker_last_job_failure_timestamp_seconds Unix time of the '
+            b'newest job failure, 0 while nothing has ever failed.\n'
+            b'# TYPE songmaker_last_job_failure_timestamp_seconds gauge\n'
+            b'songmaker_last_job_failure_timestamp_seconds 1756000000.0\n'
+            b'# HELP songmaker_job_duration_seconds Job duration statistics for completed jobs.\n'
+            b'# TYPE songmaker_job_duration_seconds gauge\n'
+            b'# HELP songmaker_queue_depth Number of jobs waiting per arq queue.\n'
+            b'# TYPE songmaker_queue_depth gauge\n'
+            b'songmaker_queue_depth{queue="music"} 7\n'
+            b'songmaker_queue_depth{queue="scoring"} 2\n'
+            b'# HELP songmaker_acestep_workers_total Total registered acestep workers by status.\n'
+            b'# TYPE songmaker_acestep_workers_total gauge\n'
+            b'songmaker_acestep_workers_total{status="online"} 0\n'
+            b'songmaker_acestep_workers_total{status="loading"} 0\n'
+            b'songmaker_acestep_workers_total{status="offline"} 3\n'
+            b'# HELP songmaker_acestep_worker_loaded_models Number of loaded models per worker.\n'
+            b'# TYPE songmaker_acestep_worker_loaded_models gauge\n'
+            b'# HELP songmaker_acestep_worker_queue_depth Per-worker generation queue depth.\n'
+            b'# TYPE songmaker_acestep_worker_queue_depth gauge\n'
+            b'# HELP songmaker_acestep_worker_vram_used_gigabytes Per-worker VRAM used, '
+            b'from its own heartbeat.\n'
+            b'# TYPE songmaker_acestep_worker_vram_used_gigabytes gauge\n'
+            b'# HELP songmaker_acestep_worker_vram_total_gigabytes Per-worker VRAM '
+            b'budget, from its heartbeat.\n'
+            b'# TYPE songmaker_acestep_worker_vram_total_gigabytes gauge\n'
+            b'# HELP songmaker_background_loop_consecutive_failures Consecutive failures '
+            b'per background loop.\n'
+            b'# TYPE songmaker_background_loop_consecutive_failures gauge\n'
+            b'# HELP songmaker_background_loop_alive Whether each background loop task is alive.\n'
+            b'# TYPE songmaker_background_loop_alive gauge\n'
+        )
     return (
         b'# HELP songmaker_http_requests_total Total HTTP requests by method and status.\n'
         b'# TYPE songmaker_http_requests_total counter\n'
@@ -470,7 +585,10 @@ def prometheus_output_before_refactor() -> bytes:
     )
 
 
-def test_prometheus_output_is_byte_identical(prometheus_output_before_refactor) -> None:
+@pytest.mark.parametrize("without_probes", [False, True], ids=["sampled", "without-probes"])
+def test_prometheus_output_is_byte_identical(
+    prometheus_output_before_refactor, without_probes,
+) -> None:
     metrics = _PrometheusMetrics(
         http_snapshot={
             "http_requests_total": {"POST 201": 3, "GET 200": 10},
@@ -494,4 +612,20 @@ def test_prometheus_output_is_byte_identical(prometheus_output_before_refactor) 
         background_loop_consecutive_failures={"session_sync": 0, "score_backfill": 3},
         background_loop_alive={"session_sync": False, "score_backfill": True},
     )
+    if without_probes:
+        metrics = replace(
+            metrics,
+            duration_avg=None,
+            duration_min=None,
+            duration_max=None,
+            acestep_workers_online=0,
+            acestep_workers_loading=0,
+            acestep_workers_offline=3,
+            acestep_worker_loaded_counts={},
+            acestep_worker_queue_depths={},
+            acestep_worker_vram_used_gb={},
+            acestep_worker_vram_total_gb={},
+            background_loop_consecutive_failures={},
+            background_loop_alive={},
+        )
     assert _format_prometheus(metrics).encode() == prometheus_output_before_refactor
