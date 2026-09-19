@@ -189,7 +189,7 @@ def set_generation_transcript(
 ) -> None:
     generation = _require_generation(session, generation_id)
     generation.whisper_text = text
-    generation.whisper_cues = [cue.model_dump() for cue in cues]
+    generation.whisper_cues = list(cues)
     session.flush()
 
 
