@@ -66,6 +66,8 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # uv run as PID 1 never reaps exited children (bwrap zombies); tini does.
+    init: true
     logging: *service-logging
     depends_on:
       postgres:
