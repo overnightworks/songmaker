@@ -83,6 +83,7 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "pyyaml": frozenset({"_yaml", "yaml"}),
     "redis": frozenset({"redis"}),
     "ruff": frozenset({"ruff"}),
+    "sentence-transformers": frozenset({"sentence_transformers"}),
     "soundfile": frozenset({"_soundfile", "_soundfile_data", "soundfile"}),
     "sqlalchemy": frozenset({"sqlalchemy"}),
     "structlog": frozenset({"structlog"}),

@@ -64,3 +64,6 @@ _reference/
 _archive/
 .env
 .pr-drafts/
+
+# Local function similarity audit
+.cache/similar_functions/
