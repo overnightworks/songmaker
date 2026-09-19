@@ -17,6 +17,7 @@ from agent_providers.codex.image import (
     CodexImageQuotaError,
 )
 from agent_providers.codex.pool import CodexProcessPool
+from agent_providers.images import ImagePolicy
 from agent_providers.process import CliRunOutcome, CliRunReason
 from conftest import override_provider_runtime, use_codex_process_pool
 from PIL import Image
@@ -203,6 +204,59 @@ def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
     ) == 0
     with factory() as session:
         assert session.get(Job, job_id).status == JobStatus.RUNNING
+
+
+@pytest.mark.parametrize("aborted", (False, True), ids=("no-abort-signal", "abort-requested"))
+def test_cover_job_passes_image_policy_and_reports_generator_abort(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, aborted: bool,
+) -> None:
+    factory, audio_dir, job_id = _cover_job(tmp_path)
+    with factory() as session:
+        assert update_job_status(session, job_id, JobStatus.RUNNING)
+        session.commit()
+    abort_signal = threading.Event() if aborted else None
+    if abort_signal is not None:
+        abort_signal.set()
+
+    def generate_image(
+        _prompt: str,
+        *,
+        policy: ImagePolicy,
+        deadline: float,
+        abort_signal: threading.Event | None,
+        model: str,
+    ) -> bytes:
+        assert policy == cover_runner.COVER_IMAGE_POLICY
+        if abort_signal is not None and abort_signal.is_set():
+            raise CodexImageCliError("Image generation cancelled.")
+        return _png_bytes()
+
+    monkeypatch.setattr(cover_runner, "generate_codex_cover_image", generate_image)
+    monkeypatch.setattr(
+        cover_runner, "cover_image_provider_method", lambda _session: _codex_cover_dispatch(),
+    )
+
+    asyncio.run(cover_runner.run_claimed_cover_suggestion_job(
+        job_id,
+        db_factory=factory,
+        audio_dir=audio_dir,
+        settings=_settings(CoverExecutor.WEB),
+        abort_signal=abort_signal,
+    ))
+
+    with factory() as session:
+        job = session.get(Job, job_id)
+        if aborted:
+            assert job.status == JobStatus.FAILED
+            assert job.error == "Codex could not draw: Image generation cancelled."
+            assert job.error_type == "cover_suggestion_error"
+            assert not job.album.cover_suggestions
+            assert not list(audio_dir.rglob("*.png"))
+        else:
+            assert job.status == JobStatus.COMPLETED
+            assert len(job.album.cover_suggestions) == 3
+            assert all((audio_dir / item.png_path).is_file() for item in job.album.cover_suggestions)
+    assert not list(audio_dir.rglob(".*.staging"))
 
 
 @pytest.mark.parametrize(
