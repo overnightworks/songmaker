@@ -1,0 +1,8 @@
+claim_id = "f5578e999a1c4bba9f6be6c6bc18a6b9"
+agent = "claude-head"
+role = "builder"
+base = "d89d856c46cd966af2c20b69673140cf7aec6921"
+branch = "claude/issue-956-health-response"
+scope = ["frontend/src/lib/api/types.ts", "frontend/src/lib/stores/health.test.ts", "frontend/src/lib/stores/health.ts", "scripts/generate_types.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/health.py", "src/songmaker_cli/health_api.py", "tests/test_health_api.py"]
+opened_commit = "dacf33de23b9208a3ec0e2a0a2a9e06b0783ee37"
+whole_reason = "Ein Antwortmodell zieht Backend, generierte Typen und den Frontend-Store zusammen"
