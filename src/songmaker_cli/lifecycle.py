@@ -32,7 +32,6 @@ from songmaker_cli.health_types import (
     BackgroundLoopName,
     CodexImageSandboxRuntimeHealth,
 )
-from songmaker_cli.health_types import BackgroundLoopStatus as BackgroundLoopStatus
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness
 from songmaker_cli.worker_liveness import read_worker_liveness as read_liveness_signals

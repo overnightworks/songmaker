@@ -27,7 +27,7 @@ from songmaker_cli.constants import BACKGROUND_LOOP_FAILURE_THRESHOLD
 from songmaker_cli.cowriter.mcp_spec import MCP_TOOL_NAMES
 from songmaker_cli.db.models import AceStepWorker
 from songmaker_cli.health_api import _format_prometheus, _PrometheusMetrics
-from songmaker_cli.lifecycle import BackgroundLoopName
+from songmaker_cli.health_types import BackgroundLoopName
 
 _ALL_SONGMAKER_TOOLS = sorted(f"mcp__songmaker__{name}" for name in MCP_TOOL_NAMES)
 
