@@ -1,3 +1,4 @@
+import { makeSong as song } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -29,6 +30,21 @@ import {
 	watchShareView
 } from './shares';
 
+const songDefaults = {
+	slug: 'tide',
+	title: 'Tide',
+	album_title: 'Nachtstrom',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	generation_count: 0,
+	best_scores: null,
+	best_rating: null,
+	is_shared: true,
+	share_slug: 'slug-s'
+} satisfies Partial<SongItem>;
+
 function page(
 	overrides: Partial<{
 		items: ShareInventoryItem[];
@@ -56,34 +72,6 @@ function item(overrides: Partial<ShareInventoryItem> = {}): ShareInventoryItem {
 		share_slug: 'slug-a',
 		created_at: '2026-01-01T00:00:00+00:00',
 		public_path: '/share/slug-a',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'tide',
-		title: 'Tide',
-		album_id: 'a1',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: true,
-		share_slug: 'slug-s',
 		...overrides
 	};
 }
@@ -374,7 +362,7 @@ describe('shares view and patches', () => {
 		await loadShareInventory({ reset: true });
 		patchSharesFromSong(
 			song({
-				id: 's1',
+				...songDefaults,
 				title: 'Tide Updated',
 				generations: [
 					{
@@ -404,7 +392,7 @@ describe('shares view and patches', () => {
 				]
 			})
 		);
-		patchSharesFromSong(song({ id: 's-other', title: 'Other' }));
+		patchSharesFromSong(song({ ...songDefaults, id: 's-other', title: 'Other' }));
 		expect(get(shareInventory).items.map((row) => row.id)).toEqual(['s1', 'g1']);
 		expect(get(shareInventory).items[0]?.title).toBe('Tide Updated');
 		expect(get(shareInventory).items[1]).toMatchObject({
@@ -434,7 +422,7 @@ describe('shares view and patches', () => {
 		);
 		await loadShareInventory({ reset: true });
 
-		patchSharesFromSong(song({ title: 'Renamed', share_slug: null, generations: [] }));
+		patchSharesFromSong(song({ ...songDefaults, title: 'Renamed', share_slug: null }));
 
 		expect(get(shareInventory).items).toMatchObject([
 			{ id: 's1', title: 'Renamed', share_slug: 'existing-song' },

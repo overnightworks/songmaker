@@ -1,3 +1,4 @@
+import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -60,6 +61,40 @@ import { playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
+const generationDefaults = {
+	generation_params: { audio_duration: 195 },
+	audio_duration_sec: 195
+} satisfies Partial<GenerationItem>;
+
+const songDefaults = {
+	album_id: 'a-local',
+	album_title: 'Local Album',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	version_count: 3,
+	generation_count: 5,
+	best_scores: null,
+	best_rating: null,
+	generations: [
+		generation({
+			...structuredClone(generationDefaults),
+			version_number: 3,
+			generation_number: 3,
+			is_picked: true
+		}),
+		generation({
+			...structuredClone(generationDefaults),
+			id: 'g2',
+			version_number: 3,
+			generation_number: 2
+		}),
+		generation({ ...structuredClone(generationDefaults), id: 'g3', version_number: 2 })
+	],
+	share_slug: null
+} satisfies Partial<SongItem>;
+
 const playlist = {
 	id: 'p1',
 	title: 'Night Drive',
@@ -117,33 +152,6 @@ function mockActions(): GenerationActions {
 	};
 }
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: { audio_duration: 195 },
-		audio_duration_sec: 195,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
 function voice(overrides: Record<string, unknown> = {}) {
 	return {
 		id: 'l1',
@@ -155,38 +163,6 @@ function voice(overrides: Record<string, unknown> = {}) {
 		created_at: '2026-01-01T00:00:00+00:00',
 		deleted_at: '2026-01-02T00:00:00+00:00',
 		samples: [],
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'local-only',
-		title: 'Local Only',
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 3,
-		generation_count: 5,
-		best_scores: null,
-		best_rating: null,
-		generations: [
-			generation({ id: 'g1', version_number: 3, generation_number: 3, is_picked: true }),
-			generation({ id: 'g2', version_number: 3, generation_number: 2 }),
-			generation({ id: 'g3', version_number: 2, generation_number: 1 })
-		],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
 		...overrides
 	};
 }
@@ -229,7 +205,7 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
 	const props = {
-		song: song(),
+		song: song(structuredClone(songDefaults)),
 		dirty: false,
 		draftVersionNumber: 4,
 		latestVersionNumber: 3,
@@ -249,8 +225,14 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 
 describe('TakesList', () => {
 	it('names a deleted voice without changing the take playback target', async () => {
-		const deletedVoiceTake = generation({ generation_params: { user_lora_id: 'l1' } });
-		const songWithDeletedVoice = song({ generations: [deletedVoiceTake] });
+		const deletedVoiceTake = generation({
+			...structuredClone(generationDefaults),
+			generation_params: { user_lora_id: 'l1' }
+		});
+		const songWithDeletedVoice = song({
+			...structuredClone(songDefaults),
+			generations: [deletedVoiceTake]
+		});
 		const { target } = await render({ song: songWithDeletedVoice, voices: [voice()] });
 
 		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
@@ -287,7 +269,9 @@ describe('TakesList', () => {
 
 	it('shows the failure even when the song has no takes yet', async () => {
 		generationFailures.set({ s1: VRAM_CAUSE });
-		const { target } = await render({ song: song({ generations: [] }) });
+		const { target } = await render({
+			song: song({ ...structuredClone(songDefaults), generations: [] })
+		});
 		expect(target.querySelector('.failed-cause')?.textContent).toBe(VRAM_CAUSE);
 	});
 
@@ -348,7 +332,7 @@ describe('TakesList', () => {
 		// A middle version (v2) was deleted after this job started: song.version_count
 		// dropped to 2, but the job still targets the highest surviving version, v3.
 		const { target } = await render({
-			song: song({ version_count: 2 }),
+			song: song({ ...structuredClone(songDefaults), version_count: 2 }),
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
 			latestVersionNumber: 3
 		});
@@ -359,7 +343,9 @@ describe('TakesList', () => {
 	it('deletes a version and its takes from the group header, with confirmation', async () => {
 		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
 		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		vi.mocked(fetchSong).mockResolvedValueOnce(
+			song({ ...structuredClone(songDefaults), version_count: 2 })
+		);
 		vi.mocked(fetchVersions).mockResolvedValueOnce([]);
 
 		const { target } = await render();
@@ -378,7 +364,10 @@ describe('TakesList', () => {
 
 	it("shows the take's model as a terse badge after the duration", async () => {
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', model_mode: 'xl-sft' })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [generation({ ...structuredClone(generationDefaults), model_mode: 'xl-sft' })]
+			})
 		});
 		const badge = target.querySelector<HTMLElement>('.model-badge');
 		expect(badge?.textContent?.trim()).toBe('xl-sft');
@@ -388,9 +377,10 @@ describe('TakesList', () => {
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
 		const { target } = await render({
 			song: song({
+				...structuredClone(songDefaults),
 				generations: [
 					generation({
-						id: 'g1',
+						...structuredClone(generationDefaults),
 						generation_params: { audio_duration: 0 },
 						audio_duration_sec: 188
 					})
@@ -403,7 +393,10 @@ describe('TakesList', () => {
 	it('shows no duration at all for a take whose length has not been measured', async () => {
 		const { target } = await render({
 			song: song({
-				generations: [generation({ id: 'g1', audio_duration_sec: null })]
+				...structuredClone(songDefaults),
+				generations: [
+					generation({ ...structuredClone(generationDefaults), audio_duration_sec: null })
+				]
 			})
 		});
 		expect(target.querySelector('.take-duration')).toBeNull();
@@ -411,7 +404,10 @@ describe('TakesList', () => {
 
 	it('shows no model badge for a take that carries no model info', async () => {
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', model_mode: '' })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [generation({ ...structuredClone(generationDefaults), model_mode: '' })]
+			})
 		});
 		expect(target.querySelector('.model-badge')).toBeNull();
 	});
@@ -419,9 +415,10 @@ describe('TakesList', () => {
 	it('shows a batch-reduction badge when the worker delivered fewer takes than asked', async () => {
 		const { target } = await render({
 			song: song({
+				...structuredClone(songDefaults),
 				generations: [
 					generation({
-						id: 'g1',
+						...structuredClone(generationDefaults),
 						generation_params: { batch_size: 2, delivered_batch_size: 1 }
 					})
 				]
@@ -434,9 +431,10 @@ describe('TakesList', () => {
 	it('shows no batch-reduction badge when the worker delivered exactly what was asked', async () => {
 		const { target } = await render({
 			song: song({
+				...structuredClone(songDefaults),
 				generations: [
 					generation({
-						id: 'g1',
+						...structuredClone(generationDefaults),
 						generation_params: { batch_size: 2, delivered_batch_size: 2 }
 					})
 				]
@@ -453,9 +451,10 @@ describe('TakesList', () => {
 	it('flags a take with no vocals detected', async () => {
 		const { target } = await render({
 			song: song({
+				...structuredClone(songDefaults),
 				generations: [
 					generation({
-						id: 'g1',
+						...structuredClone(generationDefaults),
 						scores: { lyrical_coherence: 0, lyrical_summary: 'Whisper found no vocals' }
 					})
 				]
@@ -469,7 +468,13 @@ describe('TakesList', () => {
 	it('flags a take with a long silent gap', async () => {
 		const { target } = await render({
 			song: song({
-				generations: [generation({ id: 'g1', scores: { silence_gaps: 1, silence_longest: 20 } })]
+				...structuredClone(songDefaults),
+				generations: [
+					generation({
+						...structuredClone(generationDefaults),
+						scores: { silence_gaps: 1, silence_longest: 20 }
+					})
+				]
 			})
 		});
 		const badge = target.querySelector<HTMLElement>('.quality-flag-badge');
@@ -480,7 +485,13 @@ describe('TakesList', () => {
 	it('shows no quality flag for a short, ordinary silence gap', async () => {
 		const { target } = await render({
 			song: song({
-				generations: [generation({ id: 'g1', scores: { silence_gaps: 1, silence_longest: 3 } })]
+				...structuredClone(songDefaults),
+				generations: [
+					generation({
+						...structuredClone(generationDefaults),
+						scores: { silence_gaps: 1, silence_longest: 3 }
+					})
+				]
 			})
 		});
 		expect(target.querySelector('.quality-flag-badge')).toBeNull();
@@ -494,7 +505,10 @@ describe('TakesList', () => {
 	it('shows no quality flag for a take with a merely low, non-zero coherence score', async () => {
 		const { target } = await render({
 			song: song({
-				generations: [generation({ id: 'g1', scores: { lyrical_coherence: 2 } })]
+				...structuredClone(songDefaults),
+				generations: [
+					generation({ ...structuredClone(generationDefaults), scores: { lyrical_coherence: 2 } })
+				]
 			})
 		});
 		expect(target.querySelector('.quality-flag-badge')).toBeNull();
@@ -532,17 +546,19 @@ describe('TakesList', () => {
 	] as const)(
 		'shows %s provenance with a link to its existing source',
 		async (task_type, label) => {
-			const source = generation({ id: 'source', version_number: 1, generation_number: 1 });
+			const source = generation({ ...structuredClone(generationDefaults), id: 'source' });
 			const result = generation({
+				...structuredClone(generationDefaults),
 				id: 'result',
 				version_number: 2,
-				generation_number: 1,
 				src_generation_id: source.id,
 				src_generation_number: source.generation_number,
 				src_generation_version_number: source.version_number,
 				generation_params: { task_type }
 			});
-			const { target } = await render({ song: song({ generations: [source, result] }) });
+			const { target } = await render({
+				song: song({ ...structuredClone(songDefaults), generations: [source, result] })
+			});
 			const provenance = target.querySelector<HTMLElement>('#take-result .take-origin');
 
 			expect(provenance?.textContent?.trim()).toBe(label);
@@ -554,13 +570,16 @@ describe('TakesList', () => {
 
 	it('keeps provenance as text when its source metadata has no loaded target', async () => {
 		const result = generation({
+			...structuredClone(generationDefaults),
 			id: 'result',
 			src_generation_id: 'deleted-source',
 			src_generation_number: 1,
 			src_generation_version_number: 1,
 			generation_params: { task_type: 'repaint' }
 		});
-		const { target } = await render({ song: song({ generations: [result] }) });
+		const { target } = await render({
+			song: song({ ...structuredClone(songDefaults), generations: [result] })
+		});
 		const provenance = target.querySelector<HTMLElement>('#take-result .take-origin');
 
 		expect(provenance?.textContent?.trim()).toBe('Repaint from v1 · take 1');
@@ -568,15 +587,18 @@ describe('TakesList', () => {
 	});
 
 	it('keeps source provenance non-navigating while selection mode selects the take', async () => {
-		const source = generation({ id: 'source', version_number: 1, generation_number: 1 });
+		const source = generation({ ...structuredClone(generationDefaults), id: 'source' });
 		const result = generation({
+			...structuredClone(generationDefaults),
 			id: 'result',
 			src_generation_id: source.id,
 			src_generation_number: source.generation_number,
 			src_generation_version_number: source.version_number,
 			generation_params: { task_type: 'repaint' }
 		});
-		const { target } = await render({ song: song({ generations: [source, result] }) });
+		const { target } = await render({
+			song: song({ ...structuredClone(songDefaults), generations: [source, result] })
+		});
 		enterSelectionMode();
 		await tick();
 		const row = target.querySelector<HTMLElement>('#take-result');
@@ -714,9 +736,20 @@ describe('TakesList archived takes', () => {
 	async function renderWithArchived() {
 		return render({
 			song: song({
+				...structuredClone(songDefaults),
 				generations: [
-					generation({ id: 'g1', version_number: 3, generation_number: 3 }),
-					generation({ id: 'g-arch', version_number: 3, generation_number: 2, is_archived: true })
+					generation({
+						...structuredClone(generationDefaults),
+						version_number: 3,
+						generation_number: 3
+					}),
+					generation({
+						...structuredClone(generationDefaults),
+						id: 'g-arch',
+						version_number: 3,
+						generation_number: 2,
+						is_archived: true
+					})
 				]
 			})
 		});
@@ -834,7 +867,10 @@ describe('TakesList score pill', () => {
 
 	it.each(cases)('shows $name', async ({ scores, text }) => {
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', scores })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [generation({ ...structuredClone(generationDefaults), scores })]
+			})
 		});
 		expect(target.querySelector('.score-badge')?.textContent?.trim()).toBe(text);
 	});
@@ -843,7 +879,12 @@ describe('TakesList score pill', () => {
 		// 4.5 out of 10 is 'ok' (threshold 4), while 45 out of 100 would be too
 		// — the thresholds are read on the raw value.
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', scores: { audiobox_quality: 4.5 } })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [
+					generation({ ...structuredClone(generationDefaults), scores: { audiobox_quality: 4.5 } })
+				]
+			})
 		});
 		const pill = target.querySelector('.score-badge');
 		expect(pill?.textContent?.trim()).toBe('45');
@@ -852,14 +893,27 @@ describe('TakesList score pill', () => {
 
 	it('names the metric behind the number', async () => {
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', scores: { dynamics: 54 } })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [
+					generation({ ...structuredClone(generationDefaults), scores: { dynamics: 54 } })
+				]
+			})
 		});
 		expect(target.querySelector('.score-badge')?.getAttribute('title')).toBe('Dynamics 54');
 	});
 
 	it('shows no pill for a take that carries no score at all', async () => {
 		const { target } = await render({
-			song: song({ generations: [generation({ id: 'g1', scores: { detected_language: 'en' } })] })
+			song: song({
+				...structuredClone(songDefaults),
+				generations: [
+					generation({
+						...structuredClone(generationDefaults),
+						scores: { detected_language: 'en' }
+					})
+				]
+			})
 		});
 		expect(target.querySelector('.score-badge')).toBeNull();
 	});

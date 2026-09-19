@@ -1,3 +1,4 @@
+import { makeGeneration as generation } from '$lib/test-utils/factories';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -11,33 +12,13 @@ import {
 	toggleSelection
 } from './selection';
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: '/audio/g1.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'complete',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		share_slug: null,
-		model_mode: 'base',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
+const generationDefaults = {
+	mp3_path: '/audio/g1.mp3',
+	seed: 1,
+	status: 'complete',
+	share_slug: null,
+	model_mode: 'base'
+} satisfies Partial<GenerationItem>;
 
 beforeEach(() => {
 	clearSelection();
@@ -68,7 +49,10 @@ describe('selection', () => {
 
 	it('keeps existing selections when adding all ids and clears them when selection mode exits', () => {
 		toggleSelection('g1');
-		selectAllUnkept([generation({ id: 'g1' }), generation({ id: 'g2' })]);
+		selectAllUnkept([
+			generation(generationDefaults),
+			generation({ ...generationDefaults, id: 'g2' })
+		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['g1', 'g2']));
 		expect(get(selectionCount)).toBe(2);
@@ -81,9 +65,9 @@ describe('selection', () => {
 
 	it('selects only generations that are neither picked nor kept', () => {
 		selectAllUnkept([
-			generation({ id: 'available' }),
-			generation({ id: 'picked', is_picked: true }),
-			generation({ id: 'kept', is_kept: true })
+			generation({ ...generationDefaults, id: 'available' }),
+			generation({ ...generationDefaults, id: 'picked', is_picked: true }),
+			generation({ ...generationDefaults, id: 'kept', is_kept: true })
 		]);
 
 		expect(get(selectedIds)).toEqual(new Set(['available']));

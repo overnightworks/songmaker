@@ -1,3 +1,4 @@
+import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -19,72 +20,33 @@ import { editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { GenerationItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 import writeColumnSource from './WriteColumn.svelte?raw';
 import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
 import takeStripSource from './TakeStrip.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
+const songDefaults = {
+	slug: 'test',
+	title: 'Test',
+	lyrics: 'verse one',
+	prompt: 'rock',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	best_scores: null,
+	best_rating: null,
+	generations: [generation()],
+	created_at: '',
+	share_slug: null
+} satisfies Partial<SongItem>;
+
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'test',
-		title: 'Test',
-		album_id: 'a1',
-		album_title: 'Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: 'verse one',
-		prompt: 'rock',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [generation()],
-		created_at: '',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
 beforeEach(() => {
-	loadSongData(song());
+	loadSongData(song(structuredClone(songDefaults)));
 });
 
 afterEach(async () => {
@@ -97,8 +59,8 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
 	const props = {
-		song: song(),
-		allSongs: [song()],
+		song: song(structuredClone(songDefaults)),
+		allSongs: [song(structuredClone(songDefaults))],
 		coWriterOpen: false,
 		compact: false,
 		onturncompleted: vi.fn(),
@@ -170,7 +132,7 @@ describe('WriteColumn Co-Writer mode', () => {
 		});
 		try {
 			const gen = generation({ id: 'g9' });
-			const targetSong = song({ generations: [gen] });
+			const targetSong = song({ ...structuredClone(songDefaults), generations: [gen] });
 			const { target } = await render({
 				coWriterOpen: true,
 				song: targetSong

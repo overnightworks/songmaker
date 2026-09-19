@@ -1,12 +1,12 @@
+import {
+	makePlaylistDetail as playlistDetail,
+	makePlaylistEntry as playlistEntry,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type {
-	GenerationItem,
-	PlaylistDetailItem,
-	PlaylistEntryItem,
-	SongItem
-} from '$lib/api/types';
+import type { PlaylistEntryItem } from '$lib/api/types';
 import {
 	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
@@ -141,6 +141,15 @@ import breadcrumbSource from './Breadcrumb.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
 import railSearchSource from './shell/RailSearch.svelte?raw';
+
+const playlistEntryDefaults = {
+	id: 'e1',
+	song_title: 'First Track',
+	album_title: 'Local Album',
+	mp3_path: 'g1.mp3',
+	seed: 7,
+	model_mode: 'turbo'
+} satisfies Partial<PlaylistEntryItem>;
 
 // Every target below is styled by exactly one of these components — never a
 // generic wrapper — so injecting that component's own compiled stylesheet
@@ -287,110 +296,6 @@ function layoutAlongParent(
 	});
 }
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'local-only',
-		title: 'Local Only',
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [generation()],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
-function playlistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
-	return {
-		id: 'e1',
-		position: 0,
-		generation_id: 'g1',
-		song_id: 's1',
-		song_title: 'First Track',
-		album_title: 'Local Album',
-		artist: 'Artist',
-		generation_number: 1,
-		version_number: 1,
-		is_picked: false,
-		audio_duration: 180,
-		mp3_path: 'g1.mp3',
-		seed: 7,
-		model_mode: 'turbo',
-		lyrics: null,
-		...overrides
-	};
-}
-
-function playlistDetail(): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 3,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [
-			playlistEntry({ id: 'e1', position: 0, song_title: 'First Track' }),
-			playlistEntry({
-				id: 'e2',
-				position: 1,
-				generation_id: 'g2',
-				song_title: 'Second Track'
-			}),
-			playlistEntry({
-				id: 'e3',
-				position: 2,
-				generation_id: 'g3',
-				song_title: 'Third Track'
-			})
-		]
-	};
-}
-
 function requireButton(
 	root: ParentNode,
 	name: string,
@@ -429,10 +334,42 @@ beforeEach(() => {
 			is_archived: false
 		}
 	]);
-	songList.set([song({ generations: [] })]);
+	songList.set([
+		song({
+			album_id: 'a-local',
+			album_title: 'Local Album',
+			bpm: 120,
+			audio_duration: 180,
+			key_scale: 'Am',
+			generation_params: null,
+			best_scores: null,
+			best_rating: null,
+			share_slug: null
+		})
+	]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
-	const playlist = playlistDetail();
+	const playlist = playlistDetail({
+		entry_count: 3,
+		share_slug: null,
+		entries: [
+			playlistEntry(playlistEntryDefaults),
+			playlistEntry({
+				...playlistEntryDefaults,
+				id: 'e2',
+				position: 1,
+				generation_id: 'g2',
+				song_title: 'Second Track'
+			}),
+			playlistEntry({
+				...playlistEntryDefaults,
+				id: 'e3',
+				position: 2,
+				generation_id: 'g3',
+				song_title: 'Third Track'
+			})
+		]
+	});
 	setOpenCollection({ kind: 'playlist', id: playlist.id });
 	selectedPlaylistDetail.set(playlist);
 	theme.set('dark');

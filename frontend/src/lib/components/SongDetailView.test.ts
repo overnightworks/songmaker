@@ -1,8 +1,14 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makeSong as song,
+	makeVersion as version
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, JobItem, SongItem, VersionItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, JobItem, SongItem } from '$lib/api/types';
 import type { HealthSummary } from '$lib/api/client';
 import {
 	ALBUM_COVER_ALT_TYPE,
@@ -171,34 +177,34 @@ import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
 
-const mounted: Array<ReturnType<typeof mount>> = [];
+const generationDefaults = {
+	generation_params: { inference_steps: 8, guidance_scale: 1.5 }
+} satisfies Partial<GenerationItem>;
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: { inference_steps: 8, guidance_scale: 1.5 },
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
+const albumDefaults = {
+	id: 'a-local',
+	title: 'Local Album',
+	song_count: 3,
+	share_slug: null,
+	cover: null
+} satisfies Partial<AlbumItem>;
+
+const songDefaults = {
+	album_id: 'a-local',
+	album_title: 'Local Album',
+	lyrics: 'verse',
+	prompt: 'dark folk',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	best_scores: null,
+	best_rating: null,
+	generations: [generation(structuredClone(generationDefaults))],
+	share_slug: null
+} satisfies Partial<SongItem>;
+
+const mounted: Array<ReturnType<typeof mount>> = [];
 
 function jobStatus(overrides: Partial<JobItem> = {}): JobItem {
 	return {
@@ -227,50 +233,6 @@ function healthSummary(overrides: Partial<HealthSummary> = {}): HealthSummary {
 		scoring_queue_depth: 0,
 		acestep_workers_online: 1,
 		acestep_workers_total: 1,
-		...overrides
-	};
-}
-
-function version(overrides: Partial<VersionItem> = {}): VersionItem {
-	return {
-		id: 'v1',
-		version_number: 1,
-		lyrics: 'verse',
-		prompt: 'dark folk',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	const gen = generation();
-	return {
-		id: 's1',
-		slug: 'local-only',
-		title: 'Local Only',
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: 'verse',
-		prompt: 'dark folk',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [gen],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
 		...overrides
 	};
 }
@@ -334,30 +296,11 @@ function stubLibraryMedia(options: { narrow: boolean; compact?: boolean }): void
 	);
 }
 
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a-local',
-		title: 'Local Album',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 3,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
 function albumSongs(): SongItem[] {
 	return [
-		song({ id: 's-first', title: 'First', track_number: 1 }),
-		song({ id: 's1', title: 'Local Only', track_number: 2 }),
-		song({ id: 's-last', title: 'Last', track_number: 3 })
+		song({ ...structuredClone(songDefaults), id: 's-first', title: 'First' }),
+		song({ ...structuredClone(songDefaults), track_number: 2 }),
+		song({ ...structuredClone(songDefaults), id: 's-last', title: 'Last', track_number: 3 })
 	];
 }
 
@@ -369,11 +312,11 @@ beforeEach(() => {
 	coWriterOpen.set(false);
 	recipeModel.set(null);
 	clearSelection();
-	songList.set([song()]);
+	songList.set([song(structuredClone(songDefaults))]);
 	selectedSongId.set('s1');
 	selectedGenerationId.set(null);
 	fetchAlbum.mockReset();
-	fetchAlbum.mockResolvedValue(album());
+	fetchAlbum.mockResolvedValue(album(albumDefaults));
 	playlistList.set([
 		{
 			id: 'p1',
@@ -457,7 +400,9 @@ describe('SongDetailView header — one row, every state', () => {
 
 describe('SongDetailView share link', () => {
 	it('shows a copy-link chip instead of the raw share URL when the song is shared', async () => {
-		songList.set([song({ is_shared: true, share_slug: 'abc123' })]);
+		songList.set([
+			song({ ...structuredClone(songDefaults), is_shared: true, share_slug: 'abc123' })
+		]);
 		const target = await renderView();
 
 		const chip = target.querySelector<HTMLButtonElement>('.share-link-chip');
@@ -535,7 +480,13 @@ describe('SongDetailView recipe and takes', () => {
 		]);
 		songList.set([
 			song({
-				generations: [generation({ generation_params: { user_lora_id: 'l1' } })]
+				...structuredClone(songDefaults),
+				generations: [
+					generation({
+						...structuredClone(generationDefaults),
+						generation_params: { user_lora_id: 'l1' }
+					})
+				]
 			})
 		]);
 
@@ -573,7 +524,7 @@ describe('SongDetailView recipe and takes', () => {
 			const target = await renderView();
 			expect(get(recipeOpen)).toBe(false);
 
-			pendingSource.set({ generation: generation(), mode });
+			pendingSource.set({ generation: generation(structuredClone(generationDefaults)), mode });
 			await tick();
 			await tick();
 			expect(get(recipeOpen)).toBe(true);
@@ -589,8 +540,11 @@ describe('SongDetailView recipe and takes', () => {
 	it('keeps draft params when Again has no reusable take params', async () => {
 		songList.set([
 			song({
+				...structuredClone(songDefaults),
 				generation_params: { inference_steps: 12, guidance_scale: 2 },
-				generations: [generation({ generation_params: null, seed: 11 })]
+				generations: [
+					generation({ ...structuredClone(generationDefaults), generation_params: null, seed: 11 })
+				]
 			})
 		]);
 		const target = await renderView();
@@ -625,7 +579,7 @@ describe('SongDetailView recipe and takes', () => {
 
 describe('SongDetailView Generate is enabled from the draft', () => {
 	it('stays disabled until the draft has lyrics, a prompt, and a model — even on a freshly created song with nothing saved', async () => {
-		songList.set([song({ lyrics: '', prompt: '' })]);
+		songList.set([song({ ...structuredClone(songDefaults), lyrics: '', prompt: '' })]);
 		const target = await renderView();
 		const generateBtn = () =>
 			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
@@ -646,7 +600,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		['cover', 'Generate Cover']
 	] as const)('names Generate after the active %s mode', async (mode, label) => {
 		const target = await renderView();
-		setSourceFromGeneration(generation(), mode);
+		setSourceFromGeneration(generation(structuredClone(generationDefaults)), mode);
 		await tick();
 
 		expect(target.querySelector('.generate-btn')?.textContent?.trim()).toBe(label);
@@ -838,7 +792,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		selectSong('s-last', song({ ...structuredClone(songDefaults), id: 's-last', title: 'Last' }));
 		await tick();
 
 		expect(target.querySelector('.dialog h3')?.textContent).toBe(EDITOR_UNSAVED_TITLE);
@@ -857,7 +811,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		selectSong('s-last', song({ ...structuredClone(songDefaults), id: 's-last', title: 'Last' }));
 		await tick();
 		clickNamed(target, 'Discard');
 		await tick();
@@ -867,13 +821,15 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 	it('Save persists the draft as a new version, then switches songs', async () => {
 		const { updateSong } = await import('$lib/api/client');
-		vi.mocked(updateSong).mockResolvedValueOnce(song({ lyrics: 'unsaved edit', version_count: 2 }));
+		vi.mocked(updateSong).mockResolvedValueOnce(
+			song({ ...structuredClone(songDefaults), lyrics: 'unsaved edit', version_count: 2 })
+		);
 		songList.set(albumSongs());
 		const target = await renderView();
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		selectSong('s-last', song({ ...structuredClone(songDefaults), id: 's-last', title: 'Last' }));
 		await tick();
 		const dialog = target.querySelector<HTMLElement>('.dialog');
 		if (!dialog) throw new Error('Expected the unsaved-changes dialog');
@@ -889,7 +845,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		selectSong('s-last', song({ id: 's-last', album_id: 'a-local', title: 'Last' }));
+		selectSong('s-last', song({ ...structuredClone(songDefaults), id: 's-last', title: 'Last' }));
 		await tick();
 
 		const dialog = target.querySelector<HTMLElement>('.dialog');
@@ -924,7 +880,9 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 	it('saves from the write surface without the overflow menu or generate', async () => {
 		const { updateSong } = await import('$lib/api/client');
-		vi.mocked(updateSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		vi.mocked(updateSong).mockResolvedValueOnce(
+			song({ ...structuredClone(songDefaults), version_count: 2 })
+		);
 		const target = await renderView();
 		setDraftLyrics('unsaved edit');
 		await tick();
@@ -942,14 +900,24 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 	it('toasts the actual saved version number from the versions API response, not version_count', async () => {
 		const { updateSong, fetchVersions } = await import('$lib/api/client');
-		vi.mocked(updateSong).mockResolvedValueOnce(song({ version_count: 2 }));
+		vi.mocked(updateSong).mockResolvedValueOnce(
+			song({ ...structuredClone(songDefaults), version_count: 2 })
+		);
 		const target = await renderView();
 		setDraftLyrics('unsaved edit');
 		await tick();
 
 		// Only override the *post-save* reload — the initial render already
 		// consumed one fetchVersions() call while loading the song.
-		vi.mocked(fetchVersions).mockResolvedValueOnce([version({ id: 'v5', version_number: 5 })]);
+		vi.mocked(fetchVersions).mockResolvedValueOnce([
+			version({
+				lyrics: 'verse',
+				prompt: 'dark folk',
+				created_at: '2026-01-01T00:00:00+00:00',
+				id: 'v5',
+				version_number: 5
+			})
+		]);
 		writeSaveButton(target).click();
 		await tick();
 		await Promise.resolve();
@@ -964,11 +932,20 @@ describe('SongDetailView unsaved-draft guard', () => {
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		const targetGen = generation({ id: 'g-last', song_id: 's-last' });
+		const targetGen = generation({
+			...structuredClone(generationDefaults),
+			id: 'g-last',
+			song_id: 's-last'
+		});
 		pendingSource.set({ generation: targetGen, mode: 'repaint' });
 		selectSong(
 			's-last',
-			song({ id: 's-last', album_id: 'a-local', title: 'Last', generations: [targetGen] })
+			song({
+				...structuredClone(songDefaults),
+				id: 's-last',
+				title: 'Last',
+				generations: [targetGen]
+			})
 		);
 		await tick();
 		expect(get(sourceGeneration)).toBeNull();
@@ -987,11 +964,20 @@ describe('SongDetailView unsaved-draft guard', () => {
 		setDraftLyrics('unsaved edit');
 		await tick();
 
-		const targetGen = generation({ id: 'g-last', song_id: 's-last' });
+		const targetGen = generation({
+			...structuredClone(generationDefaults),
+			id: 'g-last',
+			song_id: 's-last'
+		});
 		pendingSource.set({ generation: targetGen, mode: 'repaint' });
 		selectSong(
 			's-last',
-			song({ id: 's-last', album_id: 'a-local', title: 'Last', generations: [targetGen] })
+			song({
+				...structuredClone(songDefaults),
+				id: 's-last',
+				title: 'Last',
+				generations: [targetGen]
+			})
 		);
 		await tick();
 		clickNamed(target, 'Discard');
@@ -1042,8 +1028,10 @@ describe('recipe params from a take', () => {
 	it('copies reusable params and pins the seed when Again is clicked', async () => {
 		songList.set([
 			song({
+				...structuredClone(songDefaults),
 				generations: [
 					generation({
+						...structuredClone(generationDefaults),
 						seed: 99,
 						generation_params: {
 							inference_steps: 8,
@@ -1087,7 +1075,7 @@ describe('song header album rail', () => {
 
 	it('shows one album line and disabled ends without wrapping through neighbors', async () => {
 		stubLibraryMedia({ narrow: true });
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		songList.set(albumSongs());
 		selectedSongId.set('s1');
 		const target = await renderView();
@@ -1132,7 +1120,7 @@ describe('song header album rail', () => {
 	it('replaces the song and keeps the Write tab when next is clicked', async () => {
 		stubLibraryMedia({ narrow: true, compact: true });
 		const songs = albumSongs();
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		songList.set(songs);
 		selectedSongId.set('s1');
 		const cleanup = initNavigation();
@@ -1178,7 +1166,7 @@ describe('song header album rail', () => {
 	it('shows Library › Album › Track n of m as the breadcrumb', async () => {
 		stubLibraryMedia({ narrow: false, compact: true });
 		const songs = albumSongs();
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		songList.set(songs);
 		selectedSongId.set('s1');
 		const target = await renderView();
@@ -1203,6 +1191,7 @@ describe('SongDetailView cover hero', () => {
 	it('inherits parent album cover and does not show remove', async () => {
 		albumList.set([
 			album({
+				...albumDefaults,
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
@@ -1223,6 +1212,7 @@ describe('SongDetailView cover hero', () => {
 	it('does not pick some other album when the parent is missing', async () => {
 		albumList.set([
 			album({
+				...albumDefaults,
 				id: 'other-album',
 				title: 'Other Album',
 				cover: {
@@ -1233,6 +1223,7 @@ describe('SongDetailView cover hero', () => {
 		]);
 		fetchAlbum.mockResolvedValue(
 			album({
+				...albumDefaults,
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=parent.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=parent.jpg'
@@ -1253,6 +1244,7 @@ describe('SongDetailView cover hero', () => {
 	it('shows own cover, song alt, and remove', async () => {
 		songList.set([
 			song({
+				...structuredClone(songDefaults),
 				cover: {
 					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
 					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
@@ -1261,6 +1253,7 @@ describe('SongDetailView cover hero', () => {
 		]);
 		albumList.set([
 			album({
+				...albumDefaults,
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
@@ -1280,9 +1273,10 @@ describe('SongDetailView cover hero', () => {
 	});
 
 	it('uploads a song override', async () => {
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		uploadSongCover.mockResolvedValue(
 			song({
+				...structuredClone(songDefaults),
 				cover: {
 					card: '/api/songs/s1/cover?variant=card&v=new.jpg',
 					detail: '/api/songs/s1/cover?variant=detail&v=new.jpg'
@@ -1305,6 +1299,7 @@ describe('SongDetailView cover hero', () => {
 	it('removes only the own cover and then inherits the parent album', async () => {
 		songList.set([
 			song({
+				...structuredClone(songDefaults),
 				cover: {
 					card: '/api/songs/s1/cover?variant=card&v=own.jpg',
 					detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
@@ -1313,13 +1308,14 @@ describe('SongDetailView cover hero', () => {
 		]);
 		albumList.set([
 			album({
+				...albumDefaults,
 				cover: {
 					card: '/api/albums/a-local/cover?variant=card&v=album.jpg',
 					detail: '/api/albums/a-local/cover?variant=detail&v=album.jpg'
 				}
 			})
 		]);
-		deleteSongCover.mockResolvedValue(song({ cover: null }));
+		deleteSongCover.mockResolvedValue(song({ ...structuredClone(songDefaults), cover: null }));
 		const target = await renderView();
 		expect(target.querySelector('img')?.getAttribute('src')).toContain('/api/songs/s1/cover');
 		target.querySelector<HTMLButtonElement>('.cover-remove')?.click();

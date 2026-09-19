@@ -1,7 +1,13 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makePlaylistEntry as playlistEntry,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import type { AlbumItem, GenerationItem, PlaylistEntryItem, SongItem } from '$lib/api/types';
+import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import {
 	NOW_PLAYING_CLOSE,
@@ -61,100 +67,35 @@ vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 import { setKeep, setPick } from '$lib/stores/takeActions';
 import NowPlaying from './NowPlaying.svelte';
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 2,
-		mp3_path: 'a.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'sft',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: 'old verse',
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '',
-		...overrides
-	};
-}
+const generationDefaults = {
+	generation_number: 2,
+	mp3_path: 'a.mp3',
+	seed: 1,
+	model_mode: 'sft',
+	version_lyrics: 'old verse',
+	created_at: ''
+} satisfies Partial<GenerationItem>;
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	const gen = generation();
-	return {
-		id: 's1',
-		slug: 'tide',
-		title: 'Tide',
-		album_id: 'a1',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: 'old verse',
-		prompt: 'dreamy',
-		version_count: 1,
-		generation_count: 1,
-		is_shared: false,
-		created_at: '',
-		generations: [gen],
-		...overrides
-	};
-}
+const albumDefaults = { created_at: '' } satisfies Partial<AlbumItem>;
+
+const songDefaults = {
+	slug: 'tide',
+	title: 'Tide',
+	album_title: 'Nachtstrom',
+	lyrics: 'old verse',
+	prompt: 'dreamy',
+	created_at: '',
+	generations: [generation(generationDefaults)]
+} satisfies Partial<SongItem>;
 
 function info(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	return {
-		generation: generation(),
+		generation: generation(generationDefaults),
 		songId: 's1',
 		songTitle: 'Tide',
 		artist: 'Artist',
 		albumTitle: 'Nachtstrom',
 		lyrics: 'old verse',
-		...overrides
-	};
-}
-
-function playlistEntry(id: string, songTitle: string): PlaylistEntryItem {
-	return {
-		id,
-		position: 0,
-		generation_id: `g-${id}`,
-		song_id: `s-${id}`,
-		song_title: songTitle,
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		generation_number: 1,
-		version_number: 1,
-		is_picked: false,
-		audio_duration: 180,
-		mp3_path: `${id}.mp3`,
-		seed: 1,
-		model_mode: 'sft',
-		lyrics: null
-	};
-}
-
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a1',
-		title: 'Nachtstrom',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		created_at: '',
-		is_archived: false,
 		...overrides
 	};
 }
@@ -248,7 +189,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('shows the playing take and its version lyrics, not a later draft', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info({ lyrics: 'old verse' }));
 		expect(target.textContent).toContain(NOW_PLAYING_LABEL);
 		expect(target.textContent).toContain('Tide');
@@ -266,10 +207,10 @@ describe('NowPlaying', () => {
 
 	it('follows the lyrics with the resolved take once whisper_cues are loaded (#45)', async () => {
 		const gen = generation({
-			version_lyrics: 'old verse',
+			...generationDefaults,
 			whisper_cues: [{ start: 0, end: 1, text: 'old verse' }]
 		});
-		songList.set([song({ generations: [gen] })]);
+		songList.set([song({ ...structuredClone(songDefaults), generations: [gen] })]);
 		await renderSurface(info({ lyrics: 'old verse', generation: gen }));
 
 		expect(target.querySelectorAll('.lyrics-line')).toHaveLength(1);
@@ -311,7 +252,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('goes to the playing song and leaves Now Playing behind', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 
 		const go = Array.from(target.querySelectorAll('button')).find(
@@ -324,15 +265,18 @@ describe('NowPlaying', () => {
 	});
 
 	it('offers Previous and Next only as far as the playing queue reaches', async () => {
-		albumList.set([album()]);
-		songList.set([song()]);
+		albumList.set([album(albumDefaults)]);
+		songList.set([song(structuredClone(songDefaults))]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		expect(
 			target.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
 		).toBe(true);
 
-		songList.set([song(), song({ id: 's2', title: 'Second' })]);
+		songList.set([
+			song(structuredClone(songDefaults)),
+			song({ ...structuredClone(songDefaults), id: 's2', title: 'Second' })
+		]);
 		await tick();
 
 		expect(
@@ -344,7 +288,23 @@ describe('NowPlaying', () => {
 		queueContext.set({
 			type: 'playlist',
 			playlist: { id: 'p1', title: 'Night Drive' },
-			entries: [playlistEntry('pe1', 'Tide'), playlistEntry('pe2', 'Second')],
+			entries: [
+				playlistEntry({
+					generation_id: `g-${'pe1'}`,
+					song_id: `s-${'pe1'}`,
+					song_title: 'Tide',
+					album_title: 'Nachtstrom',
+					mp3_path: `${'pe1'}.mp3`
+				}),
+				playlistEntry({
+					id: 'pe2',
+					generation_id: `g-${'pe2'}`,
+					song_id: `s-${'pe2'}`,
+					song_title: 'Second',
+					album_title: 'Nachtstrom',
+					mp3_path: `${'pe2'}.mp3`
+				})
+			],
 			index: 0
 		});
 		await renderSurface(info());
@@ -384,7 +344,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('hides the trio and names the album for an album queue context', async () => {
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		await renderSurface(info());
 		expect(target.querySelectorAll('.pool-pill')).toHaveLength(0);
@@ -414,7 +374,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('toggles between Queue and This take', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		expect(tabs).toHaveLength(2);
@@ -429,7 +389,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('keeps the This take tab present and selected when a take is playing', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
 		const takeTab = Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]')).find(
@@ -442,7 +402,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('wires the panel tabs to their panel via aria-controls/role=tabpanel', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		const panel = target.querySelector('[role="tabpanel"]');
@@ -454,7 +414,7 @@ describe('NowPlaying', () => {
 	});
 
 	it('moves the panel tab selection and focus with the arrow keys', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		tabs[0]?.focus();
@@ -490,7 +450,7 @@ describe('NowPlaying', () => {
 
 	it('renders the docked panel inline, with no transport and no sheet to open', async () => {
 		nowPlayingDockable.set(true);
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 		nowPlayingSurface.set('docked');
 		await tick();
@@ -525,7 +485,7 @@ describe('NowPlaying', () => {
 
 	it('seeds the sheet open from a take-row request on a stacked layout, never labelling the trigger Queue', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		nowPlayingPanel.set('take');
 		await renderSurface(info());
 
@@ -538,7 +498,7 @@ describe('NowPlaying', () => {
 
 	it('moves focus into the mobile sheet when it opens', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
@@ -567,10 +527,13 @@ describe('NowPlaying', () => {
 describe('NowPlaying curation mode (#228)', () => {
 	function albumSong(id: string, genId: string, trackNumber: number): SongItem {
 		return song({
+			...structuredClone(songDefaults),
 			id,
 			title: `Song ${trackNumber}`,
 			track_number: trackNumber,
-			generations: [generation({ id: genId, song_id: id, mp3_path: `${id}.mp3` })]
+			generations: [
+				generation({ ...generationDefaults, id: genId, song_id: id, mp3_path: `${id}.mp3` })
+			]
 		});
 	}
 
@@ -580,7 +543,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		const s1 = albumSong('s1', 'g1', 1);
 		const s2 = albumSong('s2', 'g2', 2);
 		songList.set([s1, s2]);
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		const takes = [
 			info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title }),
 			info({ generation: s2.generations[0], songId: s2.id, songTitle: s2.title })
@@ -597,7 +560,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	});
 
 	it('does not render the curation bar outside curation mode', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		await renderSurface(info());
 		expect(target.querySelector('.curation-bar')).toBeNull();
 	});
@@ -664,7 +627,7 @@ describe('NowPlaying curation mode (#228)', () => {
 		// only a single-song queue has nowhere to skip to.
 		const s1 = albumSong('s1', 'g1', 1);
 		songList.set([s1]);
-		albumList.set([album()]);
+		albumList.set([album(albumDefaults)]);
 		const takes = [info({ generation: s1.generations[0], songId: s1.id, songTitle: s1.title })];
 		queueContext.set({ type: 'album', albumId: 'a1', takes, index: 0 });
 		curationActive.set(true);
@@ -724,7 +687,7 @@ describe('NowPlaying curation mode (#228)', () => {
 	});
 
 	it('ignores the P/K/S keys outside curation mode', async () => {
-		songList.set([song()]);
+		songList.set([song(structuredClone(songDefaults))]);
 		queueContext.set({ type: 'library' });
 		await renderSurface(info());
 

@@ -1,3 +1,7 @@
+import {
+	makePlaylistDetail as detail,
+	makePlaylistEntry as entry
+} from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -63,43 +67,18 @@ import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
 
+const entryDefaults = {
+	song_title: 'Tide',
+	album_title: 'Night Drive',
+	mp3_path: 'tide.mp3'
+} satisfies Partial<PlaylistEntryItem>;
+
+const detailDefaults = {
+	share_slug: null,
+	entries: [entry(entryDefaults)]
+} satisfies Partial<PlaylistDetailItem>;
+
 const mounted: Array<ReturnType<typeof mount>> = [];
-
-function entry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
-	return {
-		id: 'pe1',
-		position: 0,
-		generation_id: 'g1',
-		song_id: 's1',
-		song_title: 'Tide',
-		album_title: 'Night Drive',
-		artist: 'Artist',
-		generation_number: 1,
-		version_number: 1,
-		is_picked: false,
-		audio_duration: 180,
-		mp3_path: 'tide.mp3',
-		seed: 1,
-		model_mode: 'sft',
-		lyrics: null,
-		...overrides
-	};
-}
-
-function detail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 1,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [entry()],
-		...overrides
-	};
-}
 
 // The header prefers the lightweight playlist in playlistList and falls
 // back to the detail once it matches the open id (see PlaylistDetailView.
@@ -127,7 +106,7 @@ function openPlaylistDetail(d: PlaylistDetailItem): void {
 
 beforeEach(() => {
 	vi.mocked(fetchPlaylist).mockReset();
-	openPlaylistDetail(detail());
+	openPlaylistDetail(detail(structuredClone(detailDefaults)));
 	vi.mocked(selectSong).mockReset();
 	setShuffle(false);
 	queueContext.set({ type: 'library' });
@@ -262,7 +241,10 @@ describe('PlaylistDetailView row take traits', () => {
 	it('shows duration, version, and a pick star, since playlist rows are takes', async () => {
 		openPlaylistDetail(
 			detail({
-				entries: [entry({ version_number: 2, audio_duration: 195, is_picked: true })]
+				...structuredClone(detailDefaults),
+				entries: [
+					entry({ ...entryDefaults, version_number: 2, audio_duration: 195, is_picked: true })
+				]
 			})
 		);
 		const target = document.createElement('div');
@@ -281,7 +263,8 @@ describe('PlaylistDetailView row take traits', () => {
 	it('omits version and duration when the take does not carry them', async () => {
 		openPlaylistDetail(
 			detail({
-				entries: [entry({ version_number: null, audio_duration: null, is_picked: false })]
+				...structuredClone(detailDefaults),
+				entries: [entry({ ...entryDefaults, version_number: null, audio_duration: null })]
 			})
 		);
 		const target = document.createElement('div');
@@ -299,7 +282,8 @@ describe('PlaylistDetailView row take traits', () => {
 	it('omits duration for a take with no measured length (audio_duration 0 or null)', async () => {
 		openPlaylistDetail(
 			detail({
-				entries: [entry({ version_number: 1, audio_duration: 0, is_picked: false })]
+				...structuredClone(detailDefaults),
+				entries: [entry({ ...entryDefaults, audio_duration: 0 })]
 			})
 		);
 		const target = document.createElement('div');
@@ -349,10 +333,11 @@ describe('PlaylistDetailView row overflow menu', () => {
 async function renderTwoEntryPlaylist(): Promise<HTMLElement> {
 	openPlaylistDetail(
 		detail({
+			...structuredClone(detailDefaults),
 			entry_count: 2,
 			entries: [
-				entry({ id: 'pe1', position: 0, song_title: 'Tide' }),
-				entry({ id: 'pe2', position: 1, generation_id: 'g2', song_title: 'Ebb' })
+				entry(entryDefaults),
+				entry({ ...entryDefaults, id: 'pe2', position: 1, generation_id: 'g2', song_title: 'Ebb' })
 			]
 		})
 	);
@@ -428,7 +413,8 @@ describe('PlaylistDetailView row actions', () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		openPlaylistDetail(
 			detail({
-				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+				...structuredClone(detailDefaults),
+				entries: [entry(entryDefaults), entry({ ...entryDefaults, id: 'pe2', song_title: 'Ebb' })]
 			})
 		);
 		const target = document.createElement('div');
@@ -452,7 +438,9 @@ describe('PlaylistDetailView row actions', () => {
 	});
 
 	it('names the row play button and its … menu after the song they act on', async () => {
-		openPlaylistDetail(detail({ entries: [entry({ id: 'pe1', song_title: 'Tide' })] }));
+		openPlaylistDetail(
+			detail({ ...structuredClone(detailDefaults), entries: [entry(entryDefaults)] })
+		);
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
@@ -474,7 +462,8 @@ describe('PlaylistDetailView row actions', () => {
 		document.documentElement.dataset.pointer = 'fine';
 		openPlaylistDetail(
 			detail({
-				entries: [entry({ id: 'pe1', song_title: 'Tide' }), entry({ id: 'pe2', song_title: 'Ebb' })]
+				...structuredClone(detailDefaults),
+				entries: [entry(entryDefaults), entry({ ...entryDefaults, id: 'pe2', song_title: 'Ebb' })]
 			})
 		);
 		const target = document.createElement('div');
@@ -550,9 +539,10 @@ describe('PlaylistDetailView load failure (#139)', () => {
 
 		vi.mocked(fetchPlaylist).mockResolvedValueOnce(
 			detail({
+				...structuredClone(detailDefaults),
 				id: 'p2',
 				title: 'Party Mix',
-				entries: [entry({ id: 'pe2', song_title: 'Solstice' })]
+				entries: [entry({ ...entryDefaults, id: 'pe2', song_title: 'Solstice' })]
 			})
 		);
 		requireElement<HTMLButtonElement>(target, '.retry-btn').click();
@@ -572,7 +562,9 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 		// the Rail ever mounting ensurePlaylistsLoaded().
 		playlistList.set([]);
 		setOpenCollection({ kind: 'playlist', id: 'p9' });
-		selectedPlaylistDetail.set(detail({ id: 'p9', title: 'Shared Mix' }));
+		selectedPlaylistDetail.set(
+			detail({ ...structuredClone(detailDefaults), id: 'p9', title: 'Shared Mix' })
+		);
 		playlistDetailLoad.set({ status: 'ready', error: null });
 
 		const target = document.createElement('div');

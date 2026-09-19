@@ -1,8 +1,14 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makePlaylistDetail as playlistDetail,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { AlbumItem, GenerationItem, PlaylistDetailItem, SongItem } from '$lib/api/types';
+import type { SongItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
@@ -70,94 +76,20 @@ import PlaylistDetailView from './PlaylistDetailView.svelte';
 import SongDetailView from './SongDetailView.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
 
+const songDefaults = {
+	album_id: 'a-local',
+	album_title: 'Local Album',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	best_scores: null,
+	best_rating: null,
+	generations: [generation()],
+	share_slug: null
+} satisfies Partial<SongItem>;
+
 const mounted: Array<ReturnType<typeof mount>> = [];
-
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: 'g1.mp3',
-		wav_path: null,
-		seed: 7,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'local-only',
-		title: 'Local Only',
-		album_id: 'a-local',
-		album_title: 'Local Album',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 1,
-		best_scores: null,
-		best_rating: null,
-		generations: [generation()],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
-
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a-local',
-		title: 'Local Album',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function playlistDetail(): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: 'Night Drive',
-		slug: 'night-drive',
-		entry_count: 1,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: []
-	};
-}
 
 async function renderView(
 	factory: (target: HTMLElement) => ReturnType<typeof mount>
@@ -172,12 +104,12 @@ async function renderView(
 }
 
 beforeEach(() => {
-	albumList.set([album()]);
-	songList.set([song()]);
+	albumList.set([album({ id: 'a-local', title: 'Local Album', share_slug: null })]);
+	songList.set([song(structuredClone(songDefaults))]);
 	selectedAlbumId.set('a-local');
 	selectedSongId.set('s1');
 	selectedGenerationId.set('g1');
-	const playlist = playlistDetail();
+	const playlist = playlistDetail({ share_slug: null });
 	setOpenCollection({ kind: 'playlist', id: playlist.id });
 	selectedPlaylistDetail.set(playlist);
 });
@@ -258,7 +190,7 @@ describe('song editor survives list revalidation', () => {
 		expect(get(isDirty)).toBe(true);
 		songList.set([
 			song({
-				lyrics: '',
+				...structuredClone(songDefaults),
 				generation_count: 2,
 				generations: [generation(), generation({ id: 'g2' })]
 			})
@@ -275,8 +207,14 @@ describe('song editor survives list revalidation', () => {
 		const { setDraftLyrics, editLyrics } = await import('$lib/stores/editor');
 		setDraftLyrics('unsaved verse');
 		songList.set([
-			song(),
-			song({ id: 's2', lyrics: 'other lyrics', generation_count: 0, generations: [] })
+			song(structuredClone(songDefaults)),
+			song({
+				...structuredClone(songDefaults),
+				id: 's2',
+				lyrics: 'other lyrics',
+				generation_count: 0,
+				generations: []
+			})
 		]);
 		selectedSongId.set('s2');
 		await tick();

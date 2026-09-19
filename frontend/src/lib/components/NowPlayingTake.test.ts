@@ -1,3 +1,4 @@
+import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -26,53 +27,24 @@ import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
 import { pendingSource } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's1',
-		version_id: 'v1',
-		version_number: 3,
-		generation_number: 3,
-		mp3_path: 'a.mp3',
-		wav_path: null,
-		seed: 48113,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'sft',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: 'la la',
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '',
-		...overrides
-	};
-}
+const generationDefaults = {
+	version_number: 3,
+	generation_number: 3,
+	mp3_path: 'a.mp3',
+	seed: 48113,
+	model_mode: 'sft',
+	version_lyrics: 'la la',
+	created_at: ''
+} satisfies Partial<GenerationItem>;
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: 'tide',
-		title: 'Tide',
-		album_id: 'a1',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: 'la la',
-		prompt: 'dreamy',
-		version_count: 1,
-		generation_count: 1,
-		is_shared: false,
-		created_at: '',
-		generations: [],
-		...overrides
-	};
-}
+const songDefaults = {
+	slug: 'tide',
+	title: 'Tide',
+	album_title: 'Nachtstrom',
+	lyrics: 'la la',
+	prompt: 'dreamy',
+	created_at: ''
+} satisfies Partial<SongItem>;
 
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -96,8 +68,8 @@ async function render(
 	mounted = mount(NowPlayingTake, {
 		target,
 		props: {
-			generation: overrides.generation ?? generation(),
-			song: overrides.song ?? song(),
+			generation: overrides.generation ?? generation(generationDefaults),
+			song: overrides.song ?? song(songDefaults),
 			lyrics
 		}
 	});
@@ -108,8 +80,7 @@ describe('NowPlayingTake', () => {
 	it("names the take's version, number, duration and model in the heading", async () => {
 		await render({
 			generation: generation({
-				version_number: 3,
-				generation_number: 3,
+				...generationDefaults,
 				model_mode: 'xl-sft',
 				audio_duration_sec: 195
 			})
@@ -120,6 +91,7 @@ describe('NowPlayingTake', () => {
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
 		await render({
 			generation: generation({
+				...generationDefaults,
 				version_number: 4,
 				generation_number: 4,
 				model_mode: 'xl-turbo',
@@ -134,12 +106,7 @@ describe('NowPlayingTake', () => {
 
 	it('names no duration at all for a take whose length has not been measured', async () => {
 		await render({
-			generation: generation({
-				version_number: 1,
-				generation_number: 1,
-				model_mode: 'sft',
-				audio_duration_sec: null
-			})
+			generation: generation({ ...generationDefaults, version_number: 1, generation_number: 1 })
 		});
 		const heading = target.querySelector('.take-heading')?.textContent ?? '';
 		expect(heading).toBe('v1 · take 1 · sft');
@@ -149,6 +116,7 @@ describe('NowPlayingTake', () => {
 	it('renders scores from the generation', async () => {
 		await render({
 			generation: generation({
+				...generationDefaults,
 				scores: {
 					user_rating: 82,
 					text_accuracy: 91,
@@ -162,14 +130,14 @@ describe('NowPlayingTake', () => {
 	});
 
 	it('shows a named empty state when there are no scores yet', async () => {
-		await render({ generation: generation({ scores: null }) });
+		await render({ generation: generation(generationDefaults) });
 		expect(target.textContent).toContain('No scores yet');
 	});
 
 	it('highlights only the sung word that differs from the lyrics word at that position', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',
-			generation: generation({ whisper_text: 'die Luft schmeckt breit' })
+			generation: generation({ ...generationDefaults, whisper_text: 'die Luft schmeckt breit' })
 		});
 		const tokens = Array.from(target.querySelectorAll('.dev-token'));
 		expect(tokens.map((el) => el.textContent)).toEqual(['die', 'Luft', 'schmeckt', 'breit']);
@@ -182,7 +150,7 @@ describe('NowPlayingTake', () => {
 	it('does not flag a punctuation-only difference as a deviation', async () => {
 		await render({
 			lyrics: 'Rahmen, Luft.',
-			generation: generation({ whisper_text: 'rahmen luft' })
+			generation: generation({ ...generationDefaults, whisper_text: 'rahmen luft' })
 		});
 		expect(target.textContent).toContain('Sung text matches the lyrics');
 	});
@@ -190,7 +158,7 @@ describe('NowPlayingTake', () => {
 	it('does not flag a case-only difference as a deviation', async () => {
 		await render({
 			lyrics: 'Die Luft Schmeckt',
-			generation: generation({ whisper_text: 'die luft schmeckt' })
+			generation: generation({ ...generationDefaults, whisper_text: 'die luft schmeckt' })
 		});
 		expect(target.textContent).toContain('Sung text matches the lyrics');
 	});
@@ -198,7 +166,7 @@ describe('NowPlayingTake', () => {
 	it('marks a sung word absent from the lyrics as added, with its own tooltip', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt',
-			generation: generation({ whisper_text: 'die frische Luft schmeckt' })
+			generation: generation({ ...generationDefaults, whisper_text: 'die frische Luft schmeckt' })
 		});
 		const added = target.querySelector('.dev-token.added');
 		expect(added?.textContent).toBe('frische');
@@ -211,6 +179,7 @@ describe('NowPlayingTake', () => {
 		await render({
 			lyrics: '[Verse]\ndie Luft schmeckt weit\n\n[Chorus]\nhalt die Haende auf',
 			generation: generation({
+				...generationDefaults,
 				whisper_text: 'die Luft schmeckt weit\nhalt die Haende auf'
 			})
 		});
@@ -220,7 +189,7 @@ describe('NowPlayingTake', () => {
 	it('shows a matches-the-lyrics state when the transcript is identical', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',
-			generation: generation({ whisper_text: 'die Luft schmeckt weit' })
+			generation: generation({ ...generationDefaults, whisper_text: 'die Luft schmeckt weit' })
 		});
 		expect(target.textContent).toContain('Sung text matches the lyrics');
 	});
@@ -228,7 +197,7 @@ describe('NowPlayingTake', () => {
 	it('shows an unavailable state with no transcript yet', async () => {
 		await render({
 			lyrics: 'die Luft schmeckt weit',
-			generation: generation({ whisper_text: null })
+			generation: generation(generationDefaults)
 		});
 		expect(target.textContent).toContain('No transcript to compare against yet');
 	});
@@ -236,12 +205,12 @@ describe('NowPlayingTake', () => {
 	it('asks for a re-score while the take has no lyric cues', async () => {
 		// #141/9: without cues the lyrics cannot follow the audio, and the panel
 		// says why instead of leaving the listener to guess.
-		await render({ generation: generation({ whisper_cues: null }) });
+		await render({ generation: generation(generationDefaults) });
 		expect(target.textContent).toContain(NOW_PLAYING_RESCORE_ACTION_LABEL);
 	});
 
 	it('re-scores the take from the hint, once', async () => {
-		await render({ generation: generation({ whisper_cues: null }) });
+		await render({ generation: generation(generationDefaults) });
 		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
 		if (!hint) throw new Error('Expected the re-score hint button');
 		expect(hint.textContent?.trim()).toBe(NOW_PLAYING_RESCORE_ACTION_LABEL);
@@ -270,7 +239,7 @@ describe('NowPlayingTake', () => {
 				genId: 'g1'
 			}
 		]);
-		await render({ generation: generation({ whisper_cues: null }) });
+		await render({ generation: generation(generationDefaults) });
 		const hint = target.querySelector<HTMLButtonElement>('.rescore-hint');
 		if (!hint) throw new Error('Expected the re-score hint button');
 
@@ -288,6 +257,7 @@ describe('NowPlayingTake', () => {
 		// so the entry cannot hang off the missing-cues hint.
 		await render({
 			generation: generation({
+				...generationDefaults,
 				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
 			})
 		});
@@ -322,6 +292,7 @@ describe('NowPlayingTake', () => {
 		]);
 		await render({
 			generation: generation({
+				...generationDefaults,
 				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
 			})
 		});
@@ -339,6 +310,7 @@ describe('NowPlayingTake', () => {
 	it('drops the re-score hint once the take has cues', async () => {
 		await render({
 			generation: generation({
+				...generationDefaults,
 				whisper_cues: [{ start: 0, end: 1.5, text: 'la la' }]
 			})
 		});
@@ -358,21 +330,23 @@ describe('NowPlayingTake', () => {
 	);
 
 	it('flips pick through takeActions', async () => {
-		await render({ generation: generation({ is_picked: false }) });
+		await render({ generation: generation(generationDefaults) });
 		target.querySelector<HTMLButtonElement>('button[aria-label="Pick"]')?.click();
 		await tick();
 		expect(setPick).toHaveBeenCalledWith('s1', 'g1', true);
 	});
 
 	it('flips keep through takeActions', async () => {
-		await render({ generation: generation({ is_kept: true }) });
+		await render({ generation: generation({ ...generationDefaults, is_kept: true }) });
 		target.querySelector<HTMLButtonElement>('button[aria-label="Unkeep"]')?.click();
 		await tick();
 		expect(setKeep).toHaveBeenCalledWith('s1', 'g1', false);
 	});
 
 	it('saves the rating through takeActions once the slider is dirty', async () => {
-		await render({ generation: generation({ scores: { user_rating: 50 } }) });
+		await render({
+			generation: generation({ ...generationDefaults, scores: { user_rating: 50 } })
+		});
 		const slider = target.querySelector<HTMLInputElement>('.rating-slider');
 		if (!slider) throw new Error('Expected rating slider');
 		slider.value = '80';
@@ -387,7 +361,9 @@ describe('NowPlayingTake', () => {
 	});
 
 	it('saves rating notes alongside the rating through takeActions', async () => {
-		await render({ generation: generation({ scores: { user_rating: 50 } }) });
+		await render({
+			generation: generation({ ...generationDefaults, scores: { user_rating: 50 } })
+		});
 		const notes = target.querySelector<HTMLTextAreaElement>('.rating-notes');
 		if (!notes) throw new Error('Expected a notes textarea');
 		notes.value = 'Loved the bridge';
@@ -401,13 +377,13 @@ describe('NowPlayingTake', () => {
 	});
 
 	it('pins the seed through takeActions', async () => {
-		await render({ generation: generation({ seed: 48113 }) });
+		await render({ generation: generation(generationDefaults) });
 		target.querySelector<HTMLButtonElement>('.pin-seed')?.click();
 		expect(pinSeed).toHaveBeenCalledWith(48113);
 	});
 
 	it('omits the pin seed action when the take has no seed', async () => {
-		await render({ generation: generation({ seed: null }) });
+		await render({ generation: generation({ ...generationDefaults, seed: null }) });
 		expect(target.querySelector('.pin-seed')).toBeNull();
 	});
 
@@ -418,8 +394,8 @@ describe('NowPlayingTake', () => {
 		'%s sets the recipe source, closes Now Playing, and navigates to the song',
 		async (label, mode) => {
 			nowPlayingSurface.set('full');
-			const gen = generation();
-			const withSong = song();
+			const gen = generation(generationDefaults);
+			const withSong = song(songDefaults);
 			await render({ generation: gen, song: withSong });
 
 			Array.from(target.querySelectorAll<HTMLButtonElement>('.take-source-action'))
@@ -445,8 +421,8 @@ describe('NowPlayingTake recipe section', () => {
 	it('groups everything the take carries under its own labelled section', async () => {
 		await render({
 			generation: generation({
+				...generationDefaults,
 				model_mode: 'xl-sft',
-				seed: 48113,
 				generation_params: {
 					inference_steps: 50,
 					guidance_scale: 7.5,
@@ -455,7 +431,7 @@ describe('NowPlayingTake recipe section', () => {
 					key_scale: 'Am'
 				}
 			}),
-			song: song({ vocal_language: 'en' })
+			song: song(songDefaults)
 		});
 
 		const groupLabels = Array.from(target.querySelectorAll('.recipe-group-label')).map(
@@ -477,11 +453,12 @@ describe('NowPlayingTake recipe section', () => {
 	it('names a param the registry does not know under Other', async () => {
 		await render({
 			generation: generation({
+				...generationDefaults,
 				model_mode: '',
 				seed: null,
 				generation_params: { repaint_wav_crossfade_sec: 0.25 }
 			}),
-			song: song({ vocal_language: '' })
+			song: song({ ...songDefaults, vocal_language: '' })
 		});
 		expect(
 			Array.from(target.querySelectorAll('.recipe-group-label')).map((el) => el.textContent)
@@ -491,14 +468,14 @@ describe('NowPlayingTake recipe section', () => {
 
 	it('shows no recipe section for a take that carries nothing to show', async () => {
 		await render({
-			generation: generation({ model_mode: '', seed: null }),
-			song: song({ vocal_language: '' })
+			generation: generation({ ...generationDefaults, model_mode: '', seed: null }),
+			song: song({ ...songDefaults, vocal_language: '' })
 		});
 		expect(target.querySelector('.recipe-section')).toBeNull();
 	});
 
 	it('starts collapsed — the listener opens it, it does not open on them', async () => {
-		await render({ generation: generation({ model_mode: 'xl-sft' }) });
+		await render({ generation: generation({ ...generationDefaults, model_mode: 'xl-sft' }) });
 		const details = target.querySelector<HTMLDetailsElement>('.recipe-section');
 		expect(details?.open).toBe(false);
 	});

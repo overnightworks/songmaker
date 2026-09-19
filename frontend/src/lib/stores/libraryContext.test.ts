@@ -1,3 +1,10 @@
+import {
+	makeAlbum as album,
+	makeGeneration as generation,
+	makePlaylist as playlistItem,
+	makePlaylistDetail as playlistDetail,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -105,107 +112,39 @@ import {
 	writeLibraryHistory
 } from './libraryContext';
 
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: 'a1',
-		title: 'Nachtstrom',
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
+const generationDefaults = {
+	song_id: 's9',
+	mp3_path: '/audio/g1.mp3',
+	seed: 1
+} satisfies Partial<GenerationItem>;
 
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 's1',
-		slug: overrides.id ?? 's1',
-		title: 'Tide',
-		album_id: 'a1',
-		album_title: 'Nachtstrom',
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
-}
+const playlistItemDefaults = {
+	title: 'P',
+	slug: 'p',
+	share_slug: null
+} satisfies Partial<PlaylistItem>;
 
-function playlistDetail(overrides: Partial<PlaylistDetailItem> = {}): PlaylistDetailItem {
-	return {
-		id: 'p1',
-		title: 'P',
-		slug: 'p',
-		entry_count: 0,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		entries: [],
-		...overrides
-	};
-}
+const playlistDetailDefaults = {
+	title: 'P',
+	slug: 'p',
+	entry_count: 0,
+	share_slug: null
+} satisfies Partial<PlaylistDetailItem>;
 
-function playlistItem(overrides: Partial<PlaylistItem> = {}): PlaylistItem {
-	return {
-		id: 'p1',
-		title: 'P',
-		slug: 'p',
-		entry_count: 0,
-		is_shared: false,
-		share_slug: null,
-		album_covers: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
+const albumDefaults = { share_slug: null } satisfies Partial<AlbumItem>;
 
-function generation(overrides: Partial<GenerationItem> = {}): GenerationItem {
-	return {
-		id: 'g1',
-		song_id: 's9',
-		version_id: 'v1',
-		version_number: 1,
-		generation_number: 1,
-		mp3_path: '/audio/g1.mp3',
-		wav_path: null,
-		seed: 1,
-		status: 'completed',
-		is_archived: false,
-		is_picked: false,
-		is_kept: false,
-		is_shared: false,
-		model_mode: 'turbo',
-		whisper_text: null,
-		whisper_cues: null,
-		version_lyrics: null,
-		scores: null,
-		generation_params: null,
-		audio_duration_sec: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		...overrides
-	};
-}
+const songDefaults = {
+	title: 'Tide',
+	album_title: 'Nachtstrom',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	generation_count: 0,
+	best_scores: null,
+	best_rating: null,
+	share_slug: null
+} satisfies Partial<SongItem>;
 
 function emptyPage<T>(items: T[] = []) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
@@ -222,12 +161,14 @@ beforeEach(() => {
 	fetchShares.mockReset();
 	fetchShares.mockResolvedValue(emptyPage());
 	fetchPlaylists.mockResolvedValue([]);
-	fetchPlaylist.mockResolvedValue(playlistDetail());
+	fetchPlaylist.mockResolvedValue(playlistDetail(playlistDetailDefaults));
 	fetchAlbums.mockResolvedValue(emptyPage());
 	fetchSongs.mockResolvedValue({ ...emptyPage(), limit: 200 });
 	searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
-	fetchAlbum.mockResolvedValue(album({ id: 'a9', title: 'Remote' }));
-	fetchSong.mockResolvedValue(song({ id: 's9', album_id: 'a9', album_title: 'Remote' }));
+	fetchAlbum.mockResolvedValue(album({ ...albumDefaults, id: 'a9', title: 'Remote' }));
+	fetchSong.mockResolvedValue(
+		song({ ...songDefaults, slug: 's9', id: 's9', album_id: 'a9', album_title: 'Remote' })
+	);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetShares();
@@ -287,8 +228,8 @@ describe('library history snapshot', () => {
 			status: 'ready',
 			error: null,
 			items: [
-				{ type: 'album', album: album({ id: 'a1' }) },
-				{ type: 'album', album: album({ id: 'a2' }) }
+				{ type: 'album', album: album(albumDefaults) },
+				{ type: 'album', album: album({ ...albumDefaults, id: 'a2' }) }
 			],
 			hasMore: true,
 			nextCursor: 'cursor-old'
@@ -344,9 +285,9 @@ describe('applyLibraryHistory', () => {
 	});
 
 	it('restores browse pages even when a search query is replayed', async () => {
-		fetchAlbums.mockResolvedValue(emptyPage([album()]));
+		fetchAlbums.mockResolvedValue(emptyPage([album(albumDefaults)]));
 		searchLibrary.mockResolvedValue({
-			items: [{ type: 'album', album: album({ id: 'a-hit' }) }],
+			items: [{ type: 'album', album: album({ ...albumDefaults, id: 'a-hit' }) }],
 			next_cursor: null,
 			has_more: false
 		});
@@ -360,7 +301,9 @@ describe('applyLibraryHistory', () => {
 	});
 
 	it('hydrates a playlist collection via loadPlaylistDetail', async () => {
-		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p1', title: 'Night Drive' }));
+		fetchPlaylist.mockResolvedValueOnce(
+			playlistDetail({ ...playlistDetailDefaults, title: 'Night Drive' })
+		);
 		const state = { ...libraryRootState(), collection: { kind: 'playlist' as const, id: 'p1' } };
 		await applyLibraryHistory(state);
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
@@ -384,7 +327,9 @@ describe('applyLibraryHistory', () => {
 					resolveFirst = resolve;
 				})
 		);
-		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p2', title: 'Second' }));
+		fetchPlaylist.mockResolvedValueOnce(
+			playlistDetail({ ...playlistDetailDefaults, id: 'p2', title: 'Second' })
+		);
 		const first = applyLibraryHistory({
 			...libraryRootState(),
 			surface: 'detail',
@@ -396,7 +341,7 @@ describe('applyLibraryHistory', () => {
 			collection: { kind: 'playlist', id: 'p2' }
 		});
 		await second;
-		resolveFirst?.(playlistDetail({ id: 'p1', title: 'First' }));
+		resolveFirst?.(playlistDetail({ ...playlistDetailDefaults, title: 'First' }));
 		await first;
 		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
 	});
@@ -418,7 +363,7 @@ describe('applyLibraryHistory', () => {
 		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
 		const second = applyLibraryHistory(libraryRootState());
 		await second;
-		resolveAlbum?.(album({ id: 'a1' }));
+		resolveAlbum?.(album(albumDefaults));
 		await expect(first).resolves.toBe(false);
 
 		expect(get(openCollection)).toBeNull();
@@ -433,7 +378,9 @@ describe('applyLibraryHistory', () => {
 					rejectSong = reject;
 				})
 		);
-		fetchSong.mockResolvedValueOnce(song({ id: 's2', album_id: 'a9' }));
+		fetchSong.mockResolvedValueOnce(
+			song({ ...songDefaults, slug: 's2', id: 's2', album_id: 'a9' })
+		);
 
 		const first = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's1' });
 		await vi.waitFor(() => expect(rejectSong).toBeTypeOf('function'));
@@ -448,20 +395,24 @@ describe('applyLibraryHistory', () => {
 	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
 		songList.set([
 			song({
+				...songDefaults,
+				slug: 's9',
 				id: 's9',
 				album_id: 'a9',
 				generation_count: 2,
-				generations: [generation({ id: 'g1', song_id: 's9' })]
+				generations: [generation(generationDefaults)]
 			})
 		]);
 		fetchSong.mockResolvedValueOnce(
 			song({
+				...songDefaults,
+				slug: 's9',
 				id: 's9',
 				album_id: 'a9',
 				generation_count: 2,
 				generations: [
-					generation({ id: 'g1', song_id: 's9' }),
-					generation({ id: 'g2', song_id: 's9' })
+					generation(generationDefaults),
+					generation({ ...generationDefaults, id: 'g2' })
 				]
 			})
 		);
@@ -567,7 +518,7 @@ describe('libraryHistoryUrl', () => {
 	});
 
 	it('addresses an open song by its own slug under its album, not by id', () => {
-		songList.set([song({ id: 's1', slug: 'tide', album_id: 'anfield' })]);
+		songList.set([song({ ...songDefaults, slug: 'tide', album_id: 'anfield' })]);
 
 		expect(
 			libraryHistoryUrl({
@@ -582,10 +533,10 @@ describe('libraryHistoryUrl', () => {
 	it('addresses a selected take by its number under the song, not the query string', () => {
 		songList.set([
 			song({
-				id: 's1',
+				...songDefaults,
 				slug: 'tide',
 				album_id: 'anfield',
-				generations: [generation({ id: 'g1', song_id: 's1', generation_number: 3 })]
+				generations: [generation({ ...generationDefaults, song_id: 's1', generation_number: 3 })]
 			})
 		]);
 
@@ -601,7 +552,7 @@ describe('libraryHistoryUrl', () => {
 	});
 
 	it('falls back to the query appendage while the take is not yet among the loaded generations', () => {
-		songList.set([song({ id: 's1', slug: 'tide', album_id: 'anfield' })]);
+		songList.set([song({ ...songDefaults, slug: 'tide', album_id: 'anfield' })]);
 
 		expect(
 			libraryHistoryUrl({
@@ -636,7 +587,7 @@ describe('libraryHistoryUrl', () => {
 	});
 
 	it('addresses an open playlist by its slug, not its id', () => {
-		playlistList.set([playlistItem({ id: 'p1', slug: 'friday-night' })]);
+		playlistList.set([playlistItem({ ...playlistItemDefaults, slug: 'friday-night' })]);
 
 		expect(
 			libraryHistoryUrl({
@@ -718,7 +669,9 @@ describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
 describe('openSongAddress', () => {
 	it('makes the library restore the addressed song on a tab that knows nothing else', async () => {
 		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			...emptyPage([
+				song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+			]),
 			limit: 200
 		});
 		history.replaceState(null, '', '/album/a9/tide');
@@ -733,14 +686,16 @@ describe('openSongAddress', () => {
 	it('finds a later song page and restores its canonical address', async () => {
 		fetchSongs
 			.mockResolvedValueOnce({
-				items: [song({ id: 's-other', slug: 'other', album_id: 'a9' })],
+				items: [song({ ...songDefaults, id: 's-other', slug: 'other', album_id: 'a9' })],
 				total: 2,
 				offset: 0,
 				limit: 200,
 				has_more: true
 			})
 			.mockResolvedValueOnce({
-				items: [song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })],
+				items: [
+					song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+				],
 				total: 2,
 				offset: 200,
 				limit: 200,
@@ -757,7 +712,9 @@ describe('openSongAddress', () => {
 
 	it('reports an unknown song slug within a known album, without opening anything', async () => {
 		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			...emptyPage([
+				song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+			]),
 			limit: 200
 		});
 		history.replaceState(null, '', '/album/a9/ghost-song');
@@ -780,7 +737,9 @@ describe('openSongAddress', () => {
 
 	it('keeps a richer restore state that already opens the addressed song', async () => {
 		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			...emptyPage([
+				song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+			]),
 			limit: 200
 		});
 		const restored = {
@@ -799,7 +758,9 @@ describe('openSongAddress', () => {
 
 	it('seeds the take named by the take query and opens Takes', async () => {
 		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			...emptyPage([
+				song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+			]),
 			limit: 200
 		});
 		history.replaceState(null, '', '/album/a9/tide?gen=g1');
@@ -816,12 +777,13 @@ describe('openTakeAddress', () => {
 		fetchSongs.mockResolvedValueOnce({
 			...emptyPage([
 				song({
+					...songDefaults,
 					id: 's9',
 					slug: 'tide',
 					album_id: 'a9',
 					album_title: 'Remote',
 					generation_count: 1,
-					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 3 })]
+					generations: [generation({ ...generationDefaults, generation_number: 3 })]
 				})
 			]),
 			limit: 200
@@ -842,24 +804,26 @@ describe('openTakeAddress', () => {
 		fetchSongs.mockResolvedValueOnce({
 			...emptyPage([
 				song({
+					...songDefaults,
 					id: 's9',
 					slug: 'tide',
 					album_id: 'a9',
 					generation_count: 2,
-					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 1 })]
+					generations: [generation(generationDefaults)]
 				})
 			]),
 			limit: 200
 		});
 		fetchSong.mockResolvedValueOnce(
 			song({
+				...songDefaults,
 				id: 's9',
 				slug: 'tide',
 				album_id: 'a9',
 				generation_count: 2,
 				generations: [
-					generation({ id: 'g1', song_id: 's9', generation_number: 1 }),
-					generation({ id: 'g2', song_id: 's9', generation_number: 2 })
+					generation(generationDefaults),
+					generation({ ...generationDefaults, id: 'g2', generation_number: 2 })
 				]
 			})
 		);
@@ -875,11 +839,12 @@ describe('openTakeAddress', () => {
 		fetchSongs.mockResolvedValueOnce({
 			...emptyPage([
 				song({
+					...songDefaults,
 					id: 's9',
 					slug: 'tide',
 					album_id: 'a9',
 					generation_count: 1,
-					generations: [generation({ id: 'g1', song_id: 's9', generation_number: 1 })]
+					generations: [generation(generationDefaults)]
 				})
 			]),
 			limit: 200
@@ -894,7 +859,9 @@ describe('openTakeAddress', () => {
 
 	it('reports an unknown song slug within a known album, without opening anything', async () => {
 		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })]),
+			...emptyPage([
+				song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9', album_title: 'Remote' })
+			]),
 			limit: 200
 		});
 		history.replaceState(null, '', '/album/a9/ghost-song/take/1');
@@ -917,7 +884,9 @@ describe('openTakeAddress', () => {
 
 describe('resolveLegacySongQueryAddress', () => {
 	it('resolves a bare legacy song id onto the song address', async () => {
-		fetchSong.mockResolvedValueOnce(song({ id: 's9', slug: 'tide', album_id: 'a9' }));
+		fetchSong.mockResolvedValueOnce(
+			song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9' })
+		);
 
 		await expect(resolveLegacySongQueryAddress('s9', null)).resolves.toEqual({
 			kind: 'found',
@@ -929,11 +898,12 @@ describe('resolveLegacySongQueryAddress', () => {
 	it('resolves a legacy song+gen id pair onto the take address by number', async () => {
 		fetchSong.mockResolvedValueOnce(
 			song({
+				...songDefaults,
 				id: 's9',
 				slug: 'tide',
 				album_id: 'a9',
 				generation_count: 1,
-				generations: [generation({ id: 'g1', song_id: 's9', generation_number: 3 })]
+				generations: [generation({ ...generationDefaults, generation_number: 3 })]
 			})
 		);
 
@@ -947,11 +917,12 @@ describe('resolveLegacySongQueryAddress', () => {
 	it('drops an unknown generation id, lands on the song address, and flags the drop -- the song still exists', async () => {
 		fetchSong.mockResolvedValueOnce(
 			song({
+				...songDefaults,
 				id: 's9',
 				slug: 'tide',
 				album_id: 'a9',
 				generation_count: 1,
-				generations: [generation({ id: 'g1', song_id: 's9', generation_number: 1 })]
+				generations: [generation(generationDefaults)]
 			})
 		);
 
@@ -963,7 +934,9 @@ describe('resolveLegacySongQueryAddress', () => {
 	});
 
 	it('upserts the resolved song into songList so the redirect target finds it without fetching again', async () => {
-		fetchSong.mockResolvedValueOnce(song({ id: 's9', slug: 'tide', album_id: 'a9' }));
+		fetchSong.mockResolvedValueOnce(
+			song({ ...songDefaults, id: 's9', slug: 'tide', album_id: 'a9' })
+		);
 
 		await resolveLegacySongQueryAddress('s9', null);
 
@@ -1044,8 +1017,12 @@ describe('openAlbumAddress', () => {
 
 describe('openPlaylistAddress', () => {
 	it('makes the library restore the addressed playlist on a tab that knows nothing else', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
-		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p9', title: 'Friday Night' }));
+		fetchPlaylists.mockResolvedValueOnce([
+			playlistItem({ ...playlistItemDefaults, id: 'p9', slug: 'friday-night' })
+		]);
+		fetchPlaylist.mockResolvedValueOnce(
+			playlistDetail({ ...playlistDetailDefaults, id: 'p9', title: 'Friday Night' })
+		);
 		history.replaceState(null, '', '/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
@@ -1066,7 +1043,9 @@ describe('openPlaylistAddress', () => {
 	});
 
 	it('keeps a richer restore state that already opens the addressed playlist', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		fetchPlaylists.mockResolvedValueOnce([
+			playlistItem({ ...playlistItemDefaults, id: 'p9', slug: 'friday-night' })
+		]);
 		const restored = {
 			...libraryRootState(),
 			surface: 'detail' as const,
@@ -1081,7 +1060,9 @@ describe('openPlaylistAddress', () => {
 	});
 
 	it('lets the address overrule a restore state that opens a different playlist', async () => {
-		fetchPlaylists.mockResolvedValueOnce([playlistItem({ id: 'p9', slug: 'friday-night' })]);
+		fetchPlaylists.mockResolvedValueOnce([
+			playlistItem({ ...playlistItemDefaults, id: 'p9', slug: 'friday-night' })
+		]);
 		history.replaceState(
 			{
 				...libraryRootState(),
@@ -1105,8 +1086,10 @@ describe('openPlaylistAddress', () => {
 	});
 
 	it('reuses an already-loaded playlistList instead of fetching again', async () => {
-		playlistList.set([playlistItem({ id: 'p9', slug: 'friday-night' })]);
-		fetchPlaylist.mockResolvedValueOnce(playlistDetail({ id: 'p9', title: 'Friday Night' }));
+		playlistList.set([playlistItem({ ...playlistItemDefaults, id: 'p9', slug: 'friday-night' })]);
+		fetchPlaylist.mockResolvedValueOnce(
+			playlistDetail({ ...playlistDetailDefaults, id: 'p9', title: 'Friday Night' })
+		);
 		history.replaceState(null, '', '/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');

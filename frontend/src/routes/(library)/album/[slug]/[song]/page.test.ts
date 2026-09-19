@@ -1,3 +1,4 @@
+import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -74,6 +75,20 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 
 import SongAddressHarness from './harness.svelte';
 
+const albumDefaults = { share_slug: null, cover: null } satisfies Partial<AlbumItem>;
+
+const songDefaults = {
+	id: 'song-1',
+	bpm: 120,
+	audio_duration: 180,
+	key_scale: 'Am',
+	generation_params: null,
+	generation_count: 0,
+	best_scores: null,
+	best_rating: null,
+	share_slug: null
+} satisfies Partial<SongItem>;
+
 // The live stream the workspace bootstrap waits for. Emitting `hello` is all
 // it takes to make the real ResourceSyncController run its snapshot load, so
 // the cold start below exercises the production restore path instead of a
@@ -104,53 +119,6 @@ class FakeEventSource {
 			listener(new MessageEvent(type, { data }));
 		}
 	}
-}
-
-function album(overrides: Partial<AlbumItem> = {}): AlbumItem {
-	return {
-		id: ALBUM_SLUG,
-		title: ALBUM_TITLE,
-		artist: 'Artist',
-		subtitle: '',
-		year: '',
-		colors: {},
-		song_count: 1,
-		picked_count: 0,
-		is_shared: false,
-		share_slug: null,
-		cover: null,
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_archived: false,
-		...overrides
-	};
-}
-
-function song(overrides: Partial<SongItem> = {}): SongItem {
-	return {
-		id: 'song-1',
-		slug: SONG_SLUG,
-		title: TRACK_TITLE,
-		album_id: ALBUM_SLUG,
-		album_title: ALBUM_TITLE,
-		artist: 'Artist',
-		track_number: 1,
-		vocal_language: 'en',
-		lyrics: '',
-		prompt: '',
-		bpm: 120,
-		audio_duration: 180,
-		key_scale: 'Am',
-		generation_params: null,
-		version_count: 1,
-		generation_count: 0,
-		best_scores: null,
-		best_rating: null,
-		generations: [],
-		created_at: '2026-01-01T00:00:00+00:00',
-		is_shared: false,
-		share_slug: null,
-		...overrides
-	};
 }
 
 function page(items: SongItem[] | AlbumItem[]) {
@@ -203,10 +171,30 @@ function coldTabAt(pathname: string, search = ''): void {
 
 beforeEach(() => {
 	vi.stubGlobal('EventSource', FakeEventSource);
-	api.fetchAlbum.mockReset().mockResolvedValue(album());
+	api.fetchAlbum
+		.mockReset()
+		.mockResolvedValue(album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE }));
 	api.fetchAlbums.mockReset().mockResolvedValue(page([]));
-	api.fetchSongs.mockReset().mockResolvedValue(page([song()]));
-	api.fetchSong.mockReset().mockResolvedValue(song());
+	api.fetchSongs.mockReset().mockResolvedValue(
+		page([
+			song({
+				...songDefaults,
+				slug: SONG_SLUG,
+				title: TRACK_TITLE,
+				album_id: ALBUM_SLUG,
+				album_title: ALBUM_TITLE
+			})
+		])
+	);
+	api.fetchSong.mockReset().mockResolvedValue(
+		song({
+			...songDefaults,
+			slug: SONG_SLUG,
+			title: TRACK_TITLE,
+			album_id: ALBUM_SLUG,
+			album_title: ALBUM_TITLE
+		})
+	);
 	api.fetchVersions.mockReset().mockResolvedValue([]);
 	api.fetchLastFailedGeneration.mockReset().mockResolvedValue({ job: null });
 	api.fetchActiveModels.mockReset().mockResolvedValue([]);
@@ -242,7 +230,17 @@ describe('/album/<slug>/<song-slug> opened cold', () => {
 
 	it('opens the addressed song even when the album listing does not carry it yet', async () => {
 		api.fetchAlbums.mockResolvedValue(page([]));
-		api.fetchSongs.mockResolvedValue(page([song()]));
+		api.fetchSongs.mockResolvedValue(
+			page([
+				song({
+					...songDefaults,
+					slug: SONG_SLUG,
+					title: TRACK_TITLE,
+					album_id: ALBUM_SLUG,
+					album_title: ALBUM_TITLE
+				})
+			])
+		);
 
 		const target = openAddress();
 
@@ -310,7 +308,9 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 	it('shows the song after Try again once the failure is over', async () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
-		api.fetchAlbum.mockResolvedValue(album());
+		api.fetchAlbum.mockResolvedValue(
+			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
+		);
 
 		requireElement(target, 'button.address-action').click();
 
@@ -322,7 +322,9 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(true);
 
-		api.fetchAlbum.mockResolvedValue(album());
+		api.fetchAlbum.mockResolvedValue(
+			album({ ...albumDefaults, id: ALBUM_SLUG, title: ALBUM_TITLE })
+		);
 		requireElement(target, 'button.address-action').click();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
