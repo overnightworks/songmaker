@@ -186,6 +186,7 @@
 	}
 
 	function handlePlayClick(gen: GenerationItem, e: MouseEvent): void {
+		e.stopPropagation();
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
 			return;
@@ -209,6 +210,19 @@
 		}
 		if (gen.is_archived) return;
 		void playTakeAndShowNowPlaying(gen, song);
+	}
+
+	// An archived take has nothing for a row activation to do, so the row
+	// stops announcing itself as reachable — except in selection mode, where
+	// ticking it is still a real action.
+	function rowIsActionable(gen: GenerationItem): boolean {
+		return $selectionMode || !gen.is_archived;
+	}
+
+	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		e.preventDefault();
+		handleRowBodyClick(gen);
 	}
 
 	interface TakeProvenance {
@@ -440,7 +454,7 @@
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
 						<span class="take-main">
-							<span class="take-summary">
+							<span class="take-headline">
 								{#if $selectionMode || !gen.is_archived}
 									<button
 										type="button"
@@ -459,13 +473,14 @@
 									</button>
 								{/if}
 
-								<button
-									type="button"
-									class="take-body"
+								<span
+									class="take-summary"
+									role="button"
+									tabindex={rowIsActionable(gen) ? 0 : -1}
+									aria-disabled={rowIsActionable(gen) ? undefined : true}
 									data-hitbox="text"
 									onclick={() => handleRowBodyClick(gen)}
-									disabled={gen.is_archived && !$selectionMode}
-									aria-label={`${takeRowLabel(gen.generation_number)}${duration ? ` ${duration}` : ''}`}
+									onkeydown={(e) => handleRowKeydown(gen, e)}
 								>
 									<span class="take-label">
 										{takeRowLabel(gen.generation_number)}
@@ -484,7 +499,7 @@
 											{headline.text}
 										</span>
 									{/if}
-								</button>
+								</span>
 							</span>
 							<span class="take-details">
 								{#if batchNotice}
@@ -833,7 +848,7 @@
 		min-width: 0;
 	}
 
-	.take-summary,
+	.take-headline,
 	.take-details {
 		display: flex;
 		align-items: center;
@@ -845,23 +860,16 @@
 		flex-wrap: wrap;
 	}
 
-	.take-body {
+	.take-summary {
 		display: flex;
 		align-items: center;
 		gap: 0.35rem;
 		flex: 1;
 		min-width: 0;
-		background: none;
-		border: 0;
-		margin: 0;
-		padding: 0;
-		color: inherit;
-		font: inherit;
-		text-align: left;
 		cursor: pointer;
 	}
 
-	.take-body:disabled {
+	.take-summary[aria-disabled='true'] {
 		cursor: default;
 	}
 

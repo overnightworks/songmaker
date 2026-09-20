@@ -553,17 +553,17 @@ describe('TakesList', () => {
 			const row = target.querySelector('.take-row');
 			if (!row) throw new Error('Expected a take row');
 			const buttons = Array.from(row.querySelectorAll('button'));
-			expect(buttons).toHaveLength(4);
-
-			const body = row.querySelector<HTMLButtonElement>('.take-body');
-			if (!body) throw new Error('Expected the row body button');
-			expect(body.textContent?.trim()).not.toBe('');
-			expect(body.getAttribute('aria-label')).toBeTruthy();
-
-			for (const button of buttons.filter((candidate) => candidate !== body)) {
+			expect(buttons).toHaveLength(3);
+			for (const button of buttons) {
 				expect(button.textContent?.trim()).toBe('');
 				expect(button.getAttribute('aria-label')).toBeTruthy();
 			}
+
+			const body = row.querySelector<HTMLElement>('[role="button"].take-summary');
+			if (!body) throw new Error('Expected the row body target');
+			expect(body.textContent?.trim()).not.toBe('');
+			expect(body.getAttribute('aria-label')).toBeNull();
+			expect(body.getAttribute('tabindex')).toBe('0');
 			expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 		}
 	);
@@ -571,7 +571,7 @@ describe('TakesList', () => {
 	it('opens Now Playing on This take when the row body is tapped', async () => {
 		const { target, props } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLButtonElement>('.take-body')?.click();
+		row?.querySelector<HTMLElement>('.take-summary')?.click();
 		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'g1' }),
 			props.song
@@ -579,11 +579,25 @@ describe('TakesList', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
-	it('names the row body by take and duration', async () => {
+	it('opens Now Playing on This take when the row body is activated by keyboard', async () => {
+		const { target, props } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		const body = row?.querySelector<HTMLElement>('.take-summary');
+		body?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			props.song
+		);
+	});
+
+	it('names the row body by its visible content, not an overriding label', async () => {
 		const { target } = await render();
-		const body = target.querySelector<HTMLButtonElement>('.take-body');
+		const body = target.querySelector<HTMLElement>('.take-summary');
 		const duration = target.querySelector('.take-duration')?.textContent?.trim();
-		expect(body?.getAttribute('aria-label')).toBe(`Take 3 ${duration}`);
+		expect(body?.getAttribute('aria-label')).toBeNull();
+		expect(body?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`Take 3 ${duration}`.replace(/\s+/g, ' ').trim()
+		);
 	});
 
 	it("still only toggles play on the row's play target, never opening Now Playing itself", async () => {
@@ -900,12 +914,13 @@ describe('TakesList archived takes', () => {
 		);
 	});
 
-	it('does not play an archived take from its disabled row body outside selection mode', async () => {
+	it('does not play an archived take from its unreachable row body outside selection mode', async () => {
 		const { target } = await renderWithArchived();
 		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		if (!archivedRow) throw new Error('Expected the archived take row');
-		const body = archivedRow.querySelector<HTMLButtonElement>('.take-body');
-		expect(body?.disabled).toBe(true);
+		const body = archivedRow.querySelector<HTMLElement>('.take-summary');
+		expect(body?.getAttribute('aria-disabled')).toBe('true');
+		expect(body?.getAttribute('tabindex')).toBe('-1');
 		body?.click();
 		await tick();
 		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
@@ -917,8 +932,9 @@ describe('TakesList archived takes', () => {
 		await tick();
 		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		if (!archivedRow) throw new Error('Expected the archived take row');
-		const body = archivedRow.querySelector<HTMLButtonElement>('.take-body');
-		expect(body?.disabled).toBe(false);
+		const body = archivedRow.querySelector<HTMLElement>('.take-summary');
+		expect(body?.getAttribute('aria-disabled')).toBeNull();
+		expect(body?.getAttribute('tabindex')).toBe('0');
 		body?.click();
 		await tick();
 		expect(get(selectedIds).has('g-arch')).toBe(true);

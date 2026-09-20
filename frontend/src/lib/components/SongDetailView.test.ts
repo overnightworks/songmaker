@@ -494,7 +494,8 @@ describe('SongDetailView recipe and takes', () => {
 		const row = target.querySelector('.take-row');
 		expect(row).not.toBeNull();
 		expect(row?.querySelector('.take-action-btn')).toBeNull();
-		expect(row?.querySelectorAll('button')).toHaveLength(4);
+		expect(row?.querySelectorAll('button')).toHaveLength(3);
+		expect(row?.querySelector('[role="button"].take-summary')).not.toBeNull();
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});
 
