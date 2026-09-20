@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
-	import { onMount } from 'svelte';
+	import { onMount, type ComponentProps } from 'svelte';
 	import {
 		fetchSong,
 		renameSong,
@@ -109,6 +109,7 @@
 	import EditorStacked from './editor/EditorStacked.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
+	import SongPhoneView from './editor/SongPhoneView.svelte';
 	import EditorSheet from './editor/EditorSheet.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
@@ -392,6 +393,26 @@
 		}
 	}
 
+	const takeListProps = $derived(
+		song
+			? ({
+					song,
+					voices: $loras,
+					loadStatus: takesStatus,
+					loadError: takesError,
+					dirty,
+					draftVersionNumber,
+					latestVersionNumber,
+					generateJob: $generateAction.job,
+					onagain: applyAgain,
+					onsource: setSourceFromGeneration,
+					onretry: () => {
+						if (song) void refreshTakes(song.id);
+					}
+				} satisfies ComponentProps<typeof TakesList>)
+			: null
+	);
+
 	function applyAgain(gen: GenerationItem): void {
 		applyAgainFromGeneration(gen);
 	}
@@ -557,7 +578,7 @@
 	}
 </script>
 
-{#if song}
+{#if song && takeListProps}
 	{#snippet saveAction()}
 		<div class="write-save">
 			<p class="write-save-hint" role="status">
@@ -595,7 +616,7 @@
 		</div>
 	{/snippet}
 
-	<div class="detail-panel" class:compact>
+	{#snippet header()}
 		<EditorHeader
 			{song}
 			{coverUrl}
@@ -639,54 +660,62 @@
 			generating={$generateAction.pending}
 			{compact}
 		/>
+	{/snippet}
 
-		<div class="editor-body">
-			{#if song.is_shared && song.share_slug}
-				<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
-			{/if}
+	{#snippet sharedLink()}
+		{#if song.is_shared && song.share_slug}
+			<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
+		{/if}
+	{/snippet}
 
-			<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
-			{#if $recipeOpen && !compact}
-				{#if stacked && !stackedExpanded}
-					<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
-				{:else}
-					<RecipePanel
-						onclose={() => {
-							if (stacked) stackedExpanded = false;
-							else recipeOpen.set(false);
-						}}
-					/>
-				{/if}
-			{/if}
-
-			{#if compact}
-				{@render writeSurface(song, false, compact, () => {})}
-			{:else if $coWriterOpen}
-				{@render writeSurface(song, true, compact, onTurnCompleted)}
+	{#snippet recipe()}
+		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
+		{#if $recipeOpen && !compact}
+			{#if stacked && !stackedExpanded}
+				<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
 			{:else}
-				<div class="editor-columns">
-					{@render writeSurface(song, false, compact, () => {})}
-					<div class="takes-column">
-						{@render expiryDigest()}
-						<TakesList
-							{song}
-							voices={$loras}
-							loadStatus={takesStatus}
-							loadError={takesError}
-							{dirty}
-							{draftVersionNumber}
-							{latestVersionNumber}
-							generateJob={$generateAction.job}
-							onagain={applyAgain}
-							onsource={setSourceFromGeneration}
-							onretry={() => {
-								if (song) void refreshTakes(song.id);
-							}}
-						/>
-					</div>
-				</div>
+				<RecipePanel
+					onclose={() => {
+						if (stacked) stackedExpanded = false;
+						else recipeOpen.set(false);
+					}}
+				/>
 			{/if}
-		</div>
+		{/if}
+	{/snippet}
+
+	{#snippet phoneWrite()}
+		{@render writeSurface(song, false, true, () => {})}
+	{/snippet}
+
+	<div class="detail-panel" class:compact>
+		{#if compact}
+			<SongPhoneView
+				{header}
+				{sharedLink}
+				{recipe}
+				write={phoneWrite}
+				{expiryDigest}
+				{takeListProps}
+			/>
+		{:else}
+			{@render header()}
+			<div class="editor-body">
+				{@render sharedLink()}
+				{@render recipe()}
+				{#if $coWriterOpen}
+					{@render writeSurface(song, true, compact, onTurnCompleted)}
+				{:else}
+					<div class="editor-columns">
+						{@render writeSurface(song, false, compact, () => {})}
+						<div class="takes-column">
+							{@render expiryDigest()}
+							<TakesList {...takeListProps} />
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#snippet expiryDigest()}

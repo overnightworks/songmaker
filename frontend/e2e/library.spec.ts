@@ -263,7 +263,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	if (shell === 'mobile') {
 		await expect(surface.locator('.take-strip')).toHaveCount(1);
 		await expect(surface.locator('.takes-list')).toHaveCount(0);
-		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(0);
+		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
 	}
 	if (shell === 'desktop') {
 		await takeControl.click();

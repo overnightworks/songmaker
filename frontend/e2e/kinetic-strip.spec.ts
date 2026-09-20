@@ -430,7 +430,7 @@ test.describe('kinetic take strip', () => {
 		await context.close();
 	});
 
-	test('the strip renders in Write on the compact shell at phone width, without a second takes list', async ({
+	test('the strip renders in Write on the compact shell at phone width, alongside the Takes tab', async ({
 		browser,
 		isMobile
 	}) => {
@@ -454,7 +454,7 @@ test.describe('kinetic take strip', () => {
 		const strip = page.locator('.take-strip');
 		await expect(strip).toBeVisible();
 		await expect(page.locator('.takes-list')).toHaveCount(0);
-		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveCount(0);
+		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
 		await strip.getByRole('button', { name: library.takeLabel, exact: true }).click();
 		await expect(page.getByRole('contentinfo').getByText(library.takeLabel)).toBeVisible();
 
