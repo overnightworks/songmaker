@@ -12,6 +12,7 @@ import {
 	collectionRowPlayLabel,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
+	NOW_PLAYING_LABEL,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
@@ -256,7 +257,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	const takeControl =
 		shell === 'desktop'
-			? surface.locator('.take-row').filter({ hasText: library.takeLabel }).locator('.take-summary')
+			? surface.locator('.take-row').filter({ hasText: library.takeLabel })
 			: surface
 					.locator('.take-strip')
 					.getByRole('button', { name: library.takeLabel, exact: true });
@@ -266,10 +267,15 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
 	}
 	if (shell === 'desktop') {
-		await takeControl.click();
+		await expect(takeControl).toHaveCount(1);
+		// The unified take row's own Play control (#971/#976) toggles play/pause
+		// like the transport's — pressing it on the pick that is already playing
+		// would pause it, not surface Now Playing. Now Playing for an
+		// already-playing take is reached through the transport's own control.
+		await transport.getByRole('button', { name: NOW_PLAYING_LABEL }).click();
 		await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
-		// A row body never stops the music: the take that was already playing when
-		// the row was clicked is still playing after it.
+		// The transport's Now Playing control never touches play/pause: the pick
+		// that was already playing is still playing after it.
 		await expect(
 			shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
 				name: TRANSPORT_PAUSE_LABEL,

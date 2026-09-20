@@ -416,7 +416,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		expect(target.querySelector('.lyrics-area')).toBeNull();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-		expect(target.querySelector('.take-summary[role="button"]')).not.toBeNull();
+		expect(target.querySelector('.take-row .play-btn')).not.toBeNull();
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe(
