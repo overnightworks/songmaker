@@ -441,6 +441,8 @@ export interface JobItem {
 	type: string;
 	status: string;
 	progress: number;
+	take_index?: number | null;
+	take_count?: number | null;
 	current_epoch?: number | null;
 	train_epochs?: number | null;
 	remaining_time_estimate?: number | 'calculating' | null;

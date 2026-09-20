@@ -23,6 +23,7 @@ from songmaker_cli.api_models import (
     WhisperCue,
 )
 from songmaker_cli.constants import (
+    GENERATION_ETA_MIN_PROGRESS,
     STALE_JOB_THRESHOLDS,
     CoverExecutor,
     JobStatus,
@@ -640,6 +641,9 @@ def test_create_job(seeded_session: Session) -> None:
     assert job.type == "generate"
     assert job.status == "queued"
     assert job.progress == 0.0
+    assert job.running_since is None
+    assert job.take_index is None
+    assert job.take_count is None
 
 
 def test_update_job_status(seeded_session: Session) -> None:
@@ -650,6 +654,49 @@ def test_update_job_status(seeded_session: Session) -> None:
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "running"
     assert fetched.progress == 0.5
+    assert fetched.running_since == fetched.heartbeat_at
+
+
+def test_job_progress_preserves_running_start_and_take_counters(seeded_session: Session) -> None:
+    job = create_job(seeded_session, JobType.GENERATE)
+    update_job_status(
+        seeded_session, job.id, JobStatus.RUNNING, take_index=1, take_count=2,
+    )
+    running_since = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.running_since = running_since
+    seeded_session.commit()
+
+    update_job_status(seeded_session, job.id, JobStatus.RUNNING, progress=0.25)
+    update_job_heartbeat(seeded_session, job.id)
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    fetched = get_job(seeded_session, job.id)
+    assert aware_timestamp(fetched.running_since) == running_since
+    assert (fetched.take_index, fetched.take_count, fetched.progress) == (1, 2, 0.25)
+
+
+@pytest.mark.parametrize("claim_cover", [False, True])
+def test_entering_running_excludes_previous_queue_time(
+    seeded_session: Session, claim_cover: bool,
+) -> None:
+    job = create_job(seeded_session, JobType.COVER if claim_cover else JobType.GENERATE)
+    old_start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+    job.started_at = old_start
+    job.running_since = old_start
+    seeded_session.commit()
+
+    if claim_cover:
+        assert job_queries.claim_next_cover_job(seeded_session).id == job.id
+    else:
+        update_job_status(seeded_session, job.id, JobStatus.RUNNING)
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == JobStatus.RUNNING
+    assert aware_timestamp(fetched.running_since) > old_start
+    assert fetched.running_since == fetched.heartbeat_at
 
 
 def test_update_job_completed(seeded_session: Session) -> None:
@@ -794,6 +841,38 @@ def test_job_response_estimates_remaining_time_from_observed_epochs(
 
 
 @pytest.mark.parametrize(
+    ("progress", "elapsed", "expected"),
+    [
+        (0, 100, "calculating"),
+        (GENERATION_ETA_MIN_PROGRESS / 2, 100, "calculating"),
+        (GENERATION_ETA_MIN_PROGRESS, 100, 1900),
+        (0.25, 100, 300),
+        (0.6, 100, 67),
+        (0.75, 100, 34),
+        (1, 100, 0),
+        (0.25, None, "calculating"),
+        (0.25, 0, "calculating"),
+        (0.25, -1, "calculating"),
+    ],
+)
+def test_generation_eta_uses_elapsed_running_time_and_total_progress(
+    seeded_session: Session, progress: float, elapsed: int | None, expected: int | str,
+) -> None:
+    now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
+    job = create_job(seeded_session, JobType.GENERATE)
+    job.status = JobStatus.RUNNING
+    job.progress = progress
+    job.started_at = now - timedelta(hours=1)
+    job.running_since = now - timedelta(seconds=elapsed) if elapsed is not None else None
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(job, now=now)
+
+    assert response.remaining_time_estimate == expected
+
+
+@pytest.mark.parametrize("job_type", [JobType.GENERATE, JobType.LORA_TRAINING])
+@pytest.mark.parametrize(
     ("status", "remaining_time_estimate"),
     [
         (JobStatus.QUEUED, "calculating"),
@@ -803,16 +882,19 @@ def test_job_response_estimates_remaining_time_from_observed_epochs(
         (JobStatus.CANCELLED, 0),
     ],
 )
-def test_job_response_does_not_estimate_after_training_stops(
+def test_job_response_does_not_estimate_outside_running(
     seeded_session: Session,
+    job_type: JobType,
     status: JobStatus,
     remaining_time_estimate: int | str,
 ) -> None:
-    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    job = create_job(seeded_session, job_type)
     job.status = status
     job.current_epoch = 400
     job.train_epochs = 500
     job.training_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.running_since = job.training_started_at
+    job.progress = 0.8
     seeded_session.commit()
 
     response = JobResponse.from_orm(
@@ -2548,6 +2630,44 @@ def test_user_lora_model_mode_migration_backfills_constrains_and_removes(
         column["name"] for column in inspect(engine).get_columns("user_loras")
     }
     assert "model_mode" not in columns_after_downgrade
+    engine.dispose()
+
+
+def test_generation_progress_migration_preserves_existing_jobs(tmp_path: Path) -> None:
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    from songmaker_cli.db.migrations.versions import (
+        d52826563268_add_generation_progress_timing_to_jobs as migration,
+    )
+
+    url = f"sqlite:///{tmp_path / 'generation-progress.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO jobs (id, type, status, progress, started_at) "
+            "VALUES ('existing', 'generate', 'running', 0.25, CURRENT_TIMESTAMP)"
+        ))
+
+    command.upgrade(config, migration.revision)
+
+    columns = {column["name"]: column for column in inspect(engine).get_columns("jobs")}
+    new_columns = {"running_since", "take_index", "take_count"}
+    assert all(columns[name]["nullable"] for name in new_columns)
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT progress, running_since, take_index, take_count FROM jobs WHERE id = 'existing'"
+        )).one() == (0.25, None, None, None)
+
+    command.downgrade(config, migration.down_revision)
+
+    assert not new_columns & {column["name"] for column in inspect(engine).get_columns("jobs")}
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT progress FROM jobs WHERE id = 'existing'"
+        )).scalar_one() == 0.25
     engine.dispose()
 
 
