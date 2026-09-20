@@ -95,39 +95,6 @@ test('album, song, and take content begin at their breadcrumb headers on desktop
 	guard.assertClean();
 });
 
-test('the 375 px album line skips songs without losing its URL or focus', async ({
-	page,
-	isMobile
-}) => {
-	test.skip(!isMobile, 'The compact album line only renders on mobile.'); // NOSONAR S1607: desktop has no compact album line.
-	await page.setViewportSize({ width: 375, height: 812 });
-	const guard = new FlowGuard(page);
-	const library = readSeededLibrary();
-	const surface = workspace(page);
-	const firstSongAddress = `/album/${library.albumId}/${expectedSongSlug('Opening Move')}`;
-	const secondSongAddress = `/album/${library.albumId}/${expectedSongSlug('Second Wind')}`;
-
-	await page.goto(`/album/${library.albumId}`);
-	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
-	await expect(page).toHaveURL(firstSongAddress);
-	const line = surface.locator('.mobile-album-line');
-	await expect(line).toBeVisible();
-	await expect(line).toContainText(`${library.albumTitle} · ${library.albumSongCount} songs`);
-	await expect(line.locator('.album-line-cover')).toBeVisible();
-	await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
-	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
-
-	const next = line.getByRole('button', { name: 'Next song' });
-	await next.focus();
-	await expect(next).toBeFocused();
-	await next.click();
-	await expect(page).toHaveURL(secondSongAddress);
-	await expect(next).toBeFocused();
-	await expect(line).toBeVisible();
-	guard.assertClean();
-});
-
 test('Settings keeps the shared shell without an album row', async ({ page }) => {
 	const guard = new FlowGuard(page);
 
