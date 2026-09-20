@@ -9,6 +9,7 @@ from typing import Final, Literal
 from pydantic import BaseModel
 
 from songmaker_cli.constants import JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.timestamps import aware_timestamp
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
 RemainingTimeEstimate = int | Literal["calculating"]
@@ -19,8 +20,6 @@ def _remaining_time_estimate(
     *,
     now: datetime,
 ) -> RemainingTimeEstimate:
-    from songmaker_cli.db.models import aware_timestamp
-
     if job.status in JOB_TERMINAL_STATUSES:
         return 0
     if job.status != JobStatus.RUNNING:

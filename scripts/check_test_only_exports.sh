@@ -11,10 +11,11 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 
 export_pattern = re.compile(
-    r"^export\s+(?:declare\s+)?(?:async\s+)?(?:const\s+enum|const|let|function|class|type|interface|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)",
+    r"^export\s+(?:declare\s+)?(?:async\s+)?(?:const\s+enum|const|let|function|abstract\s+class|class|type|interface|enum)\s+([A-Za-z_$][A-Za-z0-9_$]*)",
     re.MULTILINE,
 )
 brace_export_pattern = re.compile(r"^export\s+(?:type\s+)?\{([^}]+)\}", re.MULTILINE)
+star_export_pattern = re.compile(r"^export\s+(?:type\s+)?\*\s+from\s*['\"]", re.MULTILINE)
 default_export_pattern = re.compile(r"^export\s+default\b", re.MULTILINE)
 default_import_pattern = re.compile(
     r"(?:import\s+(?:[A-Za-z_$][\w$]*\s*(?:,\s*(?:\{[^}]*\}|\*\s+as\s+\w+))?"
@@ -30,6 +31,8 @@ def exported_names(source):
             entry = re.sub(r"^\s*type\s+", "", entry).strip()
             if entry:
                 names.append(re.split(r"\s+as\s+", entry)[-1].strip())
+    if star_export_pattern.search(source):
+        names.append("*")
     if default_export_pattern.search(source):
         names.append("default")
     return names
@@ -51,6 +54,10 @@ def self_test():
     cases = [
         ("export const answer = 42;", ["answer"]),
         ("export async function run() {}", ["run"]),
+        ("export abstract class Base {}", ["Base"]),
+        ("export declare abstract class Base {}", ["Base"]),
+        ("export * from './helpers';", ["*"]),
+        ("export type * from './types';", ["*"]),
         ("export enum State { Ready }", ["State"]),
         ("export const enum State { Ready }", ["State"]),
         ("const a = 1;\nexport { a as b };", ["b"]),
@@ -77,7 +84,7 @@ def self_test():
             sys.exit(f"Default import regression: {source!r}")
     if list(default_import_paths("frontend/src/caller.ts", "import { named } from './helper';")):
         sys.exit("A named import must not keep a default export alive")
-    print("Export form regressions passed (17 cases).")
+    print("Export form regressions passed (21 cases).")
 
 
 self_test()
