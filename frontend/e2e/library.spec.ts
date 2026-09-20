@@ -12,7 +12,6 @@ import {
 	collectionRowPlayLabel,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_LABEL,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
@@ -268,14 +267,14 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	}
 	if (shell === 'desktop') {
 		await expect(takeControl).toHaveCount(1);
-		// The unified take row's own Play control (#971/#976) toggles play/pause
-		// like the transport's — pressing it on the pick that is already playing
-		// would pause it, not surface Now Playing. Now Playing for an
-		// already-playing take is reached through the transport's own control.
-		await transport.getByRole('button', { name: NOW_PLAYING_LABEL }).click();
+		// The click rule (#140): a tap on the row body plays the take and shows
+		// it in Now Playing on This take. A row body never stops the music, so
+		// tapping the pick that's already playing only opens the panel, without
+		// pausing it.
+		await takeControl.getByRole('button', { name: nameStartingWith('Take') }).click();
 		await expectTakeShownInNowPlaying(page, shell, library.pickedSongTitle);
-		// The transport's Now Playing control never touches play/pause: the pick
-		// that was already playing is still playing after it.
+		// The row body tap never touches play/pause: the pick that was already
+		// playing is still playing after it.
 		await expect(
 			shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
 				name: TRANSPORT_PAUSE_LABEL,

@@ -31,7 +31,7 @@
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
 	import { removeGenerationFromSong, replaceSongInList } from '$lib/stores/libraryData';
-	import { playTake, selectedGenerationId } from '$lib/stores/player';
+	import { playTake, playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	// Re-score comes straight from its owner rather than through
 	// GenerationActions: Now Playing has no such context and calls the same
@@ -196,6 +196,19 @@
 		}
 		if (gen.is_archived) return;
 		void playTake(gen, song);
+	}
+
+	// The row's click rule (#140): a tap on the row body — its name, duration
+	// and score, everything except the ▶ symbol, the pick star and the menu —
+	// plays the take and opens Now Playing on it. Selection mode re-purposes
+	// it to a select tap instead, same as every other row control.
+	function handleRowBodyClick(gen: GenerationItem): void {
+		if ($selectionMode) {
+			toggleSelection(gen.id);
+			return;
+		}
+		if (gen.is_archived) return;
+		void playTakeAndShowNowPlaying(gen, song);
 	}
 
 	interface TakeProvenance {
@@ -446,23 +459,32 @@
 									</button>
 								{/if}
 
-								<span class="take-label">
-									{takeRowLabel(gen.generation_number)}
-								</span>
-
-								{#if duration}
-									<span class="take-duration">{duration}</span>
-								{/if}
-
-								{#if headline}
-									<span
-										class="score-badge {headline.color}"
-										title={`${headline.label} ${headline.text}`}
-									>
-										<span class="score-shape" aria-hidden="true"></span>
-										{headline.text}
+								<button
+									type="button"
+									class="take-body"
+									data-hitbox="text"
+									onclick={() => handleRowBodyClick(gen)}
+									disabled={gen.is_archived && !$selectionMode}
+									aria-label={`${takeRowLabel(gen.generation_number)}${duration ? ` ${duration}` : ''}`}
+								>
+									<span class="take-label">
+										{takeRowLabel(gen.generation_number)}
 									</span>
-								{/if}
+
+									{#if duration}
+										<span class="take-duration">{duration}</span>
+									{/if}
+
+									{#if headline}
+										<span
+											class="score-badge {headline.color}"
+											title={`${headline.label} ${headline.text}`}
+										>
+											<span class="score-shape" aria-hidden="true"></span>
+											{headline.text}
+										</span>
+									{/if}
+								</button>
 							</span>
 							<span class="take-details">
 								{#if batchNotice}
@@ -821,6 +843,26 @@
 
 	.take-details {
 		flex-wrap: wrap;
+	}
+
+	.take-body {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex: 1;
+		min-width: 0;
+		background: none;
+		border: 0;
+		margin: 0;
+		padding: 0;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.take-body:disabled {
+		cursor: default;
 	}
 
 	.take-origin {
