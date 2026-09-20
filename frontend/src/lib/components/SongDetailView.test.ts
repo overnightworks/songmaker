@@ -8,6 +8,8 @@ import {
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import { phoneAppBar } from '$lib/stores/ui';
+import PhoneAppBar from './PhoneAppBar.svelte';
 
 import type { GenerationItem, JobItem, SongItem } from '$lib/api/types';
 import {
@@ -24,7 +26,6 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
-	HITBOX_FREQUENT_PX,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
@@ -36,13 +37,7 @@ import {
 	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
 import { accessibleName } from '$lib/test-utils/accessible-name';
-import {
-	clearHitboxStyles,
-	clearPointer,
-	injectHitboxStyles,
-	minSquarePx,
-	setPointer
-} from '$lib/test-utils/hitbox';
+import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import {
 	editGenParams,
 	editLyrics,
@@ -398,6 +393,33 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('[role="tablist"]')).toBeNull();
 		expect(target.querySelector('.lyrics-area')).not.toBeNull();
 		expect(target.querySelector('.takes-column')).not.toBeNull();
+	});
+
+	it('publishes the song actions in the layout bar and clears them when leaving', async () => {
+		stubLibraryMedia({ narrow: true, compact: true });
+		const target = await renderView({ widthPx: 390 });
+		const bar = document.createElement('div');
+		document.body.append(bar);
+		mounted.push(mount(PhoneAppBar, { target: bar }));
+		await tick();
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
+		expect(target.querySelector('.detail-header')).toBeNull();
+		expect(target.querySelector('.write-save')).toBeNull();
+		bar.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+		const save = Array.from(bar.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+			(button) => button.textContent?.trim() === 'Save version'
+		);
+		expect(save?.disabled).toBe(true);
+		setDraftLyrics('A changed verse');
+		await tick();
+		expect(save?.disabled).toBe(false);
+		const view = mounted.shift();
+		if (!view) throw new Error('Expected mounted song view');
+		await unmount(view);
+		await tick();
+		expect(get(phoneAppBar)).toBeNull();
+		expect(bar.querySelector('.brand')?.textContent).toBe('Hallucinai');
 	});
 
 	it('switches between Write and the real Takes list at phone width without losing the draft', async () => {
@@ -864,7 +886,8 @@ describe('SongDetailView unsaved-draft guard', () => {
 		);
 	});
 
-	it('saves from the write surface without the overflow menu or generate', async () => {
+	it.each([false, true])('saves the draft from its visible action (phone: %s)', async (phone) => {
+		stubLibraryMedia({ narrow: phone, compact: phone });
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(
 			song({ ...editableSongDefaults(), version_count: 2 })
@@ -874,7 +897,15 @@ describe('SongDetailView unsaved-draft guard', () => {
 		await tick();
 
 		expect(target.querySelector('.menu-panel')).toBeNull();
-		writeSaveButton(target).click();
+		if (phone) {
+			mounted.push(mount(PhoneAppBar, { target }));
+			await tick();
+			target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+			await tick();
+			clickNamed(target, 'Save version');
+		} else {
+			writeSaveButton(target).click();
+		}
 		await tick();
 		await Promise.resolve();
 		await tick();
@@ -1048,8 +1079,7 @@ describe('song header album rail', () => {
 	});
 
 	it('hides previous/next when browse is shown', async () => {
-		stubLibraryMedia({ narrow: false, compact: true });
-		document.documentElement.dataset.pointer = 'coarse';
+		stubLibraryMedia({ narrow: false, compact: false });
 		songList.set(albumSongs());
 		const target = await renderView();
 		expect(target.querySelector('.song-rail')).toBeNull();
@@ -1061,7 +1091,7 @@ describe('song header album rail', () => {
 	});
 
 	it('shows one album line and disabled ends without wrapping through neighbors', async () => {
-		stubLibraryMedia({ narrow: true });
+		stubLibraryMedia({ narrow: true, compact: false });
 		albumList.set([album({ id: 'a-local', title: 'Local Album', song_count: 3 })]);
 		songList.set(albumSongs());
 		selectedSongId.set('s1');
@@ -1079,10 +1109,6 @@ describe('song header album rail', () => {
 		expect(next.getAttribute('data-hitbox')).toBe('frequent');
 		expect(target.querySelector('.detail-header .crumb-link')).toBeNull();
 
-		setPointer('coarse');
-		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
-		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
-
 		selectedSongId.set('s-first');
 		await tick();
 		expect(prev.disabled).toBe(true);
@@ -1095,7 +1121,7 @@ describe('song header album rail', () => {
 	});
 
 	it('keeps previous and next present and disabled on a one-song album', async () => {
-		stubLibraryMedia({ narrow: true });
+		stubLibraryMedia({ narrow: true, compact: false });
 		const target = await renderView();
 		const prev = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_PREVIOUS_LABEL}"]`);
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
@@ -1105,7 +1131,7 @@ describe('song header album rail', () => {
 	});
 
 	it('replaces the song and keeps the Write tab when next is clicked', async () => {
-		stubLibraryMedia({ narrow: true, compact: true });
+		stubLibraryMedia({ narrow: true, compact: false });
 		const songs = albumSongs();
 		albumList.set([album({ id: 'a-local', title: 'Local Album', song_count: 3 })]);
 		songList.set(songs);
@@ -1128,9 +1154,8 @@ describe('song header album rail', () => {
 		cleanup();
 	});
 
-	it('keeps the narrow coarse album line inside 320px with a long album title', async () => {
-		stubLibraryMedia({ narrow: true });
-		document.documentElement.dataset.pointer = 'coarse';
+	it('keeps the album line inside a narrow desktop editor with a long album title', async () => {
+		stubLibraryMedia({ narrow: true, compact: false });
 		const longAlbumTitle =
 			'The Unreasonably Long Anniversary Collection From the Other Side of the Harbor';
 		songList.set(albumSongs().map((item) => ({ ...item, album_title: longAlbumTitle })));
@@ -1144,14 +1169,12 @@ describe('song header album rail', () => {
 			throw new Error('Expected header song rail');
 		}
 		expect(rail.textContent).toContain(`${longAlbumTitle} · 3 songs`);
-		expect(minSquarePx(prev, 'previous song').width).toBe(HITBOX_FREQUENT_PX);
-		expect(minSquarePx(next, 'next song').width).toBe(HITBOX_FREQUENT_PX);
 		expect(headerEl.scrollWidth).toBeLessThanOrEqual(320);
 		expect(rail.scrollWidth).toBeLessThanOrEqual(320);
 	});
 
 	it('shows Library › Album › Track n of m as the breadcrumb', async () => {
-		stubLibraryMedia({ narrow: false, compact: true });
+		stubLibraryMedia({ narrow: false, compact: false });
 		const songs = albumSongs();
 		albumList.set([album({ id: 'a-local', title: 'Local Album', song_count: 3 })]);
 		songList.set(songs);
@@ -1163,12 +1186,13 @@ describe('song header album rail', () => {
 		expect(crumbs[2]).toBe(`Track ${songs.findIndex((s) => s.id === 's1') + 1} of ${songs.length}`);
 	});
 
-	it('does not render a second album navigation control on mobile', async () => {
-		stubLibraryMedia({ narrow: true });
+	it('removes the album line and breadcrumbs on mobile', async () => {
+		stubLibraryMedia({ narrow: true, compact: true });
 		selectedAlbumId.set('a-local');
 		selectSong('s1');
 		const target = await renderView();
-		expect(target.querySelector('.detail-header .crumb-link')).toBeNull();
+		expect(target.querySelector('.detail-header')).toBeNull();
+		expect(target.querySelector('.mobile-album-line')).toBeNull();
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedAlbumId)).toBe('a-local');
 	});
@@ -1350,8 +1374,6 @@ describe('the editor answers to its own width, not the viewport', () => {
 		expect(songDetailViewSource).toMatch(
 			/\.detail-panel:not\(\.compact\) \.editor-body \{[^}]*overflow: hidden auto;/
 		);
-		// The compact shell keeps its own rule: `main` scrolls the whole panel,
-		// whose bottom padding is what clears the sticky Generate bar.
 		expect(songDetailViewSource).not.toMatch(/\n\t\.editor-body \{[^}]*overflow:/);
 	});
 
@@ -1369,18 +1391,5 @@ describe('the editor answers to its own width, not the viewport', () => {
 				widthQueries.map(() => `@media (max-width: ${COMPACT_LAYOUT_MAX_PX}px)`)
 			);
 		}
-	});
-});
-
-describe('mobile layout reserves space for the sticky Generate bar', () => {
-	// jsdom cannot compute fixed-element layout, so this pins the stylesheet
-	// rule directly (the same technique routes/layout.test.ts uses).
-	it("keeps the takes scroll container's bottom padding clear of both the sticky Generate bar and the player bar", () => {
-		const media = /@media \(max-width: 768px\) \{[\s\S]*?\.detail-panel \{([\s\S]*?)\}/.exec(
-			songDetailViewSource
-		);
-		if (!media) throw new Error('Expected a mobile .detail-panel rule in the stylesheet');
-		expect(media[1]).toContain('--editor-generate-bar-height');
-		expect(media[1]).toContain('--player-height');
 	});
 });
