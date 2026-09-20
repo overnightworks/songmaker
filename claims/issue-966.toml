@@ -1,8 +1,0 @@
-claim_id = "7558e077d365416c94675261e6b5a9ff"
-agent = "claude-head"
-role = "builder"
-base = "4084be4381bff40c05e880b8a3172afa58173df6"
-branch = "claude/issue-966-token-gate"
-scope = [".github/workflows/ci.yml", "docs/testing.md", "scripts/check_style_literals.py", "scripts/style-literals.txt", "tests/test_check_style_literals.py"]
-opened_commit = "20f4ebd923eb125b32a367e069303dcefc9c8581"
-whole_reason = "Skript, Baseline, Test, CI-Schritt und Doku-Absatz eines Gates"
