@@ -5,7 +5,7 @@ import {
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_LABEL
 } from '../src/lib/constants';
-import { FlowGuard, nameStartingWith, workspace } from './helpers';
+import { FlowGuard, appBar, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 function expectedSongSlug(title: string): string {
@@ -38,7 +38,10 @@ test('the rail search finds a server song and closes the drawer on desktop and 3
 	await search.fill(library.secondAlbumSongTitle);
 	await expect(rail.locator('[aria-label="Library results"]')).toBeVisible();
 	await rail.getByRole('button', { name: nameStartingWith(library.secondAlbumSongTitle) }).click();
-	await expect(surface.getByRole('heading', { name: library.secondAlbumSongTitle })).toBeVisible();
+	const songHeading = isMobile ? appBar(page) : surface;
+	await expect(
+		songHeading.getByRole('heading', { name: library.secondAlbumSongTitle })
+	).toBeVisible();
 	if (isMobile) await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
 	guard.assertClean();
 });
@@ -61,21 +64,30 @@ test('album, song, and take content begin at their breadcrumb headers on desktop
 
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
-	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
 	if (isMobile) {
-		await expect(surface.locator('.mobile-album-line')).toBeVisible();
-		await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
+		// The layout's own app bar carries the song header at compact widths
+		// (PhoneAppBar.svelte, mounted outside <main>); SongDetailView renders
+		// neither .detail-header nor .mobile-album-line there any more.
+		await expect(
+			appBar(page).getByRole('heading', { name: library.pickedSongTitle })
+		).toBeVisible();
+		await expect(surface.locator('.detail-header')).toHaveCount(0);
+		await expect(surface.locator('.mobile-album-line')).toHaveCount(0);
 	} else {
+		await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
 		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
 	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
 	await page.goto(`${songAddress}/take/1`);
-	await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
 	if (isMobile) {
-		await expect(surface.locator('.mobile-album-line')).toBeVisible();
-		await expect(surface.locator('.detail-header [aria-label="Breadcrumb"]')).toHaveCount(0);
+		await expect(
+			appBar(page).getByRole('heading', { name: library.pickedSongTitle })
+		).toBeVisible();
+		await expect(surface.locator('.detail-header')).toHaveCount(0);
+		await expect(surface.locator('.mobile-album-line')).toHaveCount(0);
 	} else {
+		await expect(surface.locator(':scope > .detail-panel > .detail-header')).toBeVisible();
 		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
 	}
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
