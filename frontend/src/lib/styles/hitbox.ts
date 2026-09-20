@@ -49,6 +49,11 @@ html[data-pointer='fine'] [data-hitbox='frequent'] {
 	min-height: var(--hitbox-compact);
 }
 
+html [data-hitbox-size='frequent'] [data-hitbox='frequent'] {
+	min-width: var(--hitbox-frequent);
+	min-height: var(--hitbox-frequent);
+}
+
 /* A labelled control carries its own width — its label — and its own border,
    so only its height has to grow to the touch target. Giving it the square
    'frequent' box instead would clamp a width the layout owns (the library
