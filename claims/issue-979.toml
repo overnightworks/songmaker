@@ -1,0 +1,8 @@
+claim_id = "3ade44810d0e4ef58bcfd4b97b1dcd7a"
+agent = "claude-head"
+role = "builder"
+base = "63180c5ffbc6f422a8e26239431b837801e084ed"
+branch = "claude/issue-979-phone-app-bar"
+scope = ["frontend/src/app.css", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/EditorHeader.svelte", "frontend/src/lib/components/editor/EditorHeader.test.ts", "frontend/src/lib/components/editor/SongMenu.svelte", "frontend/src/lib/components/editor/SongMenu.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
+opened_commit = "c49d0ec43874a7b6efd3f5d7526d2e1ef1054a26"
+whole_reason = "F1b: the layout strip becomes the phone app bar fed by the song route"
