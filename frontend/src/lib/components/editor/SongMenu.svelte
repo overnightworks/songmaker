@@ -1,39 +1,26 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { ShareResult } from '$lib/api/types';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_CLOSE_LABEL,
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 		SONG_MENU_DELETE_LABEL,
 		SONG_MENU_RENAME_LABEL,
-		SONG_MENU_SHARE_LABEL,
-		TAKE_OVERFLOW_LABEL
+		SONG_MENU_SAVE_LABEL,
+		SONG_MENU_LABEL
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
-	import ShareButton from '../ShareButton.svelte';
 
 	interface Props {
 		title: string;
-		isShared: boolean;
-		shareSlug: string | null | undefined;
-		onshare: () => Promise<ShareResult>;
-		onunshare: () => Promise<void>;
+		saveDisabled: boolean;
+		onsave: () => void;
 		onrename: () => void;
 		onaddtoplaylist: () => void;
 		ondelete: () => void;
 	}
 
-	let {
-		title,
-		isShared,
-		shareSlug,
-		onshare,
-		onunshare,
-		onrename,
-		onaddtoplaylist,
-		ondelete
-	}: Props = $props();
+	let { title, saveDisabled, onsave, onrename, onaddtoplaylist, ondelete }: Props = $props();
 
 	let menuOpen = $state(false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
@@ -76,7 +63,7 @@
 		data-hitbox="frequent"
 		aria-haspopup="dialog"
 		aria-expanded={menuOpen}
-		aria-label={TAKE_OVERFLOW_LABEL}
+		aria-label={SONG_MENU_LABEL}
 		onclick={toggleMenu}
 	>
 		<Icon name="more-horizontal" size={18} />
@@ -95,14 +82,13 @@
 			class="menu-panel"
 			role="dialog"
 			aria-modal="true"
-			aria-label={TAKE_OVERFLOW_LABEL}
+			aria-label={SONG_MENU_LABEL}
 			tabindex="-1"
 		>
 			<p class="menu-heading">Song · {title}</p>
-			<div class="menu-row">
-				<span class="menu-row-label">{SONG_MENU_SHARE_LABEL}</span>
-				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
-			</div>
+			<button class="menu-item" disabled={saveDisabled} onclick={() => runAndClose(onsave)}>
+				{SONG_MENU_SAVE_LABEL}
+			</button>
 			<button class="menu-item" onclick={() => runAndClose(onrename)}
 				>{SONG_MENU_RENAME_LABEL}</button
 			>
@@ -149,7 +135,7 @@
 		inset: 0;
 		width: 100%;
 		border: 0;
-		background: color-mix(in srgb, #000 42%, transparent);
+		background: color-mix(in srgb, var(--bg-deep) 42%, transparent);
 		cursor: default;
 	}
 
@@ -173,7 +159,7 @@
 		margin: 0;
 		padding: 0.3rem 0.6rem 0.5rem;
 		font-family: var(--font-display);
-		font-size: 0.7rem;
+		font-size: var(--label-font-size);
 		letter-spacing: 0.5px;
 		text-transform: uppercase;
 		color: var(--text-subtle);
@@ -182,27 +168,14 @@
 		overflow-wrap: anywhere;
 	}
 
-	.menu-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		padding: 0.25rem 0.6rem;
-	}
-
-	.menu-row-label {
-		font-size: 0.87rem;
-		color: var(--text);
-	}
-
 	.menu-item {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		min-height: var(--hitbox-frequent);
 		padding: 0.5rem 0.6rem;
-		border-radius: 4px;
-		font-size: 0.87rem;
+		border-radius: var(--btn-radius-sm);
+		font-size: var(--btn-font-size-sm);
 		color: var(--text);
 		background: none;
 		border: none;
@@ -212,6 +185,11 @@
 
 	.menu-item:hover:not(:disabled) {
 		background: var(--surface-hover);
+	}
+
+	.menu-item:disabled {
+		color: var(--text-disabled);
+		cursor: default;
 	}
 
 	.menu-item.destructive {

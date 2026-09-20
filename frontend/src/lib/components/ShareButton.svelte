@@ -1,17 +1,18 @@
 <script lang="ts">
 	import type { ShareResult } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
-	import { SHARE_BUTTON_COPY_FAILED_TOAST } from '$lib/constants';
+	import { SHARE_BUTTON_COPY_FAILED_TOAST, SONG_SHARE_LABEL } from '$lib/constants';
 	import Icon from './Icon.svelte';
 
 	interface Props {
+		iconOnly?: boolean;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 	}
 
-	let { isShared, shareSlug, onshare, onunshare }: Props = $props();
+	let { iconOnly = false, isShared, shareSlug, onshare, onunshare }: Props = $props();
 	let busy = $state(false);
 
 	async function toggle(): Promise<void> {
@@ -41,6 +42,10 @@
 <button
 	class="share-btn"
 	class:active={isShared}
+	class:icon-only={iconOnly}
+	data-hitbox={iconOnly ? 'frequent' : undefined}
+	aria-label={iconOnly ? SONG_SHARE_LABEL : undefined}
+	aria-pressed={iconOnly ? isShared : undefined}
 	onclick={toggle}
 	disabled={busy}
 	title={isShared ? `Shared: /share/${shareSlug ?? ''}` : 'Share'}
@@ -54,10 +59,15 @@
 		border: 1px solid var(--border);
 		border-radius: var(--btn-radius-sm);
 		color: var(--text-muted);
-		font-size: 0.93rem;
+		font-size: var(--btn-font-size);
 		padding: 0.3rem 0.7rem;
 		cursor: pointer;
 		line-height: 1;
+	}
+
+	.share-btn.icon-only {
+		border: none;
+		padding: 0;
 	}
 
 	.share-btn:hover:not(:disabled) {

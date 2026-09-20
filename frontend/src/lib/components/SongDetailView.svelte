@@ -109,6 +109,7 @@
 	import EditorStacked from './editor/EditorStacked.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
+	import { phoneAppBar } from '$lib/stores/ui';
 	import SongPhoneView from './editor/SongPhoneView.svelte';
 	import EditorSheet from './editor/EditorSheet.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -546,6 +547,30 @@
 		}
 	}
 
+	$effect(() => {
+		phoneAppBar.set(
+			song
+				? {
+						title: song.title,
+						onrename: onRenameSong,
+						share: {
+							isShared: song.is_shared,
+							shareSlug: song.share_slug,
+							onshare: onSongShareEnable,
+							onunshare: onSongShareDisable
+						},
+						menu: {
+							saveDisabled: !dirty,
+							onsave: () => void onSaveVersion(),
+							onaddtoplaylist: () => (songPlaylistPickerOpen = true),
+							ondelete: () => (showDeleteConfirm = true)
+						}
+					}
+				: null
+		);
+		return () => phoneAppBar.set(null);
+	});
+
 	function onTurnCompleted(): void {
 		if (!song) return;
 		const songId = song.id;
@@ -605,7 +630,9 @@
 		onTurnCompleted: () => void
 	)}
 		<div class="write-surface">
-			{@render saveAction()}
+			{#if !compact}
+				{@render saveAction()}
+			{/if}
 			<WriteColumn
 				song={current}
 				allSongs={songs}
@@ -658,7 +685,8 @@
 			generateTitle={$generateAction.title}
 			generateQueueReason={$generateAction.queueReason}
 			generating={$generateAction.pending}
-			{compact}
+			saveDisabled={!dirty}
+			onsave={() => void onSaveVersion()}
 		/>
 	{/snippet}
 
@@ -690,14 +718,7 @@
 
 	<div class="detail-panel" class:compact>
 		{#if compact}
-			<SongPhoneView
-				{header}
-				{sharedLink}
-				{recipe}
-				write={phoneWrite}
-				{expiryDigest}
-				{takeListProps}
-			/>
+			<SongPhoneView {sharedLink} {recipe} write={phoneWrite} {expiryDigest} {takeListProps} />
 		{:else}
 			{@render header()}
 			<div class="editor-body">
@@ -815,7 +836,7 @@
 	   It deliberately starts below the header: a size container also becomes
 	   the containing block for `position: fixed` descendants, and the header
 	   carries two of them — the song menu's full-viewport backdrop and the
-	   compact Generate bar — which would re-anchor to the editor.
+	   overlays — which would re-anchor to the editor.
 
 	   The two-up floor is two 20rem columns plus the 1.2rem gap — 659.2px,
 	   rounded up to a round 680. Below it the editor stacks, as it does in the
@@ -944,10 +965,7 @@
 
 	@media (max-width: 768px) {
 		.detail-panel {
-			/* Reserves space below the last take row / draft controls for both
-			   fixed bars stacked at the bottom of the compact layout: the
-			   sticky Generate bar sitting on top of the player bar. */
-			padding: 0.8rem 0.8rem calc(var(--player-height) + var(--editor-generate-bar-height) + 0.8rem);
+			padding: var(--row-padding);
 		}
 	}
 </style>

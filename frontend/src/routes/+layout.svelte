@@ -4,11 +4,12 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
+	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
 	import NowPlaying from '$lib/components/NowPlaying.svelte';
 	import PlayerBar from '$lib/components/PlayerBar.svelte';
-	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL } from '$lib/constants';
+	import { APP_NAME } from '$lib/constants';
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
@@ -38,8 +39,6 @@
 		initRailWidth,
 		railCollapsed,
 		railWidth,
-		sidebarOpen,
-		toggleSidebar,
 		initTheme
 	} from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -226,36 +225,7 @@
 	</div>
 {:else if me}
 	{#if compact}
-		<header class="mobile-strip">
-			<button
-				class="drawer-trigger"
-				data-hitbox="frequent"
-				data-hitbox-face
-				aria-haspopup="dialog"
-				aria-expanded={$sidebarOpen}
-				aria-label={RAIL_DRAWER_OPEN_LABEL}
-				onclick={toggleSidebar}
-			>
-				<svg
-					width="20"
-					height="20"
-					viewBox="0 0 24 24"
-					fill="none"
-					stroke="currentColor"
-					stroke-width="2"
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					aria-hidden="true"
-				>
-					<line x1="4" y1="7" x2="20" y2="7" />
-					<line x1="4" y1="12" x2="20" y2="12" />
-					<line x1="4" y1="17" x2="20" y2="17" />
-				</svg>
-			</button>
-			<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
-				>{APP_NAME}</button
-			>
-		</header>
+		<PhoneAppBar />
 		<RailDrawer>
 			<Rail
 				username={me.username}
@@ -319,35 +289,6 @@
 		padding: 8px 20px;
 		font-size: 0.95rem;
 		cursor: pointer;
-	}
-
-	.mobile-strip {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: var(--header-height);
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		padding: 0 12px;
-		background: var(--header-bg);
-		border-bottom: 1px solid var(--border);
-		z-index: 200;
-	}
-
-	.brand {
-		background: none;
-		border: none;
-		padding: 0;
-		cursor: pointer;
-		font-family: var(--font-display);
-		font-size: 16px;
-		font-weight: 700;
-		color: var(--accent);
-		letter-spacing: 3px;
-		text-transform: uppercase;
-		text-decoration: none;
 	}
 
 	.shell-row {

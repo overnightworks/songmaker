@@ -24,7 +24,7 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { closeSidebar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
+import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState, liveStream } = vi.hoisted(() => ({
@@ -213,6 +213,7 @@ afterEach(async () => {
 	authLoading.set(false);
 	authCheckError.set(null);
 	closeSidebar();
+	phoneAppBar.set(null);
 	railCollapsed.set(false);
 	localStorage.removeItem('songmaker.rail-collapsed');
 	railWidth.set(264);
@@ -371,6 +372,27 @@ describe('app shell', () => {
 		await Promise.resolve();
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('uses the same strip for song actions and opens the mounted drawer from it', async () => {
+		phoneAppBar.set({
+			title: 'Sommerlicht',
+			onrename: vi.fn(),
+			share: { isShared: false, shareSlug: null, onshare: vi.fn(), onunshare: vi.fn() },
+			menu: { saveDisabled: true, onsave: vi.fn(), onaddtoplaylist: vi.fn(), ondelete: vi.fn() }
+		});
+		const target = await renderLayout('/album/summer/sommerlicht');
+		expect(target.querySelectorAll('.mobile-strip')).toHaveLength(1);
+		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
+		expect(strip.children).toHaveLength(4);
+		expect(strip.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
+		expect(strip.querySelector('.brand')).toBeNull();
+		requireElement<HTMLButtonElement>(strip, '.drawer-trigger').click();
+		await tick();
+		expect(document.body.querySelector('.rail')).not.toBeNull();
+		phoneAppBar.set(null);
+		await tick();
+		expect(strip.querySelector('.brand')?.textContent).toBe('Hallucinai');
 	});
 
 	it('opens the rail drawer from the trigger on every private route', async () => {
