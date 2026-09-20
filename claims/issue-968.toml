@@ -1,0 +1,8 @@
+claim_id = "c782f98d0eaa4fb0b2e913786864bd49"
+agent = "claude-head"
+role = "builder"
+base = "cb50e6218e63e628ee62f72cc5c823194db1bcbd"
+branch = "claude/issue-968-active-generation"
+scope = ["api/client.ts", "generation_api.py", "jobs.test.ts", "stores/jobs.ts", "tests/test_api.py"]
+opened_commit = "d304e994b8039eb89a09e6ca14e1b36509e4995c"
+whole_reason = "Eine Scheibe aus dem geprüften Schnitt von #914; ihre Dateien inkl. Tests"
