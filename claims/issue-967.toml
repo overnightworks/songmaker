@@ -1,8 +1,0 @@
-claim_id = "b8b974b47a7e4311a8fadb094e07d51d"
-agent = "claude-head"
-role = "builder"
-base = "cb50e6218e63e628ee62f72cc5c823194db1bcbd"
-branch = "claude/issue-967-job-response"
-scope = ["frontend/src/lib/api/types.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/takeActions.test.ts", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs/generation.py", "tests/test_api.py", "tests/test_db.py", "tests/test_jobs.py"]
-opened_commit = "9d56961cf5c3b6ecd8c81fa486234714aa726615"
-whole_reason = "Pfade des Plans auf Repository-Pfade aufgelöst"
