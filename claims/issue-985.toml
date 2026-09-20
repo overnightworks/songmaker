@@ -1,0 +1,8 @@
+claim_id = "c10290b33c154d8eb11f3c3e07a1a95f"
+agent = "claude-head"
+role = "builder"
+base = "2ccf3f5f8a9684b9001c6327e027a3f120019bac"
+branch = "claude/issue-985-mount-generate"
+scope = ["frontend/e2e/kinetic-strip.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/EditorHeader.svelte", "frontend/src/lib/components/editor/EditorHeader.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts"]
+opened_commit = "849409814fed686900f150208f1d18a91fcf6315"
+whole_reason = "F2b: mount GenerateButton on both widths and delete the old header button and takes failure row"
