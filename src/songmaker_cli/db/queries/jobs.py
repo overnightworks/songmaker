@@ -238,6 +238,8 @@ def get_last_generate_job_for_song(session: Session, song_id: str) -> Job | None
 
 
 def get_active_generate_job_for_song(session: Session, song_id: str) -> Job | None:
+    """Return the song's newest queued/running generate job; used to
+    recover the SSE stream after a reload."""
     return (
         session.query(Job)
         .filter(
