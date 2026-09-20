@@ -19,6 +19,8 @@ vi.mock('$lib/api/client', () => api);
 import {
 	activeModelIds,
 	activeModels,
+	activeModelsLoading,
+	activeModelsError,
 	builtinDefaults,
 	defaultConfig,
 	deletePreset,
@@ -59,6 +61,35 @@ beforeEach(() => {
 });
 
 describe('preset store', () => {
+	it.each([false, true])('clears loading after a model request (failure: %s)', async (fails) => {
+		const response = Promise.withResolvers<[]>();
+		api.fetchActiveModels.mockReturnValueOnce(response.promise);
+		const request = loadActiveModels();
+		expect(get(activeModelsLoading)).toBe(true);
+		if (fails) response.reject(new Error('offline'));
+		else response.resolve([]);
+		await request;
+		expect(get(activeModelsLoading)).toBe(false);
+		expect(get(activeModelsError)).toBe(fails ? 'Failed to load models' : null);
+		api.fetchActiveModels.mockResolvedValueOnce([]);
+		await loadActiveModels();
+		expect(get(activeModelsError)).toBeNull();
+	});
+
+	it('remains loading until overlapping model requests finish', async () => {
+		const first = Promise.withResolvers<[]>();
+		const second = Promise.withResolvers<[]>();
+		api.fetchActiveModels.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise);
+		const firstRequest = loadActiveModels();
+		const secondRequest = loadActiveModels();
+		first.resolve([]);
+		await firstRequest;
+		expect(get(activeModelsLoading)).toBe(true);
+		second.resolve([]);
+		await secondRequest;
+		expect(get(activeModelsLoading)).toBe(false);
+	});
+
 	it('adopts each successfully loaded settings value', async () => {
 		api.fetchPresets.mockResolvedValue([preset('mine'), preset('shared', { is_shared: true })]);
 		api.fetchBuiltinDefaults.mockResolvedValue({ acestep: { inference_steps: 8 } });

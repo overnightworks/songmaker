@@ -37,7 +37,7 @@ import {
 	TAKE_COVER_LABEL,
 	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
-import { accessibleName } from '$lib/test-utils/accessible-name';
+import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import { editLyrics, pinnedSeed, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
 import { activeJobs } from '$lib/stores/jobs';
@@ -470,6 +470,27 @@ describe('SongDetailView adding a take to a playlist', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
+	it('edits the phone recipe inline without opening a sheet', async () => {
+		stubLibraryMedia({ narrow: true, compact: true });
+		const target = await renderView({ widthPx: 390 });
+		detailTab.set('write');
+		await tick();
+		const recipe = target.querySelector<HTMLElement>('.phone-recipe') as HTMLElement;
+		getByRoleButton(recipe, 'Recipe').click();
+		await tick();
+		getByRoleButton(recipe, 'BPM').click();
+		await tick();
+		const input = recipe.querySelector<HTMLInputElement>(
+			'input[aria-label="BPM"]'
+		) as HTMLInputElement;
+		input.value = '96';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		expect(recipe.textContent).toContain('96 BPM');
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
+		expect(target.querySelector('.recipe-panel')).toBeNull();
+	});
+
 	it('loads deleted voices once and names their existing takes', async () => {
 		listLoras.mockResolvedValueOnce([
 			{
@@ -553,7 +574,8 @@ describe('SongDetailView recipe and takes', () => {
 			expect(get(recipeOpen)).toBe(true);
 			expect(get(sourceMode)).toBe(mode);
 			expect(get(sourceGeneration)?.id).toBe('g1');
-			expect(target.querySelector('.recipe-panel')).not.toBeNull();
+			expect(target.querySelector(compact ? '.phone-recipe' : '.recipe-panel')).not.toBeNull();
+			if (compact) expect(target.querySelector('[role="dialog"]')).toBeNull();
 		}
 	);
 

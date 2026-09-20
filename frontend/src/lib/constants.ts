@@ -309,6 +309,26 @@ export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const SONG_MENU_DELETE_LABEL = 'Delete song';
 
+export const PHONE_RECIPE_LOADING = 'Loading…';
+export const PHONE_RECIPE_LOADED = 'Loaded';
+export const PHONE_RECIPE_MODELS_ERROR = 'Failed to load models';
+export const PHONE_RECIPE_RETRY = 'Retry';
+export const PHONE_RECIPE_PARAMETERS = 'LM / DiT';
+export const PHONE_RECIPE_CUSTOM = 'Custom';
+export const PHONE_RECIPE_REFERENCE = 'Reference';
+export const PHONE_RECIPE_UPLOAD = 'Upload audio';
+export const PHONE_RECIPE_UPLOAD_ERROR = 'Upload failed';
+export const PHONE_RECIPE_REMOVE = 'Remove';
+export const PHONE_RECIPE_DEFAULTS_ERROR = 'Failed to load generation defaults';
+export const PHONE_RECIPE_REPAINT_STRENGTH = 'Repaint strength';
+export const PHONE_RECIPE_COVER_STRENGTH = 'Cover strength';
+export const PHONE_RECIPE_NOISE_STRENGTH = 'Noise strength';
+export const PHONE_RECIPE_REPAINT_MODES = [
+	{ value: 'conservative', label: 'Conservative' },
+	{ value: 'balanced', label: 'Balanced' },
+	{ value: 'aggressive', label: 'Aggressive' }
+] as const;
+
 export const RECIPE_PANEL_LABEL = 'Recipe';
 export const RECIPE_SAVED_HINT = 'Saved with the version. Changes mark the draft.';
 export const RECIPE_COLLAPSE_LABEL = 'Collapse';

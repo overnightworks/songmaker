@@ -38,6 +38,7 @@
 		navigateToSongTab,
 		openCollectionEntry,
 		openLibraryWall,
+		openWriteTab,
 		clearGenerationSelection,
 		persistLibraryHistory,
 		selectNeighborSong,
@@ -76,7 +77,8 @@
 		setSourceFromGeneration,
 		sourceGeneration,
 		sourceMode,
-		takesPerGenerate
+		takesPerGenerate,
+		type SourceMode
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
 	import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -97,7 +99,6 @@
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
 		EDITOR_VIEW_COWRITER_LABEL,
-		EDITOR_VIEW_RECIPE_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
@@ -265,7 +266,7 @@
 	$effect(() => {
 		const pending = $pendingSource;
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
-		setSourceFromGeneration(pending.generation, pending.mode);
+		useSource(pending.generation, pending.mode);
 		pendingSource.set(null);
 	});
 
@@ -345,7 +346,7 @@
 
 	// Both toggles stacked pushes the full Recipe panel's three multi-field
 	// groups below the fold — see EditorStacked.svelte. Not relevant on
-	// compact, where Recipe is its own sheet.
+	// compact, where Recipe expands inline.
 	const stacked = $derived($coWriterOpen && $recipeOpen && !compact);
 
 	$effect(() => {
@@ -406,7 +407,7 @@
 					latestVersionNumber,
 					generateJob: $generateAction.job,
 					onagain: applyAgain,
-					onsource: setSourceFromGeneration,
+					onsource: useSource,
 					onretry: () => {
 						if (song) void refreshTakes(song.id);
 					}
@@ -416,6 +417,12 @@
 
 	function applyAgain(gen: GenerationItem): void {
 		applyAgainFromGeneration(gen);
+		if (compact) openWriteTab();
+	}
+
+	function useSource(gen: GenerationItem, mode: SourceMode): void {
+		setSourceFromGeneration(gen, mode);
+		if (compact) openWriteTab();
 	}
 
 	function onVersionClick(versionId: string): void {
@@ -718,7 +725,7 @@
 
 	<div class="detail-panel" class:compact>
 		{#if compact}
-			<SongPhoneView {sharedLink} {recipe} write={phoneWrite} {expiryDigest} {takeListProps} />
+			<SongPhoneView {sharedLink} write={phoneWrite} {expiryDigest} {takeListProps} />
 		{:else}
 			{@render header()}
 			<div class="editor-body">
@@ -774,13 +781,6 @@
 			onclose={() => coWriterOpen.set(false)}
 		>
 			{@render writeSurface(song, true, true, onTurnCompleted)}
-		</EditorSheet>
-		<EditorSheet
-			open={$recipeOpen}
-			label={EDITOR_VIEW_RECIPE_LABEL}
-			onclose={() => recipeOpen.set(false)}
-		>
-			<RecipePanel onclose={() => recipeOpen.set(false)} />
 		</EditorSheet>
 	{/if}
 {/if}

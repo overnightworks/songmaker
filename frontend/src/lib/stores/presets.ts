@@ -1,4 +1,5 @@
 import { writable, derived } from 'svelte/store';
+import { PHONE_RECIPE_MODELS_ERROR } from '$lib/constants';
 import type { PresetItem, VersionGenerationParams } from '$lib/api/types';
 import type { AvailableModel } from '$lib/api/client';
 import {
@@ -16,6 +17,8 @@ import {
 export const presets = writable<PresetItem[]>([]);
 export const builtinDefaults = writable<Record<string, VersionGenerationParams>>({});
 export const defaultConfig = writable<string | null>(null);
+export const activeModelsLoading = writable(false);
+export const activeModelsError = writable<string | null>(null);
 export const activeModels = writable<AvailableModel[]>([]);
 export const activeModelIds = derived(activeModels, ($m) => new Set($m.map((m) => m.id)));
 
@@ -40,12 +43,21 @@ export async function loadBuiltins(): Promise<void> {
 	}
 }
 
+let activeModelLoads = 0;
+
 export async function loadActiveModels(): Promise<void> {
+	activeModelLoads += 1;
+	activeModelsLoading.set(true);
+	activeModelsError.set(null);
 	try {
 		const data = await fetchActiveModels();
 		activeModels.set(data);
+		activeModelsError.set(null);
 	} catch {
-		/* models unavailable */
+		activeModelsError.set(PHONE_RECIPE_MODELS_ERROR);
+	} finally {
+		activeModelLoads -= 1;
+		activeModelsLoading.set(activeModelLoads > 0);
 	}
 }
 
