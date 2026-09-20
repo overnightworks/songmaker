@@ -237,6 +237,19 @@ def get_last_generate_job_for_song(session: Session, song_id: str) -> Job | None
     )
 
 
+def get_active_generate_job_for_song(session: Session, song_id: str) -> Job | None:
+    return (
+        session.query(Job)
+        .filter(
+            Job.song_id == song_id,
+            Job.type == JobType.GENERATE,
+            Job.status.in_(JOB_ACTIVE_STATUSES),
+        )
+        .order_by(Job.started_at.desc())
+        .first()
+    )
+
+
 def lock_active_job(session: Session, job_id: str) -> Job | None:
     job = (
         session.query(Job)

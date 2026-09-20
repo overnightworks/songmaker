@@ -1,5 +1,5 @@
 import { writable, get } from 'svelte/store';
-import { fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
+import { fetchActiveGeneration, fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
 import { JOB_TYPE_GENERATE } from '$lib/constants';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
@@ -143,6 +143,11 @@ export function trackJob(
 	activeJobs.update((jobs) => [...jobs, { job, ...context }]);
 	if (context.songId && job.type === JOB_TYPE_GENERATE) dismissGenerationFailure(context.songId);
 	streamJob(job.id);
+}
+
+export async function hydrateActiveGeneration(songId: string): Promise<void> {
+	const job = await fetchActiveGeneration(songId);
+	if (job) trackJob(job, { songId });
 }
 
 export function removeJob(jobId: string): void {
