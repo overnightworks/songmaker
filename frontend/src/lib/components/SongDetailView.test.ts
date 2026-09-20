@@ -400,14 +400,29 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(target.querySelector('.takes-column')).not.toBeNull();
 	});
 
-	it('shows the take strip in Write on compact layouts, with no second takes list', async () => {
-		stubLibraryMedia({ narrow: false, compact: true });
-		const target = await renderView();
+	it('switches between Write and the real Takes list at phone width without losing the draft', async () => {
+		openWriteTab();
+		stubLibraryMedia({ narrow: true, compact: true });
+		const target = await renderView({ widthPx: 390 });
 		expect(target.querySelector('.editor-columns')).toBeNull();
-		expect(target.querySelector('.lyrics-area')).not.toBeNull();
+		const lyrics = target.querySelector<HTMLTextAreaElement>('.lyrics-area');
+		if (!lyrics) throw new Error('Expected editable lyrics');
+		lyrics.value = 'An unfinished verse';
+		lyrics.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+		expect(Array.from(tabs, (tab) => tab.textContent?.trim())).toEqual(['Write', 'Takes (1)']);
+		tabs[1].click();
+		await tick();
+		expect(target.querySelector('.lyrics-area')).toBeNull();
+		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
+		expect(target.querySelector('.take-summary[role="button"]')).not.toBeNull();
+		tabs[0].click();
+		await tick();
+		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe(
+			'An unfinished verse'
+		);
 		expect(target.querySelector('.takes-list')).toBeNull();
-		expect(target.querySelector('.take-strip')).not.toBeNull();
-		expect(target.querySelector('[role="tablist"]')).toBeNull();
 	});
 });
 
@@ -974,6 +989,7 @@ describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
 
 describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
 	it('keeps the Write surface underneath instead of replacing it', async () => {
+		openWriteTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
 		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();

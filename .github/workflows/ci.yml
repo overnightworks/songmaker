@@ -229,6 +229,9 @@ jobs:
       - name: No test-only-alive exports
         run: bash ../scripts/check_test_only_exports.sh
 
+      - name: No new style literals
+        run: python3 ../scripts/check_style_literals.py
+
       - name: Lint
         run: pnpm lint
 

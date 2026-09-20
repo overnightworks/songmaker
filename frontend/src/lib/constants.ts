@@ -169,7 +169,7 @@ export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_RESCORE_LABEL = 'Re-score';
 export const TAKE_RESCORING_LABEL = 'Re-scoring…';
 export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
-export const TAKES_EMPTY = 'No takes yet';
+export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
 // {version} is replaced with the version number Generate would create next.
@@ -183,6 +183,8 @@ export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
+export const EDITOR_TAB_WRITE_LABEL = 'Write';
+export const EDITOR_TABS_LABEL = 'Editor tabs';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const EDITOR_VIEWS_LABEL = 'Editor views';

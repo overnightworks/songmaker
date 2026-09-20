@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
-	import { onMount } from 'svelte';
+	import { onMount, type ComponentProps } from 'svelte';
 	import {
 		fetchSong,
-		generateSong,
 		renameSong,
 		deleteSong,
 		restoreSong,
@@ -18,8 +17,8 @@
 	import { ApiError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import { activeJobs, trackJob } from '$lib/stores/jobs';
-	import { health, startHealthPolling, stopHealthPolling } from '$lib/stores/health';
+	import { generateAction, generate } from '$lib/stores/generateAction';
+	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		albumList,
 		songList,
@@ -48,15 +47,12 @@
 	import {
 		isDirty,
 		versions,
-		currentVersionIndex,
 		loadSongData,
 		loadVersion,
 		handleSave,
 		computeDraftVersionNumber,
 		discardDraft,
 		pinnedSeed,
-		editLyrics,
-		editPrompt,
 		editBpm,
 		editAudioDuration,
 		editKeyScale,
@@ -70,16 +66,11 @@
 	import {
 		applyAgainFromGeneration,
 		coWriterOpen,
-		coverNoiseStrength,
-		coverStrength,
 		pendingSource,
 		recipeChips,
 		recipeModel,
 		recipeOpen,
-		repaintEnd,
 		repaintMode,
-		repaintStart,
-		repaintStrength,
 		resetRecipeSourceForSong,
 		seedRecipeModel,
 		setSourceFromGeneration,
@@ -98,21 +89,9 @@
 		SONG_COVER_ALT_TYPE,
 		SONG_COVER_REPLACE_LABEL,
 		SONG_COVER_UPLOAD_LABEL,
-		EDITOR_GENERATE_LABEL,
-		EDITOR_GENERATE_COVER_LABEL,
-		EDITOR_GENERATE_REPAINT_LABEL,
-		EDITOR_GENERATING_LABEL,
-		EDITOR_GPU_OFFLINE_LABEL,
-		EDITOR_GPU_OFFLINE_TITLE,
-		EDITOR_MISSING_CONTENT_TITLE,
 		EDITOR_NETWORK_ERROR,
-		EDITOR_NO_MODELS_WARNING,
-		EDITOR_QUEUED_LABEL,
-		EDITOR_QUEUE_POSITION_TEMPLATE,
-		EDITOR_QUEUE_BUSY_TITLE,
 		EDITOR_SAVE_ACCESSIBLE_LABEL,
 		EDITOR_SAVE_LABEL,
-		EDITOR_SELECT_MODEL_TITLE,
 		EDITOR_UNSAVED_TITLE,
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
@@ -130,6 +109,7 @@
 	import EditorStacked from './editor/EditorStacked.svelte';
 	import WriteColumn from './editor/WriteColumn.svelte';
 	import TakesList from './editor/TakesList.svelte';
+	import SongPhoneView from './editor/SongPhoneView.svelte';
 	import EditorSheet from './editor/EditorSheet.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
@@ -145,11 +125,6 @@
 	let coverBusy = $state(false);
 	let requestedParentAlbumId: string | null = $state(null);
 	let stackedExpanded = $state(false);
-	// Set synchronously at the top of onGenerate, before its first await, so a
-	// second click arriving while the request round-trips (before a job lands
-	// in activeJobs and isGenerating below turns true) is rejected too. See
-	// #234: isGenerating alone left a gap between click and response.
-	let generateRequestInFlight = $state(false);
 
 	const song = $derived($selectedSong);
 	const songs = $derived($songList);
@@ -200,7 +175,6 @@
 				]
 			: []
 	);
-	const jobs = $derived($activeJobs);
 	const dirty = $derived($isDirty);
 	// song.version_count is a *count* of surviving versions, not the highest
 	// version number — the two diverge once any version has been deleted, so
@@ -293,15 +267,6 @@
 		setSourceFromGeneration(pending.generation, pending.mode);
 		pendingSource.set(null);
 	});
-
-	const songJobs = $derived(song ? jobs.filter((j) => j.songId === song.id) : []);
-	const generateJob = $derived(songJobs.find((j) => j.job.type === 'generate')?.job ?? null);
-	const isGenerating = $derived(
-		generateJob !== null && (generateJob.status === 'running' || generateJob.status === 'queued')
-	);
-	const generatePending = $derived(isGenerating || generateRequestInFlight);
-	const queueDepthCapReached = $derived($health?.queue_depth_cap_reached ?? false);
-	const gpuOffline = $derived($health?.acestep_workers_online === 0);
 
 	const expiringSoon = $derived.by(() => {
 		if (!song) return { count: 0, minDays: 0 };
@@ -428,56 +393,28 @@
 		}
 	}
 
+	const takeListProps = $derived(
+		song
+			? ({
+					song,
+					voices: $loras,
+					loadStatus: takesStatus,
+					loadError: takesError,
+					dirty,
+					draftVersionNumber,
+					latestVersionNumber,
+					generateJob: $generateAction.job,
+					onagain: applyAgain,
+					onsource: setSourceFromGeneration,
+					onretry: () => {
+						if (song) void refreshTakes(song.id);
+					}
+				} satisfies ComponentProps<typeof TakesList>)
+			: null
+	);
+
 	function applyAgain(gen: GenerationItem): void {
 		applyAgainFromGeneration(gen);
-	}
-
-	async function onGenerate(): Promise<void> {
-		if (!song || $recipeModel === null || generateRequestInFlight) return;
-		generateRequestInFlight = true;
-		const model: string = $recipeModel;
-		try {
-			if (dirty) {
-				await handleSave(song.id);
-			}
-			const ver = $versions[$currentVersionIndex];
-			const versionId = ver?.id;
-
-			const seedToUse = $pinnedSeed;
-			const source = $sourceGeneration;
-			if (source && $sourceMode === 'repaint') {
-				const { repaintGeneration } = await import('$lib/api/client');
-				const job = await repaintGeneration(source.id, $repaintStart, $repaintEnd, {
-					model,
-					seed: seedToUse,
-					versionId,
-					count: $takesPerGenerate,
-					repaintMode: $repaintMode,
-					repaintStrength: $repaintMode === 'balanced' ? $repaintStrength : undefined
-				});
-				pinnedSeed.set(null);
-				trackJob(job, { songId: song.id });
-			} else if (source && $sourceMode === 'cover') {
-				const { coverGeneration } = await import('$lib/api/client');
-				const job = await coverGeneration(source.id, $coverStrength, {
-					model,
-					seed: seedToUse,
-					versionId,
-					count: $takesPerGenerate,
-					coverNoiseStrength: $coverNoiseStrength > 0 ? $coverNoiseStrength : undefined
-				});
-				pinnedSeed.set(null);
-				trackJob(job, { songId: song.id });
-			} else {
-				const job = await generateSong(song.id, $takesPerGenerate, model, versionId, seedToUse);
-				pinnedSeed.set(null);
-				trackJob(job, { songId: song.id });
-			}
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
-		} finally {
-			generateRequestInFlight = false;
-		}
 	}
 
 	function onVersionClick(versionId: string): void {
@@ -639,32 +576,9 @@
 		}
 		await action();
 	}
-
-	function generateTitle(): string {
-		if (!$editLyrics || !$editPrompt) return EDITOR_MISSING_CONTENT_TITLE;
-		if ($recipeModel === null) {
-			return $activeModels.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
-		}
-		if (gpuOffline) return EDITOR_GPU_OFFLINE_TITLE;
-		return queueDepthCapReached ? EDITOR_QUEUE_BUSY_TITLE : '';
-	}
-
-	function generateLabel(): string {
-		if (isGenerating && generateJob?.status === 'queued') {
-			return generateJob.queue_position
-				? EDITOR_QUEUE_POSITION_TEMPLATE.replace('{position}', String(generateJob.queue_position))
-				: EDITOR_QUEUED_LABEL;
-		}
-		if (generatePending) return EDITOR_GENERATING_LABEL;
-		if (gpuOffline) return EDITOR_GPU_OFFLINE_LABEL;
-		if ($sourceGeneration) {
-			return $sourceMode === 'cover' ? EDITOR_GENERATE_COVER_LABEL : EDITOR_GENERATE_REPAINT_LABEL;
-		}
-		return EDITOR_GENERATE_LABEL;
-	}
 </script>
 
-{#if song}
+{#if song && takeListProps}
 	{#snippet saveAction()}
 		<div class="write-save">
 			<p class="write-save-hint" role="status">
@@ -702,7 +616,7 @@
 		</div>
 	{/snippet}
 
-	<div class="detail-panel" class:compact>
+	{#snippet header()}
 		<EditorHeader
 			{song}
 			{coverUrl}
@@ -738,66 +652,70 @@
 			coWriterOpen={$coWriterOpen}
 			ontogglerecipe={() => recipeOpen.update((v) => !v)}
 			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
-			ongenerate={onGenerate}
-			generateLabel={generateLabel()}
-			generateDisabled={generatePending ||
-				!$editLyrics ||
-				!$editPrompt ||
-				$recipeModel === null ||
-				gpuOffline}
-			generateTitle={generateTitle()}
-			generateQueueReason={generateJob?.status === 'queued' ? generateJob.queue_reason : null}
-			generating={generatePending}
+			ongenerate={generate}
+			generateLabel={$generateAction.label}
+			generateDisabled={$generateAction.disabled}
+			generateTitle={$generateAction.title}
+			generateQueueReason={$generateAction.queueReason}
+			generating={$generateAction.pending}
 			{compact}
 		/>
+	{/snippet}
 
-		<div class="editor-body">
-			{#if song.is_shared && song.share_slug}
-				<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
-			{/if}
+	{#snippet sharedLink()}
+		{#if song.is_shared && song.share_slug}
+			<ShareLinkChip url={`${window.location.origin}/share/song/${song.share_slug}`} />
+		{/if}
+	{/snippet}
 
-			<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
-			{#if $recipeOpen && !compact}
-				{#if stacked && !stackedExpanded}
-					<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
-				{:else}
-					<RecipePanel
-						onclose={() => {
-							if (stacked) stackedExpanded = false;
-							else recipeOpen.set(false);
-						}}
-					/>
-				{/if}
-			{/if}
-
-			{#if compact}
-				{@render writeSurface(song, false, compact, () => {})}
-			{:else if $coWriterOpen}
-				{@render writeSurface(song, true, compact, onTurnCompleted)}
+	{#snippet recipe()}
+		<RecipeChips {chips} open={$recipeOpen} onclick={() => recipeOpen.update((v) => !v)} />
+		{#if $recipeOpen && !compact}
+			{#if stacked && !stackedExpanded}
+				<EditorStacked {chips} onexpand={() => (stackedExpanded = true)} />
 			{:else}
-				<div class="editor-columns">
-					{@render writeSurface(song, false, compact, () => {})}
-					<div class="takes-column">
-						{@render expiryDigest()}
-						<TakesList
-							{song}
-							voices={$loras}
-							loadStatus={takesStatus}
-							loadError={takesError}
-							{dirty}
-							{draftVersionNumber}
-							{latestVersionNumber}
-							{generateJob}
-							onagain={applyAgain}
-							onsource={setSourceFromGeneration}
-							onretry={() => {
-								if (song) void refreshTakes(song.id);
-							}}
-						/>
-					</div>
-				</div>
+				<RecipePanel
+					onclose={() => {
+						if (stacked) stackedExpanded = false;
+						else recipeOpen.set(false);
+					}}
+				/>
 			{/if}
-		</div>
+		{/if}
+	{/snippet}
+
+	{#snippet phoneWrite()}
+		{@render writeSurface(song, false, true, () => {})}
+	{/snippet}
+
+	<div class="detail-panel" class:compact>
+		{#if compact}
+			<SongPhoneView
+				{header}
+				{sharedLink}
+				{recipe}
+				write={phoneWrite}
+				{expiryDigest}
+				{takeListProps}
+			/>
+		{:else}
+			{@render header()}
+			<div class="editor-body">
+				{@render sharedLink()}
+				{@render recipe()}
+				{#if $coWriterOpen}
+					{@render writeSurface(song, true, compact, onTurnCompleted)}
+				{:else}
+					<div class="editor-columns">
+						{@render writeSurface(song, false, compact, () => {})}
+						<div class="takes-column">
+							{@render expiryDigest()}
+							<TakesList {...takeListProps} />
+						</div>
+					</div>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	{#snippet expiryDigest()}
