@@ -40,6 +40,7 @@ def gate(tmp_path, monkeypatch, capsys):
         *[(f"color: {color};", "functional") for color in
           ("rgb(1 2 3)", "rgba(1, 2, 3, .5)", "hsl(12 20% 30%)", "HSLA(12, 20%, 30%, .2)")],
         ("border-radius: 4px;", "border-radius"),
+        ("border-bottom-right-radius: 2px;", "border-bottom-right-radius"),
         ("border-radius: var(--radius) 2.5px / 10%;", "border-radius"),
         ("font-size: 14px;", "font-size"),
         ("font-size: 1rem;", "font-size"),
@@ -72,6 +73,8 @@ def test_vocabulary_font_scale_passes(gate, pixels, unit):
     [
         "color: var(--text); border-radius: var(--radius); font-size: var(--font-12);",
         "border-radius: 50%; box-shadow: var(--shadow);",
+        "border-bottom-right-radius: var(--radius);",
+        "box-shadow: var(--a),\n var(--b);",
         "box-shadow: var(--shadow) !important; font-size: 12px !important;",
         "box-shadow: none; box-shadow: inherit; font-size: inherit;",
         "color: #12; color: #12345; color: #1234567; color: #123456789; color: #abcdefg;",
@@ -85,6 +88,17 @@ def test_only_frontend_source_extensions_are_scanned_and_app_css_is_exempt(gate)
     status, output, _ = gate({"app.css": "color: #fff;", "notes.md": "#abc", "empty.ts": ""})
     assert status == 0
     assert "Style literals: 0" in output
+
+
+@pytest.mark.parametrize("suffix", ["test", "spec"])
+def test_issue_references_in_test_files_are_not_style_literals(gate, suffix):
+    status, output, _ = gate({
+        f"nested/card.{suffix}.ts": "describe('card (#973)', () => {});",
+        "card.ts": "const color = '#abc';",
+    }, limit="1\n")
+    assert status == 0
+    assert "Style literals: 1 (limit 1); hex=1" in output
+    assert f"card.{suffix}.ts" not in output
 
 
 @pytest.mark.parametrize(

@@ -16,7 +16,7 @@ COLORS = re.compile(
     r"|(?P<functional>\b(?:rgba?|hsla?)\s*\()", re.IGNORECASE,
 )
 DECLARATIONS = re.compile(
-    r'''\b(?P<property>border-radius|font-size|box-shadow)\s*:\s*(?P<value>[^;{}"'`]+)''',
+    r'''\b(?P<property>border(?:-[a-z]+)*-radius|font-size|box-shadow)\s*:\s*(?P<value>[^;{}"'`]+)''',
     re.IGNORECASE,
 )
 DIMENSIONS = re.compile(r"(?<![\w-])(-?(?:\d*\.)?\d+)([a-z%]*)", re.IGNORECASE)
@@ -52,7 +52,7 @@ def findings(text: str, suffix: str) -> list[Finding]:
         kind = match["property"].lower()
         value = re.sub(r"\s*!important\b", "", match["value"], flags=re.IGNORECASE).strip()
         dimensions = DIMENSIONS.findall(TOKEN.sub("", value))
-        if kind == "border-radius":
+        if kind.startswith("border-"):
             forbidden = any(unit.lower() == "px" for _, unit in dimensions)
         elif kind == "font-size":
             forbidden = value.lower() in FONT_KEYWORDS or any(
@@ -60,7 +60,8 @@ def findings(text: str, suffix: str) -> list[Finding]:
                 float(number) * (ROOT_FONT_PX if unit.lower() == "rem" else 1)
                 not in FONT_SCALE for number, unit in dimensions)
         else:
-            forbidden = bool(TOKEN.sub("", value).strip()) and value.lower() not in RESET_VALUES
+            remainder = re.sub(r"[,\s]", "", TOKEN.sub("", value))
+            forbidden = bool(remainder) and value.lower() not in RESET_VALUES
         if forbidden:
             found.append(Finding(text.count("\n", 0, match.start()) + 1, kind, value))
     return sorted(found, key=lambda finding: finding.line)
@@ -68,7 +69,8 @@ def findings(text: str, suffix: str) -> list[Finding]:
 
 def check(source: Path, baseline: Path, *, update: bool) -> int:
     paths = sorted(path for path in source.rglob("*")
-                   if path.suffix in {".svelte", ".ts", ".css"} and path.name != "app.css")
+                   if path.suffix in {".svelte", ".ts", ".css"} and path.name != "app.css"
+                   and not path.name.endswith((".test.ts", ".spec.ts")))
     if not source.is_dir() or not paths:
         raise ValueError(f"No frontend source files found in {source}")
     sites = [(path.relative_to(source), findings(path.read_text(), path.suffix)) for path in paths]
