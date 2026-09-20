@@ -1,8 +1,0 @@
-claim_id = "ebc833bf686a40e290927f008fd22f60"
-agent = "claude-head"
-role = "builder"
-base = "d89d856c46cd966af2c20b69673140cf7aec6921"
-branch = "claude/issue-958-review-rest"
-scope = ["frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/resourceSync.test.ts", "scripts/check_test_only_exports.sh", "scripts/dead-exports.allow", "scripts/dead-symbols.allow", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/models.py", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/library_cursor.py", "src/songmaker_cli/timestamps.py", "src/songmaker_cli/worker_liveness.py", "tests/test_api.py", "tests/test_db.py", "tests/test_server.py", "tests/test_worker_liveness.py"]
-opened_commit = "b70ef98269bfaa7f74cc5b08ee27255df90429da"
-whole_reason = "Die Generation-API-Tests liegen in tests/test_api.py"
