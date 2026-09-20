@@ -190,9 +190,7 @@ def test_update_job_raises_after_retries(db_factory) -> None:
 def _patch_dispatch_and_post_process(dto_or_side_effect):
     if isinstance(dto_or_side_effect, list):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
-    elif isinstance(dto_or_side_effect, BaseException) or (
-        isinstance(dto_or_side_effect, type) and issubclass(dto_or_side_effect, BaseException)
-    ):
+    elif callable(dto_or_side_effect) or isinstance(dto_or_side_effect, BaseException):
         dispatch = AsyncMock(side_effect=dto_or_side_effect)
     else:
         dispatch = AsyncMock(return_value=dto_or_side_effect)
@@ -216,15 +214,27 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
     )
 
 
-def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
-    dispatch, post_process, defaults = _patch_dispatch_and_post_process(_make_dto(seed=42))
+@pytest.mark.parametrize("count", [1, 2])
+def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> None:
+    observed_takes = []
+    running_starts = []
+
+    async def generate_take(**kwargs):
+        kwargs["on_progress"](0.5)
+        with seeded_db() as session:
+            job = get_job(session, "j1")
+            observed_takes.append((job.take_index, job.take_count, job.progress))
+            running_starts.append(job.running_since)
+        return _make_dto(seed=42)
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
     with dispatch, post_process, defaults:
         _run(
             run_generation_job(
                 "j1",
                 "s1",
                 "v1",
-                1,
+                count,
                 "u1",
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
@@ -238,15 +248,19 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path) -> None:
         job = get_job(session, "j1")
     assert job.status == "completed"
     assert job.progress == 1.0
+    assert (job.take_index, job.take_count) == (count, count)
+    assert observed_takes == [(index + 1, count, (index + 0.5) / count) for index in range(count)]
+    assert running_starts[0] is not None
+    assert len(set(running_starts)) == 1
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
-        assert len(gens) == 1
+        assert len(gens) == count
         assert gens[0].seed == 42
         assert gens[0].model_mode == "sft"
         events = session.query(ResourceEvent).all()
-        assert len(events) == 1
-        assert events[0].generation_id == gens[0].id
+        assert len(events) == count
+        assert {event.generation_id for event in events} == {gen.id for gen in gens}
 
 
 def test_generation_hold_defers_before_building_temporary_context(
