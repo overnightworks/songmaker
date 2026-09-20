@@ -489,21 +489,13 @@ describe('SongDetailView recipe and takes', () => {
 		expect(visibleText(target)).not.toContain('Custom');
 	});
 
-	it.each([
-		['Repaint', 'repaint'],
-		['Cover', 'cover']
-	] as const)('%s opens Recipe with the selected take in %s mode', async (label, mode) => {
+	it('shows symbol actions instead of labelled source buttons in take rows', async () => {
 		const target = await renderView();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		if (!row) throw new Error('Expected a take row');
-		Array.from(row.querySelectorAll<HTMLButtonElement>('.take-action-btn'))
-			.find((button) => button.textContent?.trim() === label)
-			?.click();
-		await tick();
-
-		expect(get(recipeOpen)).toBe(true);
-		expect(get(sourceGeneration)).toEqual(expect.objectContaining({ id: 'g1' }));
-		expect(get(sourceMode)).toBe(mode);
+		const row = target.querySelector('.take-row');
+		expect(row).not.toBeNull();
+		expect(row?.querySelector('.take-action-btn')).toBeNull();
+		expect(row?.querySelectorAll('button')).toHaveLength(3);
+		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});
 
 	it.each(['repaint', 'cover'] as const)(
