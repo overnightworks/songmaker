@@ -7,7 +7,6 @@ import shutil
 import subprocess
 import uuid
 from collections.abc import Callable
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Final
 
@@ -80,6 +79,7 @@ from songmaker_cli.db.queries import (
     unpick_generation,
     update_job_status,
 )
+from songmaker_cli.timestamps import aware_timestamp
 
 log = logging.getLogger(__name__)
 
@@ -344,10 +344,6 @@ async def api_generate_song(
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
-def _as_utc(dt: datetime) -> datetime:
-    return dt if dt.tzinfo is not None else dt.replace(tzinfo=timezone.utc)
-
-
 @router.get("/songs/{song_id}/last-failed-generation")
 def api_last_failed_generation(
     song_id: str,
@@ -369,7 +365,10 @@ def api_last_failed_generation(
     if job is None or job.status != JobStatus.FAILED or job.completed_at is None:
         return LastFailedGenerationResponse(job=None)
     newest_take = next((g for g in song.generations if not g.is_archived), None)
-    if newest_take is not None and _as_utc(newest_take.created_at) >= _as_utc(job.completed_at):
+    if (
+        newest_take is not None
+        and aware_timestamp(newest_take.created_at) >= aware_timestamp(job.completed_at)
+    ):
         return LastFailedGenerationResponse(job=None)
     return LastFailedGenerationResponse(job=JobResponse.from_orm(job))
 

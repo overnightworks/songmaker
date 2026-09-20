@@ -47,6 +47,7 @@ import {
 	ResourceSyncController,
 	requestSongRefresh,
 	resetResourceSyncForTests,
+	resourceSync,
 	retryResourceSync,
 	startLibraryResourceSync,
 	stopLibraryResourceSync,
@@ -1293,6 +1294,39 @@ describe('library resource sync wiring', () => {
 		stopLibraryResourceSync();
 		expect(MockEventSource.instances[0].closed).toBe(true);
 	});
+
+	it.each([
+		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE],
+		[500, 'reconnecting', null]
+	] as const)(
+		'handles a %s auth probe through the singleton owner',
+		async (status, syncStatus, error) => {
+			vi.useFakeTimers();
+			vi.mocked(clearAuth).mockClear();
+			vi.mocked(goto).mockClear();
+			vi.stubGlobal('EventSource', MockEventSource);
+			vi.stubGlobal(
+				'fetch',
+				vi.fn().mockResolvedValue({
+					ok: false,
+					status,
+					headers: { get: () => null },
+					json: async () => ({ detail: 'Auth probe failed' })
+				})
+			);
+			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+
+			startLibraryResourceSync();
+			MockEventSource.instances[0].error();
+			await flush();
+			await flush();
+
+			expect(get(resourceSync)).toMatchObject({ status: syncStatus, error, ready: false });
+			expect(clearAuth).not.toHaveBeenCalled();
+			expect(goto).not.toHaveBeenCalled();
+			expect(MockEventSource.instances[0].closed).toBe(status === 403);
+		}
+	);
 
 	it('routes a 401 on its auth probe through the one shared session-lost reaction', async () => {
 		vi.stubGlobal('EventSource', MockEventSource);

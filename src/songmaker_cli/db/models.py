@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Final
 
 from sqlalchemy import (
@@ -36,6 +36,8 @@ from songmaker_cli.constants import (
     MODEL_DEFAULT_MODE,
     JobStatus,
 )
+from songmaker_cli.timestamps import aware_timestamp as aware_timestamp
+from songmaker_cli.timestamps import utcnow
 
 SONG_SLUG_MAX_LENGTH: Final = 220
 PLAYLIST_SLUG_MAX_LENGTH: Final = 220
@@ -77,17 +79,6 @@ def _uuid() -> str:
 
 def _session_token() -> str:
     return secrets.token_urlsafe(32)
-
-
-def utcnow() -> datetime:
-    return datetime.now(timezone.utc)
-
-
-def aware_timestamp(value: datetime) -> datetime:
-    """Interpret naive database timestamps as UTC, preserving explicit offsets."""
-    if value.tzinfo is None:
-        return value.replace(tzinfo=timezone.utc)
-    return value
 
 
 TZDateTime = DateTime(timezone=True)

@@ -27,6 +27,8 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_TITLE,
     LIBRARY_SORTS,
 )
+from songmaker_cli.db.models import Album
+from songmaker_cli.timestamps import aware_timestamp
 
 _CURSOR_KEYS = frozenset({
     LIBRARY_CURSOR_KEY_VERSION,
@@ -82,8 +84,6 @@ def decode_library_cursor(
 
 
 def cursor_from_hit(hit: Any, *, q: str, sort: str) -> LibraryCursor:
-    from songmaker_cli.db.models import Album, aware_timestamp
-
     item_type = LIBRARY_ITEM_ALBUM if isinstance(hit, Album) else LIBRARY_ITEM_SONG
     if sort == LIBRARY_SORT_TITLE:
         sort_value = hit.title.lower()

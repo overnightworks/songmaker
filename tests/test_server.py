@@ -653,7 +653,7 @@ def test_run_server_leaves_forwarded_headers_to_the_application() -> None:
     assert mock_run.call_args.kwargs["proxy_headers"] is False
 
 
-def test_lifespan_connects_arq_pool(tmp_path: Path) -> None:
+def test_lifespan_shutdown_order_drains_pending_lease_releases(tmp_path: Path) -> None:
     from unittest.mock import AsyncMock
 
     from songmaker_cli.redis_client import release_lease_in_background
