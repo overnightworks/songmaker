@@ -1,0 +1,8 @@
+claim_id = "b8b974b47a7e4311a8fadb094e07d51d"
+agent = "claude-head"
+role = "builder"
+base = "cb50e6218e63e628ee62f72cc5c823194db1bcbd"
+branch = "claude/issue-967-job-response"
+scope = ["api/types.ts", "api_models/jobs.py", "constants.py", "db/models.py", "db/queries/jobs.py", "jobs/generation.py", "stores/jobs.test.ts", "stores/takeActions.test.ts", "tests/test_api.py", "tests/test_db.py", "tests/test_jobs.py"]
+opened_commit = "9d56961cf5c3b6ecd8c81fa486234714aa726615"
+whole_reason = "Eine Scheibe aus dem geprüften Schnitt von #914; ihre Dateien inkl. Tests"
