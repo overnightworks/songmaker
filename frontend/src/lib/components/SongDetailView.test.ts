@@ -416,7 +416,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		expect(target.querySelector('.lyrics-area')).toBeNull();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-		expect(target.querySelector('.take-summary[role="button"]')).not.toBeNull();
+		expect(target.querySelector('.take-row .play-btn')).not.toBeNull();
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe(
@@ -489,12 +489,13 @@ describe('SongDetailView recipe and takes', () => {
 		expect(visibleText(target)).not.toContain('Custom');
 	});
 
-	it('shows symbol actions instead of labelled source buttons in take rows', async () => {
+	it('shows symbol actions and the row body instead of labelled source buttons in take rows', async () => {
 		const target = await renderView();
 		const row = target.querySelector('.take-row');
 		expect(row).not.toBeNull();
 		expect(row?.querySelector('.take-action-btn')).toBeNull();
 		expect(row?.querySelectorAll('button')).toHaveLength(3);
+		expect(row?.querySelector('[role="button"].take-summary')).not.toBeNull();
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});
 
