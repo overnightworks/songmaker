@@ -1,0 +1,8 @@
+claim_id = "2525fe12f732474eb18218b0490a48fc"
+agent = "claude-head"
+role = "builder"
+base = "2ccf3f5f8a9684b9001c6327e027a3f120019bac"
+branch = "claude/issue-986-phone-recipe"
+scope = ["frontend/e2e/voices.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/PhoneRecipeSection.svelte", "frontend/src/lib/components/editor/PhoneRecipeSection.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/presets.test.ts", "frontend/src/lib/stores/presets.ts"]
+opened_commit = "ef75a2739622175ab8a78f414b9225adf660f6bb"
+whole_reason = "F3: the recipe expands inline on the phone; the recipe sheet dies"
