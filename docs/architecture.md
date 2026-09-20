@@ -1001,6 +1001,7 @@ stream.
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue) |
 | POST | `/api/songs/{id}/listen` | user | Record that the owner started a playable song; this updates Continue activity without changing the song edit time. Ownership is 404; an unplayable song is 422. |
+| GET | `/api/songs/{id}/active-generation` | user | The song's newest queued/running generate job, or `null` if none. Ownership 404. Hydrates the song on entry so the frontend can reopen the job's SSE stream after a reload. |
 | GET | `/api/songs/{id}/last-failed-generation` | user | The song's last generate/repaint/cover job if it's still a failure -- `null` once a newer job (any status) or a newer non-archived take supersedes it. Ownership 404. Hydrates the take-list failure banner on page load/reopen; live SSE always wins over it. |
 | POST | `/api/generations/{id}/score` | user | Submit scoring job (→ scoring queue) |
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |

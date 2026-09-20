@@ -5,14 +5,13 @@
 		COARSE_POINTER_MEDIA,
 		EXPIRY_WARN_DAYS,
 		LIBRARY_RETRY_LABEL,
-		TAKE_ARCHIVED_SOURCE_TITLE,
 		TAKE_ARCHIVED_TITLE,
-		TAKE_COVER_LABEL,
-		TAKE_KEEP_LABEL,
+		TAKE_DELETE_TITLE_TEMPLATE,
+		TAKE_DELETE_MESSAGE,
+		TAKE_DELETE_LABEL,
 		TAKE_PROVENANCE_COVER_PREFIX,
 		TAKE_PROVENANCE_REPAINT_PREFIX,
 		TAKE_PICK_LABEL,
-		TAKE_REPAINT_LABEL,
 		TAKE_RESCORING_LABEL,
 		TAKES_DELETE_VERSION_LABEL,
 		TAKES_DRAFT_BANNER_TEMPLATE,
@@ -21,24 +20,26 @@
 		TAKES_GENERATING_LABEL,
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
+		TRANSPORT_PLAY_LABEL,
+		TRANSPORT_PAUSE_LABEL,
 		TAKES_QUEUED_LABEL
 	} from '$lib/constants';
 	import {
 		nowPlayingTakeLabel,
 		takeBatchReductionLabel,
-		takeModelModeLabel
+		takeRowLabel,
+		takeGroupLabel,
+		TAKE_KEPT_MARKER_LABEL,
+		TAKE_SELECT_LABEL,
+		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
-	import { removeGenerationFromSong, replaceSongInList } from '$lib/stores/libraryData';
-	import { playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
+	import { removeGenerationFromSong } from '$lib/stores/libraryData';
+	import { playTake, playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
-	// Re-score comes straight from its owner rather than through
-	// GenerationActions: Now Playing has no such context and calls the same
-	// function, and routing one surface through the context would put a second
-	// path to the same mutation back in the tree.
-	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
+	import { rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
-	import { getGenerationActions } from '$lib/contexts/generation-actions';
+	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import {
 		selectionMode,
 		selectedIds,
@@ -50,16 +51,11 @@
 	import { addToast } from '$lib/stores/toast';
 	import { dismissGenerationFailure, generationFailures } from '$lib/stores/jobs';
 	import { handleDeleteVersion } from '$lib/stores/editor';
-	import {
-		bulkDeleteGenerations,
-		cancelJob,
-		fetchSong,
-		remasterGeneration,
-		unarchiveGeneration
-	} from '$lib/api/client';
+	import { bulkDeleteGenerations, cancelJob } from '$lib/api/client';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
+	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import TakeMenu from './TakeMenu.svelte';
 
@@ -86,12 +82,11 @@
 		draftVersionNumber,
 		latestVersionNumber,
 		generateJob = null,
-		onagain,
 		onsource,
 		onretry
 	}: Props = $props();
 
-	const actions = getGenerationActions();
+	const actions: GenerationActions = getGenerationActions();
 
 	const GENERATION_FAILED_DISMISS_LABEL = 'Dismiss generation error';
 
@@ -115,10 +110,8 @@
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
 	let deleteVersionFor = $state<VersionGroup | null>(null);
-	let remasteringId = $state<string | null>(null);
 
 	interface VersionGroup {
-		label: string;
 		versionNumber: number | null;
 		generations: GenerationItem[];
 	}
@@ -129,10 +122,6 @@
 			const key = gen.version_number !== null ? `v${gen.version_number}` : 'unknown';
 			if (!map[key]) {
 				map[key] = {
-					label:
-						gen.version_number !== null
-							? `v${gen.version_number} · ${countTakes(gen.version_number)} take${countTakes(gen.version_number) === 1 ? '' : 's'}`
-							: 'Unknown version',
 					versionNumber: gen.version_number,
 					generations: []
 				};
@@ -143,10 +132,6 @@
 		result.sort((a, b) => (b.versionNumber ?? -1) - (a.versionNumber ?? -1));
 		return result;
 	});
-
-	function countTakes(versionNumber: number): number {
-		return song.generations.filter((g) => g.version_number === versionNumber).length;
-	}
 
 	interface HeadlineScore {
 		label: string;
@@ -193,14 +178,8 @@
 		return isGenPlaying(gen) && buffering;
 	}
 
-	// An archived take has nothing for a row activation to do, so the row stops
-	// announcing itself as a button — except in selection mode, where ticking
-	// it is still a real action.
-	function rowIsActionable(gen: GenerationItem): boolean {
-		return $selectionMode || !gen.is_archived;
-	}
-
-	function handleRowClick(gen: GenerationItem, e: MouseEvent): void {
+	function handlePlayClick(gen: GenerationItem, e: MouseEvent): void {
+		e.stopPropagation();
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
 			return;
@@ -210,13 +189,14 @@
 			return;
 		}
 		if (gen.is_archived) return;
-		void playTakeAndShowNowPlaying(gen, song);
+		void playTake(gen, song);
 	}
 
-	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
-		if (e.target !== e.currentTarget) return;
-		if (e.key !== 'Enter' && e.key !== ' ') return;
-		e.preventDefault();
+	// The row's click rule (#140): a tap on the row body — its name, duration
+	// and score, everything except the ▶ symbol, the pick star and the menu —
+	// plays the take and opens Now Playing on it. Selection mode re-purposes
+	// it to a select tap instead, same as every other row control.
+	function handleRowBodyClick(gen: GenerationItem): void {
 		if ($selectionMode) {
 			toggleSelection(gen.id);
 			return;
@@ -225,10 +205,17 @@
 		void playTakeAndShowNowPlaying(gen, song);
 	}
 
-	function useSource(gen: GenerationItem, mode: SourceMode, event: MouseEvent): void {
-		event.stopPropagation();
-		if (gen.is_archived) return;
-		onsource(gen, mode);
+	// An archived take has nothing for a row activation to do, so the row
+	// stops announcing itself as reachable — except in selection mode, where
+	// ticking it is still a real action.
+	function rowIsActionable(gen: GenerationItem): boolean {
+		return $selectionMode || !gen.is_archived;
+	}
+
+	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		e.preventDefault();
+		handleRowBodyClick(gen);
 	}
 
 	interface TakeProvenance {
@@ -271,57 +258,6 @@
 			addToast(`Deleted ${ids.length} take${ids.length !== 1 ? 's' : ''}`, 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Bulk delete failed', 'error');
-		}
-	}
-
-	async function copyShareUrl(gen: GenerationItem): Promise<void> {
-		if (!gen.share_slug) return;
-		await navigator.clipboard.writeText(`${window.location.origin}/share/gen/${gen.share_slug}`);
-		addToast('Link copied', 'success');
-	}
-
-	async function onShare(gen: GenerationItem): Promise<void> {
-		try {
-			const result = await actions.share(gen.id);
-			await navigator.clipboard.writeText(result.share_url);
-			addToast('Link copied', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Share failed', 'error');
-		}
-	}
-
-	async function onUnshare(gen: GenerationItem): Promise<void> {
-		try {
-			await actions.unshare(gen.id);
-			addToast('Sharing disabled', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Unshare failed', 'error');
-		}
-	}
-
-	async function onRemaster(gen: GenerationItem): Promise<void> {
-		if (remasteringId) return;
-		remasteringId = gen.id;
-		try {
-			await remasterGeneration(gen.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Remastered', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Remaster failed', 'error');
-		} finally {
-			remasteringId = null;
-		}
-	}
-
-	async function onRestore(gen: GenerationItem): Promise<void> {
-		try {
-			await unarchiveGeneration(gen.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Take restored', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Restore failed', 'error');
 		}
 	}
 
@@ -424,7 +360,9 @@
 		{#each groups as group (group.versionNumber ?? 'unknown')}
 			<div class="version-section">
 				<div class="version-header-row">
-					<span class="version-header">{group.label}</span>
+					<span class="version-header"
+						>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
+					>
 					{#if group.versionNumber !== null}
 						<button
 							type="button"
@@ -440,73 +378,78 @@
 					{/if}
 				</div>
 				{#each group.generations as gen (gen.id)}
+					{@const playing = isGenPlaying(gen) && audioPlayer.status === 'playing'}
 					{@const duration = formatDuration(gen)}
 					{@const provenance = takeProvenance(gen)}
 					{@const headline = headlineScore(gen)}
 					{@const flag = qualityFlag(gen.scores)}
-					{@const modelMode = takeModelModeLabel(gen.model_mode)}
 					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
 					{@const voice = voiceForGeneration(gen)}
-					<!-- `role` and `tabindex` move together with rowIsActionable, which the
-					     a11y check cannot narrow through a dynamic role. -->
-					<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 					<div
 						id={`take-${gen.id}`}
 						class="take-row"
+						data-hitbox-size="frequent"
 						class:playing={isGenPlaying(gen)}
 						class:buffering={isGenLoading(gen)}
 						class:selected={$selectedIds.has(gen.id)}
 						class:archived={gen.is_archived}
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
-						<!-- The play target is deliberately a sibling of the take actions.
-							     Making the row itself a button put source controls inside a
-							     second interactive target, so its centre could land on an
-							     action after the compact layout wrapped. -->
 						<span class="take-main">
-							<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-							<span
-								class="take-summary"
-								onclick={(e) => handleRowClick(gen, e)}
-								onkeydown={(e) => handleRowKeydown(gen, e)}
-								role={rowIsActionable(gen) ? 'button' : undefined}
-								tabindex={rowIsActionable(gen) ? 0 : undefined}
-							>
-								{#if $selectionMode}
-									<span class="selection-checkbox">
-										<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+							<span class="take-headline">
+								{#if $selectionMode || !gen.is_archived}
+									<button
+										type="button"
+										class="play-btn"
+										data-hitbox="frequent"
+										data-hitbox-face
+										onclick={(event) => handlePlayClick(gen, event)}
+										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
+										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${nowPlayingTakeLabel(gen.version_number, gen.generation_number)}`}
+									>
+										{#if $selectionMode}
+											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
+										{:else}
+											<Icon name={playing ? 'pause' : 'play'} size={16} />
+										{/if}
+									</button>
+								{/if}
+
+								<span
+									class="take-summary"
+									role="button"
+									tabindex={rowIsActionable(gen) ? 0 : -1}
+									aria-disabled={rowIsActionable(gen) ? undefined : true}
+									data-hitbox="text"
+									onclick={() => handleRowBodyClick(gen)}
+									onkeydown={(e) => handleRowKeydown(gen, e)}
+								>
+									<span class="take-label">
+										{takeRowLabel(gen.generation_number)}
 									</span>
-								{:else if !gen.is_archived}
-									<Icon name={isGenPlaying(gen) ? 'pause' : 'play'} size={14} />
-								{/if}
 
-								<span class="take-label">
-									{nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
+									{#if duration}
+										<span class="take-duration">{duration}</span>
+									{/if}
+
+									{#if headline}
+										<span
+											class="score-badge {headline.color}"
+											title={`${headline.label} ${headline.text}`}
+										>
+											<span class="score-shape" aria-hidden="true"></span>
+											{headline.text}
+										</span>
+									{/if}
 								</span>
-
-								{#if duration}
-									<span class="take-duration">{duration}</span>
-								{/if}
-
-								{#if modelMode}
-									<span class="model-badge" title="Model: {modelMode}">{modelMode}</span>
-								{/if}
-
+							</span>
+							<span class="take-details">
 								{#if batchNotice}
 									<span
 										class="batch-badge"
 										title="Batch size reduced by ACE-Step due to available VRAM: delivered {batchNotice}"
 									>
 										⚠ {batchNotice}
-									</span>
-								{/if}
-
-								{#if headline}
-									<span
-										class="score-badge {headline.color}"
-										title={`${headline.label} ${headline.text}`}
-									>
-										{headline.text}
 									</span>
 								{/if}
 
@@ -573,57 +516,24 @@
 									actions.pick(gen.id, !gen.is_picked);
 								}}
 								aria-pressed={gen.is_picked}
-								aria-label={gen.is_picked ? 'Unpick' : TAKE_PICK_LABEL}
+								aria-label={gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL}
 							>
 								<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
 							</button>
-							<button
-								type="button"
-								class="keep-btn"
-								class:kept={gen.is_kept}
-								data-hitbox="frequent"
-								onclick={(e) => {
-									e.stopPropagation();
-									actions.keep(gen.id, !gen.is_kept);
-								}}
-								aria-pressed={gen.is_kept}
-								aria-label={gen.is_kept ? 'Unkeep' : TAKE_KEEP_LABEL}
-							>
-								<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
-							</button>
+							{#if gen.is_kept}
+								<span class="keep-marker" role="img" aria-label={TAKE_KEPT_MARKER_LABEL}>
+									<Icon name="heart-filled" size={16} />
+								</span>
+							{/if}
 							{#if !$selectionMode}
-								<button
-									type="button"
-									class="take-action-btn repaint"
-									data-hitbox="text"
-									disabled={gen.is_archived}
-									title={gen.is_archived ? TAKE_ARCHIVED_SOURCE_TITLE : undefined}
-									onclick={(event) => useSource(gen, 'repaint', event)}
-								>
-									{TAKE_REPAINT_LABEL}
-								</button>
-								<button
-									type="button"
-									class="take-action-btn cover"
-									data-hitbox="text"
-									disabled={gen.is_archived}
-									title={gen.is_archived ? TAKE_ARCHIVED_SOURCE_TITLE : undefined}
-									onclick={(event) => useSource(gen, 'cover', event)}
-								>
-									{TAKE_COVER_LABEL}
-								</button>
 								<TakeMenu
 									{gen}
-									onagain={() => onagain(gen)}
-									onshare={() => void onShare(gen)}
-									onunshare={() => void onUnshare(gen)}
-									oncopylink={() => void copyShareUrl(gen)}
-									onpinseed={() => gen.seed != null && actions.pinSeed(gen.seed)}
+									onrepaint={() => onsource(gen, 'repaint')}
+									oncover={() => onsource(gen, 'cover')}
+									onkeep={() => actions.keep(gen.id, !gen.is_kept)}
+									onshare={() => actions.share(gen.id)}
+									onunshare={() => actions.unshare(gen.id)}
 									onaddtoplaylist={() => (playlistFor = gen.id)}
-									onremaster={() => void onRemaster(gen)}
-									onrescore={() => void rescore(song.id, gen.id)}
-									rescoring={$rescoringTakeIds.has(gen.id)}
-									onrestore={() => void onRestore(gen)}
 									ondelete={() => (deleteFor = gen)}
 								/>
 								{#if playlistFor === gen.id}
@@ -666,10 +576,10 @@
 {/if}
 
 {#if deleteFor}
-	<ConfirmDeleteDialog
-		title={`Delete take ${deleteFor.generation_number}?`}
-		items={['Audio files will be permanently deleted']}
-		confirmLabel="Delete Take"
+	<ConfirmDialog
+		title={TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(deleteFor.generation_number))}
+		message={TAKE_DELETE_MESSAGE}
+		confirmLabel={TAKE_DELETE_LABEL}
 		onconfirm={() => {
 			const id = deleteFor?.id;
 			deleteFor = null;
@@ -803,9 +713,7 @@
 	.version-header {
 		font-size: var(--label-font-size);
 		color: var(--text-subtle);
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		font-family: var(--font-body);
 		padding: 0.3rem 0;
 	}
 
@@ -826,14 +734,12 @@
 
 	.take-row {
 		display: flex;
-		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.6rem;
-		padding: 0.45rem 0.7rem;
+		gap: 0.25rem;
+		padding: 0.25rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
-		cursor: pointer;
 		text-align: left;
 		color: var(--text);
 		font: inherit;
@@ -842,13 +748,13 @@
 	}
 
 	.take-row:hover {
-		border-color: rgba(160, 32, 240, 0.3);
+		border-color: var(--accent);
 		background: var(--surface-hover);
 	}
 
 	.take-row.playing {
 		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.1);
+		background: color-mix(in srgb, var(--accent) 10%, var(--surface));
 	}
 
 	.take-row.buffering {
@@ -858,7 +764,7 @@
 
 	.take-row.selected {
 		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.05);
+		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
 	}
 
 	@keyframes buffer-pulse {
@@ -873,26 +779,36 @@
 		}
 	}
 
-	/* Everything that describes the take, and nothing that acts on it: this is
-	   what a tap on the row hits. It keeps a floor of --take-body-min, so a row
-	   too narrow to hold both wraps its actions onto their own line instead of
-	   letting three 44px touch targets take the row's centre — on 320px that
-	   turned a tap meant for the row into a Pick or Keep (#163/2). */
 	.take-main {
-		--take-body-min: 11rem;
 		display: flex;
 		flex-direction: column;
-		align-items: stretch;
-		flex: 1 1 var(--take-body-min);
-		min-width: var(--take-body-min);
+		flex: 1;
+		min-width: 0;
+	}
+
+	.take-headline,
+	.take-details {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		min-width: 0;
+	}
+
+	.take-details {
+		flex-wrap: wrap;
 	}
 
 	.take-summary {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: 0.35rem;
 		flex: 1;
 		min-width: 0;
+		cursor: pointer;
+	}
+
+	.take-summary[aria-disabled='true'] {
+		cursor: default;
 	}
 
 	.take-origin {
@@ -928,9 +844,9 @@
 	}
 
 	.take-label {
-		font-family: var(--font-display);
-		font-size: 0.85rem;
-		letter-spacing: 0.3px;
+		font-family: var(--font-body);
+		font-size: var(--btn-font-size);
+		flex: 1;
 		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -938,18 +854,18 @@
 	}
 
 	.take-duration {
-		font-size: 0.75rem;
+		font-size: var(--label-font-size);
 		color: var(--text-subtle);
-		flex: 1;
 		flex-shrink: 0;
 		white-space: nowrap;
 	}
 
 	.score-badge {
-		font-family: var(--font-display);
-		font-size: 0.95rem;
-		min-width: 24px;
-		text-align: center;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: var(--label-font-size);
+		flex-shrink: 0;
 	}
 
 	.score-badge.good {
@@ -964,16 +880,23 @@
 		color: var(--score-bad);
 	}
 
-	.model-badge {
-		font-size: 0.6rem;
-		padding: 0.1rem 0.35rem;
-		border-radius: 3px;
-		letter-spacing: 0.3px;
-		background: var(--surface-hover);
-		border: 1px solid var(--border);
-		color: var(--text-subtle);
-		white-space: nowrap;
-		flex-shrink: 0;
+	.score-shape {
+		width: 0.5em;
+		height: 0.5em;
+		border: 1px solid currentColor;
+	}
+
+	.score-badge.good .score-shape {
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.score-badge.ok .score-shape {
+		border-radius: 50%;
+	}
+
+	.score-badge.bad .score-shape {
+		background: currentColor;
 	}
 
 	.rescoring-badge {
@@ -1035,7 +958,7 @@
 	.take-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.35rem;
+		gap: 0;
 		flex-shrink: 0;
 		margin-left: auto;
 	}
@@ -1058,7 +981,6 @@
 	.take-row.archived .take-voice,
 	.take-row.archived .take-duration,
 	.take-row.archived .score-badge,
-	.take-row.archived .model-badge,
 	.take-row.archived .batch-badge,
 	.take-row.archived .quality-flag-badge {
 		color: var(--text-disabled);
@@ -1070,8 +992,7 @@
 	}
 
 	.pick-btn,
-	.keep-btn,
-	.take-action-btn {
+	.play-btn {
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1079,53 +1000,19 @@
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		padding: 0.15rem;
-	}
-
-	.take-action-btn {
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		font-family: var(--font-display);
-		font-size: 0.66rem;
-		letter-spacing: 0.4px;
-		padding: 0.28rem 0.55rem;
-		text-transform: uppercase;
+		padding: 0;
 	}
 
 	.pick-btn:hover,
-	.pick-btn.picked {
+	.pick-btn.picked,
+	.play-btn:hover,
+	.take-row.selected .play-btn {
 		color: var(--accent);
 	}
 
-	.keep-btn:hover,
-	.keep-btn.kept {
-		color: var(--keep);
-	}
-
-	.take-action-btn.repaint:hover:not(:disabled) {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.take-action-btn.cover:hover:not(:disabled) {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.take-action-btn:disabled {
-		color: var(--text-disabled);
-		cursor: default;
-	}
-
-	.selection-checkbox {
-		display: flex;
-		align-items: center;
-		color: var(--text-decoration);
-		flex-shrink: 0;
-	}
-
-	.take-row.selected .selection-checkbox {
-		color: var(--accent);
+	.keep-marker {
+		display: inline-flex;
+		color: var(--text);
 	}
 
 	.selection-toolbar {
@@ -1220,9 +1107,9 @@
 		color: var(--primary);
 	}
 
-	@media (max-width: 768px) {
-		.take-row {
-			padding: 0.55rem 0.6rem;
+	@media (prefers-reduced-motion: reduce) {
+		.take-row.buffering {
+			animation: none;
 		}
 	}
 </style>

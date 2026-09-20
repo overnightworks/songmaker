@@ -150,25 +150,20 @@ export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
 
-export const TAKE_AGAIN_LABEL = 'Generate again';
 export const TAKE_REPAINT_LABEL = 'Repaint';
 export const TAKE_COVER_LABEL = 'Cover';
 export const TAKE_PROVENANCE_REPAINT_PREFIX = 'Repaint from';
 export const TAKE_PROVENANCE_COVER_PREFIX = 'Cover from';
-export const TAKE_ARCHIVED_SOURCE_TITLE =
-	"Archived takes are scheduled for deletion and can't be used as a source";
 export const TAKE_PICK_LABEL = 'Pick';
-export const TAKE_KEEP_LABEL = 'Keep';
 export const TAKE_OVERFLOW_LABEL = 'More';
-export const TAKE_SHARE_LABEL = 'Share take';
-export const TAKE_UNSHARE_LABEL = 'Unshare';
-export const TAKE_COPY_LINK_LABEL = 'Copy link';
-export const TAKE_PIN_SEED_LABEL = 'Pin seed';
+export const TAKE_SHARE_LABEL = 'Share';
 export const TAKE_PLAYLIST_LABEL = 'Add to playlist';
-export const TAKE_REMASTER_LABEL = 'Remaster';
-export const TAKE_RESTORE_LABEL = 'Restore';
-export const TAKE_ARCHIVED_TITLE = 'Archived take — restore to play';
+export const TAKE_ARCHIVED_TITLE = 'Archived take';
 export const TAKE_DELETE_LABEL = 'Delete';
+export const TAKE_KEEP_LABEL = 'Keep';
+export const TAKE_UNKEEP_LABEL = 'Unkeep';
+export const TAKE_DELETE_TITLE_TEMPLATE = 'Delete take {number}?';
+export const TAKE_DELETE_MESSAGE = 'Audio files will be permanently deleted';
 export const TAKE_RESCORE_LABEL = 'Re-score';
 export const TAKE_RESCORING_LABEL = 'Re-scoring…';
 export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
@@ -275,6 +270,17 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATE_REPAINT_LABEL = 'Generate Repaint';
 export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
+export const EDITOR_GENERATE_MODE_LABELS = {
+	generate: EDITOR_GENERATE_LABEL,
+	repaint: TAKE_REPAINT_LABEL,
+	cover: TAKE_COVER_LABEL
+};
+export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
+export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
+export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
+export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
+export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
+export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
