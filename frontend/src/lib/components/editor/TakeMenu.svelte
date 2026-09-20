@@ -1,51 +1,33 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import type { GenerationItem } from '$lib/api/types';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import type { GenerationItem, ShareResult } from '$lib/api/types';
 	import {
-		TAKE_AGAIN_LABEL,
-		TAKE_COPY_LINK_LABEL,
+		TAKE_REPAINT_LABEL,
+		TAKE_COVER_LABEL,
+		TAKE_KEEP_LABEL,
+		TAKE_UNKEEP_LABEL,
 		TAKE_DELETE_LABEL,
 		TAKE_OVERFLOW_LABEL,
-		TAKE_PIN_SEED_LABEL,
 		TAKE_PLAYLIST_LABEL,
-		TAKE_REMASTER_LABEL,
-		TAKE_RESCORE_LABEL,
-		TAKE_RESCORING_LABEL,
-		TAKE_RESTORE_LABEL,
-		TAKE_SHARE_LABEL,
-		TAKE_UNSHARE_LABEL
+		TAKE_SHARE_LABEL
 	} from '$lib/constants';
 	import Icon from '../Icon.svelte';
+	import ShareButton from '../ShareButton.svelte';
 
 	interface Props {
 		gen: GenerationItem;
-		rescoring: boolean;
-		onagain: () => void;
-		onshare: () => void;
-		onunshare: () => void;
-		oncopylink: () => void;
-		onpinseed: () => void;
+		onrepaint: () => void;
+		oncover: () => void;
+		onkeep: () => void;
+		onshare: () => Promise<ShareResult>;
+		onunshare: () => Promise<void>;
 		onaddtoplaylist: () => void;
-		onremaster: () => void;
-		onrescore: () => void;
-		onrestore: () => void;
 		ondelete: () => void;
 	}
 
-	let {
-		gen,
-		rescoring,
-		onagain,
-		onshare,
-		onunshare,
-		oncopylink,
-		onpinseed,
-		onaddtoplaylist,
-		onremaster,
-		onrescore,
-		onrestore,
-		ondelete
-	}: Props = $props();
+	let { gen, onrepaint, oncover, onkeep, onshare, onunshare, onaddtoplaylist, ondelete }: Props =
+		$props();
 
 	const takeLabel = $derived(
 		gen.version_number !== null
@@ -54,6 +36,7 @@
 	);
 
 	let open = $state(false);
+	let trigger: HTMLButtonElement | undefined = $state();
 	let menuEl: HTMLDivElement | undefined = $state();
 	let flipUp = $state(false);
 
@@ -64,10 +47,12 @@
 		await tick();
 		if (!menuEl) return;
 		flipUp = menuEl.getBoundingClientRect().bottom > window.innerHeight;
+		focusFirstIn(menuEl);
 	}
 
 	function runAndClose(action: () => void): void {
 		open = false;
+		trigger?.focus();
 		action();
 	}
 
@@ -77,9 +62,11 @@
 			open = false;
 		}
 		function onDocKeydown(event: KeyboardEvent): void {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			open = false;
+			if (!menuEl) return;
+			handleFocusTrapKeydown(menuEl, event, () => {
+				open = false;
+				trigger?.focus();
+			});
 		}
 		document.addEventListener('click', onDocClick);
 		document.addEventListener('keydown', onDocKeydown, true);
@@ -92,6 +79,7 @@
 
 <div class="take-menu-anchor">
 	<button
+		bind:this={trigger}
 		type="button"
 		class="overflow-btn"
 		data-hitbox="frequent"
@@ -99,6 +87,7 @@
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-label={TAKE_OVERFLOW_LABEL}
+		title={TAKE_OVERFLOW_LABEL}
 		onclick={toggle}
 	>
 		<Icon name="more-horizontal" size={16} />
@@ -115,91 +104,56 @@
 			onkeydown={(e) => e.stopPropagation()}
 		>
 			<p class="menu-heading">{takeLabel}</p>
-			{#if gen.is_shared}
-				<button
-					type="button"
-					role="menuitem"
-					class="overflow-item"
-					onclick={() => runAndClose(oncopylink)}
-				>
-					{TAKE_COPY_LINK_LABEL}
-				</button>
-				<button
-					type="button"
-					role="menuitem"
-					class="overflow-item"
-					onclick={() => runAndClose(onunshare)}
-				>
-					{TAKE_UNSHARE_LABEL}
-				</button>
-			{:else}
-				<button
-					type="button"
-					role="menuitem"
-					class="overflow-item"
-					onclick={() => runAndClose(onshare)}
-				>
-					{TAKE_SHARE_LABEL}
-				</button>
-			{/if}
 			<button
 				type="button"
 				role="menuitem"
 				class="overflow-item"
-				onclick={() => runAndClose(onpinseed)}
+				data-hitbox="text"
+				onclick={() => runAndClose(onrepaint)}
 			>
-				{TAKE_PIN_SEED_LABEL}
+				<Icon name="paintbrush" />{TAKE_REPAINT_LABEL}
 			</button>
 			<button
 				type="button"
 				role="menuitem"
 				class="overflow-item"
-				onclick={() => runAndClose(onagain)}
+				data-hitbox="text"
+				onclick={() => runAndClose(oncover)}
 			>
-				{TAKE_AGAIN_LABEL}
+				<Icon name="layers" />{TAKE_COVER_LABEL}
 			</button>
 			<button
 				type="button"
 				role="menuitem"
 				class="overflow-item"
+				data-hitbox="text"
+				onclick={() => runAndClose(onkeep)}
+			>
+				<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} />{gen.is_kept
+					? TAKE_UNKEEP_LABEL
+					: TAKE_KEEP_LABEL}
+			</button>
+			<button
+				type="button"
+				role="menuitem"
+				class="overflow-item"
+				data-hitbox="text"
 				onclick={() => runAndClose(onaddtoplaylist)}
 			>
-				{TAKE_PLAYLIST_LABEL}
+				<Icon name="list-plus" />{TAKE_PLAYLIST_LABEL}
 			</button>
-			<button
-				type="button"
-				role="menuitem"
-				class="overflow-item"
-				onclick={() => runAndClose(onremaster)}
-			>
-				{TAKE_REMASTER_LABEL}
-			</button>
-			<button
-				type="button"
-				role="menuitem"
-				class="overflow-item"
-				disabled={rescoring}
-				onclick={() => runAndClose(onrescore)}
-			>
-				{rescoring ? TAKE_RESCORING_LABEL : TAKE_RESCORE_LABEL}
-			</button>
-			{#if gen.is_archived}
-				<button
-					type="button"
-					role="menuitem"
-					class="overflow-item"
-					onclick={() => runAndClose(onrestore)}
-				>
-					{TAKE_RESTORE_LABEL}
-				</button>
-			{/if}
+			<div class="share-row" role="none">
+				<span>{TAKE_SHARE_LABEL}</span>
+				<ShareButton isShared={gen.is_shared} shareSlug={gen.share_slug} {onshare} {onunshare} />
+			</div>
 			<button
 				type="button"
 				role="menuitem"
 				class="overflow-item destructive"
+				data-hitbox="text"
 				onclick={() => runAndClose(ondelete)}
 			>
-				{TAKE_DELETE_LABEL}
+				<Icon name="trash" />{TAKE_DELETE_LABEL}
 			</button>
 		</div>
 	{/if}
@@ -233,14 +187,14 @@
 		right: 0;
 		top: calc(100% + 4px);
 		z-index: 5;
-		min-width: 12rem;
+		width: 14rem;
+		max-width: calc(100vw - 2rem);
 		display: flex;
 		flex-direction: column;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
 		padding: 0.25rem;
-		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
 	}
 
 	.overflow-menu.flip-up {
@@ -252,26 +206,26 @@
 		margin: 0;
 		padding: 0.3rem 0.55rem 0.4rem;
 		font-family: var(--font-display);
-		font-size: 0.65rem;
+		font-size: var(--label-font-size);
 		letter-spacing: 0.5px;
-		text-transform: uppercase;
 		color: var(--text-subtle);
 		border-bottom: 1px solid var(--border);
 		margin-bottom: 0.25rem;
 	}
 
 	.overflow-item {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
 		background: none;
 		border: none;
 		text-align: left;
 		padding: 0.4rem 0.55rem;
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
+		font-size: var(--btn-font-size);
+		font-family: var(--font-body);
 		cursor: pointer;
-		border-radius: 3px;
+		border-radius: var(--btn-radius-sm);
 	}
 
 	.overflow-item:hover:not(:disabled) {
@@ -279,12 +233,39 @@
 		color: var(--text);
 	}
 
+	.overflow-item.destructive,
 	.overflow-item.destructive:hover:not(:disabled) {
 		color: var(--score-bad);
 	}
 
-	.overflow-item:disabled {
-		color: var(--text-subtle);
-		cursor: default;
+	.share-row {
+		position: relative;
+		display: flex;
+		align-items: center;
+		min-height: var(--hitbox-frequent);
+		padding: 0.4rem 0.55rem 0.4rem calc(0.55rem + 16px + 0.6rem);
+		color: var(--text-muted);
+		font-family: var(--font-body);
+		font-size: var(--btn-font-size);
+	}
+
+	.share-row :global(.share-btn) {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		padding: 0.4rem 0.55rem;
+		border: none;
+		border-radius: var(--btn-radius-sm);
+	}
+
+	.share-row :global(.share-btn:hover:not(:disabled)) {
+		background: var(--surface-hover);
+	}
+
+	.share-row span {
+		position: relative;
+		z-index: 1;
+		pointer-events: none;
 	}
 </style>

@@ -32,7 +32,8 @@ import {
 	SONG_COVER_UPLOAD_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL,
-	TAKE_AGAIN_LABEL,
+	TAKE_REPAINT_LABEL,
+	TAKE_COVER_LABEL,
 	TAKE_PLAYLIST_LABEL
 } from '$lib/constants';
 import { accessibleName } from '$lib/test-utils/accessible-name';
@@ -43,13 +44,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import {
-	editGenParams,
-	editLyrics,
-	pinnedSeed,
-	setDraftLyrics,
-	setDraftPrompt
-} from '$lib/stores/editor';
+import { editLyrics, pinnedSeed, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
 import { activeJobs } from '$lib/stores/jobs';
 import {
 	detailTab,
@@ -157,6 +152,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		generateSong: (...args: unknown[]) => generateSong(...args),
 		updateSong: vi.fn(),
 		deleteVersion: vi.fn(),
+		deleteGeneration: vi.fn().mockResolvedValue(undefined),
 		addGenerationToPlaylist: vi.fn().mockResolvedValue(undefined),
 		fetchPlaylists: vi.fn().mockResolvedValue([])
 	};
@@ -416,7 +412,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		await tick();
 		expect(target.querySelector('.lyrics-area')).toBeNull();
 		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
-		expect(target.querySelector('.take-row .play-btn')).not.toBeNull();
+		expect(target.querySelector('.take-row button.play-btn')).not.toBeNull();
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe(
@@ -493,7 +489,6 @@ describe('SongDetailView recipe and takes', () => {
 		const target = await renderView();
 		const row = target.querySelector('.take-row');
 		expect(row).not.toBeNull();
-		expect(row?.querySelector('.take-action-btn')).toBeNull();
 		expect(row?.querySelectorAll('button')).toHaveLength(3);
 		expect(row?.querySelector('[role="button"].take-summary')).not.toBeNull();
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
@@ -518,24 +513,52 @@ describe('SongDetailView recipe and takes', () => {
 		}
 	);
 
-	it('keeps draft params when Again has no reusable take params', async () => {
-		songList.set([
-			song({
-				...editableSongDefaults(),
-				generation_params: { inference_steps: 12, guidance_scale: 2 },
-				generations: [generation({ ...sourceRecipeDefaults(), generation_params: null, seed: 11 })]
-			})
-		]);
+	it.each([
+		['repaint', false],
+		['cover', false],
+		['repaint', true],
+		['cover', true]
+	] as const)(
+		'opens the recipe with the menu take as %s source (compact: %s)',
+		async (mode, compact) => {
+			stubLibraryMedia({ narrow: compact, compact });
+			const target = await renderView();
+			expect(get(recipeOpen)).toBe(false);
+			target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+			await tick();
+			clickNamed(target, mode === 'repaint' ? TAKE_REPAINT_LABEL : TAKE_COVER_LABEL);
+			await tick();
+			expect(get(recipeOpen)).toBe(true);
+			expect(get(sourceMode)).toBe(mode);
+			expect(get(sourceGeneration)?.id).toBe('g1');
+			expect(target.querySelector('.recipe-panel')).not.toBeNull();
+		}
+	);
+
+	it.each(['Cancel', 'Delete'])('asks once before take deletion and honors %s', async (choice) => {
+		const { deleteGeneration } = await import('$lib/api/client');
+		vi.mocked(deleteGeneration).mockClear();
 		const target = await renderView();
-		expect(get(editGenParams)).toEqual({ inference_steps: 12, guidance_scale: 2 });
-		const takeMenuBtn = target.querySelector<HTMLButtonElement>('.overflow-btn');
-		takeMenuBtn?.click();
+		target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
 		await tick();
-		clickNamed(target, TAKE_AGAIN_LABEL);
+		clickNamed(target, 'Delete');
 		await tick();
-		expect(get(pinnedSeed)).toBe(11);
-		expect(get(editGenParams)).toEqual({ inference_steps: 12, guidance_scale: 2 });
-		expect(get(recipeOpen)).toBe(true);
+		const dialog = target.querySelector<HTMLElement>('[role="dialog"]');
+		if (!dialog) throw new Error('Expected a delete confirmation');
+		expect(target.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+		expect(dialog.querySelector('input')).toBeNull();
+		expect(dialog.textContent).toContain('Audio files will be permanently deleted');
+		expect(deleteGeneration).not.toHaveBeenCalled();
+		clickNamed(dialog, choice);
+		await tick();
+		if (choice === 'Delete') {
+			expect(deleteGeneration).toHaveBeenCalledExactlyOnceWith('g1');
+			expect(get(songList)[0].generations).toEqual([]);
+		} else {
+			expect(deleteGeneration).not.toHaveBeenCalled();
+			expect(get(songList)[0].generations).toHaveLength(1);
+		}
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
 	});
 
 	it('clears the open take from history when bulk delete includes it', async () => {
@@ -1001,37 +1024,6 @@ describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
 		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
 		expect(target.querySelector('.sheet-panel')).not.toBeNull();
 		expect(target.querySelector('.sheet-panel .cowriter-mode')).not.toBeNull();
-	});
-});
-
-describe('recipe params from a take', () => {
-	it('copies reusable params and pins the seed when Again is clicked', async () => {
-		songList.set([
-			song({
-				...editableSongDefaults(),
-				generations: [
-					generation({
-						...sourceRecipeDefaults(),
-						seed: 99,
-						generation_params: {
-							inference_steps: 8,
-							guidance_scale: 1.5,
-							task_type: 'text2music',
-							seed: 99
-						}
-					})
-				]
-			})
-		]);
-		const target = await renderView();
-		target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
-		await tick();
-		clickNamed(target, TAKE_AGAIN_LABEL);
-		await tick();
-
-		expect(get(editGenParams)).toEqual({ inference_steps: 8, guidance_scale: 1.5 });
-		expect(get(pinnedSeed)).toBe(99);
-		expect(get(recipeOpen)).toBe(true);
 	});
 });
 
