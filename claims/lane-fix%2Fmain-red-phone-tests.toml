@@ -1,0 +1,8 @@
+claim_id = "ddf0b7cf7f69495ba1bae7d86ed93c10"
+agent = "claude-head"
+role = "builder"
+base = "cb364ff216482e5913cff043c82156e788dc19b6"
+branch = "fix/main-red-phone-tests"
+scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/tests/TakesListHarness.svelte"]
+opened_commit = "2a8e7362e399e8957be666ace622f49520c4aeab"
+whole_reason = "red main since dcb941f3: F1 tests and library e2e follow the F4a take row"
