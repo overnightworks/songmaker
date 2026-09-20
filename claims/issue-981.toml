@@ -1,8 +1,0 @@
-claim_id = "7f39cecf383742c0824176694d133ffc"
-agent = "claude-head"
-role = "builder"
-base = "dcb941f3a6367b2b50f5a874b877ccf325929bd0"
-branch = "claude/issue-981-take-menu"
-scope = ["frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakeMenu.svelte", "frontend/src/lib/components/editor/TakeMenu.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts"]
-opened_commit = "bc427bfcb34696605a45ab9602fc9703331c949c"
-whole_reason = "F4b: the six-row take menu in TakeMenu/TakesList"
