@@ -4,9 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 import type { GenerationActions } from '$lib/contexts/generation-actions';
 import {
-	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
-	TAKE_ARCHIVED_SOURCE_TITLE,
 	TAKE_ARCHIVED_TITLE,
 	TAKE_PLAYLIST_LABEL,
 	TAKE_RESCORE_LABEL,
@@ -50,14 +48,15 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playTakeAndShowNowPlaying: vi.fn(async () => undefined)
+		playTake: vi.fn(async () => undefined)
 	};
 });
 
 import { scoreGeneration } from '$lib/api/client';
 import { addToast } from '$lib/stores/toast';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
-import { playTakeAndShowNowPlaying } from '$lib/stores/player';
+import { playTake } from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesListHarness from './tests/TakesListHarness.svelte';
 
@@ -169,7 +168,7 @@ beforeEach(() => {
 	playlistList.set([{ ...playlist }]);
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
-	vi.mocked(playTakeAndShowNowPlaying).mockClear();
+	vi.mocked(playTake).mockClear();
 	activeJobs.set([]);
 	generationFailures.set({});
 	// The scoring job streams its progress over server-sent events jsdom does
@@ -181,12 +180,16 @@ beforeEach(() => {
 		}
 	);
 	clearSelection();
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
 	injectHitboxStyles();
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
 	clearHitboxStyles();
 	clearPointer();
 	activeJobs.set([]);
@@ -232,8 +235,8 @@ describe('TakesList', () => {
 		expect(target.querySelector('.take-voice')?.textContent?.trim()).toBe(
 			'Voice: Folk Alto — voice deleted'
 		);
-		target.querySelector<HTMLElement>('.take-summary')?.click();
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
+		target.querySelector<HTMLElement>('.play-btn')?.click();
+		expect(playTake).toHaveBeenCalledWith(deletedVoiceTake, songWithDeletedVoice);
 	});
 
 	it('groups takes by version, newest first', async () => {
@@ -243,6 +246,20 @@ describe('TakesList', () => {
 		);
 		expect(headers[0]).toBe('v3 · 2 takes');
 		expect(headers[1]).toBe('v2 · 1 take');
+	});
+
+	it('names the group v7 · 4 takes and each row Take n without repeating the version', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [1, 2, 3, 4].map((generation_number) =>
+					generation({ id: `g${generation_number}`, version_number: 7, generation_number })
+				)
+			})
+		});
+		expect(target.querySelector('.version-header')?.textContent?.trim()).toBe('v7 · 4 takes');
+		expect(
+			Array.from(target.querySelectorAll('.take-label'), (label) => label.textContent?.trim())
+		).toEqual(['Take 1', 'Take 2', 'Take 3', 'Take 4']);
 	});
 
 	it('shows the draft banner with the next version number only when dirty', async () => {
@@ -356,7 +373,7 @@ describe('TakesList', () => {
 		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
 	});
 
-	it("shows the take's model as a terse badge after the duration", async () => {
+	it('leaves the model in the recipe instead of repeating it on the row', async () => {
 		const { target } = await render({
 			song: song({
 				...versionedSongDefaults(),
@@ -364,8 +381,7 @@ describe('TakesList', () => {
 			})
 		});
 		const badge = target.querySelector<HTMLElement>('.model-badge');
-		expect(badge?.textContent?.trim()).toBe('xl-sft');
-		expect(badge?.previousElementSibling?.classList.contains('take-duration')).toBe(true);
+		expect(badge).toBeNull();
 	});
 
 	it('shows its own measured length, not the "auto" (0) duration it was requested with', async () => {
@@ -504,31 +520,44 @@ describe('TakesList', () => {
 		expect(target.querySelector('.quality-flag-badge')).toBeNull();
 	});
 
-	it('calls pick and keep from the take actions', async () => {
-		const { target } = await render();
-		const row = target.querySelectorAll('.take-row')[1];
-		if (!(row instanceof HTMLElement)) throw new Error('Expected the second take row (g2)');
-		row.querySelector<HTMLButtonElement>('.pick-btn')?.click();
-		expect(pick).toHaveBeenCalledWith('g2', true);
-		row.querySelector<HTMLButtonElement>('.keep-btn')?.click();
-		expect(keep).toHaveBeenCalledWith('g2', true);
-	});
+	it.each([false, true])(
+		'toggles the pick without playing the take (picked: %s)',
+		async (is_picked) => {
+			const { target } = await render({ song: song({ generations: [generation({ is_picked })] }) });
+			const button = target.querySelector<HTMLButtonElement>('.pick-btn');
+			expect(button?.getAttribute('aria-pressed')).toBe(String(is_picked));
+			button?.click();
+			expect(pick).toHaveBeenCalledWith('g1', !is_picked);
+			expect(playTake).not.toHaveBeenCalled();
+		}
+	);
 
-	it.each([
-		['Repaint', 'repaint'],
-		['Cover', 'cover']
-	] as const)('%s sets the take as the %s source without playing it', async (label, mode) => {
-		const { target, props } = await render();
-		const row = target.querySelector<HTMLElement>('.take-row');
-		if (!row) throw new Error('Expected a take row');
-		Array.from(row.querySelectorAll<HTMLButtonElement>('.take-action-btn'))
-			.find((button) => button.textContent?.trim() === label)
-			?.click();
-		await tick();
+	it.each([false, true])(
+		'shows a noninteractive heart only when kept (kept: %s)',
+		async (is_kept) => {
+			const { target } = await render({ song: song({ generations: [generation({ is_kept })] }) });
+			const marker = target.querySelector('[role="img"][aria-label="Kept"]');
+			expect(Boolean(marker)).toBe(is_kept);
+			expect(marker?.closest('button')).toBeFalsy();
+			expect(target.querySelector('.keep-btn')).toBeNull();
+		}
+	);
 
-		expect(props.onsource).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }), mode);
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
-	});
+	it.each(['fine', 'coarse'] as const)(
+		'has only symbol actions on a %s pointer',
+		async (pointer) => {
+			setPointer(pointer);
+			const { target } = await render();
+			const row = target.querySelector('.take-row');
+			expect(row?.querySelectorAll('button')).toHaveLength(3);
+			if (!row) throw new Error('Expected a take row');
+			for (const button of row.querySelectorAll('button')) {
+				expect(button.textContent?.trim()).toBe('');
+				expect(button.getAttribute('aria-label')).toBeTruthy();
+			}
+			expect(row?.textContent).not.toMatch(/Repaint|Cover/);
+		}
+	);
 
 	it.each([
 		['repaint', 'Repaint from v1 · take 1'],
@@ -603,8 +632,8 @@ describe('TakesList', () => {
 	it('plays the take and opens Now Playing on its play target click', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		row?.querySelector<HTMLElement>('.take-summary')?.click();
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+		row?.querySelector<HTMLElement>('.play-btn')?.click();
+		expect(playTake).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
@@ -616,7 +645,7 @@ describe('TakesList', () => {
 		row?.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
 		await tick();
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 3');
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('adds the take to a playlist from its own row, without also playing it', async () => {
@@ -640,7 +669,7 @@ describe('TakesList', () => {
 		await Promise.resolve();
 
 		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('re-scores the take from its own menu and marks the row until the job ends', async () => {
@@ -669,57 +698,80 @@ describe('TakesList', () => {
 		expect(scoreGeneration).toHaveBeenCalledTimes(1);
 		expect(scoreGeneration).toHaveBeenCalledWith('g1');
 		expect(row.querySelector('.rescoring-badge')?.textContent).toBe(TAKE_RESCORING_LABEL);
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 
 		activeJobs.set([]);
 		await tick();
 		expect(row.querySelector('.rescoring-badge')).toBeNull();
 	});
 
-	it('keeps every action out of the row body, so a tap on the row plays it', async () => {
-		// #163/2: on a 320px screen the three 44px touch targets used to sit
-		// across the row's centre, and a tap meant for the row toggled Pick or
-		// Keep. The body is one element the actions are never inside of, which
-		// is also what lets the actions wrap onto their own line when the row
-		// runs out of width.
+	it('plays only from its named play control, independently of the pick and menu', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		if (!row) throw new Error('Expected a take row');
-		const main = row.querySelector<HTMLElement>('.take-main');
-		if (!main) throw new Error('Expected the take row main column');
-
-		expect(main.querySelector('.take-label')).not.toBeNull();
-		expect(main.querySelector('.take-duration')).not.toBeNull();
-		expect(main.querySelector('button')).toBeNull();
-		expect(row.querySelector('.take-actions')?.parentElement).toBe(row);
-
-		// The model badge is another descriptive fact about the take, so it
-		// belongs in the body with the rest — never in take-actions, where a
-		// row too narrow to hold both wraps actions onto their own line
-		// instead of crowding a touch target (#163/2).
-		expect(main.querySelector('.model-badge')).not.toBeNull();
-		expect(row.querySelector('.take-actions')?.querySelector('.model-badge')).toBeNull();
-
-		main.querySelector<HTMLElement>('.take-summary')?.click();
+		const play = row?.querySelector<HTMLButtonElement>('[aria-label="Play v3 · take 3"]');
+		expect(play).not.toBeNull();
+		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
+		expect(play?.contains(row?.querySelector('.overflow-btn') ?? null)).toBe(false);
+		play?.click();
 		await tick();
 		expect(pick).not.toHaveBeenCalled();
 		expect(keep).not.toHaveBeenCalled();
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+		expect(playTake).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
 	});
 
-	it('sizes pick and keep to the frequent hitbox on a coarse pointer', async () => {
-		const { target } = await render();
-		const pickBtn = target.querySelector<HTMLButtonElement>('.pick-btn');
-		if (!pickBtn) throw new Error('Expected pick button');
-		setPointer('coarse');
-		expect(minSquarePx(pickBtn, 'pick').width).toBe(HITBOX_FREQUENT_PX);
-		expect(minSquarePx(pickBtn, 'pick').height).toBe(HITBOX_FREQUENT_PX);
-		setPointer('fine');
-		expect(minSquarePx(pickBtn, 'pick').width).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
+	it.each([
+		['playing', 'Pause'],
+		['paused', 'Play']
+	] as const)('names the transport action for a %s take', async (status, label) => {
+		const currentSong = song(versionedSongDefaults());
+		audioPlayer.current = {
+			generation: currentSong.generations[0],
+			songId: currentSong.id,
+			songTitle: currentSong.title,
+			artist: '',
+			albumTitle: '',
+			lyrics: null
+		};
+		audioPlayer.status = status;
+		const { target } = await render({ song: currentSong });
+		const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
+		expect(button).not.toBeNull();
+		button?.click();
+		expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
 	});
+
+	it.each(['ctrlKey', 'metaKey'])(
+		'selects through the play control with %s without playback',
+		async (modifier) => {
+			const { target } = await render();
+			target
+				.querySelector('.play-btn')
+				?.dispatchEvent(new MouseEvent('click', { bubbles: true, [modifier]: true }));
+			await tick();
+			expect(get(selectedIds).has('g1')).toBe(true);
+			expect(playTake).not.toHaveBeenCalled();
+			expect(target.querySelector('.play-btn')?.getAttribute('aria-pressed')).toBe('true');
+		}
+	);
+
+	it.each(['fine', 'coarse'] as const)(
+		'gives play, pick and menu 44 px targets on a %s pointer',
+		async (pointer) => {
+			setPointer(pointer);
+			const { target } = await render();
+			for (const selector of ['.play-btn', '.pick-btn', '.overflow-btn']) {
+				const button = target.querySelector<HTMLButtonElement>(selector);
+				if (!button) throw new Error(`Expected ${selector}`);
+				expect(minSquarePx(button, selector)).toEqual({
+					width: HITBOX_FREQUENT_PX,
+					height: HITBOX_FREQUENT_PX
+				});
+			}
+		}
+	);
 });
 
 describe('TakesList archived takes', () => {
@@ -753,18 +805,11 @@ describe('TakesList archived takes', () => {
 		expect(archivedRow.classList.contains('archived')).toBe(true);
 		expect(archivedRow.getAttribute('title')).toBe(TAKE_ARCHIVED_TITLE);
 		expect(archivedRow.querySelector('.take-label')?.previousElementSibling).toBeNull();
-		const sourceActions = Array.from(
-			archivedRow.querySelectorAll<HTMLButtonElement>('.take-action-btn')
-		);
-		expect(sourceActions).toHaveLength(2);
-		for (const action of sourceActions) {
-			expect(action.disabled).toBe(true);
-			expect(action.title).toBe(TAKE_ARCHIVED_SOURCE_TITLE);
-		}
+		expect(archivedRow.querySelector('.play-btn')).toBeNull();
 
 		archivedRow.click();
 		await tick();
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('owns and anchors its menu and playlist picker, archived or not', async () => {
@@ -785,15 +830,14 @@ describe('TakesList archived takes', () => {
 		const picker = archivedRow.querySelector('.picker');
 		expect(picker, 'the playlist picker renders inside the archived row').not.toBeNull();
 		expect(picker?.parentElement?.classList.contains('take-picker-anchor')).toBe(true);
-		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+		expect(playTake).not.toHaveBeenCalled();
 	});
 
 	it('stops announcing itself as a button while it cannot act', async () => {
 		const { target } = await renderWithArchived();
 		const [playable, archived] = Array.from(target.querySelectorAll<HTMLElement>('.take-row'));
-		expect(playable.querySelector('.take-summary')?.getAttribute('role')).toBe('button');
-		expect(archived.querySelector('.take-summary')?.getAttribute('role')).toBeNull();
-		expect(archived.querySelector('.take-summary')?.getAttribute('tabindex')).toBeNull();
+		expect(playable.querySelector('button.play-btn')).not.toBeNull();
+		expect(archived.querySelector('button.play-btn')).toBeNull();
 	});
 
 	it('is a button again in selection mode, where ticking it still does something', async () => {
@@ -801,18 +845,18 @@ describe('TakesList archived takes', () => {
 		enterSelectionMode();
 		await tick();
 		const archived = target.querySelectorAll<HTMLElement>('.take-row')[1];
-		expect(archived.querySelector('.take-summary')?.getAttribute('role')).toBe('button');
+		expect(archived.querySelector('button[aria-label="Select v3 · take 2"]')).not.toBeNull();
 		expect(archived.querySelector('.take-action-btn')).toBeNull();
-		archived.querySelector<HTMLElement>('.take-summary')?.click();
+		archived.querySelector<HTMLElement>('.play-btn')?.click();
 		await tick();
 		expect(get(selectedIds).has('g-arch')).toBe(true);
 	});
 
 	it('still plays a take that is not archived', async () => {
 		const { target } = await renderWithArchived();
-		target.querySelector<HTMLElement>('.take-row .take-summary')?.click();
+		target.querySelector<HTMLElement>('.take-row .play-btn')?.click();
 		await tick();
-		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+		expect(playTake).toHaveBeenCalledWith(
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
@@ -827,6 +871,7 @@ describe('TakesList score pill', () => {
 	// unlabelled number cannot say which scale it is on.
 	const cases = [
 		{ name: 'the rating the listener gave', scores: { user_rating: 82 }, text: '82' },
+		{ name: 'a low rating', scores: { user_rating: 20 }, text: '20' },
 		{
 			name: 'the rating even when automatic scores exist too',
 			scores: { user_rating: 82, text_accuracy: 41 },
@@ -863,6 +908,7 @@ describe('TakesList score pill', () => {
 			})
 		});
 		expect(target.querySelector('.score-badge')?.textContent?.trim()).toBe(text);
+		expect(target.querySelector('.score-shape[aria-hidden="true"]')).not.toBeNull();
 	});
 
 	it("colours the pill from the scorer's own scale, not from the shown number", async () => {
@@ -877,6 +923,7 @@ describe('TakesList score pill', () => {
 		const pill = target.querySelector('.score-badge');
 		expect(pill?.textContent?.trim()).toBe('45');
 		expect(pill?.classList.contains('ok')).toBe(true);
+		expect(pill?.querySelector('.score-shape[aria-hidden="true"]')).not.toBeNull();
 	});
 
 	it('names the metric behind the number', async () => {

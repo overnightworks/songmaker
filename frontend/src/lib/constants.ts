@@ -155,10 +155,7 @@ export const TAKE_REPAINT_LABEL = 'Repaint';
 export const TAKE_COVER_LABEL = 'Cover';
 export const TAKE_PROVENANCE_REPAINT_PREFIX = 'Repaint from';
 export const TAKE_PROVENANCE_COVER_PREFIX = 'Cover from';
-export const TAKE_ARCHIVED_SOURCE_TITLE =
-	"Archived takes are scheduled for deletion and can't be used as a source";
 export const TAKE_PICK_LABEL = 'Pick';
-export const TAKE_KEEP_LABEL = 'Keep';
 export const TAKE_OVERFLOW_LABEL = 'More';
 export const TAKE_SHARE_LABEL = 'Share take';
 export const TAKE_UNSHARE_LABEL = 'Unshare';
@@ -172,7 +169,7 @@ export const TAKE_DELETE_LABEL = 'Delete';
 export const TAKE_RESCORE_LABEL = 'Re-score';
 export const TAKE_RESCORING_LABEL = 'Re-scoring…';
 export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
-export const TAKES_EMPTY = 'No takes yet';
+export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
 // {version} is replaced with the version number Generate would create next.
@@ -186,6 +183,8 @@ export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
+export const EDITOR_TAB_WRITE_LABEL = 'Write';
+export const EDITOR_TABS_LABEL = 'Editor tabs';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const EDITOR_VIEWS_LABEL = 'Editor views';
@@ -273,6 +272,17 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATE_REPAINT_LABEL = 'Generate Repaint';
 export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
+export const EDITOR_GENERATE_MODE_LABELS = {
+	generate: EDITOR_GENERATE_LABEL,
+	repaint: TAKE_REPAINT_LABEL,
+	cover: TAKE_COVER_LABEL
+};
+export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
+export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
+export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
+export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
+export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
+export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
