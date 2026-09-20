@@ -144,7 +144,7 @@ def claim_next_cover_job(session: Session) -> Job | None:
             Job.type == JobType.COVER,
             Job.status == JobStatus.QUEUED,
         )
-        .values(status=JobStatus.RUNNING, heartbeat_at=now)
+        .values(status=JobStatus.RUNNING, heartbeat_at=now, running_since=now)
         .returning(Job.id),
     ).scalar_one_or_none()
     if claimed_id is None:
@@ -162,6 +162,8 @@ def update_job_status(
     current_epoch: int | None = None,
     train_epochs: int | None = None,
     training_started_at: datetime | None = None,
+    take_index: int | None = None,
+    take_count: int | None = None,
 ) -> bool:
     job = (
         session.query(Job)
@@ -172,6 +174,10 @@ def update_job_status(
     if job is None or job.status in JOB_TERMINAL_STATUSES:
         return False
     now = datetime.now(timezone.utc)
+    if status == JobStatus.RUNNING and (
+        job.status != JobStatus.RUNNING or job.running_since is None
+    ):
+        job.running_since = now
     job.status = status
     job.progress = progress
     job.error = error
@@ -183,6 +189,10 @@ def update_job_status(
         job.train_epochs = train_epochs
     if training_started_at is not None:
         job.training_started_at = training_started_at
+    if take_index is not None:
+        job.take_index = take_index
+    if take_count is not None:
+        job.take_count = take_count
     if worker_pid is not None:
         job.worker_pid = worker_pid
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):

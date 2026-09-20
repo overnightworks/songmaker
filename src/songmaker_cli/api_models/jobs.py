@@ -8,7 +8,12 @@ from typing import Final, Literal
 
 from pydantic import BaseModel
 
-from songmaker_cli.constants import JOB_TERMINAL_STATUSES, JobStatus
+from songmaker_cli.constants import (
+    GENERATION_ETA_MIN_PROGRESS,
+    JOB_TERMINAL_STATUSES,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.timestamps import aware_timestamp
 
 REMAINING_TIME_ESTIMATE_CALCULATING: Final = "calculating"
@@ -24,6 +29,16 @@ def _remaining_time_estimate(
         return 0
     if job.status != JobStatus.RUNNING:
         return REMAINING_TIME_ESTIMATE_CALCULATING
+
+    if job.type == JobType.GENERATE:
+        if job.progress >= 1:
+            return 0
+        if job.progress < GENERATION_ETA_MIN_PROGRESS or job.running_since is None:
+            return REMAINING_TIME_ESTIMATE_CALCULATING
+        elapsed_seconds = (now - aware_timestamp(job.running_since)).total_seconds()
+        if elapsed_seconds <= 0:
+            return REMAINING_TIME_ESTIMATE_CALCULATING
+        return ceil(elapsed_seconds * (1 - job.progress) / job.progress)
 
     current_epoch = job.current_epoch
     train_epochs = job.train_epochs
@@ -58,6 +73,8 @@ class JobResponse(BaseModel):
     type: str
     status: str
     progress: float = 0.0
+    take_index: int | None = None
+    take_count: int | None = None
     current_epoch: int | None = None
     train_epochs: int | None = None
     remaining_time_estimate: RemainingTimeEstimate | None = None
@@ -82,6 +99,8 @@ class JobResponse(BaseModel):
             type=job.type,
             status=job.status,
             progress=job.progress,
+            take_index=job.take_index,
+            take_count=job.take_count,
             current_epoch=job.current_epoch,
             train_epochs=job.train_epochs,
             remaining_time_estimate=_remaining_time_estimate(job, now=now),

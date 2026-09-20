@@ -70,6 +70,7 @@ MODEL_DEFAULT_MODE: Final[str] = "sft"
 LORA_TRAINING_MODEL_MODES: Final[frozenset[str]] = frozenset({"sft", "turbo"})
 
 GENERATION_WAITING_FOR_LORA_QUEUE_REASON: Final[str] = "Waiting for LoRA training on this GPU."
+GENERATION_ETA_MIN_PROGRESS: Final[float] = 0.05
 LORA_WAITING_FOR_GENERATION_QUEUE_REASON: Final[str] = "Waiting for queued generations on this GPU."
 
 DEFAULT_ARTIST = "Flex0r"
