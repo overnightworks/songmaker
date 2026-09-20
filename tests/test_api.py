@@ -2322,6 +2322,43 @@ def test_get_job_found(client: TestClient) -> None:
     assert resp.json()["id"] == job_id
 
 
+@pytest.mark.parametrize("progress", [0.01, 0.25])
+def test_get_running_generation_exposes_take_counters_and_eta(
+    client: TestClient, progress: float, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from songmaker_cli.api_models import jobs as job_models
+    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.db.queries import create_job, update_job_status
+
+    now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
+
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now
+
+    monkeypatch.setattr(job_models, "datetime", FixedDatetime)
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
+        update_job_status(
+            session, job.id, JobStatus.RUNNING, progress=progress,
+            take_index=1, take_count=2,
+        )
+        job.started_at = now - timedelta(hours=1)
+        job.running_since = now - timedelta(seconds=100)
+        session.commit()
+        job_id = job.id
+
+    response = client.get(f"/api/jobs/{job_id}")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert (payload["take_index"], payload["take_count"]) == (1, 2)
+    assert payload["progress"] == progress
+    assert payload["remaining_time_estimate"] == (300 if progress == 0.25 else "calculating")
+
+
 # ── Album creation ──────────────────────────────────────────────────
 
 

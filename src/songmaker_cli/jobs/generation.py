@@ -1030,7 +1030,10 @@ async def _generate_variant(
 ) -> tuple[str | None, Exception | None]:
     import uuid
 
-    _update_job(db_factory, job_id, JobStatus.RUNNING, progress=index / count)
+    _update_job(
+        db_factory, job_id, JobStatus.RUNNING,
+        progress=index / count, take_index=index + 1, take_count=count,
+    )
     try:
         worker_result = await jobs.dispatch_generation_on_worker(
             worker=admitted_worker,

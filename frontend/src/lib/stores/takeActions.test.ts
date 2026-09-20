@@ -61,6 +61,8 @@ function scoreJob(overrides: Partial<JobStatus> = {}): JobStatus {
 		type: 'score',
 		status: 'queued',
 		progress: 0,
+		take_index: null,
+		take_count: null,
 		error: null,
 		error_type: null,
 		started_at: null,
