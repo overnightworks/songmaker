@@ -50,7 +50,7 @@ import {
 } from './editor';
 import { generate, generateAction } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
-import { activeJobs, removeJob } from './jobs';
+import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
 import { songList } from './libraryData';
 import { selectedSongId } from './player';
 import { activeModels } from './presets';
@@ -80,6 +80,7 @@ const queuedJob: JobItem = {
 
 beforeEach(async () => {
 	vi.resetAllMocks();
+	resetGenerationFailures();
 	vi.stubGlobal(
 		'EventSource',
 		class {
@@ -112,9 +113,17 @@ afterEach(() => {
 
 describe('generate action presentation', () => {
 	it.each([
-		{ state: 'idle', setup: () => {}, label: EDITOR_GENERATE_LABEL, title: '', disabled: false },
+		{
+			state: 'idle',
+			setup: () => {},
+			label: EDITOR_GENERATE_LABEL,
+			title: '',
+			disabled: false,
+			expectedState: { kind: 'idle', mode: 'generate' }
+		},
 		{
 			state: 'dirty',
+			expectedState: { kind: 'idle', mode: 'generate' },
 			setup: () => setDraftLyrics('new verse'),
 			label: EDITOR_GENERATE_LABEL,
 			title: '',
@@ -122,6 +131,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'missing lyrics',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
 			setup: () => setDraftLyrics(''),
 			label: EDITOR_GENERATE_LABEL,
 			title: EDITOR_MISSING_CONTENT_TITLE,
@@ -129,6 +139,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'missing prompt',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
 			setup: () => setDraftPrompt(''),
 			label: EDITOR_GENERATE_LABEL,
 			title: EDITOR_MISSING_CONTENT_TITLE,
@@ -136,6 +147,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'no selected model',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_SELECT_MODEL_TITLE },
 			setup: () => recipeModel.set(null),
 			label: EDITOR_GENERATE_LABEL,
 			title: EDITOR_SELECT_MODEL_TITLE,
@@ -143,6 +155,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'no active models',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_NO_MODELS_WARNING },
 			setup: () => {
 				recipeModel.set(null);
 				activeModels.set([]);
@@ -153,6 +166,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'GPU offline',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
 			},
@@ -162,6 +176,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'queue full',
+			expectedState: { kind: 'idle', mode: 'generate' },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(
 					makeHealthResponse({ queue_depth_cap_reached: true })
@@ -173,6 +188,7 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'queued',
+			expectedState: { kind: 'queued', jobId: 'job1', position: 2, reason: queuedJob.queue_reason },
 			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }]),
 			label: 'Queued (#2)',
 			title: '',
@@ -180,6 +196,12 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'queued without position',
+			expectedState: {
+				kind: 'queued',
+				jobId: 'job1',
+				position: null,
+				reason: queuedJob.queue_reason
+			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }]),
 			label: EDITOR_QUEUED_LABEL,
 			title: '',
@@ -187,6 +209,14 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'running',
+			expectedState: {
+				kind: 'generating',
+				jobId: 'job1',
+				takeIndex: null,
+				takeCount: null,
+				progress: 0,
+				remaining: null
+			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }]),
 			label: EDITOR_GENERATING_LABEL,
 			title: '',
@@ -194,17 +224,82 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'another song running',
+			expectedState: { kind: 'idle', mode: 'generate' },
 			setup: () => activeJobs.set([{ songId: 's2', job: queuedJob }]),
 			label: EDITOR_GENERATE_LABEL,
 			title: '',
 			disabled: false
 		}
-	])('exposes label, title and disabled for $state', async ({ setup, label, title, disabled }) => {
-		setup();
-		stopHealthPolling();
-		startHealthPolling();
-		await Promise.resolve();
-		expect(get(generateAction)).toMatchObject({ label, title, disabled });
+	])(
+		'exposes label, title and disabled for $state',
+		async ({ setup, label, title, disabled, expectedState }) => {
+			setup();
+			stopHealthPolling();
+			startHealthPolling();
+			await Promise.resolve();
+			expect(get(generateAction)).toMatchObject({ label, title, disabled });
+			expect(get(generateAction).state).toEqual(expectedState);
+		}
+	);
+
+	it.each([100, 'calculating', null] as const)(
+		'exposes live progress and remaining time %s',
+		(remaining) => {
+			activeJobs.set([
+				{
+					songId: 's1',
+					job: {
+						...queuedJob,
+						status: 'running',
+						take_index: 1,
+						take_count: 2,
+						progress: 36,
+						remaining_time_estimate: remaining
+					}
+				}
+			]);
+			expect(get(generateAction).state).toEqual({
+				kind: 'generating',
+				jobId: 'job1',
+				takeIndex: 1,
+				takeCount: 2,
+				progress: 36,
+				remaining
+			});
+		}
+	);
+
+	it.each(['generate', 'repaint', 'cover'] as const)(
+		'exposes the selected song failure for %s and clears it on the next attempt',
+		async (mode) => {
+			if (mode !== 'generate') {
+				sourceGeneration.set(makeGeneration());
+				sourceMode.set(mode);
+			}
+			generationFailures.set({ s1: 'Worker exhausted GPU memory', s2: 'Another failure' });
+			expect(get(generateAction).state).toEqual({
+				kind: 'failed',
+				mode,
+				cause: 'Worker exhausted GPU memory'
+			});
+			const request = generate();
+			expect(get(generationFailures)).toEqual({ s2: 'Another failure' });
+			await request;
+			expect(get(generateAction).state.kind).toBe('queued');
+		}
+	);
+
+	it('keeps unavailable and pending states ahead of a previous failure', () => {
+		generationFailures.set({ s1: 'Previous failure' });
+		recipeModel.set(null);
+		expect(get(generateAction).state.kind).toBe('disabled');
+		activeJobs.set([{ songId: 's1', job: queuedJob }]);
+		expect(get(generateAction).state.kind).toBe('queued');
+	});
+
+	it('does not show another song failure', () => {
+		generationFailures.set({ s2: 'Another failure' });
+		expect(get(generateAction).state).toEqual({ kind: 'idle', mode: 'generate' });
 	});
 
 	it('follows the selected song and exposes a reason only while queued', () => {
@@ -232,7 +327,8 @@ describe('generate action execution', () => {
 		expect(get(generateAction)).toMatchObject({
 			pending: true,
 			disabled: true,
-			label: EDITOR_GENERATING_LABEL
+			label: EDITOR_GENERATING_LABEL,
+			state: { kind: 'generating', jobId: null, progress: 0, remaining: null }
 		});
 		await generate();
 		expect(updateSong).toHaveBeenCalledTimes(1);
@@ -279,6 +375,7 @@ describe('generate action execution', () => {
 		coverStrength.set(0.7);
 		coverNoiseStrength.set(variant === 'noise' ? 0.3 : 0);
 		expect(get(generateAction).label).toBe(label);
+		expect(get(generateAction).state).toEqual({ kind: 'idle', mode });
 		await generate();
 		const options = { model: 'turbo', seed: 42, versionId: 'v1', count: 2 };
 		if (mode === 'repaint') {

@@ -24,7 +24,7 @@ import {
 	versions
 } from './editor';
 import { health } from './health';
-import { activeJobs, trackJob } from './jobs';
+import { activeJobs, dismissGenerationFailure, generationFailures, trackJob } from './jobs';
 import { selectedSong } from './player';
 import { activeModels } from './presets';
 import {
@@ -43,6 +43,22 @@ import { addToast } from './toast';
 
 const requestInFlight = writable(false);
 
+type GenerateMode = 'generate' | 'repaint' | 'cover';
+
+export type GenerateState =
+	| { kind: 'idle'; mode: GenerateMode }
+	| { kind: 'queued'; jobId: string; position: number | null; reason: string | null }
+	| {
+			kind: 'generating';
+			jobId: string | null;
+			takeIndex: number | null;
+			takeCount: number | null;
+			progress: number;
+			remaining: number | 'calculating' | null;
+	  }
+	| { kind: 'failed'; mode: GenerateMode; cause: string }
+	| { kind: 'disabled'; mode: GenerateMode; reason: string };
+
 export const generateAction = derived(
 	[
 		selectedSong,
@@ -54,9 +70,10 @@ export const generateAction = derived(
 		recipeModel,
 		activeModels,
 		sourceGeneration,
-		sourceMode
+		sourceMode,
+		generationFailures
 	],
-	([song, jobs, inFlight, health, lyrics, prompt, model, models, source, mode]) => {
+	([song, jobs, inFlight, health, lyrics, prompt, model, models, source, mode, failures]) => {
 		const job = song
 			? (jobs.find((entry) => entry.songId === song.id && entry.job.type === 'generate')?.job ??
 				null)
@@ -81,13 +98,38 @@ export const generateAction = derived(
 			label = mode === 'cover' ? EDITOR_GENERATE_COVER_LABEL : EDITOR_GENERATE_REPAINT_LABEL;
 		}
 
+		const disabled = pending || !lyrics || !prompt || model === null || gpuOffline;
+		const actionMode: GenerateMode = source ? mode : 'generate';
+		const cause = song ? failures[song.id] : undefined;
+		let state: GenerateState;
+		if (job?.status === 'queued') {
+			state = {
+				kind: 'queued',
+				jobId: job.id,
+				position: job.queue_position ?? null,
+				reason: job.queue_reason ?? null
+			};
+		} else if (pending) {
+			state = {
+				kind: 'generating',
+				jobId: job?.id ?? null,
+				takeIndex: job?.take_index ?? null,
+				takeCount: job?.take_count ?? null,
+				progress: job?.progress ?? 0,
+				remaining: job?.remaining_time_estimate ?? null
+			};
+		} else if (disabled) state = { kind: 'disabled', mode: actionMode, reason: title };
+		else if (cause !== undefined) state = { kind: 'failed', mode: actionMode, cause };
+		else state = { kind: 'idle', mode: actionMode };
+
 		return {
+			state,
 			job,
 			pending,
 			gpuOffline,
 			label,
 			title,
-			disabled: pending || !lyrics || !prompt || model === null || gpuOffline,
+			disabled,
 			queueReason: job?.status === 'queued' ? job.queue_reason : null
 		};
 	}
@@ -97,6 +139,7 @@ export async function generate(): Promise<void> {
 	const song = get(selectedSong);
 	const model = get(recipeModel);
 	if (!song || model === null || get(requestInFlight)) return;
+	dismissGenerationFailure(song.id);
 	requestInFlight.set(true);
 	try {
 		if (get(isDirty)) await handleSave(song.id);
