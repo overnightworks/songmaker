@@ -34,7 +34,7 @@
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
 	import { removeGenerationFromSong } from '$lib/stores/libraryData';
-	import { playTake, selectedGenerationId } from '$lib/stores/player';
+	import { playTake, playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	import { rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -179,6 +179,7 @@
 	}
 
 	function handlePlayClick(gen: GenerationItem, e: MouseEvent): void {
+		e.stopPropagation();
 		if (e.ctrlKey || e.metaKey) {
 			toggleSelection(gen.id);
 			return;
@@ -189,6 +190,32 @@
 		}
 		if (gen.is_archived) return;
 		void playTake(gen, song);
+	}
+
+	// The row's click rule (#140): a tap on the row body — its name, duration
+	// and score, everything except the ▶ symbol, the pick star and the menu —
+	// plays the take and opens Now Playing on it. Selection mode re-purposes
+	// it to a select tap instead, same as every other row control.
+	function handleRowBodyClick(gen: GenerationItem): void {
+		if ($selectionMode) {
+			toggleSelection(gen.id);
+			return;
+		}
+		if (gen.is_archived) return;
+		void playTakeAndShowNowPlaying(gen, song);
+	}
+
+	// An archived take has nothing for a row activation to do, so the row
+	// stops announcing itself as reachable — except in selection mode, where
+	// ticking it is still a real action.
+	function rowIsActionable(gen: GenerationItem): boolean {
+		return $selectionMode || !gen.is_archived;
+	}
+
+	function handleRowKeydown(gen: GenerationItem, e: KeyboardEvent): void {
+		if (e.key !== 'Enter' && e.key !== ' ') return;
+		e.preventDefault();
+		handleRowBodyClick(gen);
 	}
 
 	interface TakeProvenance {
@@ -369,7 +396,7 @@
 						title={gen.is_archived ? TAKE_ARCHIVED_TITLE : undefined}
 					>
 						<span class="take-main">
-							<span class="take-summary">
+							<span class="take-headline">
 								{#if $selectionMode || !gen.is_archived}
 									<button
 										type="button"
@@ -388,23 +415,33 @@
 									</button>
 								{/if}
 
-								<span class="take-label">
-									{takeRowLabel(gen.generation_number)}
-								</span>
-
-								{#if duration}
-									<span class="take-duration">{duration}</span>
-								{/if}
-
-								{#if headline}
-									<span
-										class="score-badge {headline.color}"
-										title={`${headline.label} ${headline.text}`}
-									>
-										<span class="score-shape" aria-hidden="true"></span>
-										{headline.text}
+								<span
+									class="take-summary"
+									role="button"
+									tabindex={rowIsActionable(gen) ? 0 : -1}
+									aria-disabled={rowIsActionable(gen) ? undefined : true}
+									data-hitbox="text"
+									onclick={() => handleRowBodyClick(gen)}
+									onkeydown={(e) => handleRowKeydown(gen, e)}
+								>
+									<span class="take-label">
+										{takeRowLabel(gen.generation_number)}
 									</span>
-								{/if}
+
+									{#if duration}
+										<span class="take-duration">{duration}</span>
+									{/if}
+
+									{#if headline}
+										<span
+											class="score-badge {headline.color}"
+											title={`${headline.label} ${headline.text}`}
+										>
+											<span class="score-shape" aria-hidden="true"></span>
+											{headline.text}
+										</span>
+									{/if}
+								</span>
 							</span>
 							<span class="take-details">
 								{#if batchNotice}
@@ -749,7 +786,7 @@
 		min-width: 0;
 	}
 
-	.take-summary,
+	.take-headline,
 	.take-details {
 		display: flex;
 		align-items: center;
@@ -759,6 +796,19 @@
 
 	.take-details {
 		flex-wrap: wrap;
+	}
+
+	.take-summary {
+		display: flex;
+		align-items: center;
+		gap: 0.35rem;
+		flex: 1;
+		min-width: 0;
+		cursor: pointer;
+	}
+
+	.take-summary[aria-disabled='true'] {
+		cursor: default;
 	}
 
 	.take-origin {

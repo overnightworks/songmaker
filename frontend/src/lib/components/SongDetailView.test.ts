@@ -485,11 +485,12 @@ describe('SongDetailView recipe and takes', () => {
 		expect(visibleText(target)).not.toContain('Custom');
 	});
 
-	it('shows symbol actions instead of labelled source buttons in take rows', async () => {
+	it('shows symbol actions and the row body instead of labelled source buttons in take rows', async () => {
 		const target = await renderView();
 		const row = target.querySelector('.take-row');
 		expect(row).not.toBeNull();
 		expect(row?.querySelectorAll('button')).toHaveLength(3);
+		expect(row?.querySelector('[role="button"].take-summary')).not.toBeNull();
 		expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 	});
 

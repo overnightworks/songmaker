@@ -11,8 +11,10 @@ vi.mock('$lib/stores/resourceSync', () => ({
 }));
 
 const mockFetchLastFailedGeneration = vi.fn();
+const mockFetchActiveGeneration = vi.fn();
 
 vi.mock('$lib/api/client', () => ({
+	fetchActiveGeneration: (...args: unknown[]) => mockFetchActiveGeneration(...args),
 	fetchLastFailedGeneration: (...args: unknown[]) => mockFetchLastFailedGeneration(...args)
 }));
 
@@ -20,6 +22,7 @@ import {
 	activeJobs,
 	dismissGenerationFailure,
 	generationFailures,
+	hydrateActiveGeneration,
 	hydrateGenerationFailure,
 	removeJob,
 	resetGenerationFailures,
@@ -100,6 +103,7 @@ beforeEach(() => {
 	mockRequestSongRefresh.mockReset();
 	mockRequestSongRefresh.mockResolvedValue(undefined);
 	mockFetchLastFailedGeneration.mockReset();
+	mockFetchActiveGeneration.mockReset();
 	MockEventSource.instances = [];
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.useFakeTimers();
@@ -111,6 +115,64 @@ afterEach(() => {
 });
 
 describe('jobs store', () => {
+	it.each(['queued', 'running'] as const)(
+		'hydrates a %s generation after reload and receives live progress',
+		async (status) => {
+			const job = makeJob({
+				status,
+				take_index: 1,
+				take_count: 2,
+				remaining_time_estimate: status === 'queued' ? 'calculating' : 100
+			});
+			mockFetchActiveGeneration.mockResolvedValue(job);
+
+			await hydrateActiveGeneration('s1');
+
+			expect(mockFetchActiveGeneration).toHaveBeenCalledWith('s1');
+			expect(get(activeJobs)).toEqual([{ job, songId: 's1' }]);
+			expect(latestSource().url).toBe('/api/jobs/j1/stream');
+			expect(latestSource().withCredentials).toBe(true);
+			const update = {
+				...job,
+				status: 'running' as const,
+				progress: 0.75,
+				take_index: 2,
+				remaining_time_estimate: 30
+			};
+			latestSource().simulateMessage(update);
+			expect(get(activeJobs)).toEqual([{ job: update, songId: 's1' }]);
+		}
+	);
+
+	it('leaves tracking empty when the song has no active generation', async () => {
+		mockFetchActiveGeneration.mockResolvedValue(null);
+
+		await hydrateActiveGeneration('s1');
+
+		expect(get(activeJobs)).toEqual([]);
+		expect(MockEventSource.instances).toHaveLength(0);
+	});
+
+	it('reuses the stream when an active generation is hydrated twice', async () => {
+		const job = makeJob({ status: 'running' });
+		mockFetchActiveGeneration.mockResolvedValue(job);
+
+		await hydrateActiveGeneration('s1');
+		await hydrateActiveGeneration('s1');
+
+		expect(get(activeJobs)).toEqual([{ job, songId: 's1' }]);
+		expect(MockEventSource.instances).toHaveLength(1);
+	});
+
+	it('surfaces an active generation lookup failure', async () => {
+		const error = new Error('Service unavailable');
+		mockFetchActiveGeneration.mockRejectedValue(error);
+
+		await expect(hydrateActiveGeneration('s1')).rejects.toThrow(error);
+		expect(get(activeJobs)).toEqual([]);
+		expect(MockEventSource.instances).toHaveLength(0);
+	});
+
 	it('trackJob adds job to activeJobs and opens EventSource', () => {
 		trackJob(makeJob(), { songId: 's1' });
 		const jobs = get(activeJobs);

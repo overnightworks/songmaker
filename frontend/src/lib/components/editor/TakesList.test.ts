@@ -44,13 +44,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playTake: vi.fn(async () => undefined)
+		playTake: vi.fn(async () => undefined),
+		playTakeAndShowNowPlaying: vi.fn(async () => undefined)
 	};
 });
 
 import { addToast } from '$lib/stores/toast';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
-import { playTake } from '$lib/stores/player';
+import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesListHarness from './tests/TakesListHarness.svelte';
@@ -164,6 +165,7 @@ beforeEach(() => {
 	playlistLoad.set({ status: 'ready', error: null });
 	vi.mocked(addToast).mockClear();
 	vi.mocked(playTake).mockClear();
+	vi.mocked(playTakeAndShowNowPlaying).mockClear();
 	activeJobs.set([]);
 	generationFailures.set({});
 	// The scoring job streams its progress over server-sent events jsdom does
@@ -538,20 +540,70 @@ describe('TakesList', () => {
 	);
 
 	it.each(['fine', 'coarse'] as const)(
-		'has only symbol actions on a %s pointer',
+		'has three symbol actions and one labelled row body on a %s pointer',
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
 			const row = target.querySelector('.take-row');
-			expect(row?.querySelectorAll('button')).toHaveLength(3);
 			if (!row) throw new Error('Expected a take row');
-			for (const button of row.querySelectorAll('button')) {
+			const buttons = Array.from(row.querySelectorAll('button'));
+			expect(buttons).toHaveLength(3);
+			for (const button of buttons) {
 				expect(button.textContent?.trim()).toBe('');
 				expect(button.getAttribute('aria-label')).toBeTruthy();
 			}
+
+			const body = row.querySelector<HTMLElement>('[role="button"].take-summary');
+			if (!body) throw new Error('Expected the row body target');
+			expect(body.textContent?.trim()).not.toBe('');
+			expect(body.getAttribute('aria-label')).toBeNull();
+			expect(body.getAttribute('tabindex')).toBe('0');
 			expect(row?.textContent).not.toMatch(/Repaint|Cover/);
 		}
 	);
+
+	it('opens Now Playing on This take when the row body is tapped', async () => {
+		const { target, props } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		row?.querySelector<HTMLElement>('.take-summary')?.click();
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			props.song
+		);
+		expect(playTake).not.toHaveBeenCalled();
+	});
+
+	it('opens Now Playing on This take when the row body is activated by keyboard', async () => {
+		const { target, props } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		const body = row?.querySelector<HTMLElement>('.take-summary');
+		body?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		expect(playTakeAndShowNowPlaying).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			props.song
+		);
+	});
+
+	it('names the row body by its visible content, not an overriding label', async () => {
+		const { target } = await render();
+		const body = target.querySelector<HTMLElement>('.take-summary');
+		const duration = target.querySelector('.take-duration')?.textContent?.trim();
+		expect(body?.getAttribute('aria-label')).toBeNull();
+		expect(body?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			`Take 3 ${duration}`.replace(/\s+/g, ' ').trim()
+		);
+	});
+
+	it("still only toggles play on the row's play target, never opening Now Playing itself", async () => {
+		const { target } = await render();
+		const row = target.querySelector<HTMLElement>('.take-row');
+		row?.querySelector<HTMLElement>('.play-btn')?.click();
+		expect(playTake).toHaveBeenCalledWith(
+			expect.objectContaining({ id: 'g1' }),
+			expect.objectContaining({ id: 's1' })
+		);
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
 
 	it.each([
 		['repaint', 'Repaint from v1 · take 1'],
@@ -865,6 +917,33 @@ describe('TakesList archived takes', () => {
 			expect.objectContaining({ id: 'g1' }),
 			expect.objectContaining({ id: 's1' })
 		);
+	});
+
+	it('does not play an archived take from its unreachable row body outside selection mode', async () => {
+		const { target } = await renderWithArchived();
+		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		if (!archivedRow) throw new Error('Expected the archived take row');
+		const body = archivedRow.querySelector<HTMLElement>('.take-summary');
+		expect(body?.getAttribute('aria-disabled')).toBe('true');
+		expect(body?.getAttribute('tabindex')).toBe('-1');
+		body?.click();
+		await tick();
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
+	});
+
+	it('selects an archived take from its row body in selection mode', async () => {
+		const { target } = await renderWithArchived();
+		enterSelectionMode();
+		await tick();
+		const archivedRow = target.querySelectorAll<HTMLElement>('.take-row')[1];
+		if (!archivedRow) throw new Error('Expected the archived take row');
+		const body = archivedRow.querySelector<HTMLElement>('.take-summary');
+		expect(body?.getAttribute('aria-disabled')).toBeNull();
+		expect(body?.getAttribute('tabindex')).toBe('0');
+		body?.click();
+		await tick();
+		expect(get(selectedIds).has('g-arch')).toBe(true);
+		expect(playTakeAndShowNowPlaying).not.toHaveBeenCalled();
 	});
 });
 

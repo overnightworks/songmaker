@@ -270,6 +270,17 @@ export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 export const EDITOR_GENERATE_LABEL = 'Generate';
 export const EDITOR_GENERATE_REPAINT_LABEL = 'Generate Repaint';
 export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
+export const EDITOR_GENERATE_MODE_LABELS = {
+	generate: EDITOR_GENERATE_LABEL,
+	repaint: TAKE_REPAINT_LABEL,
+	cover: TAKE_COVER_LABEL
+};
+export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
+export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
+export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
+export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
+export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
+export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error';
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
