@@ -1,0 +1,7 @@
+claim_id = "6ed66fd42fd9452999a7c2a26738cf26"
+agent = "claude-head"
+role = "builder"
+base = "4084be4381bff40c05e880b8a3172afa58173df6"
+branch = "docs/freeze-phone-and-vocabulary"
+scope = ["docs/design/README.md", "docs/design/song-page-phone.html", "docs/design/vocabulary.html"]
+opened_commit = "bdee220a9abd05e46e282e8931c1a2737e756b61"
