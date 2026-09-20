@@ -136,7 +136,10 @@ describe('detail views own no content back', () => {
 		const generationTarget = await renderView((target) => mount(SongDetailView, { target }));
 		expect(generationTarget.querySelector('.back-btn')).toBeNull();
 		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('Local Only');
-		expect(generationTarget.textContent?.replace(/\s+/g, ' ')).toContain('v1 · take 1');
+		expect(generationTarget.querySelector('.version-header')?.textContent?.trim()).toBe(
+			'v1 · 1 take'
+		);
+		expect(generationTarget.querySelector('.take-label')?.textContent?.trim()).toBe('Take 1');
 		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);
 		expect(generationTarget.textContent).toContain(EDITOR_LYRICS_LABEL);
 		expect(generationTarget.querySelector('.cowriter-chat')).toBeNull();

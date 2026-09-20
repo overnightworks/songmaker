@@ -155,10 +155,7 @@ export const TAKE_REPAINT_LABEL = 'Repaint';
 export const TAKE_COVER_LABEL = 'Cover';
 export const TAKE_PROVENANCE_REPAINT_PREFIX = 'Repaint from';
 export const TAKE_PROVENANCE_COVER_PREFIX = 'Cover from';
-export const TAKE_ARCHIVED_SOURCE_TITLE =
-	"Archived takes are scheduled for deletion and can't be used as a source";
 export const TAKE_PICK_LABEL = 'Pick';
-export const TAKE_KEEP_LABEL = 'Keep';
 export const TAKE_OVERFLOW_LABEL = 'More';
 export const TAKE_SHARE_LABEL = 'Share take';
 export const TAKE_UNSHARE_LABEL = 'Unshare';

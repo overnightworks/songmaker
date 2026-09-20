@@ -23,6 +23,18 @@ export function nowPlayingTakeLabel(
 	return versionNumber != null ? `v${versionNumber}${META_SEPARATOR}${takePart}` : takePart;
 }
 
+export const TAKE_KEPT_MARKER_LABEL = 'Kept';
+export const TAKE_SELECT_LABEL = 'Select';
+
+export function takeRowLabel(generationNumber: number): string {
+	return `Take ${generationNumber}`;
+}
+
+export function takeGroupLabel(versionNumber: number | null, count: number): string {
+	const version = versionNumber === null ? 'Unknown version' : `v${versionNumber}`;
+	return `${version}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
+}
+
 interface TakeMetaParts {
 	artist: string | null;
 	versionNumber: number | null;
@@ -37,7 +49,7 @@ interface TakeMetaParts {
 // take names its model — today the raw value already is the terse label
 // (turbo, xl-turbo, xl-sft, sft, xl-base); this is where that would change if
 // it ever stopped being terse.
-export function takeModelModeLabel(modelMode: string | null | undefined): string | null {
+function takeModelModeLabel(modelMode: string | null | undefined): string | null {
 	return modelMode || null;
 }
 
