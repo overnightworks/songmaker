@@ -7,7 +7,6 @@ import {
 	HITBOX_FREQUENT_PX,
 	TAKE_ARCHIVED_TITLE,
 	TAKE_PLAYLIST_LABEL,
-	TAKE_RESCORE_LABEL,
 	TAKE_RESCORING_LABEL,
 	TAKES_MOBILE_HINT
 } from '$lib/constants';
@@ -31,9 +30,6 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		bulkDeleteGenerations: vi.fn(),
 		cancelJob: vi.fn(),
-		remasterGeneration: vi.fn(),
-		unarchiveGeneration: vi.fn(),
-		scoreGeneration: vi.fn(),
 		fetchSong: vi.fn(),
 		deleteVersion: vi.fn(),
 		fetchVersions: vi.fn().mockResolvedValue([])
@@ -52,7 +48,6 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	};
 });
 
-import { scoreGeneration } from '$lib/api/client';
 import { addToast } from '$lib/stores/toast';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import { playTake } from '$lib/stores/player';
@@ -539,7 +534,6 @@ describe('TakesList', () => {
 			const marker = target.querySelector('[role="img"][aria-label="Kept"]');
 			expect(Boolean(marker)).toBe(is_kept);
 			expect(marker?.closest('button')).toBeFalsy();
-			expect(target.querySelector('.keep-btn')).toBeNull();
 		}
 	);
 
@@ -672,38 +666,50 @@ describe('TakesList', () => {
 		expect(playTake).not.toHaveBeenCalled();
 	});
 
-	it('re-scores the take from its own menu and marks the row until the job ends', async () => {
-		vi.mocked(scoreGeneration).mockResolvedValue({
-			id: 'j1',
-			type: 'score',
-			status: 'queued',
-			progress: 0,
-			error: null,
-			error_type: null,
-			started_at: null,
-			completed_at: null
-		});
+	it('marks a take while its scoring job runs elsewhere', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
-		if (!row) throw new Error('Expected a take row');
-		expect(row.querySelector('.rescoring-badge')).toBeNull();
-
-		openTakeMenu(row);
+		expect(row?.querySelector('.rescoring-badge')).toBeNull();
+		activeJobs.set([
+			{
+				job: {
+					id: 'score-g1',
+					type: 'score',
+					status: 'running',
+					progress: 0,
+					error: null,
+					error_type: null,
+					started_at: null,
+					completed_at: null
+				},
+				songId: 's1',
+				genId: 'g1'
+			}
+		]);
 		await tick();
-		clickMenuItem(row, TAKE_RESCORE_LABEL);
-		await tick();
-		await Promise.resolve();
-		await tick();
-
-		expect(scoreGeneration).toHaveBeenCalledTimes(1);
-		expect(scoreGeneration).toHaveBeenCalledWith('g1');
-		expect(row.querySelector('.rescoring-badge')?.textContent).toBe(TAKE_RESCORING_LABEL);
-		expect(playTake).not.toHaveBeenCalled();
-
+		expect(row?.querySelector('.rescoring-badge')?.textContent).toBe(TAKE_RESCORING_LABEL);
 		activeJobs.set([]);
 		await tick();
-		expect(row.querySelector('.rescoring-badge')).toBeNull();
+		expect(row?.querySelector('.rescoring-badge')).toBeNull();
 	});
+
+	it.each([false, true])(
+		'toggles keep from the menu when kept is %s without playing',
+		async (kept) => {
+			const { target } = await render({
+				song: song({ generations: [generation({ is_kept: kept })] })
+			});
+			const row = target.querySelector<HTMLElement>('.take-row');
+			if (!row) throw new Error('Expected a take row');
+			openTakeMenu(row);
+			await tick();
+			clickMenuItem(row, kept ? 'Unkeep' : 'Keep');
+			await tick();
+			expect(keep).toHaveBeenCalledWith('g1', !kept);
+			expect(playTake).not.toHaveBeenCalled();
+			expect(row.querySelector('.overflow-menu')).toBeNull();
+		}
+	);
 
 	it('plays only from its named play control, independently of the pick and menu', async () => {
 		const { target } = await render();
@@ -846,7 +852,6 @@ describe('TakesList archived takes', () => {
 		await tick();
 		const archived = target.querySelectorAll<HTMLElement>('.take-row')[1];
 		expect(archived.querySelector('button[aria-label="Select v3 · take 2"]')).not.toBeNull();
-		expect(archived.querySelector('.take-action-btn')).toBeNull();
 		archived.querySelector<HTMLElement>('.play-btn')?.click();
 		await tick();
 		expect(get(selectedIds).has('g-arch')).toBe(true);

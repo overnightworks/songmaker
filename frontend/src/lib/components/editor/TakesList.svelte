@@ -6,6 +6,9 @@
 		EXPIRY_WARN_DAYS,
 		LIBRARY_RETRY_LABEL,
 		TAKE_ARCHIVED_TITLE,
+		TAKE_DELETE_TITLE_TEMPLATE,
+		TAKE_DELETE_MESSAGE,
+		TAKE_DELETE_LABEL,
 		TAKE_PROVENANCE_COVER_PREFIX,
 		TAKE_PROVENANCE_REPAINT_PREFIX,
 		TAKE_PICK_LABEL,
@@ -30,17 +33,13 @@
 		TAKE_SELECT_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
-	import { removeGenerationFromSong, replaceSongInList } from '$lib/stores/libraryData';
+	import { removeGenerationFromSong } from '$lib/stores/libraryData';
 	import { playTake, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
-	// Re-score comes straight from its owner rather than through
-	// GenerationActions: Now Playing has no such context and calls the same
-	// function, and routing one surface through the context would put a second
-	// path to the same mutation back in the tree.
-	import { rescore, rescoringTakeIds } from '$lib/stores/takeActions';
+	import { rescoringTakeIds } from '$lib/stores/takeActions';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
-	import { getGenerationActions } from '$lib/contexts/generation-actions';
+	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import {
 		selectionMode,
 		selectedIds,
@@ -52,16 +51,11 @@
 	import { addToast } from '$lib/stores/toast';
 	import { dismissGenerationFailure, generationFailures } from '$lib/stores/jobs';
 	import { handleDeleteVersion } from '$lib/stores/editor';
-	import {
-		bulkDeleteGenerations,
-		cancelJob,
-		fetchSong,
-		remasterGeneration,
-		unarchiveGeneration
-	} from '$lib/api/client';
+	import { bulkDeleteGenerations, cancelJob } from '$lib/api/client';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
+	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import TakeMenu from './TakeMenu.svelte';
 
@@ -88,11 +82,11 @@
 		draftVersionNumber,
 		latestVersionNumber,
 		generateJob = null,
-		onagain,
+		onsource,
 		onretry
 	}: Props = $props();
 
-	const actions = getGenerationActions();
+	const actions: GenerationActions = getGenerationActions();
 
 	const GENERATION_FAILED_DISMISS_LABEL = 'Dismiss generation error';
 
@@ -116,7 +110,6 @@
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
 	let deleteVersionFor = $state<VersionGroup | null>(null);
-	let remasteringId = $state<string | null>(null);
 
 	interface VersionGroup {
 		versionNumber: number | null;
@@ -238,57 +231,6 @@
 			addToast(`Deleted ${ids.length} take${ids.length !== 1 ? 's' : ''}`, 'success');
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Bulk delete failed', 'error');
-		}
-	}
-
-	async function copyShareUrl(gen: GenerationItem): Promise<void> {
-		if (!gen.share_slug) return;
-		await navigator.clipboard.writeText(`${window.location.origin}/share/gen/${gen.share_slug}`);
-		addToast('Link copied', 'success');
-	}
-
-	async function onShare(gen: GenerationItem): Promise<void> {
-		try {
-			const result = await actions.share(gen.id);
-			await navigator.clipboard.writeText(result.share_url);
-			addToast('Link copied', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Share failed', 'error');
-		}
-	}
-
-	async function onUnshare(gen: GenerationItem): Promise<void> {
-		try {
-			await actions.unshare(gen.id);
-			addToast('Sharing disabled', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Unshare failed', 'error');
-		}
-	}
-
-	async function onRemaster(gen: GenerationItem): Promise<void> {
-		if (remasteringId) return;
-		remasteringId = gen.id;
-		try {
-			await remasterGeneration(gen.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Remastered', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Remaster failed', 'error');
-		} finally {
-			remasteringId = null;
-		}
-	}
-
-	async function onRestore(gen: GenerationItem): Promise<void> {
-		try {
-			await unarchiveGeneration(gen.id);
-			const updated = await fetchSong(song.id);
-			replaceSongInList(updated);
-			addToast('Take restored', 'success');
-		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Restore failed', 'error');
 		}
 	}
 
@@ -549,16 +491,12 @@
 							{#if !$selectionMode}
 								<TakeMenu
 									{gen}
-									onagain={() => onagain(gen)}
-									onshare={() => void onShare(gen)}
-									onunshare={() => void onUnshare(gen)}
-									oncopylink={() => void copyShareUrl(gen)}
-									onpinseed={() => gen.seed != null && actions.pinSeed(gen.seed)}
+									onrepaint={() => onsource(gen, 'repaint')}
+									oncover={() => onsource(gen, 'cover')}
+									onkeep={() => actions.keep(gen.id, !gen.is_kept)}
+									onshare={() => actions.share(gen.id)}
+									onunshare={() => actions.unshare(gen.id)}
 									onaddtoplaylist={() => (playlistFor = gen.id)}
-									onremaster={() => void onRemaster(gen)}
-									onrescore={() => void rescore(song.id, gen.id)}
-									rescoring={$rescoringTakeIds.has(gen.id)}
-									onrestore={() => void onRestore(gen)}
 									ondelete={() => (deleteFor = gen)}
 								/>
 								{#if playlistFor === gen.id}
@@ -601,10 +539,10 @@
 {/if}
 
 {#if deleteFor}
-	<ConfirmDeleteDialog
-		title={`Delete take ${deleteFor.generation_number}?`}
-		items={['Audio files will be permanently deleted']}
-		confirmLabel="Delete Take"
+	<ConfirmDialog
+		title={TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(deleteFor.generation_number))}
+		message={TAKE_DELETE_MESSAGE}
+		confirmLabel={TAKE_DELETE_LABEL}
 		onconfirm={() => {
 			const id = deleteFor?.id;
 			deleteFor = null;

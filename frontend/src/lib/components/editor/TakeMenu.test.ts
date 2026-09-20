@@ -2,14 +2,7 @@ import { makeGeneration as gen } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-	HITBOX_COMPACT_PX,
-	HITBOX_FREQUENT_PX,
-	TAKE_AGAIN_LABEL,
-	TAKE_PLAYLIST_LABEL,
-	TAKE_RESCORE_LABEL,
-	TAKE_RESCORING_LABEL
-} from '$lib/constants';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
 
@@ -34,6 +27,8 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 	document.head.querySelectorAll('[data-hitbox-styles]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 });
@@ -41,16 +36,17 @@ afterEach(async () => {
 function defaultProps() {
 	return {
 		gen: gen({ version_number: 3, generation_number: 2 }),
-		rescoring: false,
-		onagain: vi.fn(),
-		onshare: vi.fn(),
-		onunshare: vi.fn(),
-		oncopylink: vi.fn(),
-		onpinseed: vi.fn(),
+		onrepaint: vi.fn(),
+		oncover: vi.fn(),
+		onkeep: vi.fn(),
+		onshare: vi.fn(async () => ({
+			status: 'ok',
+			share_url: 'https://example.com/share/gen/take',
+			share_slug: 'take',
+			songs_without_playable_take: []
+		})),
+		onunshare: vi.fn(async () => undefined),
 		onaddtoplaylist: vi.fn(),
-		onremaster: vi.fn(),
-		onrescore: vi.fn(),
-		onrestore: vi.fn(),
 		ondelete: vi.fn()
 	};
 }
@@ -72,69 +68,61 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 2');
 	});
 
-	it('names its actions in full, not in single-word shorthand', async () => {
-		// #141/11: "Again"/"Playlist" read as nouns; the menu says what happens.
-		const { target } = await render();
-		const labels = Array.from(target.querySelectorAll('.overflow-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(labels).toContain(TAKE_AGAIN_LABEL);
-		expect(labels).toContain(TAKE_PLAYLIST_LABEL);
-		expect(TAKE_AGAIN_LABEL).toBe('Generate again');
-		expect(TAKE_PLAYLIST_LABEL).toBe('Add to playlist');
-	});
-
-	it('offers Share when not shared, and Unshare/Copy link when shared', async () => {
-		const { target: unshared } = await render();
-		const items = Array.from(unshared.querySelectorAll('.overflow-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(items).toContain('Share take');
-		expect(items).not.toContain('Copy link');
-
-		const { target: shared } = await render({
-			gen: gen({ version_number: 3, generation_number: 2, is_shared: true })
+	it.each([false, true])('offers exactly six ordered actions when kept is %s', async (kept) => {
+		const { target } = await render({
+			gen: gen({ is_kept: kept, is_shared: true, is_archived: true })
 		});
-		const sharedItems = Array.from(shared.querySelectorAll('.overflow-item')).map((el) =>
-			el.textContent?.trim()
-		);
-		expect(sharedItems).toContain('Copy link');
-		expect(sharedItems).toContain('Unshare');
+		const rows = target.querySelectorAll('.overflow-menu > button, .share-row');
+		expect(Array.from(rows, (row) => row.textContent?.trim())).toEqual([
+			'Repaint',
+			'Cover',
+			kept ? 'Unkeep' : 'Keep',
+			'Add to playlist',
+			'Share',
+			'Delete'
+		]);
+		expect(target.querySelectorAll('.overflow-menu button')).toHaveLength(6);
 	});
 
-	it('does not expose the generic source action', async () => {
-		const { target } = await render();
-		const menu = target.querySelector('.overflow-menu');
-		if (!menu) throw new Error('Expected the overflow menu to be open');
-		expect(menu.textContent).not.toContain('Use as reference');
-	});
-
-	it('offers Re-score and runs it once', async () => {
+	it.each([
+		['Repaint', 'onrepaint'],
+		['Cover', 'oncover'],
+		['Keep', 'onkeep'],
+		['Add to playlist', 'onaddtoplaylist'],
+		['Delete', 'ondelete']
+	] as const)('runs %s and closes the menu', async (label, callback) => {
 		const { target, props } = await render();
-		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
-			(el) => el.textContent?.trim() === TAKE_RESCORE_LABEL
+		const button = Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+			(button) => button.textContent?.trim() === label
 		);
-		expect(item, 'the menu offers Re-score').toBeDefined();
-
-		item?.click();
+		button?.click();
 		await tick();
-
-		expect(props.onrescore).toHaveBeenCalledTimes(1);
+		expect(props[callback]).toHaveBeenCalledOnce();
+		expect(target.querySelector('.overflow-menu')).toBeNull();
+		expect(document.activeElement).toBe(target.querySelector('.overflow-btn'));
 	});
 
-	it('names the take as re-scoring and refuses a second run while one is queued', async () => {
-		const { target, props } = await render({ rescoring: true });
-		const item = Array.from(target.querySelectorAll<HTMLButtonElement>('.overflow-item')).find(
-			(el) => el.textContent?.trim() === TAKE_RESCORING_LABEL
-		);
-		if (!item) throw new Error('Expected the re-scoring menu item');
-		expect(item.disabled).toBe(true);
-
-		item.click();
-		await tick();
-
-		expect(props.onrescore).not.toHaveBeenCalled();
-	});
+	it.each([false, true])(
+		'uses the shared ShareButton behavior when shared is %s',
+		async (shared) => {
+			const writeText = vi.fn(async () => undefined);
+			vi.stubGlobal('navigator', { clipboard: { writeText } });
+			const { target, props } = await render({
+				gen: gen({ is_shared: shared, share_slug: shared ? 'take' : null })
+			});
+			target.querySelector<HTMLButtonElement>('.share-btn')?.click();
+			await tick();
+			if (shared) {
+				expect(props.onunshare).toHaveBeenCalledOnce();
+				expect(props.onshare).not.toHaveBeenCalled();
+				expect(writeText).not.toHaveBeenCalled();
+			} else {
+				expect(props.onshare).toHaveBeenCalledOnce();
+				expect(props.onunshare).not.toHaveBeenCalled();
+				expect(writeText).toHaveBeenCalledWith('https://example.com/share/gen/take');
+			}
+		}
+	);
 
 	it('sizes the overflow trigger to the frequent hitbox on a coarse pointer', async () => {
 		const { target } = await render();
@@ -149,11 +137,13 @@ describe('TakeMenu', () => {
 		expect(px(fine.minWidth)).toBeGreaterThanOrEqual(HITBOX_COMPACT_PX);
 	});
 
-	it('closes on Escape', async () => {
+	it('focuses the first action and returns focus on Escape', async () => {
 		const { target } = await render();
+		expect(document.activeElement?.textContent?.trim()).toBe('Repaint');
 		document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 		await tick();
 		expect(target.querySelector('.overflow-menu')).toBeNull();
+		expect(document.activeElement).toBe(target.querySelector('.overflow-btn'));
 	});
 
 	it('opens downward when there is enough space below the trigger', async () => {
