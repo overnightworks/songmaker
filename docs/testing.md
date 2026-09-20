@@ -400,6 +400,21 @@ lyrical-coherence judge, and the tool-surface health it republishes on
 
 ## Testing Patterns
 
+The frontend CI job runs `python3 scripts/check_style_literals.py` (from the
+repository root) against `.svelte`, `.ts`, and `.css` files in `frontend/src`,
+excluding `app.css` and comments. Test files (`*.test.ts` and `*.spec.ts`) are
+excluded so issue references in test names are not counted as hex colors.
+It counts hex and rgb/hsl colors, pixel `border-radius` declarations (including
+longhands), `font-size` literals outside the
+22/15/13/12/11/10 px scale (including equivalent rem values at a 16 px root),
+and literal `box-shadow` declarations. A shadow containing a color counts in
+both categories. The total cannot exceed `scripts/style-literals.txt`, even
+with `--update`; use that flag after replacing literals with tokens to lower
+the baseline. Ordinary checks never rewrite it. Output includes per-file counts;
+growth prints all current locations because a count-only baseline cannot
+distinguish new locations from existing ones. The file fixtures in
+`tests/test_check_style_literals.py` prove detection and ratchet behavior.
+
 `scripts/test_helper_ratchet.sh` checks how many helper names are defined in more
 than one test module: module-level private Python functions in `tests/`, and
 top-level named functions or `const` function expressions in `frontend/src/**/*.test.ts`.
