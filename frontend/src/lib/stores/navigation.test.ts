@@ -23,7 +23,12 @@ import { openCollection, resetCollectionForTests } from '$lib/stores/collection'
 import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/stores/playlists';
-import { generationFailures } from '$lib/stores/jobs';
+import {
+	activeJobs,
+	generationFailures,
+	removeJob,
+	resetGenerationFailures
+} from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
 import { LIBRARY_RETRY_LABEL, SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
@@ -34,6 +39,7 @@ const fetchAlbum = vi.fn();
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 const fetchLastFailedGeneration = vi.fn();
+const fetchActiveGeneration = vi.fn();
 
 // goto actually changes the URL (via the History API, like the real
 // SvelteKit goto) so tests can assert the landed-on route, not just that
@@ -78,6 +84,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchLastFailedGeneration: (...args: unknown[]) => fetchLastFailedGeneration(...args),
+	fetchActiveGeneration: (...args: unknown[]) => fetchActiveGeneration(...args),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -126,7 +133,8 @@ beforeEach(() => {
 	fetchPlaylist.mockReset();
 	fetchLastFailedGeneration.mockReset();
 	fetchLastFailedGeneration.mockResolvedValue({ job: null });
-	generationFailures.set({});
+	fetchActiveGeneration.mockReset().mockResolvedValue(null);
+	resetGenerationFailures();
 	vi.mocked(updateSong).mockReset();
 	toasts.set([]);
 	fetchPlaylists.mockResolvedValue([]);
@@ -162,6 +170,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	for (const { job } of get(activeJobs)) removeJob(job.id);
+	vi.unstubAllGlobals();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
@@ -698,7 +708,45 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 	});
 });
 
-describe('opening a song recovers its failure banner', () => {
+describe('opening a song recovers its generation state', () => {
+	it('tracks a running generation independently of the failure lookup', async () => {
+		const job = {
+			id: 'running-job',
+			type: 'generate',
+			status: 'running',
+			progress: 0.5,
+			take_index: 1,
+			take_count: 2,
+			remaining_time_estimate: 60,
+			error: null,
+			error_type: null,
+			started_at: null,
+			completed_at: null
+		};
+		vi.stubGlobal(
+			'EventSource',
+			vi.fn().mockImplementation(() => ({ close: vi.fn() }))
+		);
+		fetchLastFailedGeneration.mockReturnValue(new Promise(() => {}));
+		fetchActiveGeneration.mockResolvedValue(job);
+
+		await selectSong('s1');
+
+		expect(get(activeJobs)).toEqual([{ job, songId: 's1' }]);
+		expect(fetchActiveGeneration).toHaveBeenCalledWith('s1');
+	});
+
+	it('surfaces an active generation lookup error while keeping the song open', async () => {
+		fetchActiveGeneration.mockRejectedValue(new Error('Generation service unavailable'));
+
+		await selectSong('s1');
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ type: 'error', message: 'Generation service unavailable' })
+		]);
+	});
+
 	it('shows the cause of the last failed generation for a song opened after reload', async () => {
 		fetchLastFailedGeneration.mockResolvedValue({
 			job: {

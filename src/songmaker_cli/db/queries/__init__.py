@@ -169,6 +169,9 @@ from songmaker_cli.db.queries.jobs import (
     count_user_jobs_in_window as count_user_jobs_in_window,
 )
 from songmaker_cli.db.queries.jobs import create_job as create_job
+from songmaker_cli.db.queries.jobs import (
+    get_active_generate_job_for_song as get_active_generate_job_for_song,
+)
 from songmaker_cli.db.queries.jobs import get_job as get_job
 from songmaker_cli.db.queries.jobs import (
     get_last_cover_job_for_album as get_last_cover_job_for_album,

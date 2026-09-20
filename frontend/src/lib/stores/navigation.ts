@@ -4,7 +4,7 @@ import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
-import { hydrateGenerationFailure } from '$lib/stores/jobs';
+import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
 import {
@@ -26,7 +26,7 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import { SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
+import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
@@ -344,6 +344,10 @@ export function albumTrackNeighbors(
 // selection available for retry and surface through SongDetailView.refreshTakes.
 function loadSongContext(songId: string): Promise<void> {
 	void hydrateGenerationFailure(songId);
+	void hydrateActiveGeneration(songId).catch((err: unknown) => {
+		if (isNotFound(err)) return;
+		addToast(err instanceof Error ? err.message : API_ERROR_GENERIC_MESSAGE, 'error');
+	});
 	return ensureGenerationsLoaded(songId).catch(function acknowledgeOwnedFailure(err: unknown) {
 		if (isNotFound(err)) {
 			reportSongLinkNotFound(songId);

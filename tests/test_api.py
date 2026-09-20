@@ -1219,6 +1219,71 @@ def test_generate_song_seed_invalid(client: TestClient) -> None:
     assert resp.status_code == 422
 
 
+@pytest.mark.parametrize("status", ["queued", "running"])
+def test_active_generation_returns_latest_active_job_with_progress(
+    client: TestClient, status: str,
+) -> None:
+    now = datetime.now(timezone.utc)
+    with client.app.state.ctx.db() as session:
+        session.add(Song(id="s2", title="Other Song", album_id="rock", track_number=2))
+        session.flush()
+        session.add_all([
+            Job(
+                id="older-active", type="generate", status="running", song_id="s1",
+                started_at=now - timedelta(minutes=3),
+            ),
+            Job(
+                id="active", type="generate", status=status, song_id="s1",
+                started_at=now - timedelta(minutes=2),
+                running_since=now - timedelta(minutes=1) if status == "running" else None,
+                progress=0.5 if status == "running" else 0,
+                take_index=1, take_count=2,
+            ),
+            Job(id="newer-terminal", type="generate", status="completed", song_id="s1"),
+            Job(id="other-type", type="score", status="running", song_id="s1"),
+            Job(id="other-song", type="generate", status="running", song_id="s2"),
+        ])
+        session.commit()
+
+    resp = client.get("/api/songs/s1/active-generation")
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["id"] == "active"
+    assert body["status"] == status
+    assert body["take_index"] == 1
+    assert body["take_count"] == 2
+    if status == "running":
+        assert body["progress"] == 0.5
+        assert isinstance(body["remaining_time_estimate"], int)
+        assert body["remaining_time_estimate"] > 0
+        assert body["queue_position"] is None
+    else:
+        assert body["remaining_time_estimate"] == "calculating"
+        assert body["queue_position"] == 1
+
+
+@pytest.mark.parametrize("status", [None, "completed", "partial", "failed", "cancelled"])
+def test_active_generation_null_without_an_active_generate_job(
+    client: TestClient, status: str | None,
+) -> None:
+    with client.app.state.ctx.db() as session:
+        session.add(Song(id="s2", title="Other Song", album_id="rock", track_number=2))
+        session.flush()
+        if status is not None:
+            session.add(Job(type="generate", status=status, song_id="s1"))
+        session.add_all([
+            Job(type="score", status="running", song_id="s1"),
+            Job(type="generate", status="running", song_id="s2"),
+        ])
+        session.commit()
+
+    resp = client.get("/api/songs/s1/active-generation")
+
+    assert resp.status_code == 200
+    assert resp.json() is None
+
+
 # ── Last failed generation ───────────────────────────────────────────
 
 
@@ -1392,7 +1457,8 @@ def test_last_failed_generation_suppressed_by_a_newer_take(client: TestClient) -
     assert resp.json()["job"] is None
 
 
-def test_last_failed_generation_requires_ownership(client: TestClient) -> None:
+@pytest.mark.parametrize("endpoint", ["last-failed-generation", "active-generation"])
+def test_song_generation_job_requires_ownership(client: TestClient, endpoint: str) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
         session.add(User(
@@ -1404,14 +1470,17 @@ def test_last_failed_generation_requires_ownership(client: TestClient) -> None:
             id="other", title="Other Album", artist="Them", created_by="u-other",
         ))
         session.add(Song(id="s-other", title="Their Song", album_id="other", track_number=1))
+        session.flush()
+        session.add(Job(type="generate", status="running", song_id="s-other"))
         session.commit()
 
-    resp = client.get("/api/songs/s-other/last-failed-generation")
+    resp = client.get(f"/api/songs/s-other/{endpoint}")
     assert resp.status_code == 404
 
 
-def test_last_failed_generation_song_not_found(client: TestClient) -> None:
-    resp = client.get("/api/songs/nonexistent/last-failed-generation")
+@pytest.mark.parametrize("endpoint", ["last-failed-generation", "active-generation"])
+def test_song_generation_job_song_not_found(client: TestClient, endpoint: str) -> None:
+    resp = client.get(f"/api/songs/nonexistent/{endpoint}")
     assert resp.status_code == 404
 
 

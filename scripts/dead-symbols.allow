@@ -59,6 +59,7 @@ songmaker_cli/conversation_api.py:api_put_album_memory # HTTP dispatcher: router
 songmaker_cli/conversation_api.py:api_put_song_memory # HTTP dispatcher: router.put('/memory/songs/{song_id}')
 songmaker_cli/conversation_api.py:api_put_user_memory # HTTP dispatcher: router.put('/memory/user')
 songmaker_cli/db/engine.py:init_test_db # Explicit test database constructor; used by tests/conftest.py and database tests
+songmaker_cli/generation_api.py:api_active_generation # HTTP dispatcher: router.get('/songs/{song_id}/active-generation')
 songmaker_cli/generation_api.py:api_bulk_delete_generations # HTTP dispatcher: router.post('/generations/bulk-delete', responses={404: {'description': 'One or more generations do not exist'}})
 songmaker_cli/generation_api.py:api_cover_generation # HTTP dispatcher: router.post('/generations/{gen_id}/cover', responses={400: {'description': 'Cover request or source audio is invalid'}, 404: {'description': 'Version does not exist'}, 500: {'description': 'Source audio conversion failed'}, 503: {'description': 'Generation worker or job queue is unavailable'}})
 songmaker_cli/generation_api.py:api_delete_generation # HTTP dispatcher: router.delete('/generations/{gen_id}', responses={404: {'description': 'Generation does not exist'}})

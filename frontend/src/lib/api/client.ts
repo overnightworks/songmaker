@@ -1,4 +1,4 @@
-import { apiFetch } from './fetch';
+import { apiFetch, type JobStatus } from './fetch';
 import type { AlbumItem, LastFailedGenerationResult } from './types';
 
 export { ApiError, type JobStatus } from './fetch';
@@ -179,4 +179,8 @@ export async function fetchLastFailedGeneration(
 	songId: string
 ): Promise<LastFailedGenerationResult> {
 	return apiFetch<LastFailedGenerationResult>(`/api/songs/${songId}/last-failed-generation`);
+}
+
+export async function fetchActiveGeneration(songId: string): Promise<JobStatus | null> {
+	return apiFetch<JobStatus | null>(`/api/songs/${songId}/active-generation`);
 }

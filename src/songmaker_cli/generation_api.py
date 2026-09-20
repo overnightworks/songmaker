@@ -66,6 +66,7 @@ from songmaker_cli.db.queries import (
     delete_generation,
     disable_generation_sharing,
     enable_generation_sharing,
+    get_active_generate_job_for_song,
     get_last_generate_job_for_song,
     get_queue_position,
     keep_generation,
@@ -341,6 +342,19 @@ async def api_generate_song(
         _fail_job(ctx, job.id)
         raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
+    return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
+
+
+@router.get("/songs/{song_id}/active-generation")
+def api_active_generation(
+    song_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> JobResponse | None:
+    check_song_access(session, song_id, user)
+    job = get_active_generate_job_for_song(session, song_id)
+    if job is None:
+        return None
     return JobResponse.from_orm(job, queue_position=get_queue_position(session, job))
 
 
