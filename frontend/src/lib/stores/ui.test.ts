@@ -91,3 +91,10 @@ describe('railWidth', () => {
 		expect(get(railWidth)).toBe(360);
 	});
 });
+
+describe('phoneAppBar', () => {
+	it('starts with the library brand rather than a persisted song context', async () => {
+		const { phoneAppBar } = await import('./ui');
+		expect(get(phoneAppBar)).toBeNull();
+	});
+});

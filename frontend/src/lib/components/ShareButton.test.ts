@@ -22,6 +22,7 @@ function shareResult(overrides: Partial<ShareResult> = {}): ShareResult {
 
 function defaultProps() {
 	return {
+		iconOnly: false,
 		isShared: false,
 		shareSlug: null,
 		onshare: vi.fn<() => Promise<ShareResult>>().mockResolvedValue(shareResult()),
@@ -53,19 +54,33 @@ afterEach(async () => {
 });
 
 describe('ShareButton', () => {
-	it('shares and copies the link, reporting success', async () => {
-		Object.defineProperty(navigator, 'clipboard', {
-			value: { writeText: vi.fn().mockResolvedValue(undefined) },
-			configurable: true
-		});
-		const { target, props } = await render();
+	it.each([false, true])(
+		'shares and copies the link, reporting success (icon only: %s)',
+		async (iconOnly) => {
+			Object.defineProperty(navigator, 'clipboard', {
+				value: { writeText: vi.fn().mockResolvedValue(undefined) },
+				configurable: true
+			});
+			const { target, props } = await render({ iconOnly });
 
-		await clickShare(target);
+			await clickShare(target);
 
-		expect(props.onshare).toHaveBeenCalledTimes(1);
-		expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.test/share/abc');
-		expect(addToast).toHaveBeenCalledWith('Link copied to clipboard', 'success');
-	});
+			expect(props.onshare).toHaveBeenCalledTimes(1);
+			expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.test/share/abc');
+			expect(addToast).toHaveBeenCalledWith('Link copied to clipboard', 'success');
+		}
+	);
+
+	it.each([false, true])(
+		'names the icon action and exposes its sharing state (%s)',
+		async (isShared) => {
+			const { target } = await render({ iconOnly: true, isShared });
+			const button = target.querySelector('button');
+			expect(button?.getAttribute('aria-label')).toBe('Share song');
+			expect(button?.getAttribute('aria-pressed')).toBe(String(isShared));
+			expect(button?.getAttribute('data-hitbox')).toBe('frequent');
+		}
+	);
 
 	it('reports Share failed when the share itself throws, without touching the clipboard', async () => {
 		Object.defineProperty(navigator, 'clipboard', {

@@ -13,6 +13,7 @@
 	import EditableTitle from '../EditableTitle.svelte';
 	import Icon from '../Icon.svelte';
 	import SongMenu from './SongMenu.svelte';
+	import ShareButton from '../ShareButton.svelte';
 
 	interface BreadcrumbItem {
 		label: string;
@@ -60,7 +61,8 @@
 		generateTitle: string;
 		generateQueueReason?: string | null;
 		generating: boolean;
-		compact: boolean;
+		saveDisabled: boolean;
+		onsave: () => void;
 	}
 
 	let {
@@ -104,7 +106,8 @@
 		generateTitle,
 		generateQueueReason = null,
 		generating,
-		compact
+		saveDisabled,
+		onsave
 	}: Props = $props();
 
 	let coverInput: HTMLInputElement | null = $state(null);
@@ -157,12 +160,11 @@
 						ariaLabel="Song title"
 					/>
 				</h2>
+				<ShareButton {isShared} {shareSlug} {onshare} {onunshare} />
 				<SongMenu
 					title={song.title}
-					{isShared}
-					{shareSlug}
-					{onshare}
-					{onunshare}
+					{saveDisabled}
+					{onsave}
 					onrename={() => titleEditor?.startEdit()}
 					{onaddtoplaylist}
 					ondelete={ondeletesong}
@@ -234,28 +236,7 @@
 				{EDITOR_VIEW_RECIPE_LABEL}
 			</button>
 		</div>
-		{#if !compact}
-			<span class="editor-header-divider" aria-hidden="true"></span>
-			<button
-				type="button"
-				class="generate-btn"
-				class:generating
-				data-hitbox="text"
-				onclick={ongenerate}
-				disabled={generateDisabled}
-				title={generateTitle}
-			>
-				{generateLabel}
-			</button>
-			{#if generateQueueReason}
-				<span class="generate-queue-reason">{generateQueueReason}</span>
-			{/if}
-		{/if}
-	</div>
-</div>
-
-{#if compact}
-	<div class="editor-generate-bar">
+		<span class="editor-header-divider" aria-hidden="true"></span>
 		<button
 			type="button"
 			class="generate-btn"
@@ -271,7 +252,7 @@
 			<span class="generate-queue-reason">{generateQueueReason}</span>
 		{/if}
 	</div>
-{/if}
+</div>
 
 <style>
 	.detail-header {
@@ -534,28 +515,6 @@
 		50% {
 			box-shadow: 0 0 20px rgba(160, 32, 240, 0.4);
 		}
-	}
-
-	.editor-generate-bar {
-		position: fixed;
-		left: 0;
-		right: 0;
-		bottom: var(--player-height);
-		z-index: 30;
-		display: flex;
-		flex-wrap: wrap;
-		padding: 0.6rem 0.8rem;
-		background: var(--bg);
-		border-top: 1px solid var(--border);
-	}
-
-	.editor-generate-bar .generate-queue-reason {
-		flex-basis: 100%;
-		text-align: center;
-	}
-
-	.editor-generate-bar .generate-btn {
-		flex: 1;
 	}
 
 	@media (max-width: 768px) {

@@ -79,6 +79,17 @@ export function workspace(page: Page): Locator {
 	return page.getByRole('main');
 }
 
+/**
+ * The phone app bar landmark (`PhoneAppBar.svelte`, mounted by
+ * `+layout.svelte` outside `<main>`). On the song route at compact widths it
+ * carries the song title, share, and menu; `workspace()` no longer sees them
+ * there, so a mobile flow asserting on the song heading reads this landmark
+ * instead.
+ */
+export function appBar(page: Page): Locator {
+	return page.getByRole('banner');
+}
+
 /** Back to the wall through LIBRARY's first child, in the same SPA document. */
 export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	const rail = await openRailNav(page, shell);

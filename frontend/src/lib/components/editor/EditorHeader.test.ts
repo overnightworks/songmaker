@@ -88,7 +88,8 @@ function defaultProps() {
 		generateTitle: '',
 		generateQueueReason: null as string | null,
 		generating: false,
-		compact: false
+		saveDisabled: true,
+		onsave: vi.fn()
 	};
 }
 
@@ -115,9 +116,9 @@ describe('EditorHeader', () => {
 		expect(generateButtons[0].textContent).toContain('Generate');
 	});
 
-	it('does not render Share as a standalone action outside the song menu', async () => {
+	it('keeps Share beside the desktop song menu', async () => {
 		const { target } = await render();
-		expect(target.querySelector('.share-btn, [aria-label="Share"]')).toBeNull();
+		expect(target.querySelector('.title-row > .share-btn')).not.toBeNull();
 		expect(target.querySelector('.song-menu')).not.toBeNull();
 	});
 
@@ -194,14 +195,12 @@ describe('EditorHeader', () => {
 		}
 	});
 
-	it('sizes Generate to the frequent hitbox on a coarse pointer, in both its places', async () => {
-		for (const compact of [false, true]) {
-			const { target } = await render({ compact });
-			const generate = target.querySelector<HTMLButtonElement>('.generate-btn');
-			if (!generate) throw new Error('Expected the Generate button');
-			setPointer('coarse');
-			expect(minHeightPx(generate, 'Generate')).toBe(HITBOX_FREQUENT_PX);
-		}
+	it('sizes Generate to the frequent hitbox on a coarse pointer', async () => {
+		const { target } = await render();
+		const generate = target.querySelector<HTMLButtonElement>('.generate-btn');
+		if (!generate) throw new Error('Expected the Generate button');
+		setPointer('coarse');
+		expect(minHeightPx(generate, 'Generate')).toBe(HITBOX_FREQUENT_PX);
 	});
 
 	it('announces the song title as the heading name, with a separately named edit button', async () => {
@@ -224,29 +223,12 @@ describe('EditorHeader', () => {
 		expect(editButton.textContent?.trim()).toBe('Sommerlicht');
 	});
 
-	it('moves Generate to a fixed bottom bar and drops it from the header row in compact mode', async () => {
-		const { target } = await render({ compact: true });
-		expect(target.querySelector('.detail-header .generate-btn')).toBeNull();
-		expect(target.querySelector('.editor-generate-bar .generate-btn')).not.toBeNull();
-	});
-
-	it('puts the compact queue reason on a second flex row below Generate', async () => {
-		const { target } = await render({
-			compact: true,
-			generateQueueReason: 'Waiting for LoRA training.'
-		});
-		const bar = target.querySelector('.editor-generate-bar');
-		if (!bar) throw new Error('Expected the compact Generate bar');
-
-		expect(bar.querySelector('.generate-btn')?.nextElementSibling?.textContent).toBe(
-			'Waiting for LoRA training.'
-		);
-		expect(editorHeaderSource).toMatch(
-			/\.editor-generate-bar \{[^}]*display: flex;[^}]*flex-wrap: wrap;/
-		);
-		expect(editorHeaderSource).toMatch(
-			/\.editor-generate-bar \.generate-queue-reason \{[^}]*flex-basis: 100%;/
-		);
+	it('keeps Generate and its queue reason in the desktop header', async () => {
+		const { target } = await render({ generateQueueReason: 'Waiting for LoRA training.' });
+		expect(
+			target.querySelector('.detail-header .generate-btn')?.nextElementSibling?.textContent
+		).toBe('Waiting for LoRA training.');
+		expect(target.querySelector('.editor-generate-bar')).toBeNull();
 	});
 });
 

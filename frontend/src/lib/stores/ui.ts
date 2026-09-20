@@ -1,4 +1,16 @@
+import type { ComponentProps } from 'svelte';
+import type ShareButton from '$lib/components/ShareButton.svelte';
+import type SongMenu from '$lib/components/editor/SongMenu.svelte';
 import { writable } from 'svelte/store';
+
+interface PhoneAppBarState {
+	title: string;
+	onrename: (title: string) => Promise<void>;
+	share: ComponentProps<typeof ShareButton>;
+	menu: Omit<ComponentProps<typeof SongMenu>, 'title' | 'onrename'>;
+}
+
+export const phoneAppBar = writable<PhoneAppBarState | null>(null);
 
 export const sidebarOpen = writable(false);
 

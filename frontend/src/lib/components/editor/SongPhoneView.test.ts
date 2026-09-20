@@ -8,7 +8,6 @@ import SongPhoneView from './SongPhoneView.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const snippets = {
-	header: createRawSnippet(() => ({ render: () => '<header>Song header</header>' })),
 	sharedLink: createRawSnippet(() => ({ render: () => '<div>Share link</div>' })),
 	recipe: createRawSnippet(() => ({ render: () => '<div>Song recipe</div>' })),
 	write: createRawSnippet(() => ({
@@ -69,7 +68,7 @@ describe('SongPhoneView', () => {
 		);
 		expect(target.querySelector('textarea')).toBeNull();
 		expect(target.textContent).not.toContain('Song recipe');
-		expect(target.textContent).toContain('Song header');
+		expect(target.querySelector('header')).toBeNull();
 		expect(target.textContent).toContain('Expiry digest');
 		expect(target.querySelectorAll('.take-row')).toHaveLength(2);
 		expect(target.querySelectorAll('.take-row .play-btn')).toHaveLength(2);

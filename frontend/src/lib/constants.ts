@@ -301,7 +301,10 @@ export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_NETWORK_ERROR = 'Network error. Check connection and retry.';
 
-export const SONG_MENU_SHARE_LABEL = 'Share song';
+export const SONG_SHARE_LABEL = 'Share song';
+export const SONG_TITLE_LABEL = 'Song title';
+export const SONG_MENU_LABEL = 'Song menu';
+export const SONG_MENU_SAVE_LABEL = 'Save version';
 export const SONG_MENU_RENAME_LABEL = 'Rename';
 export const SONG_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
 export const SONG_MENU_DELETE_LABEL = 'Delete song';

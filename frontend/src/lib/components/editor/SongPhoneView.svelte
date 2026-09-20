@@ -5,7 +5,6 @@
 	import TakesList from './TakesList.svelte';
 
 	interface Props {
-		header: Snippet;
 		sharedLink: Snippet;
 		recipe: Snippet;
 		write: Snippet;
@@ -13,10 +12,9 @@
 		takeListProps: ComponentProps<typeof TakesList>;
 	}
 
-	let { header, sharedLink, recipe, write, expiryDigest, takeListProps }: Props = $props();
+	let { sharedLink, recipe, write, expiryDigest, takeListProps }: Props = $props();
 </script>
 
-{@render header()}
 <DetailTabs takeCount={takeListProps.song.generation_count} />
 <div
 	id="song-phone-panel"
