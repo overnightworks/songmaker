@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Songmaker — component vocabulary (#924, round 2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap">
+<style>
+/* ── tokens, copied verbatim from frontend/src/app.css, light theme ────── */
+:root{
+	--primary:#d41a0a; --accent:#7a18c0;
+	--bg:#f4f4f6; --bg-deep:#e8e8ec; --surface:#ffffff; --surface-hover:#ebebed;
+	--border:#d0d0d4; --text:#1a1a1e; --text-muted:#555; --text-subtle:#555;
+	--text-disabled:#9a9a9a; --text-light:#333; --header-bg:#f0f0f2;
+	--score-good-bg:#e0f5e0; --score-good:#1e7a1e;
+	--score-ok-bg:#fef3e0;   --score-ok:#b07000;
+	--score-bad-bg:#fde8e8;  --score-bad:#c02020;
+	--success:#1e7a1e;
+	--font-display:'Oswald',Impact,sans-serif;
+	--font-body:'Open Sans',Arial,sans-serif;
+	--btn-radius-sm:4px; --card-radius:6px; --input-radius:4px;
+	--btn-letter-spacing:.5px;
+	--hitbox-frequent:44px; --hitbox-compact:32px;
+
+	/* ── ruled by this page (§9) ───────────────────────────────────────── */
+	--action:#7a18c0;                  /* light theme */
+	--shadow-overlay:0 6px 24px rgba(0,0,0,.14);
+	--s1:4px; --s2:8px; --s3:12px; --s4:16px; --s6:24px;
+}
+
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+	background:#e6e5ea; color:#1a1a1e; font-family:var(--font-body); font-size:15px;
+	padding:18px 30px 24px;
+}
+.page{max-width:1880px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+
+/* ── page furniture ────────────────────────────────────────────────────── */
+.masthead{
+	background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);
+	padding:11px 22px;display:flex;align-items:flex-end;gap:22px;flex-wrap:wrap;
+}
+.masthead h1{font-family:var(--font-display);font-size:26px;letter-spacing:.6px;text-transform:uppercase;font-weight:700}
+.masthead p{font-size:12.5px;color:var(--text-muted);max-width:1240px;line-height:1.5}
+.masthead .meta{margin-left:auto;font-size:11px;color:var(--text-subtle);text-align:right;line-height:1.7;font-family:var(--font-display);letter-spacing:.4px;text-transform:uppercase}
+
+section{
+	background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);
+	padding:10px 20px 12px;display:flex;flex-direction:column;gap:9px;
+}
+.shead{display:flex;align-items:baseline;gap:12px;border-bottom:1px solid var(--border);padding-bottom:5px}
+.shead .n{
+	font-family:var(--font-display);font-size:12px;font-weight:700;letter-spacing:.5px;
+	color:#fff;background:var(--text);border-radius:var(--btn-radius-sm);
+	width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;flex:none;
+	align-self:center;
+}
+.shead h2{font-family:var(--font-display);font-size:17px;text-transform:uppercase;letter-spacing:.6px;font-weight:500;flex:none}
+.shead .rule{font-size:13px;color:var(--text-light);line-height:1.5}
+.shead .rule b{color:var(--text);font-weight:600}
+
+.cols{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
+.spec{
+	--h:32px;--fs:.8rem;--glyph:18px;
+	flex:1;min-width:0;background:var(--bg);border:1px solid var(--border);
+	border-radius:var(--card-radius);padding:10px 13px 11px;
+	display:flex;flex-direction:column;gap:7px;
+}
+.spec.phone{--h:44px;--fs:.86rem;--glyph:20px;flex:none;width:390px}
+.spec.tight{flex:none}
+.caps{
+	font-family:var(--font-display);font-size:10px;letter-spacing:.9px;text-transform:uppercase;
+	color:var(--text-subtle);display:flex;align-items:center;gap:7px;
+}
+.caps::after{content:"";flex:1;height:1px;background:var(--border)}
+.strip{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.unit{display:flex;flex-direction:column;gap:5px;align-items:flex-start}
+.unit .tag{font-size:10px;color:var(--text-subtle);font-family:var(--font-display);letter-spacing:.6px;text-transform:uppercase}
+.note{font-size:12px;color:var(--text-muted);line-height:1.55}
+.note b{color:var(--text);font-weight:600}
+.ex{
+	font-size:12px;color:var(--text-light);line-height:1.5;
+	border-left:3px solid var(--action);padding-left:10px;
+}
+.ex .k{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.5px;font-size:10px;color:var(--text-subtle);display:block}
+.kills{
+	font-size:12px;color:var(--text-muted);line-height:1.5;
+	border-left:3px solid var(--border);padding-left:10px;
+}
+.kills .k{font-family:var(--font-display);text-transform:uppercase;letter-spacing:.5px;font-size:10px;color:var(--text-subtle);display:block}
+.foot2{display:flex;gap:14px;align-items:flex-start}
+.foot2>*{flex:1;min-width:0}
+.gone{text-decoration:line-through;color:var(--text-disabled)}
+
+/* role table — placement and face size, in px, for every role */
+.roletable{display:grid;grid-template-columns:auto auto auto 1fr;gap:5px 16px;align-items:baseline;font-size:12px}
+.roletable .h{font-family:var(--font-display);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--text-subtle)}
+.roletable .r{font-family:var(--font-display);font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:var(--text)}
+.roletable .px{font-family:var(--font-display);font-size:11px;letter-spacing:.4px;color:var(--text-light);white-space:nowrap}
+.roletable .pl{color:var(--text-muted);line-height:1.45}
+
+/* ── icons ─────────────────────────────────────────────────────────────── */
+.ic{width:var(--glyph,18px);height:var(--glyph,18px);display:block;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ic.solid{fill:currentColor;stroke:none}
+.ic.sm{width:14px;height:14px}
+
+/* ═══ 1 · BUTTONS — exactly four roles ════════════════════════════════ */
+.btn{
+	height:var(--h);padding:0 14px;flex:none;
+	border:1px solid transparent;border-radius:var(--btn-radius-sm);
+	font-family:var(--font-display);font-size:var(--fs);font-weight:500;
+	letter-spacing:var(--btn-letter-spacing);text-transform:uppercase;
+	display:inline-flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;
+	background:var(--surface);color:var(--text-light);
+}
+.btn.primary{background:var(--action);border-color:var(--action);color:var(--on-action,#fff);padding:0 20px}
+.btn.secondary{border-color:var(--border);color:var(--text-light)}
+.btn.destructive{border-color:var(--score-bad);color:var(--score-bad);background:none}
+/* states — of primary and secondary, not roles of their own */
+.btn.failed{background:none;border-color:var(--score-bad);color:var(--score-bad)}
+.failline{display:flex;align-items:center;gap:2px;width:100%;min-height:44px;font:inherit;font-size:12px;line-height:1.4;color:var(--score-bad);background:none;border:0;text-align:left}
+.failline .msg{flex:1 1 auto;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.failline .chev{width:44px;height:44px;flex:none;display:inline-flex;align-items:center;justify-content:center}
+.failline.open{align-items:flex-start;padding-bottom:6px}
+.failline.open .msg{white-space:normal;overflow:visible;text-overflow:clip;padding-top:13px}
+.btn[disabled]{background:none;border-color:var(--border);color:var(--text-disabled);cursor:default}
+.btn[data-busy]{
+	position:relative;overflow:hidden;background:var(--surface);
+	border-color:var(--score-ok);color:var(--text);padding:0 18px;
+}
+.btn[data-busy] .fill{position:absolute;inset:0 auto 0 0;background:color-mix(in srgb,var(--score-ok) 22%,transparent)}
+.btn[data-busy] .t{position:relative;font-size:var(--fs)}
+
+.icon-btn{
+	width:var(--h);height:var(--h);flex:none;background:none;border:none;cursor:pointer;
+	display:inline-flex;align-items:center;justify-content:center;color:var(--text-muted);
+	border-radius:var(--btn-radius-sm);
+}
+.icon-btn .face{
+	width:var(--h);height:var(--h);
+	border:1px solid var(--border);border-radius:var(--btn-radius-sm);background:var(--surface);
+	display:flex;align-items:center;justify-content:center;color:var(--text);
+}
+.icon-btn .face.round{border-radius:50%}
+.icon-btn.ink{color:var(--text)}
+.icon-btn.mark{color:var(--text-disabled)}
+.icon-btn.mark.on{color:var(--text)}
+.hitbox{outline:1px dashed color-mix(in srgb,var(--action) 55%,transparent);outline-offset:-1px}
+.keepmark{display:inline-flex;align-items:center;justify-content:center;width:var(--h);height:var(--h);color:var(--text);flex:none}
+
+/* the ⓘ affordance */
+.info{position:relative;display:inline-flex;align-items:flex-start;gap:8px}
+.infobtn{
+	width:var(--h);height:var(--h);flex:none;border:none;background:none;cursor:pointer;
+	display:inline-flex;align-items:center;justify-content:center;color:var(--text-subtle);
+}
+.infobtn i{
+	width:18px;height:18px;border:1.5px solid currentColor;border-radius:50%;
+	display:flex;align-items:center;justify-content:center;
+	font-family:var(--font-body);font-size:11px;font-weight:600;font-style:normal;line-height:1;
+}
+.tipbox{
+	width:238px;background:var(--text);color:#fff;border-radius:var(--card-radius);
+	padding:8px 11px;font-size:12px;line-height:1.5;box-shadow:var(--shadow-overlay);
+}
+
+/* the player transport */
+.transport{display:flex;align-items:center;gap:8px}
+.circle{
+	width:var(--circle,48px);height:var(--circle,48px);flex:none;border-radius:50%;
+	border:2px solid var(--action);background:var(--surface);color:var(--action);
+	display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
+}
+.circle .ic{width:22px;height:22px}
+
+/* links */
+.lnk{color:var(--action);text-decoration:underline;text-underline-offset:2px;cursor:pointer;font-size:13px;background:none;border:none;font-family:inherit}
+.crumbs{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--text-muted);flex-wrap:wrap}
+.crumbs .sep{color:var(--text-disabled)}
+.crumbs .cur{color:var(--text)}
+.copyfield{display:flex;align-items:center;gap:6px;width:100%}
+.copyfield .box{
+	flex:1;min-width:0;height:var(--h);display:flex;align-items:center;padding:0 10px;
+	background:var(--surface);border:1px solid var(--border);border-radius:var(--input-radius);
+	font-size:12px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
+
+/* ═══ 2 · PILLS ════════════════════════════════════════════════════════ */
+.pill{
+	display:inline-flex;align-items:center;gap:5px;height:22px;padding:0 10px;
+	border:1px solid var(--border);border-radius:999px;background:var(--surface);
+	font-family:var(--font-display);font-size:11px;font-weight:500;letter-spacing:.5px;
+	text-transform:uppercase;color:var(--text-muted);white-space:nowrap;
+}
+.pill .v{color:var(--text);text-transform:none;font-size:12px}
+.pill .shape{width:8px;height:8px;flex:none}
+.pill.ready{border-color:var(--score-good);color:var(--score-good)}
+.pill.ready .shape{background:var(--score-good);border-radius:50%}
+.pill.queued{border-color:var(--score-ok);color:var(--score-ok)}
+.pill.queued .shape{border:2px solid var(--score-ok);border-radius:50%}
+.pill.failed{border-color:var(--score-bad);color:var(--score-bad)}
+.tri{width:0!important;height:0!important;background:none!important;border-radius:0!important;
+	border-left:5px solid transparent!important;border-right:5px solid transparent!important;
+	border-bottom:9px solid currentColor!important;border-top:0!important}
+.pill.chip{cursor:pointer}
+.pill.chip.on{border-color:var(--action);color:var(--action);background:color-mix(in srgb,var(--action) 8%,var(--surface))}
+
+/* ═══ 3 · TABS, SEGMENTS, RADIO ROWS ═══════════════════════════════════ */
+.tabs{display:flex;gap:2px;background:var(--header-bg);border-bottom:1px solid var(--border);padding:0 6px;border-radius:var(--card-radius) var(--card-radius) 0 0;overflow:hidden}
+.tabs button{
+	min-height:var(--h);padding:0 13px;background:none;border:none;border-bottom:2px solid transparent;
+	color:var(--text-muted);font-family:var(--font-display);font-size:12px;font-weight:500;
+	text-transform:uppercase;letter-spacing:.5px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;
+	white-space:nowrap;
+}
+.tabs button.active{color:var(--action);border-color:var(--action)}
+.tabs .count{color:var(--text-disabled);font-size:12px}
+.tabs button.active .count{color:var(--action)}
+.tabstrip-wrap{position:relative;width:100%;overflow:hidden;border-radius:var(--card-radius) var(--card-radius) 0 0}
+.tabstrip-wrap::after{content:"";position:absolute;right:0;top:0;bottom:1px;width:34px;background:linear-gradient(to right,rgba(240,240,242,0),var(--header-bg))}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--btn-radius-sm);overflow:hidden;background:var(--surface)}
+.seg button{
+	height:var(--h);padding:0 14px;background:none;border:none;border-right:1px solid var(--border);
+	font-family:var(--font-display);font-size:var(--fs);font-weight:500;letter-spacing:.5px;text-transform:uppercase;
+	color:var(--text-muted);cursor:pointer;
+}
+.seg button:last-child{border-right:none}
+.seg button.on{background:color-mix(in srgb,var(--action) 10%,var(--surface));color:var(--action)}
+.nativesel{
+	height:var(--h);border:1px solid var(--border);border-radius:var(--btn-radius-sm);
+	padding:0 8px;font-family:var(--font-body);font-size:13px;background:#fff;color:var(--text-disabled);
+}
+.radios{display:flex;flex-direction:column;gap:0;border:1px solid var(--border);border-radius:var(--card-radius);overflow:hidden;background:var(--surface);width:100%}
+.radiorow{
+	display:flex;align-items:center;gap:10px;min-height:calc(var(--h) + 12px);padding:0 8px 0 12px;
+	border-bottom:1px solid var(--border);background:none;border-left:none;border-right:none;border-top:none;
+	width:100%;text-align:left;cursor:pointer;font:inherit;color:var(--text);
+}
+.radios .radiorow:last-child{border-bottom:none}
+.dot{width:18px;height:18px;flex:none;border:1px solid var(--border);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--surface)}
+.radiorow.on .dot{border-color:var(--action)}
+.radiorow.on .dot::after{content:"";width:9px;height:9px;border-radius:50%;background:var(--action)}
+.radiorow .lb{flex:1;min-width:0;font-size:15px}
+.radiorow.on .lb{color:var(--action)}
+
+/* ═══ 4 · INPUTS ═══════════════════════════════════════════════════════ */
+.field{display:flex;flex-direction:column;gap:5px;width:100%}
+.field>.label{
+	display:flex;align-items:baseline;gap:8px;font-family:var(--font-display);font-size:11px;
+	font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--text-muted);
+}
+.field>.label .stamp{font-family:var(--font-body);font-size:11px;letter-spacing:0;text-transform:none;color:var(--text-subtle)}
+.input{
+	min-height:calc(var(--h) + 8px);padding:8px 11px;background:var(--surface);
+	border:1px solid var(--border);border-radius:var(--input-radius);color:var(--text);
+	font-family:var(--font-body);font-size:15px;line-height:1.45;display:flex;align-items:center;
+}
+.input.ph{color:var(--text-disabled)}
+.input.area{display:block;font-family:'Courier New',monospace;font-size:.92rem;line-height:1.6;white-space:pre-wrap;align-items:stretch}
+.input.area .mark,.lyricmark{font-family:var(--font-display);font-weight:500;letter-spacing:.5px;color:var(--text-muted)}
+.input.search{gap:8px}
+.kvrow{
+	display:flex;align-items:center;gap:10px;min-height:calc(var(--h) + 8px);
+	padding:0 10px 0 12px;background:var(--surface);border:1px solid var(--border);
+	border-radius:var(--input-radius);width:100%;cursor:pointer;
+}
+.kvrow .k{flex:1;min-width:0;color:var(--text-muted);font-size:.87rem}
+.kvrow .v{color:var(--text);font-size:.9rem}
+.kvrow .caret{color:var(--text-disabled);display:inline-flex}
+/* checkbox */
+.checkrow{display:flex;align-items:center;gap:10px;min-height:var(--h);cursor:pointer;background:none;border:none;width:100%;text-align:left;font:inherit;color:var(--text);padding:0}
+.cb{width:18px;height:18px;flex:none;border:1px solid var(--border);border-radius:3px;background:var(--surface);display:inline-flex;align-items:center;justify-content:center;color:transparent}
+.checkrow.on .cb{background:var(--action);border-color:var(--action);color:var(--on-action,#fff)}
+.checkrow .lb{flex:1;min-width:0;font-size:15px}
+/* range */
+.rangerow{display:flex;align-items:center;gap:10px;width:100%;min-height:var(--h)}
+.rng{position:relative;flex:1;min-width:0;height:18px;display:flex;align-items:center;cursor:pointer}
+.rng .track{position:absolute;left:0;right:0;height:4px;border-radius:2px;background:var(--border)}
+.rng .done{position:absolute;left:0;height:4px;border-radius:2px;background:var(--action)}
+.rng .knob{position:absolute;width:16px;height:16px;border-radius:50%;background:var(--surface);border:2px solid var(--action);transform:translateX(-8px)}
+.rangerow .num{font-size:13px;color:var(--text);flex:none;width:44px;text-align:right}
+
+/* ═══ 5 · ROWS ═════════════════════════════════════════════════════════ */
+.rowcard{background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);overflow:hidden;width:100%}
+.row{
+	display:flex;align-items:center;gap:8px;padding:0 6px 0 10px;
+	min-height:calc(var(--h) + 16px);border-bottom:1px solid var(--border);
+	background:var(--surface);width:100%;text-align:left;color:var(--text);font:inherit;
+}
+.rowcard .row:last-child{border-bottom:none}
+.row .title{flex:1;min-width:0;font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.row .ident{flex:1;min-width:0;font-size:15px;font-family:var(--font-body)}
+.row .meta{font-size:13px;color:var(--text-subtle);flex:none}
+.row.playing{background:color-mix(in srgb,var(--action) 7%,var(--surface))}
+.row.playing .ident,.row.playing .title{color:var(--action)}
+.score{display:inline-flex;align-items:center;gap:5px;font-size:13px;flex:none}
+.score .shape{width:8px;height:8px;flex:none}
+.score.good{color:var(--score-good)} .score.good .shape{background:var(--score-good);border-radius:50%}
+.score.ok{color:var(--score-ok)}     .score.ok .shape{border:2px solid var(--score-ok);border-radius:50%}
+.score.bad{color:var(--score-bad)}
+.grouphead{font-size:13px;color:var(--text-muted);padding:2px 0 0}
+.grip{width:var(--h);height:var(--h);flex:none;display:inline-flex;align-items:center;justify-content:center;color:var(--text-disabled);cursor:grab;background:none;border:none}
+.grip svg{width:16px;height:16px;fill:currentColor;stroke:none}
+.row.dragging{box-shadow:var(--shadow-overlay);border:1px solid var(--action);border-radius:var(--card-radius)}
+.droplane{height:2px;background:var(--action);border-radius:1px;margin:0 10px}
+/* rail row */
+.railcard{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:6px 0;overflow:hidden}
+.railrow{
+	display:flex;align-items:center;gap:8px;width:100%;min-height:var(--h);padding:0 10px 0 9px;
+	border-left:3px solid transparent;background:none;border-top:none;border-right:none;border-bottom:none;
+	color:var(--text-muted);font:inherit;font-size:14px;text-align:left;cursor:pointer;
+}
+.railrow .rt{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.railrow .rc{flex:none;font-size:11px;color:var(--text-subtle)}
+.railrow.sel{border-left-color:var(--action);background:color-mix(in srgb,var(--action) 8%,transparent);color:var(--text)}
+.railrow.sel .rc{color:var(--action)}
+.railrow.sub{padding-left:26px}
+
+/* ═══ 6 · OVERLAYS ═════════════════════════════════════════════════════ */
+.popover{
+	width:232px;background:var(--surface);border:1px solid var(--border);
+	border-radius:var(--card-radius);box-shadow:var(--shadow-overlay);overflow:hidden;
+}
+.popover .phead{
+	font-size:13px;color:var(--text-subtle);padding:8px 12px 6px;border-bottom:1px solid var(--border);
+}
+.popover button{
+	display:flex;align-items:center;gap:10px;width:100%;min-height:var(--h);padding:0 12px;
+	background:none;border:none;font-family:var(--font-body);font-size:.87rem;color:var(--text);
+	text-align:left;cursor:pointer;
+}
+.popover button.del{color:var(--score-bad);border-top:1px solid var(--border)}
+.dialog{
+	width:400px;max-width:100%;background:var(--surface);border:1px solid var(--border);
+	border-radius:var(--card-radius);box-shadow:var(--shadow-overlay);
+	padding:16px;display:flex;flex-direction:column;gap:11px;
+}
+.dialog h3{font-family:var(--font-display);font-size:1.2rem;font-weight:500;letter-spacing:.3px}
+.dialog ul{list-style:none;display:flex;flex-direction:column;gap:4px}
+.dialog li{font-size:.87rem;color:var(--text-muted);padding-left:14px;position:relative}
+.dialog li::before{content:"•";position:absolute;left:0;color:var(--score-bad)}
+.dialog .warning{font-size:13px;color:var(--score-bad);display:flex;align-items:center;gap:6px}
+.dialog .actions{display:flex;justify-content:flex-end;gap:9px}
+.scrim{background:rgba(0,0,0,.35);border-radius:var(--card-radius);padding:14px;display:flex;justify-content:center}
+
+/* ═══ 7 · STATUS ═══════════════════════════════════════════════════════ */
+.slot{
+	background:var(--surface);border:1px dashed var(--border);border-radius:var(--card-radius);
+	padding:9px 11px 11px;display:flex;flex-direction:column;gap:7px;width:100%;
+}
+.slot .head{display:flex;align-items:center;gap:8px}
+.slot .ttl{flex:1;min-width:0;font-size:13px;color:var(--text-muted);display:inline-flex;align-items:center;gap:6px}
+.slot .ttl b{font-weight:400;color:var(--score-ok)}
+.bar{height:4px;background:var(--border);border-radius:2px;overflow:hidden}
+.bar span{display:block;height:100%;background:var(--score-ok)}
+.slot .line{font-size:.78rem;color:var(--text-muted)}
+.slot.failed{border-color:var(--score-bad)}
+.slot.failed .ttl{color:var(--score-bad)}
+.slot .cause{font-size:.8rem;line-height:1.5;color:var(--text-light)}
+.slot .foot{display:flex;justify-content:flex-end}
+.toast{
+	display:flex;align-items:center;gap:10px;background:var(--text);color:#fff;
+	border-radius:var(--card-radius);padding:10px 12px;font-size:.85rem;box-shadow:var(--shadow-overlay);
+	max-width:420px;
+}
+.toast .x{margin-left:auto;color:#bbb}
+.emptybox{
+	display:flex;flex-direction:column;align-items:center;justify-content:center;gap:9px;
+	min-height:112px;color:var(--text-subtle);background:var(--surface);
+	border:1px solid var(--border);border-radius:var(--card-radius);padding:16px;width:100%;
+}
+.emptybox .glyph{color:var(--text-disabled)}
+.emptybox p{font-size:.95rem}
+.errbox{
+	display:flex;flex-direction:column;gap:9px;background:var(--surface);
+	border:1px solid var(--score-bad);border-radius:var(--card-radius);padding:12px;width:100%;
+}
+.errbox .t{font-size:15px;color:var(--score-bad);display:flex;align-items:center;gap:6px}
+.errbox p{font-size:.85rem;color:var(--text-light);line-height:1.5}
+.errbox .foot{display:flex;justify-content:flex-end}
+/* loading — skeleton rows plus one sentence, never a spinner alone */
+.skel{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);overflow:hidden}
+.skrow{display:flex;align-items:center;gap:10px;padding:0 12px;min-height:calc(var(--h) + 16px);border-bottom:1px solid var(--border)}
+.skel .skrow:last-of-type{border-bottom:none}
+.sk{display:block;height:11px;border-radius:3px;background:var(--bg-deep)}
+.sk.disc{width:28px;height:28px;border-radius:50%;flex:none}
+@media (prefers-reduced-motion:no-preference){
+	.sk{background:linear-gradient(90deg,var(--bg-deep) 0%,var(--surface-hover) 50%,var(--bg-deep) 100%);background-size:220% 100%;animation:shim 1.4s linear infinite}
+}
+@keyframes shim{from{background-position:120% 0}to{background-position:-120% 0}}
+.skline{font-size:.85rem;color:var(--text-muted);padding:9px 12px;border-top:1px solid var(--border)}
+
+/* ═══ 8 · TYPE ═════════════════════════════════════════════════════════ */
+.typetable{display:grid;grid-template-columns:auto auto auto 1fr;gap:6px 18px;align-items:baseline;font-size:12px}
+.typetable .h{font-family:var(--font-display);font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--text-subtle)}
+.typetable .m{color:var(--text-subtle);font-size:11px;font-family:var(--font-display);letter-spacing:.4px}
+.t22{font-family:var(--font-display);font-size:22px;font-weight:700;text-transform:uppercase;letter-spacing:.6px}
+.t15{font-size:15px}
+.t13{font-size:13px;color:var(--text-muted)}
+.t12{font-family:var(--font-display);font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)}
+.t11{font-family:var(--font-display);font-size:11px;font-weight:500;letter-spacing:.5px;text-transform:uppercase;color:var(--text-muted)}
+.t10{font-size:10px;color:var(--text-subtle);letter-spacing:.4px}
+.yesno{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.yesno>div{border:1px solid var(--border);border-radius:var(--card-radius);padding:10px 12px;background:var(--surface);display:flex;flex-direction:column;gap:6px}
+.yesno .hd{font-family:var(--font-display);font-size:10px;letter-spacing:.8px;text-transform:uppercase;display:flex;align-items:center;gap:6px}
+.yesno .yes .hd{color:var(--score-good)}
+.yesno .no .hd{color:var(--score-bad)}
+.yesno ul{list-style:none;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--text-muted)}
+
+/* ═══ 9 · COLOUR ═══════════════════════════════════════════════════════ */
+.opt{flex:1;min-width:0;border:1px solid var(--border);border-radius:var(--card-radius);background:var(--bg);padding:10px 13px 12px;display:flex;flex-direction:column;gap:9px}
+.opt.win{border-color:var(--action);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--action) 35%,transparent)}
+.opt .hd{display:flex;align-items:center;gap:8px}
+.opt .hd h3{font-family:var(--font-display);font-size:13px;text-transform:uppercase;letter-spacing:.5px;font-weight:500}
+.badge-win{font-family:var(--font-display);font-size:9px;letter-spacing:.8px;text-transform:uppercase;background:var(--action);color:#fff;padding:2px 7px;border-radius:999px}
+.badge-alt{font-family:var(--font-display);font-size:9px;letter-spacing:.8px;text-transform:uppercase;background:var(--border);color:var(--text-muted);padding:2px 7px;border-radius:999px}
+.tradeoff{font-size:12px;color:var(--text-muted);line-height:1.5}
+.swatches{display:flex;gap:8px;flex-wrap:wrap}
+.sw{display:flex;flex-direction:column;gap:4px;align-items:flex-start}
+.sw i{width:74px;height:26px;border-radius:var(--btn-radius-sm);border:1px solid rgba(0,0,0,.12);display:block}
+.sw b{font-family:var(--font-display);font-size:9px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-subtle);font-weight:500;line-height:1.35}
+.meaning{display:grid;grid-template-columns:104px minmax(0,1fr);gap:7px 11px;font-size:12px;align-items:center}
+.meaning .m{display:flex;align-items:center;gap:7px;color:var(--text-muted);font-family:var(--font-display);font-size:11px;letter-spacing:.5px;text-transform:uppercase}
+.meaning .d{color:var(--text-light);line-height:1.45}
+.cdot{width:10px;height:10px;border-radius:50%;flex:none;display:inline-block}
+.ratio{font-family:var(--font-display);font-size:10px;letter-spacing:.5px;text-transform:uppercase;color:var(--text-subtle);display:flex;align-items:center;gap:5px}
+.ratio b{color:var(--score-good);font-weight:500}
+/* the dark half, ruled here too */
+.dark{
+	--surface:#111;--bg:#0d0d0d;--bg-deep:#050508;--surface-hover:#1a1a1a;--border:#333;
+	--text:#e0e0e0;--text-muted:#888;--text-subtle:#888;--text-disabled:#555;--text-light:#ccc;
+	--header-bg:#0a0a0a;--score-good:#4f4;--score-ok:#f0a030;--score-bad:#f44;
+	--action:#b45cf5;--on-action:#111;
+	background:#0d0d0d;color:#e0e0e0;
+}
+.dark .caps,.dark .note,.dark .ratio{color:#888}
+.dark .note b{color:#e0e0e0}
+
+/* ═══ 10 · SPACING ═════════════════════════════════════════════════════ */
+.scalebar{display:flex;align-items:flex-end;gap:12px}
+.scalebar .u{display:flex;flex-direction:column;align-items:center;gap:5px}
+.scalebar .u i{display:block;background:var(--action);height:14px;border-radius:2px}
+.scalebar .u b{font-family:var(--font-display);font-size:10px;letter-spacing:.5px;color:var(--text-subtle);font-weight:500}
+.radii{display:flex;gap:14px;align-items:flex-end}
+.radii .r{display:flex;flex-direction:column;align-items:center;gap:5px}
+.radii .r i{width:60px;height:38px;background:var(--surface);border:1px solid var(--text-muted);display:block}
+.radii .r b{font-family:var(--font-display);font-size:10px;letter-spacing:.5px;color:var(--text-subtle);font-weight:500;text-align:center;line-height:1.4}
+.freeze-note{font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:.86rem;color:var(--text-muted);max-width:68ch;margin:0 auto;padding:.75rem 1.5rem 0}
+</style>
+</head>
+<body>
+<p class="freeze-note">
+	Freigegeben 20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in
+	<code>#914</code> und <code>#924</code>). Besitzer jeder Komponentenform (#924); jede
+	UI-Lane zitiert sie, Farbwerte sind Tokens in <code>app.css</code>, Bedeutungen sind
+	geregelt.
+</p>
+<svg style="display:none" aria-hidden="true">
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke-width="2.6"/></symbol>
+<symbol id="i-prev" viewBox="0 0 24 24"><path d="M18 19l-10-7 10-7z" fill="currentColor" stroke="none"/><rect x="5" y="5" width="2.4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-next" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z" fill="currentColor" stroke="none"/><rect x="16.6" y="5" width="2.4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-shuffle" viewBox="0 0 24 24"><path d="M3 7h3.5l3 5M21 7h-4l-8 10H3"/><path d="M17.5 4.5L21 7l-3.5 2.5M17.5 14.5L21 17l-3.5 2.5"/><path d="M21 17h-4"/></symbol>
+<symbol id="i-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"/></symbol>
+<symbol id="i-star" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.5 5.9.8-4.3 4.2 1 6-5.2-2.8-5.2 2.8 1-6L3.5 9.9l5.9-.8z"/></symbol>
+<symbol id="i-star-f" viewBox="0 0 24 24"><path d="M12 3.6l2.6 5.5 5.9.8-4.3 4.2 1 6-5.2-2.8-5.2 2.8 1-6L3.5 9.9l5.9-.8z" fill="currentColor" stroke="currentColor"/></symbol>
+<symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.6-7 9-7 9z"/></symbol>
+<symbol id="i-heart-f" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9a4 4 0 017-2.6A4 4 0 0119 11c0 4.6-7 9-7 9z" fill="currentColor" stroke="currentColor"/></symbol>
+<symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+<symbol id="i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+<symbol id="i-down" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></symbol>
+<symbol id="i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+<symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l4.5 4.5"/></symbol>
+<symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4l9 16H3zM12 10v4M12 17.2v.1"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 006 .5l2.5-2.5a4 4 0 00-5.7-5.7L11.5 7.7"/><path d="M14 10a4 4 0 00-6-.5L5.5 12a4 4 0 005.7 5.7l1.3-1.3"/></symbol>
+<symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+<symbol id="i-pencil" viewBox="0 0 24 24"><path d="M4 20l4-1 10-10-3-3L5 16z"/></symbol>
+<symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></symbol>
+<symbol id="i-disc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2"/></symbol>
+<symbol id="i-check" viewBox="0 0 24 24"><path d="M5 13l4.5 4.5L19 7" stroke-width="2.4"/></symbol>
+<symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5h10"/></symbol>
+<symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v6h7V4M8 20v-6h8v6"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.2 12a8.2 8.2 0 1 1-2.6-6"/><path d="M20.4 4.2v4.4h-4.4"/></symbol>
+<symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
+<symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></symbol>
+</svg>
+<div class="page">
+
+<header class="masthead">
+	<div style="display:flex;flex-direction:column;gap:7px">
+		<h1>Songmaker — component vocabulary</h1>
+		<p>One form per component, for the desktop and the phone alike. The audit found 40 <code>*-btn</code> rules in 29 files, 7 button shapes, 5 tab patterns and 7 overlay implementations. Every specimen below is live CSS on <b>frontend/src/app.css</b> tokens — nothing here is a screenshot. Where the phone differs it stands beside the desktop at 390&nbsp;px. Round 3 carries the operator's rulings of 20.09.2026: <b>a symbol wherever it is universally understood, a word only for the screen's one primary and inside menus and dialogs</b>; the failure belongs to the control that started it, not to a slot; <b>one take row at both widths</b>; and the ruled colour set — purple acts, red ends — in both themes.</p>
+	</div>
+	<div class="meta">Issue #924 · round 3<br>Reference: ConfirmDeleteDialog<br>Family: v4 phone concept + ui-tokens</div>
+</header>
+
+<!-- ═══ 1 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">1</span><h2>Buttons</h2>
+		<span class="rule"><b>A symbol wherever it is universally understood</b> — play, pause, next, close, more, search, add, star, heart, share, copy, trash — <b>a word only for the screen's one primary, and inside menus and dialogs.</b> So: one button — radius&nbsp;4, Oswald uppercase — in <b>four roles</b>: primary (a word, filled), icon-only (32/44, a symbol), destructive (<b>DELETE</b>, red, only in a confirm dialog) and secondary (outline with a word, <b>only inside a dialog</b> — CANCEL) — plus <b>one reserved shape</b>, the play/pause circle. <b>Busy, disabled and failed are states of the primary, not roles.</b> Every icon carries an accessible name and, on a pointer, a tooltip with the same words. A pill, a chip, a tab and a link are not buttons.</span>
+	</div>
+	<div class="cols">
+		<div class="spec" style="flex:1.35">
+			<span class="caps">The four roles · desktop 1440</span>
+			<div class="strip">
+				<div class="unit"><span class="tag">Primary</span><button class="btn primary">Generate</button></div>
+				<div class="unit"><span class="tag">Secondary · in a dialog only</span><button class="btn secondary">Cancel</button></div>
+				<div class="unit"><span class="tag">Icon-only</span>
+					<div class="strip" style="gap:2px">
+						<button class="icon-btn hitbox" aria-label="Play take 2"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button>
+						<button class="icon-btn hitbox mark" aria-label="Pick take 2"><svg class="ic"><use href="#i-star"/></svg></button>
+						<button class="icon-btn hitbox" aria-label="Take menu"><svg class="ic"><use href="#i-dots"/></svg></button>
+						<button class="icon-btn hitbox" aria-label="Dismiss"><svg class="ic"><use href="#i-x"/></svg></button>
+					</div>
+				</div>
+				<div class="unit"><span class="tag">Destructive · in a confirm dialog only</span><button class="btn destructive">Delete</button></div>
+			</div>
+			<div class="roletable">
+				<span class="h">Role</span><span class="h">Face, in px</span><span class="h">Look</span><span class="h">Its one placement</span>
+				<span class="r">Primary</span><span class="px">32 h · 44 h coarse</span><span class="px">filled</span><span class="pl">The one action of the surface — top right on the desktop, full width in the phone's action bar. At most one per screen.</span>
+				<span class="r">Secondary</span><span class="px">32 h · 44 h coarse</span><span class="px">outline, a word</span><span class="pl"><b>Inside a dialog, and nowhere else</b> — <code>CANCEL</code> beside the destructive button. On a surface, what it used to carry is a symbol.</span>
+				<span class="r">Icon-only</span><span class="px">32×32 · 44×44 coarse</span><span class="px">glyph 18 · 20 coarse</span><span class="pl">Every control that is not the one primary: a row, an app bar, the transport, a field. Always an accessible name <b>and a pointer tooltip</b> carrying the same words.</span>
+				<span class="r">Destructive</span><span class="px">32 h · 44 h coarse</span><span class="px">outline, red <code>DELETE</code></span><span class="pl"><b>One place only: the action row of a confirm dialog</b>, whose title already names the object — so the button is the bare verb. A menu's red last row is a menu row, not this button.</span>
+				<span class="r">Play circle</span><span class="px">48×48 · 56×56 coarse</span><span class="px">circle, accent ring</span><span class="pl">The player transport, and nothing else — the circle means play/pause. A row's leading play face is icon-only (32/44), not this.</span>
+			</div>
+			<span class="note">The face <b>fills the box</b> — 32×32 on a mouse, 44×44 on a coarse pointer — whether it is drawn (a border, a circle) or invisible (a bare glyph). No formula derives one from the other; <code>hitbox.ts</code> pins its face to 32 px today even when the box grows to 44.</span>
+		</div>
+		<div class="spec phone">
+			<span class="caps">Phone · 390 — the same four, 44 px</span>
+			<div class="strip" style="gap:8px">
+				<button class="icon-btn hitbox ink" aria-label="Share song" title="Share song"><svg class="ic"><use href="#i-share"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Song menu" title="Song menu"><svg class="ic"><use href="#i-dots"/></svg></button>
+				<button class="icon-btn hitbox" aria-label="Play"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button>
+				<button class="icon-btn hitbox mark" aria-label="Pick take 4"><svg class="ic"><use href="#i-star"/></svg></button>
+			</div>
+			<button class="btn primary" style="width:100%">Generate</button>
+			<span class="note">Full width because it is the screen's one action — same button, more room. The 44&nbsp;px face is the 32&nbsp;px face grown, not a different control.</span>
+		</div>
+		<div class="spec" style="flex:1;min-width:360px">
+			<span class="caps">Links — the thing that is not a button</span>
+			<div class="strip" style="align-items:flex-start;gap:20px">
+				<div class="unit" style="min-width:0">
+					<span class="tag">Breadcrumb — a link, because it goes somewhere</span>
+					<nav class="crumbs" aria-label="Breadcrumb"><button class="lnk">Library</button><span class="sep">/</span><button class="lnk">Neon Harbour</button><span class="sep">/</span><span class="cur">Opening Move</span></nav>
+				</div>
+				<div class="unit" style="flex:1;min-width:0">
+					<span class="tag">Share link — not a link: it copies</span>
+					<div class="copyfield"><span class="box">songmaker.app/s/neon-harbour-x7q2</span><button class="icon-btn ink" aria-label="Copy share link"><svg class="ic"><use href="#i-copy"/></svg></button></div>
+				</div>
+			</div>
+			<span class="note">A link is accent text with an underline and no box; it navigates. Pressing the share chip today <i>copies</i> — so it stops being a chip and becomes a read-only field with one copy button beside it, which is what it always did. The breadcrumb's hover colour moves from red to the action colour with everything else.</span>
+		</div>
+	</div>
+	<div class="cols">
+		<div class="spec tight" style="width:336px">
+			<span class="caps">States — of primary and secondary</span>
+			<div class="unit" style="width:100%"><span class="tag">Busy — the progress is the button</span><button class="btn primary" data-busy style="width:100%"><span class="fill" style="width:36%"></span><span class="t">Take 1 of 2 · 36% · ~1:40</span></button></div>
+			<div class="unit" style="width:100%"><span class="tag">Disabled — fill dropped, outline kept</span><button class="btn primary" disabled style="width:100%">GPU offline</button></div>
+			<div class="unit" style="width:100%"><span class="tag">Failed — the same box, the failure treatment, the same label</span><button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><button class="failline" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-down"/></svg></span></button></div>
+			<span class="note">Three states, all drawn on the primary. <b>Failed keeps the label</b> — pressing it again <i>is</i> the retry, so a separate <span class="gone">RETRY</span> would be the same action twice. The worker's sentence stands under the button in <b>two drawn states</b>: clamped to one line with a chevron at its end, and opened to the whole sentence in the same ink — tap the line or the chevron to open; tap again to close. §7 draws the pair. <span class="gone">danger</span> and <span class="gone">off</span> are gone as class names: a filled red button does not exist, and “off” was a state wearing a role's clothes.</span>
+		</div>
+		<div class="spec tight" style="width:306px">
+			<span class="caps">Icon-only — the two face sizes</span>
+			<div class="strip" style="gap:22px;align-items:flex-end">
+				<div class="unit"><span class="tag">Mouse · 32×32</span><div class="strip" style="gap:4px;--h:32px;--glyph:18px">
+					<button class="icon-btn hitbox" aria-label="Play"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button>
+					<button class="icon-btn hitbox ink" aria-label="Menu"><svg class="ic"><use href="#i-dots"/></svg></button>
+				</div></div>
+				<div class="unit"><span class="tag">Coarse · 44×44</span><div class="strip" style="gap:4px;--h:44px;--glyph:20px">
+					<button class="icon-btn hitbox" aria-label="Play"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button>
+					<button class="icon-btn hitbox ink" aria-label="Menu"><svg class="ic"><use href="#i-dots"/></svg></button>
+				</div></div>
+			</div>
+			<span class="note">The dashed line is the box; it is also the face. Nothing sits between them.</span>
+		</div>
+		<div class="spec tight" style="width:330px">
+			<span class="caps">The symbols — understood without the word</span>
+			<div class="strip" style="gap:2px;flex-wrap:wrap;--h:44px;--glyph:20px">
+				<button class="icon-btn hitbox ink" aria-label="Play" title="Play"><svg class="ic"><use href="#i-play"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Pause" title="Pause"><svg class="ic"><use href="#i-pause"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Next" title="Next"><svg class="ic"><use href="#i-next"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Close" title="Close"><svg class="ic"><use href="#i-x"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="More" title="More"><svg class="ic"><use href="#i-dots"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Search" title="Search"><svg class="ic"><use href="#i-search"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Add" title="Add"><svg class="ic"><use href="#i-plus"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Pick" title="Pick"><svg class="ic"><use href="#i-star"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Keep" title="Keep"><svg class="ic"><use href="#i-heart"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Share" title="Share"><svg class="ic"><use href="#i-share"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Copy" title="Copy"><svg class="ic"><use href="#i-copy"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Delete" title="Delete"><svg class="ic"><use href="#i-trash"/></svg></button>
+				<button class="icon-btn hitbox ink" aria-label="Try again" title="Try again"><svg class="ic"><use href="#i-refresh"/></svg></button>
+			</div>
+			<span class="note">Twelve symbols a person already knows, plus the circular arrow for <b>Try again</b> — the one retry left on a surface, because a load failure has no primary to press. Each carries its word as an accessible name and as a pointer tooltip, so the word is never lost, only unshouted. Anything outside this set keeps its word.</span>
+		</div>
+		<div class="spec" style="flex:1;min-width:520px">
+			<span class="caps">ⓘ — the one explanation affordance</span>
+			<div class="strip" style="align-items:flex-start;gap:12px">
+				<div class="unit" style="flex:1;min-width:0">
+					<span class="tag">In a label row · opens on hover and on tap</span>
+					<div class="strip" style="gap:6px"><span class="t11">Repaint strength</span><button class="infobtn" aria-label="About repaint strength"><i>i</i></button></div>
+					<div class="tipbox">How much of the source take is kept. Low keeps the arrangement, high rewrites it.</div>
+				</div>
+				<div class="unit" style="flex:1;min-width:0">
+					<span class="tag">Never this</span>
+					<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--input-radius);padding:8px 10px;font-size:12px;color:var(--text-disabled);line-height:1.5"><span style="color:var(--text)">Per-track</span><br><span class="gone">Shared links play one track at a time. In your library a clicked take plays on its own.</span></div>
+					<span class="note">The inline note under a radio row today (<code>settings/playback</code>). It moves behind the ⓘ.</span>
+				</div>
+			</div>
+		</div>
+		<div class="spec tight" style="width:430px">
+			<span class="caps">The player transport — one circle, the rest squares</span>
+			<div class="transport">
+				<button class="icon-btn ink" aria-label="Shuffle"><svg class="ic"><use href="#i-shuffle"/></svg></button>
+				<button class="icon-btn ink" aria-label="Previous"><svg class="ic"><use href="#i-prev"/></svg></button>
+				<button class="circle" aria-label="Pause" style="--circle:48px"><svg class="ic"><use href="#i-pause"/></svg></button>
+				<button class="icon-btn ink" aria-label="Next"><svg class="ic"><use href="#i-next"/></svg></button>
+				<span class="note" style="margin-left:6px">48&nbsp;px circle,<br>32&nbsp;px squares</span>
+			</div>
+			<div class="transport" style="--h:44px;--glyph:20px">
+				<button class="icon-btn ink" aria-label="Shuffle"><svg class="ic"><use href="#i-shuffle"/></svg></button>
+				<button class="icon-btn ink" aria-label="Previous"><svg class="ic"><use href="#i-prev"/></svg></button>
+				<button class="circle" aria-label="Play" style="--circle:56px"><svg class="ic"><use href="#i-play"/></svg></button>
+				<button class="icon-btn ink" aria-label="Next"><svg class="ic"><use href="#i-next"/></svg></button>
+				<span class="note" style="margin-left:6px">56&nbsp;px circle,<br>44&nbsp;px squares</span>
+			</div>
+			<span class="note"><b>The circle means play/pause and nothing else.</b> Shuffle, previous and next are ordinary icon-only buttons; today they are 44&nbsp;px circles too, so four circles compete for one meaning. The play circle keeps its accent ring — it is presence, not state — and loses its gradient hover and its animated border.</span>
+		</div>
+	</div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span>The album title row becomes a <b>play symbol</b> plus a 32&nbsp;px <b>…</b> — <code>+ SONG</code> moves into that menu, and <b>Share</b> becomes the share symbol in the header beside it. A confirm dialog is the only place where <b>DELETE</b> stands as a button at all.</div><div class="kills"><span class="k">Replaces</span><span class="gone">gradient pill · outline pill · outline square icon · small outline rect · solid accent rect · circle icon · ghost text</span> — 7 shapes, 40 <code>*-btn</code> rules in 29 files, and the four class names <span class="gone">danger</span> <span class="gone">off</span> <span class="gone">busy</span> <span class="gone">quiet</span>. The washed-pink disabled gradient goes; disabled drops the fill and keeps the outline. <b>Words that become symbols:</b> <span class="gone">SHARE</span> <span class="gone">COPY</span> <span class="gone">RETRY</span> <span class="gone">SAVE</span> — share and copy are glyphs, retry is the primary pressed again, Save version is a menu row.</div></div>
+</section>
+
+<!-- ═══ 2 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">2</span><h2>Chips and pills</h2>
+		<span class="rule">A pill shows <b>a state or a count and is never a button</b>; the filter chip is a different component — pressable, with a check when it is on. One form for both: fully rounded, 22&nbsp;px, Oswald&nbsp;11&nbsp;px uppercase, <b>LABEL&nbsp;value</b>, the value in its own case. A pill never stretches.</span>
+	</div>
+	<div class="cols">
+		<div class="spec">
+			<span class="caps">Status pill — shape + word</span>
+			<div class="strip">
+				<span class="pill ready"><i class="shape"></i>Ready</span>
+				<span class="pill queued"><i class="shape"></i>Queued #3</span>
+				<span class="pill failed"><i class="shape tri"></i>Failed</span>
+			</div>
+			<span class="note">Filled disc&nbsp;= good, ring&nbsp;= waiting, <b>triangle&nbsp;= failed</b>. The triangle is the ui-tokens grammar's fail shape, and it is the same shape the warning glyph already draws — so failure looks the same in a pill, a score and a slot. In grayscale the three still read apart.</span>
+		</div>
+		<div class="spec tight" style="width:246px">
+			<span class="caps">Count badge</span>
+			<div class="strip"><span class="pill">Takes <b class="v">4</b></span><span class="pill">Model <b class="v">sft</b></span></div>
+			<span class="caps">Filter chip — a different component</span>
+			<div class="strip"><button class="pill chip on"><svg class="ic sm"><use href="#i-check"/></svg>Picked</button><button class="pill chip">Kept</button></div>
+			<span class="note">A count carries no colour. A chip on&nbsp;= accent border, tint and a check. The label shouts, the value keeps its own case: <code>MODEL sft</code>, not <code>MODEL SFT</code>.</span>
+		</div>
+		<div class="spec">
+			<span class="caps">Not a chip any more — the recipe badge strip</span>
+			<div class="strip" style="gap:5px;opacity:.5">
+				<span class="pill" style="border-radius:4px">Model <b class="v">sft</b></span><span class="pill" style="border-radius:4px">Takes <b class="v">×1</b></span><span class="pill" style="border-radius:4px">BPM <b class="v">Auto</b></span><span class="pill" style="border-radius:4px">Duration <b class="v">180 s</b></span><span class="pill" style="border-radius:4px">Key <b class="v">—</b></span><span class="pill" style="border-radius:4px">Voice <b class="v">None</b></span><span class="pill" style="border-radius:4px">Seed <b class="v">Random</b></span><span class="pill" style="border-radius:4px">LM <b class="v">Default</b></span><span class="pill" style="border-radius:4px">DIT <b class="v">Default</b></span><span class="pill" style="border-radius:4px">Repaint <b class="v">Off</b></span>
+			</div>
+			<span class="note"><b>Gone.</b> Not states — ten editable settings in a state's clothes, none of them pressable. They become one collapsible recipe card (§4, §6): a summary line to glance at, label/value rows to change.</span>
+		</div>
+		<div class="spec tight" style="width:318px">
+			<span class="caps">…&nbsp;becomes this</span>
+			<button class="kvrow">
+				<span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;text-align:left">
+					<span style="font-size:11px;color:var(--text-subtle)">Recipe</span>
+					<span style="font-size:.85rem">sft · 3:00 · Auto BPM · ×1</span>
+				</span>
+				<span class="caret"><svg class="ic"><use href="#i-down"/></svg></span>
+			</button>
+		</div>
+	</div>
+	<div class="ex"><span class="k">Example</span><span class="pill ready"><i class="shape"></i>Ready</span> beside the take count <span class="pill">Takes <b class="v">4</b></span> — the state is a shape, the count is a number, and neither pretends to be a button. The one pressable thing in this section is the chip, and it wears a check to say so.</div>
+</section>
+
+<!-- ═══ 3 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">3</span><h2>Tabs, segments, radio rows</h2>
+		<span class="rule">Three ways to choose, one each: a <b>tab strip</b> (12&nbsp;px uppercase, 2&nbsp;px accent underline, <b>44&nbsp;px tall at both widths</b>, scrolling sideways) switches <i>views</i>; a <b>segmented control</b> of the same metrics picks a <i>short value</i> that fits on one line; a <b>radio row list</b> picks a value that needs its own name — one row, one dot, its explanation behind ⓘ. A native <code>&lt;select&gt;</code> replaces none of them, at any width. The strip's 44 is <b>the one height that is not a face plus the grid</b> (§10): a tab is a place to stand, not a face to press, and it stays one height on a mouse and a finger.</span>
+	</div>
+	<div class="cols">
+		<div class="spec" style="--h:44px">
+			<span class="caps">Tab strip · desktop — switches views</span>
+			<nav class="tabs" aria-label="Admin">
+				<button class="active" aria-current="page">Users</button><button>Voices</button><button>Sessions</button><button>Login attempts</button><button>Rate limits</button><button>Generation</button><button>Models</button><button>ACE-Step</button>
+			</nav>
+			<span class="caps">Segmented control — picks a short value</span>
+			<div class="strip" style="--h:32px;--fs:.8rem">
+				<div class="seg"><button class="on">Random</button><button>Pinned</button></div>
+				<div class="seg"><button>Off</button><button class="on">Conservative</button><button>Full</button></div>
+			</div>
+			<span class="note">The editor's <code>CO-WRITER | RECIPE</code> toggle pills are a view switch, so they become this strip — two tabs over the right panel of the desktop editor. How many panels that editor has is the song page's picture to decide, not this vocabulary's.</span>
+		</div>
+		<div class="spec phone">
+			<span class="caps">Phone · 390 — the same strip, scrolled</span>
+			<div class="tabstrip-wrap">
+				<nav class="tabs" aria-label="Admin">
+					<button class="active" aria-current="page">Users</button><button>Voices</button><button>Sessions</button><button>Login attempts</button><button>Rate limits</button>
+				</nav>
+			</div>
+			<div class="strip" style="align-items:center;gap:10px">
+				<select class="nativesel" disabled><option>Users</option></select>
+				<span class="note" style="flex:1"><b>Gone.</b> Only the admin strip turned into this below 640&nbsp;px.</span>
+			</div>
+		</div>
+		<div class="spec tight" style="width:392px">
+			<span class="caps">Radio rows — a value that needs its own name</span>
+			<div class="radios">
+				<button class="radiorow on"><span class="dot"></span><span class="lb">Continuous stream</span><span class="infobtn" aria-label="About continuous stream"><i>i</i></span></button>
+				<button class="radiorow"><span class="dot"></span><span class="lb">Per-track</span><span class="infobtn" aria-label="About per-track"><i>i</i></span></button>
+			</div>
+			<span class="note">Rows in one bordered card, 44&nbsp;px each, the dot and the label both in the action colour when chosen. The two-line <code>&lt;small&gt;</code> under each option today goes behind its ⓘ — an explanation is never inline.</span>
+		</div>
+	</div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span><b>WRITE · TAKES 4</b> on the song page and <b>USERS · VOICES · SESSIONS …</b> in admin are the same component at two widths. <b>QUEUE | THIS TAKE</b> in Now Playing is a view, so it becomes a tab strip, not a segment; <b>Random | Pinned</b> is a value, so it stays a segment.</div><div class="kills"><span class="k">Replaces</span><span class="gone">underline strip · CO-WRITER|RECIPE toggle pills · QUEUE|THIS TAKE red-outline segment · RANDOM|PINNED red-fill segment · CHAT|LYRICS phone strip · the phone's native select · the red-shadow playback cards</span> — 5 patterns, the degraded select, and the one radio group that was styled as neither.</div></div>
+</section>
+
+<!-- ═══ 4 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">4</span><h2>Inputs</h2>
+		<span class="rule">One field box — 1&nbsp;px border, radius&nbsp;4, 15&nbsp;px text, 40&nbsp;px high on a mouse and 52&nbsp;px on a finger — under an uppercase 11&nbsp;px label; a textarea is the same box and <b>grows with its content</b>; a choice is a <b>label/value row with a chevron</b>, never a native <code>&lt;select&gt;</code>; a switch is an <b>18&nbsp;px checkbox</b> and a quantity is <b>one slider</b> with its number beside it.</span>
+	</div>
+	<div class="cols">
+		<div class="spec" style="min-width:640px">
+			<span class="caps">Desktop · text field, search, choice</span>
+			<div class="strip" style="align-items:flex-start;gap:18px">
+				<div class="field" style="width:290px"><span class="label">Title</span><div class="input">Opening Move</div></div>
+				<div class="field" style="width:290px"><span class="label">Search</span><div class="input search ph"><svg class="ic" style="color:var(--text-disabled)"><use href="#i-search"/></svg>Search or go to…</div></div>
+				<div class="field" style="width:300px"><span class="label">Choice — never a &lt;select&gt;</span>
+					<button class="kvrow"><span class="k">Model</span><span class="v">XL-Turbo</span><span class="caret"><svg class="ic"><use href="#i-chev"/></svg></span></button>
+				</div>
+			</div>
+			<div class="field" style="max-width:660px"><span class="label">Style prompt <span class="stamp">the same box, grown to its content</span></span><div class="input area">calm test tone, 90 bpm
+dark synthwave, analog drum machine, wide reverb
+male baritone, 1984 Berlin night</div></div>
+			<span class="note">The choice row is the recipe's own pattern — the best thing in the app today — promoted to every select in the product, including the create form and admin. A field is as wide as its content needs, never as wide as the page.</span>
+		</div>
+		<div class="spec phone">
+			<span class="caps">Phone · 390 — textarea grows, nothing scrolls inside</span>
+			<div class="field"><span class="label">Style</span><div class="input area">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+			<div class="field"><span class="label">Lyrics <span class="stamp">v7 · draft</span></span>
+				<div class="input area"><span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay</div>
+			</div>
+		</div>
+		<div class="spec tight" style="width:344px">
+			<span class="caps">Checkbox — 18 px, a tick, never a toggle switch</span>
+			<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:6px 12px;width:100%">
+				<button class="checkrow on"><span class="cb"><svg class="ic sm"><use href="#i-check"/></svg></span><span class="lb">Use ERG scheduler</span><span class="infobtn" aria-label="About the ERG scheduler"><i>i</i></span></button>
+				<button class="checkrow"><span class="cb"></span><span class="lb">CFG rescale</span><span class="infobtn" aria-label="About CFG rescale"><i>i</i></span></button>
+			</div>
+			<span class="note">One box, ticked or not — the tick is the shape, the fill is the colour, and it reads in grayscale. <code>ParamControls</code>' bare <code>accent-color</code> checkbox becomes this, label first, hit area the whole row.</span>
+		</div>
+		<div class="spec tight" style="width:364px">
+			<span class="caps">Range — one slider, wherever a quantity moves</span>
+			<div class="field"><span class="label">Repaint strength <span class="stamp">recipe</span></span>
+				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:62%"></span><span class="knob" style="left:62%"></span></span><span class="num">62 %</span></div>
+			</div>
+			<div class="field"><span class="label">Seek <span class="stamp">player · transport and Now&nbsp;Playing</span></span>
+				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:38%"></span><span class="knob" style="left:38%"></span></span><span class="num">1:09</span></div>
+			</div>
+			<div class="field"><span class="label">Rail width <span class="stamp">shell</span></span>
+				<div class="rangerow"><span class="rng"><span class="track"></span><span class="done" style="width:46%"></span><span class="knob" style="left:46%"></span></span><span class="num">264 px</span></div>
+			</div>
+			<span class="note">4&nbsp;px track, the travelled part in the action colour, a 16&nbsp;px knob, and <b>the value always beside it in words a person reads</b> — a percent, a time, a pixel count. A slider without its number is a guess.</span>
+		</div>
+	</div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span><span class="t11">LYRICS</span> <span class="t13">v7 · draft</span> — the label is uppercase because it names the field; the identifier beside it is sentence case because it is a fact, not a label (§8). <code>[Chorus]</code> inside the lyrics is Oswald in muted ink: it is structure, not an action, so it takes no accent.</div><div class="kills"><span class="k">Replaces</span><span class="gone">3 kinds</span> — bordered field, unstyled native <code>&lt;select&gt;</code> (recipe, admin, create form), monospace textarea in a fixed scroll box — plus the bare <code>accent-color</code> checkbox and seven differently-styled <code>input[type=range]</code> (recipe ×3, two seek bars, the rail resize, the take rating). Labels move above the field everywhere.</div></div>
+</section>
+
+<!-- ═══ 5 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">5</span><h2>Rows and lists</h2>
+		<span class="rule">One row — 48&nbsp;px on a mouse, 60&nbsp;px on a finger, inside <b>one bordered card with a divider between rows</b>, never a card per row: a leading play face, the name in Open&nbsp;Sans&nbsp;15, right-aligned meta, then <b>the star, the keep marker when set, and one <span style="letter-spacing:1px">…</span></b>. <b>The star is always a button</b> — outline = not picked, filled = the pick — in every row at both widths; <b>keep is a marker, not a button</b>: a filled heart beside the star only when it is set, and keeping happens in the menu. <b>It is one component at both widths</b>: the desktop is the phone row at 48&nbsp;px, with no labelled actions of its own.</span>
+	</div>
+	<div class="cols">
+		<div class="spec">
+			<span class="caps">Desktop · take rows — 48 px, the same row</span>
+			<div class="grouphead">v7 · 4 takes</div>
+			<div class="rowcard">
+				<div class="row"><button class="icon-btn" aria-label="Play take 4"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="ident">Take 4</span><span class="meta">2:58</span><span class="score bad"><i class="shape tri"></i>34</span><button class="icon-btn mark" aria-label="Pick take 4"><svg class="ic"><use href="#i-star"/></svg></button><button class="icon-btn" aria-label="Take 4 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+				<div class="row playing"><button class="icon-btn" aria-label="Pause take 2"><span class="face round" style="border-color:var(--action);color:var(--action)"><svg class="ic"><use href="#i-pause"/></svg></span></button><span class="ident">Take 2</span><span class="meta">3:05</span><span class="score good"><i class="shape"></i>82</span><button class="icon-btn mark on" aria-label="Picked — take 2"><svg class="ic"><use href="#i-star-f"/></svg></button><button class="icon-btn" aria-label="Take 2 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+				<div class="row"><button class="icon-btn" aria-label="Play take 1"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="ident">Take 1</span><span class="meta">3:04</span><span class="score ok"><i class="shape"></i>61</span><button class="icon-btn mark" aria-label="Pick take 1"><svg class="ic"><use href="#i-star"/></svg></button><span class="keepmark" role="img" aria-label="Kept"><svg class="ic"><use href="#i-heart-f"/></svg></span><button class="icon-btn" aria-label="Take 1 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+			</div>
+			<span class="note">Round 2 kept <b>Repaint</b> and <b>Cover</b> named here, because the desktop has the room. <b>Operator ruling 20.09.2026 removes them</b>: room is not a reason for a second row shape. The row is one component at both widths — only its height changes, 48 on a mouse and 60 on a finger — and Repaint and Cover live in the <span style="letter-spacing:1px">…</span> at every width. This <b>overrides the frozen <code>song-editor-take.html</code> desktop row</b>, which still names them.</span>
+		</div>
+		<div class="spec tight" style="width:320px">
+			<span class="caps">Album / song row · label-value row</span>
+			<div class="rowcard">
+				<div class="row"><button class="icon-btn" aria-label="Play Opening Move"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="title">Opening Move</span><span class="meta">2 takes · 1 pick</span><button class="icon-btn" aria-label="Opening Move menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+				<div class="row" style="padding-left:12px"><span class="k" style="flex:1;color:var(--text-muted);font-size:.87rem">Created</span><span class="v" style="font-size:.9rem">19.9.2026</span></div>
+			</div>
+			<span class="caps">Rail row — where you are</span>
+			<div class="railcard">
+				<button class="railrow"><span class="rt">All albums</span><span class="rc">7</span></button>
+				<button class="railrow sel"><span class="rt">Neon Harbour</span><span class="rc">5</span></button>
+				<button class="railrow sub sel"><span class="rt">Opening Move</span><span class="rc">4 takes</span></button>
+				<button class="railrow sub"><span class="rt">Second Wind</span><span class="rc">2 takes</span></button>
+			</div>
+			<span class="note">Selected&nbsp;= a 3&nbsp;px left bar in the action colour, an 8&nbsp;% tint, full-strength ink and <b>the count in the action colour too</b>. Today that bar is red; the rail says <i>where you are</i>, which is what the action colour means (§9).</span>
+		</div>
+		<div class="spec phone">
+			<span class="caps">Phone · 390 — the same row, 60 px</span>
+			<div class="grouphead">v7 · 4 takes</div>
+			<div class="rowcard">
+				<div class="row"><button class="icon-btn" aria-label="Play take 4"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="ident">Take 4</span><span class="meta">2:58</span><span class="score bad"><i class="shape tri"></i>34</span><button class="icon-btn mark" aria-label="Pick take 4"><svg class="ic"><use href="#i-star"/></svg></button><button class="icon-btn" aria-label="Take 4 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+				<div class="row playing"><button class="icon-btn" aria-label="Pause take 2"><span class="face round" style="border-color:var(--action);color:var(--action)"><svg class="ic"><use href="#i-pause"/></svg></span></button><span class="ident">Take 2</span><span class="meta">3:05</span><span class="score good"><i class="shape"></i>82</span><button class="icon-btn mark on" aria-label="Picked — take 2"><svg class="ic"><use href="#i-star-f"/></svg></button><button class="icon-btn" aria-label="Take 2 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+				<div class="row"><button class="icon-btn" aria-label="Play take 1"><span class="face round"><svg class="ic"><use href="#i-play"/></svg></span></button><span class="ident">Take 1</span><span class="meta">3:04</span><span class="score ok"><i class="shape"></i>61</span><button class="icon-btn mark" aria-label="Pick take 1"><svg class="ic"><use href="#i-star"/></svg></button><span class="keepmark" role="img" aria-label="Kept"><svg class="ic"><use href="#i-heart-f"/></svg></span><button class="icon-btn" aria-label="Take 1 menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+			</div>
+			<span class="note">The star is here too — picking is the one thing a musician does most, so it never hides in a menu. <b>Repaint, Cover, Keep, Share and Delete</b> are one tap away in <span style="letter-spacing:1px">…</span> — the same five, in the same order, on the desktop.</span>
+		</div>
+	</div>
+	<div class="cols">
+		<div class="spec tight" style="width:430px">
+			<span class="caps">Reorder — a grip on the left, a lane where it lands <span class="badge-alt">Form ruled · built when a reorder item orders it</span></span>
+			<div class="rowcard">
+				<div class="row"><span class="grip" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#i-grip"/></svg></span><span class="title">Opening Move</span><span class="meta">3:05</span><button class="icon-btn" aria-label="Opening Move menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+			</div>
+			<div class="droplane"></div>
+			<div class="rowcard row dragging" style="background:var(--surface)"><span class="grip" aria-hidden="true" style="cursor:grabbing;color:var(--action)"><svg viewBox="0 0 24 24"><use href="#i-grip"/></svg></span><span class="title">Second Wind</span><span class="meta">2:41</span><button class="icon-btn" aria-label="Second Wind menu"><svg class="ic"><use href="#i-dots"/></svg></button></div>
+			<span class="note">The grip is the <b>only</b> drag surface — the cover art stays <code>draggable="false"</code> so an image never becomes the payload. The dragged row lifts on the one shadow; a 2&nbsp;px action-coloured lane shows where it lands. <b>Move up</b> / <b>Move down</b> stay in the <span style="letter-spacing:1px">…</span> as the keyboard path, which is how playlists reorder today.</span>
+		</div>
+		<div class="spec" style="flex:1">
+			<span class="caps">What the row's marks mean — read left to right</span>
+			<div class="meaning">
+				<span class="m"><svg class="ic sm" style="color:var(--text-disabled)"><use href="#i-star"/></svg>Outline star</span><span class="d"><b>A button:</b> not the pick — press it to make it the pick. Present in every row, at both widths.</span>
+				<span class="m"><svg class="ic sm" style="color:var(--text)"><use href="#i-star-f"/></svg>Filled star</span><span class="d"><b>The same button, pressed:</b> this is the album's take for this song. One per song; picking another releases this one.</span>
+				<span class="m"><svg class="ic sm" style="color:var(--text)"><use href="#i-heart-f"/></svg>Filled heart</span><span class="d"><b>A marker, not a button:</b> kept, so cleanup will not take it. It appears only when set; keeping and unkeeping live in the <span style="letter-spacing:1px">…</span>. There is no outline heart in a row.</span>
+				<span class="m"><svg class="ic sm" style="color:var(--action)"><use href="#i-pause"/></svg>Pause + tint</span><span class="d"><b>Presence:</b> this take is sounding right now. Not a state of the take — a fact about where you are — so it may wear the action colour (§9).</span>
+			</div>
+		</div>
+	</div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span><b>Take 1</b> · 3:04 · <span class="score ok"><i class="shape"></i>61</span> · ☆ ♥ · <span style="letter-spacing:1px">…</span> — an empty star you can press and a filled heart you cannot: the row says “not the pick, but kept” in two shapes, and both read in grayscale.</div><div class="kills"><span class="k">Replaces</span><span class="gone">4 kinds</span> — album song row (a bordered card per row), take row, rail row, label/value stack. The phone take row gains a play face, a star, a keep marker and a menu where it had a bare chip; <b>the desktop take row loses its two named actions</b> (ruling 20.09.2026) and the lowercase <code>sft</code> badge, which becomes the recipe's <code>MODEL sft</code> — so one row component serves both widths.</div></div>
+</section>
+
+<!-- ═══ 6 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">6</span><h2>Overlays</h2>
+		<span class="rule">Two overlays, no third: a <b>popover</b> for up to eight actions — sentence case, one icon each, the destructive row last and red, clamped inside the viewport at every width — and a <b>modal</b> only to confirm or to publish. <b>Editing content is never a modal</b>; it happens inline, in a collapsible card. A setting that needs confirming before it takes effect stays a dialog — that is why <code>ShareDialog</code> remains one: it publishes.</span>
+	</div>
+	<div class="cols">
+		<div class="spec tight" style="width:252px">
+			<span class="caps">Popover · the take menu — one menu, both widths</span>
+			<div class="popover">
+				<div class="phead">Take 2</div>
+				<button><svg class="ic sm"><use href="#i-pencil"/></svg>Repaint</button>
+				<button><svg class="ic sm"><use href="#i-disc"/></svg>Cover</button>
+				<button><svg class="ic sm"><use href="#i-heart"/></svg>Keep</button>
+				<button><svg class="ic sm"><use href="#i-plus"/></svg>Add to playlist</button>
+				<button><svg class="ic sm"><use href="#i-share"/></svg>Share</button>
+				<button class="del"><svg class="ic sm"><use href="#i-trash"/></svg>Delete</button>
+			</div>
+			<span class="note">The head names what the menu acts on, so every row is a bare verb — <b>Delete</b>, not “Delete take”. The ruled order is <b>Repaint · Cover · Keep · Add to playlist · Share · Delete</b> — six rows, this sequence, at both widths: the two that make a new take, then the three that place this one, then the red one. <b>Keep</b> reads <b>Unkeep</b> on a take that is already kept; the row toggles, it never doubles. The red last row is a menu row, not the destructive <i>button</i> role, which lives only in the confirm dialog.</span>
+		</div>
+		<div class="spec tight" style="width:252px">
+			<span class="caps">Popover · the song menu — another owner</span>
+			<div class="popover">
+				<div class="phead">Song · Opening Move</div>
+				<button><svg class="ic sm"><use href="#i-save"/></svg>Save version</button>
+				<button class="del"><svg class="ic sm"><use href="#i-trash"/></svg>Delete</button>
+			</div>
+			<span class="note">One grammar, another owner. <b>Save version</b> lives here, not in a take's menu — a version is the song's lyrics and prompt — and the ghost <code>SAVE</code> beside the lyrics goes. <b>Share leaves this menu</b>: the song owns the header, so its share is the share symbol up there, and an affordance exists once.</span>
+		</div>
+		<div class="spec tight" style="width:252px;--h:44px">
+			<span class="caps">Popover · 390, clamped</span>
+			<div class="popover" style="width:238px">
+				<div class="phead">Take 2</div>
+				<button><svg class="ic sm"><use href="#i-pencil"/></svg>Repaint</button>
+				<button><svg class="ic sm"><use href="#i-disc"/></svg>Cover</button>
+				<button><svg class="ic sm"><use href="#i-heart"/></svg>Keep</button>
+				<button><svg class="ic sm"><use href="#i-plus"/></svg>Add to playlist</button>
+				<button><svg class="ic sm"><use href="#i-share"/></svg>Share</button>
+				<button class="del"><svg class="ic sm"><use href="#i-trash"/></svg>Delete</button>
+			</div>
+			<span class="note">Same panel, the same six rows in the same order, 44&nbsp;px tall, right edge pinned 8&nbsp;px inside the viewport — never <code>right:0</code> off an element at the screen edge. Nothing is added, dropped or reordered at this width — the phone menu is the desktop menu, row for row.</span>
+		</div>
+		<div class="spec tight" style="width:404px">
+			<span class="caps">Modal · confirm with children — type the name</span>
+			<div class="scrim">
+				<div class="dialog" style="width:368px">
+					<h3>Delete album?</h3>
+					<ul><li><b>Neon Harbour</b> and everything under it</li><li>2 songs (Opening Move, Second Wind)</li><li>3 takes</li><li>All versions, scores, and chat history</li></ul>
+					<div class="field"><span class="label">Type the album name to confirm</span><div class="input" style="min-height:40px">Neon Harbour</div></div>
+					<p class="warning"><svg class="ic sm"><use href="#i-warn"/></svg>This cannot be undone.</p>
+					<div class="actions"><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
+				</div>
+			</div>
+		</div>
+		<div class="spec" style="flex:1;min-width:430px">
+			<span class="caps">Modal · confirm without children — no typing</span>
+			<div class="scrim">
+				<div class="dialog" style="width:340px">
+					<h3>Delete take?</h3>
+					<ul><li><b>Take 4</b> — its audio file and its scores</li></ul>
+					<p class="warning"><svg class="ic sm"><use href="#i-warn"/></svg>This cannot be undone.</p>
+					<div class="actions"><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
+				</div>
+			</div>
+			<span class="note"><b>The title carries the object</b> — “Delete album?”, “Delete take?” — so the button is the bare <b>DELETE</b>, and the consequence list names the thing. It is the last outline-with-a-word pair left: <b>CANCEL</b> beside it is the only secondary button in the system. <b>Typing the name is only for a thing with children</b> — an album or a song, which take other things down with them. A take or a playlist entry is a plain confirm: one sentence of consequence, Cancel, and the destructive button. Making every delete a typing exercise teaches the hand to type without reading.</span>
+		</div>
+	</div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span>The recipe opens <b>in place</b> — the collapsed card of §2 unfolds into label/value rows below it. The red-bordered bottom sheet with native selects is gone; so is <code>EditorSheet</code>.</div><div class="kills"><span class="k">Replaces</span><span class="gone">5 implementations</span> — ConfirmDialog, EditorSheet, CollectionMenu/SongMenu, TakeMenu, PlaylistPicker; two menu vocabularies one screen apart (album: sentence case + icons + red delete · take: uppercase, no icons, plain DELETE) become one — <b>and one take menu now serves both widths</b>. <b>ConfirmDeleteDialog is extended, not replaced</b> — it is the reference, and it gains the typed name for album and song. <b>ShareDialog stays a dialog</b> — it publishes. <b>RailDrawer stays</b> — it is navigation. <b>EditorSheet goes</b> — it edited content. Z-layers: popover 300, drawer 400, modal 1000.</div></div>
+</section>
+
+<!-- ═══ 7 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">7</span><h2>Status and feedback</h2>
+		<span class="rule">A surface reports its own state <b>where the state happens</b>: progress <i>and failure</i> inside the control that started it, one dashed <b>status slot</b> per surface <b>while a run is going</b> — and only then — and a <b>toast only for an event with no surface of its own</b>. <b>Loading is skeleton rows plus one sentence, never a spinner alone.</b> Empty and error name the real cause and offer the one next step. Every failure wears the triangle.</span>
+	</div>
+	<div class="cols">
+		<div class="spec">
+			<span class="caps">In place — the button is the progress</span>
+			<button class="btn primary" data-busy style="width:100%"><span class="fill" style="width:36%"></span><span class="t">Take 1 of 2 · 36% · ~1:40</span></button>
+			<span class="caps">Status slot — generating</span>
+			<div class="slot">
+				<div class="head"><span class="ttl"><b>v8</b> · Generating…</span><button class="icon-btn" aria-label="Cancel run"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
+				<div class="bar"><span style="width:36%"></span></div>
+				<span class="line">Take 1 of 2 · 36% · ~1:40</span>
+			</div>
+			<span class="caps">Failed — the button is the failure, its reason has two states</span>
+			<button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button>
+			<button class="failline" aria-expanded="false" aria-label="Show the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-down"/></svg></span></button>
+			<span class="caps">Opened — the same line, tapped</span>
+			<button class="btn primary failed" style="width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button>
+			<button class="failline open" aria-expanded="true" aria-label="Hide the full reason"><span class="msg">Insufficient free VRAM: need ~2.9&nbsp;GB, only 1.7&nbsp;GB available. Reduce batch size (currently 2) or audio duration (currently 285&nbsp;s).</span><span class="chev" aria-hidden="true"><svg class="ic sm"><use href="#i-up"/></svg></span></button>
+			<span class="note">Round 2 gave a failed run its own dashed slot on the results surface, with a <span class="gone">RETRY</span> inside it. <b>Operator ruling 20.09.2026 moves it into the button</b>: a failed run produced nothing, so the results surface has nothing to report, and the retry was never a second action — it is Generate pressed again. Same box, fill dropped, <code>--score-bad</code> outline and ink, an inline triangle, <b>the label unchanged</b>. The worker's sentence under it has <b>two drawn states and no third</b>: <b>clamped</b> — one line, ellipsis, a chevron at its end in a 44&nbsp;px target — and <b>opened</b> — the whole sentence wrapped, the same red ink, the chevron flipped. <b>Tap the line or the chevron to open; tap again to close.</b> Without the chevron a clamped line looks like a truncation accident, not an invitation. <b>The status slot is now the running state only.</b></span>
+		</div>
+		<div class="spec">
+			<span class="caps">Loading — skeleton rows and one sentence</span>
+			<div class="skel">
+				<div class="skrow"><span class="sk disc"></span><span class="sk" style="flex:1;max-width:190px"></span><span class="sk" style="width:38px"></span></div>
+				<div class="skrow"><span class="sk disc"></span><span class="sk" style="flex:1;max-width:150px"></span><span class="sk" style="width:38px"></span></div>
+				<div class="skrow"><span class="sk disc"></span><span class="sk" style="flex:1;max-width:172px"></span><span class="sk" style="width:38px"></span></div>
+				<p class="skline">Loading takes…</p>
+			</div>
+			<span class="note">The skeleton has the <b>shape of what is coming</b> — three take rows, not a grey rectangle — so the page does not jump when it arrives. It shimmers slowly while it waits, because it is alive, and holds still under <code>prefers-reduced-motion</code>. A bare spinner says only “something”; this says “takes, three of them, nearly here”.</span>
+			<span class="caps">Empty — an icon and one honest sentence</span>
+			<div class="emptybox">
+				<span class="glyph"><svg class="ic" style="width:30px;height:30px"><use href="#i-disc"/></svg></span>
+				<p>No takes yet — generate on Write.</p>
+			</div>
+		</div>
+		<div class="spec">
+			<span class="caps">Error — the real cause and the one next step</span>
+			<div class="errbox">
+				<span class="t"><svg class="ic sm"><use href="#i-warn"/></svg>Couldn't copy the link</span>
+				<p>Your browser blocked clipboard access. Copy it by hand instead.</p>
+				<div class="copyfield"><span class="box">https://songmaker.app/s/neon-harbour-x7q2</span><button class="icon-btn ink" aria-label="Copy share link" title="Copy"><svg class="ic"><use href="#i-copy"/></svg></button></div>
+			</div>
+			<span class="note">No <span class="gone">TRY AGAIN</span> button: the copy glyph on the field <i>is</i> the retry, and it was already there. Where a failure has no such field — <b>Failed to load takes</b> — the next step is the circular arrow, named <b>Try again</b>, not a word in a box.</span>
+			<span class="caps">Error — nothing to press, so the arrow is the step</span>
+			<div class="errbox">
+				<span class="t"><svg class="ic sm"><use href="#i-warn"/></svg>Failed to load takes</span>
+				<p>The server did not answer. Nothing was lost — ask again.</p>
+				<div class="foot"><button class="icon-btn ink" aria-label="Try again" title="Try again"><svg class="ic"><use href="#i-refresh"/></svg></button></div>
+			</div>
+			<span class="caps">Toast — only for what has no surface</span>
+			<div class="toast"><svg class="ic sm"><use href="#i-check"/></svg>Added to “Late Night Drive”.<span class="x"><svg class="ic sm"><use href="#i-x"/></svg></span></div>
+			<span class="note"><b>Not a toast:</b> <span class="gone">Failed to execute 'writeText' on 'Clipboard'</span> — a raw browser exception thrown at the user. A failure with a surface belongs on that surface.</span>
+		</div>
+	</div>
+	<div class="ex"><span class="k">Example</span>A generation never announces itself twice: the Write button carries the percent, the Takes tab carries a ring, the button carries the cause when it breaks — and no toast fires for any of it. <b>The tab's ring means “a job is running”</b>, drawn on the tab that will receive its result; the <b>pill's ring of §2 means “waiting”</b> — same shape, two owners, and each is read where it sits. The three failure marks on this page are one shape: the pill's triangle, the score's triangle, the failed button's triangle.</div>
+</section>
+
+<!-- ═══ 8 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">8</span><h2>Typography</h2>
+		<span class="rule">Six steps, two families, one weight above body. <b>Oswald carries titles, labels, buttons, pills and the lyric structure mark — nothing else.</b> A row title is Open&nbsp;Sans&nbsp;15, because it is a name a person reads, not a label. Uppercase is a label's uniform, never a sentence's; an identifier in a row is sentence case, and inside a pill <b>the value keeps its own case</b>.</span>
+	</div>
+	<div class="cols">
+		<div class="spec">
+			<span class="caps">The scale — 22 / 15 / 13 / 12 / 11 / 10</span>
+			<div class="typetable">
+				<span class="h">Step</span><span class="h">Family</span><span class="h">Weight</span><span class="h">Used for</span>
+				<span class="t22">Library</span><span class="m">Oswald</span><span class="m">700</span><span class="m">page title — one treatment, dark, uppercase</span>
+				<span class="t15">Opening Move · Take 2</span><span class="m">Open Sans</span><span class="m">400</span><span class="m">row titles, body, field content</span>
+				<span class="t13">2 takes · 1 pick · v7 · take 2</span><span class="m">Open Sans</span><span class="m">400</span><span class="m">meta, group headers, identifiers</span>
+				<span class="t12">Generate</span><span class="m">Oswald</span><span class="m">500</span><span class="m">button and tab labels</span>
+				<span class="t11">Style</span><span class="m">Oswald</span><span class="m">500</span><span class="m">field labels, status pills</span>
+				<span class="t10">19.9.2026 · 0:03</span><span class="m">Open Sans</span><span class="m">400</span><span class="m">timestamps, micro meta</span>
+			</div>
+			<span class="note">Replaces <b>34 distinct font sizes</b> (0.6–2&nbsp;rem plus px literals) and <b>20 letter-spacings</b>. Three page-title treatments — dark <code>LIBRARY</code>, solid red <code>ADMIN</code>, gradient <code>CREATE</code> — become the one dark treatment. <b>Take 4</b> leaves Oswald for Open&nbsp;Sans: it is the take's name, and a name is read, not shouted.</span>
+		</div>
+		<div class="spec tight" style="width:540px">
+			<span class="caps">Where uppercase is allowed</span>
+			<div class="yesno">
+				<div class="yes">
+					<span class="hd"><svg class="ic sm"><use href="#i-check"/></svg>Uppercase — Oswald</span>
+					<ul>
+						<li>Page title — <b class="t22" style="font-size:13px">LIBRARY</b></li>
+						<li>Tab strip and segment — <span class="t12">USERS</span> · <span class="t12">RANDOM</span></li>
+						<li>Field label — <span class="t11">STYLE PROMPT</span></li>
+						<li>Button label — <span class="t12">GENERATE</span> / <span class="t12">DELETE</span></li>
+						<li>Pill label — <span class="pill queued"><i class="shape"></i>Queued</span> <span class="pill">Model <b class="v">sft</b></span></li>
+						<li>Lyric structure mark — <span class="lyricmark">[Chorus]</span> — the one Oswald that is not uppercase: it labels a part of the song</li>
+					</ul>
+				</div>
+				<div class="no">
+					<span class="hd"><svg class="ic sm"><use href="#i-x"/></svg>Sentence case — Open Sans</span>
+					<ul>
+						<li>Body and lyrics — <span style="color:var(--text)">All mine if I follow</span></li>
+						<li>Row titles — <span style="color:var(--text)">Opening Move</span>, <span style="color:var(--text)">Take 2</span></li>
+						<li>Group headers — <span style="color:var(--text)">v7 · 4 takes</span></li>
+						<li>Menu items — <span style="color:var(--text)">Delete</span>, <span style="color:var(--text)">Save version</span></li>
+						<li>Identifiers in a row — <span style="color:var(--text)">v7 · take 2</span>, <span style="color:var(--text)">sft</span></li>
+					</ul>
+				</div>
+			</div>
+			<span class="note">Replaces <b>129 uppercase rules against 6 explicit none</b>. An identifier is rendered by its one owner (<code>nowPlayingTakeLabel</code>), so <code>UNKNOWN VERSION</code>, <code>take 2</code> and <code>v7 · take 2</code> cannot drift apart again. <b>The pill is the one exception to sentence-case identifiers:</b> its label shouts, its value does not — <code>MODEL sft</code>, because <code>sft</code> is the model's real name and no surface may re-case it.</span>
+		</div>
+	</div>
+	<div class="ex"><span class="k">Example</span><span class="t11">LYRICS</span> <span class="t13">v7 · draft</span> — label shouting, fact speaking, in one line. In the row beside it, <span class="t15">Take 2</span> speaks too.</div>
+</section>
+
+<!-- ═══ 9 ══════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">9</span><h2>Colour — meanings ruled</h2>
+		<span class="rule">Red meant five things (brand, active tab, selected segment, focus ring, delete) and purple three (playing, pick, me). <b>What is ruled is the meaning, not the hex</b> (operator ruling 20.09.2026): <b>purple is where you act and where you are</b>, <b>red means only a person can end this</b> — a failure and a delete. <b>The values are tokens in <code>app.css</code>, and the operator changes them at will</b>; every component reads the token and never a literal. A state colour is the product's own token and is <b>never</b> the action colour — but <b>“playing” is presence, not state</b>: it says where you are, so it wears the action colour like the active tab does.</span>
+	</div>
+	<div class="cols">
+		<div class="opt win" style="flex:2.1">
+			<div class="hd"><h3>The meanings, in today's tokens — purple acts and locates, red ends</h3><span class="badge-win">Tokens · meaning ruled</span></div>
+			<div class="strip" style="align-items:flex-start;gap:16px">
+				<div class="unit" style="flex:1;min-width:0">
+					<span class="tag">Light theme — on #ffffff</span>
+					<div class="swatches">
+						<div class="sw"><i style="background:#7a18c0"></i><b>Action<br>#7a18c0</b><span class="ratio">7.7:1 · <b>AA</b></span></div>
+						<div class="sw"><i style="background:#c02020"></i><b>Danger<br>#c02020</b><span class="ratio">6.1:1 · <b>AA</b></span></div>
+						<div class="sw"><i style="background:linear-gradient(135deg,#d41a0a,#7a18c0)"></i><b>Brand<br>wordmark + cover</b></div>
+					</div>
+					<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:10px 12px;display:flex;flex-direction:column;gap:9px;margin-top:4px">
+						<nav class="tabs" style="--h:44px;border-radius:0;background:none;border-bottom:1px solid var(--border);padding:0"><button class="active">Write</button><button>Takes <span class="count">4</span></button></nav>
+						<div class="strip" style="--h:32px;--fs:.8rem"><button class="btn primary">Generate</button><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
+						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Insufficient free VRAM: need ~2.9 GB.</span>
+					</div>
+					<span class="note">The primary's label is <b>white on #7a18c0 — 7.7:1</b>.</span>
+				</div>
+				<div class="unit spec dark" style="flex:1;min-width:0;border:1px solid #333;border-radius:var(--card-radius);padding:10px 12px;gap:7px">
+					<span class="caps" style="color:#888">Dark theme — on #111111</span>
+					<div class="swatches">
+						<div class="sw"><i style="background:#b45cf5;border-color:rgba(255,255,255,.14)"></i><b style="color:#888">Action<br>#b45cf5</b><span class="ratio" style="color:#888">5.21:1 · <b style="color:#4f4">AA</b></span></div>
+						<div class="sw"><i style="background:#f44;border-color:rgba(255,255,255,.14)"></i><b style="color:#888">Danger<br>#f44</b><span class="ratio" style="color:#888">5.5:1 · <b style="color:#4f4">AA</b></span></div>
+						<div class="sw"><i style="background:#a020f0;border-color:rgba(255,255,255,.14)"></i><b style="color:#888"><span class="gone" style="color:#555">was #a020f0</span><br>3.56:1</b><span class="ratio" style="color:#888">· <b style="color:#f44">fails</b></span></div>
+					</div>
+					<div style="background:#111;border:1px solid #333;border-radius:var(--card-radius);padding:10px 12px;display:flex;flex-direction:column;gap:9px;margin-top:4px">
+						<nav class="tabs" style="--h:44px;border-radius:0;background:none;border-bottom:1px solid #333;padding:0"><button class="active">Write</button><button style="color:#888">Takes <span class="count">4</span></button></nav>
+						<div class="strip" style="--h:32px;--fs:.8rem"><button class="btn primary">Generate</button><button class="btn secondary">Cancel</button><button class="btn destructive">Delete</button></div>
+						<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button><span class="failline">Insufficient free VRAM: need ~2.9 GB.</span>
+					</div>
+					<span class="note" style="color:#888"><b style="color:#e0e0e0">#a020f0 reaches only 3.56:1 on #111</b> — it fails AA as a text or icon colour, so the dark theme takes the lighter sibling <b style="color:#e0e0e0">#b45cf5</b> at <b style="color:#e0e0e0">5.21:1</b>. Its filled button carries <b style="color:#e0e0e0">#111 ink, not white</b>: dark on light purple is 5.21:1, white on it only 3.6:1.</span>
+				</div>
+			</div>
+			<span class="note"><b>These hexes are today's <code>app.css</code>, not the ruling</b> — light <code>#7a18c0</code> with white ink, dark <code>#b45cf5</code> with <code>#111</code> ink, 5.2:1. <b>“Now green” is one line in <code>app.css</code>.</b> What a new value may not do is break a meaning: the action colour stays one colour, and red stays reserved. <b>A lint gate refuses a new literal outside <code>app.css</code></b> — a hex, an <code>rgb()</code>, a px radius, an off-scale font size — so a component cannot quietly re-decide a value the operator owns.</span>
+			<span class="tradeoff"><b>What it costs:</b> the brand red leaves the button, so Songmaker's loudest colour is no longer the first thing a new user presses. The gradient survives in exactly two places — the wordmark and an album's placeholder cover. <b>What it buys:</b> red means one thing, and a failure below a button can no longer be mistaken for the button.</span>
+		</div>
+		<div class="opt" style="flex:1;max-width:300px;opacity:.72">
+			<div class="hd"><h3>Option B — red stays</h3><span class="badge-alt">Not chosen</span></div>
+			<div class="swatches">
+				<div class="sw"><i style="background:#d41a0a"></i><b>Action<br>#d41a0a</b></div>
+				<div class="sw"><i style="background:#7d1414"></i><b>Danger<br>#7d1414</b></div>
+			</div>
+			<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);padding:9px 11px;display:flex;flex-direction:column;gap:8px">
+				<div class="strip" style="--h:32px;--fs:.8rem"><button class="btn primary" style="--action:#d41a0a">Generate</button><button class="btn destructive" style="border-color:#7d1414;color:#7d1414">Delete</button></div>
+				<button class="btn primary failed" style="--h:32px;--fs:.8rem;width:100%;border-color:#7d1414;color:#7d1414"><svg class="ic sm"><use href="#i-warn"/></svg>Generate</button>
+			</div>
+			<span class="tradeoff">Keeps the brand at the point of action, but must invent a dark maroon failure that reads as <i>old</i>, not <i>urgent</i>, beside two warm reds a hand's width apart — and every alarm in the world is the brighter red, which here would be the Generate button.</span>
+		</div>
+	</div>
+	<div class="cols">
+		<div class="spec" style="flex:1">
+			<span class="caps">One meaning each — action, presence, state, ink</span>
+			<div class="meaning">
+				<span class="m"><i class="cdot" style="background:#7a18c0"></i>Action</span><span class="d"><b>Where you press:</b> the primary button, the selected segment, the chosen radio dot, the ticked checkbox, the focus ring, a link.</span>
+				<span class="m"><i class="cdot" style="background:#7a18c0"></i>Presence</span><span class="d"><b>Where you are:</b> the active tab's underline, the rail's selected row and its count, the playing row's tint and pause glyph, the player's progress line. <b>Declared presence, not state</b> — that is why it may use the action colour while a state never may.</span>
+				<span class="m">State</span><span class="d"><b>Its own tokens, never the action colour:</b> <span class="pill ready"><i class="shape"></i>Ready</span> <span class="pill queued"><i class="shape"></i>Queued</span> <span class="pill failed"><i class="shape tri"></i>Failed</span> and the scores <span class="score good"><i class="shape"></i>82</span> <span class="score ok"><i class="shape"></i>61</span> <span class="score bad"><i class="shape tri"></i>34</span>. Shape carries them first, so a different accent cannot break them.</span>
+				<span class="m"><svg class="ic sm" style="color:var(--text)"><use href="#i-star-f"/></svg>Pick · Keep</span><span class="d"><b>Shape, in ink:</b> filled star against outline, filled heart against nothing. Durable properties of a take, not a place you are — and filled-versus-outline reads in grayscale where a hue does not. <code>--keep #c03040</code> / <code>#e04050</code> retires.</span>
+				<span class="m">Me · chat</span><span class="d"><b>Position and a border:</b> my turn is right-aligned in a bordered bubble on <code>--surface</code>; the model's is left-aligned plain text under its name. The purple tint goes — the geometry already said it.</span>
+				<span class="m"><i class="cdot" style="background:#c02020"></i>Red</span><span class="d"><b>Only a person can end this:</b> a failure, and a delete. Nothing that is merely selected, active, focused or branded is red again.</span>
+			</div>
+		</div>
+	</div>
+	<div class="ex"><span class="k">Example</span>On the Takes screen: the tab underline is purple (you are here), Take&nbsp;2's row is purple-tinted with a pause glyph (it is sounding), its star is filled ink (it is the pick), Take&nbsp;1's heart is filled ink (it is kept), the score triangles are their own tokens, and the only red on the screen is Take 4's — because a failure no longer speaks here at all: it speaks on Write, in the Generate button.</div>
+</section>
+
+<!-- ═══ 10 ═════════════════════════════════════════════════════════════ -->
+<section>
+	<div class="shead"><span class="n">10</span><h2>Spacing, radius, shadow</h2>
+		<span class="rule">A 4&nbsp;px grid with five steps, <b>two radii</b> — 4&nbsp;px for what you press or type into, 6&nbsp;px for what contains — <b>two reserved shapes</b> (the pill for state and counts, the circle for play/pause only), and <b>one shadow</b>, worn only by something lifted off the page.</span>
+	</div>
+	<div class="cols">
+		<div class="spec tight" style="width:340px">
+			<span class="caps">Spacing — 4 / 8 / 12 / 16 / 24</span>
+			<div class="scalebar">
+				<div class="u"><i style="width:4px"></i><b>4</b></div>
+				<div class="u"><i style="width:8px"></i><b>8</b></div>
+				<div class="u"><i style="width:12px"></i><b>12</b></div>
+				<div class="u"><i style="width:16px"></i><b>16</b></div>
+				<div class="u"><i style="width:24px"></i><b>24</b></div>
+			</div>
+			<span class="note">4 inside a control · 8 between siblings · 12 row padding · 16 card padding · 24 between sections. Replaces the 2px / 0.25 / 0.5 / 0.6 / 0.75 / 1rem mix found in one screen. <b>A height is a face plus the grid, never a literal:</b> a row is its 32/44 face plus 8 above and below — <b>48 / 60</b>, where round 1 wrote a flat 56 — and a field is that face plus 4 — <b>40 / 52</b>, where round 1 wrote a flat 48. A coarse pointer grows the face, so it grows the row. The one exception is the tab strip, 44 at both widths (§3).</span>
+		</div>
+		<div class="spec tight" style="width:420px">
+			<span class="caps">Radius — 4 and 6, plus two shapes</span>
+			<div class="radii">
+				<div class="r"><i style="border-radius:4px"></i><b>4 px<br>press / type</b></div>
+				<div class="r"><i style="border-radius:6px"></i><b>6 px<br>card / popover</b></div>
+				<div class="r"><i style="border-radius:999px;width:70px;height:24px"></i><b>pill<br>state / count</b></div>
+				<div class="r"><i style="border-radius:50%;width:38px"></i><b>circle<br>play / pause</b></div>
+			</div>
+			<span class="note">Replaces <b>12 literal radius values</b> beating the tokens 106&nbsp;:&nbsp;99. <code>--btn-radius-pill: 16px</code> retires: at 22&nbsp;px tall it was a full pill already, one number less. The transport's three other circles become squares (§1), so the circle keeps one meaning.</span>
+		</div>
+		<div class="spec" style="flex:1">
+			<span class="caps">Shadow — one, and only when lifted</span>
+			<div class="strip" style="align-items:flex-start;gap:16px">
+				<div style="width:146px;height:56px;background:var(--surface);border:1px solid var(--border);border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted)">Card — none</div>
+				<div style="width:146px;height:56px;background:var(--surface);border:1px solid var(--border);border-radius:6px;box-shadow:var(--shadow-overlay);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted)">Popover / modal</div>
+				<div style="width:146px;height:56px;background:var(--surface);border:1px solid var(--action);border-radius:6px;box-shadow:var(--shadow-overlay);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--text-muted)">Row being dragged</div>
+			</div>
+			<span class="note"><code>--shadow-overlay: 0 6px 24px rgba(0,0,0,.14)</code>. Rows, cards, fields, buttons and pills have none — they sit on the page, they do not hover over it. Three things are lifted: a popover, a modal, and a row while a hand holds it.</span>
+		</div>
+	</div>
+	<div class="ex"><span class="k">Example</span>A take row: 12&nbsp;px side padding, 8&nbsp;px between its controls, radius 6 on the card that holds it, radius 4 on nothing (it has no box), circle on its play face, no shadow — until you pick it up.</div>
+</section>
+</div>
+</body>
+</html>

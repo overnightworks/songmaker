@@ -20,7 +20,8 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   eine echte Adresse, das Aufklappen ist reine Darstellung. Neuzeichnung am
   04.09.2026 für #564: Die Leiste ist die eine Albumliste mit Cover, Filter,
   schaltbarem Detailgrad und ziehbarer Breite; die Reihe aus #545 ist als
-  eigene Fläche abgelöst.
+  eigene Fläche abgelöst. Seit 20.09.2026 überschreibt `song-page-phone.html`
+  Zustand (f) für die Songseite: keine Albumzeile mit Prev/Next mehr.
 - `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
@@ -36,4 +37,16 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   in der Leiste links hängen an #229; die Mobilbreite ist als offene Frage
   markiert, nicht gelöst.
 - `song-editor-take.html` — Repaint/Cover am Take im Song-Editor (#230).
-  Erste Fassung freigegeben am 03.09.2026.
+  Erste Fassung freigegeben am 03.09.2026. Seit 20.09.2026 überschreibt
+  `song-page-phone.html` die Take-Zeile auf beiden Breiten: sechs-zeiliges
+  Menü statt beschrifteter Zeilenaktionen.
+- `song-page-phone.html` — die Telefon-Songseite (#914). Freigegeben
+  20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
+  #924). Besitzer der Telefon-Songseite; überschreibt Zustand (f) in
+  `navigation.html` für die Songseite (keine Albumzeile mit Prev/Next) und die
+  Take-Zeile in `song-editor-take.html` auf beiden Breiten (sechs-zeiliges
+  Menü, keine beschrifteten Zeilenaktionen).
+- `vocabulary.html` — das Komponentenvokabular (#924). Freigegeben
+  20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
+  #924). Besitzer jeder Komponentenform; jede UI-Lane zitiert sie, Farbwerte
+  sind Tokens in `app.css`, Bedeutungen sind geregelt.
