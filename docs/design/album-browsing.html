@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Album-Browsing — Fassung 1 (komprimierte Reihe)</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap">
 <style>
 	:root {
 		--paper: #f6f5f8;
@@ -763,13 +764,180 @@
 	@media (prefers-reduced-motion: reduce) {
 		.strip { scroll-behavior: auto; }
 	}
+
+	/* ── #1003 phone play frames: the live dark theme, the vocabulary's --action; scoped to .play-phone ── */
+	.play-phone {
+		--action: #a020f0;
+		--bg: #0d0d0d;
+		--surface: #111;
+		--surface-hover: #1a1a1a;
+		--border: #333;
+		--text: #e0e0e0;
+		--text-muted: #888;
+		--text-subtle: #888;
+		--text-disabled: #555;
+		--header-bg: #0a0a0a;
+		--font-display: 'Oswald', Impact, sans-serif;
+		--font-body: 'Open Sans', Arial, sans-serif;
+		--header-height: 46px;
+		--player-height: 64px;
+		--btn-radius-sm: 4px;
+		--card-radius: 6px;
+		--label-font-size: 11px;
+		--hitbox-frequent: 44px;
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+	:where(.play-phone .pp-device *) { margin: 0; padding: 0; box-sizing: border-box; }
+	.pp-board { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+	.pp-board.pp-bottom { align-items: flex-end; }
+	.pp-figure { margin: 0; display: flex; flex-direction: column; gap: .6rem; width: 390px; }
+	.pp-m { display: block; font-size: .8rem; color: var(--muted); margin-top: .2rem; }
+	.play-phone .findings + p { margin-top: .6rem; }
+	/* ── the phone screen: 390 × 844; a strip shows its bottom only ─────────── */
+	.pp-device {
+		position: relative;
+		width: 390px;
+		height: 844px;
+		flex: none;
+		display: flex;
+		flex-direction: column;
+		background: var(--bg);
+		color: var(--text);
+		font-family: var(--font-body);
+		font-size: 15px;
+		line-height: normal;
+		overflow: hidden;
+		border-radius: 10px;
+		box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 14px 40px rgba(0,0,0,.12);
+	}
+	.pp-device.pp-strip { height: 250px; border-radius: 0 0 10px 10px; }
+	.pp-device.pp-strip::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 26px; background: linear-gradient(to bottom, var(--paper), transparent); z-index: 3; pointer-events: none; }
+
+	/* ── icons ─────────────────────────────────────────────────────────────── */
+	.pp-ic { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+	.pp-ic.pp-solid { fill: currentColor; stroke: none; }
+	.pp-ic.pp-sm { width: 16px; height: 16px; }
+	.pp-ic.pp-xs { width: 14px; height: 14px; }
+	.pp-ic.pp-g22 { width: 22px; height: 22px; }
+	.pp-ic.pp-g26 { width: 26px; height: 26px; }
+	.pp-ic.pp-g28 { width: 28px; height: 28px; }
+
+	/* ── the one button vocabulary (frozen) ────────────────────────────────── */
+	.pp-icon-btn { width: var(--hitbox-frequent); height: var(--hitbox-frequent); flex: none; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-muted); border-radius: var(--btn-radius-sm); }
+	.pp-icon-btn.pp-ink { color: var(--text); }
+	.pp-icon-btn.pp-on { color: var(--action); }
+	.pp-icon-btn.pp-dim { color: var(--text-disabled); }
+	/* the play circle: the only circle and the only filled control */
+	.pp-circle { width: var(--circle, 44px); height: var(--circle, 44px); flex: none; border-radius: 50%; border: 1px solid var(--action); background: var(--action); color: #fff; display: inline-flex; align-items: center; justify-content: center; }
+	.pp-hit { outline: 1px dashed color-mix(in srgb, var(--action) 65%, transparent); outline-offset: -1px; }
+	.pp-hit-note { position: absolute; font-family: var(--font-display); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: #fff; background: color-mix(in srgb, var(--action) 80%, #000); padding: 1px 5px; border-radius: 3px; pointer-events: none; z-index: 4; }
+
+	/* ── app chrome (frozen appbar) ───────────────────────────────────────── */
+	.pp-appbar { height: var(--header-height); flex: none; display: flex; align-items: center; padding: 0 .1rem; background: var(--header-bg); border-bottom: 1px solid var(--border); }
+	.pp-appbar h1 { flex: 1; text-wrap: nowrap; min-width: 0; font-family: var(--font-display); font-weight: 500; font-size: 1.2rem; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 .3rem; color: var(--text); margin: 0; }
+
+	/* ── collection header — CollectionHeaderFrame.svelte at ≤ 768 px ───────── */
+	.pp-chead { flex: none; display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; padding: .8rem .8rem .6rem; }
+	.pp-chead .pp-ccover { width: 56px; height: 56px; flex: none; background: linear-gradient(135deg, #3b1d5e, #0e0b18); }
+	.pp-chead .pp-ccover.pp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--surface-hover); }
+	.pp-chead .pp-ccover.pp-grid span { background: linear-gradient(135deg, #3b1d5e, #0e0b18); }
+	.pp-chead .pp-ccover.pp-grid span:nth-child(2) { background: linear-gradient(135deg, #1d3f5e, #0b1018); }
+	.pp-chead .pp-ccover.pp-grid span:nth-child(3) { background: linear-gradient(135deg, #5e2e1d, #180d0b); }
+	.pp-chead .pp-ccover.pp-grid span:nth-child(4) { background: linear-gradient(135deg, #2e5e1d, #0d180b); }
+	.pp-chead .pp-titles { min-width: 10rem; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+	.pp-chead .pp-ctitle { font-family: var(--font-display); font-size: 1.2rem; text-transform: uppercase; letter-spacing: 1.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pp-chead .pp-cmeta { font-size: .8rem; color: var(--text-muted); }
+	.pp-chead .pp-crumb { font-size: .8rem; color: var(--text-muted); }
+	.pp-chead .pp-crumb i { font-style: normal; color: var(--text-subtle); margin: 0 .35rem; }
+	.pp-chead .pp-actions { display: flex; align-items: center; gap: .6rem; flex: none; }
+	/* the header actions row */
+	.pp-chead.pp-proposed .pp-actions { gap: .3rem; }
+	.pp-chead.pp-proposed .pp-actions .pp-circle { --circle: 48px; margin-right: .2rem; }
+	.pp-chead.pp-proposed .pp-actions .pp-spacer { flex: 1; }
+	.pp-chead.pp-proposed .pp-actions { flex: 1 0 100%; }
+
+	/* ── rows ─────────────────────────────────────────────────────────────── */
+	.pp-list { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 2px; padding: 0 .8rem; overflow: hidden; }
+	.pp-list.pp-album { gap: .5rem; }
+	.pp-trow { display: flex; align-items: center; gap: .6rem; padding: .65rem .8rem; background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius); font-size: .93rem; color: var(--text); min-width: 0; text-align: left; font-family: inherit; }
+	.pp-trow .pp-body { flex: 1; min-width: 0; display: flex; align-items: center; gap: .6rem; }
+	.pp-trow .pp-body.pp-col { flex-direction: column; align-items: flex-start; gap: 2px; }
+	.pp-trow .pp-ttitle { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pp-trow .pp-body.pp-col .pp-ttitle { flex: none; width: 100%; max-width: 100%; font-size: 1rem; text-align: left; }
+	.pp-trow .pp-tmeta { font-size: .75rem; color: var(--text-subtle); flex: none; }
+	.pp-trow .pp-star { color: var(--action); margin-right: .2rem; }
+	.pp-overflow-btn { width: 44px; height: 44px; flex: none; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: var(--text-muted); }
+	/* the row is the play target; the playing row wears the action colour and an equalizer mark */
+	.pp-trow.pp-tap { min-height: 60px; padding: .5rem .3rem .5rem .9rem; gap: .5rem; }
+	.pp-trow.pp-tap .pp-body.pp-col { gap: 1px; }
+	.pp-trow.pp-tap .pp-ttitle { font-size: 1rem; }
+	.pp-trow.pp-tap.pp-now { border-color: var(--action); }
+	.pp-trow.pp-tap.pp-now .pp-ttitle { color: var(--action); }
+	.pp-eq { width: 18px; height: 16px; flex: none; display: inline-flex; align-items: flex-end; gap: 2px; margin-right: .1rem; }
+	.pp-eq i { display: block; width: 3px; background: var(--action); border-radius: 1px; }
+	.pp-eq i:nth-child(1) { height: 60%; } .pp-eq i:nth-child(2) { height: 100%; } .pp-eq i:nth-child(3) { height: 40%; } .pp-eq i:nth-child(4) { height: 80%; }
+	.pp-trow.pp-tap .pp-num { width: 18px; flex: none; font-family: var(--font-display); font-size: .8rem; color: var(--text-subtle); text-align: center; }
+
+	/* ── mini-player, Variant C ── */
+	.pp-player { flex: none; height: var(--player-height); position: relative; display: flex; align-items: center; gap: 0; padding: 0 .7rem; background: var(--surface); border-top: 1px solid var(--border); }
+	.pp-cover { width: 40px; height: 40px; border-radius: var(--btn-radius-sm); flex: none; background: linear-gradient(135deg, #3b1d5e, #0e0b18); }
+	.pp-track { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+	.pp-track-title { font-family: var(--font-display); font-size: .92rem; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }
+	.pp-track-detail { font-size: .72rem; color: var(--text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.pp-player .pp-line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--border); }
+	.pp-player .pp-line span { display: block; height: 100%; width: 38%; background: var(--action); }
+	.pp-open-np { flex: 1 1 0; min-width: 0; height: 100%; display: flex; align-items: center; gap: .5rem; padding: 0; margin: 0; background: none; border: none; color: inherit; font: inherit; text-align: left; }
+	.pp-open-np.pp-right { justify-content: flex-end; }
+	.pp-player .pp-transport { display: flex; align-items: center; gap: 6px; flex: none; }
+	.pp-player .pp-transport .pp-circle { --circle: 48px; }
+
+
+
+	.pp-tail { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .5rem; padding: .75rem .8rem; overflow: hidden; }
+
+	/* ── full Now Playing — NowPlayingFrame.svelte, stacked ───────────────── */
+	.pp-np { background: var(--bg); }
+	.pp-np-header { flex: none; display: flex; align-items: flex-start; justify-content: space-between; gap: .6rem; padding: 1rem 1.4rem 0; }
+	.pp-np-kicker { font-family: var(--font-display); font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--text-muted); }
+	.pp-np-title { color: var(--text); margin: 0; font-family: var(--font-display); font-weight: 500; font-size: 1.3rem; text-transform: uppercase; letter-spacing: .03em; line-height: 1.2; }
+	.pp-np-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1.6rem; padding: 1.2rem 1.4rem 1.4rem; overflow: hidden; }
+	.pp-np-cover-col { display: flex; flex-direction: column; align-items: center; gap: 1.1rem; position: relative; }
+	.pp-cover-art { width: min(300px, 80%); aspect-ratio: 1; border-radius: var(--card-radius); background: linear-gradient(135deg, #3b1d5e, #0e0b18); box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+	.pp-cover-meta { display: flex; flex-direction: column; align-items: center; gap: .2rem; text-align: center; }
+	.pp-cover-title { font-family: var(--font-display); font-size: 1.4rem; text-transform: uppercase; letter-spacing: .03em; }
+	.pp-cover-line { font-size: .8rem; color: var(--text-muted); }
+	.pp-from-link { display: inline-flex; align-items: center; gap: .2rem; min-height: 32px; padding: 0 .5rem; font-size: .8rem; color: var(--action); background: none; border: none; font-family: inherit; }
+	.pp-from-link .pp-ic { width: 14px; height: 14px; }
+	.pp-progress { width: min(300px, 80%); display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: .6rem; }
+	.pp-time { font-family: var(--font-display); font-size: var(--label-font-size); color: var(--text-muted); }
+	.pp-seek { position: relative; height: 24px; display: flex; align-items: center; }
+	.pp-seek .pp-track-bg { width: 100%; height: 4px; border-radius: 999px; background: color-mix(in srgb, var(--border) 45%, transparent); overflow: hidden; }
+	.pp-seek .pp-track-bg span { display: block; height: 100%; width: 38%; background: var(--action); }
+	.pp-seek .pp-thumb { position: absolute; left: calc(38% - 7px); width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--bg); background: var(--text); }
+	.pp-np-transport { display: flex; align-items: center; gap: 10px; position: relative; }
+	.pp-np-transport .pp-circle { --circle: 64px; }
+	/* an empty 44 px slot at the outer right balances shuffle so the circle stays on the centre line */
+	.pp-np-transport .pp-slot { outline: 1px dashed color-mix(in srgb, var(--text-disabled) 60%, transparent); outline-offset: -1px; }
+	.pp-center-guide { position: absolute; left: 50%; top: -6px; bottom: -6px; width: 0; border-left: 1px dashed color-mix(in srgb, var(--action) 70%, transparent); pointer-events: none; }
+	.pp-center-guide::after { content: attr(data-note); position: absolute; top: -18px; left: 50%; transform: translateX(-50%); font-family: var(--font-display); font-size: 10px; letter-spacing: .5px; text-transform: uppercase; color: var(--action); white-space: nowrap; }
+	.pp-np-lyrics { display: flex; flex-direction: column; gap: .8rem; }
+	.pp-lyrics { font-family: 'Courier New', monospace; font-size: .92rem; line-height: 1.6; white-space: pre-wrap; color: var(--text); }
+	.pp-lyrics .pp-mark { font-family: var(--font-display); color: var(--text-subtle); }
+	.pp-panel-trigger { flex: none; display: flex; flex-direction: column; align-items: flex-start; gap: .15rem; width: 100%; padding: .6rem 1.4rem; border: 0; border-top: 1px solid var(--border); background: var(--header-bg); color: var(--text-muted); text-align: left; font: inherit; }
+	.pp-trigger-up-next { font-size: .72rem; color: var(--text-subtle); }
+	.pp-trigger-label { display: inline-flex; align-items: center; gap: .3rem; font-family: var(--font-display); font-size: .8rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text); }
+
+	.pp-tail { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .5rem; padding: .75rem .8rem; overflow: hidden; }
 </style>
 </head>
 <body>
 <p class="freeze-note">
 	Eingefrorener Bildbesitzer — vom Operator freigegeben am 01.09.2026, erste Fassung, nach dem
-	Ausprobieren des bedienbaren Prototyps gesegnet, Issue #348. Änderungen an dieser Datei brauchen
-	eine neue Freigabe.
+	Ausprobieren des bedienbaren Prototyps gesegnet, Issue #348. Ergänzt am 26.09.2026 um Zustand (f),
+	die Abspielsprache auf dem Telefon (Album, Playlist, Mini-Player, Now Playing), freigegeben in
+	Issue #1003. Änderungen an dieser Datei brauchen eine neue Freigabe.
 </p>
 <div class="wrap">
 
@@ -1362,6 +1530,212 @@
 				</div>
 			</div>
 		</div>
+	</section>
+
+	<hr class="rule">
+
+	<section class="play-phone" id="play-phone" lang="en">
+		<svg style="display:none" aria-hidden="true">
+		<symbol id="pp-i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
+		<symbol id="pp-i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke-width="2.6"/></symbol>
+		<symbol id="pp-i-prev" viewBox="0 0 24 24"><path d="M18 19l-10-7 10-7z" fill="currentColor" stroke="none"/><rect x="5" y="5" width="2.4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+		<symbol id="pp-i-next" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z" fill="currentColor" stroke="none"/><rect x="16.6" y="5" width="2.4" height="14" rx="1" fill="currentColor" stroke="none"/></symbol>
+		<symbol id="pp-i-shuffle" viewBox="0 0 24 24"><path d="M3 7h3.5l3 5M21 7h-4l-8 10H3"/><path d="M17.5 4.5L21 7l-3.5 2.5M17.5 14.5L21 17l-3.5 2.5"/><path d="M21 17h-4"/></symbol>
+		<symbol id="pp-i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+		<symbol id="pp-i-up" viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></symbol>
+		<symbol id="pp-i-chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
+		<symbol id="pp-i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.8" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.8" fill="currentColor" stroke="none"/></symbol>
+		<symbol id="pp-i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+		<symbol id="pp-i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+		</svg>
+		<div class="state-head">
+			<h2>(f) Playing on the phone — one play language</h2>
+			<span class="tag tag-next">Blessed 26.09.2026 · #1003</span>
+		</div>
+		<p class="state-note">
+			The phone’s album page, playlist page, mini-player and full Now Playing, 390&nbsp;px wide, in the live dark
+			theme with the vocabulary’s action colour. Frozen from the operator-blessed picture
+			<code>~/songmaker-mockups/v6-play/play.html</code> (Variant&nbsp;C); its “today” frames and the tall Variant&nbsp;T
+			were not chosen and are not part of this owner. The one-play-shape rule itself lives in
+			<code>docs/design/vocabulary.html</code> §1.
+		</p>
+		<div class="pp-board">
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>A2 · Album page, playing</b> — the header’s 48&nbsp;px circle plays the album, shuffle beside it; rows carry no play glyph — the row is the target, the playing row shows the equalizer; the mini-player (Variant&nbsp;C) says “from Nightdrive”. Blessed 26.09.2026, #1003.<span class="pp-m">measured in px: header play 48 × 48 · shuffle 44 × 44 · row 62 high · bar 64 high · bar play 48 × 48</span></figcaption>
+				<div class="pp-device" id="pp-a2">
+					<header class="pp-appbar">
+						<button class="pp-icon-btn pp-ink" aria-label="Open navigation"><svg class="pp-ic"><use href="#pp-i-menu"/></svg></button>
+						<h1>Songmaker</h1>
+					</header>
+					<div class="pp-chead pp-proposed">
+						<span class="pp-ccover" aria-hidden="true"></span>
+						<div class="pp-titles">
+							<span class="pp-ctitle">Nightdrive</span>
+							<span class="pp-cmeta">Late-night synthwave · 2026</span>
+							<span class="pp-crumb">Library<i>›</i>Nightdrive</span>
+						</div>
+						<div class="pp-actions">
+							<button class="pp-circle" aria-label="Play album"><svg class="pp-ic pp-g22"><use href="#pp-i-play"/></svg></button>
+							<button class="pp-icon-btn" aria-label="Shuffle album"><svg class="pp-ic"><use href="#pp-i-shuffle"/></svg></button>
+							<span class="pp-spacer"></span>
+							<button class="pp-icon-btn" aria-label="Add song"><svg class="pp-ic"><use href="#pp-i-plus"/></svg></button>
+							<button class="pp-icon-btn" aria-label="Album menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></button>
+						</div>
+					</div>
+					<div class="pp-list">
+						<button class="pp-trow pp-tap pp-now pp-hit"><span class="pp-eq" aria-label="Playing"><i></i><i></i><i></i><i></i></span><span class="pp-body pp-col"><span class="pp-ttitle">Opening Move</span><span class="pp-tmeta">4 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<span class="pp-hit-note" style="right:64px;top:200px">tap the row → plays</span>
+						<button class="pp-trow pp-tap"><span class="pp-num">2</span><span class="pp-body pp-col"><span class="pp-ttitle">Headlights</span><span class="pp-tmeta">2 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">3</span><span class="pp-body pp-col"><span class="pp-ttitle">All Mine If I Follow</span><span class="pp-tmeta">7 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">4</span><span class="pp-body pp-col"><span class="pp-ttitle">Radio Low and Warm</span><span class="pp-tmeta">1 take</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap" style="color:var(--text-disabled)"><span class="pp-num">5</span><span class="pp-body pp-col"><span class="pp-ttitle">Quiet Never Storm</span><span class="pp-tmeta">no take yet</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">6</span><span class="pp-body pp-col"><span class="pp-ttitle">Berlin, 1984</span><span class="pp-tmeta">3 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+					</div>
+					<div class="pp-player">
+						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Opening Move</span><span class="pp-track-detail">from Nightdrive</span></span></button>
+						<span class="pp-transport">
+							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
+							<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
+							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
+						</span>
+						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
+						<span class="pp-line"><span></span></span>
+					</div>
+				</div>
+			</figure>
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>B2 · Playlist page, playing</b> — the album’s header and row again: the circle plays the playlist, shuffle beside it; the row plays, the playing row shows the equalizer, ⋯ stays; the mini-player says “from Late Drives”. Blessed 26.09.2026, #1003.<span class="pp-m">measured in px: header play 48 × 48 · row 62 high · row menu 44 × 44 · bar play 48 × 48</span></figcaption>
+				<div class="pp-device" id="pp-b2">
+					<header class="pp-appbar">
+						<button class="pp-icon-btn pp-ink" aria-label="Open navigation"><svg class="pp-ic"><use href="#pp-i-menu"/></svg></button>
+						<h1>Songmaker</h1>
+					</header>
+					<div class="pp-chead pp-proposed">
+						<span class="pp-ccover pp-grid" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+						<div class="pp-titles">
+							<span class="pp-ctitle">Late Drives</span>
+							<span class="pp-crumb">Playlists<i>›</i>Late Drives</span>
+						</div>
+						<div class="pp-actions">
+							<button class="pp-circle" aria-label="Play playlist"><svg class="pp-ic pp-g22"><use href="#pp-i-play"/></svg></button>
+							<button class="pp-icon-btn" aria-label="Shuffle playlist"><svg class="pp-ic"><use href="#pp-i-shuffle"/></svg></button>
+							<span class="pp-spacer"></span>
+							<button class="pp-icon-btn" aria-label="Playlist menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></button>
+						</div>
+					</div>
+					<div class="pp-list">
+						<button class="pp-trow pp-tap pp-now"><span class="pp-eq" aria-label="Playing"><i></i><i></i><i></i><i></i></span><span class="pp-body pp-col"><span class="pp-ttitle"><span class="pp-star">★</span>Opening Move</span><span class="pp-tmeta">Nightdrive · v7 · take 2 · 3:08</span></span><span class="pp-overflow-btn" aria-label="Track menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">2</span><span class="pp-body pp-col"><span class="pp-ttitle">Sodium Sky</span><span class="pp-tmeta">Tidewater · v3 · take 1 · 4:12</span></span><span class="pp-overflow-btn" aria-label="Track menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">3</span><span class="pp-body pp-col"><span class="pp-ttitle"><span class="pp-star">★</span>Headlights</span><span class="pp-tmeta">Nightdrive · v2 · take 2 · 2:51</span></span><span class="pp-overflow-btn" aria-label="Track menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">4</span><span class="pp-body pp-col"><span class="pp-ttitle">Harbour Lights</span><span class="pp-tmeta">Tidewater · v5 · take 3 · 3:40</span></span><span class="pp-overflow-btn" aria-label="Track menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">5</span><span class="pp-body pp-col"><span class="pp-ttitle">Berlin, 1984</span><span class="pp-tmeta">Nightdrive · v4 · take 1 · 3:22</span></span><span class="pp-overflow-btn" aria-label="Track menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+					</div>
+					<div class="pp-player">
+						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Opening Move</span><span class="pp-track-detail">from Late Drives</span></span></button>
+						<span class="pp-transport">
+							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
+							<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
+							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
+						</span>
+						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
+						<span class="pp-line"><span></span></span>
+					</div>
+				</div>
+			</figure>
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>D1 · Full Now Playing</b> — “from Nightdrive ›” under the title opens the album; shuffle · previous · 64&nbsp;px play · next, and an empty 44&nbsp;px slot (dashed) at the outer right keeps the circle on the column’s centre line — no repeat. Blessed 26.09.2026, #1003.<span class="pp-m">measured in px: from link 128 × 32 · play 64 × 64 · square 44 × 44 · play offset from centre 0</span></figcaption>
+				<div class="pp-device pp-np" id="pp-d1">
+					<header class="pp-np-header">
+						<div><p class="pp-np-kicker">Now Playing</p><h2 class="pp-np-title">Opening Move</h2></div>
+						<button class="pp-icon-btn pp-ink" aria-label="Close"><svg class="pp-ic"><use href="#pp-i-x"/></svg></button>
+					</header>
+					<div class="pp-np-body">
+						<section class="pp-np-cover-col">
+							<div class="pp-cover-art" aria-hidden="true"></div>
+							<div class="pp-cover-meta">
+								<span class="pp-cover-title">Opening Move</span>
+								<button class="pp-from-link pp-hit" aria-label="Open album Nightdrive">from Nightdrive <svg class="pp-ic"><use href="#pp-i-chev"/></svg></button>
+								<span class="pp-cover-line">v7 · take 2</span>
+							</div>
+							<div class="pp-progress"><span class="pp-time">1:12</span><div class="pp-seek"><div class="pp-track-bg"><span></span></div><span class="pp-thumb"></span></div><span class="pp-time">3:08</span></div>
+							<div class="pp-np-transport">
+								<span class="pp-center-guide" data-note="centre of the column"></span>
+								<button class="pp-icon-btn pp-on" aria-label="Shuffle on"><svg class="pp-ic"><use href="#pp-i-shuffle"/></svg></button>
+								<button class="pp-icon-btn pp-ink" aria-label="Previous song"><svg class="pp-ic pp-g22"><use href="#pp-i-prev"/></svg></button>
+								<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g28"><use href="#pp-i-pause"/></svg></button>
+								<button class="pp-icon-btn pp-ink" aria-label="Next song"><svg class="pp-ic pp-g22"><use href="#pp-i-next"/></svg></button>
+								<span class="pp-icon-btn pp-slot" aria-hidden="true"></span>
+							</div>
+						</section>
+						<section class="pp-np-lyrics">
+							<div class="pp-lyrics"><span class="pp-mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to storm</div>
+						</section>
+					</div>
+					<button class="pp-panel-trigger"><span class="pp-trigger-up-next">Up next: Headlights</span><span class="pp-trigger-label">Queue <svg class="pp-ic pp-xs"><use href="#pp-i-up"/></svg></span></button>
+				</div>
+			</figure>
+		</div>
+		<div class="pp-board pp-bottom">
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>C2 · Mini-player, playing</b> — cover · title over “from Nightdrive” · previous · 48&nbsp;px pause in the exact centre · next; cover and words open Now Playing, so does the empty right side (dashed targets). Blessed 26.09.2026, #1003.<span class="pp-m">measured in px: bar 64 high · open target 110 × 63 · title room 62 wide · prev 44 × 44 · pause 48 × 48 · play offset from centre 0</span></figcaption>
+				<div class="pp-device pp-strip" id="pp-c2">
+					<div class="pp-tail">
+						<button class="pp-trow pp-tap"><span class="pp-num">4</span><span class="pp-body pp-col"><span class="pp-ttitle">Radio Low and Warm</span><span class="pp-tmeta">1 take</span></span><span class="pp-overflow-btn"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">6</span><span class="pp-body pp-col"><span class="pp-ttitle">Berlin, 1984</span><span class="pp-tmeta">3 takes</span></span><span class="pp-overflow-btn"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+					</div>
+					<div class="pp-player">
+						<button class="pp-open-np pp-hit" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Opening Move</span><span class="pp-track-detail">from Nightdrive</span></span></button>
+						<span class="pp-transport">
+							<button class="pp-icon-btn pp-ink pp-hit" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
+							<button class="pp-circle pp-hit" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
+							<button class="pp-icon-btn pp-ink pp-hit" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
+						</span>
+						<button class="pp-open-np pp-right pp-hit" aria-label="Open Now Playing"></button>
+						<span class="pp-hit-note" style="right:10px;top:50%;transform:translateY(-50%)">tap →</span>
+						<span class="pp-center-guide" style="top:0;bottom:0" data-note=""></span>
+						<span class="pp-line"><span></span></span>
+					</div>
+				</div>
+			</figure>
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>C3 · Mini-player, paused</b> — the same bar with a play glyph; a playlist source reads “from Late Drives”. Blessed 26.09.2026, #1003.<span class="pp-m">measured in px: bar 64 high · play 48 × 48 · title room 62 wide</span></figcaption>
+				<div class="pp-device pp-strip" id="pp-c3">
+					<div class="pp-tail">
+						<button class="pp-trow pp-tap"><span class="pp-num">4</span><span class="pp-body pp-col"><span class="pp-ttitle">Harbour Lights</span><span class="pp-tmeta">Tidewater · v5 · take 3 · 3:40</span></span><span class="pp-overflow-btn"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">5</span><span class="pp-body pp-col"><span class="pp-ttitle">Berlin, 1984</span><span class="pp-tmeta">Nightdrive · v4 · take 1 · 3:22</span></span><span class="pp-overflow-btn"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+					</div>
+					<div class="pp-player">
+						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Opening Move</span><span class="pp-track-detail">from Late Drives</span></span></button>
+						<span class="pp-transport">
+							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
+							<button class="pp-circle" aria-label="Play"><svg class="pp-ic pp-g22"><use href="#pp-i-play"/></svg></button>
+							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
+						</span>
+						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
+						<span class="pp-line"><span></span></span>
+					</div>
+				</div>
+			</figure>
+		</div>
+		<section class="decisions">
+			<div class="decision">
+				<h3>The rules</h3>
+				<ol class="findings">
+					<li><b>There is one play shape: the filled circle.</b> It stands in the album and playlist header, in the mini-player and on the full Now Playing — a play glyph inside means "start", a pause glyph means "playing"; nothing else on the phone is a circle or filled.</li>
+					<li><b>A collection plays from its header:</b> the circle plays the album or playlist from the top, the shuffle square beside it plays it shuffled; "▶ PLAY" as a word is gone.</li>
+					<li><b>A row plays by being tapped</b> — from this album or this playlist, with the rest queued behind it — and carries no play glyph of its own; the row that is playing shows the equalizer mark and its title in the action colour; ⋯ stays at the row's right.</li>
+					<li><b>The mini-player says where the music comes from:</b> a second small line "from Nightdrive" or "from Late Drives" under the title; cover and words are one target that opens Now Playing.</li>
+					<li><b>The mini-player's transport is previous · play/pause · next, play in the exact centre, every target 44 px or more</b> — shuffle lives only in the header and on the full player.</li>
+					<li><b>On the full Now Playing the title block says "from &lt;Album&gt; ›" and that line opens the album;</b> the transport is shuffle · previous · 64 px play · next, no repeat.</li>
+					<li><b>Opening Now Playing and a cut title:</b> a tap on the mini-player’s cover or title, or swiping the bar up, opens Now Playing. A title that does not fit scrolls once, slowly — pause, scroll, pause, back to the start — and only when it is cut; under <code>prefers-reduced-motion</code> it stays static with an ellipsis; the full title is always the accessible name.</li>
+				</ol>
+				<p>Honest notes: “+ Song” and the header ⋯ are drawn as 44&nbsp;px icon squares only so the row of actions is honest; they are not this picture’s subject. The equalizer mark is static here; whether it moves is the vocabulary’s motion rule. The source line reads the playback context (album or playlist); a song opened by address outside its album (#997) has no source and shows the take line instead.</p>
+			</div>
+		</section>
 	</section>
 
 	<p class="foot-note">

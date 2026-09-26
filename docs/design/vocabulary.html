@@ -169,7 +169,7 @@ section{
 .transport{display:flex;align-items:center;gap:8px}
 .circle{
 	width:var(--circle,48px);height:var(--circle,48px);flex:none;border-radius:50%;
-	border:2px solid var(--action);background:var(--surface);color:var(--action);
+	border:1px solid var(--action);background:var(--action);color:var(--on-action,#fff);
 	display:inline-flex;align-items:center;justify-content:center;cursor:pointer;
 }
 .circle .ic{width:22px;height:22px}
@@ -522,7 +522,7 @@ section{
 				<span class="r">Secondary</span><span class="px">32 h · 44 h coarse</span><span class="px">outline, a word</span><span class="pl"><b>Inside a dialog, and nowhere else</b> — <code>CANCEL</code> beside the destructive button. On a surface, what it used to carry is a symbol.</span>
 				<span class="r">Icon-only</span><span class="px">32×32 · 44×44 coarse</span><span class="px">glyph 18 · 20 coarse</span><span class="pl">Every control that is not the one primary: a row, an app bar, the transport, a field. Always an accessible name <b>and a pointer tooltip</b> carrying the same words.</span>
 				<span class="r">Destructive</span><span class="px">32 h · 44 h coarse</span><span class="px">outline, red <code>DELETE</code></span><span class="pl"><b>One place only: the action row of a confirm dialog</b>, whose title already names the object — so the button is the bare verb. A menu's red last row is a menu row, not this button.</span>
-				<span class="r">Play circle</span><span class="px">48×48 · 56×56 coarse</span><span class="px">circle, accent ring</span><span class="pl">The player transport, and nothing else — the circle means play/pause. A row's leading play face is icon-only (32/44), not this.</span>
+				<span class="r">Play circle</span><span class="px">48×48 · 64×64<br>on Now Playing</span><span class="px">filled circle</span><span class="pl"><b>The one play shape</b> (#1003, 26.09.2026): the album and playlist header, the mini-player and Now Playing, and nothing else — a play glyph inside means start, a pause glyph means playing; nothing else on the phone is a filled circle. Album and playlist rows play by a tap on the row and carry no play face; a take row's leading play face is icon-only (32/44), not this.</span>
 			</div>
 			<span class="note">The face <b>fills the box</b> — 32×32 on a mouse, 44×44 on a coarse pointer — whether it is drawn (a border, a circle) or invisible (a bare glyph). No formula derives one from the other; <code>hitbox.ts</code> pins its face to 32 px today even when the box grows to 44.</span>
 		</div>
@@ -620,14 +620,14 @@ section{
 			<div class="transport" style="--h:44px;--glyph:20px">
 				<button class="icon-btn ink" aria-label="Shuffle"><svg class="ic"><use href="#i-shuffle"/></svg></button>
 				<button class="icon-btn ink" aria-label="Previous"><svg class="ic"><use href="#i-prev"/></svg></button>
-				<button class="circle" aria-label="Play" style="--circle:56px"><svg class="ic"><use href="#i-play"/></svg></button>
+				<button class="circle" aria-label="Play" style="--circle:64px"><svg class="ic" style="width:28px;height:28px"><use href="#i-play"/></svg></button>
 				<button class="icon-btn ink" aria-label="Next"><svg class="ic"><use href="#i-next"/></svg></button>
-				<span class="note" style="margin-left:6px">56&nbsp;px circle,<br>44&nbsp;px squares</span>
+				<span class="note" style="margin-left:6px">64&nbsp;px circle on Now&nbsp;Playing,<br>44&nbsp;px squares</span>
 			</div>
-			<span class="note"><b>The circle means play/pause and nothing else.</b> Shuffle, previous and next are ordinary icon-only buttons; today they are 44&nbsp;px circles too, so four circles compete for one meaning. The play circle keeps its accent ring — it is presence, not state — and loses its gradient hover and its animated border.</span>
+			<span class="note"><b>The circle means play/pause and nothing else.</b> Shuffle, previous and next are ordinary icon-only buttons; today they are 44&nbsp;px circles too, so four circles compete for one meaning. <b>One play shape, the filled circle</b> (#1003, 26.09.2026): 48&nbsp;px in the album and playlist header and in the mini-player, 64&nbsp;px on Now Playing; a play glyph means start, a pause glyph means playing; it loses its gradient hover and its animated border. <b>Rows play by a tap on the row</b> — no play glyph of their own. The phone frames are frozen in <code>album-browsing.html</code> (f).</span>
 		</div>
 	</div>
-	<div class="foot2"><div class="ex"><span class="k">Example</span>The album title row becomes a <b>play symbol</b> plus a 32&nbsp;px <b>…</b> — <code>+ SONG</code> moves into that menu, and <b>Share</b> becomes the share symbol in the header beside it. A confirm dialog is the only place where <b>DELETE</b> stands as a button at all.</div><div class="kills"><span class="k">Replaces</span><span class="gone">gradient pill · outline pill · outline square icon · small outline rect · solid accent rect · circle icon · ghost text</span> — 7 shapes, 40 <code>*-btn</code> rules in 29 files, and the four class names <span class="gone">danger</span> <span class="gone">off</span> <span class="gone">busy</span> <span class="gone">quiet</span>. The washed-pink disabled gradient goes; disabled drops the fill and keeps the outline. <b>Words that become symbols:</b> <span class="gone">SHARE</span> <span class="gone">COPY</span> <span class="gone">RETRY</span> <span class="gone">SAVE</span> — share and copy are glyphs, retry is the primary pressed again, Save version is a menu row.</div></div>
+	<div class="foot2"><div class="ex"><span class="k">Example</span>The album header plays from the <b>filled play circle</b> with shuffle beside it (#1003), plus a 32&nbsp;px <b>…</b> — <code>+ SONG</code> moves into that menu, and <b>Share</b> becomes the share symbol in the header beside it. A confirm dialog is the only place where <b>DELETE</b> stands as a button at all.</div><div class="kills"><span class="k">Replaces</span><span class="gone">gradient pill · outline pill · outline square icon · small outline rect · solid accent rect · circle icon · ghost text</span> — 7 shapes, 40 <code>*-btn</code> rules in 29 files, and the four class names <span class="gone">danger</span> <span class="gone">off</span> <span class="gone">busy</span> <span class="gone">quiet</span>. The washed-pink disabled gradient goes; disabled drops the fill and keeps the outline. <b>Words that become symbols:</b> <span class="gone">SHARE</span> <span class="gone">COPY</span> <span class="gone">RETRY</span> <span class="gone">SAVE</span> — share and copy are glyphs, retry is the primary pressed again, Save version is a menu row.</div></div>
 </section>
 
 <!-- ═══ 2 ══════════════════════════════════════════════════════════════ -->
