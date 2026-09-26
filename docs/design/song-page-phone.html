@@ -224,7 +224,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	padding: 0 .3rem;
 }
 
-/* ── tab strip: Write / Takes, the editor's own row ───────────────────── */
+/* ── tab strip: Edit / Co-writer / Takes (n), the song's own row ─────── */
 .tabs {
 	flex: none;
 	display: flex;
@@ -244,6 +244,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	font-size: var(--tab-font-size);
 	text-transform: uppercase;
 	letter-spacing: .5px;
+	white-space: nowrap;
 	display: inline-flex;
 	align-items: center;
 	gap: .4rem;
@@ -473,7 +474,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .state-block .glyph { color: var(--text-disabled); }
 .state-block p { font-size: .95rem; }
 
-/* ── the one action bar, Write only ───────────────────────────────────── */
+/* ── the one action bar, Edit only ────────────────────────────────────── */
 .actionbar {
 	flex: none;
 	min-height: var(--editor-generate-bar-height);
@@ -640,7 +641,21 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .popover button + button { border-top: 1px solid var(--border); }
 .popover button.del { color: var(--score-bad); }
 
-/* ── co-writer screen ─────────────────────────────────────────────────── */
+/* ── co-writer tab ────────────────────────────────────────────────────── */
+/* the conversation's own line under the tabs: provider, since when, its menu */
+.convo {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	padding: 0 .1rem 0 .75rem;
+	min-height: 40px;
+	font-size: .78rem;
+	color: var(--text-subtle);
+	border-bottom: 1px solid var(--border);
+}
+.convo .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.convo b { color: var(--text-light); font-weight: 600; }
 .chat { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .7rem; padding: .85rem .75rem; overflow: hidden; }
 .who { font-size: .74rem; color: var(--text-subtle); }
 .msg { font-size: .93rem; line-height: 1.55; }
@@ -720,10 +735,16 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	Prev/Next — sowie die Take-Zeile in <code>song-editor-take.html</code> auf beiden Breiten:
 	sechs-zeiliges Menü statt beschrifteter Zeilenaktionen.
 </p>
+<p class="freeze-note">
+	Drei Tabs freigegeben 26.09.2026 (Operator: „logo", aus <code>~/songmaker-mockups/v7-tabs/</code>,
+	<code>#1016</code>): <b>Edit · Co-writer · Takes (n)</b>. Hebt L2 aus <code>#914</code> und den
+	geschobenen Co-writer-Bildschirm aus <code>#990</code> auf — keine <i>Co-writer ›</i>-Zeile unter
+	den Lyrics, kein ‹ zurück; Frames 7 und 7b sind jetzt der Co-writer-Tab.
+</p>
 <div class="board">
 
 <figure>
-	<figcaption><b>1 · Write</b> — recipe collapsed, unsaved draft; the Generate bar is one slim 56 px row, the 44 px primary with 6 px above and below. Blessed 26.09.2026, #1011 (frame A2).</figcaption>
+	<figcaption><b>1 · Edit</b> — recipe, style, lyrics; no co-writer row (the co-writer is a tab, #1016). Unsaved draft; the Generate bar is one slim 56 px row, the 44 px primary with 6 px above and below. Blessed 26.09.2026, #1011 (frame A2).</figcaption>
 	<div class="device" id="f1">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -731,9 +752,10 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">4</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body">
 			<div class="card">
@@ -761,13 +783,12 @@ so the quiet never turns to storm
 All mine if I follow
 all mine if I stay
 the road keeps the promise
-the morning gives away</div>
+the morning gives away
+
+<span class="mark">[Verse 2]</span>
+Streetlights count the exits down
+every one of them a town</div>
 			</div>
-			<button class="row">
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span>
-				<span class="grow">Co-writer</span>
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
-			</button>
 		</div>
 		<div class="actionbar">
 			<button class="btn-primary">Generate</button>
@@ -786,7 +807,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>1b · Write — typing in the lyrics</b> — keyboard open: only the app bar stays, the Generate bar and mini-player have stepped aside, the tabs scrolled up with the page. Blessed 26.09.2026, #999.</figcaption>
+	<figcaption><b>1b · Edit — typing in the lyrics</b> — keyboard open: only the app bar stays, the Generate bar and mini-player have stepped aside, the tabs scrolled up with the page. Blessed 26.09.2026, #999.</figcaption>
 	<div class="device" id="f1b">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -829,14 +850,14 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 		</div>
 	</div>
 	<div class="frame-note">
-		<p><b>Rule (phone, every screen).</b> While a text field has focus and the on-screen keyboard is open, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back as soon as the keyboard closes — leaving the field, or closing the keyboard with Back while the field keeps focus (#1017). A hardware keyboard opens no on-screen keyboard, so the bars stay. Only what belongs to the field stays — on the co-writer screen that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
+		<p><b>Rule (phone, every screen).</b> While a text field has focus and the on-screen keyboard is open, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back as soon as the keyboard closes — leaving the field, or closing the keyboard with Back while the field keeps focus (#1017). A hardware keyboard opens no on-screen keyboard, so the bars stay. Only what belongs to the field stays — on the Co-writer tab that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
 		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
-		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Write; Send the only primary on the co-writer screen.</p>
+		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Edit; Send the only primary on Co-writer; none on Takes.</p>
 	</div>
 </figure>
 
 <figure>
-	<figcaption><b>2 · Write</b> — recipe expanded in place, the page scrolls on</figcaption>
+	<figcaption><b>2 · Edit</b> — recipe expanded in place, the page scrolls on</figcaption>
 	<div class="device" id="f2">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -844,9 +865,10 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">4</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body">
 			<div class="card">
@@ -904,7 +926,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>3 · Write</b> — generating: the action carries the progress, × cancels, the same 56 px bar. Blessed 26.09.2026, #1011 (frame A4).</figcaption>
+	<figcaption><b>3 · Edit</b> — generating: the action carries the progress, × cancels, the same 56 px bar. Blessed 26.09.2026, #1011 (frame A4).</figcaption>
 	<div class="device" id="f3">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -912,9 +934,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">4</span> <span class="ring" aria-hidden="true"></span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span> <span class="ring" aria-hidden="true"></span></button>
 		</nav>
 		<div class="body">
 			<div class="card">
@@ -944,11 +967,6 @@ all mine if I stay
 the road keeps the promise
 the morning gives away</div>
 			</div>
-			<button class="row">
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span>
-				<span class="grow">Co-writer</span>
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
-			</button>
 		</div>
 		<div class="actionbar">
 			<div class="progress-btn" role="progressbar" aria-valuenow="36" aria-label="Generating v8">
@@ -971,7 +989,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>3b · Write</b> — the run failed: the button says so, and is the retry</figcaption>
+	<figcaption><b>3b · Edit</b> — the run failed: the button says so, and is the retry</figcaption>
 	<div class="device" id="f3b">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -979,9 +997,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">4</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body">
 			<div class="card">
@@ -1011,11 +1030,6 @@ all mine if I stay
 the road keeps the promise
 the morning gives away</div>
 			</div>
-			<button class="row">
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span>
-				<span class="grow">Co-writer</span>
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
-			</button>
 		</div>
 		<div class="actionbar">
 			<button class="btn-primary failed"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v3.6"/><path d="M12 16.8v.1"/></svg>Generate</button>
@@ -1035,7 +1049,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>3c · Write</b> — the same failure opened: the whole sentence, tap again to close</figcaption>
+	<figcaption><b>3c · Edit</b> — the same failure opened: the whole sentence, tap again to close</figcaption>
 	<div class="device" id="f3c">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1043,9 +1057,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">4</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body scrolled">
 			<div class="card">
@@ -1075,11 +1090,6 @@ all mine if I stay
 the road keeps the promise
 the morning gives away</div>
 			</div>
-			<button class="row">
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></svg></span>
-				<span class="grow">Co-writer</span>
-				<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span>
-			</button>
 		</div>
 		<div class="actionbar">
 			<button class="btn-primary failed"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 4l9 16H3z"/><path d="M12 10v3.6"/><path d="M12 16.8v.1"/></svg>Generate</button>
@@ -1107,9 +1117,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button>Write</button>
-			<button class="active" aria-current="page">Takes <span class="count">4</span> <span class="ring" aria-hidden="true"></span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button>Co-writer</button>
+			<button class="active" aria-current="page">Takes <span class="count">(4)</span> <span class="ring" aria-hidden="true"></span></button>
 		</nav>
 		<div class="body">
 			<div class="status-slot">
@@ -1194,9 +1205,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button>Write</button>
-			<button class="active" aria-current="page">Takes <span class="count">4</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button>Co-writer</button>
+			<button class="active" aria-current="page">Takes <span class="count">(4)</span></button>
 		</nav>
 		<div class="body">
 			<div class="version-header">v7 · 4 takes</div>
@@ -1282,14 +1294,15 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button>Write</button>
-			<button class="active" aria-current="page">Takes <span class="count">0</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button>Co-writer</button>
+			<button class="active" aria-current="page">Takes <span class="count">(0)</span></button>
 		</nav>
 			<div class="body">
 				<div class="state-block">
 					<span class="glyph" aria-hidden="true"><svg class="ic lg" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.4"/></svg></span>
-					<p>No takes yet · Generate on Write</p>
+					<p>No takes yet · Generate on Edit</p>
 				</div>
 			</div>
 		<div class="player">
@@ -1310,9 +1323,10 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
 			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
-		<nav class="tabs" aria-label="Editor tabs">
-			<button class="active" aria-current="page">Write</button>
-			<button>Takes <span class="count">0</span></button>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(0)</span></button>
 		</nav>
 			<div class="body">
 			<div class="field">
@@ -1352,13 +1366,23 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>7 · Co-writer</b> — its own screen; Send is the one primary</figcaption>
+	<figcaption><b>7 · Co-writer</b> — a tab, not a pushed screen: the song's app bar and tabs stay; the conversation line, the chat, the composer; Send is the one primary, no Generate bar. Blessed 26.09.2026, #1016 (T2).</figcaption>
 	<div class="device" id="f7">
 		<header class="appbar">
-			<button class="icon-btn ink" aria-label="Back to Write" title="Back to Write"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-			<h1>Co-writer</h1>
-			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button class="active" aria-current="page">Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="convo">
+			<span class="grow"><b>Claude</b> · conversation since Tue</span>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</div>
 		<div class="chat">
 			<div class="msg me">the chorus feels long. tighten it?</div>
 			<span class="who">Claude · for AMIF</span>
@@ -1388,15 +1412,23 @@ can wait a mile for me</span></div>
 			<span class="line"><span></span></span>
 		</div>
 	</div>
+	<div class="frame-note">
+		<p><b>Three tabs, one row (#1016).</b> The phone song page has exactly three tabs under the song's app bar: Edit, Co-writer, Takes (n). Nothing is pushed on top of the page; ☰, share and … stay reachable on every tab.</p>
+		<p><b>The co-writer is a tab, not a screen.</b> It keeps its conversation, scroll position, unsent draft and a running turn when you switch tabs and come back — switching is a look, not a leave (#1014).</p>
+		<p><b>One primary per tab.</b> Generate on Edit (the slim 56 px bar), Send on Co-writer, none on Takes. A tab never shows the other tab's primary.</p>
+		<p><b>The tab choice is remembered per song.</b> Opening the song again lands on the tab you left; a song opened for the first time lands on Edit.</p>
+		<p><b>Replaces:</b> the pushed co-writer screen with its ‹ and title, and the <i>Co-writer ›</i> row at the bottom of Write — L2 of #914.</p>
+	</div>
 </figure>
 
 <figure>
-	<figcaption><b>7b · Co-writer — typing a message</b> — keyboard open: the conversation ends at the composer, Send sits directly on the keyboard, the mini-player has stepped aside. Blessed 26.09.2026, #999.</figcaption>
+	<figcaption><b>7b · Co-writer — typing a message</b> — keyboard open: the tabs and the conversation line scrolled away with the page, the song's app bar stays; the conversation ends at the composer, Send sits directly on the keyboard, the mini-player has stepped aside. Blessed 26.09.2026, #999; tab form #1016 (T4).</figcaption>
 	<div class="device" id="f7b">
 		<header class="appbar">
-			<button class="icon-btn ink" aria-label="Back to Write" title="Back to Write"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
-			<h1>Co-writer</h1>
-			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 		</header>
 		<div class="chat">
 			<div class="msg me">the chorus feels long. tighten it?</div>
