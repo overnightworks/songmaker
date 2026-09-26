@@ -18,7 +18,7 @@ from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
 from acestep_engine.models import AceStepConfig, TaskQueryEntry
 from acestep_engine.progress import AceStepPhase, progress_from_result
-from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
+from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     JobFunction,
@@ -218,14 +218,14 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
 @pytest.mark.parametrize("count", [1, 2])
 def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> None:
     observed_takes = []
-    running_starts = []
+    generation_starts = []
 
     async def generate_take(**kwargs):
         kwargs["on_progress"](AceStepPhase.RENDERING, 0.5)
         with seeded_db() as session:
             job = get_job(session, "j1")
             observed_takes.append((job.take_index, job.take_count, job.progress))
-            running_starts.append(job.running_since)
+            generation_starts.append(job.generation_started_at)
         return _make_dto(seed=42)
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
@@ -254,8 +254,8 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
         (index + 1, count, pytest.approx((index + 0.55 + 0.15 * 0.5) / count))
         for index in range(count)
     ]
-    assert running_starts[0] is not None
-    assert len(set(running_starts)) == 1
+    assert generation_starts[0] is not None
+    assert len(set(generation_starts)) == 1
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -1637,6 +1637,45 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
     with seeded_db() as session:
         assert get_job(session, "j1").progress == 1.0
         assert session.query(Generation).filter_by(song_id="s1").count() == count
+
+
+def test_generation_job_shows_loading_the_model_before_its_estimate_starts(
+    seeded_db, tmp_path: Path,
+) -> None:
+    observed: list[tuple[str | None, str | int | None, bool]] = []
+
+    def observe() -> None:
+        with seeded_db() as session:
+            job = get_job(session, "j1")
+            response = JobResponse.from_orm(job)
+            observed.append((
+                response.phase, response.remaining_time_estimate,
+                job.generation_started_at is not None,
+            ))
+
+    async def generate_take(**kwargs):
+        kwargs["on_progress"](AceStepPhase.LOADING_MODEL, 0.0)
+        observe()
+        kwargs["on_progress"](AceStepPhase.WRITING, 0.5)
+        observe()
+        return _make_dto(seed=42)
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
+    with dispatch, post_process, defaults:
+        _run(
+            run_generation_job(
+                "j1", "s1", "v1", 1, "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
+
+    assert observed[0] == ("loading_model", "calculating", False)
+    assert observed[1][0] == "writing"
+    assert observed[1][2] is True
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:

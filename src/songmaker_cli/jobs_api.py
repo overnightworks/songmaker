@@ -153,10 +153,7 @@ async def _fetch_job_response_before(
 
 
 async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[str, None]:
-    previous_status: str | None = None
-    previous_progress: float | None = None
-    previous_queue_reason: str | None = None
-    previous_queue_position: int | None = None
+    previous_observation: tuple | None = None
     deadline = monotonic() + JOB_STREAM_CONNECTION_SECONDS
     last_emit = monotonic()
     while monotonic() < deadline:
@@ -164,17 +161,17 @@ async def _job_event_generator(ctx: AppContext, job_id: str) -> AsyncGenerator[s
         if response is None:
             return
 
-        status_changed = (
-            response.status != previous_status
-            or response.progress != previous_progress
-            or response.queue_reason != previous_queue_reason
-            or response.queue_position != previous_queue_position
+        observation = (
+            response.status,
+            response.progress,
+            response.phase,
+            response.take_index,
+            response.take_count,
+            response.queue_reason,
+            response.queue_position,
         )
-        if status_changed:
-            previous_status = response.status
-            previous_progress = response.progress
-            previous_queue_reason = response.queue_reason
-            previous_queue_position = response.queue_position
+        if observation != previous_observation:
+            previous_observation = observation
             yield f"data: {json.dumps(response.model_dump())}\n\n"
             last_emit = monotonic()
         elif monotonic() - last_emit >= SSE_HEARTBEAT_SECONDS:

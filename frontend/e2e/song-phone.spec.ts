@@ -69,11 +69,11 @@ const SECOND_TAKE_LABEL = nowPlayingTakeLabel(SONG_PHONE_VERSION_NUMBER, SONG_PH
 const RUNNING_JOB_TAKE_INDEX = 1;
 const RUNNING_JOB_TAKE_COUNT = 2;
 const RUNNING_JOB_PROGRESS = 0.36;
-// Backdating running_since by this many seconds gives the remaining-time
-// estimate real elapsed time to divide the remaining progress by (see
-// seed_e2e_job_states.py's own note) — chosen so the result lands well
-// inside a plausible single-digit-minute ETA rather than at either extreme.
-const RUNNING_JOB_RUNNING_SINCE_OFFSET_SECONDS = 64;
+// The job has been generating this many seconds, so the remaining-time
+// estimate lands well inside a plausible single-digit-minute ETA rather than
+// at either extreme.
+const RUNNING_JOB_PHASE = 'rendering';
+const RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS = 64;
 const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	'{index}',
 	String(RUNNING_JOB_TAKE_INDEX)
@@ -158,7 +158,8 @@ test.describe('song page at phone width', () => {
 			progress: RUNNING_JOB_PROGRESS,
 			takeIndex: RUNNING_JOB_TAKE_INDEX,
 			takeCount: RUNNING_JOB_TAKE_COUNT,
-			runningSinceOffsetSeconds: RUNNING_JOB_RUNNING_SINCE_OFFSET_SECONDS
+			phase: RUNNING_JOB_PHASE,
+			generationStartedOffsetSeconds: RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS
 		});
 		await page.goto(songAddress);
 		const generateStatus = panel.getByRole('status');
