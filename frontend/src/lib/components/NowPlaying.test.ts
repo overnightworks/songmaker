@@ -13,10 +13,13 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
-	NOW_PLAYING_NO_LYRICS,
-	NOW_PLAYING_TAKE_PREFIX
+	NOW_PLAYING_NO_LYRICS
 } from '$lib/constants';
-import { NOW_PLAYING_CURATE_DONE_LABEL, NOW_PLAYING_TAKE_TAB } from '$lib/constants/now-playing';
+import {
+	NOW_PLAYING_CURATE_DONE_LABEL,
+	NOW_PLAYING_TAKE_TAB,
+	nowPlayingTakeLabel
+} from '$lib/constants/now-playing';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
 	curationActive,
@@ -201,7 +204,7 @@ describe('NowPlaying', () => {
 		expect(target.textContent).toContain(NOW_PLAYING_LABEL);
 		expect(target.textContent).toContain('Tide');
 		expect(target.textContent).toContain('Nachtstrom · Artist');
-		expect(target.textContent).toContain(`${NOW_PLAYING_TAKE_PREFIX} 2`);
+		expect(target.textContent).toContain(nowPlayingTakeLabel(1, 2));
 		expect(target.textContent).toContain('old verse');
 		expect(target.textContent).not.toContain('latest draft');
 	});
