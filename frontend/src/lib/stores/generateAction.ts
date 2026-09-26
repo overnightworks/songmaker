@@ -73,10 +73,15 @@ export type GenerateState =
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string };
 
-type GenerateJobState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
+type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
+type GenerateJobState = GenerateBusyState & { jobId: string };
+
+export function isGenerateBusy(state: GenerateState): state is GenerateBusyState {
+	return state.kind === 'queued' || state.kind === 'generating';
+}
 
 export function isGenerateJobActive(state: GenerateState): state is GenerateJobState {
-	return state.kind === 'queued' || state.kind === 'generating';
+	return isGenerateBusy(state) && state.jobId !== null;
 }
 
 export const generateAction = derived(

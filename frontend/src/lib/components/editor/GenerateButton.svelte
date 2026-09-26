@@ -10,7 +10,7 @@
 		cancelGeneration,
 		generate,
 		generateAction,
-		isGenerateJobActive,
+		isGenerateBusy,
 		type GenerateState
 	} from '$lib/stores/generateAction';
 	import { formatTime } from '$lib/utils/format';
@@ -26,7 +26,7 @@
 </script>
 
 <div class="generate-action">
-	{#if isGenerateJobActive(presentation)}
+	{#if isGenerateBusy(presentation)}
 		<div class="progress-button" role="status">
 			{#if presentation.kind === 'queued'}
 				<span class="progress-label">{presentation.label}</span>

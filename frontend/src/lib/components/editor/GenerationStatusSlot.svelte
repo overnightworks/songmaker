@@ -35,18 +35,15 @@
 				v{latestVersionNumber} ·
 				<b>{presentation.kind === 'queued' ? presentation.label : EDITOR_GENERATING_LABEL}</b>
 			</span>
-			{#if presentation.jobId !== null}
-				{@const jobId = presentation.jobId}
-				<button
-					type="button"
-					class="icon-button"
-					data-hitbox="frequent"
-					aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-					onclick={() => void cancelGeneration(jobId)}
-				>
-					<Icon name="x" />
-				</button>
-			{/if}
+			<button
+				type="button"
+				class="icon-button"
+				data-hitbox="frequent"
+				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
+				onclick={() => void cancelGeneration(presentation.jobId)}
+			>
+				<Icon name="x" />
+			</button>
 		</div>
 		<div
 			class="bar"

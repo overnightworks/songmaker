@@ -121,6 +121,13 @@ const RUNNING: GenerateState = {
 	progress: 40,
 	remaining: null
 };
+const SUBMITTING: GenerateState = {
+	kind: 'generating',
+	jobId: null,
+	takeCounter: null,
+	progress: 0,
+	remaining: null
+};
 const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'j1',
@@ -373,6 +380,12 @@ describe('TakesList', () => {
 		{ name: 'a running job', state: RUNNING, expectSlot: true, expectEmpty: false },
 		{ name: 'a queued job', state: QUEUED, expectSlot: true, expectEmpty: false },
 		{ name: 'no job', state: IDLE, expectSlot: false, expectEmpty: true },
+		{
+			name: 'a submission without a job yet',
+			state: SUBMITTING,
+			expectSlot: false,
+			expectEmpty: true
+		},
 		{
 			name: 'a failed job',
 			state: { kind: 'failed', mode: 'generate', cause: 'boom' } satisfies GenerateState,

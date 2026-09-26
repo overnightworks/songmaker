@@ -86,6 +86,11 @@ describe('DetailTabs', () => {
 			},
 			true
 		],
+		[
+			'submitting',
+			{ kind: 'generating', jobId: null, takeCounter: null, progress: 0, remaining: null },
+			true
+		],
 		['idle', { kind: 'idle', mode: 'generate' }, false],
 		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
 		['failed', { kind: 'failed', mode: 'generate', cause: 'Worker error' }, false]

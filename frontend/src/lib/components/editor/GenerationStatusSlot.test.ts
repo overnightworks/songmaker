@@ -106,10 +106,9 @@ describe('GenerationStatusSlot', () => {
 		);
 	});
 
-	it('shows the submission before a job exists without offering cancellation', async () => {
+	it('stays hidden while Generate is submitting and no job exists yet', async () => {
 		await render({ ...running, jobId: null, takeCounter: null, progress: 0, remaining: null });
-		expect(document.body.querySelector('.status-title')?.textContent).toContain('Generating');
-		expect(document.body.querySelector('button')).toBeNull();
+		expect(document.body.querySelector('.status-slot')).toBeNull();
 	});
 
 	it('does not add a second live region for the job the Generate button already announces', async () => {
