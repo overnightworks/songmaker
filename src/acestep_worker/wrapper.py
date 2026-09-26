@@ -20,7 +20,7 @@ from redis.asyncio import Redis
 
 from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
-from acestep_engine.progress import AceStepPhase, AceStepProgress
+from acestep_engine.progress import NOT_STARTED, AceStepProgress
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -386,7 +386,7 @@ async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tu
                 detail=MODE_NOT_LOADED_DETAIL.format(mode=req.mode),
             )
         try:
-            task_id = await deps.task_store.create("generate", phase=AceStepPhase.WRITING)
+            task_id = await deps.task_store.create("generate", phase=NOT_STARTED.phase)
         except Exception:
             await deps.cache.release(req.mode)
             raise
