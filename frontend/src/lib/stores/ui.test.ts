@@ -109,6 +109,9 @@ describe('typingOnPhone', () => {
 		return element;
 	}
 
+	// The watcher reads focus once each focus event has settled.
+	const focusSettled = () => Promise.resolve();
+
 	it.each([
 		['the lyrics', '<textarea></textarea>'],
 		['a rename field', '<input />'],
@@ -122,8 +125,10 @@ describe('typingOnPhone', () => {
 			const input = field(html);
 
 			input.focus();
+			await focusSettled();
 			expect(get(typingOnPhone)).toBe(true);
 			input.blur();
+			await focusSettled();
 			expect(get(typingOnPhone)).toBe(false);
 			stop();
 		}
@@ -138,6 +143,20 @@ describe('typingOnPhone', () => {
 		const stop = watchTypingOnPhone(document, true);
 
 		field(html).focus();
+		await focusSettled();
+		expect(get(typingOnPhone)).toBe(false);
+		stop();
+	});
+
+	it('brings the bars back when the focused field leaves the page without a blur', async () => {
+		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
+		const stop = watchTypingOnPhone(document, true);
+		const lyrics = field('<textarea></textarea>');
+		lyrics.focus();
+		await focusSettled();
+
+		lyrics.remove();
+		await focusSettled();
 		expect(get(typingOnPhone)).toBe(false);
 		stop();
 	});
@@ -149,10 +168,12 @@ describe('typingOnPhone', () => {
 			field('<div><textarea></textarea><textarea></textarea></div>').children
 		) as HTMLTextAreaElement[];
 		style.focus();
+		await focusSettled();
 		const seen: boolean[] = [];
 		const unsubscribe = typingOnPhone.subscribe((typing) => seen.push(typing));
 
 		lyrics.focus();
+		await focusSettled();
 		expect(seen).toEqual([true]);
 		unsubscribe();
 		stop();
@@ -173,6 +194,7 @@ describe('typingOnPhone', () => {
 		const stop = watchTypingOnPhone(document, false);
 
 		field('<textarea></textarea>').focus();
+		await focusSettled();
 		expect(get(typingOnPhone)).toBe(false);
 		stop();
 	});

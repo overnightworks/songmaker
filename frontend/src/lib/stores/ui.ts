@@ -58,19 +58,35 @@ const typingOnPhoneState = writable(false);
 export const typingOnPhone = readonly(typingOnPhoneState);
 
 export function watchTypingOnPhone(root: Document, compact: boolean): () => void {
-	typingOnPhoneState.set(compact && isTextEntryField(root.activeElement));
-	if (!compact) return () => {};
-	// During `focusout` the next focus target is only known as
-	// `relatedTarget`; reading it there keeps a move from one field to the
-	// next from flashing the bars back in between.
-	const onFocusIn = (event: FocusEvent) => typingOnPhoneState.set(isTextEntryField(event.target));
-	const onFocusOut = (event: FocusEvent) =>
-		typingOnPhoneState.set(isTextEntryField(event.relatedTarget));
-	root.addEventListener('focusin', onFocusIn);
-	root.addEventListener('focusout', onFocusOut);
+	if (!compact) {
+		typingOnPhoneState.set(false);
+		return () => {};
+	}
+	let watching = true;
+	// A focused field that leaves the page (browser back, Escape closing a
+	// rename or the menu) may take focus with it without any `focusout`, so
+	// while a field has focus the page is watched for it disappearing.
+	const focusedFieldRemoval = new MutationObserver(followFocus);
+	function followFocus(): void {
+		if (!watching) return;
+		const typing = isTextEntryField(root.activeElement);
+		typingOnPhoneState.set(typing);
+		if (typing) focusedFieldRemoval.observe(root, { childList: true, subtree: true });
+		else focusedFieldRemoval.disconnect();
+	}
+	// Chrome blurs a focused field while Svelte is still removing it, where
+	// writing state throws `state_unsafe_mutation` and leaves the whole page
+	// stale; reading focus once the event has settled avoids that, and also
+	// lands a move from one field to the next without flashing the bars back.
+	const followFocusOnceSettled = () => queueMicrotask(followFocus);
+	followFocus();
+	root.addEventListener('focusin', followFocusOnceSettled);
+	root.addEventListener('focusout', followFocusOnceSettled);
 	return () => {
-		root.removeEventListener('focusin', onFocusIn);
-		root.removeEventListener('focusout', onFocusOut);
+		watching = false;
+		root.removeEventListener('focusin', followFocusOnceSettled);
+		root.removeEventListener('focusout', followFocusOnceSettled);
+		focusedFieldRemoval.disconnect();
 		typingOnPhoneState.set(false);
 	};
 }
