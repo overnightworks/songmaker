@@ -565,6 +565,23 @@ describe('PlayerBar Now Playing', () => {
 	});
 });
 
+// jsdom has no visual viewport; a phone's, shortened by the open on-screen
+// keyboard, is what sends the bars away while a field has focus.
+function openOnScreenKeyboard(): () => void {
+	Object.defineProperty(document.documentElement, 'clientHeight', {
+		configurable: true,
+		value: 844
+	});
+	Object.defineProperty(window, 'visualViewport', {
+		configurable: true,
+		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
+	});
+	return () => {
+		Reflect.deleteProperty(window, 'visualViewport');
+		Reflect.deleteProperty(document.documentElement, 'clientHeight');
+	};
+}
+
 describe('PlayerBar while typing on the phone', () => {
 	it('steps aside for the keyboard and comes back on leaving the field, with playback untouched', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
@@ -576,6 +593,7 @@ describe('PlayerBar while typing on the phone', () => {
 		audio.fire('canplay');
 		await tick();
 		expect(audio.paused).toBe(false);
+		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const lyrics = document.createElement('textarea');
 		document.body.append(lyrics);
@@ -590,5 +608,6 @@ describe('PlayerBar while typing on the phone', () => {
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(audio.paused).toBe(false);
 		stopWatching();
+		closeKeyboard();
 	});
 });

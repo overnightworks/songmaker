@@ -40,7 +40,7 @@
 		railCollapsed,
 		railWidth,
 		initTheme,
-		typingOnPhone,
+		transportBarHidden,
 		watchTypingOnPhone
 	} from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -102,15 +102,14 @@
 	});
 
 	// One fact behind every layout that reserves room for the transport bar:
-	// while the full surface or a focused field on the phone hides the app's
-	// bar, the bar takes no room. The attribute is the only thing this file
+	// while the app's bar is hidden, it takes no room. The attribute is the only thing this file
 	// owns — app.css, which owns --player-height, owns the
 	// `html[data-transport-bar='hidden']` value that collapses it, so the shell
 	// rows, the toast stack, the queue-stream chip, the editor's bottom padding
 	// and Now Playing's own sheet all follow from one declaration instead of
 	// each carrying its own exception.
 	$effect(() => {
-		const barHidden = hasPrivatePlayer && ($nowPlayingSurface === 'full' || $typingOnPhone);
+		const barHidden = hasPrivatePlayer && $transportBarHidden;
 		if (!browser) return;
 		const root = document.documentElement;
 		if (barHidden) root.dataset.transportBar = 'hidden';

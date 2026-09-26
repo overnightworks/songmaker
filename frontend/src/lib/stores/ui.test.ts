@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 beforeEach(() => {
@@ -99,6 +99,38 @@ describe('phoneAppBar', () => {
 	});
 });
 
+// jsdom has no visual viewport; this stands in for the phone's 844 px one,
+// which the on-screen keyboard shortens while the layout viewport stays put.
+const PHONE_VIEWPORT_HEIGHT_PX = 844;
+const PHONE_KEYBOARD_HEIGHT_PX = 300;
+
+function phoneViewport() {
+	const viewport = Object.assign(new EventTarget(), {
+		height: PHONE_VIEWPORT_HEIGHT_PX,
+		scale: 1
+	});
+	Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
+	Object.defineProperty(document.documentElement, 'clientHeight', {
+		configurable: true,
+		value: PHONE_VIEWPORT_HEIGHT_PX
+	});
+	function show(height: number, scale = 1): void {
+		viewport.height = height;
+		viewport.scale = scale;
+		viewport.dispatchEvent(new Event('resize'));
+	}
+	return {
+		openKeyboard: () => show(PHONE_VIEWPORT_HEIGHT_PX - PHONE_KEYBOARD_HEIGHT_PX),
+		closeKeyboard: () => show(PHONE_VIEWPORT_HEIGHT_PX),
+		show
+	};
+}
+
+afterEach(() => {
+	Reflect.deleteProperty(window, 'visualViewport');
+	Reflect.deleteProperty(document.documentElement, 'clientHeight');
+});
+
 describe('typingOnPhone', () => {
 	function field(html: string): HTMLElement {
 		const holder = document.createElement('div');
@@ -109,8 +141,8 @@ describe('typingOnPhone', () => {
 		return element;
 	}
 
-	// The watcher reads focus once each focus event has settled.
-	const focusSettled = () => Promise.resolve();
+	// The watcher reads focus and the viewport once each event has settled.
+	const settled = () => Promise.resolve();
 
 	it.each([
 		['the lyrics', '<textarea></textarea>'],
@@ -118,17 +150,20 @@ describe('typingOnPhone', () => {
 		['a search field', '<input type="search" />'],
 		['a recipe number', '<input type="number" />']
 	])(
-		'hides the bars while %s has focus on the phone, and brings them back on leaving it',
+		'hides the bars while %s has focus with the keyboard open, and brings them back on leaving it',
 		async (_, html) => {
+			const viewport = phoneViewport();
 			const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 			const stop = watchTypingOnPhone(document, true);
 			const input = field(html);
 
 			input.focus();
-			await focusSettled();
+			viewport.openKeyboard();
+			await settled();
 			expect(get(typingOnPhone)).toBe(true);
 			input.blur();
-			await focusSettled();
+			viewport.closeKeyboard();
+			await settled();
 			expect(get(typingOnPhone)).toBe(false);
 			stop();
 		}
@@ -139,47 +174,90 @@ describe('typingOnPhone', () => {
 		['a slider', '<input type="range" />'],
 		['a button', '<button type="button">Generate</button>']
 	])('keeps the bars while %s has focus, since it takes no typing', async (_, html) => {
+		const viewport = phoneViewport();
 		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 		const stop = watchTypingOnPhone(document, true);
 
 		field(html).focus();
-		await focusSettled();
+		viewport.openKeyboard();
+		await settled();
+		expect(get(typingOnPhone)).toBe(false);
+		stop();
+	});
+
+	// #1017: Android's back gesture closes the keyboard and leaves the field
+	// focused; with long lyrics there is no outside left to tap.
+	it('brings the bars back when the keyboard closes while the field keeps focus, and sends them away when it reopens', async () => {
+		const viewport = phoneViewport();
+		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
+		const stop = watchTypingOnPhone(document, true);
+		const lyrics = field('<textarea></textarea>');
+		lyrics.focus();
+		viewport.openKeyboard();
+		await settled();
+
+		viewport.closeKeyboard();
+		await settled();
+		expect(document.activeElement).toBe(lyrics);
+		expect(get(typingOnPhone)).toBe(false);
+
+		viewport.openKeyboard();
+		await settled();
+		expect(get(typingOnPhone)).toBe(true);
+		stop();
+	});
+
+	it.each([
+		['a hardware keyboard, which opens none on screen', PHONE_VIEWPORT_HEIGHT_PX, 1],
+		['a pinch zoom, which shrinks the view but opens no keyboard', PHONE_VIEWPORT_HEIGHT_PX / 2, 2]
+	])('keeps the bars while a field has focus with %s', async (_, height, scale) => {
+		const viewport = phoneViewport();
+		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
+		const stop = watchTypingOnPhone(document, true);
+
+		field('<textarea></textarea>').focus();
+		viewport.show(height, scale);
+		await settled();
 		expect(get(typingOnPhone)).toBe(false);
 		stop();
 	});
 
 	it('brings the bars back when the focused field leaves the page without a blur', async () => {
+		const viewport = phoneViewport();
 		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 		const stop = watchTypingOnPhone(document, true);
 		const lyrics = field('<textarea></textarea>');
 		lyrics.focus();
-		await focusSettled();
+		viewport.openKeyboard();
+		await settled();
 
 		lyrics.remove();
-		await focusSettled();
+		await settled();
 		expect(get(typingOnPhone)).toBe(false);
 		stop();
 	});
 
 	it('keeps the bars away while focus moves from one field to the next', async () => {
+		phoneViewport().openKeyboard();
 		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 		const stop = watchTypingOnPhone(document, true);
 		const [style, lyrics] = Array.from(
 			field('<div><textarea></textarea><textarea></textarea></div>').children
 		) as HTMLTextAreaElement[];
 		style.focus();
-		await focusSettled();
+		await settled();
 		const seen: boolean[] = [];
 		const unsubscribe = typingOnPhone.subscribe((typing) => seen.push(typing));
 
 		lyrics.focus();
-		await focusSettled();
+		await settled();
 		expect(seen).toEqual([true]);
 		unsubscribe();
 		stop();
 	});
 
 	it('picks up a field that already has focus when the phone layout begins', async () => {
+		phoneViewport().openKeyboard();
 		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 		field('<textarea></textarea>').focus();
 
@@ -190,12 +268,35 @@ describe('typingOnPhone', () => {
 	});
 
 	it('never hides the bars on the desktop layout', async () => {
+		phoneViewport().openKeyboard();
 		const { typingOnPhone, watchTypingOnPhone } = await import('./ui');
 		const stop = watchTypingOnPhone(document, false);
 
 		field('<textarea></textarea>').focus();
-		await focusSettled();
+		await settled();
 		expect(get(typingOnPhone)).toBe(false);
+		stop();
+	});
+});
+
+describe('transportBarHidden', () => {
+	it.each([
+		['hides the bar while the full Now Playing surface is open', 'full', true, true],
+		['hides the bar while the keyboard owns the bottom of the phone', 'closed', false, true],
+		['keeps the bar while Now Playing is docked beside it', 'docked', true, false],
+		['keeps the bar while nothing covers it', 'closed', true, false]
+	] as const)('%s', async (_, surface, keyboardClosed, hidden) => {
+		const viewport = phoneViewport();
+		if (!keyboardClosed) viewport.openKeyboard();
+		const { transportBarHidden, watchTypingOnPhone } = await import('./ui');
+		const { nowPlayingSurface } = await import('./player');
+		const lyrics = document.createElement('textarea');
+		document.body.replaceChildren(lyrics);
+		lyrics.focus();
+		const stop = watchTypingOnPhone(document, true);
+		nowPlayingSurface.set(surface);
+
+		expect(get(transportBarHidden)).toBe(hidden);
 		stop();
 	});
 });
