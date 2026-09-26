@@ -32,6 +32,11 @@ function makeInfo(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	};
 }
 
+function recoveryUrlOf(url: string): RegExp {
+	const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return new RegExp(`^${escaped}\\?recover=\\S+$`);
+}
+
 function makeStreamManifest(): QueueStreamManifest {
 	return {
 		snapshot_id: 'snap',
@@ -89,6 +94,7 @@ class FakeAudio {
 	currentTime = 0;
 	duration = 100;
 	paused = true;
+	seeking = false;
 	ended = false;
 	error: MediaError | null = null;
 	crossOrigin: string | null = null;
@@ -384,7 +390,7 @@ describe('event handling', () => {
 		vi.advanceTimersByTime(5000);
 
 		expect(audioPlayer.status).toBe('loading');
-		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 
 		fakeAudio.fire('loadedmetadata');
 		expect(fakeAudio.currentTime).toBe(39.25);
@@ -422,6 +428,222 @@ describe('event handling', () => {
 		audioPlayer.swapCallbacks(callbacks());
 		expect(() => fakeAudio.fire('ended')).not.toThrow();
 	});
+});
+
+describe('frozen-clock watchdog', () => {
+	const SECOND = 1000;
+
+	function startPlayingAt(seconds: number): void {
+		fakeAudio.currentTime = seconds;
+		fakeAudio.paused = false;
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+	}
+
+	function advanceSeconds(count: number, clockStep = 0): void {
+		for (let second = 0; second < count; second += 1) {
+			fakeAudio.currentTime += clockStep;
+			vi.advanceTimersByTime(SECOND);
+		}
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false });
+	});
+
+	it('reloads a take that reports playing while its clock stands still, after a few seconds', () => {
+		startPlayingAt(40);
+
+		advanceSeconds(1);
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+
+		advanceSeconds(4);
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
+	});
+
+	const playbackModes = [
+		{ mode: 'a single take', loadMode: () => {} },
+		{
+			mode: 'a queue stream',
+			loadMode: () => audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false })
+		}
+	];
+
+	it.each(
+		playbackModes.flatMap(({ mode, loadMode }) => [
+			{
+				name: `recovers a third freeze of ${mode} by itself when it played on in between`,
+				loadMode,
+				playOnSeconds: 10,
+				afterThirdFreeze: { status: 'loading', error: null }
+			},
+			{
+				name: `offers Retry on a third freeze of ${mode} when the recoveries fail back to back`,
+				loadMode,
+				playOnSeconds: 0,
+				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+			}
+		])
+	)('$name', async ({ loadMode, playOnSeconds, afterThirdFreeze }) => {
+		loadMode();
+		startPlayingAt(40);
+		for (let recovery = 1; recovery <= 2; recovery += 1) {
+			advanceSeconds(5);
+			expect(audioPlayer.status).toBe('loading');
+			await vi.advanceTimersByTimeAsync(0);
+			startPlayingAt(fakeAudio.currentTime);
+			advanceSeconds(playOnSeconds, 1);
+		}
+
+		advanceSeconds(5);
+
+		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(afterThirdFreeze);
+	});
+
+	it('asks for a new URL when the same take recovers again in a later load', () => {
+		startPlayingAt(40);
+		advanceSeconds(5);
+		const firstRecoveryUrl = fakeAudio.src;
+
+		audioPlayer.load(makeInfo(), { autoplay: false, restart: true });
+		startPlayingAt(40);
+		advanceSeconds(5);
+
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+		expect(fakeAudio.src).not.toBe(firstRecoveryUrl);
+	});
+
+	it('recovers a frozen stream in place', async () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		startPlayingAt(5);
+
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		expect(audioPlayer.mode).toBe('stream');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
+	});
+
+	it.each([
+		{
+			name: 'a user pause, then play',
+			pressPlay: () => {
+				audioPlayer.pause();
+				audioPlayer.play();
+			}
+		},
+		{ name: 'play while it still reports playing', pressPlay: () => audioPlayer.play() },
+		{ name: 'tapping the same take again', pressPlay: () => audioPlayer.load(makeInfo()) }
+	])('reloads a take whose clock stood still on $name', ({ pressPlay }) => {
+		startPlayingAt(40);
+		advanceSeconds(1);
+
+		pressPlay();
+
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+	});
+
+	it.each([
+		{
+			name: 'a take whose clock advances',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(8, 1);
+			}
+		},
+		{
+			name: 'normal buffering that resumes',
+			drive: () => {
+				startPlayingAt(40);
+				fakeAudio.fire('waiting');
+				advanceSeconds(4);
+				fakeAudio.fire('playing');
+				advanceSeconds(4, 1);
+			}
+		},
+		{
+			name: 'a slow seek',
+			drive: () => {
+				startPlayingAt(40);
+				fakeAudio.seeking = true;
+				advanceSeconds(8);
+			}
+		},
+		{
+			name: 'a user pause',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(1, 1);
+				audioPlayer.pause();
+				advanceSeconds(8);
+			}
+		},
+		{
+			name: 'play after a healthy user pause',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(1, 1);
+				audioPlayer.pause();
+				advanceSeconds(8);
+				audioPlayer.play();
+			}
+		}
+	])('leaves $name alone', ({ drive }) => {
+		drive();
+
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+		expect(audioPlayer.status).not.toBe('loading');
+	});
+
+	it.each([
+		{ source: 'app', pauseIt: () => audioPlayer.pause() },
+		{ source: 'outside', pauseIt: () => fakeAudio.pause() },
+		{
+			source: 'ended',
+			pauseIt: () => {
+				fakeAudio.ended = true;
+				fakeAudio.pause();
+			}
+		}
+	])('records a pause that came from the $source', ({ source, pauseIt }) => {
+		const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+		startPlayingAt(40);
+
+		pauseIt();
+
+		expect(debug).toHaveBeenCalledWith('Audio paused', expect.objectContaining({ source }));
+	});
+
+	it.each([
+		{
+			name: 'a take change',
+			reload: () =>
+				audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'a1/other.mp3' }) }))
+		},
+		{ name: 'a frozen-clock reload', reload: () => advanceSeconds(5) }
+	])(
+		'records a later pause from outside after $name swallowed the app pause event',
+		({ reload }) => {
+			const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+			startPlayingAt(40);
+			vi.spyOn(fakeAudio, 'pause').mockImplementationOnce(() => {
+				fakeAudio.paused = true;
+			});
+
+			reload();
+			startPlayingAt(40);
+			fakeAudio.pause();
+
+			expect(debug).toHaveBeenLastCalledWith(
+				'Audio paused',
+				expect.objectContaining({ source: 'outside' })
+			);
+		}
+	);
 });
 
 describe('stream playback', () => {
@@ -591,7 +813,7 @@ describe('stream playback', () => {
 		await Promise.resolve();
 
 		expect(audioPlayer.mode).toBe('stream');
-		expect(fakeAudio.src).toContain('recover=1');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
 		fakeAudio.fire('loadedmetadata');
 		// Resumes just behind the stalled position (seek-back margin).
 		expect(fakeAudio.currentTime).toBeCloseTo(12 - 0.75, 2);
@@ -711,7 +933,7 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 
 		expect(audioPlayer.status).toBe('loading');
-		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 		expect(fetchMock).not.toHaveBeenCalled();
 
 		fakeAudio.fire('loadedmetadata');
@@ -722,14 +944,17 @@ describe('error handling', () => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 
+		const recoveryUrls = new Set<string>();
 		for (const attempt of [1, 2]) {
 			fakeAudio.fire('play');
 			fakeAudio.currentTime = 40 + attempt;
 			fakeAudio.fire('timeupdate');
 			fakeAudio.fire('error');
-			expect(fakeAudio.src).toBe(`/audio/a1/song_v1.mp3?recover=${attempt}`);
+			expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+			recoveryUrls.add(fakeAudio.src);
 			fakeAudio.fire('loadedmetadata');
 		}
+		expect(recoveryUrls.size).toBe(2);
 
 		fakeAudio.fire('play');
 		fakeAudio.currentTime = 43;
@@ -914,14 +1139,17 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
-	it('toggle in error state retries (via play→reload)', async () => {
+	it('toggle in error state fetches the take again past the browser cache', async () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
-		const firstSrc = fakeAudio.src;
+		expect(audioPlayer.status).toBe('error');
+		fakeAudio.currentTime = 40;
 		audioPlayer.toggle();
-		expect(fakeAudio.src).toBe(firstSrc);
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 		expect(audioPlayer.status).toBe('loading');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
 	it('retries a failed stream in stream mode', async () => {
@@ -929,11 +1157,13 @@ describe('toggle / play / pause', () => {
 		audioPlayer.status = 'error';
 
 		audioPlayer.play();
-		await vi.waitFor(() => expect(fakeAudio.src).toContain('recover=1'));
+		await vi.waitFor(() =>
+			expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'))
+		);
 
 		expect(audioPlayer.mode).toBe('stream');
 		expect(audioPlayer.status).toBe('loading');
-		expect(fakeAudio.src).toContain('recover=1');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/api/queue-streams/snap/audio'));
 	});
 
 	it('toggle with no current does nothing', () => {
@@ -1149,7 +1379,7 @@ describe('loadUrl()', () => {
 		fakeAudio.fire('stalled');
 		vi.advanceTimersByTime(5000);
 
-		expect(fakeAudio.src).toBe('/shared/slug/audio/first.mp3?recover=1');
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/slug/audio/first.mp3'));
 	});
 
 	it("probes the loadUrl URL on a media error and never calls a previous owner's onAuthLost after swapping in null", async () => {
