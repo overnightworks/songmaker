@@ -14,7 +14,9 @@ import {
 	selectedSong,
 	selectSong as playerSelectSong,
 	clearGenerationSelection as playerClearGeneration,
-	ensureGenerationsLoaded
+	closeNowPlaying,
+	ensureGenerationsLoaded,
+	nowPlayingIsPushedScreen
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
@@ -30,6 +32,7 @@ import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/const
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
+	backLibraryHistory,
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
@@ -40,6 +43,7 @@ import {
 	libraryWallStateFrom,
 	setLibrarySurface,
 	snapshotLibraryHistory,
+	takeRestoredLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab,
 	type LibraryHistoryState
@@ -549,6 +553,108 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
+// History layers (issue #1002): an overlay that is a pushed screen on the
+// phone owns one history entry on top of the library it covers, at the same
+// address. The phone's Back then closes the topmost layer and leaves that
+// library exactly as it was -- no workspace re-apply, no dirty-draft save --
+// instead of applying whatever entry sits below it while the overlay stays
+// on top. The entry is a copy of that library marked with the layer's id,
+// and replace writes keep the mark (libraryContext.ts). An overlay registers
+// when it opens and unregisters when it closes any other way (×, Done,
+// Escape, a surface change); unregistering steps back off its entry, so no
+// stale copy of the library is left for Back to land on. The full Now
+// Playing surface is the first registrant.
+interface HistoryLayer {
+	close: () => void;
+	base: LibraryHistoryState;
+}
+
+const historyLayers: HistoryLayer[] = [];
+// Step-backs issued here rather than by the browser: their popstates land on
+// an entry whose library is already showing, so they apply nothing.
+let ownLayerStepBacks = 0;
+
+function registerHistoryLayer(id: string, close: () => void): () => void {
+	const base = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(base)) return () => undefined;
+	const layer: HistoryLayer = { close, base };
+	historyLayers.push(layer);
+	void writeLibraryHistory(
+		{ ...base, index: base.index + 1, layer: id },
+		urlFromState(base),
+		'push'
+	);
+	return () => unregisterHistoryLayer(layer);
+}
+
+// A layer closed from below the top takes the layers above it along.
+function unregisterHistoryLayer(layer: HistoryLayer): void {
+	const depth = historyLayers.indexOf(layer);
+	if (depth === -1) return;
+	for (const leaving of historyLayers.splice(depth).reverse()) {
+		if (leaving !== layer) leaving.close();
+		stepBackOnto(leaving.base);
+	}
+}
+
+function stepBackOnto(landing: LibraryHistoryState): void {
+	ownLayerStepBacks += 1;
+	void backLibraryHistory(landing, urlFromState(landing));
+}
+
+function topHistoryLayer(): HistoryLayer | undefined {
+	return historyLayers[historyLayers.length - 1];
+}
+
+// A popstate that leaves layer entries closes those layers, topmost first.
+// A step onto the entry right below them keeps the library as it stands; a
+// longer jump (several entries back at once) applies its own entry as usual.
+function popsHistoryLayers(state: unknown): boolean {
+	if (ownLayerStepBacks > 0) {
+		ownLayerStepBacks -= 1;
+		return true;
+	}
+	const landing = isLibraryHistoryState(state) ? state.index : -1;
+	let lowestLeft: HistoryLayer | undefined;
+	for (let top = topHistoryLayer(); top && top.base.index >= landing; top = topHistoryLayer()) {
+		historyLayers.pop();
+		top.close();
+		lowestLeft = top;
+	}
+	const staleLanding = staleLayerEntryLanding(state);
+	if (staleLanding) {
+		// The copy may be out of date -- the entry below can be rewritten after
+		// Back closed its layer -- so it applies nothing; the step's own
+		// popstate applies the entry it lands on.
+		void backLibraryHistory(staleLanding, urlFromState(staleLanding));
+		return true;
+	}
+	return lowestLeft?.base.index === landing;
+}
+
+// An entry marked as a layer that no open layer owns -- left behind by a
+// reload, or reached again with Forward after Back closed its layer -- is a
+// copy of the library below it, where Back would visibly do nothing; the
+// caller steps off it onto that library.
+function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
+	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
+	if (topHistoryLayer()?.base.index === state.index - 1) return null;
+	return { ...state, index: state.index - 1, layer: undefined };
+}
+
+const NOW_PLAYING_LAYER = 'now-playing';
+let leaveNowPlayingLayer: (() => void) | null = null;
+
+function followNowPlayingScreen(pushed: boolean): void {
+	if (pushed && !leaveNowPlayingLayer) {
+		leaveNowPlayingLayer = registerHistoryLayer(NOW_PLAYING_LAYER, closeNowPlaying);
+	} else if (!pushed && leaveNowPlayingLayer) {
+		const leave = leaveNowPlayingLayer;
+		leaveNowPlayingLayer = null;
+		leave();
+	}
+}
+
 // A cold tab's history.state carries no LibraryHistoryState until something
 // writes one -- this seeds a fresh root entry for that case, but only on a
 // plain `/` visit, which is the one library workspace path with no address
@@ -577,9 +683,15 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
+	const restored = takeRestoredLibraryHistory();
+	const staleLanding = staleLayerEntryLanding(
+		isLibraryHistoryState(restored) ? restored : existing
+	);
+	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
+		if (popsHistoryLayers(state)) return;
 		void (async () => {
 			await saveDirtyDraftBeforePopstate();
 			if (isLibraryHistoryState(state)) {
@@ -594,11 +706,18 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	return () => window.removeEventListener('popstate', onPopstate);
+	const stopFollowingNowPlaying = nowPlayingIsPushedScreen.subscribe(followNowPlayingScreen);
+	return () => {
+		window.removeEventListener('popstate', onPopstate);
+		stopFollowingNowPlaying();
+	};
 }
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
+	historyLayers.length = 0;
+	ownLayerStepBacks = 0;
+	leaveNowPlayingLayer = null;
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
 	addressedSong = null;

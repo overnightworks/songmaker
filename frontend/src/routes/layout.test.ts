@@ -9,7 +9,15 @@ import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading, authCheckError } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
-import { librarySurface } from '$lib/stores/libraryContext';
+import {
+	currentLibraryHistoryState,
+	isLibraryHistoryState,
+	libraryRootState,
+	librarySurface,
+	loadLibraryHistoryPageForTests,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
+import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
@@ -95,7 +103,7 @@ vi.mock('$lib/api/songs', () => ({
 
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
-import { goto } from '$app/navigation';
+import { afterNavigate, goto } from '$app/navigation';
 
 // `?raw` yields an empty string for a stylesheet under this vitest config
 // (CSS processing is off), so app.css is read from disk instead.
@@ -693,6 +701,43 @@ describe('auth check failure', () => {
 		await tick();
 
 		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+	});
+});
+
+// A phone tab reloaded over the full Now Playing comes back onto that layer's
+// entry; the history listener steps off it once the library starts -- but
+// only while the page still stands there (issue #1002).
+describe('a reload over the phone Now Playing', () => {
+	it('stays on the Library wall the sign-in redirect lands on', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		const playlist = {
+			...libraryRootState(),
+			index: 1,
+			surface: 'detail' as const,
+			collection: { kind: 'playlist' as const, id: 'p1' }
+		};
+		history.pushState(playlist, '', '/playlist/friday-night');
+		history.pushState(
+			{ ...playlist, index: 2, layer: 'now-playing' },
+			'',
+			'/playlist/friday-night'
+		);
+		loadLibraryHistoryPageForTests();
+		currentUser.set(null);
+		vi.mocked(checkAuth).mockImplementation(async () => null);
+		mountLayout('/');
+		await tick();
+		const onNavigated = vi.mocked(afterNavigate).mock.calls.at(-1)?.[0];
+		if (!onNavigated) throw new Error('Expected the layout to follow navigations');
+
+		history.replaceState({ 'sveltekit:history': 1 }, '', '/');
+		onNavigated({ type: 'goto' } as Parameters<typeof onNavigated>[0]);
+		currentUser.set(USER);
+
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
+		expect(location.pathname).toBe('/');
 	});
 });
 
