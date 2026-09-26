@@ -44,7 +44,7 @@ const KEYBOARD_INPUT_TYPES: ReadonlySet<string> = new Set([
 
 // A checkbox, slider or date picker is editable but takes no typing, so it
 // must not send the bars away; every other editable element does.
-export function isTextEntryField(target: EventTarget | null): boolean {
+function isTextEntryField(target: EventTarget | null): boolean {
 	if (!isEditableElement(target)) return false;
 	return !(target instanceof HTMLInputElement) || KEYBOARD_INPUT_TYPES.has(target.type);
 }
