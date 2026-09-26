@@ -3,9 +3,12 @@ import { cancelJob, generateSong } from '$lib/api/client';
 import type { JobItem } from '$lib/api/types';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
+	EDITOR_GENERATE_QUEUED_TEMPLATE,
+	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
+	EDITOR_QUEUED_LABEL,
 	EDITOR_SELECT_MODEL_TITLE
 } from '$lib/constants';
 import {
@@ -39,23 +42,42 @@ const requestInFlight = writable(false);
 
 type GenerateMode = 'generate' | 'repaint' | 'cover';
 
-export function progressPercent(job: JobItem | null | undefined): number {
+function progressPercent(job: JobItem | null): number {
 	return job ? Math.round(job.progress * 100) : 0;
+}
+
+function queuedLabel(position: number | null): string {
+	return position === null
+		? EDITOR_QUEUED_LABEL
+		: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(position));
+}
+
+function takeCounterLabel(job: JobItem | null): string | null {
+	if (job?.take_index == null || job.take_count == null || job.take_count <= 1) return null;
+	return EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', String(job.take_index)).replace(
+		'{count}',
+		String(job.take_count)
+	);
 }
 
 export type GenerateState =
 	| { kind: 'idle'; mode: GenerateMode }
-	| { kind: 'queued'; jobId: string; position: number | null; reason: string | null }
+	| { kind: 'queued'; jobId: string; label: string; reason: string | null }
 	| {
 			kind: 'generating';
 			jobId: string | null;
-			takeIndex: number | null;
-			takeCount: number | null;
+			takeCounter: string | null;
 			progress: number;
 			remaining: number | 'calculating' | null;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string };
+
+type GenerateJobState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
+
+export function isGenerateJobActive(state: GenerateState): state is GenerateJobState {
+	return state.kind === 'queued' || state.kind === 'generating';
+}
 
 export const generateAction = derived(
 	[
@@ -71,7 +93,19 @@ export const generateAction = derived(
 		sourceMode,
 		generationFailures
 	],
-	([song, jobs, inFlight, health, lyrics, prompt, model, models, source, mode, failures]) => {
+	([
+		song,
+		jobs,
+		inFlight,
+		health,
+		lyrics,
+		prompt,
+		model,
+		models,
+		source,
+		mode,
+		failures
+	]): GenerateState => {
 		const job = song
 			? (jobs.find((entry) => entry.songId === song.id && entry.job.type === 'generate')?.job ??
 				null)
@@ -87,28 +121,26 @@ export const generateAction = derived(
 		const disabled = pending || !lyrics || !prompt || model === null || gpuOffline;
 		const actionMode: GenerateMode = source ? mode : 'generate';
 		const cause = song ? failures[song.id] : undefined;
-		let state: GenerateState;
 		if (job?.status === 'queued') {
-			state = {
+			return {
 				kind: 'queued',
 				jobId: job.id,
-				position: job.queue_position ?? null,
+				label: queuedLabel(job.queue_position ?? null),
 				reason: job.queue_reason ?? null
 			};
-		} else if (pending) {
-			state = {
+		}
+		if (pending) {
+			return {
 				kind: 'generating',
 				jobId: job?.id ?? null,
-				takeIndex: job?.take_index ?? null,
-				takeCount: job?.take_count ?? null,
+				takeCounter: takeCounterLabel(job),
 				progress: progressPercent(job),
 				remaining: job?.remaining_time_estimate ?? null
 			};
-		} else if (disabled) state = { kind: 'disabled', mode: actionMode, reason: disabledReason };
-		else if (cause !== undefined) state = { kind: 'failed', mode: actionMode, cause };
-		else state = { kind: 'idle', mode: actionMode };
-
-		return { state, job };
+		}
+		if (disabled) return { kind: 'disabled', mode: actionMode, reason: disabledReason };
+		if (cause !== undefined) return { kind: 'failed', mode: actionMode, cause };
+		return { kind: 'idle', mode: actionMode };
 	}
 );
 

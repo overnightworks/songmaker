@@ -5,9 +5,12 @@ import { detailTab } from '$lib/stores/navigation';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<{ state: GenerateState }>({ state: { kind: 'idle', mode: 'generate' } });
+	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
 });
-vi.mock('$lib/stores/generateAction', () => ({ generateAction: action }));
+vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+	generateAction: action
+}));
 
 import type { GenerateState } from '$lib/stores/generateAction';
 import DetailTabs from './DetailTabs.svelte';
@@ -16,7 +19,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	detailTab.set('write');
-	action.set({ state: { kind: 'idle', mode: 'generate' } });
+	action.set({ kind: 'idle', mode: 'generate' });
 });
 
 afterEach(async () => {
@@ -71,14 +74,13 @@ describe('DetailTabs', () => {
 	});
 
 	it.each([
-		['queued', { kind: 'queued', jobId: 'job1', position: 3, reason: null }, true],
+		['queued', { kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null }, true],
 		[
 			'generating',
 			{
 				kind: 'generating',
 				jobId: 'job1',
-				takeIndex: 1,
-				takeCount: 2,
+				takeCounter: 'Take 1 of 2',
 				progress: 36,
 				remaining: null
 			},
@@ -88,7 +90,7 @@ describe('DetailTabs', () => {
 		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
 		['failed', { kind: 'failed', mode: 'generate', cause: 'Worker error' }, false]
 	] as const)('carries a ring on Takes exactly while %s', async (_label, state, expectRing) => {
-		action.set({ state: state as GenerateState });
+		action.set(state as GenerateState);
 		const tabs = await render();
 		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
 	});

@@ -1,66 +1,52 @@
 <script lang="ts">
-	import type { JobItem } from '$lib/api/types';
+	import { EDITOR_GENERATE_CANCEL_LABEL, EDITOR_GENERATING_LABEL } from '$lib/constants';
 	import {
-		EDITOR_GENERATE_CANCEL_LABEL,
-		EDITOR_GENERATE_QUEUED_TEMPLATE,
-		EDITOR_GENERATE_TAKE_TEMPLATE,
-		EDITOR_GENERATING_LABEL,
-		EDITOR_QUEUED_LABEL
-	} from '$lib/constants';
-	import { cancelGeneration, progressPercent } from '$lib/stores/generateAction';
+		cancelGeneration,
+		generateAction,
+		isGenerateJobActive
+	} from '$lib/stores/generateAction';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
-		job: JobItem | null;
 		latestVersionNumber: number;
 	}
 
-	let { job, latestVersionNumber }: Props = $props();
+	let { latestVersionNumber }: Props = $props();
 
-	const running = $derived(job !== null && (job.status === 'queued' || job.status === 'running'));
-	const percent = $derived(progressPercent(job));
-	const takeCounter = $derived.by(() => {
-		if (job?.take_index == null || job?.take_count == null || job.take_count <= 1) return null;
-		return EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', String(job.take_index)).replace(
-			'{count}',
-			String(job.take_count)
-		);
-	});
-	const queuedLabel = $derived.by(() => {
-		const position = job?.queue_position ?? null;
-		return position === null
-			? EDITOR_QUEUED_LABEL
-			: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(position));
-	});
+	const presentation = $derived($generateAction);
+	const percent = $derived(presentation.kind === 'generating' ? presentation.progress : 0);
 	const statusLineText = $derived.by(() => {
-		if (!job || job.status === 'queued') return null;
+		if (presentation.kind !== 'generating') return null;
 		const parts: string[] = [];
-		if (takeCounter) parts.push(takeCounter);
-		parts.push(`${percent}%`);
-		if (typeof job.remaining_time_estimate === 'number') {
-			parts.push(`~${formatTime(job.remaining_time_estimate)}`);
+		if (presentation.takeCounter) parts.push(presentation.takeCounter);
+		parts.push(`${presentation.progress}%`);
+		if (typeof presentation.remaining === 'number') {
+			parts.push(`~${formatTime(presentation.remaining)}`);
 		}
 		return parts.join(' · ');
 	});
 </script>
 
-{#if job && running}
+{#if isGenerateJobActive(presentation)}
 	<div class="status-slot">
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
-				<b>{job.status === 'queued' ? queuedLabel : EDITOR_GENERATING_LABEL}</b>
+				<b>{presentation.kind === 'queued' ? presentation.label : EDITOR_GENERATING_LABEL}</b>
 			</span>
-			<button
-				type="button"
-				class="icon-button"
-				data-hitbox="frequent"
-				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-				onclick={() => void cancelGeneration(job.id)}
-			>
-				<Icon name="x" />
-			</button>
+			{#if presentation.jobId !== null}
+				{@const jobId = presentation.jobId}
+				<button
+					type="button"
+					class="icon-button"
+					data-hitbox="frequent"
+					aria-label={EDITOR_GENERATE_CANCEL_LABEL}
+					onclick={() => void cancelGeneration(jobId)}
+				>
+					<Icon name="x" />
+				</button>
+			{/if}
 		</div>
 		<div
 			class="bar"
@@ -74,8 +60,8 @@
 		{#if statusLineText}
 			<p class="status-line">{statusLineText}</p>
 		{/if}
-		{#if job.queue_reason}
-			<p class="status-line reason">{job.queue_reason}</p>
+		{#if presentation.kind === 'queued' && presentation.reason}
+			<p class="status-line reason">{presentation.reason}</p>
 		{/if}
 	</div>
 {/if}

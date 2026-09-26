@@ -5,7 +5,7 @@
 		EDITOR_TAB_WRITE_LABEL,
 		EDITOR_TABS_LABEL
 	} from '$lib/constants';
-	import { generateAction } from '$lib/stores/generateAction';
+	import { generateAction, isGenerateJobActive } from '$lib/stores/generateAction';
 
 	interface Props {
 		takeCount: number;
@@ -13,9 +13,7 @@
 
 	let { takeCount }: Props = $props();
 	const tabs: readonly DetailTab[] = ['write', 'takes'];
-	const jobRunning = $derived(
-		$generateAction.state.kind === 'queued' || $generateAction.state.kind === 'generating'
-	);
+	const jobRunning = $derived(isGenerateJobActive($generateAction));
 
 	function onKeydown(event: KeyboardEvent): void {
 		let tab: DetailTab;

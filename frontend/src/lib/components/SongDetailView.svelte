@@ -17,7 +17,6 @@
 	import { ApiError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import { generateAction } from '$lib/stores/generateAction';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		albumList,
@@ -404,7 +403,6 @@
 					dirty,
 					draftVersionNumber,
 					latestVersionNumber,
-					generateJob: $generateAction.job,
 					onsource: useSource,
 					onretry: () => {
 						if (song) void refreshTakes(song.id);
