@@ -9,3 +9,5 @@ MODEL_CONFIG_PATHS: Final[dict[str, str]] = {
     "xl-sft": "acestep-v15-xl-sft",
     "xl-base": "acestep-v15-xl-base",
 }
+
+MODE_NOT_LOADED_DETAIL: Final[str] = "Mode {mode} not loaded; call /load_model first"

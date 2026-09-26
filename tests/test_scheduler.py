@@ -12,6 +12,7 @@ import fakeredis.aioredis
 import httpx
 import pytest
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
@@ -29,7 +30,6 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
-    WORKER_MODE_NOT_LOADED_DETAIL,
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
     DispatchOptions,
@@ -825,7 +825,7 @@ def _worker_with_room_for_one_mode() -> tuple[httpx.MockTransport, list[str]]:
             return httpx.Response(200, json={"loaded": loaded, "evicted": evicted})
         if request.url.path == "/generate":
             if mode not in loaded:
-                detail = WORKER_MODE_NOT_LOADED_DETAIL.format(mode=mode)
+                detail = MODE_NOT_LOADED_DETAIL.format(mode=mode)
                 return httpx.Response(409, json={"detail": detail})
             return httpx.Response(200, json={"task_id": "t1"})
         stream = _build_sse_response(

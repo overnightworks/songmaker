@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.downloads import (
@@ -382,7 +383,7 @@ async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tu
         if loaded is None:
             raise HTTPException(
                 status_code=409,
-                detail=f"Mode {req.mode} not loaded; call /load_model first",
+                detail=MODE_NOT_LOADED_DETAIL.format(mode=req.mode),
             )
         try:
             task_id = await deps.task_store.create("generate", phase=AceStepPhase.WRITING)
@@ -460,7 +461,7 @@ async def _acquire_training_model(deps: WorkerDeps, mode: str) -> Any:
     if loaded is None:
         raise HTTPException(
             status_code=409,
-            detail=f"Mode {mode} not loaded; call /load_model first",
+            detail=MODE_NOT_LOADED_DETAIL.format(mode=mode),
         )
     return loaded
 

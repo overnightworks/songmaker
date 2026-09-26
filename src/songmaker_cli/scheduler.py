@@ -33,6 +33,7 @@ from pydantic import BaseModel, ValidationError
 from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
@@ -65,7 +66,6 @@ ProgressEventHandler = Callable[[dict], Awaitable[None]]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
 NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
-WORKER_MODE_NOT_LOADED_DETAIL: Final = "Mode {mode} not loaded; call /load_model first"
 
 
 class NoCapacityError(RuntimeError):
@@ -317,7 +317,7 @@ async def _submit_generation(
 def _answers_mode_not_loaded(response: httpx.Response, mode: str) -> bool:
     if response.status_code != httpx.codes.CONFLICT:
         return False
-    return _worker_response_cause(response) == WORKER_MODE_NOT_LOADED_DETAIL.format(mode=mode)
+    return _worker_response_cause(response) == MODE_NOT_LOADED_DETAIL.format(mode=mode)
 
 
 async def _iterate_task_events(

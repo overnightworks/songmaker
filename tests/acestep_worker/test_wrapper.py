@@ -11,6 +11,7 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
 from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
@@ -333,8 +334,6 @@ def test_evict_model(tmp_path: Path) -> None:
 
 
 def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_path: Path) -> None:
-    from songmaker_cli.scheduler import WORKER_MODE_NOT_LOADED_DETAIL
-
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -344,7 +343,7 @@ def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_
             headers=_INTERNAL_HEADERS,
         )
     assert resp.status_code == 409
-    assert resp.json()["detail"] == WORKER_MODE_NOT_LOADED_DETAIL.format(mode="sft")
+    assert resp.json()["detail"] == MODE_NOT_LOADED_DETAIL.format(mode="sft")
 
 
 @pytest.mark.parametrize(
