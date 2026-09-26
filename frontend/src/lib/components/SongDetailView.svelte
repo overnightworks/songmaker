@@ -417,7 +417,6 @@
 
 	function applyAgain(gen: GenerationItem): void {
 		applyAgainFromGeneration(gen);
-		if (compact) openWriteTab();
 	}
 
 	function useSource(gen: GenerationItem, mode: SourceMode): void {
