@@ -415,8 +415,9 @@ carries its own `PlaylistQueueSource` (`{ id, title }`), captured when the
 queue is built the way the album arm carries `albumId`, so leaving a playlist
 mid-track cannot rename — or unname — the queue Now Playing is showing.
 `playPlaylistFrom(playlist, startIndex)` is the one public way a surface starts
-a playlist — a wall tile calls it directly, a row through `playPlaylistEntry`,
-which adds the pause/resume of an entry that is already playing — and it owns
+a playlist — a wall tile calls it directly, a row through `playPlaylistEntry`
+or `playPlaylistEntryAndShowNowPlaying`, which both resume an entry that is
+already loaded and never pause it — and it owns
 the `setShuffle(false)` reset that makes a picked entry honest: a row means
 "play from here", which no leftover shuffle from a previous queue may reorder.
 The idle transport Play keeps its own path, since it must keep the listener's
