@@ -1654,7 +1654,7 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
         assert session.query(Generation).filter_by(song_id="s1").count() == count
 
 
-def test_generation_job_shows_loading_the_model_before_its_estimate_starts(
+def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task(
     seeded_db, tmp_path: Path,
 ) -> None:
     observed: list[tuple[str | None, str | int | None, bool]] = []
@@ -1669,10 +1669,11 @@ def test_generation_job_shows_loading_the_model_before_its_estimate_starts(
             ))
 
     async def generate_take(**kwargs):
-        kwargs["on_progress"](AceStepPhase.LOADING_MODEL, 0.0)
-        observe()
-        kwargs["on_progress"](AceStepPhase.WRITING, 0.5)
-        observe()
+        for server_progress in (0.0, 0.0, 0.01, 0.2):
+            [item] = _running_query_entry("", server_progress).parse_result_items()
+            progress = progress_from_result(item)
+            kwargs["on_progress"](progress.phase, progress.fraction)
+            observe()
         return _make_dto(seed=42)
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
@@ -1688,9 +1689,13 @@ def test_generation_job_shows_loading_the_model_before_its_estimate_starts(
             )
         )
 
-    assert observed[0] == ("loading_model", "calculating", False)
-    assert observed[1][0] == "writing"
-    assert observed[1][2] is True
+    assert [(phase, anchored) for phase, _, anchored in observed] == [
+        ("loading_model", False),
+        ("loading_model", False),
+        ("writing", True),
+        ("writing", True),
+    ]
+    assert observed[0][1] == "calculating"
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
