@@ -14,7 +14,7 @@
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
-	import { ApiError } from '$lib/api/fetch';
+	import { ApiError, NetworkError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -389,7 +389,7 @@
 		} catch (e) {
 			if (editorSongId !== songId) return;
 			takesStatus = 'error';
-			takesError = e instanceof Error ? e.message : TAKES_ERROR;
+			takesError = describeTakesLoadFailure(e);
 		}
 	}
 
@@ -522,9 +522,19 @@
 	let songPlaylistPickerOpen = $state(false);
 
 	/**
+	 * A takes load that got no answer at all carries the browser's own text
+	 * (`Failed to fetch`); name the network instead. Any other failure keeps
+	 * its own message.
+	 */
+	function describeTakesLoadFailure(e: unknown): string {
+		if (e instanceof NetworkError) return EDITOR_NETWORK_ERROR;
+		return e instanceof Error ? e.message : TAKES_ERROR;
+	}
+
+	/**
 	 * `updateSong` fails either as an `ApiError` (server responded with a
-	 * useful detail message) or a raw fetch rejection (offline, timeout —
-	 * `TypeError: Failed to fetch`, which is not user-facing copy). Reuse the
+	 * useful detail message) or with no answer (offline, timeout — a
+	 * `NetworkError` or an abort whose text is not user-facing copy). Reuse the
 	 * network-error copy already shown elsewhere in the app instead of
 	 * surfacing the raw browser message.
 	 */

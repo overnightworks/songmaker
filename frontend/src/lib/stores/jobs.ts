@@ -1,14 +1,13 @@
 import { writable, get } from 'svelte/store';
 import { fetchActiveGeneration, fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
-import { JOB_TYPE_GENERATE } from '$lib/constants';
+import { JOB_STREAM_MAX_CONNECTION_ERRORS, JOB_TYPE_GENERATE } from '$lib/constants';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
-import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
+import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
 import { addToast } from '$lib/stores/toast';
 
-const MAX_POLL_ERRORS = 10;
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 
-interface ActiveJob {
+export interface ActiveJob {
 	job: JobStatus;
 	songId?: string;
 	albumId?: string;
@@ -84,8 +83,14 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 	);
 }
 
+interface PendingReconnect {
+	timer: ReturnType<typeof setTimeout>;
+	attempt: number;
+}
+
 const eventSources = new Map<string, EventSource>();
-const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const pendingReconnects = new Map<string, PendingReconnect>();
+let stopWatchingReconnectOpportunities: (() => void) | null = null;
 
 function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	return (
@@ -159,11 +164,7 @@ export function removeJob(jobId: string): void {
 }
 
 function stopTracking(jobId: string): void {
-	const timer = reconnectTimers.get(jobId);
-	if (timer !== undefined) {
-		clearTimeout(timer);
-		reconnectTimers.delete(jobId);
-	}
+	cancelPendingReconnect(jobId);
 	const source = eventSources.get(jobId);
 	if (source) {
 		source.close();
@@ -176,18 +177,25 @@ function stopTracking(jobId: string): void {
  * connection closes itself here rather than leaning on the browser's flat
  * native EventSource retry (that flat retry across several concurrently
  * failing job streams is what produced the operator's ERR_QUIC storm --
- * issue #257) and reopens after `nextReconnectDelayMs`, counting up `attempt`
- * the same way `errorCount` used to. Any message resets the count, so a
- * connection that recovers goes back to the short delay on its next drop.
+ * issue #257) and reopens after `nextReconnectDelayMs`, or at once when the
+ * page gets a fresh chance to reach the server (`watchReconnectOpportunities`).
+ *
+ * `attemptOnFailure` is the consecutive-error count this connection's failure
+ * records. A reopen the backoff timer scheduled is the next attempt; a reopen
+ * the page asked for (visible again, focus, back online) re-records the
+ * attempt it interrupted, so returning to the app during an outage never
+ * spends the give-up budget -- otherwise every return dropped a running job
+ * sooner (#1032). Any message resets the count, so a connection that recovers
+ * goes back to the short delay on its next drop.
  */
-function streamJob(jobId: string, attempt = 0): void {
-	let currentAttempt = attempt;
+function streamJob(jobId: string, attemptOnFailure = 1): void {
+	let failedAttempt = attemptOnFailure;
 
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
 	eventSources.set(jobId, source);
 
 	source.onmessage = (event: MessageEvent) => {
-		currentAttempt = 0;
+		failedAttempt = 1;
 		const updated: JobStatus = JSON.parse(event.data);
 
 		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
@@ -200,19 +208,47 @@ function streamJob(jobId: string, attempt = 0): void {
 	source.onerror = () => {
 		source.close();
 		eventSources.delete(jobId);
-		const nextAttempt = currentAttempt + 1;
-		if (nextAttempt >= MAX_POLL_ERRORS) {
+		if (failedAttempt >= JOB_STREAM_MAX_CONNECTION_ERRORS) {
 			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
 			addToast('Lost connection to server', 'error');
 			return;
 		}
-		const delay = nextReconnectDelayMs(nextAttempt);
-		reconnectTimers.set(
-			jobId,
-			setTimeout(() => {
-				reconnectTimers.delete(jobId);
-				streamJob(jobId, nextAttempt);
-			}, delay)
-		);
+		scheduleReconnect(jobId, failedAttempt);
 	};
+}
+
+function scheduleReconnect(jobId: string, attempt: number): void {
+	const timer = setTimeout(() => retryAfterBackoff(jobId), nextReconnectDelayMs(attempt));
+	pendingReconnects.set(jobId, { timer, attempt });
+	stopWatchingReconnectOpportunities ??= watchReconnectOpportunities(reconnectAllWaitingJobs);
+}
+
+function retryAfterBackoff(jobId: string): void {
+	const pending = takePendingReconnect(jobId);
+	if (pending !== undefined) streamJob(jobId, pending.attempt + 1);
+}
+
+function reconnectNow(jobId: string): void {
+	const pending = takePendingReconnect(jobId);
+	if (pending !== undefined) streamJob(jobId, pending.attempt);
+}
+
+function takePendingReconnect(jobId: string): PendingReconnect | undefined {
+	const pending = pendingReconnects.get(jobId);
+	cancelPendingReconnect(jobId);
+	return pending;
+}
+
+function reconnectAllWaitingJobs(): void {
+	for (const jobId of [...pendingReconnects.keys()]) reconnectNow(jobId);
+}
+
+function cancelPendingReconnect(jobId: string): void {
+	const pending = pendingReconnects.get(jobId);
+	if (pending === undefined) return;
+	clearTimeout(pending.timer);
+	pendingReconnects.delete(jobId);
+	if (pendingReconnects.size > 0) return;
+	stopWatchingReconnectOpportunities?.();
+	stopWatchingReconnectOpportunities = null;
 }

@@ -24,7 +24,7 @@ vi.mock('$lib/stores/auth', () => {
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { apiFetch, sseFetch, ApiError, handleSessionLost } from './fetch';
+import { apiFetch, sseFetch, ApiError, NetworkError, handleSessionLost } from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { clearAuth, currentUser } from '$lib/stores/auth';
@@ -304,6 +304,51 @@ describe('429 throttle toast', () => {
 
 		const shown = get(toasts).filter((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
 		expect(shown).toHaveLength(1);
+	});
+});
+
+describe('a request that gets no answer', () => {
+	const firstEventFrom = (path: string) => sseFetch(path, { method: 'POST' }).next();
+
+	it.each([
+		{ client: 'apiFetch', request: (path: string) => apiFetch(path) },
+		{ client: 'sseFetch', request: firstEventFrom }
+	])('rejects through $client as a NetworkError keeping the browser text', async ({ request }) => {
+		mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		const failure = await request('/api/songs/s1').catch((err: unknown) => err);
+		expect(failure).toBeInstanceOf(NetworkError);
+		expect(failure).toMatchObject({ path: '/api/songs/s1', message: 'Failed to fetch' });
+	});
+
+	it.each([
+		{
+			client: 'apiFetch',
+			request: (path: string) => apiFetch(path),
+			brokenAnswer: { ok: true, json: () => Promise.reject(new TypeError('network error')) }
+		},
+		{
+			client: 'sseFetch',
+			request: firstEventFrom,
+			brokenAnswer: {
+				ok: true,
+				body: new ReadableStream({ pull: (stream) => stream.error(new TypeError('network error')) })
+			}
+		}
+	])(
+		'rejects through $client as a NetworkError when the answer breaks off mid-body',
+		async ({ request, brokenAnswer }) => {
+			mockFetch.mockResolvedValueOnce(brokenAnswer);
+			const failure = await request('/api/songs/s1').catch((err: unknown) => err);
+			expect(failure).toBeInstanceOf(NetworkError);
+			expect(failure).toMatchObject({ path: '/api/songs/s1', message: 'network error' });
+		}
+	);
+
+	it('leaves an aborted request as the abort, not as a network failure', async () => {
+		mockFetch.mockRejectedValueOnce(new DOMException('The operation was aborted.', 'AbortError'));
+		const failure = await apiFetch('/api/songs/s1').catch((err: unknown) => err);
+		expect(failure).not.toBeInstanceOf(NetworkError);
+		expect(failure).toMatchObject({ name: 'AbortError' });
 	});
 });
 

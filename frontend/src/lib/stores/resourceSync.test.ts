@@ -26,7 +26,7 @@ vi.mock('$lib/stores/auth', () => {
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { clearAuth, currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
@@ -36,6 +36,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
+	RESOURCE_SYNC_OFFLINE_MESSAGE,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
@@ -141,6 +142,10 @@ async function flush(): Promise<void> {
 	for (let i = 0; i < 20; i++) {
 		await Promise.resolve();
 	}
+}
+
+function offlineFailure(songId: string): NetworkError {
+	return new NetworkError(`/api/songs/${songId}`, new TypeError('Failed to fetch'));
 }
 
 function setup(options?: {
@@ -374,6 +379,35 @@ describe('resource sync owner', () => {
 		await controller.requestSongRefresh('s1');
 		expect(fetchCalls).toEqual([]);
 	});
+
+	it.each([
+		{ dropsAfterRequest: 0, case: 'once the reconnecting stream bootstraps' },
+		{ dropsAfterRequest: 1, case: 'even when another attempt drops before the bootstrap' }
+	])(
+		'lands a refresh asked for while the stream is still reconnecting $case',
+		async ({ dropsAfterRequest }) => {
+			const { controller, sources, store, fetchCalls, upserted } = setup({
+				listPrioritySongIds: () => []
+			});
+			controller.start();
+			latestSource(sources).error();
+			await flush();
+			expect(get(store).status).toBe('reconnecting');
+
+			await controller.requestSongRefresh('s1');
+			expect(fetchCalls).toEqual([]);
+			for (let drop = 0; drop < dropsAfterRequest; drop++) {
+				latestSource(sources).error();
+				await flush();
+			}
+
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			expect(get(store).status).toBe('live');
+			expect(fetchCalls).toEqual(['s1']);
+			expect(upserted.at(-1)?.id).toBe('s1');
+		}
+	);
 
 	it('creates one stream when start is called repeatedly', () => {
 		const { controller, sources } = setup();
@@ -804,6 +838,104 @@ describe('resource sync owner', () => {
 		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
 	});
 
+	it('says the musician is offline, not the browser text, and clears it once back online', async () => {
+		vi.useFakeTimers();
+		let offline = true;
+		const { controller, sources, store } = setup({
+			fetchSong: async (songId) => {
+				if (offline) throw offlineFailure(songId);
+				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+
+		offline = false;
+		window.dispatchEvent(new Event('online'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'live', error: null });
+	});
+
+	it.each([
+		['offline', (songId: string) => offlineFailure(songId)],
+		[
+			'answered 503',
+			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`)
+		]
+	])(
+		'retries a live refresh that failed %s on its own, and brings the take in within 10 s of the network returning without any browser event',
+		async (_kind, failure) => {
+			vi.useFakeTimers();
+			let networkDown = true;
+			const { controller, sources, store, upserted } = setup({
+				fetchSong: async (songId) => {
+					if (networkDown) throw failure(songId);
+					return song({ slug: 'track', title: 'Track', id: songId, generation_count: 1 });
+				}
+			});
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			await controller.requestSongRefresh('s1');
+			expect(get(store).status).toBe('error');
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(get(store).status).toBe('error');
+			networkDown = false;
+			await vi.advanceTimersByTimeAsync(10_000);
+
+			expect(get(store)).toMatchObject({ status: 'live', error: null });
+			expect(upserted.at(-1)?.id).toBe('s1');
+		}
+	);
+
+	it('shows a bug in applying a fetched song as itself, not as the musician being offline', async () => {
+		const { controller, sources, store } = setup({
+			applySong: () => {
+				throw new TypeError("Cannot read properties of undefined (reading 'id')");
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store)).toMatchObject({
+			status: 'error',
+			error: "Cannot read properties of undefined (reading 'id')"
+		});
+	});
+
+	it('restarts a bootstrap that failed offline once the network comes back', async () => {
+		let offline = true;
+		const { controller, sources, store } = setup({
+			fetchSong: async (songId) => {
+				if (offline) throw offlineFailure(songId);
+				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+
+		offline = false;
+		window.dispatchEvent(new Event('online'));
+		expect(sources).toHaveLength(2);
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'live', error: null, ready: true });
+	});
+
 	it('returns a failed retry when the active owner stops during its refresh', async () => {
 		const pending = deferred<SongItem>();
 		const { controller, sources } = setup({ fetchSong: () => pending.promise });
@@ -1129,6 +1261,25 @@ describe('resource sync owner', () => {
 
 		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
 		expect(sources).toHaveLength(beforeError + 1);
+	});
+
+	it('reopens a dropped live stream at once when the network comes back, resuming after the last seen event', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '4' }, '4');
+		await flush();
+		await controller.waitForReady();
+
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		window.dispatchEvent(new Event('online'));
+
+		expect(sources).toHaveLength(2);
+		expect(latestSource(sources).url).toBe(`${RESOURCE_EVENT_STREAM_PATH}?last_event_id=4`);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources).toHaveLength(2);
 	});
 
 	it('resumes a dropped live stream after the last seen event and applies the take it missed', async () => {

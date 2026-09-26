@@ -22,6 +22,22 @@ export class ApiError extends Error {
 	}
 }
 
+/**
+ * The request got no answer at all -- offline, DNS, a refused connection --
+ * so `fetch` itself rejected, or the connection broke off while its body was
+ * still being read. Only the fetch boundary below knows that a rejection came
+ * from the network rather than from the caller's own code.
+ */
+export class NetworkError extends Error {
+	constructor(
+		public readonly path: string,
+		cause: TypeError
+	) {
+		super(cause.message, { cause });
+		this.name = 'NetworkError';
+	}
+}
+
 async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
 	detail: string;
 	responseDetail: unknown;
@@ -172,6 +188,15 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 	);
 }
 
+async function orNetworkError<T>(path: string, networkRead: Promise<T>): Promise<T> {
+	try {
+		return await networkRead;
+	} catch (err) {
+		if (err instanceof TypeError) throw new NetworkError(path, err);
+		throw err;
+	}
+}
+
 export async function apiFetch<T>(
 	path: string,
 	init?: RequestInit,
@@ -189,9 +214,9 @@ export async function apiFetch<T>(
 		method
 	);
 	try {
-		const resp = await fetch(path, opts);
+		const resp = await orNetworkError(path, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
-		return resp.json() as Promise<T>;
+		return await orNetworkError(path, resp.json() as Promise<T>);
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -199,12 +224,15 @@ export async function apiFetch<T>(
 
 export type JobStatus = JobItem;
 
-async function* parseSseEvents<T>(body: ReadableStream<Uint8Array>): AsyncGenerator<T> {
+async function* parseSseEvents<T>(
+	path: string,
+	body: ReadableStream<Uint8Array>
+): AsyncGenerator<T> {
 	const reader = body.getReader();
 	const decoder = new TextDecoder('utf-8');
 	let buffer = '';
 	while (true) {
-		const { value, done } = await reader.read();
+		const { value, done } = await orNetworkError(path, reader.read());
 		if (done) return;
 		buffer += decoder.decode(value, { stream: true });
 		let boundary = buffer.indexOf('\n\n');
@@ -245,9 +273,9 @@ export async function* sseFetch<T = unknown>(
 		method
 	);
 	try {
-		const resp = await fetch(path, opts);
+		const resp = await orNetworkError(path, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
-		if (resp.body) yield* parseSseEvents<T>(resp.body);
+		if (resp.body) yield* parseSseEvents<T>(path, resp.body);
 	} finally {
 		clearTimeout(timeout);
 	}
