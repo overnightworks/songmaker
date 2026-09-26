@@ -544,6 +544,33 @@ describe('frozen-clock watchdog', () => {
 
 		expect(debug).toHaveBeenCalledWith('Audio paused', expect.objectContaining({ source }));
 	});
+
+	it.each([
+		{
+			name: 'a take change',
+			reload: () =>
+				audioPlayer.load(makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'a1/other.mp3' }) }))
+		},
+		{ name: 'a frozen-clock reload', reload: () => advanceSeconds(5) }
+	])(
+		'records a later pause from outside after $name swallowed the app pause event',
+		({ reload }) => {
+			const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+			startPlayingAt(40);
+			vi.spyOn(fakeAudio, 'pause').mockImplementationOnce(() => {
+				fakeAudio.paused = true;
+			});
+
+			reload();
+			startPlayingAt(40);
+			fakeAudio.pause();
+
+			expect(debug).toHaveBeenLastCalledWith(
+				'Audio paused',
+				expect.objectContaining({ source: 'outside' })
+			);
+		}
+	);
 });
 
 describe('stream playback', () => {

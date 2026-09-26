@@ -212,8 +212,7 @@ class AudioPlayer {
 		this.error = null;
 		this.currentTime = 0;
 		this.duration = 0;
-		el.src = url;
-		el.load();
+		this.loadSource(el, url);
 	}
 
 	loadStream(
@@ -241,8 +240,7 @@ class AudioPlayer {
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.error = null;
-		el.src = manifest.stream_url;
-		el.load();
+		this.loadSource(el, manifest.stream_url);
 		// The start-track seek is applied on loadedmetadata, never eagerly:
 		// browsers accept a currentTime assignment before metadata without
 		// error, then reset it to 0 when metadata arrives — which silently
@@ -592,6 +590,14 @@ class AudioPlayer {
 		el.pause();
 	}
 
+	// Loading a source drops the 'pause' event an app pause just queued, so the
+	// app's pause marker is settled here instead of by that event.
+	private loadSource(el: HTMLAudioElement, url: string): void {
+		this.pauseRequestedByApp = false;
+		el.src = url;
+		el.load();
+	}
+
 	// Android pauses the element on its own (audio focus, another app's sound);
 	// a debug line per pause tells that apart from the app's own pauses.
 	private recordPauseSource(el: HTMLAudioElement): void {
@@ -655,8 +661,7 @@ class AudioPlayer {
 		});
 
 		this.pauseElement(el);
-		el.src = this.urlWithRecovery(this.currentUrl, this.reloadCount);
-		el.load();
+		this.loadSource(el, this.urlWithRecovery(this.currentUrl, this.reloadCount));
 	}
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
@@ -766,8 +771,7 @@ class AudioPlayer {
 		this.streamEngine.resumeAt(absoluteTime);
 		this.pauseElement(el);
 		const url = state.manifest.stream_url;
-		el.src = this.urlWithRecovery(url, this.recoveryAttempts);
-		el.load();
+		this.loadSource(el, this.urlWithRecovery(url, this.recoveryAttempts));
 	}
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
