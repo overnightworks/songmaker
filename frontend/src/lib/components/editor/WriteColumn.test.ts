@@ -120,6 +120,11 @@ describe('WriteColumn write mode', () => {
 		expect(target.querySelector('.cowriter-row')).toBeNull();
 	});
 
+	it('leaves takes to the Takes tab in compact Write mode', async () => {
+		const { target } = await render({ compact: true });
+		expect(target.querySelector('.take-strip')).toBeNull();
+	});
+
 	it('opens the co-writer from the compact "Co-Writer" row', async () => {
 		const onopencowriter = vi.fn();
 		const { target } = await render({ compact: true, onopencowriter });
@@ -223,11 +228,6 @@ describe('WriteColumn Co-Writer mode', () => {
 		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
 		expect(target.querySelector('.cowriter-takes')).not.toBeNull();
 		expect(target.querySelector('.mobile-subtabs')).toBeNull();
-	});
-
-	it('shows the kinetic take strip in compact Write mode only', async () => {
-		const { target } = await render({ compact: true });
-		expect(target.querySelector('.compact-takes .take-strip')).not.toBeNull();
 	});
 
 	it('plays a take from the strip on click without opening Now Playing', async () => {

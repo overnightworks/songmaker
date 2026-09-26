@@ -21,9 +21,10 @@ import {
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
-	return writable<{ state: GenerateState }>({ state: { kind: 'idle', mode: 'generate' } });
+	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
 });
-vi.mock('$lib/stores/generateAction', () => ({
+vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
 	generateAction: action,
 	generate: vi.fn(),
 	cancelGeneration: vi.fn()
@@ -35,15 +36,14 @@ import GenerateButton from './GenerateButton.svelte';
 const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
 	jobId: 'job1',
-	takeIndex: 1,
-	takeCount: 2,
+	takeCounter: 'Take 1 of 2',
 	progress: 36,
 	remaining: 100
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'job1',
-	position: 3,
+	label: 'Queued #3',
 	reason: 'Waiting for LoRA training on this GPU.'
 };
 let component: ReturnType<typeof mount>;
@@ -62,7 +62,7 @@ afterEach(async () => {
 });
 
 async function render(state: GenerateState): Promise<void> {
-	action.set({ state });
+	action.set(state);
 	component = mount(GenerateButton, { target: document.body });
 	await tick();
 }
@@ -96,11 +96,6 @@ describe('GenerateButton', () => {
 		expect(generate).not.toHaveBeenCalled();
 	});
 
-	it('does not invent a missing queue position', async () => {
-		await render({ ...queued, position: null });
-		expect(document.body.querySelector('[role="status"]')?.textContent?.trim()).toBe('Queued');
-	});
-
 	it.each([
 		{ remaining: 100, expected: 'Take 1 of 2 · 36% · ~1:40' },
 		{ remaining: 'calculating', expected: 'Take 1 of 2 · 36%' },
@@ -118,8 +113,8 @@ describe('GenerateButton', () => {
 		}
 	);
 
-	it('omits the take counter for a single take', async () => {
-		await render({ ...running, takeCount: 1 });
+	it('names the running job without a take counter', async () => {
+		await render({ ...running, takeCounter: null });
 		expect(document.body.textContent).toContain('Generating...');
 		expect(document.body.textContent).not.toContain('Take 1 of 1');
 	});
@@ -128,8 +123,7 @@ describe('GenerateButton', () => {
 		await render({
 			...running,
 			jobId: null,
-			takeIndex: null,
-			takeCount: null,
+			takeCounter: null,
 			progress: 0,
 			remaining: null
 		});

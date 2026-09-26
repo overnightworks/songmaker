@@ -1,18 +1,8 @@
 import { makeGeneration as generation } from '$lib/test-utils/factories';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { get } from 'svelte/store';
-
-vi.mock('$lib/stores/editor', () => {
-	return {
-		applyGenerationSettings: vi.fn(),
-		pinnedSeed: { set: vi.fn() }
-	};
-});
-
-import { applyGenerationSettings, pinnedSeed } from '$lib/stores/editor';
 import type { GenerationItem } from '$lib/api/types';
 import {
-	applyAgainFromGeneration,
 	clearSource,
 	coWriterOpen,
 	coverStrength,
@@ -205,7 +195,6 @@ describe('recipe session state', () => {
 		coWriterOpen.set(false);
 		sourceGeneration.set(null);
 		pendingSource.set(null);
-		vi.clearAllMocks();
 	});
 
 	it('seeds the model only once, from the first active model', () => {
@@ -227,17 +216,6 @@ describe('recipe session state', () => {
 		setSourceFromGeneration(generation(requestedRecipeDefaults()), 'cover');
 		clearSource();
 		expect(get(sourceGeneration)).toBeNull();
-	});
-
-	it('applyAgainFromGeneration stages reusable params and the seed without picking a source', () => {
-		applyAgainFromGeneration(generation(requestedRecipeDefaults()));
-		expect(get(sourceGeneration)).toBeNull();
-		expect(applyGenerationSettings).toHaveBeenCalledWith({
-			inference_steps: 8,
-			guidance_scale: 1.5
-		});
-		expect(pinnedSeed.set).toHaveBeenCalledWith(7);
-		expect(get(recipeOpen)).toBe(true);
 	});
 
 	it('resetRecipeSourceForSong clears the source and closes both views but keeps the model', () => {

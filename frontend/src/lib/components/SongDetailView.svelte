@@ -17,7 +17,6 @@
 	import { ApiError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import { generateAction } from '$lib/stores/generateAction';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		albumList,
@@ -65,7 +64,6 @@
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import {
-		applyAgainFromGeneration,
 		coWriterOpen,
 		pendingSource,
 		recipeChips,
@@ -405,8 +403,6 @@
 					dirty,
 					draftVersionNumber,
 					latestVersionNumber,
-					generateJob: $generateAction.job,
-					onagain: applyAgain,
 					onsource: useSource,
 					onretry: () => {
 						if (song) void refreshTakes(song.id);
@@ -414,10 +410,6 @@
 				} satisfies ComponentProps<typeof TakesList>)
 			: null
 	);
-
-	function applyAgain(gen: GenerationItem): void {
-		applyAgainFromGeneration(gen);
-	}
 
 	function useSource(gen: GenerationItem, mode: SourceMode): void {
 		setSourceFromGeneration(gen, mode);
