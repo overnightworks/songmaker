@@ -42,6 +42,27 @@ afterEach(async () => {
 
 const NO_CHIPS: RecipeChip[] = [];
 
+// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
+// records the real callback so a test can fire it like the browser would once
+// the action bar changes size.
+function stubResizeObserver(): () => void {
+	const callbacks: ResizeObserverCallback[] = [];
+	vi.stubGlobal(
+		'ResizeObserver',
+		class {
+			constructor(callback: ResizeObserverCallback) {
+				callbacks.push(callback);
+			}
+			observe(): void {}
+			unobserve(): void {}
+			disconnect(): void {}
+		}
+	);
+	return () => {
+		for (const callback of callbacks) callback([], {} as ResizeObserver);
+	};
+}
+
 async function render(
 	overrides: Partial<ComponentProps<typeof SongPhoneView>['takeListProps']> = {}
 ) {
@@ -137,6 +158,20 @@ describe('SongPhoneView', () => {
 		if (!actionBar) throw new Error('Expected an action bar');
 		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
 		expect(getComputedStyle(actionBar).position).toBe('sticky');
+	});
+
+	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
+		const triggerResize = stubResizeObserver();
+		const target = await render();
+		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
+		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
+		if (!actionBar || !writeScroll) throw new Error('Expected the action bar and write scroll');
+
+		vi.spyOn(actionBar, 'offsetHeight', 'get').mockReturnValue(140);
+		triggerResize();
+		await tick();
+
+		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('140px');
 	});
 
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {

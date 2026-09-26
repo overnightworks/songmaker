@@ -283,7 +283,7 @@
 		}
 	}
 
-	// A first generation has zero takes yet, so empty-state branches below must not hide the running status slot behind "No takes yet".
+	// The first generation of a song has zero takes; the empty state must not hide a job in flight.
 	const jobRunning = $derived(
 		generateJob !== null && (generateJob.status === 'queued' || generateJob.status === 'running')
 	);
