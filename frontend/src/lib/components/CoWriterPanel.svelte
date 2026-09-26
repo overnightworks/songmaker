@@ -380,10 +380,12 @@
 
 		input = '';
 		const lastKnownPersistedId = messages.findLast((message) => message.persistedId)?.persistedId;
-		const assistantIndex = messages.length + 1;
+		const sentAgain = unansweredMessageSentAgain(msg);
+		const earlier = sentAgain ? messages.slice(0, -1) : messages;
+		const assistantIndex = earlier.length + 1;
 		messages = [
-			...messages,
-			{ role: 'user', text: msg },
+			...earlier,
+			{ role: 'user', text: msg, persistedId: sentAgain?.persistedId },
 			{ role: 'assistant', text: '', toolCalls: [] }
 		];
 		loading = true;
@@ -437,6 +439,15 @@
 			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
 		}
 		void scrollToBottom();
+	}
+
+	/**
+	 * The server answers an unanswered last message that is sent again instead
+	 * of storing it twice (#1014), so the panel sends it in place of its bubble.
+	 */
+	function unansweredMessageSentAgain(msg: string): Message | undefined {
+		const last = messages.at(-1);
+		return last?.role === 'user' && last.text === msg ? last : undefined;
 	}
 
 	function refusalMessage(refusal: ApiError): string {

@@ -337,8 +337,9 @@ describe('CoWriterPanel failed turns', () => {
 		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
 
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
-		await vi.waitFor(() => expect(target.querySelector('.turn-error')).toBeNull());
-		expect(target.textContent).toContain('Here is a chorus');
+		await vi.waitFor(() => expect(target.textContent).toContain('Here is a chorus'));
+		expect(target.querySelector('.turn-error')).toBeNull();
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
 	});
 });
 
@@ -431,6 +432,26 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+	});
+
+	it('shows the retained unanswered message once when retrying it fails again', async () => {
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		fetchConversationMessages.mockResolvedValue(conversation(false, sent));
+		streamCoWriterTurn.mockReturnValue(
+			turnEvents([{ type: 'error', message: 'CLI is unavailable.' } as CoWriterStreamEvent])
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
+
+		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'CLI is unavailable.'
+			)
+		);
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelectorAll('.retry-turn')).toHaveLength(1);
 	});
 
 	it('names a conversation it can no longer reach instead of waiting in silence', async () => {
