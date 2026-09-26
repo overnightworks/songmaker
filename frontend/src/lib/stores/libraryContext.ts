@@ -82,11 +82,7 @@ let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
-// SvelteKit's single-page start replaces the entry's history.state with its
-// own router entry before any page runs, so the state a reload or a restored
-// tab comes back to survives only in this read, taken while the router loads
-// this module during that start.
-let restoredHistory: unknown = history.state;
+let restoredHistory: unknown = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -329,18 +325,33 @@ function pathnameOf(url: string): string {
 // the page stands.
 export function takeRestoredLibraryHistory(): unknown {
 	const restored = restoredHistory;
-	restoredHistory = null;
+	leaveRestoredLibraryHistory();
 	return restored;
+}
+
+// Back and Forward between two library entries carry no router state, so
+// SvelteKit reports no navigation for them: the first traversal after the
+// load is this module's own cue that the page left the entry it loaded onto.
+function holdRestoredLibraryHistory(): void {
+	restoredHistory = history.state;
+	window.addEventListener('popstate', leaveRestoredLibraryHistory, { once: true });
 }
 
 export function leaveRestoredLibraryHistory(): void {
 	restoredHistory = null;
+	window.removeEventListener('popstate', leaveRestoredLibraryHistory);
 }
+
+// SvelteKit's single-page start replaces the entry's history.state with its
+// own router entry before any page runs, so the state a reload or a restored
+// tab comes back to survives only in this read, taken while the router loads
+// this module during that start.
+holdRestoredLibraryHistory();
 
 // A page load, as far as the restored entry goes: reads history.state the way
 // this module's own load does.
 export function loadLibraryHistoryPageForTests(): void {
-	restoredHistory = history.state;
+	holdRestoredLibraryHistory();
 }
 
 // The library history entry as it will stand once every queued write has
@@ -885,7 +896,7 @@ export function resetLibraryContextForTests(): void {
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
-	restoredHistory = null;
+	leaveRestoredLibraryHistory();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	libraryScrollAnchor.set(0);

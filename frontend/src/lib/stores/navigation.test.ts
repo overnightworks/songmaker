@@ -1395,6 +1395,26 @@ describe('compact Now Playing owns one history entry', () => {
 		});
 	});
 
+	it('stays on the playlist Back reaches from the Now Playing entry a reload left before navigation started', async () => {
+		await openPlaylist('p1');
+		const below = history.state.index;
+		const playlistPath = location.pathname;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		reloadBeforeNavigationStarts();
+		const backLanded = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await backLanded;
+
+		stopNavigation = initNavigation();
+
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
+		expect(history.state.index).toBe(below);
+		expect(location.pathname).toBe(playlistPath);
+	});
+
 	it.each([
 		{ how: 'pushes', path: '/settings', write: history.pushState },
 		{ how: 'replaces', path: '/login', write: history.replaceState }
