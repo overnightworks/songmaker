@@ -1,5 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
+import {
+	PHONE_VIEWPORT_HEIGHT_PX,
+	phoneViewport,
+	removePhoneViewport
+} from '$lib/test-utils/on-screen-keyboard';
 
 beforeEach(() => {
 	localStorage.clear();
@@ -99,37 +104,7 @@ describe('phoneAppBar', () => {
 	});
 });
 
-// jsdom has no visual viewport; this stands in for the phone's 844 px one,
-// which the on-screen keyboard shortens while the layout viewport stays put.
-const PHONE_VIEWPORT_HEIGHT_PX = 844;
-const PHONE_KEYBOARD_HEIGHT_PX = 300;
-
-function phoneViewport() {
-	const viewport = Object.assign(new EventTarget(), {
-		height: PHONE_VIEWPORT_HEIGHT_PX,
-		scale: 1
-	});
-	Object.defineProperty(window, 'visualViewport', { configurable: true, value: viewport });
-	Object.defineProperty(document.documentElement, 'clientHeight', {
-		configurable: true,
-		value: PHONE_VIEWPORT_HEIGHT_PX
-	});
-	function show(height: number, scale = 1): void {
-		viewport.height = height;
-		viewport.scale = scale;
-		viewport.dispatchEvent(new Event('resize'));
-	}
-	return {
-		openKeyboard: () => show(PHONE_VIEWPORT_HEIGHT_PX - PHONE_KEYBOARD_HEIGHT_PX),
-		closeKeyboard: () => show(PHONE_VIEWPORT_HEIGHT_PX),
-		show
-	};
-}
-
-afterEach(() => {
-	Reflect.deleteProperty(window, 'visualViewport');
-	Reflect.deleteProperty(document.documentElement, 'clientHeight');
-});
+afterEach(removePhoneViewport);
 
 describe('typingOnPhone', () => {
 	function field(html: string): HTMLElement {

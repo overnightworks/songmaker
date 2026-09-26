@@ -35,6 +35,7 @@ import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {
@@ -564,23 +565,6 @@ describe('PlayerBar Now Playing', () => {
 		);
 	});
 });
-
-// jsdom has no visual viewport; a phone's, shortened by the open on-screen
-// keyboard, is what sends the bars away while a field has focus.
-function openOnScreenKeyboard(): () => void {
-	Object.defineProperty(document.documentElement, 'clientHeight', {
-		configurable: true,
-		value: 844
-	});
-	Object.defineProperty(window, 'visualViewport', {
-		configurable: true,
-		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
-	});
-	return () => {
-		Reflect.deleteProperty(window, 'visualViewport');
-		Reflect.deleteProperty(document.documentElement, 'clientHeight');
-	};
-}
 
 describe('PlayerBar while typing on the phone', () => {
 	it('steps aside for the keyboard and comes back on leaving the field, with playback untouched', async () => {

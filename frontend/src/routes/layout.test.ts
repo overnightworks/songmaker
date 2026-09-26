@@ -24,6 +24,7 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -130,23 +131,6 @@ function stubMatchMedia(matches: boolean): void {
 			dispatchEvent: vi.fn()
 		}))
 	);
-}
-
-// jsdom has no visual viewport; a phone's, shortened by the open on-screen
-// keyboard, is what sends the bars away while a field has focus.
-function openOnScreenKeyboard(): () => void {
-	Object.defineProperty(document.documentElement, 'clientHeight', {
-		configurable: true,
-		value: 844
-	});
-	Object.defineProperty(window, 'visualViewport', {
-		configurable: true,
-		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
-	});
-	return () => {
-		Reflect.deleteProperty(window, 'visualViewport');
-		Reflect.deleteProperty(document.documentElement, 'clientHeight');
-	};
 }
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
