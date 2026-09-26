@@ -1,0 +1,8 @@
+claim_id = "8cd5f8ffd147405a83122954af24b3e0"
+agent = "claude-head"
+role = "builder"
+base = "9f5c98ef7127b5844cd37219119fff04940a637b"
+branch = "claude/issue-1015-job-phase"
+scope = ["docs/architecture.md", "frontend/e2e/seed.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/api/types.ts", "scripts/seed_e2e_job_states.py", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/jobs_api.py", "tests/test_api.py", "tests/test_cover_runner.py", "tests/test_db.py", "tests/test_jobs.py", "tests/test_postgresql.py"]
+opened_commit = "49ad3b918a68b55541acc0fc04d80c6519a6e835"
+whole_reason = "migration, model, queries, API model, stream, tracker writer, seeds and tests of one persisted phase change together"
