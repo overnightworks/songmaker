@@ -59,7 +59,8 @@ test.describe('a finished generation on the phone', () => {
 			progress: 0.5,
 			takeIndex: 1,
 			takeCount: 1,
-			runningSinceOffsetSeconds: 30
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
 		});
 		const panel = page.getByRole('tabpanel');
 		const playButtons = panel.getByRole('button', {
