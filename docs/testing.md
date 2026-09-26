@@ -340,7 +340,6 @@ tests/acestep_worker/
 ├── test_heartbeat.py
 ├── test_main.py
 ├── test_model_cache.py
-├── test_progress.py
 ├── test_registry_client.py
 ├── test_subprocess_runner.py
 ├── test_task_store.py
