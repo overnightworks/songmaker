@@ -17,7 +17,10 @@ from acestep_engine.progress import (
 
 def test_the_phase_marks_are_the_forks_own_progress_calls() -> None:
     assert (RUNNING_STARTS_AT, WRITING_STARTS_AT, RENDERING_STARTS_AT, RENDERING_ENDS_AT) == (
-        0.01, 0.1, 0.51, 0.99,
+        0.01,
+        0.1,
+        0.51,
+        0.99,
     )
 
 
