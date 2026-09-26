@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
+import measuredTakes from './fixtures/lyrics-align-takes.json';
 import golden from './lyrics-align.fixtures.json';
-import { activeLyricLineIndices, alignLyricsToCues } from './lyrics-align';
+import { activeLyricLineIndices, alignLyricsToCues, type AlignedLyricLine } from './lyrics-align';
 
 // Invented lyric-like lines, never real lyrics. Deliberately far apart in
 // SequenceMatcher.ratio() (verified by hand against Python's difflib) from
@@ -463,6 +464,45 @@ describe('golden alignments from scripts/lyric_alignment_golden.py', () => {
 		const aligned = alignLyricsToCues(fixture.lyrics, fixture.cues as WhisperCue[]);
 
 		expect(aligned.map((line) => line.interval)).toEqual(fixture.intervals);
+	});
+});
+
+// The operator's 20 latest takes as measured on #1029: their own lyrics and
+// the Whisper cues stored with each take, nothing else.
+describe('alignLyricsToCues on the measured takes', () => {
+	const takes = measuredTakes.map((take) => ({
+		...take,
+		lines: alignLyricsToCues(take.lyrics, take.cues as WhisperCue[])
+	}));
+
+	function sungLines(lines: AlignedLyricLine[]): AlignedLyricLine[] {
+		return lines.filter((line) => line.text.trim() !== '' && !/^\[.*\]$/.test(line.text.trim()));
+	}
+
+	function litShare(lines: AlignedLyricLine[]): number {
+		const sung = sungLines(lines);
+		return sung.filter((line) => line.interval !== null).length / sung.length;
+	}
+
+	it.each(takes)('lights the lines of $title ($take) in playback order', ({ lines }) => {
+		const starts = sungLines(lines).flatMap((line) => (line.interval ? [line.interval.start] : []));
+
+		expect(starts).toEqual([...starts].sort((left, right) => left - right));
+	});
+
+	it('lights at least 97 % of all sung lines', () => {
+		const allLines = takes.flatMap(({ lines }) => lines);
+
+		expect(litShare(allLines)).toBeGreaterThanOrEqual(0.97);
+	});
+
+	it.each([
+		['f5587750', 'a mis-heard hook line', 1],
+		['e00d942b', 'a chorus lit at its later repeat', 0.84]
+	])('recovers take %s from %s', (take, _cause, minimumShare) => {
+		const measured = takes.find((candidate) => candidate.take === take);
+
+		expect(litShare(measured!.lines)).toBeGreaterThanOrEqual(minimumShare);
 	});
 });
 
