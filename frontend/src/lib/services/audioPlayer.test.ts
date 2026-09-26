@@ -1,7 +1,12 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+import {
+	audioPlayer,
+	RECOVERY_SEEK_BACK_SECONDS,
+	type AudioPlayerCallbacks,
+	type PlaybackInfo
+} from './audioPlayer.svelte';
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
@@ -1149,7 +1154,7 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 		expect(audioPlayer.status).toBe('loading');
 		fakeAudio.fire('loadedmetadata');
-		expect(fakeAudio.currentTime).toBe(39.25);
+		expect(fakeAudio.currentTime).toBe(40 - RECOVERY_SEEK_BACK_SECONDS);
 	});
 
 	it('retries a failed stream in stream mode', async () => {

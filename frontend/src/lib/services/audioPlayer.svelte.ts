@@ -40,7 +40,7 @@ const ERROR_MSG_NETWORK = 'Network error. Check connection and retry.';
 const ERROR_MSG_STALLED = 'Playback stalled. Click play to retry.';
 const STALL_RECOVERY_MS = 5000;
 const MAX_RECOVERY_ATTEMPTS = 2;
-const RECOVERY_SEEK_BACK_SECONDS = 0.75;
+export const RECOVERY_SEEK_BACK_SECONDS = 0.75;
 // An element can report itself playing while its clock stands still and no
 // waiting/stalled event ever fires — silence that pause and play on the same
 // element do not cure. The watchdog samples the clock while playing and treats
