@@ -24,8 +24,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import {
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
-		COWRITER_TOOL_CALL_TARGET_PREFIX,
-		EDITOR_COWRITER_BACK_LABEL
+		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
 	import {
 		collectPendingProposals,
@@ -61,7 +60,6 @@
 		versions?: VersionItem[];
 		catalogLoading?: boolean;
 		visible?: boolean;
-		onback?: () => void;
 		onturncompleted?: () => void;
 	}
 
@@ -73,7 +71,6 @@
 		versions = [],
 		catalogLoading = false,
 		visible = true,
-		onback,
 		onturncompleted
 	}: Props = $props();
 
@@ -520,19 +517,8 @@
 </script>
 
 <div class="cowriter">
-	<div class="cowriter-header" class:app-bar={Boolean(onback)}>
+	<div class="cowriter-header">
 		<div class="header-left">
-			{#if onback}
-				<button
-					type="button"
-					class="cowriter-back"
-					data-hitbox="frequent"
-					aria-label={EDITOR_COWRITER_BACK_LABEL}
-					onclick={onback}
-				>
-					‹
-				</button>
-			{/if}
 			<h3>
 				Co-Writer
 				{#if providerModel}
@@ -725,41 +711,12 @@
 		gap: 8px;
 	}
 
-	/* Onback is only ever supplied for the phone push screen (#990): there the
-	   header replaces the shell's own fixed PhoneAppBar strip rather than
-	   sitting in the scrolled content beneath it, so the screen shows one app
-	   bar — `‹`, title, conversation menu — never two stacked on top of each
-	   other. Desktop's own CoWriterPanel never sets onback and keeps the
-	   in-flow header. */
-	.cowriter-header.app-bar {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		height: var(--header-height);
-		z-index: 210;
-		background: var(--header-bg);
-	}
-
 	.header-left {
 		display: flex;
 		align-items: center;
 		gap: 10px;
 		min-width: 0;
 		flex: 1;
-	}
-
-	.cowriter-back {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: none;
-		color: var(--text);
-		font-size: 1.4rem;
-		line-height: 1;
-		cursor: pointer;
 	}
 
 	.header-left h3 {

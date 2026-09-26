@@ -98,6 +98,7 @@
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
@@ -553,9 +554,19 @@
 	}
 
 	$effect(() => {
+		if (!song) {
+			phoneAppBar.set(null);
+			return;
+		}
 		phoneAppBar.set(
-			song && !($coWriterOpen && compact)
+			$coWriterOpen && compact
 				? {
+						kind: 'screen',
+						title: EDITOR_VIEW_COWRITER_LABEL,
+						onback: () => coWriterOpen.set(false)
+					}
+				: {
+						kind: 'song',
 						title: song.title,
 						onrename: onRenameSong,
 						share: {
@@ -571,7 +582,6 @@
 							ondelete: () => (showDeleteConfirm = true)
 						}
 					}
-				: null
 		);
 		return () => phoneAppBar.set(null);
 	});
@@ -710,7 +720,7 @@
 		{@render writeSurface(song, false, true)}
 	{/snippet}
 
-	{#snippet cowriterPanel(onback?: () => void)}
+	{#snippet cowriterPanel()}
 		<CoWriterPanel
 			currentSongId={song.id}
 			currentAlbumId={song.album_id}
@@ -718,7 +728,6 @@
 			allSongs={songs}
 			versions={$versions}
 			onturncompleted={onTurnCompleted}
-			{onback}
 		/>
 	{/snippet}
 

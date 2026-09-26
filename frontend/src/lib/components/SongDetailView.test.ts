@@ -1140,7 +1140,7 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 		expect(target.querySelector('.cowriter')).not.toBeNull();
 	});
 
-	it("shows the co-writer's own app bar and none of the song's, restoring it on close", async () => {
+	it('switches the one shell app bar to ‹ · Co-writer and back, never layering a second bar', async () => {
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
 		const bar = document.createElement('div');
@@ -1148,20 +1148,32 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 		mounted.push(mount(PhoneAppBar, { target: bar }));
 		await tick();
 		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
+		expect(bar.querySelector('[aria-label="Share song"]')).not.toBeNull();
+		expect(bar.querySelector('[aria-label="Song menu"]')).not.toBeNull();
 
 		coWriterOpen.set(true);
 		await tick();
 
-		expect(get(phoneAppBar)).toBeNull();
-		const appBar = target.querySelector('.cowriter-header.app-bar');
-		expect(appBar).not.toBeNull();
-		expect(appBar?.querySelector('h3')?.textContent).toContain('Co-Writer');
-		expect(appBar?.querySelector(`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`)).not.toBeNull();
+		expect(get(phoneAppBar)).toEqual({
+			kind: 'screen',
+			title: EDITOR_VIEW_COWRITER_LABEL,
+			onback: expect.any(Function)
+		});
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(EDITOR_VIEW_COWRITER_LABEL);
+		expect(bar.querySelector('[aria-label="Share song"]')).toBeNull();
+		expect(bar.querySelector('[aria-label="Song menu"]')).toBeNull();
+		const backButton = bar.querySelector<HTMLButtonElement>(
+			`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`
+		);
+		expect(backButton).not.toBeNull();
+		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+		expect(target.querySelector('.cowriter-back')).toBeNull();
 
-		coWriterOpen.set(false);
+		backButton?.click();
 		await tick();
 
-		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+		expect(get(coWriterOpen)).toBe(false);
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
 		expect(get(phoneAppBar)?.title).toBe(get(songList)[0].title);
 	});
 });

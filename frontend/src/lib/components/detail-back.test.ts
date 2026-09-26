@@ -79,6 +79,7 @@ vi.mock('$app/state', () => ({
 import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import SongDetailView from './SongDetailView.svelte';
+import PhoneAppBar from './PhoneAppBar.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
 
 function detailSongDefaults(): Partial<SongItem> {
@@ -188,6 +189,10 @@ describe('SongDetailView phone Co-Writer is a pushed screen, not a history step'
 		document.documentElement.dataset.pointer = 'coarse';
 		selectedGenerationId.set(null);
 		const target = await renderView((target) => mount(SongDetailView, { target }));
+		const bar = document.createElement('div');
+		document.body.append(bar);
+		mounted.push(mount(PhoneAppBar, { target: bar }));
+		await tick();
 		expect(target.querySelector('[role="tab"]')).not.toBeNull();
 		// Mounting the page itself normalizes the URL via `goto(..., {
 		// replaceState: true })` -- unrelated to the Co-Writer toggle this test
@@ -199,7 +204,11 @@ describe('SongDetailView phone Co-Writer is a pushed screen, not a history step'
 		await tick();
 
 		expect(target.querySelector('[role="tab"]')).toBeNull();
-		const backButton = target.querySelector<HTMLButtonElement>(
+		// The back control now lives solely in the shell's one PhoneAppBar, not
+		// inside SongDetailView's own content (#990 ruling 5) -- there is no
+		// second, content-level back button to find here.
+		expect(target.querySelector(`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`)).toBeNull();
+		const backButton = bar.querySelector<HTMLButtonElement>(
 			`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`
 		);
 		expect(backButton).not.toBeNull();

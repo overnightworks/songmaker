@@ -127,26 +127,10 @@ describe('CoWriterPanel', () => {
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
 	});
 
-	it('renders no back control when the caller gives it no way out', async () => {
+	it('renders no back control of its own — the phone push screen uses the shell app bar', async () => {
 		const target = await render();
 		expect(target.querySelector('.cowriter-back')).toBeNull();
-	});
-
-	it('renders a back control that calls onback when the caller is a pushed screen', async () => {
-		const onback = vi.fn();
-		const target = await render({ onback });
-		const backButton = target.querySelector<HTMLButtonElement>('.cowriter-back');
-		expect(backButton).not.toBeNull();
-		backButton?.click();
-		expect(onback).toHaveBeenCalledTimes(1);
-	});
-
-	it('becomes its own app bar only when it is the pushed screen', async () => {
-		const withoutBack = await render();
-		expect(withoutBack.querySelector('.cowriter-header.app-bar')).toBeNull();
-
-		const withBack = await render({ onback: vi.fn() });
-		expect(withBack.querySelector('.cowriter-header.app-bar')).not.toBeNull();
+		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
 	});
 });
 
