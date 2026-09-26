@@ -125,7 +125,8 @@ class GenerationProgressTracker:
     never falls back, and stays below 1.0 while the job runs: saving a take
     sits at its phase start, and only ``_finalize_generation_job`` writes 1.0,
     once the take row exists. A phase change is written at once; within a
-    phase, writes are throttled.
+    phase, writes are throttled. Every write carries the current phase, whose
+    first generating one anchors the remaining-time estimate.
     """
 
     db_factory: sessionmaker[Session]
@@ -164,7 +165,12 @@ class GenerationProgressTracker:
 
     def _write(self, **fields: Any) -> None:
         _update_job(
-            self.db_factory, self.job_id, JobStatus.RUNNING, progress=self.reached, **fields,
+            self.db_factory,
+            self.job_id,
+            JobStatus.RUNNING,
+            progress=self.reached,
+            phase=self.phase,
+            **fields,
         )
         self.last_write = self.clock()
 
