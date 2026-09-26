@@ -17,6 +17,7 @@
 	import type {
 		ChatMessageItem,
 		ConversationItem,
+		ConversationMessagesResponse,
 		MemoryBundle,
 		SongItem,
 		VersionItem
@@ -27,8 +28,7 @@
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
-		COWRITER_TOOL_CALL_TARGET_PREFIX,
-		COWRITER_TURN_TIMEOUT_MS
+		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
 	import {
 		collectPendingProposals,
@@ -183,10 +183,10 @@
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
 		historyError = '';
-		let history: ChatMessageItem[] = [];
+		let conversation: ConversationMessagesResponse | null = null;
 		try {
-			history = (await fetchConversationMessages(conversationId)).messages;
-			messages = toMessages(history);
+			conversation = await fetchConversationMessages(conversationId);
+			messages = toMessages(conversation.messages);
 		} catch {
 			messages = [];
 			historyError = 'Conversation history unavailable';
@@ -194,46 +194,45 @@
 			historyLoading = false;
 			void scrollToBottom();
 		}
-		const unanswered = history.at(-1);
-		if (unanswered?.role === 'user' && conversationId === activeConversationId && !loading) {
-			void followRunningTurn(conversationId, unanswered.id);
-		}
+		if (!conversation || conversationId !== activeConversationId || loading) return;
+		if (conversation.turn_running) void followRunningTurn(conversationId);
+		else markUnansweredLastMessage();
 	}
 
 	/**
-	 * A trailing user message is a turn still running on the server, started
-	 * by a panel since left or another tab: the backend persists the message
-	 * when a turn starts and withdraws it when the turn ends unanswered (#1014).
+	 * Wait out a turn the server still runs — started by a panel since left or
+	 * by another tab — and show how it ended. The server's chat job decides
+	 * whether a turn runs; the stale-job reaper ends one whose process died (#1014).
 	 */
-	async function followRunningTurn(conversationId: string, sentMessageId: string): Promise<void> {
-		const assistantIndex = messages.length;
+	async function followRunningTurn(conversationId: string): Promise<void> {
 		messages = [...messages, { role: 'assistant', text: '' }];
 		loading = true;
-		const deadline = Date.now() + COWRITER_TURN_TIMEOUT_MS;
 		try {
-			while (Date.now() < deadline) {
+			for (;;) {
 				await new Promise((resolve) => setTimeout(resolve, COWRITER_RUNNING_TURN_POLL_MS));
 				if (unmounted || viewingConversationId !== conversationId) return;
-				let history: ChatMessageItem[];
+				let conversation: ConversationMessagesResponse;
 				try {
-					history = (await fetchConversationMessages(conversationId)).messages;
+					conversation = await fetchConversationMessages(conversationId);
 				} catch {
 					continue;
 				}
-				if (history.at(-1)?.id === sentMessageId) continue;
-				if (history.some((message) => message.id === sentMessageId)) {
-					messages = toMessages(history);
-					if (onturncompleted) onturncompleted();
-				} else {
-					markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
-				}
+				if (conversation.turn_running) continue;
+				messages = toMessages(conversation.messages);
+				markUnansweredLastMessage();
+				if (onturncompleted) onturncompleted();
 				return;
 			}
-			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
 		} finally {
 			loading = false;
 			void scrollToBottom();
 		}
+	}
+
+	function markUnansweredLastMessage(): void {
+		const last = messages.at(-1);
+		if (last?.role !== 'user') return;
+		messages = [...messages.slice(0, -1), { ...last, error: INCOMPLETE_TURN_MESSAGE }];
 	}
 
 	function markTurnFailed(assistantIndex: number, failureMessage: string): void {

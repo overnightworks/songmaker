@@ -78,10 +78,11 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.cowriter.routing import stream_cowriter_turn
-from songmaker_cli.db.models import ChatMessage, Generation, Song
+from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
     best_playable_generation,
+    count_user_active_jobs,
     create_conversation,
     delete_conversation,
     get_active_conversation,
@@ -959,6 +960,15 @@ def api_conversation_messages(
         title=conv.title,
         archived_at=conv.archived_at.isoformat() if conv.archived_at else None,
         messages=[ChatMessageResponse.from_orm(m) for m in messages],
+        turn_running=_turn_running(session, conv, user),
+    )
+
+
+def _turn_running(session: Session, conversation: Conversation, user: AuthenticatedUser) -> bool:
+    """A turn runs only in the active conversation, and only while its chat job is active."""
+    return (
+        conversation.archived_at is None
+        and count_user_active_jobs(session, user.id, JobType.CHAT) > 0
     )
 
 

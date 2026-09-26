@@ -366,13 +366,14 @@ def test_a_running_turn_already_shows_its_user_message_in_the_conversation(clien
     c, factory = client
     user = make_authenticated_user("u-test", username="u-u-test")
 
-    def _conversation_seen_by_a_returning_panel() -> list[tuple[str, str]]:
+    def _conversation_seen_by_a_returning_panel() -> tuple[list[tuple[str, str]], bool]:
         with factory() as reader:
             active = api_list_conversations(user, reader).conversations[0]
-            messages = api_conversation_messages(active.id, user, reader).messages
-            return [(message.role, message.content) for message in messages]
+            conversation = api_conversation_messages(active.id, user, reader)
+            messages = [(message.role, message.content) for message in conversation.messages]
+            return messages, conversation.turn_running
 
-    async def _exercise() -> list[tuple[str, str]]:
+    async def _exercise() -> tuple[list[tuple[str, str]], bool]:
         reply_released = asyncio.Event()
 
         async def _slow_reply(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
@@ -395,11 +396,43 @@ def test_a_running_turn_already_shows_its_user_message_in_the_conversation(clien
                 pass
             return seen_mid_turn
 
-    assert asyncio.run(_exercise()) == [("user", "Ja bitte")]
-    assert _conversation_seen_by_a_returning_panel() == [
-        ("user", "Ja bitte"),
-        ("assistant", "done"),
-    ]
+    assert asyncio.run(_exercise()) == ([("user", "Ja bitte")], True)
+    assert _conversation_seen_by_a_returning_panel() == (
+        [("user", "Ja bitte"), ("assistant", "done")],
+        False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("chat_job_status", "archived", "turn_running"),
+    [
+        ("running", False, True),
+        ("failed", False, False),
+        ("running", True, False),
+    ],
+    ids=["job-running", "job-reaped-after-process-death", "archived-conversation"],
+)
+def test_the_chat_job_decides_whether_a_turn_is_running(
+    client, chat_job_status, archived, turn_running,
+):
+    """A message left behind by a dead turn is not a running turn once the reaper ends its job."""
+    from datetime import UTC, datetime
+
+    c, factory = client
+    with factory() as session:
+        session.add(Conversation(
+            id="conv-1",
+            user_id="u-test",
+            archived_at=datetime.now(UTC) if archived else None,
+        ))
+        session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
+        session.add(Job(type="chat", user_id="u-test", status=chat_job_status))
+        session.commit()
+
+    body = c.get("/api/conversations/conv-1").json()
+
+    assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
+    assert body["turn_running"] is turn_running
 
 
 def test_a_turn_stamps_its_events_with_the_chat_job_and_streams_none_of_it(client):
