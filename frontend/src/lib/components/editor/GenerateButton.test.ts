@@ -36,9 +36,10 @@ import GenerateButton from './GenerateButton.svelte';
 const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
 	jobId: 'job1',
+	phase: 'Rendering',
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
-	remaining: 100
+	readout: '36% · ~1:40'
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
@@ -97,13 +98,23 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		{ remaining: 100, expected: 'Take 1 of 2 · 36% · ~1:40' },
-		{ remaining: 'calculating', expected: 'Take 1 of 2 · 36%' },
-		{ remaining: null, expected: 'Take 1 of 2 · 36%' }
+		{ phase: 'Loading model…', readout: null, expected: 'Take 1 of 2 · Loading model…' },
+		{ phase: 'Writing', readout: '36% · ~1:40', expected: 'Take 1 of 2 · Writing · 36% · ~1:40' },
+		{
+			phase: 'Rendering',
+			readout: '36% · ~1:40',
+			expected: 'Take 1 of 2 · Rendering · 36% · ~1:40'
+		},
+		{ phase: 'Saving take', readout: '36%', expected: 'Take 1 of 2 · Saving take · 36%' },
+		{
+			phase: 'Generating...',
+			readout: '36% · ~1:40',
+			expected: 'Take 1 of 2 · Generating... · 36% · ~1:40'
+		}
 	] as const)(
-		'renders progress with remaining time $remaining',
-		async ({ remaining, expected }) => {
-			await render({ ...running, remaining });
+		'names the take, its phase and its readout as "$expected"',
+		async ({ phase, readout, expected }) => {
+			await render({ ...running, phase, readout });
 			expect(
 				document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
 			).toBe(expected);
@@ -113,19 +124,21 @@ describe('GenerateButton', () => {
 		}
 	);
 
-	it('names the running job without a take counter', async () => {
+	it('names only the phase and its readout for a single take', async () => {
 		await render({ ...running, takeCounter: null });
-		expect(document.body.textContent).toContain('Generating...');
-		expect(document.body.textContent).not.toContain('Take 1 of 1');
+		expect(
+			document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
+		).toBe('Rendering · 36% · ~1:40');
 	});
 
 	it('shows submission progress without offering cancellation before a job exists', async () => {
 		await render({
 			...running,
 			jobId: null,
+			phase: 'Generating...',
 			takeCounter: null,
 			progress: 0,
-			remaining: null
+			readout: '0%'
 		});
 		expect(document.body.textContent).toContain('0%');
 		expect(document.body.querySelector('button')).toBeNull();

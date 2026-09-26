@@ -182,9 +182,10 @@ describe('generate action presentation', () => {
 			expectedState: {
 				kind: 'generating',
 				jobId: 'job1',
+				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				remaining: null
+				readout: '0%'
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
 		},
@@ -193,9 +194,10 @@ describe('generate action presentation', () => {
 			expectedState: {
 				kind: 'generating',
 				jobId: 'job1',
+				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				remaining: null
+				readout: '0%'
 			},
 			setup: () =>
 				activeJobs.set([
@@ -215,12 +217,17 @@ describe('generate action presentation', () => {
 		expect(get(generateAction)).toEqual(expectedState);
 	});
 
-	it.each([100, 'calculating', null] as const)(
-		'exposes live progress and remaining time %s, scaled from the 0..1 job fraction to a percent',
-		(remaining) => {
+	it.each([
+		{ remaining: 100, readout: '36% · ~1:40' },
+		{ remaining: 'calculating', readout: '36%' },
+		{ remaining: null, readout: '36%' }
+	] as const)(
+		'reads out live progress and remaining time $remaining, scaled from the 0..1 job fraction to a percent',
+		({ remaining, readout }) => {
 			const job: JobItem = {
 				...queuedJob,
 				status: 'running',
+				phase: 'rendering',
 				take_index: 1,
 				take_count: 2,
 				progress: 0.36,
@@ -230,10 +237,32 @@ describe('generate action presentation', () => {
 			expect(get(generateAction)).toEqual({
 				kind: 'generating',
 				jobId: 'job1',
+				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
-				remaining
+				readout
 			});
+		}
+	);
+
+	it.each([
+		{ phase: 'loading_model', label: 'Loading model…', readout: null },
+		{ phase: 'writing', label: 'Writing', readout: '36% · ~0:32' },
+		{ phase: 'rendering', label: 'Rendering', readout: '36% · ~0:32' },
+		{ phase: 'saving_take', label: 'Saving take', readout: '36% · ~0:32' },
+		{ phase: null, label: 'Generating...', readout: '36% · ~0:32' }
+	] as const)(
+		'names the $phase phase "$label" with readout $readout',
+		({ phase, label, readout }) => {
+			const job: JobItem = {
+				...queuedJob,
+				status: 'running',
+				phase,
+				progress: 0.36,
+				remaining_time_estimate: 32
+			};
+			activeJobs.set([{ songId: 's1', job }]);
+			expect(get(generateAction)).toMatchObject({ kind: 'generating', phase: label, readout });
 		}
 	);
 
@@ -346,8 +375,9 @@ describe('generate action execution', () => {
 		expect(get(generateAction)).toMatchObject({
 			kind: 'generating',
 			jobId: null,
+			phase: 'Generating...',
 			progress: 0,
-			remaining: null
+			readout: '0%'
 		});
 		await generate();
 		expect(updateSong).toHaveBeenCalledTimes(1);
