@@ -38,7 +38,6 @@ function defaultProps() {
 		gen: gen({ version_number: 3, generation_number: 2 }),
 		onrepaint: vi.fn(),
 		oncover: vi.fn(),
-		onkeep: vi.fn(),
 		onshare: vi.fn(async () => ({
 			status: 'ok',
 			share_url: 'https://example.com/share/gen/take',
@@ -68,26 +67,27 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('.menu-heading')?.textContent).toBe('Take · v3 · 2');
 	});
 
-	it.each([false, true])('offers exactly six ordered actions when kept is %s', async (kept) => {
-		const { target } = await render({
-			gen: gen({ is_kept: kept, is_shared: true, is_archived: true })
-		});
-		const rows = target.querySelectorAll('.overflow-menu > button, .share-row');
-		expect(Array.from(rows, (row) => row.textContent?.trim())).toEqual([
-			'Repaint',
-			'Cover',
-			kept ? 'Unkeep' : 'Keep',
-			'Add to playlist',
-			'Share',
-			'Delete'
-		]);
-		expect(target.querySelectorAll('.overflow-menu button')).toHaveLength(6);
-	});
+	it.each([false, true])(
+		'offers five ordered actions and leaves Keep to the row when kept is %s',
+		async (kept) => {
+			const { target } = await render({
+				gen: gen({ is_kept: kept, is_shared: true, is_archived: true })
+			});
+			const rows = target.querySelectorAll('.overflow-menu > button, .share-row');
+			expect(Array.from(rows, (row) => row.textContent?.trim())).toEqual([
+				'Repaint',
+				'Cover',
+				'Add to playlist',
+				'Share',
+				'Delete'
+			]);
+			expect(target.querySelectorAll('.overflow-menu button')).toHaveLength(5);
+		}
+	);
 
 	it.each([
 		['Repaint', 'onrepaint'],
 		['Cover', 'oncover'],
-		['Keep', 'onkeep'],
 		['Add to playlist', 'onaddtoplaylist'],
 		['Delete', 'ondelete']
 	] as const)('runs %s and closes the menu', async (label, callback) => {

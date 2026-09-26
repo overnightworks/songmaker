@@ -27,6 +27,7 @@
 	--score-ok: #b07000;
 	--score-bad-bg: #fde8e8;
 	--score-bad: #c02020;
+	--keep: #c03040;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--header-height: 46px;
@@ -197,6 +198,8 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .icon-btn.on .face { border-color: var(--action); color: var(--action); }
 .icon-btn.star { color: var(--text-disabled); }
 .icon-btn.star.on { color: var(--text); }
+.icon-btn.heart { color: var(--text-disabled); }
+.icon-btn.heart.on { color: var(--keep); }
 
 /* ── app bar: drawer ☰ · song · more — navigation.html state (f) ───────── */
 .appbar {
@@ -427,7 +430,6 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .score.ok .shape { border: 2px solid var(--score-ok); border-radius: 50%; }
 .score.bad { color: var(--score-bad); }
 .score.bad .shape { background: var(--score-bad); }
-.kept { color: var(--text); display: inline-flex; }
 
 /* ── the status slot: the one place a run or a failure speaks ─────────── */
 .status-slot {
@@ -1130,6 +1132,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 4" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 4" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 4 menu" title="Take 4 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row">
@@ -1141,6 +1144,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 3" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 3" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 3 menu" title="Take 3 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row playing">
@@ -1152,6 +1156,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star on" aria-label="Picked take 2" title="Picked" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 2" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row">
@@ -1160,9 +1165,9 @@ the morning gives away</div>
 					<span class="take-meta">
 						<span class="take-duration">3:04</span>
 						<span class="score ok" aria-label="Score 61"><span class="shape" aria-hidden="true"></span>61</span>
-						<span class="kept" role="img" title="Kept" aria-label="Kept"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></span>
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart on" aria-label="Unkeep take 1" title="Unkeep" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
@@ -1181,7 +1186,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>5 · Takes</b> — no run: just takes. Everything the row does not show lives in its <span style="letter-spacing:1px">…</span></figcaption>
+	<figcaption><b>5 · Takes</b> — no run: just takes. ★ picks and ♥ keeps in one tap, the same 44 px toggle each (#1019, 26.09.2026); everything else the row does not show lives in its <span style="letter-spacing:1px">…</span></figcaption>
 	<div class="device" id="f5">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1205,6 +1210,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 4" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 4" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 4 menu" title="Take 4 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row">
@@ -1216,6 +1222,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 3" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 3" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 3 menu" title="Take 3 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row playing">
@@ -1227,6 +1234,7 @@ the morning gives away</div>
 						
 					</span>
 					<button class="icon-btn star on" aria-label="Picked take 2" title="Picked" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 2" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 				<div class="take-row row">
@@ -1235,9 +1243,9 @@ the morning gives away</div>
 					<span class="take-meta">
 						<span class="take-duration">3:04</span>
 						<span class="score ok" aria-label="Score 61"><span class="shape" aria-hidden="true"></span>61</span>
-						<span class="kept" role="img" title="Kept" aria-label="Kept"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></span>
 					</span>
 					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart on" aria-label="Unkeep take 1" title="Unkeep" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
 					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
 				</div>
 			</div>
@@ -1257,7 +1265,6 @@ the morning gives away</div>
 			<div class="phead">Take 4</div>
 			<button role="menuitem"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 19.5l.8-3.9 10.4-10.4 3.1 3.1L8.4 18.7z"/><path d="M14.3 6.4l3.1 3.1"/></svg>Repaint</button>
 			<button role="menuitem"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.4"/><circle cx="12" cy="12" r="2.2"/></svg>Cover</button>
-			<button role="menuitem"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg>Keep</button>
 			<button role="menuitem"><svg class="ic sm" viewBox="0 0 24 24"><path d="M12 5.2v13.6M5.2 12h13.6"/></svg>Add to playlist</button>
 			<button role="menuitem"><svg class="ic sm" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg>Share</button>
 			<button role="menuitem" class="del"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg>Delete</button>
