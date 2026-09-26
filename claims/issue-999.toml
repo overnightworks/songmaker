@@ -1,8 +1,0 @@
-claim_id = "3ad4da6e95be4d248f9fd41e206c5037"
-agent = "claude-head"
-role = "builder"
-base = "3af8a94b9aac4ad59a8b5cba30e5b01cbe21d4d0"
-branch = "claude/issue-999-typing-room"
-scope = ["frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/components/editor/WriteColumn.test.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
-opened_commit = "b4e4a6b7bce6a0e468c2b4a578dc95071e3133f6"
-whole_reason = "one shell-level focus owner and its three readers (player, action bar, tabs) form one change"
