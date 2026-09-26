@@ -605,9 +605,10 @@ class AudioPlayer {
 	}
 
 	// Android pauses the element on its own (audio focus, another app's sound);
-	// a debug line per pause tells that apart from the app's own pauses.
+	// a debug line per pause tells that apart from the app's own pauses and
+	// from the pause a browser fires just before 'ended'.
 	private recordPauseSource(el: HTMLAudioElement): void {
-		const source = this.pauseRequestedByApp ? 'app' : 'outside';
+		const source = this.pauseSource(el);
 		this.pauseRequestedByApp = false;
 		console.debug('Audio paused', {
 			source,
@@ -615,6 +616,11 @@ class AudioPlayer {
 			currentTime: el.currentTime,
 			generationId: this.current?.generation.id
 		});
+	}
+
+	private pauseSource(el: HTMLAudioElement): 'app' | 'ended' | 'outside' {
+		if (this.pauseRequestedByApp) return 'app';
+		return el.ended ? 'ended' : 'outside';
 	}
 
 	private clearStallRecoveryTimer(): void {
