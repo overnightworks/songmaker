@@ -1,5 +1,6 @@
 import {
 	makeAlbum as albumItem,
+	makeGeneration,
 	makePlaylistEntry,
 	makePlaylistDetail as playlistItem
 } from '$lib/test-utils/factories';
@@ -297,6 +298,36 @@ describe('PlayerBar stream boundaries', () => {
 		await tick();
 
 		expect(playSpy).not.toHaveBeenCalled();
+	});
+});
+
+describe('PlayerBar take identifier', () => {
+	// L9: the mini-player names the playing take through the one owner,
+	// nowPlayingTakeLabel — never a second, ad-hoc format.
+	it.each([
+		[7, 'v7 · take 2'],
+		[null, 'take 2']
+	])('reads the take as %s from nowPlayingTakeLabel', async (versionNumber, expected) => {
+		audioPlayer.load(
+			{
+				generation: makeGeneration({
+					version_number: versionNumber,
+					generation_number: 2,
+					mp3_path: 'take.mp3'
+				}),
+				songId: 's1',
+				songTitle: 'AMIF',
+				artist: 'Artist',
+				albumTitle: 'Album',
+				lyrics: null
+			},
+			{ autoplay: false }
+		);
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(target.querySelector('.track-detail')?.textContent).toContain(expected);
+		expect(target.querySelector('.track-detail')?.textContent).not.toContain('Artist');
 	});
 });
 

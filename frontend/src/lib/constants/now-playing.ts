@@ -13,8 +13,9 @@ export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
 // is written out.
 const META_SEPARATOR = ' · ';
 
-// Queue row take label: "v<N> · take <k>", or just "take <k>" when the row
-// carries no version (library-pool items have version_number: null).
+// The one take identifier shared by the queue row, mini-player and
+// NowPlayingFrame: "v<N> · take <k>", or just "take <k>" when the row carries
+// no version (library-pool items have version_number: null).
 export function nowPlayingTakeLabel(
 	versionNumber: number | null,
 	generationNumber: number
