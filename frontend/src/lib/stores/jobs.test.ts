@@ -330,19 +330,20 @@ describe('jobs store', () => {
 		expect(MockEventSource.instances).toHaveLength(1);
 	});
 
-	it('does not load the song for a completed generation job', async () => {
-		trackJob(makeJob(), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ status: 'completed' }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(mockRequestSongRefresh).not.toHaveBeenCalled();
-	});
-
-	it('requests refresh through the resource-sync owner for other job types', async () => {
-		trackJob(makeJob({ type: 'score' }), { songId: 's1' });
-		latestSource().simulateMessage(makeJob({ type: 'score', status: 'completed' }));
-		await vi.advanceTimersByTimeAsync(0);
-		expect(mockRequestSongRefresh).toHaveBeenCalledWith('s1');
-	});
+	it.each([
+		['generate', 'completed'],
+		['generate', 'partial'],
+		['score', 'completed'],
+		['score', 'partial']
+	] as const)(
+		'refreshes the song through the resource-sync owner when a %s job ends %s',
+		async (type, status) => {
+			trackJob(makeJob({ type }), { songId: 's1' });
+			latestSource().simulateMessage(makeJob({ type, status }));
+			await vi.advanceTimersByTimeAsync(0);
+			expect(mockRequestSongRefresh).toHaveBeenCalledWith('s1');
+		}
+	);
 
 	it('skips refresh when no songId', async () => {
 		trackJob(makeJob({ type: 'score' }), {});
