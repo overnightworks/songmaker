@@ -9,7 +9,19 @@ import { watchTypingOnPhone } from '$lib/stores/ui';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { EDITOR_GENERATE_MODE_LABELS } from '$lib/constants';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { EDITOR_GENERATE_MODE_LABELS, EDITOR_GPU_OFFLINE_TITLE } from '$lib/constants';
+import type { GenerateState } from '$lib/stores/generateAction';
+
+const IDLE_GENERATE: GenerateState = { kind: 'idle', mode: 'generate' };
+const generateAction = await vi.hoisted(async () => {
+	const { writable } = await import('svelte/store');
+	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+});
+vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+	generateAction
+}));
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -29,6 +41,7 @@ const snippets = {
 };
 
 beforeEach(() => {
+	generateAction.set(IDLE_GENERATE);
 	detailTab.set('write');
 	coWriterOpen.set(false);
 	generationFailures.set({});
@@ -138,6 +151,16 @@ describe('SongPhoneView', () => {
 		expect(getComputedStyle(actionBar).position).toBe('sticky');
 	});
 
+	it('keeps the Write action bar one row: a disabled Generate says why inside itself', async () => {
+		generateAction.set({ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE });
+		const target = await render();
+		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
+		const button = actionBar?.querySelector('button');
+		expect(button?.disabled).toBe(true);
+		expect(button?.textContent?.trim()).toBe(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
+		expect(actionBar?.textContent?.trim()).toBe(button?.textContent?.trim());
+	});
+
 	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
 		// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
 		// records the real callback so the test can fire it like the browser would
@@ -170,21 +193,51 @@ describe('SongPhoneView', () => {
 	});
 
 	it('steps the Generate bar and its reserved room aside while the lyrics have focus, and brings them back on leaving', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const target = await render();
 		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea[aria-label="Lyrics"]');
+		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
 		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
-		if (!lyrics || !writeScroll) throw new Error('Expected the lyrics and the write scroll');
+		if (!lyrics || !actionBar || !writeScroll) throw new Error('Expected the Write tab');
+		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
 
 		lyrics.focus();
 		await tick();
-		expect(target.querySelector('.write-actionbar')).toBeNull();
+		expect(getComputedStyle(actionBar).display).toBe('none');
 		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('0px');
 
 		lyrics.blur();
 		await tick();
+		expect(getComputedStyle(actionBar).display).not.toBe('none');
 		expectGenerateAsPrimaryAction(target);
 		stopWatching();
+		closeKeyboard();
+	});
+
+	// #1017: the bar used to be unmounted while typing, so an expanded failure
+	// cause folded shut behind the user's back.
+	it('keeps an expanded failure cause open across typing in the lyrics', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
+		const stopWatching = watchTypingOnPhone(document, true);
+		generateAction.set({
+			kind: 'failed',
+			mode: 'generate',
+			cause: 'The worker ran out of memory.'
+		});
+		const target = await render();
+		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea[aria-label="Lyrics"]');
+		if (!lyrics) throw new Error('Expected the lyrics');
+		target.querySelector<HTMLButtonElement>('.failure button')?.click();
+		await tick();
+
+		lyrics.focus();
+		await tick();
+		lyrics.blur();
+		await tick();
+		expect(target.querySelector('.failure button')?.getAttribute('aria-expanded')).toBe('true');
+		stopWatching();
+		closeKeyboard();
 	});
 
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {

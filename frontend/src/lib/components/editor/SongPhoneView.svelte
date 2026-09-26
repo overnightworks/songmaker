@@ -25,14 +25,12 @@
 	// The action bar's own content decides its height (#993 fixed padding
 	// undershot it once the failure state expanded the worker sentence); the
 	// Write column reserves exactly that much, read back live instead of
-	// guessed as a constant. A bar that stepped aside for the keyboard takes
-	// no room at all.
+	// guessed as a constant. A bar that stepped aside for the keyboard measures
+	// zero and so takes no room at all; it stays mounted so the Generate
+	// button keeps its own state across the typing.
 	$effect(() => {
 		const el = actionBarEl;
-		if (!el) {
-			generateBarHeight = 0;
-			return;
-		}
+		if (!el) return;
 		const measure = () => {
 			generateBarHeight = el.offsetHeight;
 		};
@@ -65,11 +63,9 @@
 			>
 				{@render write()}
 			</div>
-			{#if !$typingOnPhone}
-				<div class="write-actionbar" bind:this={actionBarEl}>
-					<GenerateButton />
-				</div>
-			{/if}
+			<div class="write-actionbar" hidden={$typingOnPhone} bind:this={actionBarEl}>
+				<GenerateButton reasonInside />
+			</div>
 		{:else}
 			{@render expiryDigest()}
 			<TakesList {...takeListProps} />
@@ -106,5 +102,9 @@
 		align-items: center;
 		background: var(--header-bg);
 		border-top: 1px solid var(--border);
+	}
+
+	.write-actionbar[hidden] {
+		display: none;
 	}
 </style>

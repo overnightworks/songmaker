@@ -24,6 +24,7 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -451,12 +452,13 @@ describe('app shell', () => {
 		expect(rail.querySelector('.rail-collapse')).toBeNull();
 	});
 
-	// T1/T2/T6/T7 (#999): the shell alone decides that a field has focus on
-	// the phone; the bar and its reserved room step aside for the keyboard.
+	// T1/T2/T6 (#999, #1017): the shell alone decides that a field has focus
+	// on the phone with its keyboard open; the bar and its reserved room step aside for the keyboard.
 	// The room collapses through the one transport-bar fact, so the shell,
 	// the song page's panel, the toast stack and the queue-stream chip all
 	// give it back together.
 	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderLayout('/');
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -471,9 +473,11 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('keeps the transport bar and its room on the desktop while a field has focus', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderDesktopLayout();
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -482,6 +486,7 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {

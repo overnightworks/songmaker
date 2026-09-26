@@ -49,12 +49,30 @@ function isTextEntryField(target: EventTarget | null): boolean {
 	return !(target instanceof HTMLInputElement) || KEYBOARD_INPUT_TYPES.has(target.type);
 }
 
+// The smallest gap between the layout viewport and the visible one that is an
+// on-screen keyboard rather than a browser toolbar sliding in or out. The gap
+// exists only under the default interactive-widget=resizes-visual, which app.html
+// keeps by setting no interactive-widget in its viewport meta.
+const ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX = 150;
+
+// The on-screen keyboard shrinks only the visual viewport; the layout viewport
+// keeps its height. Pinch zoom shrinks the visual viewport too, so its height
+// is compared at the page's own scale.
+function onScreenKeyboardOpen(root: Document): boolean {
+	const viewport = root.defaultView?.visualViewport;
+	if (!viewport) return false;
+	const visibleHeight = viewport.height * viewport.scale;
+	return root.documentElement.clientHeight - visibleHeight >= ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX;
+}
+
 const typingOnPhoneState = writable(false);
 
-// While a text field has focus on the phone layout the keyboard owns the
-// bottom of the screen (#999): the mini-player and any action bar step aside.
-// It follows the layout, not the keyboard kind, so a Bluetooth keyboard hides
-// the bars too. The app shell is the only writer; pages only read it.
+// While a text field has focus on the phone layout and the on-screen keyboard
+// is open, the keyboard owns the bottom of the screen (#999, #1017): the
+// mini-player and any action bar step aside. Closing the keyboard brings them
+// back even though the field keeps focus (Android's back gesture does exactly
+// that), and a hardware keyboard, which opens none, never sends them away.
+// The app shell is the only writer; pages only read it.
 export const typingOnPhone = readonly(typingOnPhoneState);
 
 export function watchTypingOnPhone(root: Document, compact: boolean): () => void {
@@ -66,26 +84,29 @@ export function watchTypingOnPhone(root: Document, compact: boolean): () => void
 	// A focused field that leaves the page (browser back, Escape closing a
 	// rename or the menu) may take focus with it without any `focusout`, so
 	// while a field has focus the page is watched for it disappearing.
-	const focusedFieldRemoval = new MutationObserver(followFocus);
-	function followFocus(): void {
+	const focusedFieldRemoval = new MutationObserver(followTyping);
+	function followTyping(): void {
 		if (!watching) return;
-		const typing = isTextEntryField(root.activeElement);
-		typingOnPhoneState.set(typing);
-		if (typing) focusedFieldRemoval.observe(root, { childList: true, subtree: true });
+		const fieldFocused = isTextEntryField(root.activeElement);
+		typingOnPhoneState.set(fieldFocused && onScreenKeyboardOpen(root));
+		if (fieldFocused) focusedFieldRemoval.observe(root, { childList: true, subtree: true });
 		else focusedFieldRemoval.disconnect();
 	}
 	// Chrome blurs a focused field while Svelte is still removing it, where
 	// writing state throws `state_unsafe_mutation` and leaves the whole page
 	// stale; reading focus once the event has settled avoids that, and also
 	// lands a move from one field to the next without flashing the bars back.
-	const followFocusOnceSettled = () => queueMicrotask(followFocus);
-	followFocus();
-	root.addEventListener('focusin', followFocusOnceSettled);
-	root.addEventListener('focusout', followFocusOnceSettled);
+	const followTypingOnceSettled = () => queueMicrotask(followTyping);
+	const viewport = root.defaultView?.visualViewport;
+	followTyping();
+	root.addEventListener('focusin', followTypingOnceSettled);
+	root.addEventListener('focusout', followTypingOnceSettled);
+	viewport?.addEventListener('resize', followTypingOnceSettled);
 	return () => {
 		watching = false;
-		root.removeEventListener('focusin', followFocusOnceSettled);
-		root.removeEventListener('focusout', followFocusOnceSettled);
+		root.removeEventListener('focusin', followTypingOnceSettled);
+		root.removeEventListener('focusout', followTypingOnceSettled);
+		viewport?.removeEventListener('resize', followTypingOnceSettled);
 		focusedFieldRemoval.disconnect();
 		typingOnPhoneState.set(false);
 	};
