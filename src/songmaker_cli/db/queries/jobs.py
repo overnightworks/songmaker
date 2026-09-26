@@ -395,6 +395,7 @@ def _recover_stale_job_if_unchanged(
             error_type=error_type,
             completed_at=completed_at,
             queue_reason=None,
+            generation_started_at=None,
         )
         .execution_options(synchronize_session=False),
     )
@@ -429,6 +430,7 @@ def recover_stale_jobs_by_type(
             job.error_type = "server_restart"
             job.completed_at = now
             job.queue_reason = None
+            job.generation_started_at = None
         if stale:
             recovered[job_type] = len(stale)
     session.flush()

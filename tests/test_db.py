@@ -86,6 +86,7 @@ from songmaker_cli.db.queries import (
     prune_overflow_sessions,
     record_login_attempt,
     recover_stale_jobs_by_age_and_type,
+    recover_stale_jobs_by_type,
     save_rating,
     save_scores,
     set_generation_transcript,
@@ -728,6 +729,32 @@ def test_generation_start_is_the_first_generating_phase_after_each_running_entry
     assert generation_started_after(JobStatus.RUNNING) is None
     assert generation_started_after(JobStatus.RUNNING, GenerationPhase.SAVING_TAKE) > earlier_start
     assert generation_started_after(JobStatus.CANCELLED) is None
+
+
+def _fail_by_lost_heartbeat(session: Session, now: datetime) -> None:
+    recover_stale_jobs_by_age_and_type(session, now=now + timedelta(hours=1))
+
+
+def _fail_by_restart(session: Session, _now: datetime) -> None:
+    recover_stale_jobs_by_type(session, {JobType.GENERATE: {JobStatus.RUNNING}})
+
+
+@pytest.mark.parametrize("recover", [_fail_by_lost_heartbeat, _fail_by_restart])
+def test_recovery_failing_a_generating_job_clears_its_generation_start(
+    seeded_session: Session, recover,
+) -> None:
+    job = create_job(seeded_session, JobType.GENERATE)
+    update_job_status(seeded_session, job.id, JobStatus.RUNNING, phase=GenerationPhase.WRITING)
+    seeded_session.commit()
+    now = aware_timestamp(get_job(seeded_session, job.id).generation_started_at)
+
+    recover(seeded_session, now)
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    fetched = get_job(seeded_session, job.id)
+    assert fetched.status == JobStatus.FAILED
+    assert fetched.generation_started_at is None
 
 
 def test_update_job_completed(seeded_session: Session) -> None:
