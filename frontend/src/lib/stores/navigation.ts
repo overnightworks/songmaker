@@ -621,18 +621,25 @@ function popsHistoryLayers(state: unknown): boolean {
 		top.close();
 		lowestLeft = top;
 	}
-	stepOffStaleLayerEntry(state);
+	const staleLanding = staleLayerEntryLanding(state);
+	if (staleLanding) {
+		// The copy may be out of date -- the entry below can be rewritten after
+		// Back closed its layer -- so it applies nothing; the step's own
+		// popstate applies the entry it lands on.
+		void backLibraryHistory(staleLanding, urlFromState(staleLanding));
+		return true;
+	}
 	return lowestLeft?.base.index === landing;
 }
 
 // An entry marked as a layer that no open layer owns -- left behind by a
 // reload, or reached again with Forward after Back closed its layer -- is a
-// copy of the library below it, where Back would visibly do nothing; step
-// off it onto that library.
-function stepOffStaleLayerEntry(state: unknown): void {
-	if (!isLibraryHistoryState(state) || state.layer === undefined) return;
-	if (topHistoryLayer()?.base.index === state.index - 1) return;
-	stepBackOnto({ ...state, index: state.index - 1, layer: undefined });
+// copy of the library below it, where Back would visibly do nothing; the
+// caller steps off it onto that library.
+function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
+	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
+	if (topHistoryLayer()?.base.index === state.index - 1) return null;
+	return { ...state, index: state.index - 1, layer: undefined };
 }
 
 const NOW_PLAYING_LAYER = 'now-playing';
@@ -676,7 +683,8 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
-	stepOffStaleLayerEntry(existing);
+	const staleLanding = staleLayerEntryLanding(existing);
+	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;

@@ -1379,6 +1379,33 @@ describe('compact Now Playing owns one history entry', () => {
 		});
 	});
 
+	it('Forward onto a Now Playing entry the library below has since outgrown shows the library of the entry it steps back onto', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
+		const below = history.state.index;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		history.back();
+		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+		backToCollection();
+		await vi.waitFor(() => expect(history.state).toMatchObject({ index: below, songId: null }));
+		const forwardLanded = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+
+		history.forward();
+		await forwardLanded;
+
+		const collectionEntry = {
+			collection: { kind: 'album', id: 'a1' },
+			songId: null
+		};
+		await vi.waitFor(() => {
+			expect(history.state).toMatchObject({ index: below, ...collectionEntry });
+			expect(libraryShown()).toEqual({ ...collectionEntry, surface: 'detail' });
+		});
+	});
+
 	it('opens the playing song from Now Playing straight on top of its origin', async () => {
 		await openPlaylist('p1');
 		const below = history.state.index;
