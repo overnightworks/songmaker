@@ -44,6 +44,7 @@ from songmaker_cli.constants import (
     HTTP_NOT_FOUND,
     PWA_ICON_PATHS,
 )
+from songmaker_cli.conversation_api import fail_chat_turns_ended_by_restart
 from songmaker_cli.cover_runner import (
     CoverJobCancellationRegistry,
     cover_runner_loop,
@@ -152,6 +153,7 @@ async def _lifespan(app: FastAPI) -> AsyncGenerator[None]:
     pin_judge_route(ctx)
     if settings.cover_executor is CoverExecutor.WEB:
         await asyncio.to_thread(recover_web_cover_jobs, ctx.db, ctx.audio_dir, settings)
+    fail_chat_turns_ended_by_restart(ctx.db)
     reap_stale_jobs(ctx)
     reconcile_crashed_loras(ctx)
     await asyncio.to_thread(cleanup_expired_resource_events, ctx)
