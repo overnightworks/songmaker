@@ -685,6 +685,9 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	color: var(--text-disabled);
 	font-size: .95rem;
 }
+/* frame 7b: the message being written is real text, not the placeholder */
+.composer .input.draft { display: block; color: var(--text); }
+.composer .input.focused { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
 
 .freeze-note {
 	font-family: "IBM Plex Sans", system-ui, sans-serif;
@@ -826,6 +829,7 @@ I don't take the<span class="caret" aria-hidden="true"></span></div>
 	<div class="frame-note">
 		<p><b>Rule (phone, every screen).</b> While a text field has focus, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back when you leave the field. Only what belongs to the field stays — on the co-writer screen that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
 		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
+		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Write; Send the only primary on the co-writer screen.</p>
 	</div>
 </figure>
 
@@ -1376,6 +1380,43 @@ can wait a mile for me</span></div>
 			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
 			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
 			<span class="line"><span></span></span>
+		</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>7b · Co-writer — typing a message</b> — keyboard open: the conversation ends at the composer, Send sits directly on the keyboard, the mini-player has stepped aside. Blessed 26.09.2026, #999.</figcaption>
+	<div class="device" id="f7b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Back to Write" title="Back to Write"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+			<h1>Co-writer</h1>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<div class="chat">
+			<div class="msg me">the chorus feels long. tighten it?</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice and the last line keeps the turn.<span class="lines">All mine if I follow
+all mine if I stay
+the morning gives away</span></div>
+			<span class="tool-chip"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg> Wrote lyrics · v7 draft</span>
+			<div class="msg me">good. now a bridge in the same voice</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Four lines, no chorus rhyme, so it reads as a held breath:<span class="lines">The tank runs low on purpose
+the exit signs agree
+whatever waits in morning
+can wait a mile for me</span></div>
+		</div>
+		<div class="composer">
+			<div class="input draft focused" role="textbox">keep it, but cut it to two lines — the tank and the mor<span class="caret" aria-hidden="true"></span></div>
+			<button class="btn-primary">Send</button>
+		</div>
+		<div class="keyboard" role="img" aria-label="On-screen keyboard">
+			<div class="suggest"><span>morning</span><span>more</span><span>mornings</span></div>
+			<div class="krow"><span class="key">q</span><span class="key">w</span><span class="key">e</span><span class="key">r</span><span class="key">t</span><span class="key">y</span><span class="key">u</span><span class="key">i</span><span class="key">o</span><span class="key">p</span></div>
+			<div class="krow inset"><span class="key">a</span><span class="key">s</span><span class="key">d</span><span class="key">f</span><span class="key">g</span><span class="key">h</span><span class="key">j</span><span class="key">k</span><span class="key">l</span></div>
+			<div class="krow"><span class="key wide">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key wide">⌫</span></div>
+			<div class="krow"><span class="key num">123</span><span class="key space">space</span><span class="key ret">return</span></div>
+			<div class="home"><span></span></div>
 		</div>
 	</div>
 </figure>
