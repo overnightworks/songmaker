@@ -229,10 +229,9 @@
 	// The header can show a newly opened playlist before its detail arrives;
 	// until then this view has no playlist to start, so the header plays nothing
 	// rather than the previously opened playlist or the library.
-	function playWhole(start: CollectionStart): void {
-		if (!playlistDetail) return;
-		playPlaylist(playlistDetail, start);
-	}
+	const playWhole = $derived(
+		playlistDetail ? (start: CollectionStart) => playPlaylist(playlistDetail, start) : null
+	);
 
 	// The row is the play target: a tap plays this take from here, with the
 	// rest of the playlist queued behind it, and keeps the listener on the page.

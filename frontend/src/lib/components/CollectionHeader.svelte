@@ -22,8 +22,11 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
-		/** Starts this collection at `start`, in the order the header has just set. */
-		onplay: (start: CollectionStart) => void;
+		/**
+		 * Starts this collection at `start`, in the order the header has just set;
+		 * null while the view has nothing to start.
+		 */
+		onplay: ((start: CollectionStart) => void) | null;
 		onrename: (title: string) => Promise<void>;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
@@ -102,13 +105,16 @@
 	// it in order from the top, the shuffle square beside it plays it shuffled
 	// from a drawn song. Both set the player's own shuffle setting, so the
 	// transport's shuffle control shows the order the header just chose; which
-	// collection starts is the view's answer, through onplay.
+	// collection starts is the view's answer, through onplay. A tap that starts
+	// nothing leaves the listener's shuffle setting alone.
 	function playInOrder(): void {
+		if (!onplay) return;
 		setShuffle(false);
 		onplay('top');
 	}
 
 	function playShuffled(): void {
+		if (!onplay) return;
 		setShuffle(true);
 		onplay('random');
 	}

@@ -441,6 +441,7 @@ describe('PlaylistDetailView header play', () => {
 			expect(audioPlayer.current).toBeNull();
 			expect(get(queueContext)).toEqual({ type: 'library' });
 			expect(get(playStartNotice)).toBe('idle');
+			expect(get(shuffleEnabled)).toBe(false);
 		}
 	);
 });

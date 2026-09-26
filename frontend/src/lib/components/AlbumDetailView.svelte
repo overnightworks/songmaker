@@ -488,7 +488,7 @@
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={(start) => currentAlbumId && playAlbum(currentAlbumId, start)}
+			onplay={currentAlbumId ? (start) => playAlbum(currentAlbumId, start) : null}
 			onrename={onRenameAlbum}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
