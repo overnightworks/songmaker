@@ -340,6 +340,24 @@ describe('jobs store', () => {
 		expect(MockEventSource.instances).toHaveLength(3);
 	});
 
+	it('keeps a running job through an outage however often the user returns to the app', () => {
+		toasts.set([]);
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		latestSource().simulateError();
+		const returnsToTheApp = JOB_STREAM_MAX_CONNECTION_ERRORS * 2;
+		for (let i = 0; i < returnsToTheApp; i++) {
+			document.dispatchEvent(new Event('visibilitychange'));
+			window.dispatchEvent(new Event('focus'));
+			latestSource().simulateError();
+		}
+
+		window.dispatchEvent(new Event('online'));
+		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.4 }));
+
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.4]);
+		expect(get(toasts).map((toast) => toast.message)).not.toContain('Lost connection to server');
+	});
+
 	it('leaves a live job stream alone when the window regains focus', () => {
 		trackJob(makeJob(), {});
 		window.dispatchEvent(new Event('focus'));

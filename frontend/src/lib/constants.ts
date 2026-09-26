@@ -580,5 +580,7 @@ export const SSE_RECONNECT_JITTER_RATIO = 0.2;
 // A job stream gives up -- drops the job and says "Lost connection to
 // server" -- on this many consecutive connection errors. Twenty-four retries
 // at the delays above (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three
-// minutes the former 30s ceiling gave ten attempts.
+// minutes the former 30s ceiling gave ten attempts. Only those timed
+// retries count: a reopen on returning to the app re-records the attempt it
+// interrupted, so frequent returns never shorten the three minutes (#1032).
 export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
