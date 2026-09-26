@@ -451,6 +451,37 @@ describe('app shell', () => {
 		expect(rail.querySelector('.rail-collapse')).toBeNull();
 	});
 
+	// T1/T2/T6/T7 (#999): the shell alone decides that a field has focus on
+	// the phone; the bar and its reserved room step aside for the keyboard.
+	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
+		const target = await renderLayout('/');
+		const shell = requireElement<HTMLElement>(target, '.app-shell');
+		const lyrics = document.createElement('textarea');
+		requireElement<HTMLElement>(target, 'main').append(lyrics);
+
+		lyrics.focus();
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(shell.classList.contains('has-player')).toBe(false);
+		expect(requireElement(target, '.mobile-strip')).toBeTruthy();
+
+		lyrics.blur();
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(shell.classList.contains('has-player')).toBe(true);
+	});
+
+	it('keeps the transport bar on the desktop while a field has focus', async () => {
+		const target = await renderDesktopLayout();
+		const lyrics = document.createElement('textarea');
+		requireElement<HTMLElement>(target, 'main').append(lyrics);
+
+		lyrics.focus();
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(requireElement(target, '.shell-row').classList.contains('has-player')).toBe(true);
+	});
+
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
 		const rule = extractRule(layoutSource, '.app-shell.mobile');
 		expect(rule).toContain('display: flex');

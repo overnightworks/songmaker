@@ -39,7 +39,9 @@
 		initRailWidth,
 		railCollapsed,
 		railWidth,
-		initTheme
+		initTheme,
+		typingOnPhone,
+		watchTypingOnPhone
 	} from '$lib/stores/ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
@@ -79,6 +81,8 @@
 			compact = value;
 		});
 	});
+
+	$effect(() => watchTypingOnPhone(document, compact));
 
 	// One fact for "is there room to dock": wide enough for the workspace to
 	// give up NOW_PLAYING_DOCKED_WIDTH_PX, and a fine pointer. Matching Now
@@ -234,7 +238,7 @@
 				showResizeHandle={false}
 			/>
 		</RailDrawer>
-		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
+		<div class="app-shell mobile" class:has-player={hasPrivatePlayer && !$typingOnPhone}>
 			{@render children()}
 		</div>
 		{@render nowPlayingView()}

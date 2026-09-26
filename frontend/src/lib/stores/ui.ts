@@ -1,7 +1,8 @@
 import type { ComponentProps } from 'svelte';
 import type ShareButton from '$lib/components/ShareButton.svelte';
 import type SongMenu from '$lib/components/editor/SongMenu.svelte';
-import { writable } from 'svelte/store';
+import { readonly, writable } from 'svelte/store';
+import { isEditableElement } from '$lib/utils/escape-level-up';
 
 interface PhoneAppBarSongState {
 	kind: 'song';
@@ -29,6 +30,49 @@ export function toggleSidebar(): void {
 
 export function closeSidebar(): void {
 	sidebarOpen.set(false);
+}
+
+const KEYBOARD_INPUT_TYPES: ReadonlySet<string> = new Set([
+	'text',
+	'search',
+	'email',
+	'url',
+	'tel',
+	'password',
+	'number'
+]);
+
+// A checkbox, slider or date picker is editable but takes no typing, so it
+// must not send the bars away; every other editable element does.
+export function isTextEntryField(target: EventTarget | null): boolean {
+	if (!isEditableElement(target)) return false;
+	return !(target instanceof HTMLInputElement) || KEYBOARD_INPUT_TYPES.has(target.type);
+}
+
+const typingOnPhoneState = writable(false);
+
+// While a text field has focus on the phone layout the keyboard owns the
+// bottom of the screen (#999): the mini-player and any action bar step aside.
+// It follows the layout, not the keyboard kind, so a Bluetooth keyboard hides
+// the bars too. The app shell is the only writer; pages only read it.
+export const typingOnPhone = readonly(typingOnPhoneState);
+
+export function watchTypingOnPhone(root: Document, compact: boolean): () => void {
+	typingOnPhoneState.set(compact && isTextEntryField(root.activeElement));
+	if (!compact) return () => {};
+	// During `focusout` the next focus target is only known as
+	// `relatedTarget`; reading it there keeps a move from one field to the
+	// next from flashing the bars back in between.
+	const onFocusIn = (event: FocusEvent) => typingOnPhoneState.set(isTextEntryField(event.target));
+	const onFocusOut = (event: FocusEvent) =>
+		typingOnPhoneState.set(isTextEntryField(event.relatedTarget));
+	root.addEventListener('focusin', onFocusIn);
+	root.addEventListener('focusout', onFocusOut);
+	return () => {
+		root.removeEventListener('focusin', onFocusIn);
+		root.removeEventListener('focusout', onFocusOut);
+		typingOnPhoneState.set(false);
+	};
 }
 
 type Theme = 'dark' | 'light';
