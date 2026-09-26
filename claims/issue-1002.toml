@@ -1,0 +1,8 @@
+claim_id = "b7371d1014394f66a7e428f10b8a446d"
+agent = "claude-head"
+role = "builder"
+base = "b4ed7a3017c09d54ef43f42ed95ce50d460fd439"
+branch = "claude/issue-1002-nowplaying-back"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "69cbf20bd87bedbf1ee85defd7435ac505eb20f9"
+whole_reason = "the Now Playing history entry spans its one owner (navigation), the player's open/close and the phone e2e pin"
