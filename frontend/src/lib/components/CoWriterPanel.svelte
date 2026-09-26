@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import {
 		streamCoWriterTurn,
 		fetchConversations,
@@ -25,8 +25,10 @@
 	import { health } from '$lib/stores/health';
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
+		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
-		COWRITER_TOOL_CALL_TARGET_PREFIX
+		COWRITER_TOOL_CALL_TARGET_PREFIX,
+		COWRITER_TURN_TIMEOUT_MS
 	} from '$lib/constants';
 	import {
 		collectPendingProposals,
@@ -123,6 +125,11 @@
 	let selectedMentionIdx = $state(0);
 	let providerName = $state('claude');
 	let providerModel = $state('');
+	let unmounted = false;
+
+	onDestroy(() => {
+		unmounted = true;
+	});
 
 	$effect(() => {
 		void currentSongId;
@@ -166,21 +173,76 @@
 		}
 	}
 
+	function toMessages(history: ChatMessageItem[]): Message[] {
+		return history.map((m) => ({
+			role: m.role as 'user' | 'assistant',
+			text: m.content
+		}));
+	}
+
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
 		historyError = '';
+		let history: ChatMessageItem[] = [];
 		try {
-			const result = await fetchConversationMessages(conversationId);
-			messages = result.messages.map((m: ChatMessageItem) => ({
-				role: m.role as 'user' | 'assistant',
-				text: m.content
-			}));
+			history = (await fetchConversationMessages(conversationId)).messages;
+			messages = toMessages(history);
 		} catch {
 			messages = [];
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
 			void scrollToBottom();
+		}
+		const unanswered = history.at(-1);
+		if (unanswered?.role === 'user' && conversationId === activeConversationId && !loading) {
+			void followRunningTurn(conversationId, unanswered.id);
+		}
+	}
+
+	/**
+	 * A trailing user message is a turn still running on the server, started
+	 * by a panel since left or another tab: the backend persists the message
+	 * when a turn starts and withdraws it when the turn ends unanswered (#1014).
+	 */
+	async function followRunningTurn(conversationId: string, sentMessageId: string): Promise<void> {
+		const assistantIndex = messages.length;
+		messages = [...messages, { role: 'assistant', text: '' }];
+		loading = true;
+		const deadline = Date.now() + COWRITER_TURN_TIMEOUT_MS;
+		try {
+			while (Date.now() < deadline) {
+				await new Promise((resolve) => setTimeout(resolve, COWRITER_RUNNING_TURN_POLL_MS));
+				if (unmounted || viewingConversationId !== conversationId) return;
+				let history: ChatMessageItem[];
+				try {
+					history = (await fetchConversationMessages(conversationId)).messages;
+				} catch {
+					continue;
+				}
+				if (history.at(-1)?.id === sentMessageId) continue;
+				if (history.some((message) => message.id === sentMessageId)) {
+					messages = toMessages(history);
+					if (onturncompleted) onturncompleted();
+				} else {
+					markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
+				}
+				return;
+			}
+			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
+		} finally {
+			loading = false;
+			void scrollToBottom();
+		}
+	}
+
+	function markTurnFailed(assistantIndex: number, failureMessage: string): void {
+		messages = messages.map((message, index) =>
+			index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
+		);
+		const current = messages[assistantIndex];
+		if (current && !current.text) {
+			messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
 		}
 	}
 
@@ -295,16 +357,7 @@
 			}
 		} finally {
 			loading = false;
-			if (streamError) {
-				const failureMessage = streamError;
-				messages = messages.map((message, index) =>
-					index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
-				);
-				const current = messages[assistantIndex];
-				if (current && !current.text) {
-					messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
-				}
-			}
+			if (streamError) markTurnFailed(assistantIndex, streamError);
 			void scrollToBottom();
 		}
 	}
