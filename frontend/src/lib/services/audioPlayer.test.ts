@@ -424,6 +424,128 @@ describe('event handling', () => {
 	});
 });
 
+describe('frozen-clock watchdog', () => {
+	const SECOND = 1000;
+
+	function startPlayingAt(seconds: number): void {
+		fakeAudio.currentTime = seconds;
+		fakeAudio.paused = false;
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+	}
+
+	function advanceSeconds(count: number, clockStep = 0): void {
+		for (let second = 0; second < count; second += 1) {
+			fakeAudio.currentTime += clockStep;
+			vi.advanceTimersByTime(SECOND);
+		}
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false });
+	});
+
+	it('reloads a take that reports playing while its clock stands still, after a few seconds', () => {
+		startPlayingAt(40);
+
+		advanceSeconds(1);
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+
+		advanceSeconds(4);
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
+	});
+
+	it('recovers a frozen stream in place', async () => {
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		startPlayingAt(5);
+
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		expect(audioPlayer.mode).toBe('stream');
+		expect(fakeAudio.src).toBe('/api/queue-streams/snap/audio?recover=1');
+	});
+
+	it.each([
+		{
+			name: 'a user pause, then play',
+			pressPlay: () => {
+				audioPlayer.pause();
+				audioPlayer.play();
+			}
+		},
+		{ name: 'play while it still reports playing', pressPlay: () => audioPlayer.play() },
+		{ name: 'tapping the same take again', pressPlay: () => audioPlayer.load(makeInfo()) }
+	])('reloads a take whose clock stood still on $name', ({ pressPlay }) => {
+		startPlayingAt(40);
+		advanceSeconds(1);
+
+		pressPlay();
+
+		expect(audioPlayer.status).toBe('loading');
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3?recover=1');
+	});
+
+	it.each([
+		{
+			name: 'a take whose clock advances',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(8, 1);
+			}
+		},
+		{
+			name: 'normal buffering that resumes',
+			drive: () => {
+				startPlayingAt(40);
+				fakeAudio.fire('waiting');
+				advanceSeconds(4);
+				fakeAudio.fire('playing');
+				advanceSeconds(4, 1);
+			}
+		},
+		{
+			name: 'a user pause',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(1, 1);
+				audioPlayer.pause();
+				advanceSeconds(8);
+			}
+		},
+		{
+			name: 'play after a healthy user pause',
+			drive: () => {
+				startPlayingAt(40);
+				advanceSeconds(1, 1);
+				audioPlayer.pause();
+				advanceSeconds(8);
+				audioPlayer.play();
+			}
+		}
+	])('leaves $name alone', ({ drive }) => {
+		drive();
+
+		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
+		expect(audioPlayer.status).not.toBe('loading');
+	});
+
+	it.each([
+		{ source: 'app', pauseIt: () => audioPlayer.pause() },
+		{ source: 'outside', pauseIt: () => fakeAudio.pause() }
+	])('records a pause that came from the $source', ({ source, pauseIt }) => {
+		const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
+		startPlayingAt(40);
+
+		pauseIt();
+
+		expect(debug).toHaveBeenCalledWith('Audio paused', expect.objectContaining({ source }));
+	});
+});
+
 describe('stream playback', () => {
 	it('leaves the current playback alone when an empty stream has no start track', () => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
