@@ -376,6 +376,35 @@ describe('resource sync owner', () => {
 		expect(fetchCalls).toEqual([]);
 	});
 
+	it.each([
+		{ dropsAfterRequest: 0, case: 'once the reconnecting stream bootstraps' },
+		{ dropsAfterRequest: 1, case: 'even when another attempt drops before the bootstrap' }
+	])(
+		'lands a refresh asked for while the stream is still reconnecting $case',
+		async ({ dropsAfterRequest }) => {
+			const { controller, sources, store, fetchCalls, upserted } = setup({
+				listPrioritySongIds: () => []
+			});
+			controller.start();
+			latestSource(sources).error();
+			await flush();
+			expect(get(store).status).toBe('reconnecting');
+
+			await controller.requestSongRefresh('s1');
+			expect(fetchCalls).toEqual([]);
+			for (let drop = 0; drop < dropsAfterRequest; drop++) {
+				latestSource(sources).error();
+				await flush();
+			}
+
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			expect(get(store).status).toBe('live');
+			expect(fetchCalls).toEqual(['s1']);
+			expect(upserted.at(-1)?.id).toBe('s1');
+		}
+	);
+
 	it('creates one stream when start is called repeatedly', () => {
 		const { controller, sources } = setup();
 		controller.start();

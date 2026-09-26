@@ -98,6 +98,7 @@ export class ResourceSyncController {
 	private buffer: GenerationCreatedResourceEvent[] = [];
 	private deferred: GenerationCreatedResourceEvent[] = [];
 	private readonly pendingSongIds = new Set<string>();
+	private readonly refreshesAwaitingBootstrap = new Set<string>();
 	private readonly failedSongIds = new Set<string>();
 	private readonly queuedGenerationIds = new Set<string>();
 	private readonly seenGenerationIds = new Set<string>();
@@ -177,9 +178,18 @@ export class ResourceSyncController {
 		return true;
 	}
 
+	/**
+	 * A refresh asked for before the stream has bootstrapped waits for that
+	 * bootstrap even across a dropped attempt, which abandons the epoch's own
+	 * pending songs: a job that ended while the stream was still reconnecting
+	 * must still bring its take in once the stream is back (#1032).
+	 */
 	requestSongRefresh(songId: string): Promise<void> {
 		this.invalidateSong(songId);
-		if (!this.canFlush()) return Promise.resolve();
+		if (!this.canFlush()) {
+			this.refreshesAwaitingBootstrap.add(songId);
+			return Promise.resolve();
+		}
 		return this.flushPending(this.epoch);
 	}
 
@@ -279,6 +289,7 @@ export class ResourceSyncController {
 		this.invalidateInflightProbes();
 		this.seenGenerationIds.clear();
 		this.songRevisions.clear();
+		this.refreshesAwaitingBootstrap.clear();
 		this.flushing = null;
 		if (options.resetStore) this.store.set({ ...INITIAL });
 		this.resolveReady(false);
@@ -448,6 +459,7 @@ export class ResourceSyncController {
 			}
 			while (this.isCurrentEpoch(epoch)) {
 				this.queueBufferedSongs();
+				this.queueRefreshesAwaitingBootstrap();
 				if (this.pendingSongIds.size === 0) break;
 				await this.flushPending(epoch, true);
 			}
@@ -488,6 +500,13 @@ export class ResourceSyncController {
 		for (const event of pending) {
 			this.queueLoadedSong(event);
 		}
+	}
+
+	private queueRefreshesAwaitingBootstrap(): void {
+		for (const songId of this.refreshesAwaitingBootstrap) {
+			this.invalidateSong(songId);
+		}
+		this.refreshesAwaitingBootstrap.clear();
 	}
 
 	private queueLoadedSong(event: GenerationCreatedResourceEvent): void {
