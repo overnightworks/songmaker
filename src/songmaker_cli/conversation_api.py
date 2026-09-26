@@ -20,9 +20,8 @@ import asyncio
 import json
 import logging
 import time
-from collections.abc import AsyncGenerator, AsyncIterator, Sequence
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
-from enum import Enum
 from typing import TYPE_CHECKING, Final, Literal
 
 from agent_providers.errors import (
@@ -37,7 +36,7 @@ from agent_providers.events import (
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
@@ -79,7 +78,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.cowriter.history import compact_conversation, count_tokens, fold_summary
 from songmaker_cli.cowriter.routing import stream_cowriter_turn
-from songmaker_cli.db.models import Generation, Song
+from songmaker_cli.db.models import ChatMessage, Generation, Song
 from songmaker_cli.db.queries import (
     archive_conversation,
     best_playable_generation,
@@ -106,7 +105,7 @@ from songmaker_cli.db.queries import (
     upsert_summary,
     upsert_user_memory,
 )
-from songmaker_cli.db.queries.conversations import append_message, delete_message
+from songmaker_cli.db.queries.conversations import append_message
 
 if TYPE_CHECKING:
     from agent_providers.catalog import ProviderRoute
@@ -114,24 +113,6 @@ if TYPE_CHECKING:
 log = logging.getLogger(__name__)
 
 router = APIRouter()
-
-
-class _ChatStreamingResponse(StreamingResponse):
-    """Abort an inline chat turn when its ASGI response cannot complete."""
-
-    def __init__(self, content, *, abort_chat_turn, **kwargs):
-        super().__init__(content, **kwargs)
-        self._abort_chat_turn = abort_chat_turn
-
-    async def __call__(self, scope, receive, send) -> None:
-        try:
-            await super().__call__(scope, receive, send)
-        finally:
-            try:
-                if isinstance(self.body_iterator, AsyncGenerator):
-                    await self.body_iterator.aclose()
-            finally:
-                await self._abort_chat_turn()
 
 
 COWRITER_ROLE = (
@@ -490,47 +471,93 @@ class PreparedChatTurn:
     user_message: ChatMessageResponse
 
 
-class ChatTurnOutcome(Enum):
-    ANSWERED = "answered"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-
 @dataclass
 class ChatTurnLifecycle:
     session: Session
     job_id: str
-    user_message_id: str
-    heartbeat_task: asyncio.Task[None] | None = None
-    finished: bool = False
+    heartbeat_task: asyncio.Task[None]
 
-    async def finish(self, outcome: ChatTurnOutcome) -> None:
+    async def finish(self, *, cancelled: bool) -> None:
         from songmaker_cli.jobs._runtime import (
             _cancel_chat_job,
             _stop_chat_job_heartbeat,
         )
 
-        if self.finished:
+        if cancelled:
+            await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
             return
-        self.finished = True
-        assert self.heartbeat_task is not None
+        await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
+
+
+class ChatTurnFrames:
+    """Relay one running turn's SSE frames to its client for as long as it listens.
+
+    A client that leaves ends the relay, never the turn: the turn runs to
+    completion and persists its reply for the panel that returns (#1014).
+    """
+
+    def __init__(self) -> None:
+        self._pending: asyncio.Queue[str | None] = asyncio.Queue()
+        self._listening = True
+
+    def publish(self, frame: str) -> None:
+        if self._listening:
+            self._pending.put_nowait(frame)
+
+    def end(self) -> None:
+        self._pending.put_nowait(None)
+
+    async def relay(self) -> AsyncIterator[str]:
         try:
-            if outcome is ChatTurnOutcome.CANCELLED:
-                await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
-            else:
-                await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
+            while (frame := await self._pending.get()) is not None:
+                yield frame
         finally:
-            if outcome is not ChatTurnOutcome.ANSWERED:
-                self._withdraw_unanswered_message()
+            self._listening = False
 
-    def _withdraw_unanswered_message(self) -> None:
-        """Drop the user message a turn persisted at its start once no reply can follow.
 
-        A returning panel reads a trailing user message as a turn still
-        running; withdrawing it tells that panel the turn ended unanswered.
-        """
-        delete_message(self.session, self.user_message_id)
-        self.session.commit()
+_running_chat_turns: set[asyncio.Task[None]] = set()
+
+
+def _start_chat_turn(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    prepared: PreparedChatTurn,
+    db_factory: sessionmaker[Session],
+) -> ChatTurnFrames:
+    frames = ChatTurnFrames()
+    turn = asyncio.create_task(_run_chat_turn(req, user, prepared, db_factory, frames))
+    _running_chat_turns.add(turn)
+    turn.add_done_callback(_forget_chat_turn)
+    return frames
+
+
+def _forget_chat_turn(turn: asyncio.Task[None]) -> None:
+    _running_chat_turns.discard(turn)
+    if not turn.cancelled() and (crash := turn.exception()) is not None:
+        log.error("Co-writer turn ended with an error", exc_info=crash)
+
+
+async def _run_chat_turn(
+    req: ChatTurnV2Request,
+    user: AuthenticatedUser,
+    prepared: PreparedChatTurn,
+    db_factory: sessionmaker[Session],
+    frames: ChatTurnFrames,
+) -> None:
+    """Run a started turn on its own session, independent of the request that started it."""
+    from songmaker_cli.jobs._runtime import _keep_chat_job_heartbeat
+
+    try:
+        with db_factory() as session:
+            lifecycle = ChatTurnLifecycle(
+                session,
+                prepared.job_id,
+                asyncio.create_task(_keep_chat_job_heartbeat(db_factory, prepared.job_id)),
+            )
+            async for frame in _chat_event_generator(req, user, session, prepared, lifecycle):
+                frames.publish(frame)
+    finally:
+        frames.end()
 
 
 _PROVIDER_UNAVAILABLE_STATUS: Final = 503
@@ -578,18 +605,11 @@ async def api_chat_turn(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    from songmaker_cli.jobs._runtime import _keep_chat_job_heartbeat
-
     check_redis_health(request)
     prepared = _prepare_chat_turn(req, request, user, session)
-    lifecycle = ChatTurnLifecycle(session, prepared.job_id, prepared.user_message.id)
-    lifecycle.heartbeat_task = asyncio.create_task(
-        _keep_chat_job_heartbeat(request.app.state.ctx.db, prepared.job_id),
-    )
-
-    return _ChatStreamingResponse(
-        _chat_event_generator(req, user, session, prepared, lifecycle),
-        abort_chat_turn=lambda: lifecycle.finish(ChatTurnOutcome.CANCELLED),
+    frames = _start_chat_turn(req, user, prepared, request.app.state.ctx.db)
+    return StreamingResponse(
+        frames.relay(),
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -677,6 +697,9 @@ def _prepare_chat_messages(
     try:
         conversation = get_or_create_active_conversation(session, user.id)
         history = list_messages(session, conversation.id)
+        retried = _unanswered_message_sent_again(history, req.message)
+        if retried is not None:
+            history = history[:-1]
         tail_budget = get_cowriter_tail_token_budget(session)
         compacted = compact_conversation(
             history,
@@ -687,7 +710,7 @@ def _prepare_chat_messages(
         _save_compacted_summary(session, conversation, history, compacted)
         api_messages = compacted.to_api_messages()
         api_messages.append({"role": "user", "content": envelope.wrap_user_message(req.message)})
-        user_message = append_message(
+        user_message = retried or append_message(
             session,
             conversation.id,
             "user",
@@ -713,6 +736,22 @@ def _prepare_chat_messages(
         conversation.id,
         ChatMessageResponse.from_orm(user_message),
     )
+
+
+def _unanswered_message_sent_again(
+    history: Sequence[ChatMessage],
+    message: str,
+) -> ChatMessage | None:
+    """Return the conversation's unanswered last message when this turn sends it again.
+
+    A turn that ends without a reply keeps the message it was started with,
+    and Try again resends that text; the new turn answers the retained
+    message instead of repeating it (#1014).
+    """
+    last = history[-1] if history else None
+    if last is not None and last.role == "user" and last.content == message:
+        return last
+    return None
 
 
 def _save_compacted_summary(session: Session, conversation, history, compacted) -> None:
@@ -765,7 +804,7 @@ async def _chat_event_generator(
         user=user,
         correlation_id=prepared.job_id,
     )
-    outcome = ChatTurnOutcome.CANCELLED
+    terminal = False
     try:
         assistant_text = ""
         try:
@@ -776,26 +815,26 @@ async def _chat_event_generator(
                 yield _sse_format(event)
             _log_chat_turn(prepared, started)
         except ProviderUnavailableError as exc:
-            outcome = ChatTurnOutcome.FAILED
+            terminal = True
             yield _provider_unavailable_event(session, prepared.job_id, exc)
             return
         except Exception as exc:
-            outcome = ChatTurnOutcome.FAILED
+            terminal = True
             yield _chat_failure_event(session, prepared.job_id, exc)
             return
         try:
             final_event = _complete_chat_turn(req, session, prepared, assistant_text)
         except Exception:
-            outcome = ChatTurnOutcome.FAILED
+            terminal = True
             yield _chat_completion_failure_event(session, prepared.job_id)
             return
-        outcome = ChatTurnOutcome.ANSWERED
+        terminal = True
         yield _sse_format(final_event)
     finally:
         try:
             await stream.aclose()
         finally:
-            await lifecycle.finish(outcome)
+            await lifecycle.finish(cancelled=not terminal)
 
 
 def _log_chat_turn(prepared: PreparedChatTurn, started: float) -> None:
