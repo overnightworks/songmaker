@@ -805,6 +805,57 @@ def test_shared_audio_lookups_authorize_canonical_missing_names_before_file_chec
     assert checked_paths == []
 
 
+@pytest.mark.parametrize(
+    ("share_path", "audio_path", "seed"),
+    [
+        pytest.param(None, "/audio/admin_user/g1.mp3", None, id="owner"),
+        pytest.param(
+            "/api/albums/test_album/share", "/shared/{slug}/audio/admin_user/g1.mp3", None,
+            id="album",
+        ),
+        pytest.param(
+            "/api/songs/s1/share", "/shared/song/{slug}/audio/admin_user/g1.mp3", None,
+            id="song",
+        ),
+        pytest.param(
+            "/api/generations/g1/share", "/shared/gen/{slug}/audio/admin_user/g1.mp3", None,
+            id="generation",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share", "/shared/playlist/{slug}/audio/admin_user/g1.mp3",
+            _seed_shared_playlist_audio,
+            id="playlist",
+        ),
+    ],
+)
+def test_a_take_is_cached_for_good_by_the_listeners_browser_only(
+    sharing_app: TestClient,
+    share_path: str | None,
+    audio_path: str,
+    seed: Callable | None,
+) -> None:
+    if seed is not None:
+        with sharing_app.app.state.ctx.db() as session:
+            seed(session)
+            session.commit()
+    if share_path is None:
+        client = sharing_app
+    else:
+        slug = sharing_app.post(share_path).json()["share_slug"]
+        audio_path = audio_path.format(slug=slug)
+        client = TestClient(sharing_app.app, cookies={})
+
+    response = client.get(audio_path)
+
+    assert response.status_code == 200
+    directives = {
+        directive.strip() for directive in response.headers["cache-control"].split(",")
+    }
+    assert {"private", "immutable"} <= directives
+    max_age = next(d for d in directives if d.startswith("max-age="))
+    assert int(max_age.removeprefix("max-age=")) > 0
+
+
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
     resp = sharing_app.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
