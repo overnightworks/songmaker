@@ -725,7 +725,7 @@
 
 	<div class="detail-panel" class:compact>
 		{#if compact}
-			<SongPhoneView {sharedLink} write={phoneWrite} {expiryDigest} {takeListProps} />
+			<SongPhoneView {sharedLink} write={phoneWrite} {expiryDigest} {takeListProps} {chips} />
 		{:else}
 			{@render header()}
 			<div class="editor-body">

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
+	import type { RecipeChip } from '$lib/stores/recipe';
 	import { detailTab } from '$lib/stores/navigation';
 	import DetailTabs from './DetailTabs.svelte';
 	import PhoneRecipeSection from './PhoneRecipeSection.svelte';
@@ -10,9 +11,10 @@
 		write: Snippet;
 		expiryDigest: Snippet;
 		takeListProps: ComponentProps<typeof TakesList>;
+		chips: RecipeChip[];
 	}
 
-	let { sharedLink, write, expiryDigest, takeListProps }: Props = $props();
+	let { sharedLink, write, expiryDigest, takeListProps, chips }: Props = $props();
 </script>
 
 <DetailTabs takeCount={takeListProps.song.generation_count} />
@@ -25,7 +27,7 @@
 >
 	{#if $detailTab === 'write'}
 		{@render sharedLink()}
-		<PhoneRecipeSection />
+		<PhoneRecipeSection {chips} />
 		{@render write()}
 	{:else}
 		{@render expiryDigest()}

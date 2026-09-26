@@ -7,6 +7,7 @@ const api = vi.hoisted(() => ({
 	fetchBuiltinDefaults: vi.fn(),
 	fetchActiveModels: vi.fn(),
 	fetchDefaultConfig: vi.fn(),
+	fetchGenerationDefaults: vi.fn(),
 	updateDefaultConfig: vi.fn(),
 	createPreset: vi.fn(),
 	updatePreset: vi.fn(),
@@ -16,17 +17,23 @@ const api = vi.hoisted(() => ({
 
 vi.mock('$lib/api/client', () => api);
 
+import { setDraftGenParams } from '$lib/stores/editor';
+import { recipeModel } from '$lib/stores/recipe';
 import {
 	activeModelIds,
 	activeModels,
 	activeModelsLoading,
 	activeModelsError,
 	builtinDefaults,
+	currentPreset,
 	defaultConfig,
 	deletePreset,
+	effectiveGenerationDefaults,
+	generationDefaultsError,
 	loadActiveModels,
 	loadBuiltins,
 	loadDefaultConfig,
+	loadGenerationDefaults,
 	loadPresets,
 	presets,
 	saveDefaultConfig,
@@ -58,6 +65,9 @@ beforeEach(() => {
 	builtinDefaults.set({});
 	defaultConfig.set(null);
 	activeModels.set([]);
+	generationDefaultsError.set(false);
+	recipeModel.set(null);
+	setDraftGenParams(null);
 });
 
 describe('preset store', () => {
@@ -148,9 +158,22 @@ describe('preset store', () => {
 				return loadDefaultConfig();
 			},
 			() => get(defaultConfig)
+		],
+		[
+			'generation defaults',
+			() => {
+				recipeModel.set('acestep');
+				api.fetchGenerationDefaults.mockResolvedValueOnce({ acestep: { inference_steps: 4 } });
+				return loadGenerationDefaults();
+			},
+			() => {
+				api.fetchGenerationDefaults.mockRejectedValueOnce(new Error('offline'));
+				return loadGenerationDefaults();
+			},
+			() => get(effectiveGenerationDefaults)
 		]
 	])('keeps prior %s when loading is unavailable', async (_name, arrange, load, read) => {
-		arrange();
+		await arrange();
 		const previousValue = read();
 		await load();
 		expect(read()).toEqual(previousValue);
@@ -192,5 +215,42 @@ describe('preset store', () => {
 		api.updatePreset.mockResolvedValue(preset('new-default', { is_default: false }));
 		await unsetDefault('new-default');
 		expect(get(presets).find((item) => item.id === 'new-default')?.is_default).toBe(false);
+	});
+
+	it.each([false, true])(
+		'reports generation-defaults availability (failure: %s)',
+		async (fails) => {
+			if (fails) api.fetchGenerationDefaults.mockRejectedValueOnce(new Error('offline'));
+			else api.fetchGenerationDefaults.mockResolvedValueOnce({});
+			await loadGenerationDefaults();
+			expect(get(generationDefaultsError)).toBe(fails);
+			api.fetchGenerationDefaults.mockResolvedValueOnce({});
+			await loadGenerationDefaults();
+			expect(get(generationDefaultsError)).toBe(false);
+		}
+	);
+
+	it("merges the current model's builtin defaults with its saved generation defaults", async () => {
+		builtinDefaults.set({ acestep: { inference_steps: 8, guidance_scale: 5 } });
+		api.fetchGenerationDefaults.mockResolvedValueOnce({ acestep: { inference_steps: 4 } });
+		recipeModel.set('acestep');
+
+		await loadGenerationDefaults();
+
+		expect(get(effectiveGenerationDefaults)).toEqual({ inference_steps: 4, guidance_scale: 5 });
+	});
+
+	it('finds the saved preset whose params match the current draft for the active model', () => {
+		presets.set([
+			preset('other-model', { model_mode: 'other', params: { inference_steps: 4 } }),
+			preset('match', { model_mode: 'acestep', params: { inference_steps: 4 } })
+		]);
+		recipeModel.set('acestep');
+
+		setDraftGenParams({ inference_steps: 4 });
+		expect(get(currentPreset)?.id).toBe('match');
+
+		setDraftGenParams({ inference_steps: 9 });
+		expect(get(currentPreset)).toBeUndefined();
 	});
 });

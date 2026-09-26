@@ -1,5 +1,5 @@
 import { writable, derived } from 'svelte/store';
-import { PHONE_RECIPE_MODELS_ERROR } from '$lib/constants';
+import { MODELS_LOAD_ERROR } from '$lib/constants';
 import type { PresetItem, VersionGenerationParams } from '$lib/api/types';
 import type { AvailableModel } from '$lib/api/client';
 import {
@@ -7,12 +7,15 @@ import {
 	fetchBuiltinDefaults,
 	fetchActiveModels,
 	fetchDefaultConfig,
+	fetchGenerationDefaults,
 	updateDefaultConfig as updateDefaultConfigApi,
 	createPreset as createPresetApi,
 	updatePreset as updatePresetApi,
 	deletePresetApi,
 	setPresetDefault as setPresetDefaultApi
 } from '$lib/api/client';
+import { editGenParams } from '$lib/stores/editor';
+import { recipeModel } from '$lib/stores/recipe';
 
 export const presets = writable<PresetItem[]>([]);
 export const builtinDefaults = writable<Record<string, VersionGenerationParams>>({});
@@ -52,9 +55,8 @@ export async function loadActiveModels(): Promise<void> {
 	try {
 		const data = await fetchActiveModels();
 		activeModels.set(data);
-		activeModelsError.set(null);
 	} catch {
-		activeModelsError.set(PHONE_RECIPE_MODELS_ERROR);
+		activeModelsError.set(MODELS_LOAD_ERROR);
 	} finally {
 		activeModelLoads -= 1;
 		activeModelsLoading.set(activeModelLoads > 0);
@@ -113,3 +115,47 @@ export async function deletePreset(presetId: string): Promise<void> {
 	await deletePresetApi(presetId);
 	presets.update((list) => list.filter((p) => p.id !== presetId));
 }
+
+const generationDefaults = writable<Record<string, VersionGenerationParams>>({});
+export const generationDefaultsError = writable(false);
+
+export async function loadGenerationDefaults(): Promise<void> {
+	generationDefaultsError.set(false);
+	try {
+		const data = await fetchGenerationDefaults();
+		generationDefaults.set(data);
+	} catch {
+		generationDefaultsError.set(true);
+	}
+}
+
+// The current model's built-in defaults, overridden by the operator's saved
+// generation defaults for that model — the placeholder values a recipe's
+// param controls fall back to until the user overrides them.
+export const effectiveGenerationDefaults = derived(
+	[builtinDefaults, generationDefaults, recipeModel],
+	([$builtinDefaults, $generationDefaults, $recipeModel]) =>
+		({
+			...($builtinDefaults[$recipeModel ?? ''] ?? {}),
+			...($generationDefaults[$recipeModel ?? ''] ?? {})
+		}) as Required<VersionGenerationParams>
+);
+
+function presetParamsEqual(a: VersionGenerationParams, b: VersionGenerationParams): boolean {
+	const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+	for (const key of keys) {
+		if ((a as Record<string, unknown>)[key] !== (b as Record<string, unknown>)[key]) return false;
+	}
+	return true;
+}
+
+// The saved preset, if any, whose params exactly match the current draft
+// generation params for the current model — used to show "Custom" instead of
+// a preset name once the draft diverges.
+export const currentPreset = derived(
+	[presets, recipeModel, editGenParams],
+	([$presets, $recipeModel, $editGenParams]) =>
+		$presets.find(
+			(p) => p.model_mode === $recipeModel && presetParamsEqual(p.params, $editGenParams ?? {})
+		)
+);

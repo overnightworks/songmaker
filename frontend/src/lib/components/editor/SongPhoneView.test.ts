@@ -1,6 +1,7 @@
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab } from '$lib/stores/navigation';
+import type { RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
@@ -34,6 +35,8 @@ afterEach(async () => {
 	detailTab.set('write');
 });
 
+const NO_CHIPS: RecipeChip[] = [];
+
 async function render(
 	overrides: Partial<ComponentProps<typeof SongPhoneView>['takeListProps']> = {}
 ) {
@@ -44,6 +47,7 @@ async function render(
 			target,
 			props: {
 				...snippets,
+				chips: NO_CHIPS,
 				takeListProps: {
 					song: makeSong({ generations: [], generation_count: 0 }),
 					dirty: false,

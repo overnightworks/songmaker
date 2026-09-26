@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { get } from 'svelte/store';
+import { derived, get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
@@ -9,10 +9,12 @@ import {
 	editKeyScale,
 	editGenParams,
 	pinnedSeed,
+	savedSongData,
 	loadSongData,
 	setDraftGenParams
 } from '$lib/stores/editor';
 import {
+	recipeChips,
 	recipeModel,
 	recipeOpen,
 	takesPerGenerate,
@@ -27,7 +29,13 @@ import {
 } from '$lib/stores/recipe';
 import { activeModels, loadActiveModels } from '$lib/stores/presets';
 import { loras } from '$lib/stores/loras';
+import {
+	VOICE_PICKER_NONE_LABEL,
+	VOICE_PICKER_DELETED_LABEL,
+	PHONE_RECIPE_CUSTOM
+} from '$lib/constants';
 import { fetchActiveModels, fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
+import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
 import PhoneRecipeSection from './PhoneRecipeSection.svelte';
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
@@ -49,6 +57,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 vi.mock('$lib/api/loras', () => ({ listLoras: vi.fn().mockResolvedValue([]) }));
 
 let mounted: ReturnType<typeof mount>;
+let stopChipsSync: (() => void) | undefined;
 
 beforeEach(async () => {
 	vi.clearAllMocks();
@@ -66,16 +75,77 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
+	stopChipsSync?.();
 	await unmount(mounted);
 	document.body.replaceChildren();
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 });
 
+function voiceLabelFor(loraId: string | null | undefined): string {
+	if (!loraId) return VOICE_PICKER_NONE_LABEL;
+	const voice = get(loras).find((item) => item.id === loraId);
+	if (!voice) return PHONE_RECIPE_CUSTOM;
+	return voice.deleted_at ? `${voice.name} — ${VOICE_PICKER_DELETED_LABEL}` : voice.name;
+}
+
+// Mirrors SongDetailView's own `chips` derivation (the real caller of
+// PhoneRecipeSection), so the harness follows the same store changes a real
+// parent would, without re-implementing PhoneRecipeSection's own logic.
+const chipsStore = derived(
+	[
+		recipeModel,
+		takesPerGenerate,
+		editBpm,
+		editAudioDuration,
+		editKeyScale,
+		editGenParams,
+		pinnedSeed,
+		sourceGeneration,
+		sourceMode,
+		repaintMode,
+		savedSongData
+	],
+	([
+		$recipeModel,
+		$takesPerGenerate,
+		$editBpm,
+		$editAudioDuration,
+		$editKeyScale,
+		$editGenParams,
+		$pinnedSeed,
+		$sourceGeneration,
+		$sourceMode,
+		$repaintMode,
+		$saved
+	]) =>
+		recipeChips({
+			model: $recipeModel,
+			takes: $takesPerGenerate,
+			bpm: $editBpm,
+			audioDuration: $editAudioDuration,
+			keyScale: $editKeyScale,
+			voiceLabel: voiceLabelFor($editGenParams?.user_lora_id),
+			pinnedSeed: $pinnedSeed,
+			genParams: $editGenParams,
+			sourceGeneration: $sourceGeneration,
+			sourceMode: $sourceMode,
+			repaintMode: $repaintMode,
+			savedBpm: $saved.bpm,
+			savedAudioDuration: $saved.audio_duration,
+			savedKeyScale: $saved.key_scale,
+			savedGenParams: $saved.genParams
+		})
+);
+
 async function render() {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(PhoneRecipeSection, { target });
+	const props = reactiveProps({ chips: get(chipsStore) });
+	stopChipsSync = chipsStore.subscribe((chips) => {
+		props.chips = chips;
+	});
+	mounted = mount(PhoneRecipeSection, { target, props });
 	await tick();
 	await tick();
 	return target;

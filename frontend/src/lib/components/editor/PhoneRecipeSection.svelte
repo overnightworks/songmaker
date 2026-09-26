@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { VersionGenerationParams } from '$lib/api/types';
-	import { fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
+	import type { RecipeChip } from '$lib/stores/recipe';
+	import { uploadReferenceAudio } from '$lib/api/client';
 	import {
 		editBpm,
 		editAudioDuration,
 		editKeyScale,
 		editGenParams,
-		savedSongData,
 		setDraftBpm,
 		setDraftAudioDuration,
 		setDraftKeyScale,
@@ -15,7 +14,6 @@
 		pinnedSeed
 	} from '$lib/stores/editor';
 	import {
-		recipeChips,
 		recipeModel,
 		recipeOpen,
 		takesPerGenerate,
@@ -34,12 +32,14 @@
 		activeModelsLoading,
 		activeModelsError,
 		loadActiveModels,
-		builtinDefaults,
-		loadBuiltins,
 		presets,
-		loadPresets
+		loadPresets,
+		loadBuiltins,
+		currentPreset,
+		effectiveGenerationDefaults,
+		generationDefaultsError,
+		loadGenerationDefaults
 	} from '$lib/stores/presets';
-	import { loras } from '$lib/stores/loras';
 	import {
 		RECIPE_PANEL_LABEL,
 		RECIPE_SOURCE_LABEL,
@@ -56,7 +56,6 @@
 		TAKE_REPAINT_LABEL,
 		TAKE_COVER_LABEL,
 		VOICE_PICKER_NONE_LABEL,
-		VOICE_PICKER_DELETED_LABEL,
 		PHONE_RECIPE_LOADING,
 		PHONE_RECIPE_LOADED,
 		PHONE_RECIPE_RETRY,
@@ -70,45 +69,27 @@
 		PHONE_RECIPE_REPAINT_STRENGTH,
 		PHONE_RECIPE_COVER_STRENGTH,
 		PHONE_RECIPE_NOISE_STRENGTH,
-		PHONE_RECIPE_REPAINT_MODES
+		PHONE_RECIPE_REPAINT_MODES,
+		RECIPE_BPM_MAX,
+		RECIPE_DURATION_MAX_SECONDS,
+		RECIPE_TAKES_PER_GENERATE_OPTIONS,
+		RECIPE_MAX_INFERENCE_STEPS_DEFAULT,
+		RECIPE_SOURCE_DURATION_DEFAULT_SECONDS
 	} from '$lib/constants';
 	import VoicePicker from '../VoicePicker.svelte';
 	import ParamControls from '../ParamControls.svelte';
 	import WaveformRangePicker from '../WaveformRangePicker.svelte';
 
+	interface Props {
+		chips: RecipeChip[];
+	}
+
+	let { chips }: Props = $props();
+
 	let openField = $state<string | null>(null);
-	let globalDefaults = $state<Record<string, VersionGenerationParams>>({});
-	let defaultsError = $state(false);
 	let referenceUploading = $state(false);
 	let referenceError = $state<string | null>(null);
 	let referenceFilename = $state<string | null>(null);
-	const voice = $derived($loras.find((item) => item.id === $editGenParams?.user_lora_id));
-	const voiceLabel = $derived(
-		voice
-			? `${voice.name}${voice.deleted_at ? ` — ${VOICE_PICKER_DELETED_LABEL}` : ''}`
-			: $editGenParams?.user_lora_id
-				? PHONE_RECIPE_CUSTOM
-				: VOICE_PICKER_NONE_LABEL
-	);
-	const chips = $derived(
-		recipeChips({
-			model: $recipeModel,
-			takes: $takesPerGenerate,
-			bpm: $editBpm,
-			audioDuration: $editAudioDuration,
-			keyScale: $editKeyScale,
-			voiceLabel,
-			pinnedSeed: $pinnedSeed,
-			genParams: $editGenParams,
-			sourceGeneration: $sourceGeneration,
-			sourceMode: $sourceMode,
-			repaintMode: $repaintMode,
-			savedBpm: $savedSongData.bpm,
-			savedAudioDuration: $savedSongData.audio_duration,
-			savedKeyScale: $savedSongData.key_scale,
-			savedGenParams: $savedSongData.genParams
-		})
-	);
 	const soundOrder = ['model', 'duration', 'bpm', 'key', 'takes', 'voice'];
 	const soundChips = $derived(
 		chips
@@ -128,23 +109,8 @@
 			? PHONE_RECIPE_LOADING
 			: ($activeModelsError ?? (modelData ? modelData.id.toUpperCase() : VOICE_PICKER_NONE_LABEL))
 	);
-	const effectiveDefaults = $derived({
-		...($builtinDefaults[$recipeModel ?? ''] ?? {}),
-		...(globalDefaults[$recipeModel ?? ''] ?? {})
-	} as Required<VersionGenerationParams>);
 	const referencePath = $derived($editGenParams?.reference_audio_path ?? null);
 	const matchingPresets = $derived($presets.filter((preset) => preset.model_mode === $recipeModel));
-	const selectedPreset = $derived(
-		matchingPresets.find((preset) => {
-			const params = $editGenParams ?? {};
-			const keys = new Set([...Object.keys(preset.params), ...Object.keys(params)]);
-			return [...keys].every(
-				(key) =>
-					preset.params[key as keyof VersionGenerationParams] ===
-					params[key as keyof VersionGenerationParams]
-			);
-		})
-	);
 	const groups = $derived([
 		{
 			label: RECIPE_GROUP_SOUND_LABEL,
@@ -168,7 +134,7 @@
 					key: 'preset',
 					label: RECIPE_PRESET_LABEL,
 					value:
-						selectedPreset?.name ??
+						$currentPreset?.name ??
 						($editGenParams ? PHONE_RECIPE_CUSTOM : RECIPE_PRESET_DEFAULT_OPTION),
 					changed: false
 				},
@@ -185,15 +151,6 @@
 			rows: chips.filter((chip) => chip.key === 'seed' || chip.key === 'repaint')
 		}
 	]);
-
-	async function loadDefaults(): Promise<void> {
-		defaultsError = false;
-		try {
-			globalDefaults = await fetchGenerationDefaults();
-		} catch {
-			defaultsError = true;
-		}
-	}
 
 	async function uploadReference(event: Event): Promise<void> {
 		const input = event.currentTarget as HTMLInputElement;
@@ -216,7 +173,7 @@
 	onMount(() => {
 		void loadBuiltins();
 		void loadPresets();
-		void loadDefaults();
+		void loadGenerationDefaults();
 	});
 </script>
 
@@ -280,7 +237,7 @@
 									aria-label={row.label}
 									type="number"
 									min="0"
-									max={row.key === 'bpm' ? 999 : 600}
+									max={row.key === 'bpm' ? RECIPE_BPM_MAX : RECIPE_DURATION_MAX_SECONDS}
 									value={row.key === 'bpm' ? $editBpm : $editAudioDuration}
 									oninput={(event) =>
 										(row.key === 'bpm' ? setDraftBpm : setDraftAudioDuration)(
@@ -299,7 +256,8 @@
 									value={$takesPerGenerate}
 									onchange={(event) => takesPerGenerate.set(Number(event.currentTarget.value))}
 								>
-									{#each [1, 2, 3, 5, 10] as count (count)}<option value={count}>×{count}</option
+									{#each RECIPE_TAKES_PER_GENERATE_OPTIONS as count (count)}<option value={count}
+											>×{count}</option
 										>{/each}
 								</select>
 							{:else if row.key === 'voice'}
@@ -328,14 +286,14 @@
 							{:else if row.key === 'preset'}
 								<select
 									aria-label={row.label}
-									value={selectedPreset?.id ?? ($editGenParams ? 'custom' : '')}
+									value={$currentPreset?.id ?? ($editGenParams ? 'custom' : '')}
 									onchange={(event) =>
 										setDraftGenParams(
 											matchingPresets.find((preset) => preset.id === event.currentTarget.value)
 												?.params ?? null
 										)}
 								>
-									{#if !selectedPreset && $editGenParams}
+									{#if !$currentPreset && $editGenParams}
 										<option value="custom" disabled>{PHONE_RECIPE_CUSTOM}</option>
 									{/if}
 									<option value="">{RECIPE_PRESET_DEFAULT_OPTION}</option>
@@ -344,15 +302,18 @@
 										>{/each}
 								</select>
 							{:else if row.key === 'parameters'}
-								{#if defaultsError}<p role="alert">{PHONE_RECIPE_DEFAULTS_ERROR}</p>
-									<button type="button" onclick={loadDefaults}>{PHONE_RECIPE_RETRY}</button>{/if}
+								{#if $generationDefaultsError}<p role="alert">{PHONE_RECIPE_DEFAULTS_ERROR}</p>
+									<button type="button" onclick={loadGenerationDefaults}
+										>{PHONE_RECIPE_RETRY}</button
+									>{/if}
 								<ParamControls
 									values={$editGenParams ?? {}}
-									placeholders={effectiveDefaults}
+									placeholders={$effectiveGenerationDefaults}
 									onchange={(params) =>
 										setDraftGenParams(Object.keys(params).length ? params : null)}
 									hiddenParams={modelData?.capabilities?.hidden_params ?? []}
-									maxInferenceSteps={modelData?.capabilities?.max_inference_steps ?? 200}
+									maxInferenceSteps={modelData?.capabilities?.max_inference_steps ??
+										RECIPE_MAX_INFERENCE_STEPS_DEFAULT}
 								/>
 							{:else if row.key === 'seed'}
 								<div class="choices">
@@ -391,7 +352,8 @@
 										>
 										<WaveformRangePicker
 											audioUrl={`/audio/${$sourceGeneration.mp3_path}`}
-											duration={$sourceGeneration.generation_params?.audio_duration ?? 180}
+											duration={$sourceGeneration.generation_params?.audio_duration ??
+												RECIPE_SOURCE_DURATION_DEFAULT_SECONDS}
 											startPercent={$repaintStart}
 											endPercent={$repaintEnd}
 											onchange={(start, end) => {
