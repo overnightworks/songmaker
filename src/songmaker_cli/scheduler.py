@@ -65,6 +65,7 @@ ProgressEventHandler = Callable[[dict], Awaitable[None]]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
 NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
+WORKER_MODE_NOT_LOADED_DETAIL: Final = "Mode {mode} not loaded; call /load_model first"
 
 
 class NoCapacityError(RuntimeError):
@@ -85,6 +86,14 @@ class WorkerGenerationFailed(WorkerTaskFailed):
     Its message is ACE-Step's own cause from an ``error`` event, or the
     scheduler's ``WORKER_STREAM_WENT_SILENT`` cause after ``httpx.ReadTimeout``.
     The job layer logs and stores this cause verbatim for the musician.
+    """
+
+
+class WorkerModeNotLoaded(WorkerTaskFailed):
+    """Raised when ``/generate`` finds the job's mode no longer loaded.
+
+    Another job's ``/load_model`` may evict this job's mode between two of
+    its takes, since a mode is only held while a take runs on it.
     """
 
 
@@ -258,6 +267,15 @@ async def _ensure_loaded(
 ) -> None:
     if target_mode in worker.loaded_modes:
         return
+    await _load_model(worker, target_mode, options, on_progress)
+
+
+async def _load_model(
+    worker: _PickedWorker,
+    target_mode: str,
+    options: DispatchOptions,
+    on_progress: GenerationProgressCallback | None,
+) -> None:
     log.info(
         "Worker %s does not have %s loaded — issuing /load_model",
         worker.id,
@@ -290,8 +308,16 @@ async def _submit_generation(
             json={"mode": target_mode, "config": config_payload},
             headers=_internal_headers(),
         )
+        if _answers_mode_not_loaded(resp, target_mode):
+            raise WorkerModeNotLoaded(_worker_response_cause(resp))
         resp.raise_for_status()
         return resp.json()["task_id"]
+
+
+def _answers_mode_not_loaded(response: httpx.Response, mode: str) -> bool:
+    if response.status_code != httpx.codes.CONFLICT:
+        return False
+    return _worker_response_cause(response) == WORKER_MODE_NOT_LOADED_DETAIL.format(mode=mode)
 
 
 async def _iterate_task_events(
@@ -598,7 +624,12 @@ async def dispatch_generation_on_worker(
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
     await _ensure_loaded(worker, target_mode, options, on_progress)
-    task_id = await _submit_generation(worker, ace_config, target_mode, options)
+    try:
+        task_id = await _submit_generation(worker, ace_config, target_mode, options)
+    except WorkerModeNotLoaded:
+        log.info("Worker %s no longer has %s loaded — reloading it once", worker.id, target_mode)
+        await _load_model(worker, target_mode, options, on_progress)
+        task_id = await _submit_generation(worker, ace_config, target_mode, options)
     return await consume_task_stream(
         worker,
         task_id,

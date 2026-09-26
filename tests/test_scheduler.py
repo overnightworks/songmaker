@@ -29,6 +29,7 @@ from songmaker_cli.constants import (
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.queries import register_worker
 from songmaker_cli.scheduler import (
+    WORKER_MODE_NOT_LOADED_DETAIL,
     WORKER_STREAM_WENT_SILENT,
     AllWorkersHeld,
     DispatchOptions,
@@ -809,19 +810,23 @@ def test_ensure_loaded_posts_when_missing() -> None:
     assert kwargs["json"] == {"mode": "sft"}
 
 
-def _worker_that_loads_each_mode_once() -> tuple[httpx.MockTransport, list[str]]:
-    loaded: set[str] = set()
+def _worker_with_room_for_one_mode() -> tuple[httpx.MockTransport, list[str]]:
+    loaded: list[str] = []
     real_loads: list[str] = []
     finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
 
     def handle(request: httpx.Request) -> httpx.Response:
+        mode = json.loads(request.content)["mode"] if request.method == "POST" else None
         if request.url.path == "/load_model":
-            mode = json.loads(request.content)["mode"]
+            evicted = [held for held in loaded if held != mode]
             if mode not in loaded:
-                loaded.add(mode)
+                loaded[:] = [mode]
                 real_loads.append(mode)
-            return httpx.Response(200, json={"loaded": sorted(loaded), "evicted": []})
+            return httpx.Response(200, json={"loaded": loaded, "evicted": evicted})
         if request.url.path == "/generate":
+            if mode not in loaded:
+                detail = WORKER_MODE_NOT_LOADED_DETAIL.format(mode=mode)
+                return httpx.Response(409, json={"detail": detail})
             return httpx.Response(200, json={"task_id": "t1"})
         stream = _build_sse_response(
             ("progress", {"progress": 0.5, "phase": AceStepPhase.RENDERING}),
@@ -832,13 +837,17 @@ def _worker_that_loads_each_mode_once() -> tuple[httpx.MockTransport, list[str]]
     return httpx.MockTransport(handle), real_loads
 
 
-def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypatch) -> None:
-    transport, real_loads = _worker_that_loads_each_mode_once()
+def _route_worker_requests_to(monkeypatch, transport: httpx.MockTransport) -> None:
     real_client = httpx.AsyncClient
     monkeypatch.setattr(
         "songmaker_cli.scheduler.httpx.AsyncClient",
         lambda *args, **kwargs: real_client(*args, transport=transport, **kwargs),
     )
+
+
+def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypatch) -> None:
+    transport, real_loads = _worker_with_room_for_one_mode()
+    _route_worker_requests_to(monkeypatch, transport)
     admitted_cold = _make_picked(loaded=[])
     phases_per_take: list[list[AceStepPhase]] = []
 
@@ -860,6 +869,36 @@ def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypat
         [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
         [AceStepPhase.RENDERING],
         [AceStepPhase.RENDERING],
+    ]
+
+
+def test_a_take_whose_mode_another_job_evicted_reloads_it_once_and_succeeds(monkeypatch) -> None:
+    transport, real_loads = _worker_with_room_for_one_mode()
+    _route_worker_requests_to(monkeypatch, transport)
+    sft_job_view = _make_picked(loaded=[])
+    turbo_job_view = _make_picked(loaded=[])
+    sft_phases_per_take: list[list[AceStepPhase]] = []
+
+    async def take(view, mode: str, phases: list[AceStepPhase]) -> GenerationTaskResultDTO:
+        return await dispatch_generation_on_worker(
+            worker=view,
+            ace_config=_make_ace_config(),
+            target_mode=mode,
+            on_progress=lambda phase, _fraction: phases.append(phase),
+        )
+
+    async def run_two_jobs_whose_takes_alternate() -> None:
+        for _ in range(2):
+            sft_phases_per_take.append([])
+            await take(sft_job_view, "sft", sft_phases_per_take[-1])
+            await take(turbo_job_view, "turbo", [])
+
+    _run(run_two_jobs_whose_takes_alternate())
+
+    assert real_loads == ["sft", "turbo", "sft", "turbo"]
+    assert sft_phases_per_take == [
+        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
+        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
     ]
 
 

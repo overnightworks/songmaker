@@ -389,7 +389,7 @@ Top-level song/version fields:
 
 ## Modes
 
-All modes use the same upstream ACE-Step task endpoint with different `task_type` + audio inputs. If the requested model isn't loaded on the chosen worker, the scheduler issues `POST /load_model` before `POST /generate`.
+All modes use the same upstream ACE-Step task endpoint with different `task_type` + audio inputs. If the requested model isn't loaded on the chosen worker, the scheduler issues `POST /load_model` before `POST /generate`. A job's takes hold their mode only while each runs, so another job's load can evict it between two takes; when `POST /generate` then answers 409 `Mode {mode} not loaded; call /load_model first`, the scheduler reloads the mode once and resubmits the take.
 
 | Mode | task_type | Trigger | What It Does |
 |------|-----------|---------|--------------|

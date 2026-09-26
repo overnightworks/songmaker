@@ -332,7 +332,9 @@ def test_evict_model(tmp_path: Path) -> None:
     assert body["loaded"] == []
 
 
-def test_generate_requires_loaded(tmp_path: Path) -> None:
+def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_path: Path) -> None:
+    from songmaker_cli.scheduler import WORKER_MODE_NOT_LOADED_DETAIL
+
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -342,6 +344,7 @@ def test_generate_requires_loaded(tmp_path: Path) -> None:
             headers=_INTERNAL_HEADERS,
         )
     assert resp.status_code == 409
+    assert resp.json()["detail"] == WORKER_MODE_NOT_LOADED_DETAIL.format(mode="sft")
 
 
 @pytest.mark.parametrize(
