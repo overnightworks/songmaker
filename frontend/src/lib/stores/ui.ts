@@ -50,7 +50,9 @@ function isTextEntryField(target: EventTarget | null): boolean {
 }
 
 // The smallest gap between the layout viewport and the visible one that is an
-// on-screen keyboard rather than a browser toolbar sliding in or out.
+// on-screen keyboard rather than a browser toolbar sliding in or out. The gap
+// exists only under the default interactive-widget=resizes-visual, which app.html
+// keeps by setting no interactive-widget in its viewport meta.
 const ON_SCREEN_KEYBOARD_MIN_HEIGHT_PX = 150;
 
 // The on-screen keyboard shrinks only the visual viewport; the layout viewport
