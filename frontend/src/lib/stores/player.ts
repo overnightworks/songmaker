@@ -288,7 +288,7 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 // Where a collection start begins: its top, or — for a shuffled start, which
 // has no top — a drawn entry, since shuffledWithStart keeps the start in front
 // and only shuffles what follows it.
-type CollectionStart = 'top' | 'random';
+export type CollectionStart = 'top' | 'random';
 
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
@@ -529,7 +529,7 @@ export function idlePlayTarget(input: {
 	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
-async function startOpenCollection(start: CollectionStart): Promise<void> {
+export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -538,25 +538,14 @@ async function startOpenCollection(start: CollectionStart): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		playPlaylist(playlist, start);
+		playPlaylist(playlist, 'top');
 		return;
 	}
 	if (target.type === 'album') {
-		await playAlbum(target.albumId, start);
+		await playAlbum(target.albumId);
 		return;
 	}
 	await playLibrary();
-}
-
-export async function playIdleStart(): Promise<void> {
-	await startOpenCollection('top');
-}
-
-// The collection header's shuffle square: shuffle on, and the open album or
-// playlist starts on a drawn song instead of the same first track every time.
-export async function playOpenCollectionShuffled(): Promise<void> {
-	setShuffle(true);
-	await startOpenCollection('random');
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
@@ -1236,10 +1225,11 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 	return { id: playlist.id, title: playlist.title };
 }
 
-// The idle transport Play on an open playlist. It keeps the listener's
-// shuffle setting, unlike playPlaylistFrom, where picking a specific entry
-// is itself the statement that the queue should start in playlist order.
-function playPlaylist(playlist: PlaylistDetailItem, start: CollectionStart): void {
+// A whole-playlist start: the idle transport Play and the playlist header. It
+// keeps the listener's shuffle setting, unlike playPlaylistFrom, where picking a
+// specific entry is itself the statement that the queue should start in
+// playlist order.
+export function playPlaylist(playlist: PlaylistDetailItem, start: CollectionStart): void {
 	if (playlist.entries.length === 0) {
 		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist, start));
 		return;
