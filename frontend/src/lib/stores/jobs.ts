@@ -7,7 +7,7 @@ import { addToast } from '$lib/stores/toast';
 
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
 
-interface ActiveJob {
+export interface ActiveJob {
 	job: JobStatus;
 	songId?: string;
 	albumId?: string;
