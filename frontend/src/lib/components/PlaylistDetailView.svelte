@@ -537,6 +537,7 @@
 	}
 
 	.entry-row {
+		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
@@ -579,6 +580,19 @@
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	/* The whole card plays the entry (#1010); the later-painted ⋯ anchor stays above it. */
+	.entry-info::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+	}
+
+	/* The global press scale would make the button the ::after's containing block,
+	   shrink the target mid-press and send a release near the card's edge to the card. */
+	.entry-row .entry-info:active:not(:disabled) {
+		transform: none;
 	}
 
 	.entry-text {
