@@ -1,0 +1,8 @@
+claim_id = "17d1c3f110354065a9f1f9753efd5a61"
+agent = "claude-head"
+role = "builder"
+base = "8719cf7105a77d0ab6795e8cb7ceb51697a008bd"
+branch = "claude/issue-1025-player-watchdog"
+scope = ["frontend/src/lib/constants.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "src/songmaker_cli/generation_api.py", "src/songmaker_cli/sharing_api.py", "tests/test_api.py", "tests/test_sharing.py"]
+opened_commit = "15a8d5dffded7dfc4d9b96a1a1205a91b0b4d5ec"
+whole_reason = "the player watchdog and the audio cache headers close the same silent-playback report"
