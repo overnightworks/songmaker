@@ -270,6 +270,57 @@ describe('generate action presentation', () => {
 		expect(get(generateAction)).toEqual({ kind: 'idle', mode: 'generate' });
 	});
 
+	describe("once the job's takes are in the list", () => {
+		const jobStartedAt = '2026-09-26T10:00:00+00:00';
+		const takeBeforeJob = makeGeneration({ id: 'old', created_at: '2026-09-26T09:59:59+00:00' });
+		const takeOfJob = (id: string) =>
+			makeGeneration({ id, created_at: '2026-09-26T10:01:00+00:00' });
+		const runningJob = (overrides: Partial<JobItem> = {}): JobItem => ({
+			...queuedJob,
+			status: 'running',
+			progress: 0.4,
+			started_at: jobStartedAt,
+			...overrides
+		});
+
+		it.each([
+			{
+				case: 'its one take landed',
+				takes: [takeOfJob('new'), takeBeforeJob],
+				jobs: [runningJob()],
+				kind: 'idle'
+			},
+			{
+				case: 'both of its two takes landed',
+				takes: [takeOfJob('b'), takeOfJob('a')],
+				jobs: [runningJob({ take_index: 2, take_count: 2 })],
+				kind: 'idle'
+			},
+			{
+				case: 'only the first of its two takes landed',
+				takes: [takeOfJob('a'), takeBeforeJob],
+				jobs: [runningJob({ take_index: 2, take_count: 2 })],
+				kind: 'generating'
+			},
+			{
+				case: 'only takes from before the job exist',
+				takes: [takeBeforeJob],
+				jobs: [runningJob()],
+				kind: 'generating'
+			},
+			{
+				case: 'a newer job for the song is queued behind the landed one',
+				takes: [takeOfJob('new')],
+				jobs: [runningJob(), { ...queuedJob, id: 'job2', started_at: '2026-09-26T10:02:00+00:00' }],
+				kind: 'queued'
+			}
+		])('presents $kind when $case', ({ takes, jobs, kind }) => {
+			songList.set([makeSong({ lyrics: 'verse', prompt: 'folk', generations: takes })]);
+			activeJobs.set(jobs.map((job) => ({ songId: 's1', job })));
+			expect(get(generateAction).kind).toBe(kind);
+		});
+	});
+
 	it('follows the selected song and exposes a reason only while queued', () => {
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
 		expect(get(generateAction)).toMatchObject({

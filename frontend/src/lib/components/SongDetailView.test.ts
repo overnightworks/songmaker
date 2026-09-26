@@ -20,6 +20,7 @@ import {
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
+	EDITOR_NETWORK_ERROR,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
@@ -164,7 +165,8 @@ import editorHeaderSource from './editor/EditorHeader.svelte?raw';
 import recipePanelSource from './editor/RecipePanel.svelte?raw';
 import takesListSource from './editor/TakesList.svelte?raw';
 import writeColumnSource from './editor/WriteColumn.svelte?raw';
-import { addGenerationToPlaylist } from '$lib/api/client';
+import { addGenerationToPlaylist, fetchSong } from '$lib/api/client';
+import { NetworkError } from '$lib/api/fetch';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
@@ -475,6 +477,30 @@ describe('SongDetailView adding a take to a playlist', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
+	it.each([
+		{
+			failure: 'no network answer',
+			error: new NetworkError('/api/songs/s1', new TypeError('Failed to fetch')),
+			shown: EDITOR_NETWORK_ERROR,
+			hidden: 'Failed to fetch'
+		},
+		{
+			failure: 'a bug that is not the network',
+			error: new TypeError('generations is not iterable'),
+			shown: 'generations is not iterable',
+			hidden: EDITOR_NETWORK_ERROR
+		}
+	])('names $failure honestly when the takes cannot load', async ({ error, shown, hidden }) => {
+		vi.mocked(fetchSong).mockRejectedValueOnce(error);
+		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
+		const target = await renderView();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain(shown);
+		expect(target.textContent).not.toContain(hidden);
+	});
+
 	it('edits the phone recipe inline without opening a sheet', async () => {
 		stubLibraryMedia({ narrow: true, compact: true });
 		const target = await renderView({ widthPx: 390 });

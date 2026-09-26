@@ -8,6 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from time import monotonic
+from typing import Final
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -59,7 +60,7 @@ _SSE_HEADERS = {
     "Cache-Control": "no-cache, no-store",
     "X-Accel-Buffering": "no",
 }
-_AHEAD_BIGINT_SENTINEL = POSTGRES_BIGINT_MAX + 1
+LAST_EVENT_ID_OUT_OF_RANGE: Final[str] = "Last-Event-ID is beyond the event sequence range"
 
 
 @dataclass(frozen=True)
@@ -88,7 +89,7 @@ def parse_last_event_id(raw: str | None) -> int | None:
     if len(canonical) > len(max_bigint) or (
         len(canonical) == len(max_bigint) and canonical > max_bigint
     ):
-        return _AHEAD_BIGINT_SENTINEL
+        raise HTTPException(400, LAST_EVENT_ID_OUT_OF_RANGE)
     return int(canonical)
 
 
