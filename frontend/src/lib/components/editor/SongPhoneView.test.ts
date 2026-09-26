@@ -42,27 +42,6 @@ afterEach(async () => {
 
 const NO_CHIPS: RecipeChip[] = [];
 
-// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
-// records the real callback so a test can fire it like the browser would once
-// the action bar changes size.
-function stubResizeObserver(): () => void {
-	const callbacks: ResizeObserverCallback[] = [];
-	vi.stubGlobal(
-		'ResizeObserver',
-		class {
-			constructor(callback: ResizeObserverCallback) {
-				callbacks.push(callback);
-			}
-			observe(): void {}
-			unobserve(): void {}
-			disconnect(): void {}
-		}
-	);
-	return () => {
-		for (const callback of callbacks) callback([], {} as ResizeObserver);
-	};
-}
-
 async function render(
 	overrides: Partial<ComponentProps<typeof SongPhoneView>['takeListProps']> = {}
 ) {
@@ -161,7 +140,24 @@ describe('SongPhoneView', () => {
 	});
 
 	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
-		const triggerResize = stubResizeObserver();
+		// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
+		// records the real callback so the test can fire it like the browser would
+		// once the action bar changes size.
+		const resizeCallbacks: ResizeObserverCallback[] = [];
+		vi.stubGlobal(
+			'ResizeObserver',
+			class {
+				constructor(callback: ResizeObserverCallback) {
+					resizeCallbacks.push(callback);
+				}
+				observe(): void {}
+				unobserve(): void {}
+				disconnect(): void {}
+			}
+		);
+		const triggerResize = () => {
+			for (const callback of resizeCallbacks) callback([], {} as ResizeObserver);
+		};
 		const target = await render();
 		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
 		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
