@@ -54,27 +54,26 @@
 	// different height, so the listener stays live for as long as the field
 	// does.
 	function autogrowTextarea(node: HTMLTextAreaElement, params: { active: boolean; value: string }) {
+		let autogrowing = false;
 		function resize() {
 			node.style.height = 'auto';
 			node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`;
 		}
-		// addEventListener/removeEventListener are no-ops on a listener that's
-		// already (not) registered, so this can run unconditionally on every
-		// call instead of tracking a redundant "currently active" flag. The
-		// `input` listener lives inside this same active/inactive branch as
-		// `resize` — desktop's `active: false` must leave the node fully alone
-		// so its own manual resize handle keeps working (#993).
+		// Desktop's `active: false` must leave the node fully alone so its own
+		// manual resize handle keeps working (#993): no listener, and the height
+		// is only cleared on the way out of compact — clearing it on every
+		// keystroke threw away a height the musician had dragged (#999).
 		function apply(next: { active: boolean; value: string }) {
-			params = next;
-			if (params.active) {
+			if (next.active) {
 				tick().then(resize);
 				node.addEventListener('input', resize);
 				window.addEventListener('resize', resize);
-			} else {
+			} else if (autogrowing) {
 				node.style.height = '';
 				node.removeEventListener('input', resize);
 				window.removeEventListener('resize', resize);
 			}
+			autogrowing = next.active;
 		}
 		apply(params);
 		return {

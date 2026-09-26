@@ -380,6 +380,6 @@ describe('shared album page', () => {
 		expect(surface).not.toBeNull();
 		expect(surface?.getAttribute('aria-modal')).toBe('true');
 		expect(target.querySelector('.player-bar')).not.toBeNull();
-		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 	});
 });

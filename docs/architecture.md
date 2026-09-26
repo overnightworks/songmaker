@@ -374,8 +374,9 @@ transport, so `PlayerBar` renders no `TransportBarFrame` while
 `nowPlayingSurface` is `'full'`. `--player-height` is the single fact behind
 that: it means "the room the transport bar takes right now", and `app.css`
 owns every one of its values — the resting 88px, the 64px compact/coarse
-overrides, and `html[data-now-playing='full'] { --player-height: 0px }` for
-while the app's bar is hidden. That last rule ties with
+overrides, and `html[data-transport-bar='hidden'] { --player-height: 0px }` for
+while the app's bar is hidden — under the full surface, or while a field has
+focus on the phone and the keyboard takes the bottom. That last rule ties with
 `html[data-pointer='coarse']` on specificity, so it sits directly below it and
 wins on source order; `+layout.svelte` owns only the attribute it keys on. Everything that reserves space for the bar — the shell
 rows, `ToastContainer`, `QueueStreamFeedback`, the editor's bottom padding,

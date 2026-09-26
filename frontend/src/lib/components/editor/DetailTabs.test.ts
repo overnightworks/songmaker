@@ -14,6 +14,9 @@ vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 
 import type { GenerateState } from '$lib/stores/generateAction';
 import DetailTabs from './DetailTabs.svelte';
+import detailTabsSource from './DetailTabs.svelte?raw';
+import { watchTypingOnPhone } from '$lib/stores/ui';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -26,6 +29,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	detailTab.set('write');
+	clearComponentStyles();
 });
 
 async function render(takeCount = 4) {
@@ -98,5 +102,25 @@ describe('DetailTabs', () => {
 		action.set(state as GenerateState);
 		const tabs = await render();
 		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
+	});
+
+	it('sticks to the top, but scrolls away with the text while a field has focus on the phone', async () => {
+		const stopWatching = watchTypingOnPhone(document, true);
+		const [write] = await render();
+		const tablist = write.parentElement;
+		if (!tablist) throw new Error('Expected the tab list');
+		injectComponentStyles(detailTabsSource, 'DetailTabs.svelte', tablist);
+		expect(getComputedStyle(tablist).position).toBe('sticky');
+
+		const lyrics = document.createElement('textarea');
+		document.body.append(lyrics);
+		lyrics.focus();
+		await tick();
+		expect(getComputedStyle(tablist).position).not.toBe('sticky');
+
+		lyrics.blur();
+		await tick();
+		expect(getComputedStyle(tablist).position).toBe('sticky');
+		stopWatching();
 	});
 });

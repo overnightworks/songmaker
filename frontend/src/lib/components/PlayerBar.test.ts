@@ -31,7 +31,7 @@ import {
 import * as playerStore from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
@@ -562,5 +562,33 @@ describe('PlayerBar Now Playing', () => {
 		expect(document.activeElement).toBe(
 			target.querySelector(`button[aria-label="${NOW_PLAYING_LABEL}"]`)
 		);
+	});
+});
+
+describe('PlayerBar while typing on the phone', () => {
+	it('steps aside for the keyboard and comes back on leaving the field, with playback untouched', async () => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+		await tick();
+		expect(audio.paused).toBe(false);
+		const stopWatching = watchTypingOnPhone(document, true);
+		const lyrics = document.createElement('textarea');
+		document.body.append(lyrics);
+
+		lyrics.focus();
+		await tick();
+		expect(target.querySelector('.player-bar')).toBeNull();
+		expect(audio.paused).toBe(false);
+
+		lyrics.blur();
+		await tick();
+		expect(target.querySelector('.player-bar')).not.toBeNull();
+		expect(audio.paused).toBe(false);
+		stopWatching();
 	});
 });
