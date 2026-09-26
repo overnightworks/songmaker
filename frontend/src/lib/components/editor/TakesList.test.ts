@@ -284,11 +284,11 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('shows a generating row while a generate job runs for this song', async () => {
+	it('shows the running status slot while a generate job runs for this song', async () => {
 		const { target } = await render({
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
 		});
-		expect(target.querySelector('.generating-row')?.textContent).toContain('generating');
+		expect(target.querySelector('.status-slot')?.textContent).toContain('Generating');
 	});
 
 	it('shows a queued generation reason and position without treating it as a failure', async () => {
@@ -303,13 +303,13 @@ describe('TakesList', () => {
 			}
 		});
 
-		expect(target.querySelector('.generating-label')?.textContent).toContain('queued #2');
-		expect(target.querySelector('.generating-label')?.textContent).toContain(
+		expect(target.querySelector('.status-line')?.textContent).toContain('Queued #2');
+		expect(target.querySelector('.status-line.reason')?.textContent).toContain(
 			'Waiting for LoRA training on this GPU.'
 		);
 	});
 
-	it('labels the generating row with the version actually being generated, not the next draft version', async () => {
+	it('labels the status slot with the version actually being generated, not the next draft version', async () => {
 		// draftVersionNumber (the number Generate would create *next*) is 4
 		// here — the two must not be conflated, since a running job always
 		// targets an already-saved version (latestVersionNumber).
@@ -318,11 +318,11 @@ describe('TakesList', () => {
 			draftVersionNumber: 4,
 			latestVersionNumber: 3
 		});
-		expect(target.querySelector('.generating-label')?.textContent).toContain('v3');
-		expect(target.querySelector('.generating-label')?.textContent).not.toContain('v4');
+		expect(target.querySelector('.status-title')?.textContent).toContain('v3');
+		expect(target.querySelector('.status-title')?.textContent).not.toContain('v4');
 	});
 
-	it('labels the generating row from the actual highest version number, not the stale version_count after a mid-run deletion', async () => {
+	it('labels the status slot from the actual highest version number, not the stale version_count after a mid-run deletion', async () => {
 		// A middle version (v2) was deleted after this job started: song.version_count
 		// dropped to 2, but the job still targets the highest surviving version, v3.
 		const { target } = await render({
@@ -330,8 +330,8 @@ describe('TakesList', () => {
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
 			latestVersionNumber: 3
 		});
-		expect(target.querySelector('.generating-label')?.textContent).toContain('v3');
-		expect(target.querySelector('.generating-label')?.textContent).not.toContain('v2');
+		expect(target.querySelector('.status-title')?.textContent).toContain('v3');
+		expect(target.querySelector('.status-title')?.textContent).not.toContain('v2');
 	});
 
 	it('deletes a version and its takes from the group header, with confirmation', async () => {
