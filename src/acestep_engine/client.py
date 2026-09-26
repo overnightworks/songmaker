@@ -38,6 +38,7 @@ from acestep_engine.models import (
     TaskQueryResponse,
     TaskSubmitResponse,
 )
+from acestep_engine.progress import AceStepProgress, progress_from_result
 from acestep_engine.settings import get_engine_settings
 
 log = logging.getLogger(__name__)
@@ -91,11 +92,15 @@ def _completed_poll_result(entry: TaskQueryEntry, started_at: float) -> _PollRes
 def _report_poll_progress(
     entry: TaskQueryEntry,
     started_at: float,
-    on_progress: Callable[[str], None] | None,
+    on_progress: Callable[[AceStepProgress], None] | None,
 ) -> None:
     elapsed = time.monotonic() - started_at
-    progress = entry.progress_text or f"generating ({elapsed:.0f}s)"
-    log.info("ACE-Step: %s", progress)
+    log.info("ACE-Step: %s", entry.progress_text or f"generating ({elapsed:.0f}s)")
+    items = entry.parse_result_items()
+    progress = progress_from_result(items[0]) if items else None
+    if progress is None:
+        log.warning("ACE-Step running entry carries no progress value: %s", entry.result)
+        return
     if on_progress is not None:
         on_progress(progress)
 
@@ -345,13 +350,14 @@ class AceStepClient:
 
     def generate(
         self, config: AceStepConfig,
-        on_progress: Callable[[str], None] | None = None,
+        on_progress: Callable[[AceStepProgress], None] | None = None,
     ) -> AceStepResult:
         """Generate music via ACE-Step and return audio samples.
 
         Args:
             config: Generation parameters.
-            on_progress: Called with raw progress text on each poll tick.
+            on_progress: Called with the phase and its fraction on each poll
+                tick whose entry carries ACE-Step's progress value.
 
         Raises:
             TaskSubmissionError: Failed to submit the generation task.
@@ -489,7 +495,7 @@ class AceStepClient:
 
     def _poll_result(
         self, task_id: str,
-        on_progress: Callable[[str], None] | None = None,
+        on_progress: Callable[[AceStepProgress], None] | None = None,
     ) -> _PollResult:
         """Poll until the generation task completes.
 
@@ -528,7 +534,7 @@ class AceStepClient:
         self,
         payload: bytes,
         started_at: float,
-        on_progress: Callable[[str], None] | None,
+        on_progress: Callable[[AceStepProgress], None] | None,
     ) -> _PollResult | None:
         response = self._query_task_result(payload)
         if not response.data:
