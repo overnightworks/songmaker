@@ -1,0 +1,8 @@
+claim_id = "483531729133439486eb15cade6e7ad2"
+agent = "claude-head"
+role = "builder"
+base = "f7808b95a5bfbdac73c608f0fc3de126b6d5a8ae"
+branch = "claude/issue-990-cowriter-screen"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/kinetic-strip.spec.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/components/editor/WriteColumn.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "21333e33c501991116eaa694a0ab66fe352aed69"
+whole_reason = "F5: the pushed co-writer screen replaces the compact sheet across its view, parent and tests in one change"
