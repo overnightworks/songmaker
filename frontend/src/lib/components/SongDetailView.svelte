@@ -723,7 +723,7 @@
 		/>
 	{/snippet}
 
-	<div class="detail-panel" class:compact>
+	<div class="detail-panel" class:compact class:grows-with-content={compact && !$coWriterOpen}>
 		{#if compact}
 			<SongPhoneView
 				{sharedLink}
@@ -822,6 +822,14 @@
 		width: 100%;
 		min-width: 0;
 		min-height: 0;
+	}
+
+	/* The phone's sticky Write/Takes tabs can only stick inside this box, so
+	   it must be as tall as the page it scrolls — shrunk to `main`'s height
+	   they let go after one screen (#1017). The co-writer keeps the bounded
+	   box: its message list scrolls inside it with the composer pinned. */
+	.detail-panel.grows-with-content {
+		flex: 1 0 auto;
 	}
 
 	/* Everything under the header answers to the width the editor actually

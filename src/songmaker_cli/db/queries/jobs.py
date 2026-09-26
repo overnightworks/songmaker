@@ -6,6 +6,7 @@ import logging
 from collections.abc import Collection, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+from typing import Final
 
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from songmaker_cli.constants import (
     JOB_ACTIVE_STATUSES,
     JOB_TERMINAL_STATUSES,
+    GenerationPhase,
     JobStaleThresholds,
     JobStatus,
     JobType,
@@ -23,6 +25,10 @@ from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
 log = logging.getLogger(__name__)
+
+_GENERATING_PHASES: Final = frozenset(
+    {GenerationPhase.WRITING, GenerationPhase.RENDERING, GenerationPhase.SAVING_TAKE}
+)
 
 
 def create_job(
@@ -144,7 +150,7 @@ def claim_next_cover_job(session: Session) -> Job | None:
             Job.type == JobType.COVER,
             Job.status == JobStatus.QUEUED,
         )
-        .values(status=JobStatus.RUNNING, heartbeat_at=now, running_since=now)
+        .values(status=JobStatus.RUNNING, heartbeat_at=now)
         .returning(Job.id),
     ).scalar_one_or_none()
     if claimed_id is None:
@@ -164,6 +170,7 @@ def update_job_status(
     training_started_at: datetime | None = None,
     take_index: int | None = None,
     take_count: int | None = None,
+    phase: GenerationPhase | None = None,
 ) -> bool:
     job = (
         session.query(Job)
@@ -174,10 +181,7 @@ def update_job_status(
     if job is None or job.status in JOB_TERMINAL_STATUSES:
         return False
     now = datetime.now(timezone.utc)
-    if status == JobStatus.RUNNING and (
-        job.status != JobStatus.RUNNING or job.running_since is None
-    ):
-        job.running_since = now
+    _move_generation_start(job, status, phase, now)
     job.status = status
     job.progress = progress
     job.error = error
@@ -193,6 +197,8 @@ def update_job_status(
         job.take_index = take_index
     if take_count is not None:
         job.take_count = take_count
+    if phase is not None:
+        job.phase = phase
     if worker_pid is not None:
         job.worker_pid = worker_pid
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
@@ -201,6 +207,25 @@ def update_job_status(
         job.completed_at = now
     session.flush()
     return True
+
+
+def _move_generation_start(
+    job: Job, status: str, phase: GenerationPhase | None, now: datetime,
+) -> None:
+    """Anchor the remaining-time estimate at the first generating phase.
+
+    Each RUNNING entry starts without an anchor, so a requeue excludes the
+    earlier queue time, and loading the model never counts: a cold start
+    and a warm one reach the same progress in the same generating time.
+    """
+    if status != JobStatus.RUNNING or job.status != JobStatus.RUNNING:
+        job.generation_started_at = None
+    if (
+        status == JobStatus.RUNNING
+        and phase in _GENERATING_PHASES
+        and job.generation_started_at is None
+    ):
+        job.generation_started_at = now
 
 
 def update_job_heartbeat(session: Session, job_id: str) -> None:
@@ -370,6 +395,7 @@ def _recover_stale_job_if_unchanged(
             error_type=error_type,
             completed_at=completed_at,
             queue_reason=None,
+            generation_started_at=None,
         )
         .execution_options(synchronize_session=False),
     )
@@ -404,6 +430,7 @@ def recover_stale_jobs_by_type(
             job.error_type = "server_restart"
             job.completed_at = now
             job.queue_reason = None
+            job.generation_started_at = None
         if stale:
             recovered[job_type] = len(stale)
     session.flush()

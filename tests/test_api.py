@@ -1235,7 +1235,7 @@ def test_active_generation_returns_latest_active_job_with_progress(
             Job(
                 id="active", type="generate", status=status, song_id="s1",
                 started_at=now - timedelta(minutes=2),
-                running_since=now - timedelta(minutes=1) if status == "running" else None,
+                generation_started_at=now - timedelta(minutes=1) if status == "running" else None,
                 progress=0.5 if status == "running" else 0,
                 take_index=1, take_count=2,
             ),
@@ -2396,7 +2396,7 @@ def test_get_running_generation_exposes_take_counters_and_eta(
     client: TestClient, progress: float, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
-    from songmaker_cli.constants import JobStatus, JobType
+    from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
     from songmaker_cli.db.queries import create_job, update_job_status
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
@@ -2412,10 +2412,10 @@ def test_get_running_generation_exposes_take_counters_and_eta(
         job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
         update_job_status(
             session, job.id, JobStatus.RUNNING, progress=progress,
-            take_index=1, take_count=2,
+            take_index=1, take_count=2, phase=GenerationPhase.WRITING,
         )
         job.started_at = now - timedelta(hours=1)
-        job.running_since = now - timedelta(seconds=100)
+        job.generation_started_at = now - timedelta(seconds=100)
         session.commit()
         job_id = job.id
 
@@ -2425,7 +2425,53 @@ def test_get_running_generation_exposes_take_counters_and_eta(
     payload = response.json()
     assert (payload["take_index"], payload["take_count"]) == (1, 2)
     assert payload["progress"] == progress
+    assert payload["phase"] == "writing"
     assert payload["remaining_time_estimate"] == (300 if progress == 0.25 else "calculating")
+
+
+@pytest.mark.parametrize(
+    "timeline",
+    [
+        [("rendering", 0.36, 64)],
+        [("loading_model", 0.0, 120), ("rendering", 0.36, 64)],
+    ],
+    ids=["warm", "cold"],
+)
+def test_generation_estimate_leaves_the_model_load_out(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    timeline: list[tuple[str, float, int]],
+) -> None:
+    from songmaker_cli.api_models import jobs as job_models
+    from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
+    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import jobs as job_queries
+
+    clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
+
+    class SteppedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock[0]
+
+    monkeypatch.setattr(job_models, "datetime", SteppedDatetime)
+    monkeypatch.setattr(job_queries, "datetime", SteppedDatetime)
+    ctx: AppContext = client.app.state.ctx
+    with ctx.db() as session:
+        job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
+        for phase, progress, seconds in timeline:
+            update_job_status(
+                session, job.id, JobStatus.RUNNING,
+                progress=progress, phase=GenerationPhase(phase),
+            )
+            clock[0] += timedelta(seconds=seconds)
+        session.commit()
+        job_id = job.id
+
+    payload = client.get(f"/api/jobs/{job_id}").json()
+
+    assert payload["phase"] == "rendering"
+    assert payload["remaining_time_estimate"] == 114
 
 
 # ── Album creation ──────────────────────────────────────────────────
@@ -2879,8 +2925,25 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     assert "completed" in statuses
 
 
-def test_stream_job_emits_queue_reason_and_position_without_a_status_change(
-    client: TestClient,
+@pytest.mark.parametrize(
+    ("status", "before", "after"),
+    [
+        (
+            "queued",
+            {"queue_reason": "Waiting for LoRA training on this GPU."},
+            {"queue_reason": "Waiting for the next GPU slot."},
+        ),
+        ("running", {"phase": "loading_model"}, {"phase": "writing"}),
+        (
+            "running",
+            {"take_index": 1, "take_count": 2},
+            {"take_index": 2, "take_count": 2},
+        ),
+    ],
+    ids=["queue_reason", "phase", "take"],
+)
+def test_stream_job_emits_a_change_without_a_status_or_progress_change(
+    client: TestClient, status: str, before: dict, after: dict,
 ) -> None:
     import asyncio
     import json
@@ -2892,12 +2955,7 @@ def test_stream_job_emits_queue_reason_and_position_without_a_status_change(
     with ctx.db() as session:
         create_job(session, "generate", user_id=_DEFAULT_USER_ID)
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(
-            session,
-            job.id,
-            "queued",
-            queue_reason="Waiting for LoRA training on this GPU.",
-        )
+        update_job_status(session, job.id, status, **before)
         session.commit()
         job_id = job.id
 
@@ -2905,12 +2963,7 @@ def test_stream_job_emits_queue_reason_and_position_without_a_status_change(
         stream = _job_event_generator(ctx, job_id)
         first = json.loads((await anext(stream)).removeprefix("data: "))
         with ctx.db() as session:
-            update_job_status(
-                session,
-                job_id,
-                "queued",
-                queue_reason="Waiting for the next GPU slot.",
-            )
+            update_job_status(session, job_id, status, **after)
             session.commit()
         second = json.loads((await anext(stream)).removeprefix("data: "))
         await stream.aclose()
@@ -2918,10 +2971,11 @@ def test_stream_job_emits_queue_reason_and_position_without_a_status_change(
 
     first, second = asyncio.run(collect_updates())
 
-    assert first["status"] == second["status"] == "queued"
-    assert first["queue_reason"] == "Waiting for LoRA training on this GPU."
-    assert second["queue_reason"] == "Waiting for the next GPU slot."
-    assert first["queue_position"] == second["queue_position"] == 2
+    assert first["status"] == second["status"] == status
+    assert first["progress"] == second["progress"]
+    assert first["queue_position"] == second["queue_position"]
+    assert {key: first[key] for key in before} == before
+    assert {key: second[key] for key in after} == after
 
 
 def test_stream_job_sends_heartbeat_without_status_change(
