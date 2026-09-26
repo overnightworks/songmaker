@@ -114,6 +114,8 @@ export class ResourceSyncController {
 	private probeGeneration = 0;
 	private reconnectAttempt = 0;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	private failedSongRetryAttempt = 0;
 
 	constructor(
 		private readonly deps: ResourceSyncDeps,
@@ -304,6 +306,7 @@ export class ResourceSyncController {
 		this.lastEventId = null;
 		this.pendingSongIds.clear();
 		this.failedSongIds.clear();
+		this.clearFailedSongRetry();
 		this.queuedGenerationIds.clear();
 	}
 
@@ -585,7 +588,7 @@ export class ResourceSyncController {
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (this.songRevisions.get(songId) !== revision) return;
 			this.deps.applySong(song);
-			this.failedSongIds.delete(songId);
+			this.forgetFailedSong(songId);
 			for (const generation of song.generations) {
 				this.trackSeenGenerationId(generation.id);
 			}
@@ -594,14 +597,50 @@ export class ResourceSyncController {
 			if (!this.isCurrentEpoch(epoch)) return;
 			if (this.songRevisions.get(songId) !== revision) return;
 			if (err instanceof ApiError && err.status === 404) {
-				this.failedSongIds.delete(songId);
+				this.forgetFailedSong(songId);
 				this.deps.forgetSong(songId);
 				this.clearLiveErrorIfHealed();
 				return;
 			}
 			this.failedSongIds.add(songId);
 			this.setVisibleError(errorMessage(err));
+			this.scheduleFailedSongRetry();
 		}
+	}
+
+	private forgetFailedSong(songId: string): void {
+		this.failedSongIds.delete(songId);
+		if (this.failedSongIds.size === 0) this.failedSongRetryAttempt = 0;
+	}
+
+	/**
+	 * A song refresh that failed while the stream stays up has no stream
+	 * drop to piggyback on, and a network that returns without an `online`
+	 * event fires nothing either, so the failed songs retry on the stream's
+	 * own capped backoff until they land (#1032).
+	 */
+	private scheduleFailedSongRetry(): void {
+		if (this.failedSongRetryTimer !== null) return;
+		this.failedSongRetryAttempt += 1;
+		this.failedSongRetryTimer = setTimeout(() => {
+			this.failedSongRetryTimer = null;
+			void this.retryFailedSongs();
+		}, nextReconnectDelayMs(this.failedSongRetryAttempt));
+	}
+
+	private async retryFailedSongs(): Promise<void> {
+		if (!this.canFlush() || this.failedSongIds.size === 0) return;
+		for (const songId of this.failedSongIds) {
+			this.invalidateSong(songId);
+		}
+		await this.flushPending(this.epoch);
+	}
+
+	private clearFailedSongRetry(): void {
+		this.failedSongRetryAttempt = 0;
+		if (this.failedSongRetryTimer === null) return;
+		clearTimeout(this.failedSongRetryTimer);
+		this.failedSongRetryTimer = null;
 	}
 
 	private trackSeenGenerationId(generationId: string): void {

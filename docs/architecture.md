@@ -986,8 +986,10 @@ explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect and is retried
 on the next `hello`; a later successful fetch clears Retry. A refresh that got no
 answer at all reads "You're offline — retrying" rather than the browser's own
-`Failed to fetch`, and the next `online`, focus or visible event retries it; the
-same events restart a bootstrap that failed.
+`Failed to fetch`. A failed live refresh also retries on its own, on the streams'
+backoff capped below 10 seconds, so a network that returns without an `online`
+event still brings the take in; the next `online`, focus or visible event retries
+at once, and the same events restart a bootstrap that failed.
 The owner remembers the id of the last event it saw and reopens a dropped stream
 with that `last_event_id` query cursor, so an event sent while the phone's screen
 was off or the connection was down is replayed rather than lost. A completed or
