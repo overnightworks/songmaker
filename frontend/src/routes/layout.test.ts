@@ -376,6 +376,7 @@ describe('app shell', () => {
 
 	it('uses the same strip for song actions and opens the mounted drawer from it', async () => {
 		phoneAppBar.set({
+			kind: 'song',
 			title: 'Sommerlicht',
 			onrename: vi.fn(),
 			share: { isShared: false, shareSlug: null, onshare: vi.fn(), onunshare: vi.fn() },

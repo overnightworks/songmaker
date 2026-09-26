@@ -10,7 +10,11 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { HITBOX_FREQUENT_PX, RAIL_DRAWER_OPEN_LABEL } from '$lib/constants';
+import {
+	EDITOR_COWRITER_BACK_LABEL,
+	HITBOX_FREQUENT_PX,
+	RAIL_DRAWER_OPEN_LABEL
+} from '$lib/constants';
 import PhoneAppBar from './PhoneAppBar.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -35,6 +39,7 @@ describe('PhoneAppBar', () => {
 	it('offers four song slots with named touch actions and inline rename', async () => {
 		const onrename = vi.fn(async () => undefined);
 		phoneAppBar.set({
+			kind: 'song',
 			title: 'Sommerlicht',
 			onrename,
 			share: {
@@ -80,5 +85,29 @@ describe('PhoneAppBar', () => {
 		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
 		await tick();
 		expect(onrename).toHaveBeenCalledWith('Abendlicht');
+	});
+
+	it('renders a pushed screen as a single back control and title, with no drawer, share, or menu', async () => {
+		const onback = vi.fn();
+		phoneAppBar.set({ kind: 'screen', title: 'Co-Writer', onback });
+		const target = document.createElement('div');
+		target.style.width = '390px';
+		document.body.append(target);
+		mounted.push(mount(PhoneAppBar, { target }));
+		await tick();
+		expect(target.querySelector('header')?.children).toHaveLength(2);
+		expect(target.querySelector('h1')?.textContent?.trim()).toBe('Co-Writer');
+		expect(target.querySelector('.brand')).toBeNull();
+		expect(target.querySelector('.drawer-trigger')).toBeNull();
+		expect(target.querySelector('[aria-label="Share song"]')).toBeNull();
+		expect(target.querySelector('[aria-label="Song menu"]')).toBeNull();
+		const backButton = getByRoleButton(target, EDITOR_COWRITER_BACK_LABEL);
+		expect(backButton.dataset.hitbox).toBe('frequent');
+		expect(minSquarePx(backButton, EDITOR_COWRITER_BACK_LABEL)).toEqual({
+			width: HITBOX_FREQUENT_PX,
+			height: HITBOX_FREQUENT_PX
+		});
+		backButton.click();
+		expect(onback).toHaveBeenCalledTimes(1);
 	});
 });

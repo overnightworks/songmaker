@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import {
 		editLyrics,
 		editPrompt,
@@ -9,26 +10,23 @@
 	} from '$lib/stores/editor';
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import {
-		EDITOR_CHAT_LABEL,
 		EDITOR_LYRICS_LABEL,
 		EDITOR_STYLE_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
-		EDITOR_TAB_TAKES_LABEL
+		EDITOR_TAB_TAKES_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL
 	} from '$lib/constants';
-	import CoWriterPanel from '../CoWriterPanel.svelte';
 	import TakeStrip from './TakeStrip.svelte';
 
 	interface Props {
 		song: SongItem;
-		allSongs: SongItem[];
 		coWriterOpen: boolean;
 		compact: boolean;
-		onturncompleted: () => void;
+		cowriterPanel: Snippet;
+		onopencowriter: () => void;
 	}
 
-	let { song, allSongs, coWriterOpen, compact, onturncompleted }: Props = $props();
-
-	let mobileSubTab = $state<'chat' | 'lyrics'>('chat');
+	let { song, coWriterOpen, compact, cowriterPanel, onopencowriter }: Props = $props();
 
 	const dirty = $derived($isDirty);
 	const latestVersion = $derived<VersionItem | null>($versions[0] ?? null);
@@ -42,67 +40,31 @@
 </script>
 
 {#if coWriterOpen}
-	<div class="cowriter-mode" class:compact>
-		{#if compact}
-			<div class="mobile-subtabs" role="tablist" aria-label="Write">
-				<button
-					type="button"
-					role="tab"
-					class:active={mobileSubTab === 'chat'}
-					aria-selected={mobileSubTab === 'chat'}
-					onclick={() => (mobileSubTab = 'chat')}
-				>
-					{EDITOR_CHAT_LABEL}
-				</button>
-				<button
-					type="button"
-					role="tab"
-					class:active={mobileSubTab === 'lyrics'}
-					aria-selected={mobileSubTab === 'lyrics'}
-					onclick={() => (mobileSubTab = 'lyrics')}
-				>
-					{EDITOR_LYRICS_LABEL}
-				</button>
-			</div>
-		{/if}
-
+	<div class="cowriter-mode">
 		<div class="cowriter-columns">
-			{#if !compact || mobileSubTab === 'chat'}
-				<div class="cowriter-chat">
-					<CoWriterPanel
-						currentSongId={song.id}
-						currentAlbumId={song.album_id}
-						currentAlbumTitle={song.album_title}
-						{allSongs}
-						versions={$versions}
-						{onturncompleted}
-					/>
-				</div>
-			{/if}
-			{#if !compact || mobileSubTab === 'lyrics'}
-				<div class="cowriter-lyrics">
-					<span class="lyrics-label"
-						>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span
-					>
+			<div class="cowriter-chat">
+				{@render cowriterPanel()}
+			</div>
+			<div class="cowriter-lyrics">
+				<span class="lyrics-label"
+					>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span
+				>
+				<textarea
+					class="lyrics-area"
+					value={$editLyrics}
+					oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
+				<label class="style-field">
+					<span>{EDITOR_STYLE_LABEL}</span>
 					<textarea
-						class="lyrics-area"
-						value={$editLyrics}
-						oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
-					<label class="style-field">
-						<span>{EDITOR_STYLE_LABEL}</span>
-						<textarea
-							rows="2"
-							value={$editPrompt}
-							oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
-					</label>
-				</div>
-			{/if}
-			{#if !compact}
-				<div class="cowriter-takes">
-					<span class="takes-heading">{EDITOR_TAB_TAKES_LABEL}</span>
-					<TakeStrip {song} />
-				</div>
-			{/if}
+						rows="2"
+						value={$editPrompt}
+						oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
+				</label>
+			</div>
+			<div class="cowriter-takes">
+				<span class="takes-heading">{EDITOR_TAB_TAKES_LABEL}</span>
+				<TakeStrip {song} />
+			</div>
 		</div>
 	</div>
 {:else}
@@ -121,6 +83,10 @@
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
 		{#if compact}
+			<button type="button" class="cowriter-row" data-hitbox="text" onclick={onopencowriter}>
+				<span class="cowriter-row-label">{EDITOR_VIEW_COWRITER_LABEL}</span>
+				<span class="chevron" aria-hidden="true">›</span>
+			</button>
 			<div class="compact-takes">
 				<TakeStrip {song} />
 			</div>
@@ -137,6 +103,34 @@
 
 	.compact-takes {
 		min-width: 0;
+	}
+
+	.cowriter-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		color: var(--text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.cowriter-row-label {
+		flex: 1;
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		font-family: var(--font-display);
+		letter-spacing: 1px;
+	}
+
+	.cowriter-row .chevron {
+		flex-shrink: 0;
+		color: var(--text-subtle);
 	}
 
 	.edit-field {
@@ -204,10 +198,12 @@
 	}
 
 	/* Filling a fixed height only works where every part has a column of its
-	   own to scroll in: the compact sheet, which shows one at a time, and the
-	   editor above its two-up floor. Stacked, they run on and the workspace
-	   scrolls — sharing one height squeezed the lyrics column below its
-	   content, which then spilled over the take strip (#185). */
+	   own to scroll in — the editor above its two-up floor. Stacked, they run
+	   on and the workspace scrolls — sharing one height squeezed the lyrics
+	   column below its content, which then spilled over the take strip
+	   (#185). Co-Writer mode itself is desktop-only now: the phone screen
+	   that replaces the page (#990) instantiates CoWriterPanel directly, so
+	   this block never renders compact. */
 	.cowriter-mode {
 		display: flex;
 		flex-direction: column;
@@ -216,43 +212,9 @@
 		flex-shrink: 0;
 	}
 
-	.cowriter-mode.compact {
-		height: 100%;
-		flex-shrink: 1;
-	}
-
-	.cowriter-mode.compact .cowriter-columns {
-		flex: 1;
-	}
-
-	.mobile-subtabs {
-		display: flex;
-		gap: 2px;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.mobile-subtabs button {
-		padding: 0.5rem 1rem;
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.8rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		cursor: pointer;
-	}
-
-	.mobile-subtabs button.active {
-		color: var(--primary);
-		border-color: var(--primary);
-	}
-
 	/* Chat, lyrics and the take strip stand side by side only where the editor
 	   has the room for them (the `editor` container SongDetailView owns, #185).
-	   Below that — and in the compact sheet, which is outside that container —
-	   they stack, and the strip goes back to scrolling sideways. */
+	   Below that they stack, and the strip goes back to scrolling sideways. */
 	.cowriter-columns {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
@@ -282,7 +244,7 @@
 	   cap on a window tall enough to make it the smaller side. A song whose
 	   params render a taller (wrapped) chip row eats into this margin — the
 	   same approximation the wrapped-header estimate already carries. */
-	.cowriter-mode:not(.compact) .cowriter-chat {
+	.cowriter-chat {
 		height: min(60dvh, calc(100dvh - 441px));
 	}
 
@@ -292,7 +254,7 @@
 			min-height: 0;
 		}
 
-		.cowriter-mode:not(.compact) .cowriter-chat {
+		.cowriter-chat {
 			height: auto;
 		}
 
