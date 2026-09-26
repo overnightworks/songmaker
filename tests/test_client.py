@@ -703,6 +703,22 @@ def test_poll_reports_the_structured_progress_and_ignores_the_log_text() -> None
     ]
 
 
+def test_poll_reports_a_cold_task_as_loading_its_model_until_acestep_starts_it() -> None:
+    reported = _poll_reporting_progress(
+        _running_entry("Loading checkpoint shards 1/4", progress=0.0, stage="queued"),
+        _running_entry("Loading checkpoint shards 4/4", progress=0.0, stage="queued"),
+        _running_entry("running", progress=0.01, stage="running"),
+        _running_entry("Phase 1: Generating CoT metadata", progress=0.1, stage="LM"),
+    )
+
+    assert [p.phase for p in reported] == [
+        AceStepPhase.LOADING_MODEL,
+        AceStepPhase.LOADING_MODEL,
+        AceStepPhase.WRITING,
+        AceStepPhase.WRITING,
+    ]
+
+
 def test_poll_skips_an_entry_without_a_progress_value(caplog: pytest.LogCaptureFixture) -> None:
     reported = _poll_reporting_progress(_running_entry("8/50 [00:02<00:13]"))
 
