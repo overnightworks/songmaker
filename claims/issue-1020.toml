@@ -1,0 +1,8 @@
+claim_id = "a40150e7cec748b980df9bdb765530f8"
+agent = "claude-head"
+role = "builder"
+base = "8719cf7105a77d0ab6795e8cb7ceb51697a008bd"
+branch = "claude/issue-1020-take-arrives"
+scope = ["frontend/e2e/take-arrives.spec.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "src/songmaker_cli/db/queries/resource_events.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/resource_events.py", "tests/test_resource_event_api.py", "tests/test_resource_events.py"]
+opened_commit = "82df2511d8afc9a725d15fc4a2a2ecd5bc25e067"
+whole_reason = "the job's terminal refresh (frontend) and the event stream resume (backend) close the same gap"
