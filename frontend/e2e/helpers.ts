@@ -69,6 +69,16 @@ export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
  */
 export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 55;
 
+/**
+ * What `take-arrives.spec.ts` costs the API, measured on a green run against a
+ * clean stack: opening the album, selecting the song with its seeded running
+ * job, the Takes tab, then the job's terminal song refresh once the job ends
+ * over its own open SSE stream — measured 23 requests. The job seeding and its
+ * completion run directly against the database, the same way
+ * `SONG_PHONE_FLOW_API_REQUEST_BUDGET`'s do. Mobile-only.
+ */
+export const TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET = 30;
+
 const API_PATH_PREFIX = '/api';
 
 /** Which shell a test drives: the mobile project is the emulated phone. */
