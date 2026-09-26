@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from songmaker_cli.constants import (
     GENERATION_ETA_MIN_PROGRESS,
     JOB_TERMINAL_STATUSES,
+    GenerationPhase,
     JobStatus,
     JobType,
 )
@@ -33,9 +34,9 @@ def _remaining_time_estimate(
     if job.type == JobType.GENERATE:
         if job.progress >= 1:
             return 0
-        if job.progress < GENERATION_ETA_MIN_PROGRESS or job.running_since is None:
+        if job.progress < GENERATION_ETA_MIN_PROGRESS or job.generation_started_at is None:
             return REMAINING_TIME_ESTIMATE_CALCULATING
-        elapsed_seconds = (now - aware_timestamp(job.running_since)).total_seconds()
+        elapsed_seconds = (now - aware_timestamp(job.generation_started_at)).total_seconds()
         if elapsed_seconds <= 0:
             return REMAINING_TIME_ESTIMATE_CALCULATING
         return ceil(elapsed_seconds * (1 - job.progress) / job.progress)
@@ -73,6 +74,7 @@ class JobResponse(BaseModel):
     type: str
     status: str
     progress: float = 0.0
+    phase: GenerationPhase | None = None
     take_index: int | None = None
     take_count: int | None = None
     current_epoch: int | None = None
@@ -99,6 +101,7 @@ class JobResponse(BaseModel):
             type=job.type,
             status=job.status,
             progress=job.progress,
+            phase=job.phase if job.status == JobStatus.RUNNING else None,
             take_index=job.take_index,
             take_count=job.take_count,
             current_epoch=job.current_epoch,
