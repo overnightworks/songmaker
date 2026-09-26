@@ -25,11 +25,11 @@
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
 		RAIL_LIBRARY_LOAD_ERROR,
-		RAIL_LIBRARY_NAV_LABEL,
-		RAIL_PLAYING_MARKER_LABEL
+		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
 	import { titleInitials } from '$lib/utils/format';
+	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_ALBUM_ITEM_CLASS, RAIL_ALL_ALBUMS_ITEM_CLASS } from './rail-item-selector';
 
@@ -54,7 +54,6 @@
 	const surface = $derived($librarySurface);
 	const currentSongId = $derived($selectedSongId);
 	const current = $derived(audioPlayer.current);
-	const playing = $derived(audioPlayer.status === 'playing');
 	const openAlbumId = $derived(collection?.kind === 'album' ? collection.id : null);
 	const query = $derived($railTreeQuery.trim().toLowerCase());
 	const filtering = $derived(query.length > 0);
@@ -167,10 +166,6 @@
 	function openAllAlbums(): void {
 		closeLibraryGroupForWall();
 		void openLibraryWall();
-	}
-
-	function isSongPlaying(song: SongItem): boolean {
-		return current?.songId === song.id && playing;
 	}
 
 	function trackMeta(song: SongItem): string {
@@ -298,15 +293,7 @@
 													class:row-active={song.id === currentSongId}
 													onclick={() => onTrackClick(song)}
 												>
-													{#if isSongPlaying(song)}
-														<span
-															class="equalizer"
-															role="img"
-															aria-label={RAIL_PLAYING_MARKER_LABEL}
-														>
-															<span></span><span></span><span></span>
-														</span>
-													{/if}
+													<PlayingMark current={current?.songId === song.id} />
 													<span class="row-title">{song.title}</span>
 													<span class="row-meta">{trackMeta(song)}</span>
 												</button>
@@ -508,51 +495,6 @@
 		.caret,
 		.album-songs {
 			transition: none;
-		}
-	}
-
-	.equalizer {
-		display: inline-flex;
-		align-items: flex-end;
-		gap: 2px;
-		width: 12px;
-		height: 12px;
-		flex-shrink: 0;
-	}
-
-	.equalizer span {
-		width: 2px;
-		background: var(--accent);
-		animation: equalize 0.9s ease-in-out infinite;
-	}
-
-	.equalizer span:nth-child(1) {
-		height: 40%;
-		animation-delay: -0.6s;
-	}
-
-	.equalizer span:nth-child(2) {
-		height: 100%;
-		animation-delay: -0.3s;
-	}
-
-	.equalizer span:nth-child(3) {
-		height: 65%;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.equalizer span {
-			animation: none;
-		}
-	}
-
-	@keyframes equalize {
-		0%,
-		100% {
-			height: 30%;
-		}
-		50% {
-			height: 100%;
 		}
 	}
 </style>
