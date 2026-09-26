@@ -827,4 +827,52 @@ describe('CoWriterPanel proposal target (#238)', () => {
 
 		expect(target.querySelector('.tool-target')).toBeNull();
 	});
+
+	it("keeps an earlier reply's proposal target after the next turn is answered", async () => {
+		const answered = (userId: string, assistantId: string): CoWriterStreamEvent => ({
+			type: 'final',
+			conversation_id: 'c1',
+			user_message: chatMessage(userId, 'user', 'request'),
+			assistant_message: chatMessage(assistantId, 'assistant', 'Done')
+		});
+		streamCoWriterTurn
+			.mockReturnValueOnce(
+				turnEvents([
+					{
+						type: 'tool_call',
+						tool_use_id: 't1',
+						name: 'update_song_lyrics',
+						input: { song_id: 's2', lyrics: 'new verse' }
+					},
+					answered('u1', 'a1')
+				])
+			)
+			.mockReturnValueOnce(turnEvents([answered('u2', 'a2')]));
+		conversationPages(
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'the request'),
+				chatMessage('a1', 'assistant', 'Done'),
+				chatMessage('u2', 'user', 'thanks'),
+				chatMessage('a2', 'assistant', 'Done')
+			)
+		);
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const target = await render({
+			allSongs: [
+				song({ slug: 'open-song', title: 'Open Song', generation_count: 0 }),
+				song({ slug: 'open-song', generation_count: 0, id: 's2', title: 'Other Song' })
+			]
+		});
+		await sendMessage(target, 'update the other song');
+
+		await sendTurn(target, 'thanks');
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(3));
+		await tick();
+		expect(chatView(target)).toHaveLength(4);
+
+		const badge = target.querySelector<HTMLElement>('.tool-target');
+		expect(badge?.textContent?.trim()).toBe('for: Other Song');
+		expect(badge?.classList.contains('foreign')).toBe(true);
+	});
 });
