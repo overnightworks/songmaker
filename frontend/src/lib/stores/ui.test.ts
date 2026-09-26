@@ -263,7 +263,8 @@ describe('transportBarHidden', () => {
 	] as const)('%s', async (_, surface, keyboardClosed, hidden) => {
 		const viewport = phoneViewport();
 		if (!keyboardClosed) viewport.openKeyboard();
-		const { transportBarHidden, watchTypingOnPhone } = await import('./ui');
+		const { watchTypingOnPhone } = await import('./ui');
+		const { transportBarHidden } = await import('./transportBar');
 		const { nowPlayingSurface } = await import('./player');
 		const lyrics = document.createElement('textarea');
 		document.body.replaceChildren(lyrics);
