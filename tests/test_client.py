@@ -26,6 +26,7 @@ from acestep_engine.errors import (
     TaskSubmissionError,
 )
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase, AceStepProgress
 
 
 def test_is_acestep_available_true() -> None:
@@ -655,76 +656,58 @@ def test_poll_result_empty_data_continues() -> None:
     assert result.seed == 42
 
 
-# ── poll with progress_text logging ────────────────────────────────
+# ── poll progress reporting ────────────────────────────────────────
 
 
-def test_poll_result_logs_progress_text() -> None:
-    client = AceStepClient()
+def _running_entry(progress_text: str, **item: object) -> dict[str, object]:
+    """A running ``/query_result`` entry shaped like the fork's local cache."""
+    return {
+        "task_id": "abc",
+        "status": 0,
+        "progress_text": progress_text,
+        "result": json.dumps([{"file": "", "status": 0, **item}]),
+    }
 
-    progress_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 0, "progress_text": "Generating bars 10/20"}],
-    }).encode()
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
+
+def _poll_reporting_progress(*running_entries: dict[str, object]) -> list[AceStepProgress]:
+    reported: list[AceStepProgress] = []
     success_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
+        "data": [{
+            "task_id": "abc",
+            "status": 1,
+            "result": json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}]),
+        }],
     }).encode()
-
-    call_count = 0
-
-    def fake_monotonic() -> float:
-        nonlocal call_count
-        call_count += 1
-        return 0.0
-
     with (
         patch("acestep_engine.client.urlopen") as mock_urlopen,
         patch("acestep_engine.client.time.sleep"),
-        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
     ):
         mock_urlopen.side_effect = [
-            _mock_response(progress_resp),
+            *(_mock_response(json.dumps({"data": [entry]}).encode()) for entry in running_entries),
             _mock_response(success_resp),
         ]
-        result = client._poll_result("abc")
-
+        result = AceStepClient()._poll_result("abc", on_progress=reported.append)
     assert result.audio_path == "/v1/audio?path=test.wav"
-    assert result.seed == 1
+    return reported
 
 
-# ── poll with no progress_text logging ─────────────────────────────
+def test_poll_reports_the_structured_progress_and_ignores_the_log_text() -> None:
+    reported = _poll_reporting_progress(
+        _running_entry("Loading checkpoint shards 4/4 [00:03<00:00]", progress=0.1, stage="LM"),
+        _running_entry("0/1 [00:00<?, ?it/s]", progress=0.75, stage="Generating music"),
+    )
+
+    assert [(p.phase, p.fraction) for p in reported] == [
+        (AceStepPhase.WRITING, 0.0),
+        (AceStepPhase.RENDERING, pytest.approx(0.5)),
+    ]
 
 
-def test_poll_result_logs_elapsed_without_progress_text() -> None:
-    client = AceStepClient()
+def test_poll_skips_an_entry_without_a_progress_value(caplog: pytest.LogCaptureFixture) -> None:
+    reported = _poll_reporting_progress(_running_entry("8/50 [00:02<00:13]"))
 
-    progress_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 0, "progress_text": ""}],
-    }).encode()
-    result_items = json.dumps([{"file": "/v1/audio?path=test.wav", "seed_value": "1"}])
-    success_resp = json.dumps({
-        "data": [{"task_id": "abc", "status": 1, "result": result_items}],
-    }).encode()
-
-    call_count = 0
-
-    def fake_monotonic() -> float:
-        nonlocal call_count
-        call_count += 1
-        return 0.0
-
-    with (
-        patch("acestep_engine.client.urlopen") as mock_urlopen,
-        patch("acestep_engine.client.time.sleep"),
-        patch("acestep_engine.client.time.monotonic", side_effect=fake_monotonic),
-    ):
-        mock_urlopen.side_effect = [
-            _mock_response(progress_resp),
-            _mock_response(success_resp),
-        ]
-        result = client._poll_result("abc")
-
-    assert result.audio_path == "/v1/audio?path=test.wav"
-    assert result.seed == 1
+    assert reported == []
+    assert sum(record.levelname == "WARNING" for record in caplog.records) == 1
 
 
 # ── poll KeyboardInterrupt ─────────────────────────────────────────
