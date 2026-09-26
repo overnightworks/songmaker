@@ -1012,7 +1012,7 @@ stream.
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
 | DELETE | `/api/songs/{id}/chat` | user | Clear chat history |
 | GET | `/api/chat/recent` | user | Songs with active chats |
-| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. It captures the persisted provider/model/route once before streaming. A selected-route failure emits exactly one 503 frame with safe `provider`, `route`, and normalized `reason`; it never retries the sibling route. |
+| POST | `/api/chat/turn` | user | Co-writer turn — SSE stream of assistant text, tool calls, and a final event with persisted messages. The user message is persisted when the turn starts; the turn then runs as a task of its own, so a client that disconnects only stops listening, and the reply and any song edits persist when the turn completes. A turn that ends without a reply keeps the message it was started with (never withdrawn), and a turn that resends that unanswered message's exact text answers it instead of repeating it. `GET /api/conversations/{id}` reports `turn_running` from the user's active chat job, which the stale-job reaper ends when the web process dies; the panel follows a turn only while it is true and shows a trailing user message of a turn that no longer runs as unanswered, with Try again. It captures the persisted provider/model/route once before streaming. A selected-route failure emits exactly one 503 frame with safe `provider`, `route`, and normalized `reason`; it never retries the sibling route. |
 | GET | `/api/settings/cowriter` | user | Co-writer provider/model plus the effective `provider_routes` map and a typed readiness/catalogue snapshot for both routes of every provider. The existing provider-keyed model fields remain the selected-route projection. |
 | PUT | `/api/settings/cowriter` | admin | Atomically persist provider, model, optional complete route map, and history-tail budget. Omitting the map retains it. An unknown provider or model is rejected with a string detail; a route that cannot answer is saved with its reason in the response status. |
 | GET/PUT | `/api/settings/cover` | admin | Read or persist Cover's independent provider, route, and model. The selection is retained even when its route cannot make images; the next Cover job reports the named fixed failure and never falls back. |
@@ -1169,8 +1169,8 @@ parent's coherence budget, which is spent after the child returns.
   API ─→ route by type ──┤
                          └─ arq:queue:scoring → Scoring Worker(s)
 
-  Chat runs inline in the API process (no arq queue).
-  Client cancellation follows the `POST /api/chat/turn` contract.
+  Chat runs inline in the API process (no arq queue), as a task of its own:
+  a client that disconnects stops listening, not the turn.
 ```
 
 **Music worker** (`music_worker.py`):
@@ -1247,8 +1247,9 @@ never been observed; with a newer observation, it is `alive`.
   age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no
   worker liveness signal and queued chat can only use the age guard.
-  A client-aborted chat turn follows the `POST /api/chat/turn` cancellation
-  contract rather than waiting for the running-job heartbeat reaper.
+  A client that disconnects does not end its chat turn; the turn runs to
+  completion. A turn whose web process dies is ended by the running-job
+  heartbeat reaper.
 
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 

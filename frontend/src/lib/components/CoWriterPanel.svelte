@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import {
 		streamCoWriterTurn,
 		fetchConversations,
@@ -17,6 +17,7 @@
 	import type {
 		ChatMessageItem,
 		ConversationItem,
+		ConversationMessagesResponse,
 		MemoryBundle,
 		SongItem,
 		VersionItem
@@ -25,6 +26,8 @@
 	import { health } from '$lib/stores/health';
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
+		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
+		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
@@ -123,6 +126,11 @@
 	let selectedMentionIdx = $state(0);
 	let providerName = $state('claude');
 	let providerModel = $state('');
+	let unmounted = false;
+
+	onDestroy(() => {
+		unmounted = true;
+	});
 
 	$effect(() => {
 		void currentSongId;
@@ -166,21 +174,81 @@
 		}
 	}
 
+	function toMessages(history: ChatMessageItem[]): Message[] {
+		return history.map((m) => ({
+			role: m.role as 'user' | 'assistant',
+			text: m.content
+		}));
+	}
+
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
 		historyError = '';
+		let conversation: ConversationMessagesResponse | null = null;
 		try {
-			const result = await fetchConversationMessages(conversationId);
-			messages = result.messages.map((m: ChatMessageItem) => ({
-				role: m.role as 'user' | 'assistant',
-				text: m.content
-			}));
+			conversation = await fetchConversationMessages(conversationId);
+			messages = toMessages(conversation.messages);
 		} catch {
 			messages = [];
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
 			void scrollToBottom();
+		}
+		if (!conversation || conversationId !== activeConversationId || loading) return;
+		if (conversation.turn_running) void followRunningTurn(conversationId);
+		else markUnansweredLastMessage();
+	}
+
+	/**
+	 * Wait out a turn the server still runs — started by a panel since left or
+	 * by another tab — and show how it ended. The server's chat job decides
+	 * whether a turn runs; the stale-job reaper ends one whose process died (#1014).
+	 */
+	async function followRunningTurn(conversationId: string): Promise<void> {
+		const placeholderIndex = messages.length;
+		messages = [...messages, { role: 'assistant', text: '' }];
+		loading = true;
+		let consecutiveFailedPolls = 0;
+		try {
+			while (consecutiveFailedPolls < COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT) {
+				await new Promise((resolve) => setTimeout(resolve, COWRITER_RUNNING_TURN_POLL_MS));
+				if (unmounted || viewingConversationId !== conversationId) return;
+				let conversation: ConversationMessagesResponse;
+				try {
+					conversation = await fetchConversationMessages(conversationId);
+				} catch {
+					consecutiveFailedPolls += 1;
+					continue;
+				}
+				consecutiveFailedPolls = 0;
+				if (conversation.turn_running) continue;
+				messages = toMessages(conversation.messages);
+				markUnansweredLastMessage();
+				if (onturncompleted) onturncompleted();
+				return;
+			}
+			messages = messages.slice(0, placeholderIndex);
+			historyError = 'Conversation history unavailable';
+		} finally {
+			loading = false;
+			void scrollToBottom();
+		}
+	}
+
+	function markUnansweredLastMessage(): void {
+		const last = messages.at(-1);
+		if (last?.role !== 'user') return;
+		messages = [...messages.slice(0, -1), { ...last, error: INCOMPLETE_TURN_MESSAGE }];
+	}
+
+	function markTurnFailed(assistantIndex: number, failureMessage: string): void {
+		messages = messages.map((message, index) =>
+			index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
+		);
+		const current = messages[assistantIndex];
+		if (current && !current.text) {
+			messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
 		}
 	}
 
@@ -295,16 +363,7 @@
 			}
 		} finally {
 			loading = false;
-			if (streamError) {
-				const failureMessage = streamError;
-				messages = messages.map((message, index) =>
-					index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
-				);
-				const current = messages[assistantIndex];
-				if (current && !current.text) {
-					messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
-				}
-			}
+			if (streamError) markTurnFailed(assistantIndex, streamError);
 			void scrollToBottom();
 		}
 	}
