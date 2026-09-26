@@ -1268,6 +1268,12 @@ export function isPlaylistEntryCurrent(entry: PlaylistEntryItem): boolean {
 	);
 }
 
+// Whether a song is the one the transport is holding right now, whichever of
+// its takes that is: an album row and its rail track mark the song, not a take.
+export function isSongCurrent(songId: string): boolean {
+	return audioPlayer.current?.songId === songId;
+}
+
 // A playlist entry's `position` is the playlist's order of record, so a
 // queue is always built from that order — shuffled off it while shuffle is
 // on, and restored to it the moment shuffle goes off, instead of freezing
