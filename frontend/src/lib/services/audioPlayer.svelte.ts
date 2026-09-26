@@ -69,7 +69,7 @@ class AudioPlayer {
 	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
 	private lastCheckedTime = 0;
 	private stillChecks = 0;
-	private reloadCount = 0;
+	private recoveryUrlSerial = 0;
 	private pauseRequestedByApp = false;
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
@@ -199,7 +199,6 @@ class AudioPlayer {
 
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
-		this.reloadCount = 0;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = opts.startAt ?? null;
 		this.lastObservedTime = 0;
@@ -250,12 +249,7 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error') {
-			if (this.streamEngine.active) {
-				this.recoveryAttempts = 0;
-				void this.recoverStream('media-error');
-				return;
-			}
-			this.load(this.current, { autoplay: true });
+			this.reloadOnPlay('media-error');
 			return;
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
@@ -263,7 +257,7 @@ class AudioPlayer {
 			return;
 		}
 		if (this.clockStoodStill) {
-			this.reloadFrozenTake();
+			this.reloadOnPlay('frozen-clock');
 			return;
 		}
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
@@ -368,7 +362,6 @@ class AudioPlayer {
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
-		this.reloadCount = 0;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -401,7 +394,6 @@ class AudioPlayer {
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
-		this.reloadCount = 0;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -518,8 +510,13 @@ class AudioPlayer {
 		});
 	}
 
-	private urlWithRecovery(url: string, recoveryAttempt: number): string {
-		return `${url}${url.includes('?') ? '&' : '?'}recover=${recoveryAttempt}`;
+	// A recovery URL is never reused, not across loads or page reloads either:
+	// the browser keeps a take for good, so only a URL it has not seen yet
+	// makes it fetch the take again.
+	private urlWithRecovery(url: string): string {
+		this.recoveryUrlSerial += 1;
+		const token = `${Date.now()}-${this.recoveryUrlSerial}`;
+		return `${url}${url.includes('?') ? '&' : '?'}recover=${token}`;
 	}
 
 	private scheduleStallRecovery(): void {
@@ -575,14 +572,16 @@ class AudioPlayer {
 		return this.stillChecks > 0;
 	}
 
-	private reloadFrozenTake(): void {
+	// A play on a broken or silent element fetches the take again rather than
+	// resuming what the element holds.
+	private reloadOnPlay(reason: 'media-error' | 'frozen-clock'): void {
+		this.recoveryAttempts = 0;
 		if (this.streamEngine.active) {
-			this.recoveryAttempts = 0;
-			void this.recoverStream('frozen-clock');
+			void this.recoverStream(reason);
 			return;
 		}
 		const position = this.audio?.currentTime || this.currentTime;
-		this.reloadAt(Math.max(0, position - RECOVERY_SEEK_BACK_SECONDS), 'frozen-clock');
+		this.reloadAt(Math.max(0, position - RECOVERY_SEEK_BACK_SECONDS), reason);
 	}
 
 	private pauseElement(el: HTMLAudioElement): void {
@@ -638,12 +637,9 @@ class AudioPlayer {
 		return true;
 	}
 
-	// Every reload asks for a URL this load has not used yet, so the browser
-	// fetches the take again instead of replaying the entry it already holds.
 	private reloadAt(seekTime: number, reason: RecoveryReason): void {
 		const el = this.audio;
 		if (!el || !this.current || !this.currentUrl) return;
-		this.reloadCount += 1;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = seekTime;
 		this.currentTime = seekTime;
@@ -655,13 +651,13 @@ class AudioPlayer {
 
 		console.debug('Recovering audio playback', {
 			reason,
-			attempt: this.reloadCount,
+			attempt: this.recoveryAttempts,
 			seekTime,
 			generationId: this.current.generation.id
 		});
 
 		this.pauseElement(el);
-		this.loadSource(el, this.urlWithRecovery(this.currentUrl, this.reloadCount));
+		this.loadSource(el, this.urlWithRecovery(this.currentUrl));
 	}
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
@@ -771,7 +767,7 @@ class AudioPlayer {
 		this.streamEngine.resumeAt(absoluteTime);
 		this.pauseElement(el);
 		const url = state.manifest.stream_url;
-		this.loadSource(el, this.urlWithRecovery(url, this.recoveryAttempts));
+		this.loadSource(el, this.urlWithRecovery(url));
 	}
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
