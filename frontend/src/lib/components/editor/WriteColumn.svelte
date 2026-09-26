@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { tick, type Snippet } from 'svelte';
 	import {
 		editLyrics,
 		editPrompt,
@@ -43,17 +43,33 @@
 	// scroll box, which is what this replaces. Desktop keeps its own
 	// resizable, min-height-floored box untouched — this action only ever
 	// touches the node when `active` is true. `value` is watched too so a
-	// draft loaded from the store (switching songs) resizes the same as one
-	// typed in.
+	// draft loaded from the store (switching songs, a co-writer write, a
+	// version restore) resizes the same as one typed in — but `update` runs
+	// as a render effect before the template effect that lands the new
+	// `value` on the textarea, so it must wait a tick before measuring, or it
+	// reads the old DOM value and leaves the field short. `scrollHeight` sits
+	// inside the border box while the set height is the border-box height
+	// (`box-sizing: border-box`), so the border itself has to be added back
+	// on top. A window resize (rotation) re-wraps the same text to a
+	// different height, so the listener stays live for as long as the field
+	// does.
 	function autogrowTextarea(node: HTMLTextAreaElement, params: { active: boolean; value: string }) {
 		function resize() {
 			node.style.height = 'auto';
-			node.style.height = `${node.scrollHeight}px`;
+			node.style.height = `${node.scrollHeight + node.offsetHeight - node.clientHeight}px`;
 		}
+		// addEventListener/removeEventListener are no-ops on a listener that's
+		// already (not) registered, so this can run unconditionally on every
+		// call instead of tracking a redundant "currently active" flag.
 		function apply(next: { active: boolean; value: string }) {
 			params = next;
-			if (params.active) resize();
-			else node.style.height = '';
+			if (params.active) {
+				tick().then(resize);
+				window.addEventListener('resize', resize);
+			} else {
+				node.style.height = '';
+				window.removeEventListener('resize', resize);
+			}
 		}
 		node.addEventListener('input', resize);
 		apply(params);
@@ -61,6 +77,7 @@
 			update: apply,
 			destroy() {
 				node.removeEventListener('input', resize);
+				window.removeEventListener('resize', resize);
 			}
 		};
 	}
