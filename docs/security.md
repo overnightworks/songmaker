@@ -337,6 +337,7 @@ All responses include:
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from a peer inside a `TRUSTED_PROXIES` network)
 - `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
+- `Cache-Control: private, max-age=31536000, immutable` on generation audio: `/audio/*` and every `/shared/**/audio/*` route (`sharing_api.py`). A generation file never changes under its name, so the listener's browser keeps it for a year, while `private` forbids any shared cache (CDN, proxy) from holding it. Consequence: a revoked share stays playable from that listener's own browser cache. Queue-stream snapshot audio is not a generation file — it expires within hours — so both `/api/queue-streams/{id}/audio` and `/shared/queue-streams/{id}/audio` send `no-store`.
 
 ## CORS
 
