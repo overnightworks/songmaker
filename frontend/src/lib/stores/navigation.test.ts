@@ -13,8 +13,10 @@ import SongDetailView from '$lib/components/SongDetailView.svelte';
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
 import {
 	captureLibraryScroll,
+	currentLibraryHistoryState,
 	detailTab,
 	isLibraryHistoryState,
+	leaveRestoredLibraryHistory,
 	libraryScrollAnchor,
 	librarySurface,
 	loadLibraryHistoryPageForTests,
@@ -1347,16 +1349,20 @@ describe('compact Now Playing owns one history entry', () => {
 		discardDraft();
 	});
 
+	function reloadBeforeNavigationStarts(): void {
+		persistLibraryHistory();
+		stopNavigation();
+		resetNavigationForTests();
+		closeNowPlaying();
+		loadLibraryHistoryPageForTests();
+		history.replaceState(SVELTEKIT_START_ENTRY, '');
+	}
+
 	it.each([
 		{
 			way: 'a reload',
 			reach: () => {
-				persistLibraryHistory();
-				stopNavigation();
-				resetNavigationForTests();
-				closeNowPlaying();
-				loadLibraryHistoryPageForTests();
-				history.replaceState(SVELTEKIT_START_ENTRY, '');
+				reloadBeforeNavigationStarts();
 				stopNavigation = initNavigation();
 			}
 		},
@@ -1388,6 +1394,27 @@ describe('compact Now Playing owns one history entry', () => {
 			surface: 'detail'
 		});
 	});
+
+	it.each([
+		{ how: 'pushes', path: '/settings', write: history.pushState },
+		{ how: 'replaces', path: '/login', write: history.replaceState }
+	])(
+		'stays where a navigation that $how the Now Playing entry a reload left went before navigation started',
+		async ({ path, write }) => {
+			await openPlaylist('p1');
+			const below = history.state.index;
+			openNowPlaying('take');
+			await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+			reloadBeforeNavigationStarts();
+			write.call(history, SVELTEKIT_START_ENTRY, '', path);
+			leaveRestoredLibraryHistory();
+
+			stopNavigation = initNavigation();
+
+			expect(currentLibraryHistoryState()).toEqual(SVELTEKIT_START_ENTRY);
+			expect(location.pathname).toBe(path);
+		}
+	);
 
 	it('Forward onto a Now Playing entry the library below has since outgrown shows the library of the entry it steps back onto', async () => {
 		await openAlbum('a1');

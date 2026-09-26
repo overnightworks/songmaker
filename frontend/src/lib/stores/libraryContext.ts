@@ -324,11 +324,17 @@ function pathnameOf(url: string): string {
 }
 
 // The history.state the page loaded onto, handed out once: the first reader
-// after a load gets it, every later one null.
+// after a load gets it, every later one null -- and so does a reader after
+// the page has navigated off that entry, where it no longer describes where
+// the page stands.
 export function takeRestoredLibraryHistory(): unknown {
 	const restored = restoredHistory;
 	restoredHistory = null;
 	return restored;
+}
+
+export function leaveRestoredLibraryHistory(): void {
+	restoredHistory = null;
 }
 
 // A page load, as far as the restored entry goes: reads history.state the way
