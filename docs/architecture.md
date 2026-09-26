@@ -992,7 +992,9 @@ was off or the connection was down is replayed rather than lost. A completed or
 partial job — a generate job included — also asks this owner to refresh its song
 when its job stream reports the end, so the new take is in the list right after the
 job tab shows its success toast even if the `generation.created` event fell into a
-reconnect gap; both triggers are idempotent. Other tabs update through the event.
+reconnect gap; both triggers are idempotent. A refresh asked for while the stream
+has not bootstrapped yet waits for that bootstrap, even across another dropped
+attempt. Other tabs update through the event.
 The Generate button and the Takes status slot follow the take list rather than the
 job stream: `generateAction` stops presenting a generate job as running once as
 many takes as it was asked for, created since it started, are in the song's list,
