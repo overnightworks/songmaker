@@ -94,6 +94,7 @@ class FakeAudio {
 	currentTime = 0;
 	duration = 100;
 	paused = true;
+	seeking = false;
 	ended = false;
 	error: MediaError | null = null;
 	crossOrigin: string | null = null;
@@ -523,6 +524,14 @@ describe('frozen-clock watchdog', () => {
 				advanceSeconds(4);
 				fakeAudio.fire('playing');
 				advanceSeconds(4, 1);
+			}
+		},
+		{
+			name: 'a slow seek',
+			drive: () => {
+				startPlayingAt(40);
+				fakeAudio.seeking = true;
+				advanceSeconds(8);
 			}
 		},
 		{
