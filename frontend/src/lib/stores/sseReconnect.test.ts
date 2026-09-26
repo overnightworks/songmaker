@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
 	SSE_RECONNECT_BACKOFF_FACTOR,
@@ -6,7 +6,7 @@ import {
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
-import { nextReconnectDelayMs } from './sseReconnect';
+import { nextReconnectDelayMs, watchReconnectOpportunities } from './sseReconnect';
 
 function expectedRange(attempt: number): { min: number; max: number } {
 	const exponential = SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_BACKOFF_FACTOR ** (attempt - 1);
@@ -29,6 +29,13 @@ describe('nextReconnectDelayMs', () => {
 		expect(farAttempt).toBe(SSE_RECONNECT_MAX_DELAY_MS);
 	});
 
+	it('never waits longer than 10 seconds, jitter included, at any attempt', () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0.9999);
+		const longest = Math.max(...[1, 2, 3, 4, 5, 10, 20].map(nextReconnectDelayMs));
+		vi.restoreAllMocks();
+		expect(longest).toBeLessThanOrEqual(10_000);
+	});
+
 	it('is monotonically non-decreasing at the jitter floor as attempts grow', () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0);
 		const delays = [1, 2, 3, 4, 5, 6].map((attempt) => nextReconnectDelayMs(attempt));
@@ -36,5 +43,48 @@ describe('nextReconnectDelayMs', () => {
 		for (let i = 1; i < delays.length; i++) {
 			expect(delays[i]).toBeGreaterThanOrEqual(delays[i - 1]);
 		}
+	});
+});
+
+function setVisibility(state: DocumentVisibilityState): void {
+	Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+}
+
+describe('watchReconnectOpportunities', () => {
+	afterEach(() => setVisibility('visible'));
+
+	it.each([
+		{
+			opportunity: 'the window regains focus',
+			dispatch: () => window.dispatchEvent(new Event('focus'))
+		},
+		{
+			opportunity: 'the network comes back',
+			dispatch: () => window.dispatchEvent(new Event('online'))
+		},
+		{
+			opportunity: 'the page becomes visible',
+			dispatch: () => {
+				setVisibility('visible');
+				document.dispatchEvent(new Event('visibilitychange'));
+			}
+		}
+	])('reconnects at once when $opportunity', ({ dispatch }) => {
+		const reconnectNow = vi.fn();
+		const stop = watchReconnectOpportunities(reconnectNow);
+		dispatch();
+		stop();
+		expect(reconnectNow).toHaveBeenCalledOnce();
+	});
+
+	it('waits while the page is hidden and after watching stopped', () => {
+		const reconnectNow = vi.fn();
+		const stop = watchReconnectOpportunities(reconnectNow);
+		setVisibility('hidden');
+		document.dispatchEvent(new Event('visibilitychange'));
+		stop();
+		window.dispatchEvent(new Event('online'));
+		window.dispatchEvent(new Event('focus'));
+		expect(reconnectNow).not.toHaveBeenCalled();
 	});
 });

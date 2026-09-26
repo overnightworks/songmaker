@@ -32,7 +32,7 @@ import {
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 import { classifyAuthFailure } from '$lib/stores/auth';
-import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
+import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
 
 // The browser only sends `Last-Event-ID` on its own native retry; the owner
 // reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
@@ -103,7 +103,7 @@ export class ResourceSyncController {
 	private readonly songRevisions = new Map<string, number>();
 	private flushing: Promise<void> | null = null;
 	private readonly readyWaiters: Array<(ok: boolean) => void> = [];
-	private visibilityBound = false;
+	private stopWatchingOpportunities: (() => void) | null = null;
 	private visibilityTimer: ReturnType<typeof setTimeout> | null = null;
 	private loadedWatchUnsub: (() => void) | null = null;
 	private loadedNotifyQueued = false;
@@ -133,7 +133,7 @@ export class ResourceSyncController {
 		if (this.started) return;
 		this.started = true;
 		this.bootstrapErrors = 0;
-		this.bindVisibility();
+		this.stopWatchingOpportunities ??= watchReconnectOpportunities(this.onReconnectOpportunity);
 		this.bindLoadedWatch();
 		this.setStatus('connecting');
 		this.openSource();
@@ -268,7 +268,8 @@ export class ResourceSyncController {
 		this.started = false;
 		this.clearReconnectTimer();
 		this.closeSource();
-		this.unbindVisibility();
+		this.stopWatchingOpportunities?.();
+		this.stopWatchingOpportunities = null;
 		this.clearVisibilityTimer();
 		this.unbindLoadedWatch();
 		this.abandonEpoch();
@@ -655,32 +656,24 @@ export class ResourceSyncController {
 		for (const waiter of waiters) waiter(ok);
 	}
 
-	private bindVisibility(): void {
-		if (this.visibilityBound || typeof window === 'undefined') return;
-		this.visibilityBound = true;
-		window.addEventListener('focus', this.onVisibility);
-		if (typeof document !== 'undefined') {
-			document.addEventListener('visibilitychange', this.onVisibility);
-		}
+	private readonly onReconnectOpportunity = (): void => {
+		this.reconnectNowIfWaiting();
+		this.scheduleRevalidation();
+	};
+
+	private reconnectNowIfWaiting(): void {
+		if (this.reconnectTimer === null) return;
+		this.clearReconnectTimer();
+		this.openSource();
 	}
 
-	private unbindVisibility(): void {
-		if (!this.visibilityBound || typeof window === 'undefined') return;
-		this.visibilityBound = false;
-		this.clearVisibilityTimer();
-		window.removeEventListener('focus', this.onVisibility);
-		if (typeof document !== 'undefined') {
-			document.removeEventListener('visibilitychange', this.onVisibility);
-		}
-	}
-
-	private readonly onVisibility = (): void => {
+	private scheduleRevalidation(): void {
 		this.clearVisibilityTimer();
 		this.visibilityTimer = setTimeout(() => {
 			this.visibilityTimer = null;
 			void this.handleVisibility();
 		}, RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
-	};
+	}
 
 	private clearVisibilityTimer(): void {
 		if (this.visibilityTimer === null) return;

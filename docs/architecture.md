@@ -970,9 +970,13 @@ in flight stay queued until those songs enter the loaded set. Browse and album
 list writes keep already-loaded takes when a later summary would otherwise wipe
 them. History restore
 awaits every expanded album before the snapshot is ready so those tracks are in
-the loaded set for the buffer flush. Window `focus` and document `visibilitychange`
-revalidate the selected song and any failed refresh, not the whole browse page —
-a 200-song library would otherwise exceed the 120/min IP limiter. Missed takes for
+the loaded set for the buffer flush. Window `focus` and `online` and document
+`visibilitychange` to visible revalidate the selected song and any failed refresh,
+not the whole browse page — a 200-song library would otherwise exceed the 120/min
+IP limiter. The same three events reopen a dropped resource or job stream at once
+instead of waiting out its backoff (`watchReconnectOpportunities` in
+`sseReconnect.ts`), and that backoff never waits longer than 10 seconds, so a take
+finished while the phone was away arrives within seconds of its return. Missed takes for
 other loaded songs arrive through EventSource replay. Song fetches run with bounded
 concurrency. A 404 drops the song from the loaded set instead of retrying forever.
 The open song editor reloads only when the selected song id changes or the user
