@@ -136,6 +136,7 @@ import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
+import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
@@ -152,6 +153,10 @@ const COMPONENT_STYLE_SOURCES = {
 	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
+	CollectionHeaderFrame: {
+		source: collectionHeaderFrameSource,
+		filename: 'CollectionHeaderFrame.svelte'
+	},
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
 	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
 	RailSearch: { source: railSearchSource, filename: 'RailSearch.svelte' },
@@ -203,6 +208,16 @@ const INVENTORY = [
 		name: 'drawer-trigger',
 		selector: '.drawer-trigger[data-hitbox="frequent"]',
 		component: 'Layout'
+	},
+	{
+		name: 'collection-play',
+		selector: '.play-circle[data-hitbox="frequent"]',
+		component: 'CollectionHeaderFrame'
+	},
+	{
+		name: 'collection-shuffle',
+		selector: '.shuffle-btn[data-hitbox="frequent"]',
+		component: 'CollectionHeaderFrame'
 	},
 	{
 		name: 'collection-menu',

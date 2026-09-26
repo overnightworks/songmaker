@@ -2,6 +2,7 @@
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
 	import {
 		isPlaylistEntryCurrent,
+		playIdleStart,
 		playPlaylistEntry,
 		playPlaylistEntryAndShowNowPlaying
 	} from '$lib/stores/player';
@@ -228,6 +229,13 @@
 		}
 	}
 
+	// The open playlist is this view's playlist, so the player's own start of
+	// the open collection is what plays it from the top.
+	function playFromTop(): void {
+		if (!playlistDetail) return;
+		void playIdleStart();
+	}
+
 	function playEntry(index: number): void {
 		if (!playlistDetail) return;
 		playPlaylistEntry(playlistDetail, index);
@@ -349,7 +357,7 @@
 				artFill={null}
 				playlistCovers={playlistMeta.album_covers}
 				playlistCover={playlistMeta.cover}
-				onplay={() => playEntry(0)}
+				onplay={playFromTop}
 				onrename={onPlaylistRename}
 				isShared={playlistMeta.is_shared}
 				shareSlug={playlistMeta.share_slug}

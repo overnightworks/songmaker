@@ -13,6 +13,7 @@
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
+	import { setShuffle } from '$lib/stores/player';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -21,6 +22,7 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
+		/** Starts this collection from its top, honouring the listener's shuffle setting. */
 		onplay: () => void;
 		onrename: (title: string) => Promise<void>;
 		isShared: boolean;
@@ -95,6 +97,20 @@
 	function triggerRename(): void {
 		editableTitle?.startEdit();
 	}
+
+	// The header is where a collection's play order is chosen: the circle plays
+	// it in order, the shuffle square beside it plays it shuffled. Both go
+	// through the player's own shuffle setting, so the transport's shuffle
+	// control shows the order the header just chose.
+	function playInOrder(): void {
+		setShuffle(false);
+		onplay();
+	}
+
+	function playShuffled(): void {
+		setShuffle(true);
+		onplay();
+	}
 </script>
 
 {#snippet titleArea()}
@@ -160,7 +176,9 @@
 	{coverAlt}
 	{initials}
 	{artFill}
-	{onplay}
+	{kind}
+	onplay={playInOrder}
+	onshuffle={playShuffled}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
