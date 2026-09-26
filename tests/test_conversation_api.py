@@ -352,6 +352,56 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         assert job.status == "completed"
 
 
+def test_a_running_turn_already_shows_its_user_message_in_the_conversation(client):
+    """A panel opened while the reply is still streaming finds the message sent (#1014)."""
+    import asyncio
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import (
+        api_chat_turn,
+        api_conversation_messages,
+        api_list_conversations,
+    )
+
+    c, factory = client
+    user = make_authenticated_user("u-test", username="u-u-test")
+
+    def _conversation_seen_by_a_returning_panel() -> list[tuple[str, str]]:
+        with factory() as reader:
+            active = api_list_conversations(user, reader).conversations[0]
+            messages = api_conversation_messages(active.id, user, reader).messages
+            return [(message.role, message.content) for message in messages]
+
+    async def _exercise() -> list[tuple[str, str]]:
+        reply_released = asyncio.Event()
+
+        async def _slow_reply(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+            yield AssistantTextEvent(text="working on it")
+            await reply_released.wait()
+            yield FinalEvent(text="done")
+
+        request = Request({"type": "http", "app": c.app})
+        with factory() as session, patch(
+            "songmaker_cli.conversation_api.stream_cowriter_turn", _slow_reply,
+        ):
+            response = await api_chat_turn(
+                ChatTurnV2Request(message="Ja bitte"), request, user, session,
+            )
+            stream = response.body_iterator
+            await anext(stream)
+            seen_mid_turn = _conversation_seen_by_a_returning_panel()
+            reply_released.set()
+            async for _frame in stream:
+                pass
+            return seen_mid_turn
+
+    assert asyncio.run(_exercise()) == [("user", "Ja bitte")]
+    assert _conversation_seen_by_a_returning_panel() == [
+        ("user", "Ja bitte"),
+        ("assistant", "done"),
+    ]
+
+
 def test_a_turn_stamps_its_events_with_the_chat_job_and_streams_none_of_it(client):
     """The turn's own job id reaches the deepest event producer and stops there.
 
@@ -496,6 +546,7 @@ def test_chat_turn_disconnect_reaps_provider_before_asgi_23_response_returns(cli
         assert job.status == "failed"
         assert job.error_type == "cancelled"
         assert job.error == "Turn cancelled by the client."
+        assert session.query(ChatMessage).count() == 0
 
 
 def test_chat_turn_start_response_failure_cancels_unstarted_stream(client):
@@ -567,6 +618,7 @@ def test_chat_turn_start_response_failure_cancels_unstarted_stream(client):
         assert job.status == "failed"
         assert job.error_type == "cancelled"
         assert job.error == "Turn cancelled by the client."
+        assert session.query(ChatMessage).count() == 0
 
 
 def test_chat_turn_marks_job_cancelled_when_stream_generator_closes(client):
@@ -630,6 +682,7 @@ def test_chat_turn_marks_job_cancelled_when_stream_generator_closes(client):
         assert job.status == "failed"
         assert job.error_type == "cancelled"
         assert job.error == "Turn cancelled by the client."
+        assert session.query(ChatMessage).count() == 0
 
 
 def test_chat_turn_closing_after_completion_keeps_job_completed(client):
@@ -872,6 +925,7 @@ def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
         jobs = session.query(Job).all()
         assert len(jobs) == 1
         assert jobs[0].status == "failed"
+        assert session.query(ChatMessage).count() == 0
 
 
 def test_chat_turn_unavailable_emits_503_error_frame(client):
@@ -911,7 +965,6 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     assert secret_sentinel not in resp.text
 
     with factory() as session:
-        assert session.query(Conversation).count() == 0
         assert session.query(ChatMessage).count() == 0
 
 

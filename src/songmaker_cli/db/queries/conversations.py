@@ -133,6 +133,11 @@ def append_message(
     return msg
 
 
+def delete_message(session: Session, message_id: str) -> None:
+    session.query(ChatMessage).filter_by(id=message_id).delete()
+    session.flush()
+
+
 def upsert_summary(
     session: Session,
     conversation_id: str,

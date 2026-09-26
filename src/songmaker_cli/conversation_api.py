@@ -22,6 +22,7 @@ import logging
 import time
 from collections.abc import AsyncGenerator, AsyncIterator, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Final, Literal
 
 from agent_providers.errors import (
@@ -105,7 +106,7 @@ from songmaker_cli.db.queries import (
     upsert_summary,
     upsert_user_memory,
 )
-from songmaker_cli.db.queries.conversations import append_message
+from songmaker_cli.db.queries.conversations import append_message, delete_message
 
 if TYPE_CHECKING:
     from agent_providers.catalog import ProviderRoute
@@ -485,16 +486,25 @@ class PreparedChatTurn:
     windowed: bool
     tail_budget: int
     job_id: str
+    conversation_id: str
+    user_message: ChatMessageResponse
+
+
+class ChatTurnOutcome(Enum):
+    ANSWERED = "answered"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
 
 
 @dataclass
 class ChatTurnLifecycle:
     session: Session
     job_id: str
+    user_message_id: str
     heartbeat_task: asyncio.Task[None] | None = None
     finished: bool = False
 
-    async def finish(self, *, cancelled: bool) -> None:
+    async def finish(self, outcome: ChatTurnOutcome) -> None:
         from songmaker_cli.jobs._runtime import (
             _cancel_chat_job,
             _stop_chat_job_heartbeat,
@@ -504,10 +514,23 @@ class ChatTurnLifecycle:
             return
         self.finished = True
         assert self.heartbeat_task is not None
-        if cancelled:
-            await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
-            return
-        await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
+        try:
+            if outcome is ChatTurnOutcome.CANCELLED:
+                await _cancel_chat_job(self.session, self.heartbeat_task, self.job_id)
+            else:
+                await _stop_chat_job_heartbeat(self.heartbeat_task, self.job_id)
+        finally:
+            if outcome is not ChatTurnOutcome.ANSWERED:
+                self._withdraw_unanswered_message()
+
+    def _withdraw_unanswered_message(self) -> None:
+        """Drop the user message a turn persisted at its start once no reply can follow.
+
+        A returning panel reads a trailing user message as a turn still
+        running; withdrawing it tells that panel the turn ended unanswered.
+        """
+        delete_message(self.session, self.user_message_id)
+        self.session.commit()
 
 
 _PROVIDER_UNAVAILABLE_STATUS: Final = 503
@@ -559,14 +582,14 @@ async def api_chat_turn(
 
     check_redis_health(request)
     prepared = _prepare_chat_turn(req, request, user, session)
-    lifecycle = ChatTurnLifecycle(session, prepared.job_id)
+    lifecycle = ChatTurnLifecycle(session, prepared.job_id, prepared.user_message.id)
     lifecycle.heartbeat_task = asyncio.create_task(
         _keep_chat_job_heartbeat(request.app.state.ctx.db, prepared.job_id),
     )
 
     return _ChatStreamingResponse(
         _chat_event_generator(req, user, session, prepared, lifecycle),
-        abort_chat_turn=lambda: lifecycle.finish(cancelled=True),
+        abort_chat_turn=lambda: lifecycle.finish(ChatTurnOutcome.CANCELLED),
         media_type=SSE_MEDIA_TYPE,
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
@@ -652,18 +675,26 @@ def _prepare_chat_messages(
     from songmaker_cli.jobs._runtime import _fail_chat_job
 
     try:
-        active = get_active_conversation(session, user.id)
-        history = list_messages(session, active.id) if active else []
+        conversation = get_or_create_active_conversation(session, user.id)
+        history = list_messages(session, conversation.id)
         tail_budget = get_cowriter_tail_token_budget(session)
         compacted = compact_conversation(
             history,
             budget=tail_budget,
-            existing=active.summary if active is not None else None,
+            existing=conversation.summary,
             summarize=fold_summary,
         )
-        _save_compacted_summary(session, active, history, compacted)
+        _save_compacted_summary(session, conversation, history, compacted)
         api_messages = compacted.to_api_messages()
         api_messages.append({"role": "user", "content": envelope.wrap_user_message(req.message)})
+        user_message = append_message(
+            session,
+            conversation.id,
+            "user",
+            req.message,
+            song_id=req.current_song_id,
+        )
+        session.commit()
     except asyncio.CancelledError:
         _fail_chat_job(session, job_id, "Chat request cancelled", "cancelled")
         raise
@@ -679,15 +710,17 @@ def _prepare_chat_messages(
         compacted.windowed,
         tail_budget,
         job_id,
+        conversation.id,
+        ChatMessageResponse.from_orm(user_message),
     )
 
 
-def _save_compacted_summary(session: Session, active, history, compacted) -> None:
-    if active is None or not compacted.windowed or compacted.summary_text is None:
+def _save_compacted_summary(session: Session, conversation, history, compacted) -> None:
+    if not compacted.windowed or compacted.summary_text is None:
         return
     upsert_summary(
         session,
-        active.id,
+        conversation.id,
         compacted.summary_text,
         compacted.last_summarized_message_id,
         message_count=len(history),
@@ -732,7 +765,7 @@ async def _chat_event_generator(
         user=user,
         correlation_id=prepared.job_id,
     )
-    terminal = False
+    outcome = ChatTurnOutcome.CANCELLED
     try:
         assistant_text = ""
         try:
@@ -743,26 +776,26 @@ async def _chat_event_generator(
                 yield _sse_format(event)
             _log_chat_turn(prepared, started)
         except ProviderUnavailableError as exc:
-            terminal = True
+            outcome = ChatTurnOutcome.FAILED
             yield _provider_unavailable_event(session, prepared.job_id, exc)
             return
         except Exception as exc:
-            terminal = True
+            outcome = ChatTurnOutcome.FAILED
             yield _chat_failure_event(session, prepared.job_id, exc)
             return
         try:
-            final_event = _complete_chat_turn(req, user, session, prepared.job_id, assistant_text)
+            final_event = _complete_chat_turn(req, session, prepared, assistant_text)
         except Exception:
-            terminal = True
+            outcome = ChatTurnOutcome.FAILED
             yield _chat_completion_failure_event(session, prepared.job_id)
             return
-        terminal = True
+        outcome = ChatTurnOutcome.ANSWERED
         yield _sse_format(final_event)
     finally:
         try:
             await stream.aclose()
         finally:
-            await lifecycle.finish(cancelled=not terminal)
+            await lifecycle.finish(outcome)
 
 
 def _log_chat_turn(prepared: PreparedChatTurn, started: float) -> None:
@@ -814,33 +847,24 @@ def _chat_failure_event(session: Session, job_id: str, exc: Exception) -> str:
 
 def _complete_chat_turn(
     req: ChatTurnV2Request,
-    user: AuthenticatedUser,
     session: Session,
-    job_id: str,
+    prepared: PreparedChatTurn,
     assistant_text: str,
 ) -> dict:
-    conversation = get_or_create_active_conversation(session, user.id)
-    user_message = append_message(
-        session,
-        conversation.id,
-        "user",
-        req.message,
-        song_id=req.current_song_id,
-    )
     assistant_message = append_message(
         session,
-        conversation.id,
+        prepared.conversation_id,
         "assistant",
         assistant_text,
         song_id=req.current_song_id,
     )
-    if not update_job_status(session, job_id, JobStatus.COMPLETED, progress=1.0):
-        log.warning("Chat job %s was already terminal at completion", job_id)
+    if not update_job_status(session, prepared.job_id, JobStatus.COMPLETED, progress=1.0):
+        log.warning("Chat job %s was already terminal at completion", prepared.job_id)
     session.commit()
     return {
         "type": "final",
-        "conversation_id": conversation.id,
-        "user_message": ChatMessageResponse.from_orm(user_message).model_dump(),
+        "conversation_id": prepared.conversation_id,
+        "user_message": prepared.user_message.model_dump(),
         "assistant_message": ChatMessageResponse.from_orm(assistant_message).model_dump(),
     }
 
