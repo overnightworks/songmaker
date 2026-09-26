@@ -323,11 +323,15 @@ def test_replay_hello_reasserts_cursor_before_any_replay_frame(tmp_path: Path) -
     first_hello = asyncio.run(_reconnect_once())
     second_hello = asyncio.run(_reconnect_once())
 
-    assert first_hello == second_hello == {
-        "id": "1",
-        "event": "hello",
-        "data": {"high_water_mark": "2"},
-    }
+    assert (
+        first_hello
+        == second_hello
+        == {
+            "id": "1",
+            "event": "hello",
+            "data": {"high_water_mark": "2"},
+        }
+    )
 
 
 @pytest.mark.parametrize(
@@ -373,7 +377,8 @@ def test_gap_resync_advances_to_live_without_a_second_resync(tmp_path: Path) -> 
     _create_event(factory, users["alice"], 2)
     with factory() as session:
         session.query(ResourceEvent).filter_by(
-            user_id=users["alice"], sequence=1,
+            user_id=users["alice"],
+            sequence=1,
         ).delete()
         session.commit()
     generator = resource_api._resource_event_generator(
@@ -706,7 +711,9 @@ def test_each_reconnect_reauthenticates_disabled_account(
     with factory() as session:
         session.get(User, users["alice"]).is_active = False
         session.commit()
-    installed_web_auth_config(clients["alice"].app).session_cache.delete_user_sessions(users["alice"])
+    installed_web_auth_config(clients["alice"].app).session_cache.delete_user_sessions(
+        users["alice"]
+    )
     assert clients["alice"].get("/api/resource-events/stream").status_code == 403
 
 

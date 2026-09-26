@@ -956,9 +956,10 @@ retry, or as the `last_event_id` query parameter when the client opens a fresh
 `EventSource` itself after a drop; the header wins when both are sent. A cursor
 that is not a non-negative decimal, or lies beyond the BIGINT sequence range, is
 answered with 400. Missing retained history, an internal sequence hole, or `L > H`
-produces one `resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
-seconds so each reconnect rechecks the session. Sequence and high-water
-JSON fields are decimal strings, matching SSE IDs without JavaScript precision loss.
+produces one `resync` at `H`. Heartbeats are SSE comments. Every connection ends
+after at most 60 seconds so each reconnect rechecks the session. Sequence and
+high-water JSON fields are decimal strings, matching SSE IDs without JavaScript
+precision loss.
 
 The library page is the sole frontend owner of that stream. Each mount — including
 return from settings — opens a native `EventSource`, waits for `hello`, and runs
@@ -976,9 +977,10 @@ not the whole browse page — a 200-song library would otherwise exceed the 120/
 IP limiter. The same three events reopen a dropped resource or job stream at once
 instead of waiting out its backoff (`watchReconnectOpportunities` in
 `sseReconnect.ts`), and that backoff never waits longer than 10 seconds, so a take
-finished while the phone was away arrives within seconds of its return. Missed takes for
-other loaded songs arrive through EventSource replay. Song fetches run with bounded
-concurrency. A 404 drops the song from the loaded set instead of retrying forever.
+finished while the phone was away arrives within seconds of its return. Missed
+takes for other loaded songs arrive through EventSource replay. Song fetches run
+with bounded concurrency. A 404 drops the song from the loaded set instead of
+retrying forever.
 The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect and is retried
@@ -1000,8 +1002,8 @@ job stream: `generateAction` stops presenting a generate job as running once as
 many takes as it was asked for, created since it started, are in the song's list,
 even while its own stream still waits to report the end. Bootstrap failures retry a
 bounded number of times, then surface one accessible Retry status rather than
-hanging on `Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror` close the
-stream.
+hanging on `Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror`
+close the stream.
 
 ## API Endpoints
 
