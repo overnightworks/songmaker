@@ -3,7 +3,6 @@
 	import {
 		isPlaylistEntryCurrent,
 		playIdleStart,
-		playPlaylistEntry,
 		playPlaylistEntryAndShowNowPlaying
 	} from '$lib/stores/player';
 	import {
@@ -20,7 +19,6 @@
 		uploadPlaylistCover,
 		deletePlaylistCover
 	} from '$lib/stores/playlists';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { addToast } from '$lib/stores/toast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
@@ -37,8 +35,6 @@
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
-		collectionRowPauseLabel,
-		collectionRowPlayLabel,
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
@@ -48,10 +44,10 @@
 	} from '$lib/constants';
 	import { nowPlayingTakeMeta } from '$lib/constants/now-playing';
 	import { titleInitials } from '$lib/utils/format';
-	import type { PlaylistEntryItem } from '$lib/api/types';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
+	import PlayingMark from './PlayingMark.svelte';
 
 	// The header prefers the lightweight playlist already in playlistList so
 	// a slow or failed detail fetch never leaves the previous playlist's
@@ -236,27 +232,11 @@
 		void playIdleStart();
 	}
 
-	function playEntry(index: number): void {
-		if (!playlistDetail) return;
-		playPlaylistEntry(playlistDetail, index);
-	}
-
-	// The row itself is a take row, so a click on it plays the take and shows
-	// it in Now Playing; the ▶ beside it plays and nothing more.
+	// The row is the play target: a tap plays this take from here, with the
+	// rest of the playlist queued behind it, and shows it in Now Playing.
 	function openEntry(index: number): void {
 		if (!playlistDetail) return;
 		void playPlaylistEntryAndShowNowPlaying(playlistDetail, index);
-	}
-
-	function isEntryPlaying(entry: PlaylistEntryItem): boolean {
-		return isPlaylistEntryCurrent(entry) && audioPlayer.status === 'playing';
-	}
-
-	function isEntryLoading(entry: PlaylistEntryItem): boolean {
-		return (
-			isPlaylistEntryCurrent(entry) &&
-			(audioPlayer.status === 'loading' || audioPlayer.status === 'buffering')
-		);
 	}
 
 	// ── Offline / Save for offline ──────────────────────────────────────────
@@ -387,36 +367,23 @@
 				     strips in Safari/VoiceOver. -->
 				<ul class="entry-rows" role="list">
 					{#each playlistDetail.entries as entry, i (entry.id)}
-						<li class="entry-row" class:playing={isPlaylistEntryCurrent(entry)}>
-							<button
-								type="button"
-								class="entry-play"
-								class:playing={isEntryPlaying(entry)}
-								class:loading={isEntryLoading(entry)}
-								data-hitbox="frequent"
-								onclick={() => playEntry(i)}
-								aria-label={isEntryPlaying(entry)
-									? collectionRowPauseLabel(entry.song_title)
-									: collectionRowPlayLabel(entry.song_title)}
-							>
-								{#if isEntryLoading(entry)}
-									<span class="spinner"></span>
-								{:else}
-									<Icon name={isEntryPlaying(entry) ? 'pause' : 'play'} size={16} />
-								{/if}
-							</button>
+						{@const current = isPlaylistEntryCurrent(entry)}
+						<li class="entry-row" class:current>
 							<button type="button" class="entry-info" onclick={() => openEntry(i)}>
-								<span class="entry-title">
-									{#if entry.is_picked}<span class="picked-star">★</span>{/if}
-									{entry.song_title}
-								</span>
-								<span class="entry-meta">
-									{nowPlayingTakeMeta({
-										artist: entry.artist,
-										versionNumber: entry.version_number,
-										generationNumber: entry.generation_number,
-										durationSec: entry.audio_duration
-									})}
+								<PlayingMark {current} />
+								<span class="entry-text">
+									<span class="entry-title">
+										{#if entry.is_picked}<span class="picked-star">★</span>{/if}
+										{entry.song_title}
+									</span>
+									<span class="entry-meta">
+										{nowPlayingTakeMeta({
+											artist: entry.artist,
+											versionNumber: entry.version_number,
+											generationNumber: entry.generation_number,
+											durationSec: entry.audio_duration
+										})}
+									</span>
 								</span>
 							</button>
 							<div class="entry-actions">
@@ -590,63 +557,20 @@
 		box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 7%, transparent);
 	}
 
-	.entry-row.playing {
-		border-color: var(--accent);
-		background: rgba(160, 32, 240, 0.1);
-	}
-
-	.entry-play {
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		border: 2px solid var(--border);
-		background: color-mix(in srgb, var(--bg) 30%, transparent);
-		color: var(--text-muted);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-		cursor: pointer;
-		transition:
-			border-color 0.15s,
-			color 0.15s,
-			background 0.15s;
-	}
-
-	.entry-row:hover .entry-play {
+	.entry-row.current {
 		border-color: var(--primary);
+	}
+
+	.entry-row.current .entry-title {
 		color: var(--primary);
-	}
-
-	.entry-play.playing,
-	.entry-play.loading {
-		border-color: var(--accent);
-		color: var(--accent);
-	}
-
-	.spinner {
-		display: inline-block;
-		width: 0.95rem;
-		height: 0.95rem;
-		border: 2px solid var(--accent);
-		border-top-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	.entry-info {
 		flex: 1;
 		min-width: 0;
 		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 2px;
+		align-items: center;
+		gap: 0.6rem;
 		background: none;
 		border: none;
 		padding: 0;
@@ -656,8 +580,17 @@
 		cursor: pointer;
 	}
 
-	.entry-title {
+	.entry-text {
 		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 2px;
+	}
+
+	.entry-title {
+		max-width: 100%;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

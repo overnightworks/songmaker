@@ -187,11 +187,6 @@ const INVENTORY = [
 		component: 'PlaylistDetailView'
 	},
 	{
-		name: 'playlist-row-play',
-		selector: '.entry-play[data-hitbox="frequent"]',
-		component: 'PlaylistDetailView'
-	},
-	{
 		name: 'playlist-picker-add',
 		selector: '.picker-add[data-hitbox="frequent"]',
 		component: 'PlaylistPicker'
