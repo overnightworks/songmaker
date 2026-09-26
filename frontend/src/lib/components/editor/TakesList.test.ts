@@ -56,6 +56,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	};
 });
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+const generateState = await vi.hoisted(async () => {
+	const { writable } = await import('svelte/store');
+	return writable<GenerateState>({ kind: 'idle', mode: 'generate' });
+});
+vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+	generateAction: generateState
+}));
 vi.mock('$lib/stores/navigation', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/navigation')>();
 	return { ...actual, persistLibraryHistory: vi.fn() };
@@ -70,6 +78,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import { addToast } from '$lib/stores/toast';
+import type { GenerateState } from '$lib/stores/generateAction';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -103,6 +112,28 @@ function versionedSongDefaults(): Partial<SongItem> {
 		]
 	};
 }
+
+const IDLE: GenerateState = { kind: 'idle', mode: 'generate' };
+const RUNNING: GenerateState = {
+	kind: 'generating',
+	jobId: 'j1',
+	takeCounter: null,
+	progress: 40,
+	remaining: null
+};
+const SUBMITTING: GenerateState = {
+	kind: 'generating',
+	jobId: null,
+	takeCounter: null,
+	progress: 0,
+	remaining: null
+};
+const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
+	kind: 'queued',
+	jobId: 'j1',
+	label: 'Queued #2',
+	reason: null
+};
 
 const playlist = {
 	id: 'p1',
@@ -211,6 +242,7 @@ afterEach(async () => {
 	clearPointer();
 	activeJobs.set([]);
 	generationFailures.set({});
+	generateState.set(IDLE);
 	vi.unstubAllGlobals();
 	clearSelection();
 });
@@ -223,7 +255,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		dirty: false,
 		draftVersionNumber: 4,
 		latestVersionNumber: 3,
-		onagain: vi.fn(),
 		onsource: vi.fn(),
 		...overrides
 	};
@@ -305,23 +336,14 @@ describe('TakesList', () => {
 	);
 
 	it('shows the running status slot while a generate job runs for this song', async () => {
-		const { target } = await render({
-			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
-		});
+		generateState.set(RUNNING);
+		const { target } = await render();
 		expect(target.querySelector('.status-slot')?.textContent).toContain('Generating');
 	});
 
 	it('shows a queued generation reason and position without treating it as a failure', async () => {
-		const { target } = await render({
-			generateJob: {
-				id: 'j1',
-				type: 'generate',
-				status: 'queued',
-				progress: 0,
-				queue_position: 2,
-				queue_reason: 'Waiting for LoRA training on this GPU.'
-			}
-		});
+		generateState.set({ ...QUEUED, reason: 'Waiting for LoRA training on this GPU.' });
+		const { target } = await render();
 
 		expect(target.querySelector('.status-title')?.textContent).toContain('Queued #2');
 		expect(target.querySelector('.status-line.reason')?.textContent).toContain(
@@ -333,8 +355,8 @@ describe('TakesList', () => {
 		// draftVersionNumber (the number Generate would create *next*) is 4
 		// here — the two must not be conflated, since a running job always
 		// targets an already-saved version (latestVersionNumber).
+		generateState.set(RUNNING);
 		const { target } = await render({
-			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
 			draftVersionNumber: 4,
 			latestVersionNumber: 3
 		});
@@ -345,9 +367,9 @@ describe('TakesList', () => {
 	it('labels the status slot from the actual highest version number, not the stale version_count after a mid-run deletion', async () => {
 		// A middle version (v2) was deleted after this job started: song.version_count
 		// dropped to 2, but the job still targets the highest surviving version, v3.
+		generateState.set(RUNNING);
 		const { target } = await render({
 			song: song({ ...versionedSongDefaults(), version_count: 2 }),
-			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
 			latestVersionNumber: 3
 		});
 		expect(target.querySelector('.status-title')?.textContent).toContain('v3');
@@ -355,41 +377,31 @@ describe('TakesList', () => {
 	});
 
 	it.each([
+		{ name: 'a running job', state: RUNNING, expectSlot: true, expectEmpty: false },
+		{ name: 'a queued job', state: QUEUED, expectSlot: true, expectEmpty: false },
+		{ name: 'no job', state: IDLE, expectSlot: false, expectEmpty: true },
 		{
-			name: 'a running job',
-			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
-			expectSlot: true,
-			expectEmpty: false
+			name: 'a submission without a job yet',
+			state: SUBMITTING,
+			expectSlot: false,
+			expectEmpty: true
 		},
-		{
-			name: 'a queued job',
-			generateJob: {
-				id: 'j1',
-				type: 'generate',
-				status: 'queued',
-				progress: 0,
-				queue_position: 2
-			},
-			expectSlot: true,
-			expectEmpty: false
-		},
-		{ name: 'no job', generateJob: null, expectSlot: false, expectEmpty: true },
 		{
 			name: 'a failed job',
-			generateJob: { id: 'j1', type: 'generate', status: 'failed', progress: 0, error: 'boom' },
+			state: { kind: 'failed', mode: 'generate', cause: 'boom' } satisfies GenerateState,
 			expectSlot: false,
 			expectEmpty: true
 		}
 	])(
 		'shows the slot and hides "No takes yet" for a song with zero takes and $name',
-		async ({ generateJob, expectSlot, expectEmpty }) => {
+		async ({ state, expectSlot, expectEmpty }) => {
+			generateState.set(state);
 			const { target } = await render({
-				song: song({ ...versionedSongDefaults(), generations: [] }),
-				generateJob
+				song: song({ ...versionedSongDefaults(), generations: [] })
 			});
 			expect(target.querySelector('.status-slot') !== null).toBe(expectSlot);
 			expect(target.textContent?.includes('No takes yet · Generate on Write')).toBe(expectEmpty);
-			if (generateJob?.status === 'queued') {
+			if (state.kind === 'queued') {
 				expect(target.querySelector('.status-title')?.textContent).toContain('Queued #2');
 			}
 		}
@@ -1123,10 +1135,8 @@ describe('TakesList load states', () => {
 
 	it('does not offer the tap-play hint on Takes while the first generation has zero takes yet', async () => {
 		stubCoarsePointer(true);
-		const { target } = await render({
-			song: song({}),
-			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
-		});
+		generateState.set(RUNNING);
+		const { target } = await render({ song: song({}) });
 		expect(target.querySelector('.status-slot')).not.toBeNull();
 		expect(target.textContent).not.toContain(TAKES_MOBILE_HINT);
 		vi.unstubAllGlobals();

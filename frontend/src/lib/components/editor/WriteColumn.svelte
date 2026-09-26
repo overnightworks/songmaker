@@ -141,9 +141,6 @@
 				<span class="cowriter-row-label">{EDITOR_VIEW_COWRITER_LABEL}</span>
 				<span class="chevron" aria-hidden="true">›</span>
 			</button>
-			<div class="compact-takes">
-				<TakeStrip {song} />
-			</div>
 		{/if}
 	</div>
 {/if}
@@ -153,10 +150,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
-
-	.compact-takes {
-		min-width: 0;
 	}
 
 	.cowriter-row {

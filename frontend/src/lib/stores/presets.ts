@@ -129,9 +129,6 @@ export async function loadGenerationDefaults(): Promise<void> {
 	}
 }
 
-// The current model's built-in defaults, overridden by the operator's saved
-// generation defaults for that model — the placeholder values a recipe's
-// param controls fall back to until the user overrides them.
 export const effectiveGenerationDefaults = derived(
 	[builtinDefaults, generationDefaults, recipeModel],
 	([$builtinDefaults, $generationDefaults, $recipeModel]) =>
@@ -149,9 +146,6 @@ function presetParamsEqual(a: VersionGenerationParams, b: VersionGenerationParam
 	return true;
 }
 
-// The saved preset, if any, whose params exactly match the current draft
-// generation params for the current model — used to show "Custom" instead of
-// a preset name once the draft diverges.
 export const currentPreset = derived(
 	[presets, recipeModel, editGenParams],
 	([$presets, $recipeModel, $editGenParams]) =>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { SongItem, GenerationItem, JobItem, UserLoraItem } from '$lib/api/types';
+	import type { SongItem, GenerationItem, UserLoraItem } from '$lib/api/types';
 	import type { SourceMode } from '$lib/stores/recipe';
 	import {
 		COARSE_POINTER_MEDIA,
@@ -55,6 +55,7 @@
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
+	import { generateAction, isGenerateJobActive } from '$lib/stores/generateAction';
 	import TakeMenu from './TakeMenu.svelte';
 
 	// Varying row widths draw the shape of what is coming, not a grey rectangle.
@@ -68,8 +69,6 @@
 		dirty: boolean;
 		draftVersionNumber: number;
 		latestVersionNumber: number;
-		generateJob?: JobItem | null;
-		onagain: (gen: GenerationItem) => void;
 		onsource: (gen: GenerationItem, mode: SourceMode) => void;
 		onretry?: () => void;
 	}
@@ -82,7 +81,6 @@
 		dirty,
 		draftVersionNumber,
 		latestVersionNumber,
-		generateJob = null,
 		onsource,
 		onretry
 	}: Props = $props();
@@ -284,12 +282,10 @@
 	}
 
 	// The first generation of a song has zero takes; the empty state must not hide a job in flight.
-	const jobRunning = $derived(
-		generateJob !== null && (generateJob.status === 'queued' || generateJob.status === 'running')
-	);
+	const jobRunning = $derived(isGenerateJobActive($generateAction));
 </script>
 
-<GenerationStatusSlot job={generateJob} {latestVersionNumber} />
+<GenerationStatusSlot {latestVersionNumber} />
 
 {#if loadStatus === 'error' && song.generations.length === 0}
 	<div class="empty" role="alert">

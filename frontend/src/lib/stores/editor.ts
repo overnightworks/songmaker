@@ -109,11 +109,6 @@ export const currentVersionIndex = writable(0);
 // --- Pinned seed (forwarded to the next generation request) ---
 export const pinnedSeed = writable<number | null>(null);
 
-// --- Pinned generation settings (loaded via "Use these settings" button) ---
-export function applyGenerationSettings(params: VersionGenerationParams): void {
-	setDraftGenParams(params);
-}
-
 function songDataFromSong(s: SongItem): SongData {
 	return {
 		lyrics: s.lyrics,
