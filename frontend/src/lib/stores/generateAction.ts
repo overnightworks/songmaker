@@ -1,6 +1,8 @@
 import { derived, get, writable } from 'svelte/store';
-import { generateSong } from '$lib/api/client';
+import { cancelJob, generateSong } from '$lib/api/client';
+import type { JobItem } from '$lib/api/types';
 import {
+	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
@@ -36,6 +38,10 @@ import { addToast } from './toast';
 const requestInFlight = writable(false);
 
 type GenerateMode = 'generate' | 'repaint' | 'cover';
+
+export function progressPercent(job: JobItem | null | undefined): number {
+	return job ? Math.round(job.progress * 100) : 0;
+}
 
 export type GenerateState =
 	| { kind: 'idle'; mode: GenerateMode }
@@ -95,7 +101,7 @@ export const generateAction = derived(
 				jobId: job?.id ?? null,
 				takeIndex: job?.take_index ?? null,
 				takeCount: job?.take_count ?? null,
-				progress: job?.progress ?? 0,
+				progress: progressPercent(job),
 				remaining: job?.remaining_time_estimate ?? null
 			};
 		} else if (disabled) state = { kind: 'disabled', mode: actionMode, reason: disabledReason };
@@ -148,5 +154,13 @@ export async function generate(): Promise<void> {
 		addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
 	} finally {
 		requestInFlight.set(false);
+	}
+}
+
+export async function cancelGeneration(jobId: string): Promise<void> {
+	try {
+		await cancelJob(jobId);
+	} catch (error) {
+		addToast(error instanceof Error ? error.message : EDITOR_GENERATE_CANCEL_FAILED, 'error');
 	}
 }

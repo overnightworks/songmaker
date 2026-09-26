@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { cancelJob } from '$lib/api/client';
 	import {
-		EDITOR_GENERATE_CANCEL_FAILED,
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 		EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
@@ -11,8 +9,12 @@
 		EDITOR_GENERATING_LABEL,
 		EDITOR_QUEUED_LABEL
 	} from '$lib/constants';
-	import { generate, generateAction, type GenerateState } from '$lib/stores/generateAction';
-	import { addToast } from '$lib/stores/toast';
+	import {
+		cancelGeneration,
+		generate,
+		generateAction,
+		type GenerateState
+	} from '$lib/stores/generateAction';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
@@ -23,14 +25,6 @@
 	$effect(() => {
 		if (presentation.kind !== 'failed') expanded = false;
 	});
-
-	async function cancel(jobId: string): Promise<void> {
-		try {
-			await cancelJob(jobId);
-		} catch (error) {
-			addToast(error instanceof Error ? error.message : EDITOR_GENERATE_CANCEL_FAILED, 'error');
-		}
-	}
 </script>
 
 <div class="generate-action">
@@ -54,7 +48,7 @@
 					{:else}
 						{EDITOR_GENERATING_LABEL}
 					{/if}
-					· {Math.round(presentation.progress)}%{#if typeof presentation.remaining === 'number'}
+					· {presentation.progress}%{#if typeof presentation.remaining === 'number'}
 						{` · ~${formatTime(presentation.remaining)}`}
 					{/if}
 				</span>
@@ -67,7 +61,7 @@
 				class="icon-button"
 				data-hitbox="frequent"
 				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-				onclick={() => void cancel(jobId)}
+				onclick={() => void cancelGeneration(jobId)}
 			>
 				<Icon name="x" />
 			</button>
