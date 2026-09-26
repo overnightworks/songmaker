@@ -32,6 +32,23 @@ afterEach(async () => {
 	clearComponentStyles();
 });
 
+// jsdom has no visual viewport; a phone's, shortened by the open on-screen
+// keyboard, is what sends the bars away while a field has focus.
+function openOnScreenKeyboard(): () => void {
+	Object.defineProperty(document.documentElement, 'clientHeight', {
+		configurable: true,
+		value: 844
+	});
+	Object.defineProperty(window, 'visualViewport', {
+		configurable: true,
+		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
+	});
+	return () => {
+		Reflect.deleteProperty(window, 'visualViewport');
+		Reflect.deleteProperty(document.documentElement, 'clientHeight');
+	};
+}
+
 async function render(takeCount = 4) {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -104,7 +121,8 @@ describe('DetailTabs', () => {
 		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
 	});
 
-	it('sticks to the top, but scrolls away with the text while a field has focus on the phone', async () => {
+	it('sticks to the top, but scrolls away with the text while typing on the phone keyboard', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const [write] = await render();
 		const tablist = write.parentElement;
@@ -122,5 +140,6 @@ describe('DetailTabs', () => {
 		await tick();
 		expect(getComputedStyle(tablist).position).toBe('sticky');
 		stopWatching();
+		closeKeyboard();
 	});
 });
