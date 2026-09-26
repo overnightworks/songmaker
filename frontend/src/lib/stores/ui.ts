@@ -1,8 +1,7 @@
 import type { ComponentProps } from 'svelte';
 import type ShareButton from '$lib/components/ShareButton.svelte';
 import type SongMenu from '$lib/components/editor/SongMenu.svelte';
-import { derived, readable, readonly, writable, type Readable } from 'svelte/store';
-import { nowPlayingSurface } from '$lib/stores/player';
+import { readonly, writable } from 'svelte/store';
 import { isEditableElement } from '$lib/utils/escape-level-up';
 
 interface PhoneAppBarSongState {
@@ -110,18 +109,6 @@ export function watchTypingOnPhone(root: Document, compact: boolean): () => void
 		typingOnPhoneState.set(false);
 	};
 }
-
-// The app's transport bar gives way to the full Now Playing surface, which
-// carries the only transport, and to the on-screen keyboard; the bar and the
-// room the shell reserves for it both read this one fact. The player store
-// imports this module, so the player is read only once someone subscribes,
-// never while the two modules are still loading each other.
-export const transportBarHidden: Readable<boolean> = readable(false, (set) =>
-	derived(
-		[nowPlayingSurface, typingOnPhone],
-		([surface, typing]) => surface === 'full' || typing
-	).subscribe(set)
-);
 
 type Theme = 'dark' | 'light';
 

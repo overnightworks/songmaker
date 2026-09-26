@@ -40,9 +40,9 @@
 		railCollapsed,
 		railWidth,
 		initTheme,
-		transportBarHidden,
 		watchTypingOnPhone
 	} from '$lib/stores/ui';
+	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';

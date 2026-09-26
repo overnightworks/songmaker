@@ -21,7 +21,7 @@
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { transportBarHidden } from '$lib/stores/ui';
+	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
