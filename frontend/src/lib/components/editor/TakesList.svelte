@@ -10,7 +10,9 @@
 		TAKE_DELETE_LABEL,
 		TAKE_PROVENANCE_COVER_PREFIX,
 		TAKE_PROVENANCE_REPAINT_PREFIX,
+		TAKE_KEEP_LABEL,
 		TAKE_PICK_LABEL,
+		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL,
 		TAKES_DELETE_VERSION_LABEL,
 		TAKES_DRAFT_BANNER_TEMPLATE,
@@ -27,7 +29,6 @@
 		takeBatchReductionLabel,
 		takeRowLabel,
 		takeGroupLabel,
-		TAKE_KEPT_MARKER_LABEL,
 		TAKE_SELECT_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
@@ -188,9 +189,9 @@
 	}
 
 	// The row's click rule (#140): a tap on the row body — its name, duration
-	// and score, everything except the ▶ symbol, the pick star and the menu —
-	// plays the take and opens Now Playing on it. Selection mode re-purposes
-	// it to a select tap instead, same as every other row control.
+	// and score, everything except the ▶ symbol, the ★ and ♥ toggles and the
+	// menu — plays the take and opens Now Playing on it. Selection mode
+	// re-purposes it to a select tap instead, same as every other row control.
 	function handleRowBodyClick(gen: GenerationItem): void {
 		if ($selectionMode) {
 			toggleSelection(gen.id);
@@ -372,6 +373,7 @@
 					{@const flag = qualityFlag(gen.scores)}
 					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
 					{@const voice = voiceForGeneration(gen)}
+					{@const takeName = nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 					<div
 						id={`take-${gen.id}`}
 						class="take-row"
@@ -392,7 +394,7 @@
 										data-hitbox-face
 										onclick={(event) => handlePlayClick(gen, event)}
 										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
-										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${nowPlayingTakeLabel(gen.version_number, gen.generation_number)}`}
+										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${takeName}`}
 									>
 										{#if $selectionMode}
 											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
@@ -503,21 +505,29 @@
 									actions.pick(gen.id, !gen.is_picked);
 								}}
 								aria-pressed={gen.is_picked}
-								aria-label={gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL}
+								aria-label={`${gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL} ${takeName}`}
 							>
 								<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
 							</button>
-							{#if gen.is_kept}
-								<span class="keep-marker" role="img" aria-label={TAKE_KEPT_MARKER_LABEL}>
-									<Icon name="heart-filled" size={16} />
-								</span>
-							{/if}
+							<button
+								type="button"
+								class="keep-btn"
+								class:kept={gen.is_kept}
+								data-hitbox="frequent"
+								onclick={(e) => {
+									e.stopPropagation();
+									actions.keep(gen.id, !gen.is_kept);
+								}}
+								aria-pressed={gen.is_kept}
+								aria-label={`${gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL} ${takeName}`}
+							>
+								<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
+							</button>
 							{#if !$selectionMode}
 								<TakeMenu
 									{gen}
 									onrepaint={() => onsource(gen, 'repaint')}
 									oncover={() => onsource(gen, 'cover')}
-									onkeep={() => actions.keep(gen.id, !gen.is_kept)}
 									onshare={() => actions.share(gen.id)}
 									onunshare={() => actions.unshare(gen.id)}
 									onaddtoplaylist={() => (playlistFor = gen.id)}
@@ -898,6 +908,7 @@
 	}
 
 	.pick-btn,
+	.keep-btn,
 	.play-btn {
 		display: flex;
 		align-items: center;
@@ -916,9 +927,9 @@
 		color: var(--accent);
 	}
 
-	.keep-marker {
-		display: inline-flex;
-		color: var(--text);
+	.keep-btn:hover,
+	.keep-btn.kept {
+		color: var(--keep);
 	}
 
 	.selection-toolbar {

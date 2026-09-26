@@ -17,6 +17,7 @@ import DetailTabs from './DetailTabs.svelte';
 import detailTabsSource from './DetailTabs.svelte?raw';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -104,7 +105,8 @@ describe('DetailTabs', () => {
 		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
 	});
 
-	it('sticks to the top, but scrolls away with the text while a field has focus on the phone', async () => {
+	it('sticks to the top, but scrolls away with the text while typing on the phone keyboard', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const [write] = await render();
 		const tablist = write.parentElement;
@@ -122,5 +124,6 @@ describe('DetailTabs', () => {
 		await tick();
 		expect(getComputedStyle(tablist).position).toBe('sticky');
 		stopWatching();
+		closeKeyboard();
 	});
 });

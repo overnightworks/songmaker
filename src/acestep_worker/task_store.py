@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
 
+from acestep_engine.progress import AceStepPhase
 from acestep_worker.clock import utcnow
 from acestep_worker.models import (
     TaskKind,
@@ -25,6 +26,7 @@ class _Task:
     kind: TaskKind
     state: TaskState = "pending"
     progress: float = 0.0
+    phase: AceStepPhase | None = None
     current_epoch: int | None = None
     train_epochs: int | None = None
     training_started_at: datetime | None = None
@@ -41,6 +43,7 @@ class _Task:
             kind=self.kind,
             state=self.state,
             progress=self.progress,
+            phase=self.phase,
             current_epoch=self.current_epoch,
             train_epochs=self.train_epochs,
             training_started_at=self.training_started_at,
@@ -65,14 +68,23 @@ class TaskStore:
         self._lock = asyncio.Lock()
         self._retention = retention_seconds
 
-    async def create(self, kind: TaskKind, *, train_epochs: int | None = None) -> str:
+    async def create(
+        self,
+        kind: TaskKind,
+        *,
+        train_epochs: int | None = None,
+        phase: AceStepPhase | None = None,
+    ) -> str:
         if kind != "train_lora" and train_epochs is not None:
             raise ValueError("Only LoRA training tasks have epochs")
+        if kind != "generate" and phase is not None:
+            raise ValueError("Only generation tasks have phases")
         task_id = f"{kind[:3]}-{uuid4().hex[:12]}"
         async with self._lock:
             self._tasks[task_id] = _Task(
                 task_id=task_id,
                 kind=kind,
+                phase=phase,
                 current_epoch=0 if train_epochs is not None else None,
                 train_epochs=train_epochs,
             )
@@ -89,11 +101,13 @@ class TaskStore:
         task_id: str,
         progress: float,
         *,
+        phase: AceStepPhase | None = None,
         current_epoch: int | None = None,
     ) -> None:
         await self._update(
             task_id,
             progress=progress,
+            phase=phase,
             current_epoch=current_epoch,
         )
 
@@ -111,6 +125,7 @@ class TaskStore:
         *,
         state: TaskState | None = None,
         progress: float | None = None,
+        phase: AceStepPhase | None = None,
         current_epoch: int | None = None,
         training_started_at: datetime | None = None,
         result: TaskResult | None = None,
@@ -125,6 +140,8 @@ class TaskStore:
                 task.state = state
             if progress is not None:
                 task.progress = progress
+            if phase is not None:
+                task.phase = phase
             if current_epoch is not None:
                 task.current_epoch = current_epoch
             if training_started_at is not None:

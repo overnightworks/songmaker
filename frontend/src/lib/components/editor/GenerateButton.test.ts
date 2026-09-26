@@ -61,9 +61,9 @@ afterEach(async () => {
 	clearPointer();
 });
 
-async function render(state: GenerateState): Promise<void> {
+async function render(state: GenerateState, props: { reasonInside?: boolean } = {}): Promise<void> {
 	action.set(state);
-	component = mount(GenerateButton, { target: document.body });
+	component = mount(GenerateButton, { target: document.body, props });
 	await tick();
 }
 
@@ -148,6 +148,17 @@ describe('GenerateButton', () => {
 			expect(generate).not.toHaveBeenCalled();
 		}
 	);
+
+	it('carries the disabled reason inside the one outline button in the slim phone bar', async () => {
+		await render(
+			{ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
+			{ reasonInside: true }
+		);
+		const button = getByRoleButton(document.body, `Generate — ${EDITOR_GPU_OFFLINE_TITLE}`);
+		expect(button.disabled).toBe(true);
+		expect(button.textContent?.trim()).toBe(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
+		expect(document.body.textContent?.trim()).toBe(button.textContent?.trim());
+	});
 
 	it('expands and collapses the literal worker sentence and retries through Generate', async () => {
 		const cause =
