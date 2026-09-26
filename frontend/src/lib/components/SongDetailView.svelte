@@ -14,7 +14,7 @@
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
-	import { ApiError } from '$lib/api/fetch';
+	import { ApiError, NetworkError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -529,12 +529,12 @@
 	 * surfacing the raw browser message.
 	 */
 	/**
-	 * A takes load that got no answer at all rejects with a `TypeError`
-	 * whose text is the browser's own (`Failed to fetch`); name the network
-	 * instead. Any other failure keeps its own message.
+	 * A takes load that got no answer at all carries the browser's own text
+	 * (`Failed to fetch`); name the network instead. Any other failure keeps
+	 * its own message.
 	 */
 	function describeTakesLoadFailure(e: unknown): string {
-		if (e instanceof TypeError) return EDITOR_NETWORK_ERROR;
+		if (e instanceof NetworkError) return EDITOR_NETWORK_ERROR;
 		return e instanceof Error ? e.message : TAKES_ERROR;
 	}
 

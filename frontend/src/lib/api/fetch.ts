@@ -22,6 +22,21 @@ export class ApiError extends Error {
 	}
 }
 
+/**
+ * The request got no answer at all -- offline, DNS, a refused connection --
+ * so `fetch` itself rejected. Only the fetch boundary below knows that a
+ * rejection came from the network rather than from the caller's own code.
+ */
+export class NetworkError extends Error {
+	constructor(
+		public readonly path: string,
+		cause: TypeError
+	) {
+		super(cause.message, { cause });
+		this.name = 'NetworkError';
+	}
+}
+
 async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
 	detail: string;
 	responseDetail: unknown;
@@ -172,6 +187,15 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 	);
 }
 
+async function fetchOrNetworkError(path: string, init: RequestInit): Promise<Response> {
+	try {
+		return await fetch(path, init);
+	} catch (err) {
+		if (err instanceof TypeError) throw new NetworkError(path, err);
+		throw err;
+	}
+}
+
 export async function apiFetch<T>(
 	path: string,
 	init?: RequestInit,
@@ -189,7 +213,7 @@ export async function apiFetch<T>(
 		method
 	);
 	try {
-		const resp = await fetch(path, opts);
+		const resp = await fetchOrNetworkError(path, opts);
 		await throwForFailedResponse(resp, path);
 		return resp.json() as Promise<T>;
 	} finally {
@@ -245,7 +269,7 @@ export async function* sseFetch<T = unknown>(
 		method
 	);
 	try {
-		const resp = await fetch(path, opts);
+		const resp = await fetchOrNetworkError(path, opts);
 		await throwForFailedResponse(resp, path);
 		if (resp.body) yield* parseSseEvents<T>(resp.body);
 	} finally {
