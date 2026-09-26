@@ -194,7 +194,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 	isMobile
 }) => {
 	test.setTimeout(180_000);
-	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
+	if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
 	const source = await seedVoiceTake(request);
 	const marker = Date.now().toString(36);
 	const voiceName = `E2E Voice ${marker}`;
@@ -274,10 +274,30 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		await expect(page.getByRole('heading', { name: /E2E With Voice/ })).toBeVisible();
-		await page
-			.getByRole('group', { name: 'Editor views', exact: true })
-			.getByRole('button', { name: 'Recipe', exact: true })
-			.click();
+		if (isMobile) {
+			await page.getByRole('tab', { name: 'Write', exact: true }).click();
+			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
+			await test.info().attach('phone-recipe-collapsed', {
+				body: await recipe.screenshot(),
+				contentType: 'image/png'
+			});
+			await recipe.getByRole('button', { name: 'Recipe', exact: true }).click();
+			await test.info().attach('phone-recipe-expanded', {
+				body: await recipe.screenshot(),
+				contentType: 'image/png'
+			});
+			await recipe.getByRole('button', { name: 'Voice', exact: true }).click();
+			await test.info().attach('phone-recipe-voice', {
+				body: await recipe.screenshot(),
+				contentType: 'image/png'
+			});
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+		} else {
+			await page
+				.getByRole('group', { name: 'Editor views', exact: true })
+				.getByRole('button', { name: 'Recipe', exact: true })
+				.click();
+		}
 		const picker = page.locator('.voice-picker .picker');
 		await picker.click();
 		const options = page.getByRole('listbox', { name: 'Your Voice', exact: true });
@@ -302,10 +322,18 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await deleteDialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
-		await page
-			.getByRole('group', { name: 'Editor views', exact: true })
-			.getByRole('button', { name: 'Recipe', exact: true })
-			.click();
+		if (isMobile) {
+			await page.getByRole('tab', { name: 'Write', exact: true }).click();
+			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
+			await recipe.getByRole('button', { name: 'Recipe', exact: true }).click();
+			await recipe.getByRole('button', { name: 'Voice', exact: true }).click();
+			await expect(page.getByRole('dialog')).toHaveCount(0);
+		} else {
+			await page
+				.getByRole('group', { name: 'Editor views', exact: true })
+				.getByRole('button', { name: 'Recipe', exact: true })
+				.click();
+		}
 		if (isMobile) {
 			await expect(page.locator('.voice-picker .mobile-label')).toHaveText(
 				'Your Voice · sft model'
@@ -320,10 +348,10 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await expect(deletedVoiceOption).toBeDisabled();
 		await deletedPicker.click();
 		if (isMobile) {
-			await page.getByRole('button', { name: 'Collapse ˄', exact: true }).click();
-			const deletedVoiceTake = page.locator('.take-chip').filter({ hasText: 'v1 · take 1' });
+			await page.getByRole('tab', { name: /^Takes/ }).click();
+			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
 			await expect(deletedVoiceTake).toBeVisible();
-			await deletedVoiceTake.click();
+			await deletedVoiceTake.getByRole('button', { name: 'Play v1 · take 1', exact: true }).click();
 			await expect(deletedVoiceTake).toHaveClass(/playing/);
 		} else {
 			const deletedVoiceTake = page.locator('.take-row').filter({ hasText: voiceName });
@@ -393,7 +421,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		mkdirSync(SCREENSHOT_DIR, { recursive: true });
 		await page.screenshot({
-			path: `${SCREENSHOT_DIR}/live-s55-${isMobile ? '375' : 'desktop'}.png`,
+			path: `${SCREENSHOT_DIR}/live-s55-${isMobile ? '390' : 'desktop'}.png`,
 			fullPage: true
 		});
 
