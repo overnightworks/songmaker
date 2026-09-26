@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import '../app.css';
-	import { goto } from '$app/navigation';
+	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
@@ -19,6 +19,7 @@
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
+	import { leaveRestoredLibraryHistory } from '$lib/stores/libraryContext';
 	import {
 		startLibraryResourceSync,
 		stopLibraryResourceSync,
@@ -116,6 +117,13 @@
 		if (barHidden) root.dataset.transportBar = 'hidden';
 		else delete root.dataset.transportBar;
 		return () => delete root.dataset.transportBar;
+	});
+
+	// A navigation before the library starts -- the sign-in redirect, or
+	// leaving before the first snapshot -- moves the page off the entry it
+	// loaded onto, whose restored state must not steer `initNavigation` then.
+	afterNavigate(({ type }) => {
+		if (type !== 'enter') leaveRestoredLibraryHistory();
 	});
 
 	// The live-sync stream and the history listener outlive a route swap
