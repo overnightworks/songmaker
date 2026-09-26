@@ -8,7 +8,7 @@
 // Its song is seeded directly against the database (`seedSongPhoneSong`),
 // into the album song-phone.spec.ts already owns for phone-only songs.
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_GENERATE_MODE_LABELS, EDITOR_VIEW_COWRITER_LABEL } from '../src/lib/constants';
 import { appBar, FlowGuard, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
@@ -16,6 +16,15 @@ import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
 const PHONE_TYPING_SONG_TITLE = 'Phone Typing';
 const COWRITER_COMPOSER_PLACEHOLDER = /^Ask the co-writer/;
 const COWRITER_SEND_LABEL = 'Send';
+const NO_RESERVED_ROOM = '0px';
+
+// The room every layout keeps free for the transport bar (app.css owns it):
+// while the keyboard owns the bottom, the page takes it back.
+function reservedTransportBarRoom(page: Page): Promise<string> {
+	return page.evaluate(() =>
+		getComputedStyle(document.documentElement).getPropertyValue('--player-height').trim()
+	);
+}
 
 test.describe('typing on the phone', () => {
 	test('the mini-player and the Generate bar step aside while a field has focus, and come back after', async ({
@@ -47,10 +56,12 @@ test.describe('typing on the phone', () => {
 		await expect(generate).toBeHidden();
 		await expect(appBar(page)).toBeVisible();
 		await expect(lyrics).toBeInViewport();
+		expect(await reservedTransportBarRoom(page)).toBe(NO_RESERVED_ROOM);
 
 		await lyrics.blur();
 		await expect(miniPlayer).toBeVisible();
 		await expect(generate).toBeVisible();
+		expect(await reservedTransportBarRoom(page)).not.toBe(NO_RESERVED_ROOM);
 
 		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL }).click();
 		const composer = page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);

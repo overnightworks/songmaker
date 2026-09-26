@@ -453,25 +453,27 @@ describe('app shell', () => {
 
 	// T1/T2/T6/T7 (#999): the shell alone decides that a field has focus on
 	// the phone; the bar and its reserved room step aside for the keyboard.
+	// The room collapses through the one transport-bar fact, so the shell,
+	// the song page's panel, the toast stack and the queue-stream chip all
+	// give it back together.
 	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
 		const target = await renderLayout('/');
-		const shell = requireElement<HTMLElement>(target, '.app-shell');
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
 
 		lyrics.focus();
 		await tick();
 		expect(target.querySelector('.player-bar')).toBeNull();
-		expect(shell.classList.contains('has-player')).toBe(false);
+		expect(document.documentElement.dataset.transportBar).toBe('hidden');
 		expect(requireElement(target, '.mobile-strip')).toBeTruthy();
 
 		lyrics.blur();
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
-		expect(shell.classList.contains('has-player')).toBe(true);
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 	});
 
-	it('keeps the transport bar on the desktop while a field has focus', async () => {
+	it('keeps the transport bar and its room on the desktop while a field has focus', async () => {
 		const target = await renderDesktopLayout();
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -479,7 +481,7 @@ describe('app shell', () => {
 		lyrics.focus();
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
-		expect(requireElement(target, '.shell-row').classList.contains('has-player')).toBe(true);
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 	});
 
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
@@ -640,21 +642,23 @@ describe('docked Now Playing', () => {
 		await renderDesktopLayout();
 		openNowPlaying('queue');
 		await tick();
-		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 
 		nowPlayingSurface.set('full');
 		await tick();
-		expect(document.documentElement.dataset.nowPlaying).toBe('full');
-		expect(extractRule(appCss, "html[data-now-playing='full']")).toContain('--player-height: 0px');
+		expect(document.documentElement.dataset.transportBar).toBe('hidden');
+		expect(extractRule(appCss, "html[data-transport-bar='hidden']")).toContain(
+			'--player-height: 0px'
+		);
 		// Same specificity as the coarse-pointer override of the same variable,
 		// so only source order makes the collapse win.
-		expect(appCss.indexOf("html[data-now-playing='full']")).toBeGreaterThan(
+		expect(appCss.indexOf("html[data-transport-bar='hidden']")).toBeGreaterThan(
 			appCss.indexOf("html[data-pointer='coarse']")
 		);
 
 		closeNowPlaying();
 		await tick();
-		expect(document.documentElement.dataset.nowPlaying).toBeUndefined();
+		expect(document.documentElement.dataset.transportBar).toBeUndefined();
 	});
 
 	// Too narrow for Now Playing's own three columns is too narrow to stand
