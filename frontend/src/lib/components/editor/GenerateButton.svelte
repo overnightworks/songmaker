@@ -3,8 +3,7 @@
 		EDITOR_GENERATE_CANCEL_LABEL,
 		EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 		EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
-		EDITOR_GENERATE_MODE_LABELS,
-		EDITOR_GENERATING_LABEL
+		EDITOR_GENERATE_MODE_LABELS
 	} from '$lib/constants';
 	import {
 		cancelGeneration,
@@ -13,7 +12,6 @@
 		isGenerateBusy,
 		type GenerateState
 	} from '$lib/stores/generateAction';
-	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -49,10 +47,7 @@
 				<span class="progress-fill" style:width={`${presentation.progress}%`} aria-hidden="true"
 				></span>
 				<span class="progress-label">
-					{presentation.takeCounter ?? EDITOR_GENERATING_LABEL}
-					· {presentation.progress}%{#if typeof presentation.remaining === 'number'}
-						{` · ~${formatTime(presentation.remaining)}`}
-					{/if}
+					{presentation.phase}{#if presentation.readout !== null}{` · ${presentation.readout}`}{/if}
 				</span>
 			{/if}
 		</div>

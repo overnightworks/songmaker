@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { EDITOR_GENERATE_CANCEL_LABEL, EDITOR_GENERATING_LABEL } from '$lib/constants';
+	import { EDITOR_GENERATE_CANCEL_LABEL } from '$lib/constants';
 	import {
 		cancelGeneration,
 		generateAction,
 		isGenerateJobActive
 	} from '$lib/stores/generateAction';
-	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -18,13 +17,8 @@
 	const percent = $derived(presentation.kind === 'generating' ? presentation.progress : 0);
 	const statusLineText = $derived.by(() => {
 		if (presentation.kind !== 'generating') return null;
-		const parts: string[] = [];
-		if (presentation.takeCounter) parts.push(presentation.takeCounter);
-		parts.push(`${presentation.progress}%`);
-		if (typeof presentation.remaining === 'number') {
-			parts.push(`~${formatTime(presentation.remaining)}`);
-		}
-		return parts.join(' · ');
+		const parts = [presentation.takeCounter, presentation.readout].filter((part) => part !== null);
+		return parts.length > 0 ? parts.join(' · ') : null;
 	});
 </script>
 
@@ -33,7 +27,7 @@
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
-				<b>{presentation.kind === 'queued' ? presentation.label : EDITOR_GENERATING_LABEL}</b>
+				<b>{presentation.kind === 'queued' ? presentation.label : presentation.phase}</b>
 			</span>
 			<button
 				type="button"

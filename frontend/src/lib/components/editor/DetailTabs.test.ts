@@ -85,15 +85,23 @@ describe('DetailTabs', () => {
 			{
 				kind: 'generating',
 				jobId: 'job1',
+				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
-				remaining: null
+				readout: '36%'
 			},
 			true
 		],
 		[
 			'submitting',
-			{ kind: 'generating', jobId: null, takeCounter: null, progress: 0, remaining: null },
+			{
+				kind: 'generating',
+				jobId: null,
+				phase: 'Generating...',
+				takeCounter: null,
+				progress: 0,
+				readout: '0%'
+			},
 			true
 		],
 		['idle', { kind: 'idle', mode: 'generate' }, false],

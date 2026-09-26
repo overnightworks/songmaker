@@ -26,9 +26,10 @@ import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
 	jobId: 'job1',
+	phase: 'Rendering',
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
-	remaining: 100
+	readout: '36% · ~1:40'
 };
 
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
@@ -72,27 +73,54 @@ describe('GenerationStatusSlot', () => {
 		expect(document.body.querySelector('.status-slot')).toBeNull();
 	});
 
-	it('shows the version, the take counter, the percent and the ETA while running, without repeating "Generating…"', async () => {
-		await render(running);
-		const slot = document.body.querySelector('.status-slot');
-		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			'v8 · Generating... Take 1 of 2 · 36% · ~1:40'
-		);
-		expect(document.body.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe(
-			'36'
-		);
-	});
+	it.each([
+		{
+			phase: 'Loading model…',
+			readout: null,
+			expected: 'v8 · Loading model… Take 1 of 2'
+		},
+		{
+			phase: 'Writing',
+			readout: '36% · ~1:40',
+			expected: 'v8 · Writing Take 1 of 2 · 36% · ~1:40'
+		},
+		{
+			phase: 'Rendering',
+			readout: '36% · ~1:40',
+			expected: 'v8 · Rendering Take 1 of 2 · 36% · ~1:40'
+		},
+		{
+			phase: 'Saving take',
+			readout: '36%',
+			expected: 'v8 · Saving take Take 1 of 2 · 36%'
+		},
+		{
+			phase: 'Generating...',
+			readout: '36% · ~1:40',
+			expected: 'v8 · Generating... Take 1 of 2 · 36% · ~1:40'
+		}
+	] as const)(
+		'titles the version with its phase and reads out the take as "$expected"',
+		async ({ phase, readout, expected }) => {
+			await render({ ...running, phase, readout });
+			const slot = document.body.querySelector('.status-slot');
+			expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(expected);
+			expect(
+				document.body.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')
+			).toBe('36');
+		}
+	);
 
-	it('omits the take counter for a single take and shows the percent alone on its line', async () => {
+	it('omits the take counter for a single take and shows the readout alone on its line', async () => {
 		await render({ ...running, takeCounter: null });
 		const slot = document.body.querySelector('.status-slot');
 		expect(slot?.textContent).not.toContain('Take 1 of 1');
 		expect(slot?.querySelector('.status-line')?.textContent).toBe('36% · ~1:40');
 	});
 
-	it('omits the ETA while it is still calculating', async () => {
-		await render({ ...running, remaining: 'calculating' });
-		expect(document.body.textContent).not.toContain('~');
+	it('leaves out the status line while a single take loads its model', async () => {
+		await render({ ...running, phase: 'Loading model…', takeCounter: null, readout: null });
+		expect(document.body.querySelector('.status-line')).toBeNull();
 	});
 
 	it('shows the queue position in the title, and the reason on its own line', async () => {
@@ -107,7 +135,7 @@ describe('GenerationStatusSlot', () => {
 	});
 
 	it('stays hidden while Generate is submitting and no job exists yet', async () => {
-		await render({ ...running, jobId: null, takeCounter: null, progress: 0, remaining: null });
+		await render({ ...running, jobId: null, takeCounter: null, progress: 0, readout: '0%' });
 		expect(document.body.querySelector('.status-slot')).toBeNull();
 	});
 
