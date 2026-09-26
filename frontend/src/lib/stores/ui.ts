@@ -1,7 +1,8 @@
 import type { ComponentProps } from 'svelte';
 import type ShareButton from '$lib/components/ShareButton.svelte';
 import type SongMenu from '$lib/components/editor/SongMenu.svelte';
-import { writable } from 'svelte/store';
+import { readonly, writable } from 'svelte/store';
+import { isEditableElement } from '$lib/utils/escape-level-up';
 
 interface PhoneAppBarSongState {
 	kind: 'song';
@@ -29,6 +30,65 @@ export function toggleSidebar(): void {
 
 export function closeSidebar(): void {
 	sidebarOpen.set(false);
+}
+
+const KEYBOARD_INPUT_TYPES: ReadonlySet<string> = new Set([
+	'text',
+	'search',
+	'email',
+	'url',
+	'tel',
+	'password',
+	'number'
+]);
+
+// A checkbox, slider or date picker is editable but takes no typing, so it
+// must not send the bars away; every other editable element does.
+function isTextEntryField(target: EventTarget | null): boolean {
+	if (!isEditableElement(target)) return false;
+	return !(target instanceof HTMLInputElement) || KEYBOARD_INPUT_TYPES.has(target.type);
+}
+
+const typingOnPhoneState = writable(false);
+
+// While a text field has focus on the phone layout the keyboard owns the
+// bottom of the screen (#999): the mini-player and any action bar step aside.
+// It follows the layout, not the keyboard kind, so a Bluetooth keyboard hides
+// the bars too. The app shell is the only writer; pages only read it.
+export const typingOnPhone = readonly(typingOnPhoneState);
+
+export function watchTypingOnPhone(root: Document, compact: boolean): () => void {
+	if (!compact) {
+		typingOnPhoneState.set(false);
+		return () => {};
+	}
+	let watching = true;
+	// A focused field that leaves the page (browser back, Escape closing a
+	// rename or the menu) may take focus with it without any `focusout`, so
+	// while a field has focus the page is watched for it disappearing.
+	const focusedFieldRemoval = new MutationObserver(followFocus);
+	function followFocus(): void {
+		if (!watching) return;
+		const typing = isTextEntryField(root.activeElement);
+		typingOnPhoneState.set(typing);
+		if (typing) focusedFieldRemoval.observe(root, { childList: true, subtree: true });
+		else focusedFieldRemoval.disconnect();
+	}
+	// Chrome blurs a focused field while Svelte is still removing it, where
+	// writing state throws `state_unsafe_mutation` and leaves the whole page
+	// stale; reading focus once the event has settled avoids that, and also
+	// lands a move from one field to the next without flashing the bars back.
+	const followFocusOnceSettled = () => queueMicrotask(followFocus);
+	followFocus();
+	root.addEventListener('focusin', followFocusOnceSettled);
+	root.addEventListener('focusout', followFocusOnceSettled);
+	return () => {
+		watching = false;
+		root.removeEventListener('focusin', followFocusOnceSettled);
+		root.removeEventListener('focusout', followFocusOnceSettled);
+		focusedFieldRemoval.disconnect();
+		typingOnPhoneState.set(false);
+	};
 }
 
 type Theme = 'dark' | 'light';

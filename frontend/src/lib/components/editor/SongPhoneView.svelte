@@ -2,6 +2,7 @@
 	import type { ComponentProps, Snippet } from 'svelte';
 	import { coWriterOpen, type RecipeChip } from '$lib/stores/recipe';
 	import { detailTab } from '$lib/stores/navigation';
+	import { typingOnPhone } from '$lib/stores/ui';
 	import DetailTabs from './DetailTabs.svelte';
 	import GenerateButton from './GenerateButton.svelte';
 	import PhoneRecipeSection from './PhoneRecipeSection.svelte';
@@ -24,10 +25,14 @@
 	// The action bar's own content decides its height (#993 fixed padding
 	// undershot it once the failure state expanded the worker sentence); the
 	// Write column reserves exactly that much, read back live instead of
-	// guessed as a constant.
+	// guessed as a constant. A bar that stepped aside for the keyboard takes
+	// no room at all.
 	$effect(() => {
 		const el = actionBarEl;
-		if (!el) return;
+		if (!el) {
+			generateBarHeight = 0;
+			return;
+		}
 		const measure = () => {
 			generateBarHeight = el.offsetHeight;
 		};
@@ -60,9 +65,11 @@
 			>
 				{@render write()}
 			</div>
-			<div class="write-actionbar" bind:this={actionBarEl}>
-				<GenerateButton />
-			</div>
+			{#if !$typingOnPhone}
+				<div class="write-actionbar" bind:this={actionBarEl}>
+					<GenerateButton />
+				</div>
+			{/if}
 		{:else}
 			{@render expiryDigest()}
 			<TakesList {...takeListProps} />

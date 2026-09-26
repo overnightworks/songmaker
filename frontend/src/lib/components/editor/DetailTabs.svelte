@@ -6,6 +6,7 @@
 		EDITOR_TABS_LABEL
 	} from '$lib/constants';
 	import { generateAction, isGenerateBusy } from '$lib/stores/generateAction';
+	import { typingOnPhone } from '$lib/stores/ui';
 
 	interface Props {
 		takeCount: number;
@@ -38,7 +39,12 @@
 	}
 </script>
 
-<div class="detail-tabs" role="tablist" aria-label={EDITOR_TABS_LABEL}>
+<div
+	class="detail-tabs"
+	class:pinned={!$typingOnPhone}
+	role="tablist"
+	aria-label={EDITOR_TABS_LABEL}
+>
 	{#each tabs as tab (tab)}
 		<button
 			type="button"
@@ -65,12 +71,16 @@
 
 <style>
 	.detail-tabs {
-		position: sticky;
-		top: 0;
-		z-index: 1;
 		display: flex;
 		background: var(--header-bg);
 		border-bottom: 1px solid var(--border);
+	}
+
+	/* While typing the text owns the screen, so the tabs scroll away with it. */
+	.detail-tabs.pinned {
+		position: sticky;
+		top: 0;
+		z-index: 1;
 	}
 
 	button {
