@@ -4,21 +4,19 @@
 		EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 		EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 		EDITOR_GENERATE_MODE_LABELS,
-		EDITOR_GENERATE_QUEUED_TEMPLATE,
-		EDITOR_GENERATE_TAKE_TEMPLATE,
-		EDITOR_GENERATING_LABEL,
-		EDITOR_QUEUED_LABEL
+		EDITOR_GENERATING_LABEL
 	} from '$lib/constants';
 	import {
 		cancelGeneration,
 		generate,
 		generateAction,
+		isGenerateBusy,
 		type GenerateState
 	} from '$lib/stores/generateAction';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
-	const presentation: GenerateState = $derived($generateAction.state);
+	const presentation: GenerateState = $derived($generateAction);
 	let expanded = $state(false);
 	const failureId = $props.id();
 
@@ -28,26 +26,15 @@
 </script>
 
 <div class="generate-action">
-	{#if presentation.kind === 'queued' || presentation.kind === 'generating'}
+	{#if isGenerateBusy(presentation)}
 		<div class="progress-button" role="status">
 			{#if presentation.kind === 'queued'}
-				<span class="progress-label">
-					{presentation.position === null
-						? EDITOR_QUEUED_LABEL
-						: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(presentation.position))}
-				</span>
+				<span class="progress-label">{presentation.label}</span>
 			{:else}
 				<span class="progress-fill" style:width={`${presentation.progress}%`} aria-hidden="true"
 				></span>
 				<span class="progress-label">
-					{#if presentation.takeIndex !== null && presentation.takeCount !== null && presentation.takeCount > 1}
-						{EDITOR_GENERATE_TAKE_TEMPLATE.replace(
-							'{index}',
-							String(presentation.takeIndex)
-						).replace('{count}', String(presentation.takeCount))}
-					{:else}
-						{EDITOR_GENERATING_LABEL}
-					{/if}
+					{presentation.takeCounter ?? EDITOR_GENERATING_LABEL}
 					· {presentation.progress}%{#if typeof presentation.remaining === 'number'}
 						{` · ~${formatTime(presentation.remaining)}`}
 					{/if}

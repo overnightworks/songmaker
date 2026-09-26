@@ -6,9 +6,8 @@
 // stays silent, and which axis a real container query puts the strip on can
 // only be shown here, against a real render.
 //
-// The strip renders in Write on the compact shell too. Its phone proof below
-// verifies the same action survives at 375px and that a second take list is
-// not reintroduced there.
+// On the phone the Takes tab owns takes, so the strip is absent from Write;
+// the phone proof below keeps it from creeping back in.
 
 import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_VIEW_COWRITER_LABEL, TRANSPORT_PAUSE_LABEL } from '../src/lib/constants';
@@ -430,7 +429,7 @@ test.describe('kinetic take strip', () => {
 		await context.close();
 	});
 
-	test('the strip renders in Write on the compact shell at phone width, alongside the Takes tab', async ({
+	test('the strip is absent from Write at phone width, where the Takes tab owns takes', async ({
 		browser,
 		isMobile
 	}) => {
@@ -451,12 +450,8 @@ test.describe('kinetic take strip', () => {
 		await page.goto(`/album/${library.albumId}/${expectedSongSlug(library.pickedSongTitle)}`);
 		await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
 
-		const strip = page.locator('.take-strip');
-		await expect(strip).toBeVisible();
-		await expect(page.locator('.takes-list')).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
-		await strip.getByRole('button', { name: library.takeLabel, exact: true }).click();
-		await expect(page.getByRole('contentinfo').getByText(library.takeLabel)).toBeVisible();
+		await expect(page.locator('.take-strip')).toHaveCount(0);
 
 		await context.close();
 	});

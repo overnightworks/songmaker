@@ -43,7 +43,7 @@ import {
 	setDraftPrompt,
 	versions
 } from './editor';
-import { cancelGeneration, generate, generateAction, progressPercent } from './generateAction';
+import { cancelGeneration, generate, generateAction } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
 import { songList } from './libraryData';
@@ -159,7 +159,12 @@ describe('generate action presentation', () => {
 		},
 		{
 			state: 'queued',
-			expectedState: { kind: 'queued', jobId: 'job1', position: 2, reason: queuedJob.queue_reason },
+			expectedState: {
+				kind: 'queued',
+				jobId: 'job1',
+				label: 'Queued #2',
+				reason: queuedJob.queue_reason
+			},
 			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }])
 		},
 		{
@@ -167,7 +172,7 @@ describe('generate action presentation', () => {
 			expectedState: {
 				kind: 'queued',
 				jobId: 'job1',
-				position: null,
+				label: 'Queued',
 				reason: queuedJob.queue_reason
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }])
@@ -177,12 +182,25 @@ describe('generate action presentation', () => {
 			expectedState: {
 				kind: 'generating',
 				jobId: 'job1',
-				takeIndex: null,
-				takeCount: null,
+				takeCounter: null,
 				progress: 0,
 				remaining: null
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
+		},
+		{
+			state: 'running a single take',
+			expectedState: {
+				kind: 'generating',
+				jobId: 'job1',
+				takeCounter: null,
+				progress: 0,
+				remaining: null
+			},
+			setup: () =>
+				activeJobs.set([
+					{ songId: 's1', job: { ...queuedJob, status: 'running', take_index: 1, take_count: 1 } }
+				])
 		},
 		{
 			state: 'another song running',
@@ -194,7 +212,7 @@ describe('generate action presentation', () => {
 		stopHealthPolling();
 		startHealthPolling();
 		await Promise.resolve();
-		expect(get(generateAction).state).toEqual(expectedState);
+		expect(get(generateAction)).toEqual(expectedState);
 	});
 
 	it.each([100, 'calculating', null] as const)(
@@ -209,15 +227,13 @@ describe('generate action presentation', () => {
 				remaining_time_estimate: remaining
 			};
 			activeJobs.set([{ songId: 's1', job }]);
-			expect(get(generateAction).state).toEqual({
+			expect(get(generateAction)).toEqual({
 				kind: 'generating',
 				jobId: 'job1',
-				takeIndex: 1,
-				takeCount: 2,
+				takeCounter: 'Take 1 of 2',
 				progress: 36,
 				remaining
 			});
-			expect(progressPercent(job)).toBe(36);
 		}
 	);
 
@@ -229,7 +245,7 @@ describe('generate action presentation', () => {
 				sourceMode.set(mode);
 			}
 			generationFailures.set({ s1: 'Worker exhausted GPU memory', s2: 'Another failure' });
-			expect(get(generateAction).state).toEqual({
+			expect(get(generateAction)).toEqual({
 				kind: 'failed',
 				mode,
 				cause: 'Worker exhausted GPU memory'
@@ -237,33 +253,34 @@ describe('generate action presentation', () => {
 			const request = generate();
 			expect(get(generationFailures)).toEqual({ s2: 'Another failure' });
 			await request;
-			expect(get(generateAction).state.kind).toBe('queued');
+			expect(get(generateAction).kind).toBe('queued');
 		}
 	);
 
 	it('keeps unavailable and pending states ahead of a previous failure', () => {
 		generationFailures.set({ s1: 'Previous failure' });
 		recipeModel.set(null);
-		expect(get(generateAction).state.kind).toBe('disabled');
+		expect(get(generateAction).kind).toBe('disabled');
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
-		expect(get(generateAction).state.kind).toBe('queued');
+		expect(get(generateAction).kind).toBe('queued');
 	});
 
 	it('does not show another song failure', () => {
 		generationFailures.set({ s2: 'Another failure' });
-		expect(get(generateAction).state).toEqual({ kind: 'idle', mode: 'generate' });
+		expect(get(generateAction)).toEqual({ kind: 'idle', mode: 'generate' });
 	});
 
 	it('follows the selected song and exposes a reason only while queued', () => {
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
 		expect(get(generateAction)).toMatchObject({
-			job: queuedJob,
-			state: { kind: 'queued', reason: queuedJob.queue_reason }
+			kind: 'queued',
+			jobId: queuedJob.id,
+			reason: queuedJob.queue_reason
 		});
 		activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }]);
-		expect(get(generateAction)).toMatchObject({ state: { kind: 'generating' } });
+		expect(get(generateAction)).toMatchObject({ kind: 'generating' });
 		selectedSongId.set(null);
-		expect(get(generateAction)).toMatchObject({ job: null, state: { kind: 'idle' } });
+		expect(get(generateAction)).toMatchObject({ kind: 'idle' });
 	});
 });
 
@@ -276,7 +293,10 @@ describe('generate action execution', () => {
 		vi.mocked(fetchVersions).mockResolvedValue([makeVersion({ id: 'v2', version_number: 2 })]);
 		const request = generate();
 		expect(get(generateAction)).toMatchObject({
-			state: { kind: 'generating', jobId: null, progress: 0, remaining: null }
+			kind: 'generating',
+			jobId: null,
+			progress: 0,
+			remaining: null
 		});
 		await generate();
 		expect(updateSong).toHaveBeenCalledTimes(1);
@@ -286,7 +306,7 @@ describe('generate action execution', () => {
 		expect(generateSong).toHaveBeenCalledExactlyOnceWith('s1', 2, 'turbo', 'v2', 42);
 		expect(get(isDirty)).toBe(false);
 		expect(get(pinnedSeed)).toBeNull();
-		expect(get(generateAction)).toMatchObject({ state: { kind: 'queued' }, job: queuedJob });
+		expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 	});
 
 	it.each(['save', 'generate'] as const)(
@@ -298,13 +318,13 @@ describe('generate action execution', () => {
 				vi.mocked(updateSong).mockRejectedValueOnce(failure);
 			} else vi.mocked(generateSong).mockRejectedValueOnce(failure);
 			await generate();
-			expect(get(generateAction)).toMatchObject({ state: { kind: 'idle' } });
+			expect(get(generateAction)).toMatchObject({ kind: 'idle' });
 			expect(get(pinnedSeed)).toBe(42);
 			expect(addToast).toHaveBeenCalledWith(failure.message, 'error');
 			if (step === 'save') expect(generateSong).not.toHaveBeenCalled();
 			vi.mocked(updateSong).mockResolvedValue(makeSong({ lyrics: 'new verse', prompt: 'folk' }));
 			await generate();
-			expect(get(generateAction).job).toEqual(queuedJob);
+			expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 		}
 	);
 
@@ -322,7 +342,7 @@ describe('generate action execution', () => {
 		repaintStrength.set(0.6);
 		coverStrength.set(0.7);
 		coverNoiseStrength.set(variant === 'noise' ? 0.3 : 0);
-		expect(get(generateAction).state).toEqual({ kind: 'idle', mode });
+		expect(get(generateAction)).toEqual({ kind: 'idle', mode });
 		await generate();
 		const options = { model: 'turbo', seed: 42, versionId: 'v1', count: 2 };
 		if (mode === 'repaint') {
@@ -337,7 +357,7 @@ describe('generate action execution', () => {
 				coverNoiseStrength: variant === 'noise' ? 0.3 : undefined
 			});
 		}
-		expect(get(generateAction).job).toEqual(queuedJob);
+		expect(get(generateAction)).toMatchObject({ kind: 'queued', jobId: queuedJob.id });
 		expect(get(pinnedSeed)).toBeNull();
 	});
 
@@ -353,7 +373,7 @@ describe('generate action execution', () => {
 		else recipeModel.set(null);
 		await generate();
 		expect(generateSong).not.toHaveBeenCalled();
-		expect(get(generateAction).state.kind).not.toBe('generating');
+		expect(get(generateAction).kind).not.toBe('generating');
 	});
 });
 

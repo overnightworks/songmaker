@@ -1110,7 +1110,7 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 		openWriteTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
-		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
+		expect(target.querySelector('.write-surface .cowriter-row')).not.toBeNull();
 
 		coWriterOpen.set(true);
 		await tick();
@@ -1123,7 +1123,7 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 		await tick();
 
 		expect(target.querySelector('.cowriter')).toBeNull();
-		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
+		expect(target.querySelector('.write-surface .cowriter-row')).not.toBeNull();
 	});
 
 	it('opens from the Write column\'s "Co-writer" row', async () => {
