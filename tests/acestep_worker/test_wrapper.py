@@ -11,7 +11,9 @@ import httpx
 import pytest
 from fastapi.testclient import TestClient
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_key, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
@@ -331,7 +333,7 @@ def test_evict_model(tmp_path: Path) -> None:
     assert body["loaded"] == []
 
 
-def test_generate_requires_loaded(tmp_path: Path) -> None:
+def test_generate_answers_an_unloaded_mode_the_way_the_scheduler_recognizes(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -341,6 +343,7 @@ def test_generate_requires_loaded(tmp_path: Path) -> None:
             headers=_INTERNAL_HEADERS,
         )
     assert resp.status_code == 409
+    assert resp.json()["detail"] == MODE_NOT_LOADED_DETAIL.format(mode="sft")
 
 
 @pytest.mark.parametrize(
@@ -433,7 +436,7 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
     assert resp.json()["detail"] == "GPU is held for LoRA training"
 
 
-def test_generate_returns_task_id(tmp_path: Path) -> None:
+def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -443,8 +446,10 @@ def test_generate_returns_task_id(tmp_path: Path) -> None:
             json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
             headers=_INTERNAL_HEADERS,
         )
+        task = client.get(f"/tasks/{resp.json()['task_id']}", headers=_INTERNAL_HEADERS)
     assert resp.status_code == 200
     assert resp.json()["task_id"].startswith("gen-")
+    assert task.json()["phase"] == "loading_model"
 
 
 def _full_ace_step_config_payload() -> dict[str, Any]:
@@ -700,7 +705,7 @@ def test_default_generate_runner_carries_delivered_batch_size(
     assert snap.result.delivered_batch_size == 1
 
 
-def test_default_generate_runner_emits_progress(
+def test_default_generate_runner_emits_the_engines_phase_and_fraction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -712,28 +717,18 @@ def test_default_generate_runner_emits_progress(
         delivered_batch_size=None,
     )
 
-    captured_progress: list[float] = []
-
     def _fake_generate(ace_config, on_progress=None):
-        if on_progress is not None:
-            on_progress("8/50 [00:02<00:13]")
-            on_progress("LM chunk 1/1")
-            on_progress("25/50 [00:05<00:08]")
+        on_progress(AceStepProgress(AceStepPhase.WRITING, 0.5))
+        on_progress(AceStepProgress(AceStepPhase.RENDERING, 0.25))
         return fake_result
 
     _patch_engine_modules(monkeypatch, _fake_generate)
 
     async def go():
         store = TaskStore()
-        task_id = await store.create("generate")
-        original_update = store.update_progress
-
-        async def _capture(tid, fraction):
-            captured_progress.append(fraction)
-            await original_update(tid, fraction)
-
-        store.update_progress = _capture  # type: ignore[method-assign]
-
+        task_id = await store.create("generate", phase=AceStepPhase.WRITING)
+        events = store.subscribe(task_id)
+        await anext(events)
         await default_generate_runner(
             store,
             task_id,
@@ -742,13 +737,17 @@ def test_default_generate_runner_emits_progress(
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
-        await asyncio.sleep(0.05)
-        return await store.get(task_id)
+        return [event async for event in events]
 
-    snap = _run(go())
-    assert snap is not None
-    assert snap.state == "done"
-    assert captured_progress == [8 / 50, 25 / 50]
+    events = _run(go())
+
+    progress_events = [event.data for event in events if event.type == "progress"]
+    assert [(data["phase"], data["progress"]) for data in progress_events] == [
+        ("writing", 0.0),
+        ("writing", 0.5),
+        ("rendering", 0.25),
+    ]
+    assert events[-1].type == "done"
 
 
 def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, type APIRequestContext } from '@playwright/test';
+import type { JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
 const execFileAsync = promisify(execFile);
@@ -161,7 +162,7 @@ export interface SeededLibrary {
 	secondAlbumSongTitle: string;
 	/** Dedicated album the kinetic-strip flow can mutate without changing the base library. */
 	kineticStripAlbumId: string;
-	/** Dedicated album song-phone.spec.ts seeds its own song and job states into. */
+	/** Dedicated album song-phone.spec.ts and take-arrives.spec.ts seed their own songs and job states into. */
 	songPhoneAlbumId: string;
 }
 
@@ -739,15 +740,18 @@ export async function seedSongPhoneSong(
 	}
 }
 
+type GenerationPhase = NonNullable<JobItem['phase']>;
+
 /**
  * A running generate job for `songId`, seeded directly against the database
  * (`scripts/seed_e2e_job_states.py`) since CI's e2e stack runs no ACE-Step
  * worker to produce one. `update_job_status`'s own RUNNING branch sets
  * `heartbeat_at` to the moment the row is written, comfortably inside
  * `JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS` for the rest of the test — nothing
- * here needs to touch it by hand. `runningSinceOffsetSeconds` backdates
- * `running_since` alone, so the remaining-time estimate has real elapsed
- * time to divide the remaining progress by. Returns the job's id.
+ * here needs to touch it by hand. A generating `phase` starts the estimate's
+ * clock; `generationStartedOffsetSeconds` moves that start into the past, so
+ * the remaining-time estimate has elapsed time to work with. Returns the
+ * job's id.
  */
 export async function seedRunningGenerationJob(
 	songId: string,
@@ -755,7 +759,8 @@ export async function seedRunningGenerationJob(
 		progress: number;
 		takeIndex: number;
 		takeCount: number;
-		runningSinceOffsetSeconds: number;
+		phase: GenerationPhase;
+		generationStartedOffsetSeconds: number;
 	}
 ): Promise<string> {
 	try {
@@ -777,8 +782,10 @@ export async function seedRunningGenerationJob(
 				String(options.takeIndex),
 				'--take-count',
 				String(options.takeCount),
-				'--running-since-offset',
-				String(options.runningSinceOffsetSeconds),
+				'--phase',
+				options.phase,
+				'--generation-started-offset',
+				String(options.generationStartedOffsetSeconds),
 				'--owner-username',
 				requiredEnv('ADMIN_USERNAME')
 			],
@@ -822,6 +829,39 @@ export async function failGenerationJob(jobId: string, error: string): Promise<v
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Failing the generate job failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * Completes an existing generate job with one new take on its song's latest
+ * version, in the same commit, so the job's own open
+ * `/api/jobs/{id}/stream` reports the end only once the take is readable.
+ * The `generation.created` resource event a real worker also writes is left
+ * out on purpose (`set-completed` in `scripts/seed_e2e_job_states.py`): it
+ * stands in for the event a phone's dropped resource stream never received,
+ * so only the job's own terminal refresh can bring the take into the list.
+ */
+export async function completeGenerationJobWithoutEvent(jobId: string): Promise<void> {
+	try {
+		await execWithStdin(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'set-completed',
+				'--job-id',
+				jobId
+			],
+			{ cwd: REPO_ROOT },
+			readFileSync(TAKE_FIXTURE)
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Completing the generate job failed: ${detail}`, { cause: err });
 	}
 }
 

@@ -5,8 +5,6 @@
 	import {
 		TAKE_REPAINT_LABEL,
 		TAKE_COVER_LABEL,
-		TAKE_KEEP_LABEL,
-		TAKE_UNKEEP_LABEL,
 		TAKE_DELETE_LABEL,
 		TAKE_OVERFLOW_LABEL,
 		TAKE_PLAYLIST_LABEL,
@@ -19,15 +17,13 @@
 		gen: GenerationItem;
 		onrepaint: () => void;
 		oncover: () => void;
-		onkeep: () => void;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
 		onaddtoplaylist: () => void;
 		ondelete: () => void;
 	}
 
-	let { gen, onrepaint, oncover, onkeep, onshare, onunshare, onaddtoplaylist, ondelete }: Props =
-		$props();
+	let { gen, onrepaint, oncover, onshare, onunshare, onaddtoplaylist, ondelete }: Props = $props();
 
 	const takeLabel = $derived(
 		gen.version_number !== null
@@ -121,17 +117,6 @@
 				onclick={() => runAndClose(oncover)}
 			>
 				<Icon name="layers" />{TAKE_COVER_LABEL}
-			</button>
-			<button
-				type="button"
-				role="menuitem"
-				class="overflow-item"
-				data-hitbox="text"
-				onclick={() => runAndClose(onkeep)}
-			>
-				<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} />{gen.is_kept
-					? TAKE_UNKEEP_LABEL
-					: TAKE_KEEP_LABEL}
 			</button>
 			<button
 				type="button"

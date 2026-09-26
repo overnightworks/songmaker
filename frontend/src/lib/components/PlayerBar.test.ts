@@ -35,6 +35,7 @@ import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {
@@ -576,6 +577,7 @@ describe('PlayerBar while typing on the phone', () => {
 		audio.fire('canplay');
 		await tick();
 		expect(audio.paused).toBe(false);
+		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const lyrics = document.createElement('textarea');
 		document.body.append(lyrics);
@@ -590,5 +592,6 @@ describe('PlayerBar while typing on the phone', () => {
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(audio.paused).toBe(false);
 		stopWatching();
+		closeKeyboard();
 	});
 });

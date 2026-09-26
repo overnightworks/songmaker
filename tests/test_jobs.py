@@ -16,11 +16,14 @@ import httpx
 import pytest
 from agent_providers.constants import JUDGE_FAILURE_TIMEOUT
 
-from acestep_engine.models import AceStepConfig
-from songmaker_cli.api_models import CoverTaskParams, RepaintTaskParams
+from acestep_engine.models import AceStepConfig, TaskQueryEntry
+from acestep_engine.progress import AceStepPhase, progress_from_result
+from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    GenerationPhase,
     JobFunction,
+    JobStatus,
     JobType,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -52,7 +55,7 @@ from songmaker_cli.jobs import (
     run_generation_job,
     run_scoring_job,
 )
-from songmaker_cli.jobs.generation import GenerationJobRequest
+from songmaker_cli.jobs.generation import GenerationJobRequest, GenerationProgressTracker
 from songmaker_cli.scheduler import (
     WORKER_STREAM_WENT_SILENT,
     GenerationTaskResultDTO,
@@ -178,6 +181,15 @@ def test_update_job_success(seeded_db) -> None:
         assert job.progress == 0.5
 
 
+def test_a_new_running_entry_starts_without_the_previous_runs_phase(seeded_db) -> None:
+    _update_job(seeded_db, "j1", JobStatus.RUNNING, phase=GenerationPhase.SAVING_TAKE)
+    _update_job(seeded_db, "j1", JobStatus.QUEUED)
+    _update_job(seeded_db, "j1", JobStatus.RUNNING)
+
+    with seeded_db() as session:
+        assert get_job(session, "j1").phase is None
+
+
 def test_update_job_raises_after_retries(db_factory) -> None:
     broken_factory = MagicMock(side_effect=RuntimeError("db broken"))
     with pytest.raises(RuntimeError, match="status update to 'running' failed after 2 attempts"):
@@ -217,14 +229,17 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
 @pytest.mark.parametrize("count", [1, 2])
 def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> None:
     observed_takes = []
-    running_starts = []
+    generation_starts = []
+    phases_at_take_start = []
 
     async def generate_take(**kwargs):
-        kwargs["on_progress"](0.5)
+        with seeded_db() as session:
+            phases_at_take_start.append(get_job(session, "j1").phase)
+        kwargs["on_progress"](AceStepPhase.RENDERING, 0.5)
         with seeded_db() as session:
             job = get_job(session, "j1")
             observed_takes.append((job.take_index, job.take_count, job.progress))
-            running_starts.append(job.running_since)
+            generation_starts.append(job.generation_started_at)
         return _make_dto(seed=42)
 
     dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
@@ -249,9 +264,13 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
     assert job.status == "completed"
     assert job.progress == 1.0
     assert (job.take_index, job.take_count) == (count, count)
-    assert observed_takes == [(index + 1, count, (index + 0.5) / count) for index in range(count)]
-    assert running_starts[0] is not None
-    assert len(set(running_starts)) == 1
+    assert observed_takes == [
+        (index + 1, count, pytest.approx((index + 0.55 + 0.15 * 0.5) / count))
+        for index in range(count)
+    ]
+    assert generation_starts[0] is not None
+    assert len(set(generation_starts)) == 1
+    assert phases_at_take_start == [GenerationPhase.LOADING_MODEL] * count
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
@@ -1559,11 +1578,131 @@ def test_generation_job_cancel_after_worker_skips_persist(
         assert session.query(ResourceEvent).count() == 0
 
 
+_OLD_REGEX_FALSE_POSITIVES_AND_A_REAL_ACE_STEP_RUN = (
+    ("", 0.0),
+    ("Loading checkpoint shards 4/4 [00:03<00:00, 1.01s/it]", 0.01),
+    ("Phase 1: Generating CoT metadata", 0.1),
+    ("0/1 [00:00<?, ?it/s]", 0.5),
+    ("Preparing inputs...", 0.51),
+    ("8/50 [00:02<00:13]", 0.52),
+    ("Loading checkpoint shards 1/4 [00:01<00:03]", 0.6),
+    ("49/50 [00:13<00:00]", 0.79),
+    ("Decoding audio...", 0.8),
+    ("0/1 [00:00<?, ?it/s]", 0.99),
+)
+
+
+def _running_query_entry(progress_text: str, server_progress: float) -> TaskQueryEntry:
+    return TaskQueryEntry(
+        task_id="t",
+        status=0,
+        progress_text=progress_text,
+        result=json.dumps([{"file": "", "progress": server_progress}]),
+    )
+
+
+@pytest.mark.parametrize("count", [1, 2])
+def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_take_is_saved(
+    seeded_db, tmp_path: Path, count: int,
+) -> None:
+    observed: list[float] = []
+
+    def job_progress() -> float:
+        with seeded_db() as session:
+            return get_job(session, "j1").progress
+
+    async def generate_take(**kwargs):
+        kwargs["on_progress"](AceStepPhase.LOADING_MODEL, 0.0)
+        observed.append(job_progress())
+        for progress_text, server_progress in _OLD_REGEX_FALSE_POSITIVES_AND_A_REAL_ACE_STEP_RUN:
+            [item] = _running_query_entry(progress_text, server_progress).parse_result_items()
+            progress = progress_from_result(item)
+            kwargs["on_progress"](progress.phase, progress.fraction)
+            observed.append(job_progress())
+        return _make_dto(seed=42)
+
+    def post_process_observing_progress(**kwargs):
+        observed.append(job_progress())
+        return _persist_via_post_process(**kwargs)
+
+    dispatch, _, defaults = _patch_dispatch_and_post_process(generate_take)
+    with (
+        dispatch,
+        defaults,
+        patch(
+            "songmaker_cli.jobs.post_process_generation",
+            side_effect=post_process_observing_progress,
+        ),
+        patch("songmaker_cli.jobs.generation._PROGRESS_THROTTLE_SECONDS", 0.0),
+    ):
+        _run(
+            run_generation_job(
+                "j1", "s1", "v1", count, "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
+
+    assert observed == sorted(observed)
+    assert max(observed) < 1.0
+    assert observed[-1] == pytest.approx((count - 1 + 0.70) / count)
+    with seeded_db() as session:
+        assert get_job(session, "j1").progress == 1.0
+        assert session.query(Generation).filter_by(song_id="s1").count() == count
+
+
+def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task(
+    seeded_db, tmp_path: Path,
+) -> None:
+    observed: list[tuple[str | None, str | int | None, bool]] = []
+
+    def observe() -> None:
+        with seeded_db() as session:
+            job = get_job(session, "j1")
+            response = JobResponse.from_orm(job)
+            observed.append((
+                response.phase, response.remaining_time_estimate,
+                job.generation_started_at is not None,
+            ))
+
+    async def generate_take(**kwargs):
+        for server_progress in (0.0, 0.0, 0.01, 0.2):
+            [item] = _running_query_entry("", server_progress).parse_result_items()
+            progress = progress_from_result(item)
+            kwargs["on_progress"](progress.phase, progress.fraction)
+            observe()
+        return _make_dto(seed=42)
+
+    dispatch, post_process, defaults = _patch_dispatch_and_post_process(generate_take)
+    with dispatch, post_process, defaults:
+        _run(
+            run_generation_job(
+                "j1", "s1", "v1", 1, "u1",
+                db_factory=seeded_db,
+                audio_dir=tmp_path / "audio",
+                data_dir=tmp_path / "data",
+                redis=MagicMock(),
+                target_model="sft",
+            )
+        )
+
+    assert [(phase, anchored) for phase, _, anchored in observed] == [
+        ("loading_model", False),
+        ("loading_model", False),
+        ("writing", True),
+        ("writing", True),
+    ]
+    assert observed[0][1] == "calculating"
+
+
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:
     _update_job(seeded_db, "j1", "running", progress=0.2)
     _cancel_job(seeded_db, "j1")
-    callback = _make_generation_progress_callback(seeded_db, "j1", 0, 1)
-    callback(0.9)
+    callback = _make_generation_progress_callback(GenerationProgressTracker(seeded_db, "j1", 1))
+    callback(AceStepPhase.RENDERING, 0.9)
     _finalize_generation_job(seeded_db, "j1", 1, 1, None)
 
     with seeded_db() as session:
