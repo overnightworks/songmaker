@@ -17,6 +17,7 @@ import {
 	isLibraryHistoryState,
 	libraryScrollAnchor,
 	librarySurface,
+	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -1271,6 +1272,13 @@ describe('compact Now Playing owns one history entry', () => {
 		}
 	];
 
+	// What SvelteKit's single-page start writes over the entry a page loads onto.
+	const SVELTEKIT_START_ENTRY = {
+		'sveltekit:history': 1,
+		'sveltekit:navigation': 1,
+		'sveltekit:states': {}
+	};
+
 	let stopNavigation: () => void = () => undefined;
 
 	beforeEach(() => {
@@ -1347,6 +1355,8 @@ describe('compact Now Playing owns one history entry', () => {
 				stopNavigation();
 				resetNavigationForTests();
 				closeNowPlaying();
+				loadLibraryHistoryPageForTests();
+				history.replaceState(SVELTEKIT_START_ENTRY, '');
 				stopNavigation = initNavigation();
 			}
 		},

@@ -273,6 +273,23 @@ const NOW_PLAYING_LEAVES: {
 		}
 	},
 	{
+		// A reload -- or a phone restoring a tab it discarded -- drops the open
+		// Now Playing but not its history entry; once its library has loaded
+		// the app steps back off that entry, and Back is meant from then on.
+		name: 'a reload',
+		leave: async (page) => {
+			await page.addInitScript(() => {
+				window.addEventListener(
+					'popstate',
+					() => document.documentElement.setAttribute('data-e2e-stepped-back', ''),
+					{ once: true }
+				);
+			});
+			await page.reload();
+			await expect(page.locator('html[data-e2e-stepped-back]')).toBeAttached();
+		}
+	},
+	{
 		name: '× right after open',
 		leave: async (page, playing) => {
 			await page.keyboard.press('Escape');

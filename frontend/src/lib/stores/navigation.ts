@@ -43,6 +43,7 @@ import {
 	libraryWallStateFrom,
 	setLibrarySurface,
 	snapshotLibraryHistory,
+	takeRestoredLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab,
 	type LibraryHistoryState
@@ -682,7 +683,10 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
-	const staleLanding = staleLayerEntryLanding(existing);
+	const restored = takeRestoredLibraryHistory();
+	const staleLanding = staleLayerEntryLanding(
+		isLibraryHistoryState(restored) ? restored : existing
+	);
 	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {

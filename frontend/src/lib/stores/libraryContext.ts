@@ -82,6 +82,11 @@ let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
+// SvelteKit's single-page start replaces the entry's history.state with its
+// own router entry before any page runs, so the state a reload or a restored
+// tab comes back to survives only in this read, taken while the router loads
+// this module during that start.
+let restoredHistory: unknown = history.state;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -316,6 +321,20 @@ function queueHistoryStep(
 
 function pathnameOf(url: string): string {
 	return new URL(url, window.location.origin).pathname;
+}
+
+// The history.state the page loaded onto, handed out once: the first reader
+// after a load gets it, every later one null.
+export function takeRestoredLibraryHistory(): unknown {
+	const restored = restoredHistory;
+	restoredHistory = null;
+	return restored;
+}
+
+// A page load, as far as the restored entry goes: reads history.state the way
+// this module's own load does.
+export function loadLibraryHistoryPageForTests(): void {
+	restoredHistory = history.state;
 }
 
 // The library history entry as it will stand once every queued write has
@@ -860,6 +879,7 @@ export function resetLibraryContextForTests(): void {
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
+	restoredHistory = null;
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	libraryScrollAnchor.set(0);
