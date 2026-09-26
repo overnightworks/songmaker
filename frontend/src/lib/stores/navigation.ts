@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { derived, get, writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
@@ -16,8 +16,7 @@ import {
 	clearGenerationSelection as playerClearGeneration,
 	closeNowPlaying,
 	ensureGenerationsLoaded,
-	nowPlayingDockable,
-	nowPlayingSurface
+	nowPlayingIsPushedScreen
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
@@ -563,11 +562,6 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 // room for the docked panel) steps back off that entry, so no stale copy of
 // the library is left for Back to land on. The docked panel and a desktop
 // full surface push nothing.
-const compactNowPlayingShown = derived(
-	[nowPlayingSurface, nowPlayingDockable],
-	([surface, dockable]) => surface === 'full' && !dockable
-);
-
 // The library entry the Now Playing layer sits on, for as long as the layer
 // is the top entry. Kept here rather than marked on the layer's own state:
 // every replace write snapshots the library afresh and would drop the mark.
@@ -656,7 +650,7 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	const stopFollowingNowPlaying = compactNowPlayingShown.subscribe(followCompactNowPlaying);
+	const stopFollowingNowPlaying = nowPlayingIsPushedScreen.subscribe(followCompactNowPlaying);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		stopFollowingNowPlaying();
