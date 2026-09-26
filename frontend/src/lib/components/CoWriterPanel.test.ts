@@ -66,6 +66,25 @@ async function* turnEvents(events: CoWriterStreamEvent[]) {
 	for (const event of events) yield event;
 }
 
+/** Streams that end without the server's own error frame: the turn itself may still run. */
+const droppedStreams: Array<[string, () => AsyncGenerator<CoWriterStreamEvent>]> = [
+	['a stream that ends before its final event', () => turnEvents([])],
+	[
+		'a timed out stream',
+		async function* () {
+			yield* [] as CoWriterStreamEvent[];
+			throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+		}
+	],
+	[
+		'a stream the network dropped',
+		async function* () {
+			yield { type: 'assistant_text', text: 'Mach ich' } as CoWriterStreamEvent;
+			throw new TypeError('Failed to fetch');
+		}
+	]
+];
+
 /**
  * After a turn's "final" event, the panel reloads conversations to confirm
  * which one is active. The real backend already reflects the just-created
@@ -255,40 +274,24 @@ describe('CoWriterPanel failed turns', () => {
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
 	});
 
-	it('names a stream that ends before its final event', async () => {
-		streamCoWriterTurn.mockReturnValue(turnEvents([]));
-		const target = await render();
+	it.each(droppedStreams)(
+		'names %s whose message never reached the server, with a retry',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			const target = await render();
 
-		await sendTurn(target, 'write a chorus');
+			await sendTurn(target, 'write a chorus');
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
-		expect(target.querySelector('.typing')).toBeNull();
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
-	});
-
-	it('names a timed out stream below the retained user message', async () => {
-		streamCoWriterTurn.mockReturnValue(
-			(async function* () {
-				yield* [] as CoWriterStreamEvent[];
-				throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-			})()
-		);
-		const target = await render();
-
-		await sendTurn(target, 'write a chorus');
-
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-	});
+			await vi.waitFor(() =>
+				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+					'The co-writer did not answer. Try again.'
+				)
+			);
+			expect(target.querySelector('.typing')).toBeNull();
+			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+		}
+	);
 
 	it('names a 503 below the user message, ends typing, and retries the retained message', async () => {
 		streamCoWriterTurn.mockReturnValueOnce(
@@ -445,6 +448,89 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			)
 		);
 		expect(target.querySelector('.typing')).toBeNull();
+	});
+
+	async function sendInAnOpenConversation(onturncompleted = vi.fn()): Promise<HTMLElement> {
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const target = await render({ onturncompleted });
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		await sendTurn(target, 'Ja bitte');
+		return target;
+	}
+
+	it.each(droppedStreams)(
+		'follows the turn the server still runs after %s, then shows its reply',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			conversationPages(
+				conversation(false),
+				conversation(true, sent),
+				conversation(false, sent, reply)
+			);
+			const onturncompleted = vi.fn();
+
+			const target = await sendInAnOpenConversation(onturncompleted);
+
+			await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+			await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+			expect(target.querySelector('.turn-error')).toBeNull();
+			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
+
+			await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+			await vi.waitFor(() =>
+				expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+			);
+			expect(target.querySelector('.typing')).toBeNull();
+			expect(target.querySelector('.turn-error')).toBeNull();
+			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+			expect(onturncompleted).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it('shows the reply of a turn that finished while its stream was down', async () => {
+		streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+		conversationPages(conversation(false), conversation(false, sent, reply));
+		const onturncompleted = vi.fn();
+
+		const target = await sendInAnOpenConversation(onturncompleted);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.querySelector('.turn-error')).toBeNull();
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(onturncompleted).toHaveBeenCalledTimes(1);
+	});
+
+	it('follows a turn another tab is running and keeps what was typed', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(409, 'A co-writer reply is still being written', '/api/chat/turn');
+			})()
+		);
+		const otherTab = chatMessage('u0', 'user', 'Refrain kürzer');
+		conversationPages(
+			conversation(false),
+			conversation(true, otherTab),
+			conversation(false, otherTab, reply)
+		);
+
+		const target = await sendInAnOpenConversation();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.user')?.textContent).toContain('Refrain kürzer')
+		);
+		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('Ja bitte');
+		expect(target.querySelector('.turn-error')).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.textContent).not.toContain('Ja bitte');
 	});
 
 	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {
