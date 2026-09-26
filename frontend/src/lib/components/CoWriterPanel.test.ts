@@ -126,6 +126,20 @@ describe('CoWriterPanel', () => {
 		expect(root).not.toBeNull();
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
 	});
+
+	it('renders no back control when the caller gives it no way out', async () => {
+		const target = await render();
+		expect(target.querySelector('.cowriter-back')).toBeNull();
+	});
+
+	it('renders a back control that calls onback when the caller is a pushed screen', async () => {
+		const onback = vi.fn();
+		const target = await render({ onback });
+		const backButton = target.querySelector<HTMLButtonElement>('.cowriter-back');
+		expect(backButton).not.toBeNull();
+		backButton?.click();
+		expect(onback).toHaveBeenCalledTimes(1);
+	});
 });
 
 describe('CoWriterPanel failed turns', () => {

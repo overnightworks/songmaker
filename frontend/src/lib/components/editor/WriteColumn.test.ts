@@ -16,7 +16,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
-import { editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { editLyrics, loadSongData } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -82,30 +82,23 @@ describe('WriteColumn write mode', () => {
 });
 
 describe('WriteColumn Co-Writer mode', () => {
-	it('shows Chat and Lyrics together on desktop with a take strip, no mobile sub-tabs', async () => {
-		const { target } = await render({ coWriterOpen: true, compact: false });
-		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
-		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
-		expect(target.querySelector('.cowriter-takes')).not.toBeNull();
-		expect(target.querySelector('.mobile-subtabs')).toBeNull();
-	});
-
-	it('splits Chat | Lyrics into tabs and leaves the take strip out of the Co-Writer sheet on mobile', async () => {
-		setDraftLyrics('verse one');
-		const { target } = await render({ coWriterOpen: true, compact: true });
-		expect(target.querySelector('.mobile-subtabs')).not.toBeNull();
-		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
-		expect(target.querySelector('.cowriter-lyrics')).toBeNull();
-		expect(target.querySelector('.cowriter-takes')).toBeNull();
-
-		const lyricsTab = Array.from(
-			target.querySelectorAll<HTMLButtonElement>('.mobile-subtabs button')
-		).find((el) => el.textContent === 'Lyrics');
-		lyricsTab?.click();
-		await tick();
-		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
-		expect(target.querySelector('.cowriter-chat')).toBeNull();
-	});
+	// The phone screen that replaces the page (#990) instantiates CoWriterPanel
+	// directly and never reaches WriteColumn's coWriterOpen branch, so that
+	// branch no longer varies by `compact` — one shape, chat + lyrics + take
+	// strip, regardless of the prop.
+	it.each([
+		['desktop', false],
+		['a compact caller', true]
+	])(
+		'shows Chat, Lyrics and the take strip together with %s, no mobile sub-tabs',
+		async (_, compact) => {
+			const { target } = await render({ coWriterOpen: true, compact });
+			expect(target.querySelector('.cowriter-chat')).not.toBeNull();
+			expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
+			expect(target.querySelector('.cowriter-takes')).not.toBeNull();
+			expect(target.querySelector('.mobile-subtabs')).toBeNull();
+		}
+	);
 
 	it('shows the kinetic take strip in compact Write mode only', async () => {
 		const { target } = await render({ compact: true });
@@ -164,12 +157,11 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 
 	it('lets the stacked parts run on rather than share one squeezed height', () => {
 		// Sharing it cut the lyrics column below its content, which then spilled
-		// over the take strip; only a part with a column of its own, or alone in
-		// the compact sheet, can scroll in place.
+		// over the take strip; only a part with a column of its own can scroll
+		// in place.
 		const stacked = /\n\t\.cowriter-mode \{([^}]*)\}/.exec(writeColumnSource)?.[1];
 		expect(stacked).toBeDefined();
 		expect(stacked).not.toMatch(/\bheight: 100%/);
-		expect(writeColumnSource).toMatch(/\.cowriter-mode\.compact \{\s*height: 100%;/);
 		expect(writeColumnSource).toMatch(
 			/@container editor \(min-width: 680px\) \{\s*\.cowriter-mode \{\s*flex: 1;\s*min-height: 0;/
 		);
@@ -204,7 +196,7 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 	// the dock open reads the composer against the real cascade.
 	it('bounds the stacked chat height to what a narrowed editor actually has, not just the window', () => {
 		expect(writeColumnSource).toMatch(
-			/\.cowriter-mode:not\(\.compact\) \.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
+			/\.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
 		);
 	});
 

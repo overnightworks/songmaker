@@ -24,7 +24,8 @@
 	import { addToast } from '$lib/stores/toast';
 	import {
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
-		COWRITER_TOOL_CALL_TARGET_PREFIX
+		COWRITER_TOOL_CALL_TARGET_PREFIX,
+		EDITOR_COWRITER_BACK_LABEL
 	} from '$lib/constants';
 	import {
 		collectPendingProposals,
@@ -60,6 +61,7 @@
 		versions?: VersionItem[];
 		catalogLoading?: boolean;
 		visible?: boolean;
+		onback?: () => void;
 		onturncompleted?: () => void;
 	}
 
@@ -71,6 +73,7 @@
 		versions = [],
 		catalogLoading = false,
 		visible = true,
+		onback,
 		onturncompleted
 	}: Props = $props();
 
@@ -519,6 +522,17 @@
 <div class="cowriter">
 	<div class="cowriter-header">
 		<div class="header-left">
+			{#if onback}
+				<button
+					type="button"
+					class="cowriter-back"
+					data-hitbox="frequent"
+					aria-label={EDITOR_COWRITER_BACK_LABEL}
+					onclick={onback}
+				>
+					‹
+				</button>
+			{/if}
 			<h3>
 				Co-Writer
 				{#if providerModel}
@@ -717,6 +731,19 @@
 		gap: 10px;
 		min-width: 0;
 		flex: 1;
+	}
+
+	.cowriter-back {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text);
+		font-size: 1.4rem;
+		line-height: 1;
+		cursor: pointer;
 	}
 
 	.header-left h3 {

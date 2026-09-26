@@ -1104,8 +1104,8 @@ describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
 	});
 });
 
-describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
-	it('keeps the Write surface underneath instead of replacing it', async () => {
+describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
+	it('replaces the Write surface instead of opening a sheet beside it', async () => {
 		openWriteTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
@@ -1114,9 +1114,16 @@ describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
 		coWriterOpen.set(true);
 		await tick();
 
+		expect(target.querySelector('.sheet-panel')).toBeNull();
+		expect(target.querySelector('.write-surface')).toBeNull();
+		expect(target.querySelector('[role="tab"]')).toBeNull();
+		expect(target.querySelector('.cowriter')).not.toBeNull();
+
+		coWriterOpen.set(false);
+		await tick();
+
+		expect(target.querySelector('.cowriter')).toBeNull();
 		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
-		expect(target.querySelector('.sheet-panel')).not.toBeNull();
-		expect(target.querySelector('.sheet-panel .cowriter-mode')).not.toBeNull();
 	});
 });
 

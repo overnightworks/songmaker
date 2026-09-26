@@ -98,7 +98,6 @@
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
@@ -112,7 +111,7 @@
 	import TakesList from './editor/TakesList.svelte';
 	import { phoneAppBar } from '$lib/stores/ui';
 	import SongPhoneView from './editor/SongPhoneView.svelte';
-	import EditorSheet from './editor/EditorSheet.svelte';
+	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
@@ -716,9 +715,28 @@
 		{@render writeSurface(song, false, true, () => {})}
 	{/snippet}
 
+	{#snippet phoneCowriter()}
+		<CoWriterPanel
+			currentSongId={song.id}
+			currentAlbumId={song.album_id}
+			currentAlbumTitle={song.album_title}
+			allSongs={songs}
+			versions={$versions}
+			onturncompleted={onTurnCompleted}
+			onback={() => coWriterOpen.set(false)}
+		/>
+	{/snippet}
+
 	<div class="detail-panel" class:compact>
 		{#if compact}
-			<SongPhoneView {sharedLink} write={phoneWrite} {expiryDigest} {takeListProps} {chips} />
+			<SongPhoneView
+				{sharedLink}
+				write={phoneWrite}
+				cowriter={phoneCowriter}
+				{expiryDigest}
+				{takeListProps}
+				{chips}
+			/>
 		{:else}
 			{@render header()}
 			<div class="editor-body">
@@ -765,16 +783,6 @@
 			}}
 			onclose={() => (songPlaylistPickerOpen = false)}
 		/>
-	{/if}
-
-	{#if compact}
-		<EditorSheet
-			open={$coWriterOpen}
-			label={EDITOR_VIEW_COWRITER_LABEL}
-			onclose={() => coWriterOpen.set(false)}
-		>
-			{@render writeSurface(song, true, true, onTurnCompleted)}
-		</EditorSheet>
 	{/if}
 {/if}
 

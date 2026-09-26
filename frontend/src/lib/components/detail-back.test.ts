@@ -13,7 +13,12 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';
+import { coWriterOpen } from '$lib/stores/recipe';
+import {
+	EDITOR_COWRITER_BACK_LABEL,
+	EDITOR_LYRICS_LABEL,
+	EDITOR_STYLE_PROMPT_LABEL
+} from '$lib/constants';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -115,6 +120,8 @@ afterEach(async () => {
 	resetCollectionForTests();
 	albumList.set([]);
 	songList.set([]);
+	coWriterOpen.set(false);
+	delete document.documentElement.dataset.pointer;
 });
 
 describe('detail views own no content back', () => {
@@ -172,6 +179,38 @@ describe('detail views own no content back', () => {
 		await tick();
 		expect(target.querySelector('.back-link')).toBeNull();
 		expect(target.querySelector('.back-btn')).toBeNull();
+	});
+});
+
+describe('SongDetailView phone Co-Writer is a pushed screen, not a history step', () => {
+	it('replaces the page and returns via ‹ without adding a browser-history entry', async () => {
+		const { goto } = await import('$app/navigation');
+		document.documentElement.dataset.pointer = 'coarse';
+		selectedGenerationId.set(null);
+		const target = await renderView((target) => mount(SongDetailView, { target }));
+		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+		// Mounting the page itself normalizes the URL via `goto(..., {
+		// replaceState: true })` -- unrelated to the Co-Writer toggle this test
+		// proves. Only a call count past this baseline would mean opening or
+		// closing the screen pushed a history step.
+		const navigationCallsBeforeToggle = vi.mocked(goto).mock.calls.length;
+
+		coWriterOpen.set(true);
+		await tick();
+
+		expect(target.querySelector('[role="tab"]')).toBeNull();
+		const backButton = target.querySelector<HTMLButtonElement>(
+			`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`
+		);
+		expect(backButton).not.toBeNull();
+		expect(vi.mocked(goto).mock.calls.length).toBe(navigationCallsBeforeToggle);
+
+		backButton?.click();
+		await tick();
+
+		expect(get(coWriterOpen)).toBe(false);
+		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+		expect(vi.mocked(goto).mock.calls.length).toBe(navigationCallsBeforeToggle);
 	});
 });
 
