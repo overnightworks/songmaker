@@ -9,7 +9,8 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
-	collectionRowPlayLabel,
+	collectionPlayLabel,
+	collectionShuffleLabel,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
@@ -20,6 +21,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
+	RAIL_PLAYING_MARKER_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
@@ -240,9 +242,15 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	await expectSettingsRailRoundTrip(page, shell, surface, library.albumTitle);
 
-	await surface
-		.getByRole('button', { name: collectionRowPlayLabel(library.pickedSongTitle) })
-		.click();
+	// One play language (#1003): the header's circle starts the album from its
+	// top, the shuffle square sits beside it, and a song row carries no play
+	// glyph of its own -- tapping it opens the song.
+	await expect(
+		surface.getByRole('button', { name: collectionShuffleLabel('album'), exact: true })
+	).toBeVisible();
+	const pickedSongRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
+	await expect(pickedSongRow.getByRole('button')).toHaveCount(1);
+	await surface.getByRole('button', { name: collectionPlayLabel('album'), exact: true }).click();
 
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
@@ -252,8 +260,11 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 	).toBeVisible();
 	if (shell === 'mobile') await expectCompactTransport(transport);
+	await expect(
+		pickedSongRow.getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+	).toBeVisible();
 
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await pickedSongRow.getByRole('button').click();
 	if (shell === 'mobile') {
 		const takesTab = surface.getByRole('tab', { name: /Takes/ });
 		await expect(takesTab).toHaveCount(1);
@@ -341,6 +352,12 @@ test('plays the album pick, curates a playlist and serves the public album link'
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong)
 		]);
+		await expect(
+			entryRows.last().getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+		).toBeVisible();
+		await expect(
+			entryRows.first().getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+		).toHaveCount(0);
 	}
 
 	const shuffle = transport.getByRole('button', {
