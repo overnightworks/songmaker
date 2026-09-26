@@ -862,6 +862,40 @@ describe('resource sync owner', () => {
 		expect(get(store)).toMatchObject({ status: 'live', error: null });
 	});
 
+	it.each([
+		['offline', (songId: string) => offlineFailure(songId)],
+		[
+			'answered 503',
+			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`)
+		]
+	])(
+		'retries a live refresh that failed %s on its own, and brings the take in within 10 s of the network returning without any browser event',
+		async (_kind, failure) => {
+			vi.useFakeTimers();
+			let networkDown = true;
+			const { controller, sources, store, upserted } = setup({
+				fetchSong: async (songId) => {
+					if (networkDown) throw failure(songId);
+					return song({ slug: 'track', title: 'Track', id: songId, generation_count: 1 });
+				}
+			});
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			await controller.requestSongRefresh('s1');
+			expect(get(store).status).toBe('error');
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(get(store).status).toBe('error');
+			networkDown = false;
+			await vi.advanceTimersByTimeAsync(10_000);
+
+			expect(get(store)).toMatchObject({ status: 'live', error: null });
+			expect(upserted.at(-1)?.id).toBe('s1');
+		}
+	);
+
 	it('shows a bug in applying a fetched song as itself, not as the musician being offline', async () => {
 		const { controller, sources, store } = setup({
 			applySong: () => {
