@@ -47,6 +47,9 @@ const RECOVERY_SEEK_BACK_SECONDS = 0.75;
 // this many still samples in a row as a stall.
 const PROGRESS_CHECK_MS = 1000;
 const STILL_CHECKS_BEFORE_RECOVERY = 4;
+// A take that has played on for as long as a freeze takes to detect has
+// recovered; its next freeze is a new one, not a failed recovery.
+const STEADY_CHECKS_BEFORE_RECOVERY_BUDGET_RESET = STILL_CHECKS_BEFORE_RECOVERY;
 
 class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
@@ -69,6 +72,7 @@ class AudioPlayer {
 	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
 	private lastCheckedTime = 0;
 	private stillChecks = 0;
+	private steadyChecks = 0;
 	private recoveryUrlSerial = 0;
 	private pauseRequestedByApp = false;
 	private streamEndSignaled = false;
@@ -544,6 +548,7 @@ class AudioPlayer {
 		if (this.progressWatchdog) return;
 		this.lastCheckedTime = el.currentTime;
 		this.stillChecks = 0;
+		this.steadyChecks = 0;
 		this.progressWatchdog = setInterval(() => this.checkProgress(el), PROGRESS_CHECK_MS);
 	}
 
@@ -558,12 +563,18 @@ class AudioPlayer {
 	private checkProgress(el: HTMLAudioElement): void {
 		const clockMoved = el.currentTime !== this.lastCheckedTime;
 		this.lastCheckedTime = el.currentTime;
+		this.trackSteadyPlayback(clockMoved && this.status === 'playing' && !el.seeking);
 		if (clockMoved || this.status !== 'playing' || el.paused || el.seeking) {
 			this.stillChecks = 0;
 			return;
 		}
 		this.stillChecks += 1;
 		if (this.stillChecks >= STILL_CHECKS_BEFORE_RECOVERY) this.recoverFromStall('frozen-clock');
+	}
+
+	private trackSteadyPlayback(playingSteadily: boolean): void {
+		this.steadyChecks = playingSteadily ? this.steadyChecks + 1 : 0;
+		if (this.steadyChecks >= STEADY_CHECKS_BEFORE_RECOVERY_BUDGET_RESET) this.recoveryAttempts = 0;
 	}
 
 	// Survives a pause on purpose: pause and play on an element whose clock
