@@ -23,6 +23,7 @@ from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
     GenerationPhase,
     JobFunction,
+    JobStatus,
     JobType,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -178,6 +179,15 @@ def test_update_job_success(seeded_db) -> None:
         job = get_job(session, "j1")
         assert job.status == "running"
         assert job.progress == 0.5
+
+
+def test_a_new_running_entry_starts_without_the_previous_runs_phase(seeded_db) -> None:
+    _update_job(seeded_db, "j1", JobStatus.RUNNING, phase=GenerationPhase.SAVING_TAKE)
+    _update_job(seeded_db, "j1", JobStatus.QUEUED)
+    _update_job(seeded_db, "j1", JobStatus.RUNNING)
+
+    with seeded_db() as session:
+        assert get_job(session, "j1").phase is None
 
 
 def test_update_job_raises_after_retries(db_factory) -> None:

@@ -182,6 +182,8 @@ def update_job_status(
         return False
     now = datetime.now(timezone.utc)
     _move_generation_start(job, status, phase, now)
+    if status == JobStatus.RUNNING and job.status != JobStatus.RUNNING:
+        job.phase = None
     job.status = status
     job.progress = progress
     job.error = error
