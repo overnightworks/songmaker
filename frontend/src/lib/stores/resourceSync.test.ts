@@ -102,8 +102,8 @@ class MockEventSource implements ResourceEventSource {
 		this.closed = true;
 	}
 
-	emit(type: string, data: unknown): void {
-		const event = new MessageEvent(type, { data: JSON.stringify(data) });
+	emit(type: string, data: unknown, lastEventId = ''): void {
+		const event = new MessageEvent(type, { data: JSON.stringify(data), lastEventId });
 		for (const listener of this.listeners.get(type) ?? []) listener(event);
 	}
 
@@ -1129,6 +1129,53 @@ describe('resource sync owner', () => {
 
 		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
 		expect(sources).toHaveLength(beforeError + 1);
+	});
+
+	it('resumes a dropped live stream after the last seen event and applies the take it missed', async () => {
+		vi.useFakeTimers();
+		const serverTakes = ['g5'];
+		const { controller, sources, upserted } = setup({
+			fetchSong: async (songId) =>
+				song({
+					slug: 'track',
+					title: 'Track',
+					id: songId,
+					generation_count: serverTakes.length,
+					generations: serverTakes.map((id) =>
+						gen({ seed: 1, model_mode: 'sft', id, mp3_path: `${id}.mp3` })
+					)
+				})
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '4' }, '4');
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('5', 'g5'), '5');
+		await flush();
+
+		latestSource(sources).error();
+		await flush();
+		serverTakes.push('g6');
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+
+		expect(latestSource(sources).url).toBe(`${RESOURCE_EVENT_STREAM_PATH}?last_event_id=5`);
+		latestSource(sources).emit('hello', { high_water_mark: '6' }, '5');
+		latestSource(sources).emit('generation.created', created('6', 'g6'), '6');
+		await flush();
+		expect(upserted.at(-1)?.generations.map((take) => take.id)).toEqual(['g5', 'g6']);
+	});
+
+	it('reopens without a cursor after a restart, so the fresh stream starts a new snapshot', async () => {
+		const { controller, sources } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '4' }, '4');
+		await flush();
+		await controller.waitForReady();
+
+		controller.stop();
+		controller.start();
+
+		expect(latestSource(sources).url).toBe(RESOURCE_EVENT_STREAM_PATH);
 	});
 
 	it('grows the backoff delay on successive live drops and resets after a hello', async () => {

@@ -34,6 +34,11 @@ import { selectedSongId } from '$lib/stores/player';
 import { classifyAuthFailure } from '$lib/stores/auth';
 import { nextReconnectDelayMs } from '$lib/stores/sseReconnect';
 
+// The browser only sends `Last-Event-ID` on its own native retry; the owner
+// reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
+// server that cursor as a query parameter instead (#1020).
+const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
+
 type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
@@ -88,6 +93,7 @@ export class ResourceSyncController {
 	private started = false;
 	private epoch = 0;
 	private watermark: string | null = null;
+	private lastEventId: string | null = null;
 	private buffer: GenerationCreatedResourceEvent[] = [];
 	private deferred: GenerationCreatedResourceEvent[] = [];
 	private readonly pendingSongIds = new Set<string>();
@@ -205,12 +211,22 @@ export class ResourceSyncController {
 	}
 
 	private openSource(): void {
-		const source = this.deps.createEventSource(RESOURCE_EVENT_STREAM_PATH);
+		const source = this.deps.createEventSource(this.streamUrl());
 		this.source = source;
 		source.addEventListener(RESOURCE_EVENT_HELLO, this.onHello);
 		source.addEventListener(RESOURCE_EVENT_RESYNC, this.onResync);
 		source.addEventListener(RESOURCE_EVENT_GENERATION_CREATED, this.onGenerationCreated);
 		source.onerror = this.onError;
+	}
+
+	private streamUrl(): string {
+		if (this.lastEventId === null) return RESOURCE_EVENT_STREAM_PATH;
+		const query = new URLSearchParams({ [RESOURCE_EVENT_RESUME_QUERY]: this.lastEventId });
+		return `${RESOURCE_EVENT_STREAM_PATH}?${query}`;
+	}
+
+	private rememberEventId(event: MessageEvent): void {
+		if (event.lastEventId !== '') this.lastEventId = event.lastEventId;
 	}
 
 	private closeSource(): void {
@@ -272,6 +288,7 @@ export class ResourceSyncController {
 		this.buffer = [];
 		this.deferred = [];
 		this.watermark = null;
+		this.lastEventId = null;
 		this.pendingSongIds.clear();
 		this.failedSongIds.clear();
 		this.queuedGenerationIds.clear();
@@ -303,6 +320,7 @@ export class ResourceSyncController {
 			return;
 		}
 		this.reconnectAttempt = 0;
+		this.rememberEventId(event);
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
 		this.invalidateInflightProbes();
 		if (this.syncedOnce && this.state.status !== 'bootstrapping') {
@@ -321,6 +339,7 @@ export class ResourceSyncController {
 			this.failBootstrap(errorMessage(err));
 			return;
 		}
+		this.rememberEventId(event);
 		this.store.update((state) => ({ ...state, highWaterMark: resync.high_water_mark }));
 		this.invalidateInflightProbes();
 		this.syncedOnce = false;
@@ -337,6 +356,7 @@ export class ResourceSyncController {
 			return;
 		}
 		this.advanceSequence(created.sequence);
+		this.rememberEventId(event);
 		if (this.seenGenerationIds.has(created.generation_id)) return;
 		if (!this.canFlush()) {
 			if (this.isAfterWatermark(created.sequence)) this.buffer.push(created);
