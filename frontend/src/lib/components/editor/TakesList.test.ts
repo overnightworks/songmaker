@@ -576,37 +576,44 @@ describe('TakesList', () => {
 		expect(target.querySelector('.quality-flag-badge')).toBeNull();
 	});
 
-	it.each([false, true])(
-		'toggles the pick without playing the take (picked: %s)',
-		async (is_picked) => {
-			const { target } = await render({ song: song({ generations: [generation({ is_picked })] }) });
-			const button = target.querySelector<HTMLButtonElement>('.pick-btn');
-			expect(button?.getAttribute('aria-pressed')).toBe(String(is_picked));
+	it.each([
+		['pick', '.pick-btn', 'is_picked', false],
+		['pick', '.pick-btn', 'is_picked', true],
+		['keep', '.keep-btn', 'is_kept', false],
+		['keep', '.keep-btn', 'is_kept', true]
+	] as const)(
+		'toggles the %s in one tap on the row without playing the take (on: %s)',
+		async (action, selector, flag, on) => {
+			const { target } = await render({
+				song: song({ generations: [generation({ [flag]: on })] })
+			});
+			const button = target.querySelector<HTMLButtonElement>(selector);
+			expect(button?.getAttribute('aria-pressed')).toBe(String(on));
 			button?.click();
-			expect(pick).toHaveBeenCalledWith('g1', !is_picked);
+			expect({ pick, keep }[action]).toHaveBeenCalledWith('g1', !on);
 			expect(playTake).not.toHaveBeenCalled();
 		}
 	);
 
-	it.each([false, true])(
-		'shows a noninteractive heart only when kept (kept: %s)',
-		async (is_kept) => {
-			const { target } = await render({ song: song({ generations: [generation({ is_kept })] }) });
-			const marker = target.querySelector('[role="img"][aria-label="Kept"]');
-			expect(Boolean(marker)).toBe(is_kept);
-			expect(marker?.closest('button')).toBeFalsy();
-		}
-	);
+	it.each([
+		[false, 'Keep'],
+		[true, 'Unkeep']
+	] as const)('fills the heart when kept is %s and names its tap %s', async (is_kept, label) => {
+		const { target } = await render({ song: song({ generations: [generation({ is_kept })] }) });
+		const heart = target.querySelector<HTMLButtonElement>('.keep-btn');
+		expect(heart?.getAttribute('aria-label')).toBe(label);
+		expect(heart?.classList.contains('kept')).toBe(is_kept);
+	});
 
 	it.each(['fine', 'coarse'] as const)(
-		'has three symbol actions and one labelled row body on a %s pointer',
+		'has four symbol actions (▶ ★ ♥ ⋯) and one labelled row body on a %s pointer',
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
 			const row = target.querySelector('.take-row');
 			if (!row) throw new Error('Expected a take row');
 			const buttons = Array.from(row.querySelectorAll('button'));
-			expect(buttons).toHaveLength(3);
+			expect(buttons).toHaveLength(4);
 			for (const button of buttons) {
 				expect(button.textContent?.trim()).toBe('');
 				expect(button.getAttribute('aria-label')).toBeTruthy();
@@ -804,30 +811,13 @@ describe('TakesList', () => {
 		expect(row?.querySelector('.rescoring-badge')).toBeNull();
 	});
 
-	it.each([false, true])(
-		'toggles keep from the menu when kept is %s without playing',
-		async (kept) => {
-			const { target } = await render({
-				song: song({ generations: [generation({ is_kept: kept })] })
-			});
-			const row = target.querySelector<HTMLElement>('.take-row');
-			if (!row) throw new Error('Expected a take row');
-			openTakeMenu(row);
-			await tick();
-			clickMenuItem(row, kept ? 'Unkeep' : 'Keep');
-			await tick();
-			expect(keep).toHaveBeenCalledWith('g1', !kept);
-			expect(playTake).not.toHaveBeenCalled();
-			expect(row.querySelector('.overflow-menu')).toBeNull();
-		}
-	);
-
 	it('plays only from its named play control, independently of the pick and menu', async () => {
 		const { target } = await render();
 		const row = target.querySelector<HTMLElement>('.take-row');
 		const play = row?.querySelector<HTMLButtonElement>('[aria-label="Play v3 · take 3"]');
 		expect(play).not.toBeNull();
 		expect(play?.contains(row?.querySelector('.pick-btn') ?? null)).toBe(false);
+		expect(play?.contains(row?.querySelector('.keep-btn') ?? null)).toBe(false);
 		expect(play?.contains(row?.querySelector('.overflow-btn') ?? null)).toBe(false);
 		play?.click();
 		await tick();
@@ -875,11 +865,11 @@ describe('TakesList', () => {
 	);
 
 	it.each(['fine', 'coarse'] as const)(
-		'gives play, pick and menu 44 px targets on a %s pointer',
+		'gives play, pick, keep and menu 44 px targets on a %s pointer',
 		async (pointer) => {
 			setPointer(pointer);
 			const { target } = await render();
-			for (const selector of ['.play-btn', '.pick-btn', '.overflow-btn']) {
+			for (const selector of ['.play-btn', '.pick-btn', '.keep-btn', '.overflow-btn']) {
 				const button = target.querySelector<HTMLButtonElement>(selector);
 				if (!button) throw new Error(`Expected ${selector}`);
 				expect(minSquarePx(button, selector)).toEqual({
