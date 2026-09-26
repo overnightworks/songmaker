@@ -80,6 +80,22 @@ export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 55;
 export const TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET = 30;
 
 const API_PATH_PREFIX = '/api';
+const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
+
+// Streams the client closes on purpose: leaving the library route (Settings,
+// sign-out) stops the live resource-event stream
+// (`ResourceSyncController.stop()`), a co-writer turn's reader stops on the
+// last event it needs, including a named failure, and a job's stream closes
+// on the job's terminal status (`completeTrackedJob` in `stores/jobs.ts`) —
+// racing the server's own end-of-stream right behind it, which a loaded
+// machine loses often enough to fail a flow (#1020). Matched on the path
+// alone: a resumed resource stream carries a `last_event_id` query.
+function isClosedOnPurpose(url: string): boolean {
+	const path = new URL(url).pathname;
+	return (
+		path === RESOURCE_EVENT_STREAM_PATH || path === COWRITER_TURN_PATH || JOB_STREAM_PATH.test(path)
+	);
+}
 
 /** Which shell a test drives: the mobile project is the emulated phone. */
 export function shellOf(testInfo: TestInfo): Shell {
@@ -203,18 +219,11 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Both of these are streams the client closes on purpose: leaving the
-			// library route (Settings, sign-out) stops the live resource-event
-			// stream (`ResourceSyncController.stop()`), and a co-writer turn's
-			// reader stops on the last event it needs, including a named failure.
-			// Chromium reports either cancelled in-flight request as a failed one
-			// with exactly this error, indistinguishable from any other
+			// Chromium reports a stream the client cancelled in flight as a failed
+			// request with exactly this error, indistinguishable from any other
 			// intentional client-side abort. Every other reason still fails the
 			// flow, including a 429 or 5xx on the same path (handled below).
-			const closedOnPurpose = [RESOURCE_EVENT_STREAM_PATH, COWRITER_TURN_PATH].some((path) =>
-				request.url().endsWith(path)
-			);
-			if (errorText === 'net::ERR_ABORTED' && closedOnPurpose) {
+			if (errorText === 'net::ERR_ABORTED' && isClosedOnPurpose(request.url())) {
 				return;
 			}
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
