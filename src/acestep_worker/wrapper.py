@@ -19,6 +19,7 @@ from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -384,7 +385,7 @@ async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tu
                 detail=f"Mode {req.mode} not loaded; call /load_model first",
             )
         try:
-            task_id = await deps.task_store.create("generate")
+            task_id = await deps.task_store.create("generate", phase=AceStepPhase.WRITING)
         except Exception:
             await deps.cache.release(req.mode)
             raise
@@ -1036,7 +1037,6 @@ async def default_generate_runner(
     from acestep_engine.client import AceStepClient
     from acestep_engine.errors import AceStepError
     from acestep_worker.models import GenerationTaskResult
-    from acestep_worker.progress import parse_step_fraction
 
     await task_store.mark_running(task_id)
     try:
@@ -1044,12 +1044,11 @@ async def default_generate_runner(
 
         loop = asyncio.get_running_loop()
 
-        def _on_progress(text: str) -> None:
-            fraction = parse_step_fraction(text)
-            if fraction is None:
-                return
+        def _on_progress(progress: AceStepProgress) -> None:
             asyncio.run_coroutine_threadsafe(
-                task_store.update_progress(task_id, fraction),
+                task_store.update_progress(
+                    task_id, progress.fraction, phase=progress.phase,
+                ),
                 loop,
             )
 

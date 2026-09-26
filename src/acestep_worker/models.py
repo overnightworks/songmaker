@@ -6,6 +6,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase
 
 TaskKind = Literal["generate", "download", "train_lora"]
 TaskState = Literal["pending", "running", "done", "error"]
@@ -121,6 +122,7 @@ class TaskSnapshot(BaseModel):
     kind: TaskKind
     state: TaskState
     progress: float = 0.0
+    phase: AceStepPhase | None = None
     current_epoch: int | None = None
     train_epochs: int | None = None
     training_started_at: datetime | None = None
