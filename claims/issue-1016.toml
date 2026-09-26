@@ -1,7 +1,0 @@
-claim_id = "ab685212a21b4d36b98d4f88e70d9d19"
-agent = "claude-head"
-role = "builder"
-base = "9f5c98ef7127b5844cd37219119fff04940a637b"
-branch = "claude/issue-1016-three-tabs"
-scope = ["docs/design/song-page-phone.html"]
-opened_commit = "cb087873a49cdcf220a045691ab0c4c574a47fac"
