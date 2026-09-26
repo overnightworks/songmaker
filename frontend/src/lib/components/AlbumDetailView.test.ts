@@ -90,13 +90,19 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playAlbum: vi.fn()
+		playAlbum: vi.fn(),
+		playOpenCollectionShuffled: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import {
+	playAlbum,
+	playOpenCollectionShuffled,
+	setShuffle,
+	shuffleEnabled
+} from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { activeJobs } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
@@ -218,16 +224,28 @@ describe('AlbumDetailView header', () => {
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 	});
 
-	it.each([
-		{ label: collectionPlayLabel('album'), shuffled: false },
-		{ label: collectionShuffleLabel('album'), shuffled: true }
-	])('starts this album from "$label" with shuffle $shuffled', async ({ label, shuffled }) => {
+	it('starts this album in order from its play circle', async () => {
+		setShuffle(true);
 		const target = await renderDetail();
 
-		getByRoleButton(requireElement(target, '.collection-header'), label).click();
+		getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionPlayLabel('album')
+		).click();
 
 		expect(playAlbum).toHaveBeenCalledWith('a-local');
-		expect(get(shuffleEnabled)).toBe(shuffled);
+		expect(get(shuffleEnabled)).toBe(false);
+	});
+
+	it('starts the open album shuffled from its shuffle square', async () => {
+		const target = await renderDetail();
+
+		getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionShuffleLabel('album')
+		).click();
+
+		expect(playOpenCollectionShuffled).toHaveBeenCalled();
 	});
 
 	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(

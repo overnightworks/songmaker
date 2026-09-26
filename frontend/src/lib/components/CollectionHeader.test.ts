@@ -3,11 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
+vi.mock('$lib/stores/player', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/player')>()),
+	playOpenCollectionShuffled: vi.fn()
+}));
 
 import { get } from 'svelte/store';
 import { ALBUM_ADD_SONG_LABEL, collectionPlayLabel, collectionShuffleLabel } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
-import { setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { playOpenCollectionShuffled, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import CollectionHeader from './CollectionHeader.svelte';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
@@ -72,6 +76,7 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	setShuffle(false);
+	vi.mocked(playOpenCollectionShuffled).mockClear();
 	document.body.replaceChildren();
 });
 
@@ -83,23 +88,30 @@ describe('CollectionHeader', () => {
 		expect(crumbs).toEqual(['Library', 'Night Drive']);
 	});
 
-	it.each([
-		{ kind: 'album' as const, button: 'play', shuffled: false },
-		{ kind: 'album' as const, button: 'shuffle', shuffled: true },
-		{ kind: 'playlist' as const, button: 'play', shuffled: false },
-		{ kind: 'playlist' as const, button: 'shuffle', shuffled: true }
-	])(
-		'starts the $kind from its $button button with shuffle $shuffled',
-		async ({ kind, button, shuffled }) => {
-			setShuffle(!shuffled);
+	it.each(['album', 'playlist'] as const)(
+		'starts the %s in order from its play circle',
+		async (kind) => {
+			setShuffle(true);
 			const props = { ...baseProps(), kind };
 			const target = await render(props);
-			const label = button === 'play' ? collectionPlayLabel(kind) : collectionShuffleLabel(kind);
 
-			getByRoleButton(target, label).click();
+			getByRoleButton(target, collectionPlayLabel(kind)).click();
 
 			expect(props.onplay).toHaveBeenCalledTimes(1);
-			expect(get(shuffleEnabled)).toBe(shuffled);
+			expect(get(shuffleEnabled)).toBe(false);
+		}
+	);
+
+	it.each(['album', 'playlist'] as const)(
+		'starts the open %s shuffled from its shuffle square',
+		async (kind) => {
+			const props = { ...baseProps(), kind };
+			const target = await render(props);
+
+			getByRoleButton(target, collectionShuffleLabel(kind)).click();
+
+			expect(playOpenCollectionShuffled).toHaveBeenCalledTimes(1);
+			expect(props.onplay).not.toHaveBeenCalled();
 		}
 	);
 

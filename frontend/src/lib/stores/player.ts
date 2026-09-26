@@ -265,16 +265,30 @@ function playGeneration(
 	else audioPlayer.load(info);
 }
 
+function randomIndex(length: number): number {
+	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
+}
+
+function shuffled<T>(items: T[]): T[] {
+	const copy = [...items];
+	for (let i = copy.length - 1; i > 0; i--) {
+		const j = randomIndex(i + 1);
+		[copy[i], copy[j]] = [copy[j], copy[i]];
+	}
+	return copy;
+}
+
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
 	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
 	const start = items[startIndex] ?? items[0];
 	const rest = items.filter((_, index) => index !== startIndex);
-	for (let i = rest.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1)); // NOSONAR S2245: shuffle has no security context.
-		[rest[i], rest[j]] = [rest[j], rest[i]];
-	}
-	return { items: [start, ...rest], startIndex: 0 };
+	return { items: [start, ...shuffled(rest)], startIndex: 0 };
 }
+
+// Where a collection start begins: its top, or — for a shuffled start, which
+// has no top — a drawn entry, since shuffledWithStart keeps the start in front
+// and only shuffles what follows it.
+type CollectionStart = 'top' | 'random';
 
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
@@ -515,7 +529,7 @@ export function idlePlayTarget(input: {
 	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
-export async function playIdleStart(): Promise<void> {
+async function startOpenCollection(start: CollectionStart): Promise<void> {
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -524,14 +538,25 @@ export async function playIdleStart(): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		playPlaylist(playlist);
+		playPlaylist(playlist, start);
 		return;
 	}
 	if (target.type === 'album') {
-		await playAlbum(target.albumId);
+		await playAlbum(target.albumId, start);
 		return;
 	}
 	await playLibrary();
+}
+
+export async function playIdleStart(): Promise<void> {
+	await startOpenCollection('top');
+}
+
+// The collection header's shuffle square: shuffle on, and the open album or
+// playlist starts on a drawn song instead of the same first track every time.
+export async function playOpenCollectionShuffled(): Promise<void> {
+	setShuffle(true);
+	await startOpenCollection('random');
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
@@ -1082,9 +1107,11 @@ export async function playPrevSong(): Promise<void> {
 // uncaught here and propagates to the caller.
 async function firstPlayableAlbumTake(
 	albumId: string,
-	seq: number
+	seq: number,
+	start: CollectionStart
 ): Promise<{ song: SongItem; gen: GenerationItem } | null> {
-	for (const song of albumSongsInOrder(albumId)) {
+	const inOrder = albumSongsInOrder(albumId);
+	for (const song of start === 'random' ? shuffled(inOrder) : inOrder) {
 		if (song.generation_count === 0) continue;
 		await ensureGenerationsLoaded(song.id);
 		if (!playStartIsCurrent(seq)) return null;
@@ -1095,7 +1122,7 @@ async function firstPlayableAlbumTake(
 	return null;
 }
 
-export async function playAlbum(albumId: string): Promise<void> {
+export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
@@ -1105,9 +1132,9 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	let start: { song: SongItem; gen: GenerationItem } | null;
+	let startTake: { song: SongItem; gen: GenerationItem } | null;
 	try {
-		start = await firstPlayableAlbumTake(albumId, seq);
+		startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
 		playStartNotice.set('idle');
@@ -1115,21 +1142,21 @@ export async function playAlbum(albumId: string): Promise<void> {
 		return;
 	}
 	if (!playStartIsCurrent(seq)) return;
-	if (!start) {
-		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
+	if (!startTake) {
+		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
 		return;
 	}
 	playStartNotice.set('idle');
 	playNativeAlbumTakes(
 		albumId,
-		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(start.song, start.gen))],
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(startTake.song, startTake.gen))],
 		0
 	);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
-	setAlbumQueueTakes(albumId, entries, start.gen.id);
+	setAlbumQueueTakes(albumId, entries, startTake.gen.id);
 }
 
 async function playAlbumFromGeneration(
@@ -1212,13 +1239,14 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 // The idle transport Play on an open playlist. It keeps the listener's
 // shuffle setting, unlike playPlaylistFrom, where picking a specific entry
 // is itself the statement that the queue should start in playlist order.
-function playPlaylist(playlist: PlaylistDetailItem): void {
+function playPlaylist(playlist: PlaylistDetailItem, start: CollectionStart): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
+		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist, start));
 		return;
 	}
 	playStartNotice.set('idle');
-	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, 0, { restart: true });
+	const startIndex = start === 'random' ? randomIndex(playlist.entries.length) : 0;
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
 
 // The one way a surface starts a playlist: name the playlist and the entry
