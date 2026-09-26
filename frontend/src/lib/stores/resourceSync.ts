@@ -168,11 +168,8 @@ export class ResourceSyncController {
 			this.restartConnection();
 			return this.waitForReady();
 		}
-		const retryIds = new Set([...this.failedSongIds, ...this.deps.listPrioritySongIds()]);
+		this.requeueFailedSongs(this.deps.listPrioritySongIds());
 		this.failedSongIds.clear();
-		for (const songId of retryIds) {
-			this.invalidateSong(songId);
-		}
 		await this.flushPending(this.epoch);
 		if (!this.started) return false;
 		if (this.state.error) return false;
@@ -198,10 +195,7 @@ export class ResourceSyncController {
 	async handleVisibility(): Promise<void> {
 		if (!this.started || !this.syncedOnce) return;
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-		const retryIds = new Set([...this.failedSongIds, ...this.deps.listPrioritySongIds()]);
-		for (const songId of retryIds) {
-			this.invalidateSong(songId);
-		}
+		this.requeueFailedSongs(this.deps.listPrioritySongIds());
 		if (this.pendingSongIds.size === 0) return;
 		await this.flushPending(this.epoch);
 	}
@@ -423,9 +417,7 @@ export class ResourceSyncController {
 
 	private async recoverLiveConnection(): Promise<void> {
 		this.promoteDeferredSongs();
-		for (const songId of this.failedSongIds) {
-			this.invalidateSong(songId);
-		}
+		this.requeueFailedSongs();
 		if (this.pendingSongIds.size > 0) {
 			await this.flushPending(this.epoch);
 		}
@@ -630,10 +622,14 @@ export class ResourceSyncController {
 
 	private async retryFailedSongs(): Promise<void> {
 		if (!this.canFlush() || this.failedSongIds.size === 0) return;
-		for (const songId of this.failedSongIds) {
+		this.requeueFailedSongs();
+		await this.flushPending(this.epoch);
+	}
+
+	private requeueFailedSongs(extraIds: readonly string[] = []): void {
+		for (const songId of new Set([...this.failedSongIds, ...extraIds])) {
 			this.invalidateSong(songId);
 		}
-		await this.flushPending(this.epoch);
 	}
 
 	private clearFailedSongRetry(): void {
