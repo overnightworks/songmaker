@@ -11,15 +11,17 @@ import {
 import { readSeededLibrary } from './seed';
 
 /**
- * A full green suite run measures 42 requests on desktop and 36 on mobile.
- * Earlier flows create enough albums to cross the library's pagination
- * boundary; this flow itself adds no requests for that data. The two shells
- * share one IP rate-limit window, so new round trips are a regression to find
- * rather than a budget to raise.
+ * A full green suite run measures 39 requests on desktop and 44 on mobile.
+ * Since the album row opens the song (#1010), the flow pays for the song
+ * page's own loads (the song, its versions, its active and last failed take,
+ * models, LoRAs) before it plays the take. Earlier flows create enough albums
+ * to cross the library's pagination boundary; this flow itself adds no
+ * requests for that data. The two shells share one IP rate-limit window, so
+ * new round trips are a regression to find rather than a budget to raise.
  */
 const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	desktop: 42,
-	mobile: 36
+	mobile: 45
 };
 
 test('Continue shows up to six tagged entries and moves a played song to the front after reload', async ({
