@@ -352,28 +352,19 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         assert job.status == "completed"
 
 
-def test_a_running_turn_already_shows_its_user_message_in_the_conversation(client):
-    """A panel opened while the reply is still streaming finds the message sent (#1014)."""
+_RETURNING_USER = make_authenticated_user("u-test", username="u-u-test")
+
+
+def _while_a_turn_runs(client, look):
+    """Hold one turn open on "Ja bitte", return what ``look`` sees meanwhile, then let it finish."""
     import asyncio
 
     from songmaker_cli.api_models import ChatTurnV2Request
-    from songmaker_cli.conversation_api import (
-        api_chat_turn,
-        api_conversation_messages,
-        api_list_conversations,
-    )
+    from songmaker_cli.conversation_api import api_chat_turn
 
     c, factory = client
-    user = make_authenticated_user("u-test", username="u-u-test")
 
-    def _conversation_seen_by_a_returning_panel() -> tuple[list[tuple[str, str]], bool]:
-        with factory() as reader:
-            active = api_list_conversations(user, reader).conversations[0]
-            conversation = api_conversation_messages(active.id, user, reader)
-            messages = [(message.role, message.content) for message in conversation.messages]
-            return messages, conversation.turn_running
-
-    async def _exercise() -> tuple[list[tuple[str, str]], bool]:
+    async def _exercise():
         reply_released = asyncio.Event()
 
         async def _slow_reply(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
@@ -386,21 +377,69 @@ def test_a_running_turn_already_shows_its_user_message_in_the_conversation(clien
             "songmaker_cli.conversation_api.stream_cowriter_turn", _slow_reply,
         ):
             response = await api_chat_turn(
-                ChatTurnV2Request(message="Ja bitte"), request, user, session,
+                ChatTurnV2Request(message="Ja bitte"), request, _RETURNING_USER, session,
             )
             stream = response.body_iterator
             await anext(stream)
-            seen_mid_turn = _conversation_seen_by_a_returning_panel()
+            seen_mid_turn = await look()
             reply_released.set()
             async for _frame in stream:
                 pass
             return seen_mid_turn
 
-    assert asyncio.run(_exercise()) == ([("user", "Ja bitte")], True)
-    assert _conversation_seen_by_a_returning_panel() == (
+    return asyncio.run(_exercise())
+
+
+def _conversation_seen_by_a_returning_panel(factory) -> tuple[list[tuple[str, str]], bool]:
+    from songmaker_cli.conversation_api import api_conversation_messages, api_list_conversations
+
+    with factory() as reader:
+        active = api_list_conversations(_RETURNING_USER, reader).conversations[0]
+        conversation = api_conversation_messages(active.id, _RETURNING_USER, reader)
+        messages = [(message.role, message.content) for message in conversation.messages]
+        return messages, conversation.turn_running
+
+
+def test_a_running_turn_already_shows_its_user_message_in_the_conversation(client):
+    """A panel opened while the reply is still streaming finds the message sent (#1014)."""
+    _c, factory = client
+
+    async def _look():
+        return _conversation_seen_by_a_returning_panel(factory)
+
+    assert _while_a_turn_runs(client, _look) == ([("user", "Ja bitte")], True)
+    assert _conversation_seen_by_a_returning_panel(factory) == (
         [("user", "Ja bitte"), ("assistant", "done")],
         False,
     )
+
+
+def test_a_turn_sent_while_another_runs_is_refused_and_the_message_answered_once(client):
+    """Try again or a second tab cannot start a second turn on the same message (#1014)."""
+    from fastapi import HTTPException
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
+    c, factory = client
+
+    async def _send_it_again():
+        with factory() as session, pytest.raises(HTTPException) as refused:
+            await api_chat_turn(
+                ChatTurnV2Request(message="Ja bitte"),
+                Request({"type": "http", "app": c.app}),
+                _RETURNING_USER,
+                session,
+            )
+        return refused.value.status_code
+
+    assert _while_a_turn_runs(client, _send_it_again) == 409
+    assert _conversation_seen_by_a_returning_panel(factory) == (
+        [("user", "Ja bitte"), ("assistant", "done")],
+        False,
+    )
+    with factory() as session:
+        assert [job.status for job in session.query(Job).filter_by(type="chat")] == ["completed"]
 
 
 @pytest.mark.parametrize(

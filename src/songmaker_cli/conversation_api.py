@@ -563,6 +563,7 @@ async def _run_chat_turn(
 
 _PROVIDER_UNAVAILABLE_STATUS: Final = 503
 _TURN_FAILED_STATUS: Final = 500
+_TURN_ALREADY_RUNNING_STATUS: Final = 409
 _CHAT_REQUEST_FAILED: Final = "Chat request failed"
 _CHAT_COMPLETION_FAILED: Final = "Chat completion failed"
 
@@ -597,6 +598,7 @@ def _sse_format(event: BaseModel | dict) -> str:
     "/chat/turn",
     responses={
         404: {"description": "Mentioned album or version does not exist"},
+        409: {"description": "Another co-writer turn is still running"},
         422: {"description": "Chat context or co-writer configuration is invalid"},
     },
 )
@@ -630,9 +632,25 @@ def _prepare_chat_turn(
         JobType.CHAT,
         redis=request.app.state.ctx.redis,
     )
+    _refuse_while_another_turn_runs(session, user)
     update_job_status(session, job.id, JobStatus.RUNNING)
     session.commit()
     return _prepare_chat_messages(req, user, session, envelope, provider, route, model, job.id)
+
+
+def _refuse_while_another_turn_runs(session: Session, user: AuthenticatedUser) -> None:
+    """Refuse a turn while another one runs, so no message is ever answered twice.
+
+    Runs once the new turn's own chat job exists, before the commit that
+    releases the rate-limit lock, so two turns sent at once cannot both pass;
+    the panel that is refused follows the running turn instead (#1014).
+    """
+    if _running_turn_count(session, user) > 1:
+        session.rollback()
+        raise HTTPException(
+            _TURN_ALREADY_RUNNING_STATUS,
+            "A co-writer reply is still being written",
+        )
 
 
 def _chat_turn_context(
@@ -747,7 +765,8 @@ def _unanswered_message_sent_again(
 
     A turn that ends without a reply keeps the message it was started with,
     and Try again resends that text; the new turn answers the retained
-    message instead of repeating it (#1014).
+    message instead of repeating it (#1014). No other turn can still be
+    answering it: a turn only starts while none runs.
     """
     last = history[-1] if history else None
     if last is not None and last.role == "user" and last.content == message:
@@ -966,10 +985,15 @@ def api_conversation_messages(
 
 def _turn_running(session: Session, conversation: Conversation, user: AuthenticatedUser) -> bool:
     """A turn runs only in the active conversation, and only while its chat job is active."""
-    return (
-        conversation.archived_at is None
-        and count_user_active_jobs(session, user.id, JobType.CHAT) > 0
-    )
+    return conversation.archived_at is None and _running_turn_count(session, user) > 0
+
+
+def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
+    """Each running co-writer turn holds an active chat job.
+
+    The stale-job reaper ends the job of a turn whose process died.
+    """
+    return count_user_active_jobs(session, user.id, JobType.CHAT)
 
 
 @router.post("/conversations/new")
