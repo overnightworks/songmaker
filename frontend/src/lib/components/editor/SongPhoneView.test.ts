@@ -7,7 +7,8 @@ import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
-import { injectComponentStyles } from '$lib/test-utils/component-styles';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { EDITOR_GENERATE_MODE_LABELS } from '$lib/constants';
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -38,6 +39,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	detailTab.set('write');
 	coWriterOpen.set(false);
+	clearComponentStyles();
 });
 
 const NO_CHIPS: RecipeChip[] = [];
@@ -58,7 +60,6 @@ async function render(
 					dirty: false,
 					draftVersionNumber: 2,
 					latestVersionNumber: 1,
-					onagain: vi.fn(),
 					onsource: vi.fn(),
 					...overrides
 				}
@@ -69,18 +70,20 @@ async function render(
 	return target;
 }
 
+function expectGenerateAsPrimaryAction(target: HTMLElement): void {
+	const primaryAction = target
+		.querySelector('[role="tabpanel"] > :last-child')
+		?.querySelector('button');
+	expect(primaryAction?.textContent?.trim()).toBe(EDITOR_GENERATE_MODE_LABELS.generate);
+}
+
 describe('SongPhoneView', () => {
 	it('switches from the supplied Write surface to the real takes and back', async () => {
 		const takes = [makeGeneration(), makeGeneration({ id: 'g2', generation_number: 2 })];
 		const target = await render({ song: makeSong({ generations: takes, generation_count: 2 }) });
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
 		expect(target.querySelector('section[aria-label="Recipe"]')).not.toBeNull();
-		expect(
-			target
-				.querySelector('[role="tabpanel"] > :last-child')
-				?.querySelector('button')
-				?.textContent?.trim()
-		).toBe('Generate');
+		expectGenerateAsPrimaryAction(target);
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		tabs[1].click();
 		await tick();
@@ -97,12 +100,7 @@ describe('SongPhoneView', () => {
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
-		expect(
-			target
-				.querySelector('[role="tabpanel"] > :last-child')
-				?.querySelector('button')
-				?.textContent?.trim()
-		).toBe('Generate');
+		expectGenerateAsPrimaryAction(target);
 		expect(target.querySelector('.takes-list')).toBeNull();
 	});
 

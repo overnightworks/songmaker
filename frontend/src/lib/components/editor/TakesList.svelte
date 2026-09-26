@@ -69,7 +69,6 @@
 		draftVersionNumber: number;
 		latestVersionNumber: number;
 		generateJob?: JobItem | null;
-		onagain: (gen: GenerationItem) => void;
 		onsource: (gen: GenerationItem, mode: SourceMode) => void;
 		onretry?: () => void;
 	}

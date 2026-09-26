@@ -65,7 +65,6 @@
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addGenerationToPlaylist, addSongToPlaylist } from '$lib/stores/playlists';
 	import {
-		applyAgainFromGeneration,
 		coWriterOpen,
 		pendingSource,
 		recipeChips,
@@ -406,7 +405,6 @@
 					draftVersionNumber,
 					latestVersionNumber,
 					generateJob: $generateAction.job,
-					onagain: applyAgain,
 					onsource: useSource,
 					onretry: () => {
 						if (song) void refreshTakes(song.id);
@@ -414,10 +412,6 @@
 				} satisfies ComponentProps<typeof TakesList>)
 			: null
 	);
-
-	function applyAgain(gen: GenerationItem): void {
-		applyAgainFromGeneration(gen);
-	}
 
 	function useSource(gen: GenerationItem, mode: SourceMode): void {
 		setSourceFromGeneration(gen, mode);

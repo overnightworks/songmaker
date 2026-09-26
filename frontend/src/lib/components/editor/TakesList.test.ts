@@ -223,7 +223,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		dirty: false,
 		draftVersionNumber: 4,
 		latestVersionNumber: 3,
-		onagain: vi.fn(),
 		onsource: vi.fn(),
 		...overrides
 	};
