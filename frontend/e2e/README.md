@@ -167,14 +167,17 @@ fits inside a run. Production stays at 5 / 15 / 3600.
 
 `song-phone.spec.ts` carries `SONG_PHONE_FLOW_API_REQUEST_BUDGET`
 (`helpers.ts`, unlike the other file-local budgets above, since the flow
-seeds nothing through the run's API context at all): measured on a green run
-against a clean stack at 30 -- a cold song open, the Takes tab, playing a
-take, and two more cold opens of the same song for the running and the
-failed job states -- against a ceiling of 40. Seeding the song and both job
-states never touches this budget: like the rail's filler albums and
+seeds nothing through the run's API context at all) -- see that constant's
+own doc comment for the measured count, the flow it covers and its ceiling,
+rather than restating the numbers here (the same convention
+`LIBRARY_FLOW_API_REQUEST_BUDGET`'s own comment names, and the reason those
+numbers drifted apart before). Seeding the song and both job states never
+touches this budget: like the rail's filler albums and
 `kinetic-strip.spec.ts`'s own takes, all three run directly against the
 database rather than through the page (`seedSongPhoneSong`,
-`seedRunningGenerationJob`, `failGenerationJob` in `seed.ts`).
+`seedRunningGenerationJob`, `failGenerationJob` in `seed.ts`); the failed job
+state itself arrives live over the running job's still-open SSE stream, with
+no cold open of its own.
 
 Two things that flow needs and no other one does are worth naming here. Its
 tests start logged out, which takes an explicitly empty

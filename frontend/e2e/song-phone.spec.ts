@@ -45,6 +45,7 @@ import {
 import {
 	failGenerationJob,
 	readSeededLibrary,
+	runMarker,
 	seedRunningGenerationJob,
 	seedSongPhoneSong
 } from './seed';
@@ -93,13 +94,18 @@ test.describe('song page at phone width', () => {
 		});
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
+		// A per-attempt title, not the bare constant: CI retries this test once
+		// on failure (playwright.config.ts), and a retry re-seeding the same
+		// title into the same shared album would leave two rows starting with
+		// it, breaking the row lookup below with a strict-mode violation.
+		const songTitle = `${SONG_PHONE_SONG_TITLE} ${runMarker()}`;
 		const songId = await seedSongPhoneSong(
 			library.songPhoneAlbumId,
-			SONG_PHONE_SONG_TITLE,
+			songTitle,
 			SONG_PHONE_VERSION_NUMBER,
 			SONG_PHONE_TAKE_COUNT
 		);
-		const songAddress = `/album/${library.songPhoneAlbumId}/${expectedSongSlug(SONG_PHONE_SONG_TITLE)}`;
+		const songAddress = `/album/${library.songPhoneAlbumId}/${expectedSongSlug(songTitle)}`;
 		// The one song-phone-panel element (SongPhoneView.svelte): its content
 		// swaps with the active tab, so this locator always reads whichever tab
 		// is current rather than naming Write and Takes separately.
@@ -113,9 +119,9 @@ test.describe('song page at phone width', () => {
 		// from the rail into an album into a song.
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(SONG_PHONE_SONG_TITLE) })
+			.getByRole('button', { name: nameStartingWith(songTitle) })
 			.click();
-		await expect(page.getByRole('heading', { name: SONG_PHONE_SONG_TITLE })).toBeVisible();
+		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(

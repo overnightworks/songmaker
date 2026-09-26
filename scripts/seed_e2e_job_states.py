@@ -26,7 +26,7 @@ mounted. Use the venv's Python directly:
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-running \\
         --song-id <id> --progress 0.36 --take-index 1 --take-count 2 \\
-        --running-since-offset 64
+        --running-since-offset 64 --owner-username e2e-ci-admin
 
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-failed \\
@@ -56,7 +56,6 @@ from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus, JobType
 from songmaker_cli.db.engine import connect_db, resolve_database_url
-from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     create_generation,
     create_generation_created_event,
@@ -150,15 +149,22 @@ def cmd_create_song(session: Session, args: argparse.Namespace) -> None:
 def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     """Attach a fresh running generate job to a song.
 
+    ``owner_username`` resolves the same way ``create-song``'s does: a real
+    generate job always carries its requester's id (``jobs_api.py``'s own
+    ownership check reads it), never ``None``.
     ``update_job_status(..., JobStatus.RUNNING, ...)`` sets ``heartbeat_at``
     to now itself, so the job starts well inside
     ``GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS`` with no further work
-    here. ``running_since`` is backdated separately, by
-    ``running_since_offset`` seconds, so the remaining-time estimate
-    (``_remaining_time_estimate`` in ``api_models/jobs.py``) has real elapsed
-    time to divide the remaining progress by.
+    here. ``running_since`` is backdated on the same ``Job`` instance
+    ``create_job`` returned, by ``running_since_offset`` seconds, so the
+    remaining-time estimate (``_remaining_time_estimate`` in
+    ``api_models/jobs.py``) has real elapsed time to divide the remaining
+    progress by.
     """
-    job = create_job(session, JobType.GENERATE, user_id=None, song_id=args.song_id)
+    owner = get_user_by_username(session, args.owner_username)
+    if owner is None:
+        raise SystemExit(f"No user named {args.owner_username!r}")
+    job = create_job(session, JobType.GENERATE, user_id=owner.id, song_id=args.song_id)
     update_job_status(
         session,
         job.id,
@@ -167,8 +173,7 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
         take_index=args.take_index,
         take_count=args.take_count,
     )
-    running_since = datetime.now(timezone.utc) - timedelta(seconds=args.running_since_offset)
-    session.query(Job).filter_by(id=job.id).update({Job.running_since: running_since})
+    job.running_since = datetime.now(timezone.utc) - timedelta(seconds=args.running_since_offset)
     session.commit()
     print(job.id)
 
@@ -179,10 +184,12 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     Transitioning a still-open job (rather than creating a new, already-failed
     one) is deliberate: ``/api/jobs/{id}/stream`` polls the row and pushes the
     change to any client still watching it, the same way a real worker crash
-    would report it.
+    would report it. ``error_type`` matches ``generation.py``'s own failure
+    path (``"generation_error"``) -- the sentence this literal is supposed to
+    resemble.
     """
     updated = update_job_status(
-        session, args.job_id, JobStatus.FAILED, error=args.error, error_type="generation_failed",
+        session, args.job_id, JobStatus.FAILED, error=args.error, error_type="generation_error",
     )
     if not updated:
         raise SystemExit(f"Job {args.job_id} was already terminal or does not exist")
@@ -209,6 +216,7 @@ def main(argv: list[str] | None = None) -> int:
     p_running.add_argument("--take-index", type=int, required=True)
     p_running.add_argument("--take-count", type=int, required=True)
     p_running.add_argument("--running-since-offset", type=float, required=True)
+    p_running.add_argument("--owner-username", required=True)
     p_running.set_defaults(func=cmd_set_running)
 
     p_failed = sub.add_parser(

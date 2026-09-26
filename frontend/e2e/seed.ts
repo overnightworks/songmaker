@@ -83,7 +83,13 @@ export const VOICES_OCCUPANCY_PROMPT = 'E2E voices occupancy prompt';
 const VOICE_ADAPTER_COMPARISON_PROMPT = 'E2E adapter comparison prompt';
 const VOICE_ADAPTER_COMPARISON_LYRICS = 'E2E adapter comparison lyrics';
 
-function runMarker(): string {
+/**
+ * A per-invocation uniqueness suffix. Called fresh inside a test body (never
+ * cached), so a CI retry -- which re-runs the whole test function later in
+ * wall-clock time -- gets a new marker rather than colliding with the
+ * previous attempt's own seeded rows.
+ */
+export function runMarker(): string {
 	return Date.now().toString(36);
 }
 
@@ -772,7 +778,9 @@ export async function seedRunningGenerationJob(
 				'--take-count',
 				String(options.takeCount),
 				'--running-since-offset',
-				String(options.runningSinceOffsetSeconds)
+				String(options.runningSinceOffsetSeconds),
+				'--owner-username',
+				requiredEnv('ADMIN_USERNAME')
 			],
 			{ cwd: REPO_ROOT }
 		);
