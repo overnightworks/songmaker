@@ -1,8 +1,0 @@
-claim_id = "152d4050a1bd48f29a2719104919d3be"
-agent = "claude-head"
-role = "builder"
-base = "2acad03bfb21933b929ab5c18602e00645c76172"
-branch = "claude/issue-1036-cold-load-phase"
-scope = ["docs/architecture.md", "src/acestep_engine/progress.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/jobs.py", "src/songmaker_cli/jobs/generation.py", "tests/acestep_worker/test_task_store.py", "tests/acestep_worker/test_wrapper.py", "tests/test_acestep_engine_progress.py", "tests/test_api.py", "tests/test_client.py", "tests/test_jobs.py", "tests/test_queue_streams.py", "tests/test_scheduler.py"]
-opened_commit = "ffab0f33adf0197400a55ee36972b06d6f0db0b4"
-whole_reason = "one phase signal across engine mapping, worker task creation, tracker and job query"
