@@ -1,0 +1,7 @@
+claim_id = "b78d8d713bfb4036965823bc3d1d5309"
+agent = "claude-head"
+role = "builder"
+base = "ed4a03921b8e5c77d3bb606359e74dd101b99445"
+branch = "claude/issue-1042-player-recovery"
+scope = ["frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
+opened_commit = "45f2d4742f215a5de0f997c55db5712ddbe7ffb4"
