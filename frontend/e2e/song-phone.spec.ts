@@ -53,6 +53,7 @@ import {
 	workspace
 } from './helpers';
 import {
+	advanceGenerationJobPhase,
 	failGenerationJob,
 	readSeededLibrary,
 	runMarker,
@@ -69,6 +70,11 @@ const SONG_PHONE_TAKE_COUNT = 2;
 const SECOND_TAKE_LABEL = nowPlayingTakeLabel(SONG_PHONE_VERSION_NUMBER, SONG_PHONE_TAKE_COUNT);
 const RUNNING_JOB_TAKE_INDEX = 1;
 const RUNNING_JOB_TAKE_COUNT = 2;
+// A cold start: the job begins by loading the model, which names no percent
+// and no remaining time (#1040), then moves on live to rendering.
+const LOADING_JOB_PHASE = 'loading_model';
+const LOADING_JOB_PHASE_LABEL = GENERATION_PHASE_LABELS[LOADING_JOB_PHASE];
+const LOADING_JOB_PROGRESS = 0;
 const RUNNING_JOB_PROGRESS = 0.36;
 // The job has been generating this many seconds, so the remaining-time
 // estimate lands well inside a plausible single-digit-minute ETA rather than
@@ -157,25 +163,40 @@ test.describe('song page at phone width', () => {
 		// A seeded running job, discovered the same way a reload would: a fresh
 		// cold open re-runs loadSongContext's hydrateActiveGeneration.
 		const jobId = await seedRunningGenerationJob(songId, {
-			progress: RUNNING_JOB_PROGRESS,
+			progress: LOADING_JOB_PROGRESS,
 			takeIndex: RUNNING_JOB_TAKE_INDEX,
 			takeCount: RUNNING_JOB_TAKE_COUNT,
-			phase: RUNNING_JOB_PHASE,
-			generationStartedOffsetSeconds: RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS
+			phase: LOADING_JOB_PHASE
 		});
 		await page.goto(songAddress);
 		const generateStatus = panel.getByRole('status');
+		await expect(generateStatus).toHaveText(
+			`${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL}`
+		);
+
+		await page.getByRole('tab', { name: /Takes/ }).click();
+		await expect(panel.getByRole('progressbar')).toBeVisible();
+		await expect(panel.getByText(LOADING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
+		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
+		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toHaveCount(0);
+
+		// Leaving the model load live, over the same job's still-open SSE
+		// stream — no reload, matching a real worker's own reporting path.
+		await advanceGenerationJobPhase(jobId, {
+			progress: RUNNING_JOB_PROGRESS,
+			phase: RUNNING_JOB_PHASE,
+			generationStartedOffsetSeconds: RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS
+		});
+		await expect(panel.getByText(RUNNING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
+		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
+		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
+
+		await page.getByRole('tab', { name: /Write/ }).click();
 		await expect(generateStatus).toContainText(
 			new RegExp(
 				`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
 			)
 		);
-
-		await page.getByRole('tab', { name: /Takes/ }).click();
-		await expect(panel.getByRole('progressbar')).toBeVisible();
-		await expect(panel.getByText(RUNNING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
-		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
-		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
 
 		// Failing the same job live, over its still-open SSE stream — no
 		// reload, matching a real worker crash's own reporting path.
