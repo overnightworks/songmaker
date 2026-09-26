@@ -108,6 +108,12 @@ _TAKE_SHARES: Final[dict[GenerationPhase, _TakeShare]] = {
     GenerationPhase.RENDERING: _TakeShare(starts_at=0.55, weight=0.15),
     GenerationPhase.SAVING_TAKE: _TakeShare(starts_at=0.70, weight=0.30),
 }
+_PHASES_IN_TAKE_ORDER: Final[tuple[GenerationPhase, ...]] = (
+    GenerationPhase.LOADING_MODEL,
+    GenerationPhase.WRITING,
+    GenerationPhase.RENDERING,
+    GenerationPhase.SAVING_TAKE,
+)
 _GENERATION_PHASE_OF: Final[dict[AceStepPhase, GenerationPhase]] = {
     AceStepPhase.LOADING_MODEL: GenerationPhase.LOADING_MODEL,
     AceStepPhase.WRITING: GenerationPhase.WRITING,
@@ -128,7 +134,9 @@ class GenerationProgressTracker:
     phase, writes are throttled. Every write carries the current phase, whose
     first generating one anchors the remaining-time estimate. A take starts
     where ACE-Step reports a task it has not started, so the previous take's
-    phase never shows beside the new take.
+    phase never shows beside the new take. Within a take the phase only moves
+    forward: a report of an earlier phase, such as ACE-Step's progress
+    dropping below its running mark after writing began, is ignored.
     """
 
     db_factory: sessionmaker[Session]
@@ -150,6 +158,8 @@ class GenerationProgressTracker:
         self._write(take_index=index + 1, take_count=self.take_count)
 
     def report(self, phase: GenerationPhase, fraction: float) -> None:
+        if self._precedes_current_phase(phase):
+            return
         share = _TAKE_SHARES[phase]
         self._raise_to(
             (self.take_index + share.starts_at + share.weight * fraction) / self.take_count
@@ -161,6 +171,11 @@ class GenerationProgressTracker:
 
     def start_saving_take(self) -> None:
         self.report(GenerationPhase.SAVING_TAKE, 0.0)
+
+    def _precedes_current_phase(self, phase: GenerationPhase) -> bool:
+        if self.phase is None:
+            return False
+        return _PHASES_IN_TAKE_ORDER.index(phase) < _PHASES_IN_TAKE_ORDER.index(self.phase)
 
     def _raise_to(self, value: float) -> None:
         self.reached = max(self.reached, value)
