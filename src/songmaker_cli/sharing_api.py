@@ -97,9 +97,10 @@ log = logging.getLogger(__name__)
 NOT_FOUND_DETAIL: Final = "Not found"
 QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
-# A take's file is written once and never changes, so a browser may keep it for
-# good; "private" forbids any shared cache (CDN, proxy) from holding one.
-TAKE_AUDIO_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
+# A take's file and a queue-stream snapshot are each written once under their
+# name and never change, so a browser may keep them for good; "private" forbids
+# any shared cache (CDN, proxy) from holding one.
+AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
 
 
 # Public, unauthenticated share endpoints fail open: blocking real listeners
@@ -218,11 +219,11 @@ def _shared_cover_response(
     )
 
 
-def _take_audio_response(audio_path: Path) -> FileResponse:
+def _audio_file_response(audio_path: Path) -> FileResponse:
     return FileResponse(
         audio_path,
         media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE),
-        headers={"Cache-Control": TAKE_AUDIO_CACHE_CONTROL},
+        headers={"Cache-Control": AUDIO_FILE_CACHE_CONTROL},
     )
 
 
@@ -275,7 +276,7 @@ async def get_audio(
         audio_path = resolve_audio_path(ctx.audio_dir, f"{owner_id}/{filename}")
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=False)
-    return _take_audio_response(audio_path)
+    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -406,7 +407,7 @@ def get_shared_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    return _take_audio_response(audio_path)
+    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -510,7 +511,7 @@ def get_shared_song_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    return _take_audio_response(audio_path)
+    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -603,7 +604,7 @@ def get_shared_gen_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    return _take_audio_response(audio_path)
+    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -801,7 +802,7 @@ def get_shared_playlist_audio(
         audio_path = require_existing_audio_path(audio_path)
     except AudioFileNotFoundError as exc:
         raise_audio_file_http_error(exc, public=True)
-    return _take_audio_response(audio_path)
+    return _audio_file_response(audio_path)
 
 
 @router.get(
@@ -817,6 +818,4 @@ def get_shared_queue_stream_audio(
     _check_shared_rate_limit(request)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     _validate_shared_queue_manifest(manifest, db)
-    audio_path = queue_stream_audio_path(ctx, snapshot_id)
-    media_type = AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE)
-    return FileResponse(audio_path, media_type=media_type)
+    return _audio_file_response(queue_stream_audio_path(ctx, snapshot_id))
