@@ -67,7 +67,7 @@
 
 	.write-actionbar {
 		position: sticky;
-		bottom: var(--player-height);
+		bottom: 0;
 		z-index: 1;
 		flex: none;
 		min-height: var(--editor-generate-bar-height);

@@ -7,6 +7,7 @@ import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
+import { injectComponentStyles } from '$lib/test-utils/component-styles';
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -124,8 +125,8 @@ describe('SongPhoneView', () => {
 	);
 
 	// #993: the Generate action used to scroll away with the rest of the Write
-	// tab. jsdom computes no layout, so the sticky pin itself is pinned against
-	// the source (the browser gate proves the real render); this proves the
+	// tab. jsdom computes no layout, so the real cascade has to be injected onto
+	// the action bar before its position can be read back; this proves the
 	// action sits in its own end-of-tab container and that container is the
 	// one declared sticky.
 	it('pins the Generate action in a sticky action bar at the end of the Write tab', async () => {
@@ -133,9 +134,9 @@ describe('SongPhoneView', () => {
 		const actionBar = target.querySelector('[role="tabpanel"] > :last-child');
 		expect(actionBar?.classList.contains('write-actionbar')).toBe(true);
 		expect(actionBar?.querySelector('.generate-action')).not.toBeNull();
-		expect(songPhoneViewSource).toMatch(
-			/\.write-actionbar \{\s*position: sticky;\s*bottom: var\(--player-height\);/
-		);
+		if (!actionBar) throw new Error('Expected an action bar');
+		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
+		expect(getComputedStyle(actionBar).position).toBe('sticky');
 	});
 
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
