@@ -3,6 +3,7 @@
 	import type { RecipeChip } from '$lib/stores/recipe';
 	import { detailTab } from '$lib/stores/navigation';
 	import DetailTabs from './DetailTabs.svelte';
+	import GenerateButton from './GenerateButton.svelte';
 	import PhoneRecipeSection from './PhoneRecipeSection.svelte';
 	import TakesList from './TakesList.svelte';
 
@@ -29,6 +30,7 @@
 		{@render sharedLink()}
 		<PhoneRecipeSection {chips} />
 		{@render write()}
+		<GenerateButton />
 	{:else}
 		{@render expiryDigest()}
 		<TakesList {...takeListProps} />

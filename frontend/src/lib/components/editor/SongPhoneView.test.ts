@@ -70,6 +70,12 @@ describe('SongPhoneView', () => {
 		const target = await render({ song: makeSong({ generations: takes, generation_count: 2 }) });
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
 		expect(target.querySelector('section[aria-label="Recipe"]')).not.toBeNull();
+		expect(
+			target
+				.querySelector('[role="tabpanel"] > :last-child')
+				?.querySelector('button')
+				?.textContent?.trim()
+		).toBe('Generate');
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		tabs[1].click();
 		await tick();
@@ -78,6 +84,7 @@ describe('SongPhoneView', () => {
 		);
 		expect(target.querySelector('textarea')).toBeNull();
 		expect(target.querySelector('section[aria-label="Recipe"]')).toBeNull();
+		expect(target.querySelector('.generate-action')).toBeNull();
 		expect(target.querySelector('header')).toBeNull();
 		expect(target.textContent).toContain('Expiry digest');
 		expect(target.querySelectorAll('.take-row')).toHaveLength(2);
@@ -85,6 +92,12 @@ describe('SongPhoneView', () => {
 		tabs[0].click();
 		await tick();
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
+		expect(
+			target
+				.querySelector('[role="tabpanel"] > :last-child')
+				?.querySelector('button')
+				?.textContent?.trim()
+		).toBe('Generate');
 		expect(target.querySelector('.takes-list')).toBeNull();
 	});
 
@@ -102,6 +115,7 @@ describe('SongPhoneView', () => {
 				'Takes (0)'
 			);
 			expect(target.querySelector('textarea')).toBeNull();
+			expect(target.querySelector('.generate-action')).toBeNull();
 		}
 	);
 });

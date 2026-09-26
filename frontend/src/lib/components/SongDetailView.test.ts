@@ -16,9 +16,9 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	COMPACT_LAYOUT_MAX_PX,
 	COMPACT_LAYOUT_MEDIA,
-	EDITOR_GENERATE_LABEL,
+	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATING_LABEL,
-	EDITOR_GPU_OFFLINE_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_LABEL,
@@ -40,7 +40,7 @@ import {
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import { editLyrics, pinnedSeed, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
-import { activeJobs } from '$lib/stores/jobs';
+import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import {
 	detailTab,
 	initNavigation,
@@ -307,6 +307,7 @@ beforeEach(() => {
 	listLoras.mockResolvedValue([]);
 	loras.set([]);
 	activeJobs.set([]);
+	generationFailures.set({});
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.mocked(addToast).mockClear();
 });
@@ -326,6 +327,7 @@ afterEach(async () => {
 	songList.set([]);
 	albumList.set([]);
 	activeJobs.set([]);
+	generationFailures.set({});
 	clearHitboxStyles();
 	clearPointer();
 	vi.unstubAllGlobals();
@@ -339,8 +341,10 @@ describe('SongDetailView header — one row, every state', () => {
 		if (!actions) throw new Error('Expected header actions');
 		expect(visibleText(actions)).toContain(EDITOR_VIEW_COWRITER_LABEL);
 		expect(visibleText(actions)).toContain(EDITOR_VIEW_RECIPE_LABEL);
-		expect(target.querySelectorAll('.generate-btn')).toHaveLength(1);
-		expect(target.querySelector('.generate-btn')?.textContent).toContain(EDITOR_GENERATE_LABEL);
+		expect(target.querySelectorAll('.generate-action .primary-button')).toHaveLength(1);
+		expect(target.querySelector('.generate-action .primary-button')?.textContent).toContain(
+			EDITOR_GENERATE_MODE_LABELS.generate
+		);
 	});
 
 	it('toggles the Recipe panel independently of the Write/Takes content', async () => {
@@ -629,7 +633,7 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 		const target = await renderView();
 		const generateBtn = () =>
 			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
-				(el) => el.textContent?.trim() === EDITOR_GENERATE_LABEL
+				(el) => el.textContent?.trim() === EDITOR_GENERATE_MODE_LABELS.generate
 			);
 		expect(generateBtn()?.disabled).toBe(true);
 
@@ -642,29 +646,35 @@ describe('SongDetailView Generate is enabled from the draft', () => {
 	});
 
 	it.each([
-		['repaint', 'Generate Repaint'],
-		['cover', 'Generate Cover']
+		['repaint', 'Repaint'],
+		['cover', 'Cover']
 	] as const)('names Generate after the active %s mode', async (mode, label) => {
 		const target = await renderView();
 		setSourceFromGeneration(generation(sourceRecipeDefaults()), mode);
 		await tick();
 
-		expect(target.querySelector('.generate-btn')?.textContent?.trim()).toBe(label);
+		expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
+			label
+		);
 	});
 
 	it('keeps Text2Music named Generate', async () => {
 		const target = await renderView();
-		expect(target.querySelector('.generate-btn')?.textContent?.trim()).toBe(EDITOR_GENERATE_LABEL);
+		expect(target.querySelector('.generate-action .primary-button')?.textContent?.trim()).toBe(
+			EDITOR_GENERATE_MODE_LABELS.generate
+		);
 	});
 });
 
-describe('SongDetailView Generate reacts to ACE-Step worker availability', () => {
+describe.each([false, true])('SongDetailView Generate with phone layout %s', (phone) => {
 	beforeEach(() => {
 		recipeModel.set('turbo');
+		stubLibraryMedia({ narrow: phone });
+		openWriteTab();
 	});
 
 	function generateBtn(target: HTMLElement): HTMLButtonElement | null {
-		return target.querySelector<HTMLButtonElement>('.generate-btn');
+		return target.querySelector<HTMLButtonElement>('.generate-action .primary-button');
 	}
 
 	it('disables Generate with a reason when no ACE-Step worker is online', async () => {
@@ -673,7 +683,9 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 
 		const btn = generateBtn(target);
 		expect(btn?.disabled).toBe(true);
-		expect(btn?.textContent).toContain(EDITOR_GPU_OFFLINE_LABEL);
+		expect(target.querySelector('.generate-action .reason')?.textContent).toContain(
+			EDITOR_GPU_OFFLINE_TITLE
+		);
 		expect(btn?.title).toBe(EDITOR_GPU_OFFLINE_TITLE);
 	});
 
@@ -683,7 +695,7 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 
 		const btn = generateBtn(target);
 		expect(btn?.disabled).toBe(false);
-		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
+		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
 	});
 
 	it('re-enables Generate without a reload once a worker comes back online', async () => {
@@ -698,7 +710,30 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 
 		const btn = generateBtn(target);
 		expect(btn?.disabled).toBe(false);
-		expect(btn?.textContent).toContain(EDITOR_GENERATE_LABEL);
+		expect(btn?.textContent).toContain(EDITOR_GENERATE_MODE_LABELS.generate);
+	});
+
+	it('shows the worker failure at Generate, expands it and retries through the same button', async () => {
+		const cause =
+			'Music generation failed: Insufficient free VRAM: need ~2.0 GB, only 1.3 GB available';
+		generationFailures.set({ s1: cause });
+		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
+		const target = await renderView();
+		const action = target.querySelector<HTMLElement>('.generate-action');
+		if (!action) throw new Error('Expected Generate action');
+		expect(target.querySelectorAll('.generate-action')).toHaveLength(1);
+		expect(action.textContent).toContain(cause);
+		expect(target.querySelector('.takes-list')?.textContent ?? '').not.toContain(cause);
+		const expand = getByRoleButton(action, EDITOR_GENERATE_FAILURE_EXPAND_LABEL);
+		expect(expand.getAttribute('aria-expanded')).toBe('false');
+		expand.click();
+		await tick();
+		expect(expand.getAttribute('aria-expanded')).toBe('true');
+		getByRoleButton(action, EDITOR_GENERATE_MODE_LABELS.generate).click();
+		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
+		await tick();
+		expect(action.textContent).not.toContain(cause);
+		expect(action.querySelector('[role="status"]')?.textContent).toContain('Queued');
 	});
 
 	it('shows a queued generation reason and its position from the job stream', async () => {
@@ -714,8 +749,11 @@ describe('SongDetailView Generate reacts to ACE-Step worker availability', () =>
 		]);
 		const target = await renderView();
 
-		expect(generateBtn(target)?.textContent).toContain('Queued (#2)');
-		expect(target.querySelector('.generate-queue-reason')?.textContent).toBe(
+		expect(target.querySelector('.generate-action [role="status"]')?.textContent).toContain(
+			'Queued #2'
+		);
+		expect(generateBtn(target)).toBeNull();
+		expect(target.querySelector('.generate-action .reason')?.textContent).toBe(
 			'Waiting for LoRA training on this GPU.'
 		);
 	});
@@ -727,7 +765,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 	});
 
 	function generateBtn(target: HTMLElement): HTMLButtonElement {
-		const btn = target.querySelector<HTMLButtonElement>('.generate-btn');
+		const btn = target.querySelector<HTMLButtonElement>('.generate-action .primary-button');
 		if (!btn) throw new Error('Expected the Generate button');
 		return btn;
 	}
@@ -773,15 +811,17 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		btn.click();
 		await tick();
 
-		expect(btn.disabled).toBe(true);
-		expect(btn.textContent).toContain(EDITOR_GENERATING_LABEL);
+		expect(target.querySelector('.generate-action .primary-button')).toBeNull();
+		expect(target.querySelector('.generate-action [role="status"]')?.textContent).toContain(
+			EDITOR_GENERATING_LABEL
+		);
 
 		resolveGenerate(jobStatus({ status: 'completed' }));
 		await tick();
 		await Promise.resolve();
 		await tick();
 
-		expect(btn.disabled).toBe(false);
+		expect(generateBtn(target).disabled).toBe(false);
 	});
 
 	it('releases the guard after a successful response, letting the next click through', async () => {
@@ -793,7 +833,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
 		await tick();
 
-		btn.click();
+		generateBtn(target).click();
 		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(2));
 	});
 
@@ -806,7 +846,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('boom', 'error'));
 
 		generateSong.mockResolvedValueOnce(jobStatus({ status: 'completed' }));
-		btn.click();
+		generateBtn(target).click();
 		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(2));
 	});
 });

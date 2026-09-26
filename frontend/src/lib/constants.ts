@@ -177,7 +177,6 @@ export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate 
 export const TAKES_GENERATING_LABEL = 'generating';
 export const TAKES_QUEUED_LABEL = 'queued';
 export const EDITOR_QUEUED_LABEL = 'Queued';
-export const EDITOR_QUEUE_POSITION_TEMPLATE = `${EDITOR_QUEUED_LABEL} (#{position})`;
 export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
@@ -269,11 +268,8 @@ export const COWRITER_TOOL_CALL_TARGET_PREFIX = 'for:';
 export const COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE =
 	'This proposal applies to a different song than the one you have open';
 
-export const EDITOR_GENERATE_LABEL = 'Generate';
-export const EDITOR_GENERATE_REPAINT_LABEL = 'Generate Repaint';
-export const EDITOR_GENERATE_COVER_LABEL = 'Generate Cover';
 export const EDITOR_GENERATE_MODE_LABELS = {
-	generate: EDITOR_GENERATE_LABEL,
+	generate: 'Generate',
 	repaint: TAKE_REPAINT_LABEL,
 	cover: TAKE_COVER_LABEL
 };
@@ -289,8 +285,6 @@ export const EDITOR_GENERATING_LABEL = 'Generating...';
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
-export const EDITOR_QUEUE_BUSY_TITLE = 'System busy — submit may be rejected';
-export const EDITOR_GPU_OFFLINE_LABEL = 'GPU offline';
 export const EDITOR_GPU_OFFLINE_TITLE = 'No ACE-Step worker online — generation unavailable';
 export const EDITOR_CHAT_LABEL = 'Chat';
 export const EDITOR_LYRICS_LABEL = 'Lyrics';
