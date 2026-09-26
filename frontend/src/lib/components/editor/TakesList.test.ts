@@ -303,7 +303,7 @@ describe('TakesList', () => {
 			}
 		});
 
-		expect(target.querySelector('.status-line')?.textContent).toContain('Queued #2');
+		expect(target.querySelector('.status-line')?.textContent).toContain('#2');
 		expect(target.querySelector('.status-line.reason')?.textContent).toContain(
 			'Waiting for LoRA training on this GPU.'
 		);

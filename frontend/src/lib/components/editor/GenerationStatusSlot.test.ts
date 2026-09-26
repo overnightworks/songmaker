@@ -11,11 +11,12 @@ import {
 } from '$lib/test-utils/hitbox';
 import { HITBOX_FREQUENT_PX } from '$lib/constants';
 
-vi.mock('$lib/api/client', () => ({ cancelJob: vi.fn() }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('$lib/stores/generateAction', () => ({
+	cancelGeneration: vi.fn(),
+	progressPercent: (job: JobItem | null) => (job ? Math.round(job.progress * 100) : 0)
+}));
 
-import { cancelJob } from '$lib/api/client';
-import { addToast } from '$lib/stores/toast';
+import { cancelGeneration } from '$lib/stores/generateAction';
 import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 
 const runningJob: JobItem = {
@@ -65,19 +66,19 @@ describe('GenerationStatusSlot', () => {
 		'renders nothing for a %s job',
 		async (status) => {
 			await render({ ...runningJob, status });
-			expect(document.body.querySelector('[role="status"]')).toBeNull();
+			expect(document.body.querySelector('.status-slot')).toBeNull();
 		}
 	);
 
 	it('renders nothing without a job', async () => {
 		await render(null);
-		expect(document.body.querySelector('[role="status"]')).toBeNull();
+		expect(document.body.querySelector('.status-slot')).toBeNull();
 	});
 
-	it('shows the version, the take counter, the percent and the ETA while running', async () => {
+	it('shows the version, the take counter, the percent and the ETA while running, without repeating "Generating…"', async () => {
 		await render(runningJob);
-		const slot = document.body.querySelector('[role="status"]');
-		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toContain(
+		const slot = document.body.querySelector('.status-slot');
+		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
 			'v8 · Generating... Take 1 of 2 · 36% · ~1:40'
 		);
 		expect(document.body.querySelector('[role="progressbar"]')?.getAttribute('aria-valuenow')).toBe(
@@ -85,10 +86,11 @@ describe('GenerationStatusSlot', () => {
 		);
 	});
 
-	it('omits the take counter for a single take', async () => {
+	it('omits the take counter for a single take and shows the percent alone on its line', async () => {
 		await render({ ...runningJob, take_count: 1 });
-		expect(document.body.textContent).not.toContain('Take 1 of 1');
-		expect(document.body.textContent).toContain('Generating...');
+		const slot = document.body.querySelector('.status-slot');
+		expect(slot?.textContent).not.toContain('Take 1 of 1');
+		expect(slot?.querySelector('.status-line')?.textContent).toBe('36% · ~1:40');
 	});
 
 	it('omits the ETA while it is still calculating', async () => {
@@ -96,21 +98,28 @@ describe('GenerationStatusSlot', () => {
 		expect(document.body.textContent).not.toContain('~');
 	});
 
-	it('shows the queue position and the reason on its own line', async () => {
+	it('shows the queue position without repeating "Queued", and the reason on its own line', async () => {
 		await render(queuedJob);
-		const slot = document.body.querySelector('[role="status"]');
-		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toContain(
-			'v8 · Queued Queued #3 Waiting for LoRA training on this GPU.'
+		const slot = document.body.querySelector('.status-slot');
+		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'v8 · Queued #3 Waiting for LoRA training on this GPU.'
 		);
 	});
 
 	it('does not invent a missing queue position', async () => {
 		await render({ ...queuedJob, queue_position: null });
-		expect(document.body.querySelector('[role="status"]')?.textContent).toContain('Queued');
-		expect(document.body.querySelector('[role="status"]')?.textContent).not.toContain('#');
+		const slot = document.body.querySelector('.status-slot');
+		expect(slot?.textContent).toContain('Queued');
+		expect(slot?.textContent).not.toContain('#');
 	});
 
-	it('cancels the job at a 44px hitbox', async () => {
+	it('does not add a second live region for the job the Generate button already announces', async () => {
+		await render(runningJob);
+		expect(document.body.querySelectorAll('[role="status"]')).toHaveLength(0);
+		expect(document.body.querySelector('[role="progressbar"]')).not.toBeNull();
+	});
+
+	it('cancels the job through the shared cancelGeneration owner at a 44px hitbox', async () => {
 		await render(runningJob);
 		const cancel = getByRoleButton(document.body, 'Cancel generation');
 		expect(minSquarePx(cancel, 'Cancel generation')).toEqual({
@@ -119,14 +128,6 @@ describe('GenerationStatusSlot', () => {
 		});
 		cancel.click();
 		await tick();
-		expect(cancelJob).toHaveBeenCalledExactlyOnceWith('job1');
-	});
-
-	it('surfaces a cancellation failure', async () => {
-		vi.mocked(cancelJob).mockRejectedValue(new Error('Worker unavailable'));
-		await render(runningJob);
-		getByRoleButton(document.body, 'Cancel generation').click();
-		await tick();
-		expect(addToast).toHaveBeenCalledWith('Worker unavailable', 'error');
+		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
 	});
 });

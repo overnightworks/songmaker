@@ -20,13 +20,13 @@ const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
 	return writable<{ state: GenerateState }>({ state: { kind: 'idle', mode: 'generate' } });
 });
-vi.mock('$lib/stores/generateAction', () => ({ generateAction: action, generate: vi.fn() }));
-vi.mock('$lib/api/client', () => ({ cancelJob: vi.fn() }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('$lib/stores/generateAction', () => ({
+	generateAction: action,
+	generate: vi.fn(),
+	cancelGeneration: vi.fn()
+}));
 
-import { cancelJob } from '$lib/api/client';
-import { generate, type GenerateState } from '$lib/stores/generateAction';
-import { addToast } from '$lib/stores/toast';
+import { cancelGeneration, generate, type GenerateState } from '$lib/stores/generateAction';
 import GenerateButton from './GenerateButton.svelte';
 
 const running: Extract<GenerateState, { kind: 'generating' }> = {
@@ -89,7 +89,7 @@ describe('GenerateButton', () => {
 		});
 		cancel.click();
 		await tick();
-		expect(cancelJob).toHaveBeenCalledExactlyOnceWith('job1');
+		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
 		expect(generate).not.toHaveBeenCalled();
 	});
 
@@ -111,7 +111,7 @@ describe('GenerateButton', () => {
 			).toBe(expected);
 			getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL).click();
 			await tick();
-			expect(cancelJob).toHaveBeenCalledExactlyOnceWith('job1');
+			expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
 		}
 	);
 
@@ -132,14 +132,6 @@ describe('GenerateButton', () => {
 		});
 		expect(document.body.textContent).toContain('0%');
 		expect(document.body.querySelector('button')).toBeNull();
-	});
-
-	it('surfaces a cancellation failure', async () => {
-		vi.mocked(cancelJob).mockRejectedValue(new Error('Worker unavailable'));
-		await render(running);
-		getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL).click();
-		await tick();
-		expect(addToast).toHaveBeenCalledWith('Worker unavailable', 'error');
 	});
 
 	it('disables generation with a visible reason and matching title', async () => {

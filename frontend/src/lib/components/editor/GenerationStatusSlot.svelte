@@ -1,15 +1,12 @@
 <script lang="ts">
 	import type { JobItem } from '$lib/api/types';
-	import { cancelJob } from '$lib/api/client';
 	import {
-		EDITOR_GENERATE_CANCEL_FAILED,
 		EDITOR_GENERATE_CANCEL_LABEL,
-		EDITOR_GENERATE_QUEUED_TEMPLATE,
 		EDITOR_GENERATE_TAKE_TEMPLATE,
 		EDITOR_GENERATING_LABEL,
 		EDITOR_QUEUED_LABEL
 	} from '$lib/constants';
-	import { addToast } from '$lib/stores/toast';
+	import { cancelGeneration, progressPercent } from '$lib/stores/generateAction';
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
@@ -21,13 +18,7 @@
 	let { job, latestVersionNumber }: Props = $props();
 
 	const running = $derived(job !== null && (job.status === 'queued' || job.status === 'running'));
-	const percent = $derived(job ? Math.round(job.progress * 100) : 0);
-	const queueLabel = $derived.by(() => {
-		const position = job?.queue_position ?? null;
-		return position === null
-			? EDITOR_QUEUED_LABEL
-			: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(position));
-	});
+	const percent = $derived(progressPercent(job));
 	const takeCounter = $derived.by(() => {
 		if (job?.take_index == null || job?.take_count == null || job.take_count <= 1) return null;
 		return EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', String(job.take_index)).replace(
@@ -35,19 +26,24 @@
 			String(job.take_count)
 		);
 	});
-
-	async function cancel(): Promise<void> {
-		if (!job) return;
-		try {
-			await cancelJob(job.id);
-		} catch (error) {
-			addToast(error instanceof Error ? error.message : EDITOR_GENERATE_CANCEL_FAILED, 'error');
+	const statusLineText = $derived.by(() => {
+		if (!job) return null;
+		if (job.status === 'queued') {
+			const position = job.queue_position ?? null;
+			return position !== null ? `#${position}` : null;
 		}
-	}
+		const parts: string[] = [];
+		if (takeCounter) parts.push(takeCounter);
+		parts.push(`${percent}%`);
+		if (typeof job.remaining_time_estimate === 'number') {
+			parts.push(`~${formatTime(job.remaining_time_estimate)}`);
+		}
+		return parts.join(' · ');
+	});
 </script>
 
 {#if job && running}
-	<div class="status-slot" role="status">
+	<div class="status-slot">
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
@@ -58,7 +54,7 @@
 				class="icon-button"
 				data-hitbox="frequent"
 				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-				onclick={() => void cancel()}
+				onclick={() => void cancelGeneration(job.id)}
 			>
 				<Icon name="x" />
 			</button>
@@ -72,15 +68,9 @@
 		>
 			<span style:width={`${percent}%`}></span>
 		</div>
-		<p class="status-line">
-			{#if job.status === 'queued'}
-				{queueLabel}
-			{:else}
-				{takeCounter ?? EDITOR_GENERATING_LABEL} · {percent}%{#if typeof job.remaining_time_estimate === 'number'}
-					{` · ~${formatTime(job.remaining_time_estimate)}`}
-				{/if}
-			{/if}
-		</p>
+		{#if statusLineText}
+			<p class="status-line">{statusLineText}</p>
+		{/if}
 		{#if job.queue_reason}
 			<p class="status-line reason">{job.queue_reason}</p>
 		{/if}
