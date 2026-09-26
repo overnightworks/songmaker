@@ -113,8 +113,10 @@ class GenerationTaskResultDTO(BaseModel):
     delivered_batch_size: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class _PickedWorker:
+    """One job's view of a worker: its heartbeat at admission plus the loads this job made."""
+
     id: str
     host: str
     port: int
@@ -124,6 +126,10 @@ class _PickedWorker:
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"  # NOSONAR Private traffic uses an internal token.
+
+    def record_loaded(self, mode: str) -> None:
+        if mode not in self.loaded_modes:
+            self.loaded_modes = [*self.loaded_modes, mode]
 
 
 @dataclass
@@ -268,6 +274,7 @@ async def _ensure_loaded(
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise WorkerTaskFailed(_worker_response_cause(resp)) from exc
+    worker.record_loaded(target_mode)
 
 
 async def _submit_generation(

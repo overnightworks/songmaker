@@ -45,6 +45,7 @@ from songmaker_cli.scheduler import (
     consume_download_task_stream,
     consume_task_stream,
     dispatch_generation,
+    dispatch_generation_on_worker,
     pick_any_online_worker,
     pick_worker,
 )
@@ -806,6 +807,60 @@ def test_ensure_loaded_posts_when_missing() -> None:
     args, kwargs = client.post.call_args
     assert args[0].endswith("/load_model")
     assert kwargs["json"] == {"mode": "sft"}
+
+
+def _worker_that_loads_each_mode_once() -> tuple[httpx.MockTransport, list[str]]:
+    loaded: set[str] = set()
+    real_loads: list[str] = []
+    finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/load_model":
+            mode = json.loads(request.content)["mode"]
+            if mode not in loaded:
+                loaded.add(mode)
+                real_loads.append(mode)
+            return httpx.Response(200, json={"loaded": sorted(loaded), "evicted": []})
+        if request.url.path == "/generate":
+            return httpx.Response(200, json={"task_id": "t1"})
+        stream = _build_sse_response(
+            ("progress", {"progress": 0.5, "phase": AceStepPhase.RENDERING}),
+            ("done", {"result": finished_take}),
+        )
+        return httpx.Response(200, content=stream, headers={"content-type": "text/event-stream"})
+
+    return httpx.MockTransport(handle), real_loads
+
+
+def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypatch) -> None:
+    transport, real_loads = _worker_that_loads_each_mode_once()
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        "songmaker_cli.scheduler.httpx.AsyncClient",
+        lambda *args, **kwargs: real_client(*args, transport=transport, **kwargs),
+    )
+    admitted_cold = _make_picked(loaded=[])
+    phases_per_take: list[list[AceStepPhase]] = []
+
+    async def run_job(take_count: int) -> None:
+        for _ in range(take_count):
+            phases: list[AceStepPhase] = []
+            phases_per_take.append(phases)
+            await dispatch_generation_on_worker(
+                worker=admitted_cold,
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
+            )
+
+    _run(run_job(take_count=3))
+
+    assert real_loads == ["sft"]
+    assert phases_per_take == [
+        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
+        [AceStepPhase.RENDERING],
+        [AceStepPhase.RENDERING],
+    ]
 
 
 def test_submit_generation_returns_task_id() -> None:
