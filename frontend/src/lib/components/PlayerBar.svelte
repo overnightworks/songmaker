@@ -35,6 +35,7 @@
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
@@ -123,9 +124,12 @@
 				>{current.songTitle}</span
 			>
 			<span class="track-detail"
-				>{current.artist} · take {current.generation.generation_number}{#if isLoading}<span
-						class="loading-text">Loading...</span
-					>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
+				>{nowPlayingTakeLabel(
+					current.generation.version_number,
+					current.generation.generation_number
+				)}{#if isLoading}<span class="loading-text">Loading...</span>{:else if isError}<span
+						class="error-text">{errorMsg ?? 'Error'}</span
+					>{/if}</span
 			>
 		{:else if startNotice === 'building'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>

@@ -33,8 +33,12 @@
 		{#if $detailTab === 'write'}
 			{@render sharedLink()}
 			<PhoneRecipeSection {chips} />
-			{@render write()}
-			<GenerateButton />
+			<div class="write-scroll">
+				{@render write()}
+			</div>
+			<div class="write-actionbar">
+				<GenerateButton />
+			</div>
 		{:else}
 			{@render expiryDigest()}
 			<TakesList {...takeListProps} />
@@ -48,5 +52,28 @@
 		flex-direction: column;
 		gap: var(--row-gap);
 		min-width: 0;
+	}
+
+	/* The Write tab's own content keeps growing the page (#993); the action
+	   bar below it is what must stay put. A sticky box near the bottom of a
+	   scrolling ancestor (`<main>`, per SongDetailView/LibraryWorkspace) stays
+	   pinned to `bottom` for the whole scroll, not just once it is reached —
+	   but that also means it visually renders above wherever the flow hasn't
+	   scrolled to yet, so the lyrics need their own reserved gap the size of
+	   the bar or its rendered box would sit over their last lines. */
+	.write-scroll {
+		padding-bottom: var(--editor-generate-bar-height);
+	}
+
+	.write-actionbar {
+		position: sticky;
+		bottom: 0;
+		z-index: 1;
+		flex: none;
+		min-height: var(--editor-generate-bar-height);
+		display: flex;
+		align-items: center;
+		background: var(--header-bg);
+		border-top: 1px solid var(--border);
 	}
 </style>

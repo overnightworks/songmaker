@@ -16,7 +16,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
-import { editLyrics, loadSongData } from '$lib/stores/editor';
+import { editLyrics, loadSongData, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -38,6 +38,16 @@ function draftSongDefaults(): Partial<SongItem> {
 		generations: [generation()],
 		created_at: ''
 	};
+}
+
+// jsdom never lays a textarea out, so `scrollHeight` is a fixed 0 unless a
+// test asks for it to track content the way a real browser would.
+function stubScrollHeight() {
+	return vi
+		.spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+		.mockImplementation(function (this: HTMLTextAreaElement) {
+			return this.value.length;
+		});
 }
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -117,6 +127,89 @@ describe('WriteColumn write mode', () => {
 		expect(row?.textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
 		row?.click();
 		expect(onopencowriter).toHaveBeenCalledOnce();
+	});
+
+	// L9: the compact page is the one scroll surface, so a field that
+	// overflows its box must grow the page rather than scroll inside itself.
+	it.each([
+		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
+		['lyrics', '.lyrics-area']
+	])('grows the compact %s field with its content, not inside a fixed box', async (_, selector) => {
+		const scrollHeightSpy = stubScrollHeight();
+		try {
+			const { target } = await render({ compact: true });
+			const field = target.querySelector<HTMLTextAreaElement>(selector);
+			if (!field) throw new Error(`Expected a ${_} textarea`);
+			field.value = 'one\ntwo\nthree';
+			field.dispatchEvent(new Event('input', { bubbles: true }));
+			await tick();
+			expect(field.style.height).toBe(`${field.value.length}px`);
+		} finally {
+			scrollHeightSpy.mockRestore();
+		}
+	});
+
+	it.each([
+		['style prompt', '.edit-field textarea:not(.lyrics-area)', setDraftPrompt],
+		['lyrics', '.lyrics-area', setDraftLyrics]
+	])(
+		're-measures the compact %s field once an external draft write lands',
+		async (_, selector, setDraft) => {
+			const scrollHeightSpy = stubScrollHeight();
+			try {
+				const { target } = await render({ compact: true });
+				const field = target.querySelector<HTMLTextAreaElement>(selector);
+				if (!field) throw new Error(`Expected a ${_} textarea`);
+				setDraft('one\ntwo\nthree\nfour');
+				await tick();
+				await Promise.resolve();
+				await tick();
+				expect(field.value).toBe('one\ntwo\nthree\nfour');
+				expect(field.style.height).toBe(`${field.value.length}px`);
+			} finally {
+				scrollHeightSpy.mockRestore();
+			}
+		}
+	);
+
+	it('re-measures the compact lyrics field on a window resize', async () => {
+		const scrollHeightSpy = stubScrollHeight();
+		try {
+			const { target } = await render({ compact: true });
+			const field = target.querySelector<HTMLTextAreaElement>('.lyrics-area');
+			if (!field) throw new Error('Expected a lyrics textarea');
+			field.value = 'one\ntwo\nthree\nfour\nfive';
+			field.dispatchEvent(new Event('input', { bubbles: true }));
+			await tick();
+			field.style.height = '3px';
+			window.dispatchEvent(new Event('resize'));
+			expect(field.style.height).toBe(`${field.value.length}px`);
+		} finally {
+			scrollHeightSpy.mockRestore();
+		}
+	});
+
+	it.each([
+		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
+		['lyrics', '.lyrics-area']
+	])('leaves the desktop %s field to its own resizable layout', async (_, selector) => {
+		// A stubbed, non-zero scrollHeight is what actually proves the action
+		// leaves the desktop field alone (#993 regression: an `input` listener
+		// attached regardless of `active` grew a real Chromium textarea to
+		// 980px). Without the stub jsdom's own scrollHeight of 0 would pass
+		// trivially even with the listener still wired up.
+		const scrollHeightSpy = stubScrollHeight();
+		try {
+			const { target } = await render({ compact: false });
+			const field = target.querySelector<HTMLTextAreaElement>(selector);
+			if (!field) throw new Error(`Expected a ${_} textarea`);
+			field.value = 'one\ntwo\nthree';
+			field.dispatchEvent(new Event('input', { bubbles: true }));
+			await tick();
+			expect(field.style.height).toBe('');
+		} finally {
+			scrollHeightSpy.mockRestore();
+		}
 	});
 });
 
