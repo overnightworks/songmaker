@@ -56,6 +56,9 @@ export interface LibraryHistoryState {
 	generationId: string | null;
 	scrollAnchor: number;
 	detailTab?: DetailTab;
+	// Set on the entry a history layer owns (navigation.ts): an overlay that
+	// sits on top of the library this state describes, at the same address.
+	layer?: string;
 }
 
 // Opening a song lands on Write — on a compact layout the tabs are the only
@@ -93,6 +96,7 @@ function hasValidHistoryMetadata(state: Record<string, unknown>): boolean {
 	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
 		return false;
 	}
+	if (state.layer !== undefined && typeof state.layer !== 'string') return false;
 	return true;
 }
 
@@ -265,9 +269,10 @@ export function writeLibraryHistory(
 	}
 	return queueHistoryStep(state, pathname, async () => {
 		if (crossesRoutes) {
+			const written = mode === 'replace' ? keepEntryLayer(state) : state;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
 			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
-			applyHistoryWrite(state, url, 'replace');
+			applyHistoryWrite(written, url, 'replace');
 			return;
 		}
 		applyHistoryWrite(state, url, mode);
@@ -275,7 +280,7 @@ export function writeLibraryHistory(
 }
 
 // Steps back onto the entry below, whose state the caller already knows
-// (issue #1002: the compact Now Playing layer leaving for the library it
+// (issue #1002: a history layer in navigation.ts leaving for the library it
 // covers). A traversal is asynchronous -- it lands only when its `popstate`
 // fires -- so it joins the same queue as a crossing write: a write issued
 // straight afterwards (Go to song opening the playing song) lands on top of
@@ -322,7 +327,18 @@ export function currentLibraryHistoryState(): unknown {
 
 function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: HistoryWriteMode): void {
 	if (mode === 'push') history.pushState(state, '', url);
-	else history.replaceState(state, '', url);
+	else history.replaceState(keepEntryLayer(state), '', url);
+}
+
+// A replace rewrites the library an entry shows, never what the entry is: an
+// entry a history layer owns stays marked as that layer, whichever writer
+// snapshots the library onto it.
+function keepEntryLayer(state: LibraryHistoryState): LibraryHistoryState {
+	const entry: unknown = history.state;
+	if (state.layer !== undefined || !isLibraryHistoryState(entry) || entry.layer === undefined) {
+		return state;
+	}
+	return { ...state, layer: entry.layer };
 }
 
 type AlbumAddress = 'found' | 'unknown';

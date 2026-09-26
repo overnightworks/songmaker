@@ -557,10 +557,12 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 // address. The phone's Back then closes the topmost layer and leaves that
 // library exactly as it was -- no workspace re-apply, no dirty-draft save --
 // instead of applying whatever entry sits below it while the overlay stays
-// on top. An overlay registers when it opens and unregisters when it closes
-// any other way (×, Done, Escape, a surface change); unregistering steps
-// back off its entry, so no stale copy of the library is left for Back to
-// land on. The full Now Playing surface is the first registrant.
+// on top. The entry is a copy of that library marked with the layer's id,
+// and replace writes keep the mark (libraryContext.ts). An overlay registers
+// when it opens and unregisters when it closes any other way (×, Done,
+// Escape, a surface change); unregistering steps back off its entry, so no
+// stale copy of the library is left for Back to land on. The full Now
+// Playing surface is the first registrant.
 interface HistoryLayer {
 	id: string;
 	close: () => void;
@@ -577,7 +579,11 @@ export function registerHistoryLayer(id: string, close: () => void): () => void 
 	if (!isLibraryHistoryState(base)) return () => undefined;
 	const layer: HistoryLayer = { id, close, base };
 	historyLayers.push(layer);
-	void writeLibraryHistory({ ...base, index: base.index + 1 }, urlFromState(base), 'push');
+	void writeLibraryHistory(
+		{ ...base, index: base.index + 1, layer: id },
+		urlFromState(base),
+		'push'
+	);
 	return () => unregisterHistoryLayer(layer);
 }
 
@@ -615,7 +621,18 @@ function popsHistoryLayers(state: unknown): boolean {
 		top.close();
 		lowestLeft = top;
 	}
+	stepOffStaleLayerEntry(state);
 	return lowestLeft?.base.index === landing;
+}
+
+// An entry marked as a layer that no open layer owns -- left behind by a
+// reload, or reached again with Forward after Back closed its layer -- is a
+// copy of the library below it, where Back would visibly do nothing; step
+// off it onto that library.
+function stepOffStaleLayerEntry(state: unknown): void {
+	if (!isLibraryHistoryState(state) || state.layer === undefined) return;
+	if (topHistoryLayer()?.base.index === state.index - 1) return;
+	stepBackOnto({ ...state, index: state.index - 1, layer: undefined });
 }
 
 const NOW_PLAYING_LAYER = 'now-playing';
@@ -659,6 +676,7 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
+	stepOffStaleLayerEntry(existing);
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
