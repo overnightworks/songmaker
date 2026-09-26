@@ -34,6 +34,7 @@ from redis.asyncio import Redis
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
     admit_generation as admit_generation_occupancy,
 )
@@ -59,6 +60,8 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 ProgressCallback = Callable[[float], Awaitable[None] | None]
+GenerationProgressCallback = Callable[[AceStepPhase, float], Awaitable[None] | None]
+ProgressEventHandler = Callable[[dict], Awaitable[None]]
 HeartbeatCallback = Callable[[], Awaitable[None] | None]
 WORKER_STREAM_WENT_SILENT = JOB_ERROR_WORKER_STREAM_SILENT
 NO_ONLINE_ACESTEP_WORKERS_DETAIL: Final = "No online ACE-Step workers"
@@ -110,8 +113,10 @@ class GenerationTaskResultDTO(BaseModel):
     delivered_batch_size: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclass
 class _PickedWorker:
+    """One job's view of a worker: its heartbeat at admission plus the loads this job made."""
+
     id: str
     host: str
     port: int
@@ -121,6 +126,10 @@ class _PickedWorker:
     @property
     def base_url(self) -> str:
         return f"http://{self.host}:{self.port}"  # NOSONAR Private traffic uses an internal token.
+
+    def record_loaded(self, mode: str) -> None:
+        if mode not in self.loaded_modes:
+            self.loaded_modes = [*self.loaded_modes, mode]
 
 
 @dataclass
@@ -245,6 +254,7 @@ async def _ensure_loaded(
     worker: _PickedWorker,
     target_mode: str,
     options: DispatchOptions,
+    on_progress: GenerationProgressCallback | None = None,
 ) -> None:
     if target_mode in worker.loaded_modes:
         return
@@ -253,6 +263,7 @@ async def _ensure_loaded(
         worker.id,
         target_mode,
     )
+    await _maybe_invoke(on_progress, AceStepPhase.LOADING_MODEL, 0.0)
     async with httpx.AsyncClient(timeout=options.load_model_timeout_seconds) as client:
         resp = await client.post(
             f"{worker.base_url}/load_model",
@@ -263,6 +274,7 @@ async def _ensure_loaded(
             resp.raise_for_status()
         except httpx.HTTPStatusError as exc:
             raise WorkerTaskFailed(_worker_response_cause(resp)) from exc
+    worker.record_loaded(target_mode)
 
 
 async def _submit_generation(
@@ -375,7 +387,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
     result_type: type[_TaskResultT],
     invalid_result_label: str,
     error_exception_type: type[WorkerTaskFailed],
-    on_progress: ProgressCallback | None = None,
+    on_progress_event: ProgressEventHandler,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
 ) -> _TaskResultT:
@@ -400,7 +412,7 @@ async def _consume_task_stream[_TaskResultT: BaseModel](
                 result_type=result_type,
                 invalid_result_label=invalid_result_label,
                 error_exception_type=error_exception_type,
-                on_progress=on_progress,
+                on_progress_event=on_progress_event,
             )
             if result is not None:
                 return result
@@ -416,16 +428,47 @@ async def _consume_stream_event[_TaskResultT: BaseModel](
     result_type: type[_TaskResultT],
     invalid_result_label: str,
     error_exception_type: type[WorkerTaskFailed],
-    on_progress: ProgressCallback | None,
+    on_progress_event: ProgressEventHandler,
 ) -> _TaskResultT | None:
     if event_type == "progress":
-        await _maybe_invoke(on_progress, float(data.get("progress", 0.0)))
+        await on_progress_event(data)
         return None
     if event_type == "done":
         return _validate_task_result(data, result_type, invalid_result_label)
     if event_type == "error":
         _raise_worker_event_error(data, error_exception_type)
     return None
+
+
+def _plain_progress_events(on_progress: ProgressCallback | None) -> ProgressEventHandler:
+    async def handle(data: dict) -> None:
+        await _maybe_invoke(on_progress, float(data.get("progress", 0.0)))
+
+    return handle
+
+
+def _generation_progress_events(
+    on_progress: GenerationProgressCallback | None,
+) -> ProgressEventHandler:
+    """Hand on a generate task's phase and fraction.
+
+    An event without a known phase or without a progress value is logged and
+    dropped rather than failing the take: the generation keeps running and
+    the job keeps its last value.
+    """
+
+    async def handle(data: dict) -> None:
+        try:
+            phase = AceStepPhase(data.get("phase"))
+        except ValueError:
+            log.warning("Worker generate progress event without a known phase: %r", data)
+            return
+        if "progress" not in data:
+            log.warning("Worker generate progress event without a progress value: %r", data)
+            return
+        await _maybe_invoke(on_progress, phase, float(data["progress"]))
+
+    return handle
 
 
 def _validate_task_result[_TaskResultT: BaseModel](
@@ -460,7 +503,7 @@ async def consume_task_stream(
     worker: _PickedWorker,
     task_id: str,
     *,
-    on_progress: ProgressCallback | None = None,
+    on_progress: GenerationProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
@@ -474,7 +517,7 @@ async def consume_task_stream(
         result_type=GenerationTaskResultDTO,
         invalid_result_label="invalid result",
         error_exception_type=WorkerGenerationFailed,
-        on_progress=on_progress,
+        on_progress_event=_generation_progress_events(on_progress),
         on_heartbeat=on_heartbeat,
         options=options,
     )
@@ -498,7 +541,7 @@ async def consume_download_task_stream(
         result_type=DownloadTaskResultDTO,
         invalid_result_label="invalid download result",
         error_exception_type=WorkerTaskFailed,
-        on_progress=on_progress,
+        on_progress_event=_plain_progress_events(on_progress),
         on_heartbeat=on_heartbeat,
         options=options,
     )
@@ -508,7 +551,7 @@ async def dispatch_generation(
     *,
     ace_config: AceStepConfig,
     target_mode: str,
-    on_progress: ProgressCallback | None = None,
+    on_progress: GenerationProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     redis: Redis,
     db_factory: sessionmaker[Session],
@@ -550,11 +593,11 @@ async def dispatch_generation_on_worker(
     worker: _PickedWorker,
     ace_config: AceStepConfig,
     target_mode: str,
-    on_progress: ProgressCallback | None = None,
+    on_progress: GenerationProgressCallback | None = None,
     on_heartbeat: HeartbeatCallback | None = None,
     options: DispatchOptions = DispatchOptions(),
 ) -> GenerationTaskResultDTO:
-    await _ensure_loaded(worker, target_mode, options)
+    await _ensure_loaded(worker, target_mode, options, on_progress)
     task_id = await _submit_generation(worker, ace_config, target_mode, options)
     return await consume_task_stream(
         worker,

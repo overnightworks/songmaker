@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
     gpu_hold_key,
     queue_depth_key,
@@ -44,6 +45,7 @@ from songmaker_cli.scheduler import (
     consume_download_task_stream,
     consume_task_stream,
     dispatch_generation,
+    dispatch_generation_on_worker,
     pick_any_online_worker,
     pick_worker,
 )
@@ -379,16 +381,21 @@ def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
     assert str(exc_info.value) == "GPU OOM"
 
 
-def test_consume_task_stream_progress_calls_callback() -> None:
+def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_missing_phase_or_progress(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     worker = _make_picked()
-    captured: list[float] = []
+    captured: list[tuple[AceStepPhase, float]] = []
 
-    async def on_progress(fraction: float) -> None:
-        captured.append(fraction)
+    async def on_progress(phase: AceStepPhase, fraction: float) -> None:
+        captured.append((phase, fraction))
 
     events = [
-        ("progress", {"progress": 0.2}),
-        ("progress", {"progress": 0.5}),
+        ("progress", {"progress": 0.2, "phase": "writing"}),
+        ("progress", {"progress": 0.9, "phase": None}),
+        ("progress", {"progress": 0.9, "phase": "unheard-of"}),
+        ("progress", {"phase": "rendering"}),
+        ("progress", {"progress": 0.5, "phase": "rendering"}),
         (
             "done",
             {
@@ -401,7 +408,8 @@ def test_consume_task_stream_progress_calls_callback() -> None:
     with _patch_async_client(client):
         _run(consume_task_stream(worker, "gen-1", on_progress=on_progress))
 
-    assert captured == [0.2, 0.5]
+    assert captured == [(AceStepPhase.WRITING, 0.2), (AceStepPhase.RENDERING, 0.5)]
+    assert sum(record.levelname == "WARNING" for record in caplog.records) == 3
 
 
 def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
@@ -618,7 +626,7 @@ def test_dispatch_loads_model_if_not_loaded(db_factory, db_session) -> None:
 
     load_calls: list[str] = []
 
-    async def _fake_ensure_loaded(worker, target_mode, options):
+    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
         load_calls.append(target_mode)
 
     done = [
@@ -656,7 +664,7 @@ def test_dispatch_skips_load_when_already_loaded(db_factory, db_session) -> None
 
     load_called = False
 
-    async def _fake_ensure_loaded(worker, target_mode, options):
+    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
         nonlocal load_called
         if target_mode not in worker.loaded_modes:
             load_called = True
@@ -761,13 +769,22 @@ def test_dto_keys_match_worker_model_fields() -> None:
 # ── _ensure_loaded + _submit_generation (httpx unit tests) ─────────
 
 
+def _record_into(announced: list[tuple[AceStepPhase, float]]):
+    def on_progress(phase: AceStepPhase, fraction: float) -> None:
+        announced.append((phase, fraction))
+
+    return on_progress
+
+
 def test_ensure_loaded_skips_when_already_loaded() -> None:
     worker = _make_picked(loaded=["sft"])
+    announced: list[tuple[AceStepPhase, float]] = []
     with patch("songmaker_cli.scheduler.httpx.AsyncClient") as cls:
         from songmaker_cli.scheduler import _ensure_loaded
 
-        _run(_ensure_loaded(worker, "sft", DispatchOptions()))
+        _run(_ensure_loaded(worker, "sft", DispatchOptions(), _record_into(announced)))
     cls.assert_not_called()
+    assert announced == []
 
 
 def test_ensure_loaded_posts_when_missing() -> None:
@@ -781,13 +798,69 @@ def test_ensure_loaded_posts_when_missing() -> None:
 
     from songmaker_cli.scheduler import _ensure_loaded
 
+    announced: list[tuple[AceStepPhase, float]] = []
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
-        _run(_ensure_loaded(worker, "sft", DispatchOptions()))
+        _run(_ensure_loaded(worker, "sft", DispatchOptions(), _record_into(announced)))
 
+    assert announced == [(AceStepPhase.LOADING_MODEL, 0.0)]
     client.post.assert_called_once()
     args, kwargs = client.post.call_args
     assert args[0].endswith("/load_model")
     assert kwargs["json"] == {"mode": "sft"}
+
+
+def _worker_that_loads_each_mode_once() -> tuple[httpx.MockTransport, list[str]]:
+    loaded: set[str] = set()
+    real_loads: list[str] = []
+    finished_take = {"mode": "sft", "audio_path": "/tmp/take.wav", "seed": 1}
+
+    def handle(request: httpx.Request) -> httpx.Response:
+        if request.url.path == "/load_model":
+            mode = json.loads(request.content)["mode"]
+            if mode not in loaded:
+                loaded.add(mode)
+                real_loads.append(mode)
+            return httpx.Response(200, json={"loaded": sorted(loaded), "evicted": []})
+        if request.url.path == "/generate":
+            return httpx.Response(200, json={"task_id": "t1"})
+        stream = _build_sse_response(
+            ("progress", {"progress": 0.5, "phase": AceStepPhase.RENDERING}),
+            ("done", {"result": finished_take}),
+        )
+        return httpx.Response(200, content=stream, headers={"content-type": "text/event-stream"})
+
+    return httpx.MockTransport(handle), real_loads
+
+
+def test_later_takes_of_a_cold_job_neither_reload_nor_announce_loading(monkeypatch) -> None:
+    transport, real_loads = _worker_that_loads_each_mode_once()
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(
+        "songmaker_cli.scheduler.httpx.AsyncClient",
+        lambda *args, **kwargs: real_client(*args, transport=transport, **kwargs),
+    )
+    admitted_cold = _make_picked(loaded=[])
+    phases_per_take: list[list[AceStepPhase]] = []
+
+    async def run_job(take_count: int) -> None:
+        for _ in range(take_count):
+            phases: list[AceStepPhase] = []
+            phases_per_take.append(phases)
+            await dispatch_generation_on_worker(
+                worker=admitted_cold,
+                ace_config=_make_ace_config(),
+                target_mode="sft",
+                on_progress=lambda phase, _fraction, phases=phases: phases.append(phase),
+            )
+
+    _run(run_job(take_count=3))
+
+    assert real_loads == ["sft"]
+    assert phases_per_take == [
+        [AceStepPhase.LOADING_MODEL, AceStepPhase.RENDERING],
+        [AceStepPhase.RENDERING],
+        [AceStepPhase.RENDERING],
+    ]
 
 
 def test_submit_generation_returns_task_id() -> None:

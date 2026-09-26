@@ -18,6 +18,7 @@ from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase
 from songmaker_cli import jobs
 from songmaker_cli.acestep_state import decr_queue_depth
 from songmaker_cli.api_models import (
@@ -43,6 +44,7 @@ from songmaker_cli.constants import (
     JOB_ERROR_USER_LORA_UNAVAILABLE,
     JOB_ERROR_VERSION_NOT_FOUND,
     WORKER_SHARED_TMP_DIRNAME,
+    GenerationPhase,
     JobFunction,
     JobStatus,
     JobType,
@@ -64,7 +66,12 @@ from songmaker_cli.generate import (
     _write_output,
 )
 from songmaker_cli.parser import AlbumMeta, SongMeta
-from songmaker_cli.scheduler import AllWorkersHeld, NoCapacityError, WorkerTaskFailed
+from songmaker_cli.scheduler import (
+    AllWorkersHeld,
+    GenerationProgressCallback,
+    NoCapacityError,
+    WorkerTaskFailed,
+)
 
 from ._runtime import (
     GenerationSetupError,
@@ -79,6 +86,87 @@ log = logging.getLogger(__name__)
 GENERATION_JOB_TERMINAL_LOG: Final = "Generation job %s stopping because job is terminal"
 
 _PROGRESS_THROTTLE_SECONDS = 2.0
+
+
+@dataclass(frozen=True)
+class _TakeShare:
+    """Where a phase starts within one take and how much of the take it spans.
+
+    The shares are calibrated on a traced xl-turbo take with the model already
+    loaded (job 623c09fc, 26.09.2026): writing 49 s, rendering 12 s, saving
+    the take 31 s. Loading a model has no share: its length depends on the
+    model and the cache, not on the take.
+    """
+
+    starts_at: float
+    weight: float
+
+
+_TAKE_SHARES: Final[dict[GenerationPhase, _TakeShare]] = {
+    GenerationPhase.LOADING_MODEL: _TakeShare(starts_at=0.0, weight=0.0),
+    GenerationPhase.WRITING: _TakeShare(starts_at=0.0, weight=0.55),
+    GenerationPhase.RENDERING: _TakeShare(starts_at=0.55, weight=0.15),
+    GenerationPhase.SAVING_TAKE: _TakeShare(starts_at=0.70, weight=0.30),
+}
+_GENERATION_PHASE_OF: Final[dict[AceStepPhase, GenerationPhase]] = {
+    AceStepPhase.LOADING_MODEL: GenerationPhase.LOADING_MODEL,
+    AceStepPhase.WRITING: GenerationPhase.WRITING,
+    AceStepPhase.RENDERING: GenerationPhase.RENDERING,
+}
+
+
+@dataclass
+class GenerationProgressTracker:
+    """The single writer of a running generate job's progress.
+
+    Every RUNNING write of a generate job goes through here, because
+    ``update_job_status`` resets progress whenever a write omits it. The
+    value is ``(take + phase start + phase weight * fraction) / take count``,
+    never falls back, and stays below 1.0 while the job runs: saving a take
+    sits at its phase start, and only ``_finalize_generation_job`` writes 1.0,
+    once the take row exists. A phase change is written at once; within a
+    phase, writes are throttled.
+    """
+
+    db_factory: sessionmaker[Session]
+    job_id: str
+    take_count: int
+    clock: Callable[[], float] = time.monotonic
+    take_index: int = field(default=0, init=False)
+    phase: GenerationPhase | None = field(default=None, init=False)
+    reached: float = field(default=0.0, init=False)
+    last_write: float = field(default=-math.inf, init=False)
+
+    def mark_running(self) -> None:
+        self._write(worker_pid=os.getpid())
+
+    def start_take(self, index: int) -> None:
+        self.take_index = index
+        self.phase = None
+        self._raise_to(index / self.take_count)
+        self._write(take_index=index + 1, take_count=self.take_count)
+
+    def report(self, phase: GenerationPhase, fraction: float) -> None:
+        share = _TAKE_SHARES[phase]
+        self._raise_to(
+            (self.take_index + share.starts_at + share.weight * fraction) / self.take_count
+        )
+        phase_changed = phase != self.phase
+        self.phase = phase
+        if phase_changed or self.clock() - self.last_write >= _PROGRESS_THROTTLE_SECONDS:
+            self._write()
+
+    def start_saving_take(self) -> None:
+        self.report(GenerationPhase.SAVING_TAKE, 0.0)
+
+    def _raise_to(self, value: float) -> None:
+        self.reached = max(self.reached, value)
+
+    def _write(self, **fields: Any) -> None:
+        _update_job(
+            self.db_factory, self.job_id, JobStatus.RUNNING, progress=self.reached, **fields,
+        )
+        self.last_write = self.clock()
 
 
 @dataclass(frozen=True)
@@ -681,21 +769,12 @@ async def _auto_score_generation(
 
 
 def _make_generation_progress_callback(
-    db_factory: sessionmaker[Session],
-    job_id: str,
-    variant_index: int,
-    count: int,
-) -> Callable[[float], None]:
-    last_update = 0.0
+    progress: GenerationProgressTracker,
+) -> GenerationProgressCallback:
+    """Translate the worker's ACE-Step phases into the job's own."""
 
-    def _on_progress(step_fraction: float) -> None:
-        nonlocal last_update
-        now = time.monotonic()
-        if now - last_update < _PROGRESS_THROTTLE_SECONDS:
-            return
-        combined = (variant_index + step_fraction) / count
-        _update_job(db_factory, job_id, JobStatus.RUNNING, progress=combined)
-        last_update = now
+    def _on_progress(phase: AceStepPhase, fraction: float) -> None:
+        progress.report(_GENERATION_PHASE_OF[phase], fraction)
 
     return _on_progress
 
@@ -857,7 +936,8 @@ async def run_generation_job(
         if ctx is None:
             return
 
-        _update_job(db_factory, job_id, JobStatus.RUNNING, worker_pid=os.getpid())
+        progress = GenerationProgressTracker(db_factory, job_id, count)
+        progress.mark_running()
         if _job_is_terminal(db_factory, job_id):
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return
@@ -872,6 +952,7 @@ async def run_generation_job(
                 song_id,
                 count,
                 ctx,
+                progress,
             )
         finally:
             _remove_temporary_generation_audio(tmp_copies)
@@ -996,6 +1077,7 @@ async def _generate_variants(
     song_id: str,
     count: int,
     ctx: GenerationContext,
+    progress: GenerationProgressTracker,
 ) -> None:
     completed = 0
     last_error: Exception | None = None
@@ -1010,6 +1092,7 @@ async def _generate_variants(
             index,
             count,
             ctx,
+            progress,
         )
         if error is not None:
             last_error = error
@@ -1027,25 +1110,24 @@ async def _generate_variant(
     index: int,
     count: int,
     ctx: GenerationContext,
+    progress: GenerationProgressTracker,
 ) -> tuple[str | None, Exception | None]:
     import uuid
 
-    _update_job(
-        db_factory, job_id, JobStatus.RUNNING,
-        progress=index / count, take_index=index + 1, take_count=count,
-    )
+    progress.start_take(index)
     try:
         worker_result = await jobs.dispatch_generation_on_worker(
             worker=admitted_worker,
             ace_config=ctx.ace_config,
             target_mode=ctx.model_name,
-            on_progress=_make_generation_progress_callback(db_factory, job_id, index, count),
+            on_progress=_make_generation_progress_callback(progress),
             on_heartbeat=_make_heartbeat_callback(db_factory, job_id),
         )
         if _job_is_terminal(db_factory, job_id):
             _discard_worker_audio(worker_result.audio_path)
             log.info(GENERATION_JOB_TERMINAL_LOG, job_id)
             return None, None
+        progress.start_saving_take()
         persisted_gen_id = await asyncio.to_thread(
             jobs.post_process_generation,
             worker_audio_path=worker_result.audio_path,

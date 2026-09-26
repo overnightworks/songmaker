@@ -575,6 +575,15 @@ class JobType(StrEnum):
     DOWNLOAD_MODEL_ON_WORKER = "download_model_on_worker"
 
 
+class GenerationPhase(StrEnum):
+    """The stretch of one take a generate job is in."""
+
+    LOADING_MODEL = "loading_model"
+    WRITING = "writing"
+    RENDERING = "rendering"
+    SAVING_TAKE = "saving_take"
+
+
 class WorkerLivenessSignal(StrEnum):
     MUSIC = "music"
     SCORING = "scoring"

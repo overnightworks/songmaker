@@ -142,6 +142,7 @@ class ResultItem(BaseModel):
     status_message: str | None = None
     requested_batch_size: int | None = None
     delivered_batch_size: int | None = None
+    progress: float | None = None
 
     @property
     def seed(self) -> int:

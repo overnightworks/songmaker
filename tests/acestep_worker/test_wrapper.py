@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase, AceStepProgress
 from acestep_worker.gpu_util import GpuHealth, GpuHealthStatus
 from acestep_worker.heartbeat import HeartbeatLoop, gpu_hold_key, queue_depth_key
 from acestep_worker.model_cache import LoadedModel, ModelCache, VramReader, VramStats
@@ -700,7 +701,7 @@ def test_default_generate_runner_carries_delivered_batch_size(
     assert snap.result.delivered_batch_size == 1
 
 
-def test_default_generate_runner_emits_progress(
+def test_default_generate_runner_emits_the_engines_phase_and_fraction(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -712,28 +713,18 @@ def test_default_generate_runner_emits_progress(
         delivered_batch_size=None,
     )
 
-    captured_progress: list[float] = []
-
     def _fake_generate(ace_config, on_progress=None):
-        if on_progress is not None:
-            on_progress("8/50 [00:02<00:13]")
-            on_progress("LM chunk 1/1")
-            on_progress("25/50 [00:05<00:08]")
+        on_progress(AceStepProgress(AceStepPhase.WRITING, 0.5))
+        on_progress(AceStepProgress(AceStepPhase.RENDERING, 0.25))
         return fake_result
 
     _patch_engine_modules(monkeypatch, _fake_generate)
 
     async def go():
         store = TaskStore()
-        task_id = await store.create("generate")
-        original_update = store.update_progress
-
-        async def _capture(tid, fraction):
-            captured_progress.append(fraction)
-            await original_update(tid, fraction)
-
-        store.update_progress = _capture  # type: ignore[method-assign]
-
+        task_id = await store.create("generate", phase=AceStepPhase.WRITING)
+        events = store.subscribe(task_id)
+        await anext(events)
         await default_generate_runner(
             store,
             task_id,
@@ -742,13 +733,17 @@ def test_default_generate_runner_emits_progress(
             port=8101,
             audio_output_dir=tmp_path / "audio",
         )
-        await asyncio.sleep(0.05)
-        return await store.get(task_id)
+        return [event async for event in events]
 
-    snap = _run(go())
-    assert snap is not None
-    assert snap.state == "done"
-    assert captured_progress == [8 / 50, 25 / 50]
+    events = _run(go())
+
+    progress_events = [event.data for event in events if event.type == "progress"]
+    assert [(data["phase"], data["progress"]) for data in progress_events] == [
+        ("writing", 0.0),
+        ("writing", 0.5),
+        ("rendering", 0.25),
+    ]
+    assert events[-1].type == "done"
 
 
 def test_default_generate_runner_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
