@@ -56,6 +56,9 @@ export interface LibraryHistoryState {
 	generationId: string | null;
 	scrollAnchor: number;
 	detailTab?: DetailTab;
+	// Set on the entry a history layer owns (navigation.ts): an overlay that
+	// sits on top of the library this state describes, at the same address.
+	layer?: string;
 }
 
 // Opening a song lands on Write — on a compact layout the tabs are the only
@@ -79,6 +82,7 @@ let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
+let restoredHistory: unknown = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -93,6 +97,7 @@ function hasValidHistoryMetadata(state: Record<string, unknown>): boolean {
 	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
 		return false;
 	}
+	if (state.layer !== undefined && typeof state.layer !== 'string') return false;
 	return true;
 }
 
@@ -256,24 +261,51 @@ export function writeLibraryHistory(
 	url: string,
 	mode: HistoryWriteMode
 ): Promise<void> {
-	const pathname = new URL(url, window.location.origin).pathname;
+	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
 	if (!crossesRoutes && queuedHistoryWrites === 0) {
 		applyHistoryWrite(state, url, mode);
 		return Promise.resolve();
 	}
-	plannedHistory = { pathname, state };
-	queuedHistoryWrites += 1;
-	const write = historyWrites.then(async () => {
+	return queueHistoryStep(state, pathname, async () => {
 		if (crossesRoutes) {
+			const written = mode === 'replace' ? keepEntryLayer(state) : state;
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
 			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
-			applyHistoryWrite(state, url, 'replace');
+			applyHistoryWrite(written, url, 'replace');
 			return;
 		}
 		applyHistoryWrite(state, url, mode);
 	});
+}
+
+// Steps back onto the entry below, whose state the caller already knows
+// (issue #1002: a history layer in navigation.ts leaving for the library it
+// covers). A traversal is asynchronous -- it lands only when its `popstate`
+// fires -- so it joins the same queue as a crossing write: a write issued
+// straight afterwards (Go to song opening the playing song) lands on top of
+// the entry below instead of racing the traversal, and reads `landing` from
+// `currentLibraryHistoryState` meanwhile.
+export function backLibraryHistory(landing: LibraryHistoryState, url: string): Promise<void> {
+	return queueHistoryStep(landing, pathnameOf(url), traverseBack);
+}
+
+function traverseBack(): Promise<void> {
+	return new Promise((resolve) => {
+		window.addEventListener('popstate', () => resolve(), { once: true });
+		history.back();
+	});
+}
+
+function queueHistoryStep(
+	state: LibraryHistoryState,
+	pathname: string,
+	step: () => Promise<void>
+): Promise<void> {
+	plannedHistory = { pathname, state };
+	queuedHistoryWrites += 1;
+	const write = historyWrites.then(step);
 	historyWrites = write
 		.catch(() => undefined)
 		.finally(() => {
@@ -281,6 +313,45 @@ export function writeLibraryHistory(
 			if (queuedHistoryWrites === 0) plannedHistory = null;
 		});
 	return write;
+}
+
+function pathnameOf(url: string): string {
+	return new URL(url, window.location.origin).pathname;
+}
+
+// The history.state the page loaded onto, handed out once: the first reader
+// after a load gets it, every later one null -- and so does a reader after
+// the page has navigated off that entry, where it no longer describes where
+// the page stands.
+export function takeRestoredLibraryHistory(): unknown {
+	const restored = restoredHistory;
+	leaveRestoredLibraryHistory();
+	return restored;
+}
+
+// Back and Forward between two library entries carry no router state, so
+// SvelteKit reports no navigation for them: the first traversal after the
+// load is this module's own cue that the page left the entry it loaded onto.
+function holdRestoredLibraryHistory(): void {
+	restoredHistory = history.state;
+	window.addEventListener('popstate', leaveRestoredLibraryHistory, { once: true });
+}
+
+export function leaveRestoredLibraryHistory(): void {
+	restoredHistory = null;
+	window.removeEventListener('popstate', leaveRestoredLibraryHistory);
+}
+
+// SvelteKit's single-page start replaces the entry's history.state with its
+// own router entry before any page runs, so the state a reload or a restored
+// tab comes back to survives only in this read, taken while the router loads
+// this module during that start.
+holdRestoredLibraryHistory();
+
+// A page load, as far as the restored entry goes: reads history.state the way
+// this module's own load does.
+export function loadLibraryHistoryPageForTests(): void {
+	holdRestoredLibraryHistory();
 }
 
 // The library history entry as it will stand once every queued write has
@@ -292,7 +363,18 @@ export function currentLibraryHistoryState(): unknown {
 
 function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: HistoryWriteMode): void {
 	if (mode === 'push') history.pushState(state, '', url);
-	else history.replaceState(state, '', url);
+	else history.replaceState(keepEntryLayer(state), '', url);
+}
+
+// A replace rewrites the library an entry shows, never what the entry is: an
+// entry a history layer owns stays marked as that layer, whichever writer
+// snapshots the library onto it.
+function keepEntryLayer(state: LibraryHistoryState): LibraryHistoryState {
+	const entry: unknown = history.state;
+	if (state.layer !== undefined || !isLibraryHistoryState(entry) || entry.layer === undefined) {
+		return state;
+	}
+	return { ...state, layer: entry.layer };
 }
 
 type AlbumAddress = 'found' | 'unknown';
@@ -814,6 +896,7 @@ export function resetLibraryContextForTests(): void {
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
+	leaveRestoredLibraryHistory();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	libraryScrollAnchor.set(0);
