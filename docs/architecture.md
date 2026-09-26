@@ -953,8 +953,10 @@ reconnect reasserts its existing cursor with `hello` and `id: L`, replays only
 `L < sequence <= H`, then becomes
 live. The cursor `L` arrives as the browser's `Last-Event-ID` header on a native
 retry, or as the `last_event_id` query parameter when the client opens a fresh
-`EventSource` itself after a drop; the header wins when both are sent. Missing retained history, an internal sequence hole, or `L > H` produces one
-`resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
+`EventSource` itself after a drop; the header wins when both are sent. A cursor
+that is not a non-negative decimal, or lies beyond the BIGINT sequence range, is
+answered with 400. Missing retained history, an internal sequence hole, or `L > H`
+produces one `resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
 seconds so each reconnect rechecks the session. Sequence and high-water
 JSON fields are decimal strings, matching SSE IDs without JavaScript precision loss.
 

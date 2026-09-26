@@ -138,23 +138,26 @@ def _install_finite_route_stream(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(resource_api, "_resource_event_generator", _finite)
 
 
-def _install_bounded_route_stream(monkeypatch: pytest.MonkeyPatch, frame_count: int) -> None:
+def _install_replay_bounded_route_stream(monkeypatch: pytest.MonkeyPatch) -> None:
+    """End each route stream once a frame reaches the high-water mark it replays through.
+
+    The end is the stream's own frame, not a per-frame timeout, so a slow
+    replay under a loaded xdist run cannot end the stream early.
+    """
     original_generator = resource_api._resource_event_generator
     monkeypatch.setattr(resource_api, "RESOURCE_EVENT_STREAM_POLL_SECONDS", 0.01)
 
-    async def _bounded(*args, **kwargs):
-        generator = original_generator(*args, **kwargs)
+    async def _through_high_water_mark(ctx, user_id, last_event_id, high_water_mark, oldest):
+        generator = original_generator(ctx, user_id, last_event_id, high_water_mark, oldest)
         try:
-            yield await anext(generator)
-            for _ in range(frame_count - 1):
-                try:
-                    yield await asyncio.wait_for(anext(generator), timeout=0.05)
-                except (TimeoutError, StopAsyncIteration):
+            async for frame in generator:
+                yield frame
+                if int(_parse_sse(frame).get("id", -1)) >= high_water_mark:
                     return
         finally:
             await generator.aclose()
 
-    monkeypatch.setattr(resource_api, "_resource_event_generator", _bounded)
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _through_high_water_mark)
 
 
 def _created_generation_ids(body: str) -> list[str]:
@@ -174,15 +177,19 @@ def test_parse_last_event_id_rejects_non_ascii_non_negative_decimal(raw: str) ->
     assert exc_info.value.detail == LAST_EVENT_ID_INVALID
 
 
-def test_parse_last_event_id_handles_empty_leading_zero_and_bigint_ahead() -> None:
+def test_parse_last_event_id_handles_empty_leading_zero_and_bigint_max() -> None:
     assert resource_api.parse_last_event_id(None) is None
     assert resource_api.parse_last_event_id("") is None
     assert resource_api.parse_last_event_id("00012") == 12
     assert resource_api.parse_last_event_id(str(POSTGRES_BIGINT_MAX)) == POSTGRES_BIGINT_MAX
-    assert resource_api.parse_last_event_id(str(POSTGRES_BIGINT_MAX + 1)) == (
-        POSTGRES_BIGINT_MAX + 1
-    )
-    assert resource_api.parse_last_event_id("9" * 10_000) == POSTGRES_BIGINT_MAX + 1
+
+
+@pytest.mark.parametrize("raw", [str(POSTGRES_BIGINT_MAX + 1), "9" * 10_000])
+def test_parse_last_event_id_rejects_a_cursor_beyond_bigint(raw: str) -> None:
+    with pytest.raises(HTTPException) as exc_info:
+        resource_api.parse_last_event_id(raw)
+    assert exc_info.value.status_code == 400
+    assert exc_info.value.detail == resource_api.LAST_EVENT_ID_OUT_OF_RANGE
 
 
 def test_wire_models_preserve_bigint_precision_as_decimal_strings() -> None:
@@ -328,7 +335,7 @@ def test_replay_hello_reasserts_cursor_before_any_replay_frame(tmp_path: Path) -
     [
         (1, 2, None),
         (0, 3, 2),
-        (POSTGRES_BIGINT_MAX + 1, 3, 1),
+        (POSTGRES_BIGINT_MAX, 3, 1),
     ],
 )
 def test_handshake_gaps_emit_exactly_one_resync_with_data(
@@ -546,15 +553,29 @@ def test_poll_crossing_deadline_does_not_emit_a_late_heartbeat(
 
 
 @pytest.mark.parametrize(
-    ("headers", "params"),
-    [({"Last-Event-ID": "-1"}, {}), ({}, {"last_event_id": "-1"})],
-    ids=["header", "query"],
+    ("headers", "params", "detail"),
+    [
+        ({"Last-Event-ID": "-1"}, {}, LAST_EVENT_ID_INVALID),
+        ({}, {"last_event_id": "-1"}, LAST_EVENT_ID_INVALID),
+        (
+            {"Last-Event-ID": str(POSTGRES_BIGINT_MAX + 1)},
+            {},
+            resource_api.LAST_EVENT_ID_OUT_OF_RANGE,
+        ),
+        (
+            {},
+            {"last_event_id": str(POSTGRES_BIGINT_MAX + 1)},
+            resource_api.LAST_EVENT_ID_OUT_OF_RANGE,
+        ),
+    ],
+    ids=["header", "query", "header-beyond-bigint", "query-beyond-bigint"],
 )
 def test_route_requires_auth_and_validates_cursor_after_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     headers: dict[str, str],
     params: dict[str, str],
+    detail: str,
 ) -> None:
     clients, _, _ = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
@@ -566,7 +587,7 @@ def test_route_requires_auth_and_validates_cursor_after_auth(
         params=params,
     )
     assert response.status_code == 400
-    assert response.json() == {"detail": LAST_EVENT_ID_INVALID}
+    assert response.json() == {"detail": detail}
 
 
 @pytest.mark.parametrize(
@@ -588,7 +609,7 @@ def test_route_replays_the_events_after_the_given_cursor(
     clients, factory, users = _authenticated_clients(tmp_path)
     for number in range(1, 4):
         _create_event(factory, users["alice"], number)
-    _install_bounded_route_stream(monkeypatch, frame_count=1 + len(replayed))
+    _install_replay_bounded_route_stream(monkeypatch)
 
     body = (
         clients["alice"]
@@ -695,7 +716,7 @@ def test_authenticated_stream_isolates_two_users_and_admin(
 ) -> None:
     clients, factory, users = _authenticated_clients(tmp_path)
     generation_id = _create_event(factory, users["alice"], 1)
-    _install_bounded_route_stream(monkeypatch, frame_count=2)
+    _install_replay_bounded_route_stream(monkeypatch)
     bodies = {
         username: client.get(
             "/api/resource-events/stream",
@@ -924,9 +945,7 @@ def test_outer_app_deadline_cancels_blocked_send_completes_response_and_releases
         await app(_resource_event_stream_scope(clients["alice"]), _receive, _send)
         elapsed = loop.time() - started_at
         assert [
-            message["status"]
-            for message in messages
-            if message["type"] == "http.response.start"
+            message["status"] for message in messages if message["type"] == "http.response.start"
         ] == [200]
         assert [
             message
@@ -989,13 +1008,16 @@ def test_outer_app_deadline_does_not_duplicate_normal_stream_completion(
     assert [
         message["status"] for message in messages if message["type"] == "http.response.start"
     ] == [200]
-    assert len(
-        [
-            message
-            for message in messages
-            if message["type"] == "http.response.body" and not message.get("more_body", False)
-        ]
-    ) == 1
+    assert (
+        len(
+            [
+                message
+                for message in messages
+                if message["type"] == "http.response.body" and not message.get("more_body", False)
+            ]
+        )
+        == 1
+    )
 
 
 def test_outer_app_deadline_contains_synthetic_terminal_oserror_and_releases_lease(
@@ -1156,16 +1178,14 @@ def test_per_user_open_rate_is_bounded(tmp_path: Path, monkeypatch: pytest.Monke
     clients, _, _ = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
     open_limit = get_settings().resource_event_stream_open_limit
-    responses = [
-        clients["alice"].get("/api/resource-events/stream")
-        for _ in range(open_limit + 1)
-    ]
+    responses = [clients["alice"].get("/api/resource-events/stream") for _ in range(open_limit + 1)]
     assert all(response.status_code == 200 for response in responses[:-1])
     assert responses[-1].status_code == 429
 
 
 def test_per_user_open_rate_reads_settings_override(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The limit is a settings field, not the constant it used to be
     (issue #294): a `RESOURCE_EVENT_STREAM_OPEN_LIMIT` env override, the
