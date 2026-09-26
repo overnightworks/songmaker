@@ -1,3 +1,4 @@
+import type { JobItem } from '$lib/api/types';
 import type { RepaintMode } from '$lib/stores/recipe';
 
 export const APP_NAME = 'Hallucinai';
@@ -284,6 +285,12 @@ export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error
 export const EDITOR_SAVE_LABEL = 'Save';
 export const EDITOR_SAVE_ACCESSIBLE_LABEL = 'Save changes';
 export const EDITOR_GENERATING_LABEL = 'Generating...';
+export const GENERATION_PHASE_LABELS: Record<NonNullable<JobItem['phase']>, string> = {
+	loading_model: 'Loading model…',
+	writing: 'Writing',
+	rendering: 'Rendering',
+	saving_take: 'Saving take'
+};
 export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable one.';
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';

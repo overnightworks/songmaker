@@ -190,6 +190,15 @@ def test_a_new_running_entry_starts_without_the_previous_runs_phase(seeded_db) -
         assert get_job(session, "j1").phase is None
 
 
+def test_a_requeued_job_carries_no_take_counter(seeded_db) -> None:
+    _update_job(seeded_db, "j1", JobStatus.RUNNING, take_index=2, take_count=2)
+    _update_job(seeded_db, "j1", JobStatus.QUEUED)
+
+    with seeded_db() as session:
+        response = JobResponse.from_orm(get_job(session, "j1"))
+    assert (response.take_index, response.take_count) == (None, None)
+
+
 def test_update_job_raises_after_retries(db_factory) -> None:
     broken_factory = MagicMock(side_effect=RuntimeError("db broken"))
     with pytest.raises(RuntimeError, match="status update to 'running' failed after 2 attempts"):
@@ -1654,9 +1663,11 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
         assert session.query(Generation).filter_by(song_id="s1").count() == count
 
 
-def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task(
-    seeded_db, tmp_path: Path,
-) -> None:
+def _observe_job_while_acestep_reports(
+    seeded_db, tmp_path: Path, server_progress_values: tuple[float, ...],
+) -> list[tuple[str | None, str | int | None, bool]]:
+    """Run one take whose ACE-Step task reports these progress values, and
+    read the job's phase, remaining time and anchor after each report."""
     observed: list[tuple[str | None, str | int | None, bool]] = []
 
     def observe() -> None:
@@ -1669,7 +1680,7 @@ def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task
             ))
 
     async def generate_take(**kwargs):
-        for server_progress in (0.0, 0.0, 0.01, 0.2):
+        for server_progress in server_progress_values:
             [item] = _running_query_entry("", server_progress).parse_result_items()
             progress = progress_from_result(item)
             kwargs["on_progress"](progress.phase, progress.fraction)
@@ -1688,6 +1699,13 @@ def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task
                 target_model="sft",
             )
         )
+    return observed
+
+
+def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task(
+    seeded_db, tmp_path: Path,
+) -> None:
+    observed = _observe_job_while_acestep_reports(seeded_db, tmp_path, (0.0, 0.0, 0.01, 0.2))
 
     assert [(phase, anchored) for phase, _, anchored in observed] == [
         ("loading_model", False),
@@ -1696,6 +1714,18 @@ def test_a_cold_generation_shows_loading_the_model_until_acestep_starts_the_task
         ("writing", True),
     ]
     assert observed[0][1] == "calculating"
+
+
+def test_a_take_never_shows_an_earlier_phase_once_writing_began(
+    seeded_db, tmp_path: Path,
+) -> None:
+    observed = _observe_job_while_acestep_reports(
+        seeded_db, tmp_path, (0.0, 0.2, 0.005, 0.0, 0.6),
+    )
+
+    assert [phase for phase, _, _ in observed] == [
+        "loading_model", "writing", "writing", "writing", "rendering",
+    ]
 
 
 def test_generation_progress_does_not_revive_cancelled(seeded_db) -> None:

@@ -30,6 +30,11 @@ mounted. Use the venv's Python directly:
         --owner-username e2e-ci-admin
 
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
+        scripts/seed_e2e_job_states.py set-phase \\
+        --job-id <id> --progress 0.36 --phase rendering \\
+        --generation-started-offset 64
+
+    docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-failed \\
         --job-id <id> --error "ACE-Step worker: CUDA out of memory on device 0"
 
@@ -39,9 +44,9 @@ mounted. Use the venv's Python directly:
 
 ``create-song`` prints the created song's id on stdout, ``set-running`` the
 created job's id -- both mirroring ``scripts/seed_e2e_song_takes.py``'s own
-convention. ``set-failed`` and ``set-completed`` print nothing. Connects to the database only --
-never runs schema migrations, even implicitly, matching every other one-off
-script here (see ``connect_db()`` in ``db/engine.py``).
+convention. ``set-phase``, ``set-failed`` and ``set-completed`` print nothing.
+Connects to the database only -- never runs schema migrations, even
+implicitly, matching every other one-off script here (see ``connect_db()`` in ``db/engine.py``).
 """
 
 from __future__ import annotations
@@ -61,7 +66,7 @@ from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, GenerationPhase, JobStatus, JobType
 from songmaker_cli.db.engine import connect_db, resolve_database_url
-from songmaker_cli.db.models import Generation
+from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries import (
     create_generation,
     create_generation_created_event,
@@ -196,12 +201,33 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
         take_count=args.take_count,
         phase=args.phase,
     )
-    if args.generation_started_offset is not None:
-        if job.generation_started_at is None:
-            raise SystemExit(f"Phase {args.phase} has not started generating yet")
-        job.generation_started_at -= timedelta(seconds=args.generation_started_offset)
+    _backdate_generation_start(job, args)
     session.commit()
     print(job.id)
+
+
+def cmd_set_phase(session: Session, args: argparse.Namespace) -> None:
+    """Move an existing running generate job on to a later phase in place.
+
+    The same job id, not a fresh one, so its open ``/api/jobs/{id}/stream``
+    reports the move live, the way a worker leaving the model load would.
+    """
+    job = get_job(session, args.job_id)
+    if job is None or job.status != JobStatus.RUNNING:
+        raise SystemExit(f"Job {args.job_id} is not running")
+    update_job_status(
+        session, job.id, JobStatus.RUNNING, progress=args.progress, phase=args.phase,
+    )
+    _backdate_generation_start(job, args)
+    session.commit()
+
+
+def _backdate_generation_start(job: Job, args: argparse.Namespace) -> None:
+    if args.generation_started_offset is None:
+        return
+    if job.generation_started_at is None:
+        raise SystemExit(f"Phase {args.phase} has not started generating yet")
+    job.generation_started_at -= timedelta(seconds=args.generation_started_offset)
 
 
 def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
@@ -276,6 +302,17 @@ def main(argv: list[str] | None = None) -> int:
     p_running.add_argument("--generation-started-offset", type=float)
     p_running.add_argument("--owner-username", required=True)
     p_running.set_defaults(func=cmd_set_running)
+
+    p_phase = sub.add_parser(
+        "set-phase", help="Move an existing running generate job on to a later phase.",
+    )
+    p_phase.add_argument("--job-id", required=True)
+    p_phase.add_argument("--progress", type=float, required=True)
+    p_phase.add_argument(
+        "--phase", type=GenerationPhase, choices=list(GenerationPhase), required=True,
+    )
+    p_phase.add_argument("--generation-started-offset", type=float)
+    p_phase.set_defaults(func=cmd_set_phase)
 
     p_failed = sub.add_parser(
         "set-failed", help="Fail an existing job with a literal worker sentence.",

@@ -117,16 +117,18 @@ const IDLE: GenerateState = { kind: 'idle', mode: 'generate' };
 const RUNNING: GenerateState = {
 	kind: 'generating',
 	jobId: 'j1',
+	phase: 'Rendering',
 	takeCounter: null,
 	progress: 40,
-	remaining: null
+	readout: '40%'
 };
 const SUBMITTING: GenerateState = {
 	kind: 'generating',
 	jobId: null,
+	phase: 'Generating...',
 	takeCounter: null,
 	progress: 0,
-	remaining: null
+	readout: '0%'
 };
 const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
@@ -335,10 +337,10 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('shows the running status slot while a generate job runs for this song', async () => {
+	it('shows the running status slot with its phase while a generate job runs for this song', async () => {
 		generateState.set(RUNNING);
 		const { target } = await render();
-		expect(target.querySelector('.status-slot')?.textContent).toContain('Generating');
+		expect(target.querySelector('.status-slot')?.textContent).toContain('Rendering');
 	});
 
 	it('shows a queued generation reason and position without treating it as a failure', async () => {
