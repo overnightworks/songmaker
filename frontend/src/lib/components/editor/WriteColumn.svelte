@@ -60,18 +60,22 @@
 		}
 		// addEventListener/removeEventListener are no-ops on a listener that's
 		// already (not) registered, so this can run unconditionally on every
-		// call instead of tracking a redundant "currently active" flag.
+		// call instead of tracking a redundant "currently active" flag. The
+		// `input` listener lives inside this same active/inactive branch as
+		// `resize` — desktop's `active: false` must leave the node fully alone
+		// so its own manual resize handle keeps working (#993).
 		function apply(next: { active: boolean; value: string }) {
 			params = next;
 			if (params.active) {
 				tick().then(resize);
+				node.addEventListener('input', resize);
 				window.addEventListener('resize', resize);
 			} else {
 				node.style.height = '';
+				node.removeEventListener('input', resize);
 				window.removeEventListener('resize', resize);
 			}
 		}
-		node.addEventListener('input', resize);
 		apply(params);
 		return {
 			update: apply,

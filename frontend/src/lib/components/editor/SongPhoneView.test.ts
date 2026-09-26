@@ -6,6 +6,7 @@ import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
 import SongPhoneView from './SongPhoneView.svelte';
+import songPhoneViewSource from './SongPhoneView.svelte?raw';
 
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -121,6 +122,21 @@ describe('SongPhoneView', () => {
 			expect(target.querySelector('.generate-action')).toBeNull();
 		}
 	);
+
+	// #993: the Generate action used to scroll away with the rest of the Write
+	// tab. jsdom computes no layout, so the sticky pin itself is pinned against
+	// the source (the browser gate proves the real render); this proves the
+	// action sits in its own end-of-tab container and that container is the
+	// one declared sticky.
+	it('pins the Generate action in a sticky action bar at the end of the Write tab', async () => {
+		const target = await render();
+		const actionBar = target.querySelector('[role="tabpanel"] > :last-child');
+		expect(actionBar?.classList.contains('write-actionbar')).toBe(true);
+		expect(actionBar?.querySelector('.generate-action')).not.toBeNull();
+		expect(songPhoneViewSource).toMatch(
+			/\.write-actionbar \{\s*position: sticky;\s*bottom: var\(--player-height\);/
+		);
+	});
 
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
 		const target = await render();

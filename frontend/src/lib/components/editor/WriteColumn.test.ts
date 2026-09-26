@@ -193,13 +193,23 @@ describe('WriteColumn write mode', () => {
 		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
 		['lyrics', '.lyrics-area']
 	])('leaves the desktop %s field to its own resizable layout', async (_, selector) => {
-		const { target } = await render({ compact: false });
-		const field = target.querySelector<HTMLTextAreaElement>(selector);
-		if (!field) throw new Error(`Expected a ${_} textarea`);
-		field.value = 'one\ntwo\nthree';
-		field.dispatchEvent(new Event('input', { bubbles: true }));
-		await tick();
-		expect(field.style.height).toBe('');
+		// A stubbed, non-zero scrollHeight is what actually proves the action
+		// leaves the desktop field alone (#993 regression: an `input` listener
+		// attached regardless of `active` grew a real Chromium textarea to
+		// 980px). Without the stub jsdom's own scrollHeight of 0 would pass
+		// trivially even with the listener still wired up.
+		const scrollHeightSpy = stubScrollHeight();
+		try {
+			const { target } = await render({ compact: false });
+			const field = target.querySelector<HTMLTextAreaElement>(selector);
+			if (!field) throw new Error(`Expected a ${_} textarea`);
+			field.value = 'one\ntwo\nthree';
+			field.dispatchEvent(new Event('input', { bubbles: true }));
+			await tick();
+			expect(field.style.height).toBe('');
+		} finally {
+			scrollHeightSpy.mockRestore();
+		}
 	});
 });
 
