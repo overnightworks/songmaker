@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import {
 		editLyrics,
 		editPrompt,
@@ -12,20 +13,20 @@
 		EDITOR_LYRICS_LABEL,
 		EDITOR_STYLE_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
-		EDITOR_TAB_TAKES_LABEL
+		EDITOR_TAB_TAKES_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL
 	} from '$lib/constants';
-	import CoWriterPanel from '../CoWriterPanel.svelte';
 	import TakeStrip from './TakeStrip.svelte';
 
 	interface Props {
 		song: SongItem;
-		allSongs: SongItem[];
 		coWriterOpen: boolean;
 		compact: boolean;
-		onturncompleted: () => void;
+		cowriterPanel: Snippet;
+		onopencowriter: () => void;
 	}
 
-	let { song, allSongs, coWriterOpen, compact, onturncompleted }: Props = $props();
+	let { song, coWriterOpen, compact, cowriterPanel, onopencowriter }: Props = $props();
 
 	const dirty = $derived($isDirty);
 	const latestVersion = $derived<VersionItem | null>($versions[0] ?? null);
@@ -42,14 +43,7 @@
 	<div class="cowriter-mode">
 		<div class="cowriter-columns">
 			<div class="cowriter-chat">
-				<CoWriterPanel
-					currentSongId={song.id}
-					currentAlbumId={song.album_id}
-					currentAlbumTitle={song.album_title}
-					{allSongs}
-					versions={$versions}
-					{onturncompleted}
-				/>
+				{@render cowriterPanel()}
 			</div>
 			<div class="cowriter-lyrics">
 				<span class="lyrics-label"
@@ -89,6 +83,10 @@
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
 		{#if compact}
+			<button type="button" class="cowriter-row" data-hitbox="text" onclick={onopencowriter}>
+				<span class="cowriter-row-label">{EDITOR_VIEW_COWRITER_LABEL}</span>
+				<span class="chevron" aria-hidden="true">›</span>
+			</button>
 			<div class="compact-takes">
 				<TakeStrip {song} />
 			</div>
@@ -105,6 +103,34 @@
 
 	.compact-takes {
 		min-width: 0;
+	}
+
+	.cowriter-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.6rem 0.8rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
+		color: var(--text);
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.cowriter-row-label {
+		flex: 1;
+		font-size: var(--label-font-size);
+		color: var(--text-muted);
+		text-transform: uppercase;
+		font-family: var(--font-display);
+		letter-spacing: 1px;
+	}
+
+	.cowriter-row .chevron {
+		flex-shrink: 0;
+		color: var(--text-subtle);
 	}
 
 	.edit-field {

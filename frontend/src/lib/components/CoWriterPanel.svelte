@@ -520,7 +520,7 @@
 </script>
 
 <div class="cowriter">
-	<div class="cowriter-header">
+	<div class="cowriter-header" class:app-bar={Boolean(onback)}>
 		<div class="header-left">
 			{#if onback}
 				<button
@@ -723,6 +723,22 @@
 		padding: 8px 12px;
 		border-bottom: 1px solid var(--border);
 		gap: 8px;
+	}
+
+	/* Onback is only ever supplied for the phone push screen (#990): there the
+	   header replaces the shell's own fixed PhoneAppBar strip rather than
+	   sitting in the scrolled content beneath it, so the screen shows one app
+	   bar — `‹`, title, conversation menu — never two stacked on top of each
+	   other. Desktop's own CoWriterPanel never sets onback and keeps the
+	   in-flow header. */
+	.cowriter-header.app-bar {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		height: var(--header-height);
+		z-index: 210;
+		background: var(--header-bg);
 	}
 
 	.header-left {

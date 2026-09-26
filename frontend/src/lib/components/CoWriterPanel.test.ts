@@ -140,6 +140,14 @@ describe('CoWriterPanel', () => {
 		backButton?.click();
 		expect(onback).toHaveBeenCalledTimes(1);
 	});
+
+	it('becomes its own app bar only when it is the pushed screen', async () => {
+		const withoutBack = await render();
+		expect(withoutBack.querySelector('.cowriter-header.app-bar')).toBeNull();
+
+		const withBack = await render({ onback: vi.fn() });
+		expect(withBack.querySelector('.cowriter-header.app-bar')).not.toBeNull();
+	});
 });
 
 describe('CoWriterPanel failed turns', () => {

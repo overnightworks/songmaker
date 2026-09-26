@@ -10,7 +10,7 @@
 	interface Props {
 		sharedLink: Snippet;
 		write: Snippet;
-		cowriter: Snippet;
+		cowriter: Snippet<[onback?: () => void]>;
 		expiryDigest: Snippet;
 		takeListProps: ComponentProps<typeof TakesList>;
 		chips: RecipeChip[];
@@ -20,7 +20,7 @@
 </script>
 
 {#if $coWriterOpen}
-	{@render cowriter()}
+	{@render cowriter(() => coWriterOpen.set(false))}
 {:else}
 	<DetailTabs takeCount={takeListProps.song.generation_count} />
 	<div

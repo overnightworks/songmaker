@@ -554,7 +554,7 @@
 
 	$effect(() => {
 		phoneAppBar.set(
-			song
+			song && !($coWriterOpen && compact)
 				? {
 						title: song.title,
 						onrename: onRenameSong,
@@ -628,22 +628,17 @@
 		</div>
 	{/snippet}
 
-	{#snippet writeSurface(
-		current: SongItem,
-		withCowriter: boolean,
-		isCompact: boolean,
-		onTurnCompleted: () => void
-	)}
+	{#snippet writeSurface(current: SongItem, withCowriter: boolean, isCompact: boolean)}
 		<div class="write-surface">
 			{#if !compact}
 				{@render saveAction()}
 			{/if}
 			<WriteColumn
 				song={current}
-				allSongs={songs}
 				coWriterOpen={withCowriter}
 				compact={isCompact}
-				onturncompleted={onTurnCompleted}
+				{cowriterPanel}
+				onopencowriter={() => coWriterOpen.set(true)}
 			/>
 		</div>
 	{/snippet}
@@ -712,10 +707,10 @@
 	{/snippet}
 
 	{#snippet phoneWrite()}
-		{@render writeSurface(song, false, true, () => {})}
+		{@render writeSurface(song, false, true)}
 	{/snippet}
 
-	{#snippet phoneCowriter()}
+	{#snippet cowriterPanel(onback?: () => void)}
 		<CoWriterPanel
 			currentSongId={song.id}
 			currentAlbumId={song.album_id}
@@ -723,7 +718,7 @@
 			allSongs={songs}
 			versions={$versions}
 			onturncompleted={onTurnCompleted}
-			onback={() => coWriterOpen.set(false)}
+			{onback}
 		/>
 	{/snippet}
 
@@ -732,7 +727,7 @@
 			<SongPhoneView
 				{sharedLink}
 				write={phoneWrite}
-				cowriter={phoneCowriter}
+				cowriter={cowriterPanel}
 				{expiryDigest}
 				{takeListProps}
 				{chips}
@@ -743,10 +738,10 @@
 				{@render sharedLink()}
 				{@render recipe()}
 				{#if $coWriterOpen}
-					{@render writeSurface(song, true, compact, onTurnCompleted)}
+					{@render writeSurface(song, true, compact)}
 				{:else}
 					<div class="editor-columns">
-						{@render writeSurface(song, false, compact, () => {})}
+						{@render writeSurface(song, false, compact)}
 						<div class="takes-column">
 							{@render expiryDigest()}
 							<TakesList {...takeListProps} />

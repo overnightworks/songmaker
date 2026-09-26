@@ -26,6 +26,7 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
+	EDITOR_COWRITER_BACK_LABEL,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
@@ -1114,7 +1115,6 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 		coWriterOpen.set(true);
 		await tick();
 
-		expect(target.querySelector('.sheet-panel')).toBeNull();
 		expect(target.querySelector('.write-surface')).toBeNull();
 		expect(target.querySelector('[role="tab"]')).toBeNull();
 		expect(target.querySelector('.cowriter')).not.toBeNull();
@@ -1124,6 +1124,45 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 
 		expect(target.querySelector('.cowriter')).toBeNull();
 		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
+	});
+
+	it('opens from the Write column\'s "Co-writer" row', async () => {
+		openWriteTab();
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		const row = target.querySelector<HTMLButtonElement>('.cowriter-row');
+		expect(row?.textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
+
+		row?.click();
+		await tick();
+
+		expect(get(coWriterOpen)).toBe(true);
+		expect(target.querySelector('.cowriter')).not.toBeNull();
+	});
+
+	it("shows the co-writer's own app bar and none of the song's, restoring it on close", async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		const bar = document.createElement('div');
+		document.body.append(bar);
+		mounted.push(mount(PhoneAppBar, { target: bar }));
+		await tick();
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
+
+		coWriterOpen.set(true);
+		await tick();
+
+		expect(get(phoneAppBar)).toBeNull();
+		const appBar = target.querySelector('.cowriter-header.app-bar');
+		expect(appBar).not.toBeNull();
+		expect(appBar?.querySelector('h3')?.textContent).toContain('Co-Writer');
+		expect(appBar?.querySelector(`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`)).not.toBeNull();
+
+		coWriterOpen.set(false);
+		await tick();
+
+		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+		expect(get(phoneAppBar)?.title).toBe(get(songList)[0].title);
 	});
 });
 
