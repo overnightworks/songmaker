@@ -118,6 +118,34 @@ describe('WriteColumn write mode', () => {
 		row?.click();
 		expect(onopencowriter).toHaveBeenCalledOnce();
 	});
+
+	// L9: the compact page is the one scroll surface, so a field that
+	// overflows its box must grow the page rather than scroll inside itself.
+	it.each([
+		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
+		['lyrics', '.lyrics-area']
+	])('grows the compact %s field with its content, not inside a fixed box', async (_, selector) => {
+		const { target } = await render({ compact: true });
+		const field = target.querySelector<HTMLTextAreaElement>(selector);
+		if (!field) throw new Error(`Expected a ${_} textarea`);
+		field.value = 'one\ntwo\nthree';
+		field.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		expect(field.style.height).not.toBe('');
+	});
+
+	it.each([
+		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
+		['lyrics', '.lyrics-area']
+	])('leaves the desktop %s field to its own resizable layout', async (_, selector) => {
+		const { target } = await render({ compact: false });
+		const field = target.querySelector<HTMLTextAreaElement>(selector);
+		if (!field) throw new Error(`Expected a ${_} textarea`);
+		field.value = 'one\ntwo\nthree';
+		field.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		expect(field.style.height).toBe('');
+	});
 });
 
 describe('WriteColumn Co-Writer mode', () => {

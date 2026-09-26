@@ -37,6 +37,33 @@
 				? 'draft'
 				: ''
 	);
+
+	// At compact width the page itself is the one scroll surface (L9): a
+	// fixed-height field whose content overflows becomes its own nested
+	// scroll box, which is what this replaces. Desktop keeps its own
+	// resizable, min-height-floored box untouched — this action only ever
+	// touches the node when `active` is true. `value` is watched too so a
+	// draft loaded from the store (switching songs) resizes the same as one
+	// typed in.
+	function autogrowTextarea(node: HTMLTextAreaElement, params: { active: boolean; value: string }) {
+		function resize() {
+			node.style.height = 'auto';
+			node.style.height = `${node.scrollHeight}px`;
+		}
+		function apply(next: { active: boolean; value: string }) {
+			params = next;
+			if (params.active) resize();
+			else node.style.height = '';
+		}
+		node.addEventListener('input', resize);
+		apply(params);
+		return {
+			update: apply,
+			destroy() {
+				node.removeEventListener('input', resize);
+			}
+		};
+	}
 </script>
 
 {#if coWriterOpen}
@@ -71,13 +98,19 @@
 	<div class="write-mode">
 		<label class="edit-field">
 			<span>{EDITOR_STYLE_PROMPT_LABEL}</span>
-			<textarea rows="4" value={$editPrompt} oninput={(e) => setDraftPrompt(e.currentTarget.value)}
-			></textarea>
+			<textarea
+				rows="4"
+				class:auto-grow={compact}
+				use:autogrowTextarea={{ active: compact, value: $editPrompt }}
+				value={$editPrompt}
+				oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
 		</label>
 		<label class="edit-field">
 			<span>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span>
 			<textarea
 				class="lyrics-area"
+				class:auto-grow={compact}
+				use:autogrowTextarea={{ active: compact, value: $editLyrics }}
 				rows="15"
 				value={$editLyrics}
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
@@ -186,15 +219,16 @@
 		resize: vertical;
 	}
 
-	@media (max-width: 768px) {
-		/* Write owns the one compact take surface. Its desktop-sized textarea
-		   pushed that surface behind the fixed Generate bar, so the first take
-		   could be seen but not reached at 375px. Keep the usable default short;
-		   people can still grow it with the textarea's native resize handle. */
-		.write-mode .lyrics-area {
-			min-height: 8rem;
-			height: 8rem;
-		}
+	/* Compact write mode is one scrolling column (L9): a fixed-height field
+	   whose content overflows becomes its own nested scroll box, which is
+	   what a phone must not have. The JS action sets an explicit height that
+	   tracks content, so a manual resize handle (and its own internal
+	   scrollbar underneath) would fight it — `resize: none` leaves growth to
+	   that height alone. Desktop keeps `resize: vertical` and its own
+	   min-height floor untouched. */
+	.auto-grow {
+		resize: none;
+		overflow: hidden;
 	}
 
 	/* Filling a fixed height only works where every part has a column of its

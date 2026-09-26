@@ -9,7 +9,6 @@
 		NOW_PLAYING_GO_TO_SONG,
 		NOW_PLAYING_LABEL,
 		NOW_PLAYING_NO_LYRICS,
-		NOW_PLAYING_TAKE_PREFIX,
 		SONG_NEXT_LABEL,
 		SONG_PREVIOUS_LABEL
 	} from '$lib/constants';
@@ -20,6 +19,7 @@
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
+		nowPlayingTakeLabel,
 		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
 	import { formatTime } from '$lib/utils/format';
@@ -123,7 +123,9 @@
 	const albumLine = $derived(
 		[info.albumTitle, info.artist].filter((part) => part.length > 0).join(' · ')
 	);
-	const takeLabel = $derived(`${NOW_PLAYING_TAKE_PREFIX} ${info.generation.generation_number}`);
+	const takeLabel = $derived(
+		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
+	);
 
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
