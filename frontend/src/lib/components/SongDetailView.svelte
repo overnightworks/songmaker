@@ -389,7 +389,7 @@
 		} catch (e) {
 			if (editorSongId !== songId) return;
 			takesStatus = 'error';
-			takesError = e instanceof Error ? e.message : TAKES_ERROR;
+			takesError = describeRequestFailure(e, TAKES_ERROR);
 		}
 	}
 
@@ -522,16 +522,20 @@
 	let songPlaylistPickerOpen = $state(false);
 
 	/**
-	 * `updateSong` fails either as an `ApiError` (server responded with a
+	 * A request fails either as an `ApiError` (server responded with a
 	 * useful detail message) or a raw fetch rejection (offline, timeout —
 	 * `TypeError: Failed to fetch`, which is not user-facing copy). Reuse the
 	 * network-error copy already shown elsewhere in the app instead of
 	 * surfacing the raw browser message.
 	 */
-	function describeSaveFailure(e: unknown): string {
-		if (e instanceof ApiError) return e.message || 'Save failed';
+	function describeRequestFailure(e: unknown, fallback: string): string {
+		if (e instanceof ApiError) return e.message || fallback;
 		if (e instanceof Error) return EDITOR_NETWORK_ERROR;
-		return 'Save failed';
+		return fallback;
+	}
+
+	function describeSaveFailure(e: unknown): string {
+		return describeRequestFailure(e, 'Save failed');
 	}
 
 	async function onSaveVersion(): Promise<void> {

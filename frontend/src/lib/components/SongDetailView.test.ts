@@ -20,6 +20,7 @@ import {
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
+	EDITOR_NETWORK_ERROR,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
 	EDITOR_SAVE_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
@@ -164,7 +165,7 @@ import editorHeaderSource from './editor/EditorHeader.svelte?raw';
 import recipePanelSource from './editor/RecipePanel.svelte?raw';
 import takesListSource from './editor/TakesList.svelte?raw';
 import writeColumnSource from './editor/WriteColumn.svelte?raw';
-import { addGenerationToPlaylist } from '$lib/api/client';
+import { addGenerationToPlaylist, fetchSong } from '$lib/api/client';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
@@ -475,6 +476,17 @@ describe('SongDetailView adding a take to a playlist', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
+	it('says the network failed, not the browser text, when the takes cannot load offline', async () => {
+		vi.mocked(fetchSong).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
+		const target = await renderView();
+		await tick();
+		await Promise.resolve();
+		await tick();
+		expect(target.textContent).toContain(EDITOR_NETWORK_ERROR);
+		expect(target.textContent).not.toContain('Failed to fetch');
+	});
+
 	it('edits the phone recipe inline without opening a sheet', async () => {
 		stubLibraryMedia({ narrow: true, compact: true });
 		const target = await renderView({ widthPx: 390 });
