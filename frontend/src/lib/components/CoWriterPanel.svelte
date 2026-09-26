@@ -437,7 +437,7 @@
 		} else if (answeredConversationId === null) {
 			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
 		} else {
-			await adoptPersistedHistory(answeredConversationId, messages[assistantIndex]);
+			await adoptPersistedHistory(answeredConversationId);
 		}
 		void scrollToBottom();
 	}
@@ -446,17 +446,22 @@
 	 * An answered turn shows what the conversation holds, so the chat reads
 	 * the same before and after a reload: an older failed message stays as the
 	 * server stored it, or leaves when it never reached the server (#1014).
-	 * The reply keeps the tool calls it streamed; they are not persisted. When
-	 * the history cannot be read, the streamed exchange stays as it is.
+	 * Every reply keeps the tool calls it streamed in this session; they are
+	 * not persisted. When the history cannot be read, the streamed exchange
+	 * stays as it is.
 	 */
-	async function adoptPersistedHistory(conversationId: string, reply: Message): Promise<void> {
+	async function adoptPersistedHistory(conversationId: string): Promise<void> {
 		const conversation = await fetchConversationMessages(conversationId).catch(() => null);
 		if (!conversation || loading || viewingConversationId !== conversationId) return;
-		messages = toMessages(conversation.messages).map((message) =>
-			message.persistedId === reply.persistedId
-				? { ...message, toolCalls: reply.toolCalls }
-				: message
+		const streamedToolCalls = new Map(
+			messages
+				.filter((message) => message.persistedId && message.toolCalls)
+				.map((message) => [message.persistedId, message.toolCalls])
 		);
+		messages = toMessages(conversation.messages).map((message) => ({
+			...message,
+			toolCalls: streamedToolCalls.get(message.persistedId)
+		}));
 		followOrSettleTurn(conversation);
 	}
 
