@@ -21,6 +21,7 @@ from acestep_engine.progress import AceStepPhase, progress_from_result
 from songmaker_cli.api_models import CoverTaskParams, JobResponse, RepaintTaskParams
 from songmaker_cli.constants import (
     ARQ_SCORING_QUEUE_NAME,
+    GenerationPhase,
     JobFunction,
     JobType,
 )
@@ -219,8 +220,11 @@ def _patch_dispatch_and_post_process(dto_or_side_effect):
 def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> None:
     observed_takes = []
     generation_starts = []
+    phases_at_take_start = []
 
     async def generate_take(**kwargs):
+        with seeded_db() as session:
+            phases_at_take_start.append(get_job(session, "j1").phase)
         kwargs["on_progress"](AceStepPhase.RENDERING, 0.5)
         with seeded_db() as session:
             job = get_job(session, "j1")
@@ -256,6 +260,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
     ]
     assert generation_starts[0] is not None
     assert len(set(generation_starts)) == 1
+    assert phases_at_take_start == [GenerationPhase.LOADING_MODEL] * count
 
     with seeded_db() as session:
         gens = session.query(Generation).filter_by(song_id="s1").all()
