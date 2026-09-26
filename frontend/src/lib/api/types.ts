@@ -441,6 +441,7 @@ export interface JobItem {
 	type: string;
 	status: string;
 	progress: number;
+	phase?: 'loading_model' | 'writing' | 'rendering' | 'saving_take' | null;
 	take_index?: number | null;
 	take_count?: number | null;
 	current_epoch?: number | null;
