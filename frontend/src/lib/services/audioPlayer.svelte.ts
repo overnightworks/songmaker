@@ -464,6 +464,7 @@ class AudioPlayer {
 		el.addEventListener('playing', () => {
 			this.clearStallRecoveryTimer();
 			this.startProgressWatchdog(el);
+			if (this.gaveUpOnStall) this.resumeAfterGivingUp();
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
@@ -539,11 +540,25 @@ class AudioPlayer {
 			void this.recoverStream(reason);
 			return;
 		}
-		if (!this.recoverPlayback(reason)) {
-			this.stopProgressWatchdog();
-			this.status = 'error';
-			this.error = ERROR_MSG_STALLED;
-		}
+		if (!this.recoverPlayback(reason)) this.giveUpOnStall();
+	}
+
+	// Pausing the element too keeps the sound and the lock screen in line with
+	// the stalled message.
+	private giveUpOnStall(): void {
+		this.stopProgressWatchdog();
+		this.status = 'error';
+		this.error = ERROR_MSG_STALLED;
+		if (this.audio) this.pauseElement(this.audio);
+	}
+
+	private get gaveUpOnStall(): boolean {
+		return this.status === 'error' && this.error === ERROR_MSG_STALLED;
+	}
+
+	private resumeAfterGivingUp(): void {
+		this.status = 'playing';
+		this.error = null;
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
@@ -741,8 +756,7 @@ class AudioPlayer {
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		if (this.recoveryAttempts >= MAX_RECOVERY_ATTEMPTS) {
-			this.status = 'error';
-			this.error = ERROR_MSG_STALLED;
+			this.giveUpOnStall();
 			return;
 		}
 		this.recoveryAttempts += 1;
