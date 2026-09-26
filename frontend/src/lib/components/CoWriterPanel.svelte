@@ -24,6 +24,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import { health } from '$lib/stores/health';
 	import {
+		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
@@ -234,6 +235,10 @@
 		if (!msg || loading) return;
 		if (viewingConversationId !== null && viewingConversationId !== activeConversationId) {
 			addToast('Viewing an archived conversation — start a new one to reply', 'info');
+			return;
+		}
+		if (claudeDrifted) {
+			addToast(cowriterUnavailableLabel(providerName), 'error');
 			return;
 		}
 
@@ -518,8 +523,15 @@
 
 	// Grok and Codex have no pre-emptive signal; only Claude's drifted or
 	// unverified tool surface is caught before a turn is sent (ruling 26.09.2026).
-	const claudeUnavailable = $derived(
-		providerName === 'claude' && $health !== null && $health.claude_cli_tool_surface !== 'ok'
+	// Drift is a per-build verdict: the send path itself refuses. Unverified
+	// only warns — the backend gate re-probes on every turn.
+	const claudeDrifted = $derived(
+		providerName === 'claude' && $health !== null && $health.claude_cli_tool_surface === 'drift'
+	);
+	const claudeUnverified = $derived(
+		providerName === 'claude' &&
+			$health !== null &&
+			$health.claude_cli_tool_surface === 'unverified'
 	);
 </script>
 
@@ -647,8 +659,10 @@
 		</div>
 	{/if}
 
-	{#if claudeUnavailable}
+	{#if claudeDrifted}
 		<div class="unavailable-banner" role="status">{cowriterUnavailableLabel(providerName)}</div>
+	{:else if claudeUnverified}
+		<div class="unverified-banner" role="status">{COWRITER_CLAUDE_UNVERIFIED_LABEL}</div>
 	{/if}
 
 	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
@@ -695,7 +709,7 @@
 		{/if}
 		<ChatInput
 			bind:value={input}
-			disabled={loading || !input.trim() || readOnly || claudeUnavailable}
+			disabled={loading || !input.trim() || readOnly || claudeDrifted}
 			bind:inputRef={inputEl}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
@@ -1044,6 +1058,14 @@
 		padding: 6px 12px;
 		background: var(--surface);
 		color: var(--score-bad);
+		font-size: 0.8rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.unverified-banner {
+		padding: 6px 12px;
+		background: var(--surface);
+		color: var(--score-ok);
 		font-size: 0.8rem;
 		border-top: 1px solid var(--border);
 	}

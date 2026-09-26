@@ -28,6 +28,22 @@ function enterSelectionMode(): void {
 	toggleSelection('selection-mode-seed');
 }
 
+function stubCoarsePointer(isCoarse: boolean): void {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn((query: string) => ({
+			matches: isCoarse ? query.includes('coarse') : false,
+			media: query,
+			onchange: null,
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			dispatchEvent: vi.fn()
+		}))
+	);
+}
+
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return {
@@ -1106,19 +1122,7 @@ describe('TakesList load states', () => {
 	});
 
 	it('does not offer the tap-play hint on Takes while the first generation has zero takes yet', async () => {
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn((query: string) => ({
-				matches: query.includes('coarse'),
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			}))
-		);
+		stubCoarsePointer(true);
 		const { target } = await render({
 			song: song({}),
 			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
@@ -1132,35 +1136,11 @@ describe('TakesList load states', () => {
 describe('TakesList touch hint', () => {
 	it('shows the tap hint on a coarse pointer and hides it on a mouse', async () => {
 		// #141/11: a narrow desktop window is compact but still has a mouse.
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn((query: string) => ({
-				matches: query.includes('coarse'),
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			}))
-		);
+		stubCoarsePointer(true);
 		const { target: coarse } = await render();
 		expect(coarse.textContent).toContain(TAKES_MOBILE_HINT);
 
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				addListener: vi.fn(),
-				removeListener: vi.fn(),
-				dispatchEvent: vi.fn()
-			}))
-		);
+		stubCoarsePointer(false);
 		const { target: fine } = await render();
 		expect(fine.textContent).not.toContain(TAKES_MOBILE_HINT);
 		vi.unstubAllGlobals();

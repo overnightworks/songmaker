@@ -2,6 +2,7 @@ import { makeHealthResponse, makeSong as song } from '$lib/test-utils/factories'
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
+import { COWRITER_CLAUDE_UNVERIFIED_LABEL } from '$lib/constants';
 
 import { ApiError } from '$lib/api/fetch';
 
@@ -145,23 +146,66 @@ describe('CoWriterPanel', () => {
 });
 
 describe('CoWriterPanel unavailable before any turn', () => {
-	it.each(['drift', 'unverified'] as const)(
-		'names Claude unavailable and disables Send when its tool surface is %s',
-		async (claude_cli_tool_surface) => {
-			fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface }));
-			const target = await render();
+	it('names Claude unavailable and refuses Send via click, Enter, and the retry link once its tool surface drifts', async () => {
+		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'ok' }));
+		streamCoWriterTurn.mockReturnValueOnce(
+			(async function* () {
+				yield* [];
+				throw new ApiError(503, 'Claude CLI is temporarily unavailable', '/api/chat/turn');
+			})()
+		);
+		const target = await render();
+
+		await sendTurn(target, 'write a chorus');
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull()
+		);
+		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+
+		stopHealthPolling();
+		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'drift' }));
+		startHealthPolling();
+		await vi.waitFor(() =>
 			expect(target.querySelector('.unavailable-banner')?.textContent).toContain(
 				'claude is currently unavailable'
-			);
-			await sendTurn(target, 'write a chorus');
-			expect(streamCoWriterTurn).not.toHaveBeenCalled();
-		}
-	);
+			)
+		);
+
+		target.querySelector<HTMLButtonElement>('.send-btn')?.click();
+		await tick();
+		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+
+		const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
+		if (!input) throw new Error('Expected the chat textarea');
+		input.value = 'another try';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await tick();
+		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+
+		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
+		await tick();
+		expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+	});
+
+	it('warns without disabling Send when the tool surface is unverified, and still sends the turn', async () => {
+		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'unverified' }));
+		const target = await render();
+		expect(target.querySelector('.unverified-banner')?.textContent).toBe(
+			COWRITER_CLAUDE_UNVERIFIED_LABEL
+		);
+		expect(target.querySelector('.unavailable-banner')).toBeNull();
+
+		await sendTurn(target, 'write a chorus');
+		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
+	});
 
 	it('stays available when the tool surface is ok', async () => {
 		fetchHealth.mockResolvedValue(makeHealthResponse({ claude_cli_tool_surface: 'ok' }));
 		const target = await render();
 		expect(target.querySelector('.unavailable-banner')).toBeNull();
+		expect(target.querySelector('.unverified-banner')).toBeNull();
 	});
 
 	it('gives Grok no pre-emptive signal — it keeps the reactive 503 path', async () => {
