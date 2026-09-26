@@ -9,7 +9,7 @@ from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from time import monotonic
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from webauth.rate_limit import RedisRateLimitBackend
@@ -438,7 +438,18 @@ async def _leased_resource_event_generator(
         503: {"description": "Resource event stream capacity is unavailable"},
     },
 )
-def api_stream_resource_events(request: Request) -> StreamingResponse:
+def api_stream_resource_events(
+    request: Request,
+    last_event_id: str | None = Query(None),
+) -> StreamingResponse:
+    """Stream the caller's resource events, resuming after its last seen event.
+
+    The cursor arrives as the browser's own ``Last-Event-ID`` header on a native
+    retry, or as the ``last_event_id`` query parameter when the client opens a
+    fresh ``EventSource`` itself after a drop -- a browser cannot set that header
+    on a new connection. The header wins when both are present: a native retry
+    of a connection opened with the query cursor carries the newer position.
+    """
     ctx: AppContext = request.app.state.ctx
     with ctx.db() as session:
         user = authenticate_request(request, session)
@@ -446,7 +457,7 @@ def api_stream_resource_events(request: Request) -> StreamingResponse:
         oldest_retained = get_oldest_resource_event_sequence(session, user.id)
         session.commit()
 
-    last_event_id = parse_last_event_id(request.headers.get("last-event-id"))
+    cursor = parse_last_event_id(request.headers.get("last-event-id") or last_event_id)
     limiter, lease_token = _acquire_stream_lease(request, user.id)
     return StreamingResponse(
         _leased_resource_event_generator(
@@ -454,7 +465,7 @@ def api_stream_resource_events(request: Request) -> StreamingResponse:
             limiter,
             lease_token,
             user.id,
-            last_event_id,
+            cursor,
             high_water_mark,
             oldest_retained,
         ),

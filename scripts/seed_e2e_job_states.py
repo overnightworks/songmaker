@@ -32,9 +32,13 @@ mounted. Use the venv's Python directly:
         scripts/seed_e2e_job_states.py set-failed \\
         --job-id <id> --error "ACE-Step worker: CUDA out of memory on device 0"
 
+    docker compose exec -T songmaker-web /app/.venv/bin/python \\
+        scripts/seed_e2e_job_states.py set-completed --job-id <id> \\
+        < frontend/e2e/fixtures/take.mp3
+
 ``create-song`` prints the created song's id on stdout, ``set-running`` the
 created job's id -- both mirroring ``scripts/seed_e2e_song_takes.py``'s own
-convention. ``set-failed`` prints nothing. Connects to the database only --
+convention. ``set-failed`` and ``set-completed`` print nothing. Connects to the database only --
 never runs schema migrations, even implicitly, matching every other one-off
 script here (see ``connect_db()`` in ``db/engine.py``).
 """
@@ -56,11 +60,14 @@ from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root
 from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus, JobType
 from songmaker_cli.db.engine import connect_db, resolve_database_url
+from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries import (
     create_generation,
     create_generation_created_event,
     create_job,
     create_song,
+    get_job,
+    get_song,
     get_user_by_username,
     update_job_status,
     update_song,
@@ -71,6 +78,30 @@ from songmaker_cli.settings import get_settings
 def _resolve_audio_dir() -> Path:
     project_root = find_project_root(Path.cwd()) or Path.cwd()
     return project_root / get_settings().audio_dir
+
+
+def add_take(
+    session: Session,
+    audio_dir: Path,
+    mp3_bytes: bytes,
+    *,
+    song_id: str,
+    version_id: str,
+    owner_id: str,
+) -> Generation:
+    """Write one take's audio file and its generation row on ``version_id``."""
+    generation_id = str(uuid.uuid4())
+    dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
+    dst.write_bytes(mp3_bytes)  # NOSONAR Uses validated audio path.
+    return create_generation(
+        session,
+        song_id=song_id,
+        version_id=version_id,
+        mp3_path=f"{owner_id}/{generation_id}.mp3",
+        model_mode=MODEL_DEFAULT_MODE,
+        generation_id=generation_id,
+        audio_dir=audio_dir,
+    )
 
 
 def seed_song_at_version(
@@ -106,17 +137,9 @@ def seed_song_at_version(
         version = update_song(session, song.id, force_new_version=True)
 
     for _ in range(take_count):
-        generation_id = str(uuid.uuid4())
-        dst = audio_file_path(audio_dir, owner_id, generation_id, ".mp3")
-        dst.write_bytes(mp3_bytes)  # NOSONAR Uses validated audio path.
-        gen = create_generation(
-            session,
-            song_id=song.id,
-            version_id=version.id,
-            mp3_path=f"{owner_id}/{generation_id}.mp3",
-            model_mode=MODEL_DEFAULT_MODE,
-            generation_id=generation_id,
-            audio_dir=audio_dir,
+        gen = add_take(
+            session, audio_dir, mp3_bytes,
+            song_id=song.id, version_id=version.id, owner_id=owner_id,
         )
         create_generation_created_event(
             session, user_id=owner_id, song_id=song.id, generation_id=gen.id,
@@ -196,6 +219,35 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     session.commit()
 
 
+def cmd_set_completed(session: Session, args: argparse.Namespace) -> None:
+    """Complete an existing generate job with one new take, and no resource event.
+
+    The take lands on the song's latest version and the job turns
+    ``completed`` in one commit, so the job's own open stream never reports
+    the end before the take is readable. The ``generation.created`` event a
+    real worker also writes is left out on purpose: it stands in for the event
+    a phone's dropped resource stream never received (#1020), so only the
+    job's own terminal refresh can bring the take into the list.
+    """
+    job = get_job(session, args.job_id)
+    if job is None or job.song_id is None or job.user_id is None:
+        raise SystemExit(f"Job {args.job_id} does not exist or belongs to no song")
+    mp3_bytes = sys.stdin.buffer.read()
+    if not mp3_bytes:
+        raise SystemExit("No MP3 bytes received on stdin")
+    song = get_song(session, job.song_id)
+    version = song.latest_version if song is not None else None
+    if version is None:
+        raise SystemExit(f"Song {job.song_id} does not exist or has no version")
+    add_take(
+        session, _resolve_audio_dir(), mp3_bytes,
+        song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
+    )
+    if not update_job_status(session, args.job_id, JobStatus.COMPLETED, progress=1.0):
+        raise SystemExit(f"Job {args.job_id} was already terminal")
+    session.commit()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -225,6 +277,13 @@ def main(argv: list[str] | None = None) -> int:
     p_failed.add_argument("--job-id", required=True)
     p_failed.add_argument("--error", required=True)
     p_failed.set_defaults(func=cmd_set_failed)
+
+    p_completed = sub.add_parser(
+        "set-completed",
+        help="Complete an existing generate job with one take read from stdin, without its event.",
+    )
+    p_completed.add_argument("--job-id", required=True)
+    p_completed.set_defaults(func=cmd_set_completed)
 
     args = parser.parse_args(argv)
 
