@@ -1,8 +1,0 @@
-claim_id = "60b814b757a94309b68a3311b5336092"
-agent = "claude-head"
-role = "builder"
-base = "f7808b95a5bfbdac73c608f0fc3de126b6d5a8ae"
-branch = "claude/issue-989-running-status-slot"
-scope = ["frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts"]
-opened_commit = "758536861f5f628973e84529bce0fe4913a6877c"
-whole_reason = "F2c: the status slot, its tab ring and the one queue template form one reviewable change"
