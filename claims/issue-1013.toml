@@ -1,0 +1,8 @@
+claim_id = "61f689561b1a457cace7ff9a2adcaa66"
+agent = "claude-head"
+role = "builder"
+base = "3af8a94b9aac4ad59a8b5cba30e5b01cbe21d4d0"
+branch = "claude/issue-1013-progress-pipeline"
+scope = ["docs/acestep.md", "docs/architecture.md", "src/acestep_engine/client.py", "src/acestep_engine/models.py", "src/acestep_engine/progress.py", "src/acestep_worker/models.py", "src/acestep_worker/progress.py", "src/acestep_worker/task_store.py", "src/acestep_worker/wrapper.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/scheduler.py", "tests/acestep_worker/test_progress.py", "tests/acestep_worker/test_task_store.py", "tests/acestep_worker/test_wrapper.py", "tests/test_acestep_engine_progress.py", "tests/test_client.py", "tests/test_jobs.py", "tests/test_scheduler.py"]
+opened_commit = "502d3b39ef7d652f006b18e0ff1d110615981ce8"
+whole_reason = "engine, worker and web must change together because TaskSnapshot.progress changes meaning"
