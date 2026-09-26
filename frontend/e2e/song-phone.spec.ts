@@ -16,6 +16,15 @@
 // (/api/jobs/{id}/stream polls the row every second), so the frontend picks
 // up the transition live, the way a real worker crash would report it — no
 // reload, and no dependence on the reaper ever running.
+//
+// The same absent worker also means `GET /health` reports
+// `acestep_workers_online: 0`, and `generateAction`'s derivation (see its own
+// comment) treats that as an unconditional disabled reason that outranks a
+// failed job's cause — so without help, the failed-job assertion below would
+// never see anything but "No ACE-Step worker online". A narrowly scoped
+// `page.route` on `**/health` reports one worker online for this page only,
+// standing in for the seeded heartbeat a real worker would publish, so the
+// failed generation's own persistent UI is what's on screen instead.
 
 import { expect, test } from '@playwright/test';
 import {
@@ -71,6 +80,17 @@ test.describe('song page at phone width', () => {
 		isMobile
 	}) => {
 		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		// Stands in for the absent worker's own heartbeat (see the file header):
+		// every /health this page makes reports one online, so generateAction's
+		// disabled-reason check never masks the failed job below.
+		await page.route('**/health', async (route) => {
+			const response = await route.fetch();
+			const body = (await response.json()) as Record<string, unknown>;
+			await route.fulfill({
+				response,
+				json: { ...body, acestep_workers_online: 1, acestep_workers_total: 1 }
+			});
+		});
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		const songId = await seedSongPhoneSong(
@@ -142,6 +162,11 @@ test.describe('song page at phone width', () => {
 		await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
 		await page.getByRole('tab', { name: /Write/ }).click();
 		await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
+		// The same failure also raises a toast (ToastContainer.svelte) that
+		// overlaps the expand button until it is dismissed or its own 5s timer
+		// runs out — dismiss it explicitly so the click below isn't racing that
+		// timer.
+		await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
 		await panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_EXPAND_LABEL }).click();
 		await expect(
 			panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL })
