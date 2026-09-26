@@ -9,7 +9,7 @@ import { watchTypingOnPhone } from '$lib/stores/ui';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { EDITOR_GENERATE_MODE_LABELS } from '$lib/constants';
+import { EDITOR_GENERATE_MODE_LABELS, EDITOR_GPU_OFFLINE_TITLE } from '$lib/constants';
 import type { GenerateState } from '$lib/stores/generateAction';
 
 const IDLE_GENERATE: GenerateState = { kind: 'idle', mode: 'generate' };
@@ -165,6 +165,16 @@ describe('SongPhoneView', () => {
 		if (!actionBar) throw new Error('Expected an action bar');
 		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
 		expect(getComputedStyle(actionBar).position).toBe('sticky');
+	});
+
+	it('keeps the Write action bar one row: a disabled Generate says why inside itself', async () => {
+		generateAction.set({ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE });
+		const target = await render();
+		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
+		const button = actionBar?.querySelector('button');
+		expect(button?.disabled).toBe(true);
+		expect(button?.textContent?.trim()).toBe(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
+		expect(actionBar?.textContent?.trim()).toBe(button?.textContent?.trim());
 	});
 
 	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
