@@ -941,21 +941,24 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	}
 }
 
-// What a click on a take row means, wherever that row lives (the click rule
-// of issue #140): play the take and surface Now Playing straight on its
-// judging panel. The editor's takes list and a playlist's rows differ only in
-// how playback starts, so both hand that start to this one action.
-//
+type TakeRow = { alreadyLoaded: boolean; start: () => void | Promise<void> };
+
 // A row body never stops the music. The take a row stands for is left
 // running, and a paused one picks up where it stands rather than starting
-// over, so clicking the row that is already loaded only brings up the panel.
-// Pausing belongs to a take row's own ▶ and to the transport.
-async function playTakeRow(row: {
-	alreadyLoaded: boolean;
-	start: () => void | Promise<void>;
-}): Promise<void> {
+// over. Pausing belongs to a take row's own ▶ and to the transport.
+async function playRow(row: TakeRow): Promise<void> {
 	if (row.alreadyLoaded) audioPlayer.play();
 	else await row.start();
+}
+
+// What a click on a take row means where it has no page of its own to show
+// the result (the click rule of issue #140): play the take and surface Now
+// Playing straight on its judging panel. The editor's takes list and the
+// rail's playlist rows differ only in how playback starts, so both hand that
+// start to this one action; clicking the row already loaded only brings up
+// the panel.
+async function playTakeRow(row: TakeRow): Promise<void> {
+	await playRow(row);
 	openNowPlaying('take');
 }
 
@@ -973,15 +976,28 @@ export async function playTakeAndShowNowPlaying(
 	await playTakeRow({ alreadyLoaded: isTakeCurrent(gen), start: () => playTake(gen, song) });
 }
 
+function playlistEntryRow(playlist: PlaylistDetailItem, index: number): TakeRow {
+	const entry = playlist.entries[index];
+	return {
+		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
+		start: () => playPlaylistFrom(playlist, index)
+	};
+}
+
 export async function playPlaylistEntryAndShowNowPlaying(
 	playlist: PlaylistDetailItem,
 	index: number
 ): Promise<void> {
-	const entry = playlist.entries[index];
-	await playTakeRow({
-		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
-		start: () => playPlaylistFrom(playlist, index)
-	});
+	await playTakeRow(playlistEntryRow(playlist, index));
+}
+
+// A row on the playlist page (#1010): it plays from here and leaves the
+// listener on the page, whose playing row and mini-player show the result.
+export async function playPlaylistEntry(
+	playlist: PlaylistDetailItem,
+	index: number
+): Promise<void> {
+	await playRow(playlistEntryRow(playlist, index));
 }
 
 type QueueDirection = -1 | 1;

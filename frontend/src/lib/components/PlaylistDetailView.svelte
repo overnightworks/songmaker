@@ -3,7 +3,7 @@
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylist,
-		playPlaylistEntryAndShowNowPlaying,
+		playPlaylistEntry,
 		type CollectionStart
 	} from '$lib/stores/player';
 	import {
@@ -235,10 +235,10 @@
 	}
 
 	// The row is the play target: a tap plays this take from here, with the
-	// rest of the playlist queued behind it, and shows it in Now Playing.
-	function openEntry(index: number): void {
+	// rest of the playlist queued behind it, and keeps the listener on the page.
+	function playEntry(index: number): void {
 		if (!playlistDetail) return;
-		void playPlaylistEntryAndShowNowPlaying(playlistDetail, index);
+		void playPlaylistEntry(playlistDetail, index);
 	}
 
 	// ── Offline / Save for offline ──────────────────────────────────────────
@@ -371,7 +371,7 @@
 					{#each playlistDetail.entries as entry, i (entry.id)}
 						{@const current = isPlaylistEntryCurrent(entry)}
 						<li class="entry-row" class:current>
-							<button type="button" class="entry-info" onclick={() => openEntry(i)}>
+							<button type="button" class="entry-info" onclick={() => playEntry(i)}>
 								<PlayingMark {current} />
 								<span class="entry-text">
 									<span class="entry-title">
