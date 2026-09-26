@@ -119,7 +119,8 @@ test.describe('a take that finished while the phone was offline', () => {
 			progress: 0.4,
 			takeIndex: 1,
 			takeCount: 1,
-			runningSinceOffsetSeconds: 30
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
 		});
 		const panel = page.getByRole('tabpanel');
 		// Each attempt gets a stream that ends at once, the way a dead network
