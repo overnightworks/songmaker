@@ -9,7 +9,7 @@
 		loadSongsForAlbum,
 		songList
 	} from '$lib/stores/libraryData';
-	import { selectedSongId } from '$lib/stores/player';
+	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		compareAlbumTracks,
@@ -17,7 +17,6 @@
 		openLibraryWall,
 		selectSong
 	} from '$lib/stores/navigation';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_RETRY_LABEL,
@@ -53,7 +52,6 @@
 	const collection = $derived($openCollection);
 	const surface = $derived($librarySurface);
 	const currentSongId = $derived($selectedSongId);
-	const current = $derived(audioPlayer.current);
 	const openAlbumId = $derived(collection?.kind === 'album' ? collection.id : null);
 	const query = $derived($railTreeQuery.trim().toLowerCase());
 	const filtering = $derived(query.length > 0);
@@ -293,7 +291,7 @@
 													class:row-active={song.id === currentSongId}
 													onclick={() => onTrackClick(song)}
 												>
-													<PlayingMark current={current?.songId === song.id} />
+													<PlayingMark current={isSongCurrent(song.id)} />
 													<span class="row-title">{song.title}</span>
 													<span class="row-meta">{trackMeta(song)}</span>
 												</button>

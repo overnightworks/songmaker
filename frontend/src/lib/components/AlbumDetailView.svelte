@@ -28,8 +28,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
-	import { curateAlbum, selectedAlbumId, playAlbum } from '$lib/stores/player';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
 	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
@@ -600,7 +599,7 @@
 				<p class="empty-tab">No songs in this album yet.</p>
 			{:else}
 				{#each albumSongs as s (s.id)}
-					{@const current = audioPlayer.current?.songId === s.id}
+					{@const current = isSongCurrent(s.id)}
 					<div class="item-row" class:current>
 						<button class="item-body" onclick={() => selectSong(s.id)}>
 							<PlayingMark {current} />
