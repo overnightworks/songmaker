@@ -13,6 +13,7 @@ import httpx
 import pytest
 
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import AceStepPhase
 from songmaker_cli.acestep_state import (
     gpu_hold_key,
     queue_depth_key,
@@ -379,16 +380,20 @@ def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
     assert str(exc_info.value) == "GPU OOM"
 
 
-def test_consume_task_stream_progress_calls_callback() -> None:
+def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_without_one(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
     worker = _make_picked()
-    captured: list[float] = []
+    captured: list[tuple[AceStepPhase, float]] = []
 
-    async def on_progress(fraction: float) -> None:
-        captured.append(fraction)
+    async def on_progress(phase: AceStepPhase, fraction: float) -> None:
+        captured.append((phase, fraction))
 
     events = [
-        ("progress", {"progress": 0.2}),
-        ("progress", {"progress": 0.5}),
+        ("progress", {"progress": 0.2, "phase": "writing"}),
+        ("progress", {"progress": 0.9, "phase": None}),
+        ("progress", {"progress": 0.9, "phase": "unheard-of"}),
+        ("progress", {"progress": 0.5, "phase": "rendering"}),
         (
             "done",
             {
@@ -401,7 +406,8 @@ def test_consume_task_stream_progress_calls_callback() -> None:
     with _patch_async_client(client):
         _run(consume_task_stream(worker, "gen-1", on_progress=on_progress))
 
-    assert captured == [0.2, 0.5]
+    assert captured == [(AceStepPhase.WRITING, 0.2), (AceStepPhase.RENDERING, 0.5)]
+    assert sum(record.levelname == "WARNING" for record in caplog.records) == 2
 
 
 def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
@@ -618,7 +624,7 @@ def test_dispatch_loads_model_if_not_loaded(db_factory, db_session) -> None:
 
     load_calls: list[str] = []
 
-    async def _fake_ensure_loaded(worker, target_mode, options):
+    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
         load_calls.append(target_mode)
 
     done = [
@@ -656,7 +662,7 @@ def test_dispatch_skips_load_when_already_loaded(db_factory, db_session) -> None
 
     load_called = False
 
-    async def _fake_ensure_loaded(worker, target_mode, options):
+    async def _fake_ensure_loaded(worker, target_mode, options, on_progress=None):
         nonlocal load_called
         if target_mode not in worker.loaded_modes:
             load_called = True
@@ -761,13 +767,22 @@ def test_dto_keys_match_worker_model_fields() -> None:
 # ── _ensure_loaded + _submit_generation (httpx unit tests) ─────────
 
 
+def _record_into(announced: list[tuple[AceStepPhase, float]]):
+    def on_progress(phase: AceStepPhase, fraction: float) -> None:
+        announced.append((phase, fraction))
+
+    return on_progress
+
+
 def test_ensure_loaded_skips_when_already_loaded() -> None:
     worker = _make_picked(loaded=["sft"])
+    announced: list[tuple[AceStepPhase, float]] = []
     with patch("songmaker_cli.scheduler.httpx.AsyncClient") as cls:
         from songmaker_cli.scheduler import _ensure_loaded
 
-        _run(_ensure_loaded(worker, "sft", DispatchOptions()))
+        _run(_ensure_loaded(worker, "sft", DispatchOptions(), _record_into(announced)))
     cls.assert_not_called()
+    assert announced == []
 
 
 def test_ensure_loaded_posts_when_missing() -> None:
@@ -781,9 +796,11 @@ def test_ensure_loaded_posts_when_missing() -> None:
 
     from songmaker_cli.scheduler import _ensure_loaded
 
+    announced: list[tuple[AceStepPhase, float]] = []
     with patch("songmaker_cli.scheduler.httpx.AsyncClient", return_value=client):
-        _run(_ensure_loaded(worker, "sft", DispatchOptions()))
+        _run(_ensure_loaded(worker, "sft", DispatchOptions(), _record_into(announced)))
 
+    assert announced == [(AceStepPhase.LOADING_MODEL, 0.0)]
     client.post.assert_called_once()
     args, kwargs = client.post.call_args
     assert args[0].endswith("/load_model")

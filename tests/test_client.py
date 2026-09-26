@@ -707,7 +707,7 @@ def test_poll_skips_an_entry_without_a_progress_value(caplog: pytest.LogCaptureF
     reported = _poll_reporting_progress(_running_entry("8/50 [00:02<00:13]"))
 
     assert reported == []
-    assert [record.levelname for record in caplog.records] == ["WARNING"]
+    assert sum(record.levelname == "WARNING" for record in caplog.records) == 1
 
 
 # ── poll KeyboardInterrupt ─────────────────────────────────────────
