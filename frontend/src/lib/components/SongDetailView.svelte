@@ -17,7 +17,7 @@
 	import { ApiError } from '$lib/api/fetch';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
-	import { generateAction, generate } from '$lib/stores/generateAction';
+	import { generateAction } from '$lib/stores/generateAction';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 	import {
 		albumList,
@@ -679,12 +679,6 @@
 			coWriterOpen={$coWriterOpen}
 			ontogglerecipe={() => recipeOpen.update((v) => !v)}
 			ontogglecowriter={() => coWriterOpen.update((v) => !v)}
-			ongenerate={generate}
-			generateLabel={$generateAction.label}
-			generateDisabled={$generateAction.disabled}
-			generateTitle={$generateAction.title}
-			generateQueueReason={$generateAction.queueReason}
-			generating={$generateAction.pending}
 			saveDisabled={!dirty}
 			onsave={() => void onSaveVersion()}
 		/>

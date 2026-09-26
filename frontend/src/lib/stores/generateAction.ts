@@ -1,17 +1,9 @@
 import { derived, get, writable } from 'svelte/store';
 import { generateSong } from '$lib/api/client';
 import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATE_COVER_LABEL,
-	EDITOR_GENERATE_REPAINT_LABEL,
-	EDITOR_GENERATING_LABEL,
-	EDITOR_GPU_OFFLINE_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
-	EDITOR_QUEUED_LABEL,
-	EDITOR_QUEUE_POSITION_TEMPLATE,
-	EDITOR_QUEUE_BUSY_TITLE,
 	EDITOR_SELECT_MODEL_TITLE
 } from '$lib/constants';
 import {
@@ -80,23 +72,11 @@ export const generateAction = derived(
 			: null;
 		const pending = inFlight || job?.status === 'queued' || job?.status === 'running';
 		const gpuOffline = health?.acestep_workers_online === 0;
-		let title = '';
-		if (!lyrics || !prompt) title = EDITOR_MISSING_CONTENT_TITLE;
+		let disabledReason = '';
+		if (!lyrics || !prompt) disabledReason = EDITOR_MISSING_CONTENT_TITLE;
 		else if (model === null) {
-			title = models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
-		} else if (gpuOffline) title = EDITOR_GPU_OFFLINE_TITLE;
-		else if (health?.queue_depth_cap_reached) title = EDITOR_QUEUE_BUSY_TITLE;
-
-		let label = EDITOR_GENERATE_LABEL;
-		if (job?.status === 'queued') {
-			label = job.queue_position
-				? EDITOR_QUEUE_POSITION_TEMPLATE.replace('{position}', String(job.queue_position))
-				: EDITOR_QUEUED_LABEL;
-		} else if (pending) label = EDITOR_GENERATING_LABEL;
-		else if (gpuOffline) label = EDITOR_GPU_OFFLINE_LABEL;
-		else if (source) {
-			label = mode === 'cover' ? EDITOR_GENERATE_COVER_LABEL : EDITOR_GENERATE_REPAINT_LABEL;
-		}
+			disabledReason = models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
+		} else if (gpuOffline) disabledReason = EDITOR_GPU_OFFLINE_TITLE;
 
 		const disabled = pending || !lyrics || !prompt || model === null || gpuOffline;
 		const actionMode: GenerateMode = source ? mode : 'generate';
@@ -118,20 +98,11 @@ export const generateAction = derived(
 				progress: job?.progress ?? 0,
 				remaining: job?.remaining_time_estimate ?? null
 			};
-		} else if (disabled) state = { kind: 'disabled', mode: actionMode, reason: title };
+		} else if (disabled) state = { kind: 'disabled', mode: actionMode, reason: disabledReason };
 		else if (cause !== undefined) state = { kind: 'failed', mode: actionMode, cause };
 		else state = { kind: 'idle', mode: actionMode };
 
-		return {
-			state,
-			job,
-			pending,
-			gpuOffline,
-			label,
-			title,
-			disabled,
-			queueReason: job?.status === 'queued' ? job.queue_reason : null
-		};
+		return { state, job };
 	}
 );
 

@@ -82,12 +82,6 @@ function defaultProps() {
 		coWriterOpen: false,
 		ontogglerecipe: vi.fn(),
 		ontogglecowriter: vi.fn(),
-		ongenerate: vi.fn(),
-		generateLabel: 'Generate',
-		generateDisabled: false,
-		generateTitle: '',
-		generateQueueReason: null as string | null,
-		generating: false,
 		saveDisabled: true,
 		onsave: vi.fn()
 	};
@@ -111,7 +105,7 @@ describe('EditorHeader', () => {
 		expect(toggles).toHaveLength(2);
 		expect(toggles[0].textContent).toContain('Co-Writer');
 		expect(toggles[1].textContent).toContain('Recipe');
-		const generateButtons = target.querySelectorAll('.generate-btn');
+		const generateButtons = target.querySelectorAll('.generate-action .primary-button');
 		expect(generateButtons).toHaveLength(1);
 		expect(generateButtons[0].textContent).toContain('Generate');
 	});
@@ -187,20 +181,14 @@ describe('EditorHeader', () => {
 		// #163/1: the face is a fixed 24/44px box, so on a text label it cuts
 		// straight through the word. Labelled buttons carry their own border.
 		const { target } = await render();
-		for (const labelled of target.querySelectorAll('.view-toggle, .generate-btn')) {
+		for (const labelled of target.querySelectorAll(
+			'.view-toggle, .generate-action .primary-button'
+		)) {
 			expect(
 				labelled.hasAttribute('data-hitbox-face'),
 				`${labelled.textContent?.trim()} draws a face over its label`
 			).toBe(false);
 		}
-	});
-
-	it('sizes Generate to the frequent hitbox on a coarse pointer', async () => {
-		const { target } = await render();
-		const generate = target.querySelector<HTMLButtonElement>('.generate-btn');
-		if (!generate) throw new Error('Expected the Generate button');
-		setPointer('coarse');
-		expect(minHeightPx(generate, 'Generate')).toBe(HITBOX_FREQUENT_PX);
 	});
 
 	it('announces the song title as the heading name, with a separately named edit button', async () => {
@@ -221,14 +209,6 @@ describe('EditorHeader', () => {
 		expect(heading.tagName).toBe('H2');
 		const editButton = getByRoleButton(heading, 'Edit song title');
 		expect(editButton.textContent?.trim()).toBe('Sommerlicht');
-	});
-
-	it('keeps Generate and its queue reason in the desktop header', async () => {
-		const { target } = await render({ generateQueueReason: 'Waiting for LoRA training.' });
-		expect(
-			target.querySelector('.detail-header .generate-btn')?.nextElementSibling?.textContent
-		).toBe('Waiting for LoRA training.');
-		expect(target.querySelector('.editor-generate-bar')).toBeNull();
 	});
 });
 

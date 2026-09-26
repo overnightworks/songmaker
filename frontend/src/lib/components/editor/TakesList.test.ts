@@ -267,35 +267,22 @@ describe('TakesList', () => {
 		expect(dirty.querySelector('.draft-banner')?.textContent).toContain('v4');
 	});
 
-	it('shows why the last generation failed, with the full cause in the title', async () => {
-		generationFailures.set({ s1: VRAM_CAUSE });
-		const { target } = await render();
-		const cause = target.querySelector<HTMLElement>('.failed-cause');
-		expect(cause?.textContent).toBe(VRAM_CAUSE);
-		expect(cause?.title).toBe(VRAM_CAUSE);
-	});
-
-	it('shows the failure even when the song has no takes yet', async () => {
-		generationFailures.set({ s1: VRAM_CAUSE });
-		const { target } = await render({
-			song: song({ ...versionedSongDefaults(), generations: [] })
-		});
-		expect(target.querySelector('.failed-cause')?.textContent).toBe(VRAM_CAUSE);
-	});
-
-	it('hides the failure once the user dismisses it', async () => {
-		generationFailures.set({ s1: VRAM_CAUSE });
-		const { target } = await render();
-		target.querySelector<HTMLButtonElement>('.failed-dismiss')?.click();
-		await tick();
-		expect(target.querySelector('.failed-row')).toBeNull();
-	});
-
-	it('shows no failure row for another song', async () => {
-		generationFailures.set({ s2: VRAM_CAUSE });
-		const { target } = await render();
-		expect(target.querySelector('.failed-row')).toBeNull();
-	});
+	it.each([true, false])(
+		'keeps failures off Takes when existing takes are %s',
+		async (hasTakes) => {
+			generationFailures.set({ s1: VRAM_CAUSE });
+			const { target } = await render({
+				song: song({
+					...versionedSongDefaults(),
+					generations: hasTakes ? [generation()] : []
+				})
+			});
+			expect(target.textContent).not.toContain(VRAM_CAUSE);
+			expect(target.querySelector('[role="alert"]')).toBeNull();
+			if (hasTakes) expect(target.querySelectorAll('.take-row')).toHaveLength(1);
+			else expect(target.textContent).toContain('No takes yet · Generate on Write');
+		}
+	);
 
 	it('shows a generating row while a generate job runs for this song', async () => {
 		const { target } = await render({
@@ -320,7 +307,6 @@ describe('TakesList', () => {
 		expect(target.querySelector('.generating-label')?.textContent).toContain(
 			'Waiting for LoRA training on this GPU.'
 		);
-		expect(target.querySelector('.failed-row')).toBeNull();
 	});
 
 	it('labels the generating row with the version actually being generated, not the next draft version', async () => {

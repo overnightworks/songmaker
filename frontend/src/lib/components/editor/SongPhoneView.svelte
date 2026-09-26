@@ -2,6 +2,7 @@
 	import type { ComponentProps, Snippet } from 'svelte';
 	import { detailTab } from '$lib/stores/navigation';
 	import DetailTabs from './DetailTabs.svelte';
+	import GenerateButton from './GenerateButton.svelte';
 	import TakesList from './TakesList.svelte';
 
 	interface Props {
@@ -27,6 +28,7 @@
 		{@render sharedLink()}
 		{@render recipe()}
 		{@render write()}
+		<GenerateButton />
 	{:else}
 		{@render expiryDigest()}
 		<TakesList {...takeListProps} />

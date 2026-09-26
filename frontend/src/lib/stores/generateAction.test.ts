@@ -8,16 +8,9 @@ import {
 } from '$lib/test-utils/factories';
 import type { JobItem } from '$lib/api/types';
 import {
-	EDITOR_GENERATE_LABEL,
-	EDITOR_GENERATE_COVER_LABEL,
-	EDITOR_GENERATE_REPAINT_LABEL,
-	EDITOR_GENERATING_LABEL,
-	EDITOR_GPU_OFFLINE_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
-	EDITOR_QUEUED_LABEL,
-	EDITOR_QUEUE_BUSY_TITLE,
 	EDITOR_SELECT_MODEL_TITLE
 } from '$lib/constants';
 
@@ -116,42 +109,27 @@ describe('generate action presentation', () => {
 		{
 			state: 'idle',
 			setup: () => {},
-			label: EDITOR_GENERATE_LABEL,
-			title: '',
-			disabled: false,
 			expectedState: { kind: 'idle', mode: 'generate' }
 		},
 		{
 			state: 'dirty',
 			expectedState: { kind: 'idle', mode: 'generate' },
-			setup: () => setDraftLyrics('new verse'),
-			label: EDITOR_GENERATE_LABEL,
-			title: '',
-			disabled: false
+			setup: () => setDraftLyrics('new verse')
 		},
 		{
 			state: 'missing lyrics',
 			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
-			setup: () => setDraftLyrics(''),
-			label: EDITOR_GENERATE_LABEL,
-			title: EDITOR_MISSING_CONTENT_TITLE,
-			disabled: true
+			setup: () => setDraftLyrics('')
 		},
 		{
 			state: 'missing prompt',
 			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_MISSING_CONTENT_TITLE },
-			setup: () => setDraftPrompt(''),
-			label: EDITOR_GENERATE_LABEL,
-			title: EDITOR_MISSING_CONTENT_TITLE,
-			disabled: true
+			setup: () => setDraftPrompt('')
 		},
 		{
 			state: 'no selected model',
 			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_SELECT_MODEL_TITLE },
-			setup: () => recipeModel.set(null),
-			label: EDITOR_GENERATE_LABEL,
-			title: EDITOR_SELECT_MODEL_TITLE,
-			disabled: true
+			setup: () => recipeModel.set(null)
 		},
 		{
 			state: 'no active models',
@@ -159,20 +137,14 @@ describe('generate action presentation', () => {
 			setup: () => {
 				recipeModel.set(null);
 				activeModels.set([]);
-			},
-			label: EDITOR_GENERATE_LABEL,
-			title: EDITOR_NO_MODELS_WARNING,
-			disabled: true
+			}
 		},
 		{
 			state: 'GPU offline',
 			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
-			},
-			label: EDITOR_GPU_OFFLINE_LABEL,
-			title: EDITOR_GPU_OFFLINE_TITLE,
-			disabled: true
+			}
 		},
 		{
 			state: 'queue full',
@@ -181,18 +153,12 @@ describe('generate action presentation', () => {
 				vi.mocked(fetchHealth).mockResolvedValue(
 					makeHealthResponse({ queue_depth_cap_reached: true })
 				);
-			},
-			label: EDITOR_GENERATE_LABEL,
-			title: EDITOR_QUEUE_BUSY_TITLE,
-			disabled: false
+			}
 		},
 		{
 			state: 'queued',
 			expectedState: { kind: 'queued', jobId: 'job1', position: 2, reason: queuedJob.queue_reason },
-			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }]),
-			label: 'Queued (#2)',
-			title: '',
-			disabled: true
+			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }])
 		},
 		{
 			state: 'queued without position',
@@ -202,10 +168,7 @@ describe('generate action presentation', () => {
 				position: null,
 				reason: queuedJob.queue_reason
 			},
-			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }]),
-			label: EDITOR_QUEUED_LABEL,
-			title: '',
-			disabled: true
+			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }])
 		},
 		{
 			state: 'running',
@@ -217,30 +180,20 @@ describe('generate action presentation', () => {
 				progress: 0,
 				remaining: null
 			},
-			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }]),
-			label: EDITOR_GENERATING_LABEL,
-			title: '',
-			disabled: true
+			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
 		},
 		{
 			state: 'another song running',
 			expectedState: { kind: 'idle', mode: 'generate' },
-			setup: () => activeJobs.set([{ songId: 's2', job: queuedJob }]),
-			label: EDITOR_GENERATE_LABEL,
-			title: '',
-			disabled: false
+			setup: () => activeJobs.set([{ songId: 's2', job: queuedJob }])
 		}
-	])(
-		'exposes label, title and disabled for $state',
-		async ({ setup, label, title, disabled, expectedState }) => {
-			setup();
-			stopHealthPolling();
-			startHealthPolling();
-			await Promise.resolve();
-			expect(get(generateAction)).toMatchObject({ label, title, disabled });
-			expect(get(generateAction).state).toEqual(expectedState);
-		}
-	);
+	])('exposes the state for $state', async ({ setup, expectedState }) => {
+		setup();
+		stopHealthPolling();
+		startHealthPolling();
+		await Promise.resolve();
+		expect(get(generateAction).state).toEqual(expectedState);
+	});
 
 	it.each([100, 'calculating', null] as const)(
 		'exposes live progress and remaining time %s',
@@ -306,13 +259,12 @@ describe('generate action presentation', () => {
 		activeJobs.set([{ songId: 's1', job: queuedJob }]);
 		expect(get(generateAction)).toMatchObject({
 			job: queuedJob,
-			queueReason: queuedJob.queue_reason,
-			pending: true
+			state: { kind: 'queued', reason: queuedJob.queue_reason }
 		});
 		activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }]);
-		expect(get(generateAction)).toMatchObject({ queueReason: null, pending: true });
+		expect(get(generateAction)).toMatchObject({ state: { kind: 'generating' } });
 		selectedSongId.set(null);
-		expect(get(generateAction)).toMatchObject({ job: null, queueReason: null, pending: false });
+		expect(get(generateAction)).toMatchObject({ job: null, state: { kind: 'idle' } });
 	});
 });
 
@@ -325,9 +277,6 @@ describe('generate action execution', () => {
 		vi.mocked(fetchVersions).mockResolvedValue([makeVersion({ id: 'v2', version_number: 2 })]);
 		const request = generate();
 		expect(get(generateAction)).toMatchObject({
-			pending: true,
-			disabled: true,
-			label: EDITOR_GENERATING_LABEL,
 			state: { kind: 'generating', jobId: null, progress: 0, remaining: null }
 		});
 		await generate();
@@ -338,7 +287,7 @@ describe('generate action execution', () => {
 		expect(generateSong).toHaveBeenCalledExactlyOnceWith('s1', 2, 'turbo', 'v2', 42);
 		expect(get(isDirty)).toBe(false);
 		expect(get(pinnedSeed)).toBeNull();
-		expect(get(generateAction)).toMatchObject({ pending: true, job: queuedJob });
+		expect(get(generateAction)).toMatchObject({ state: { kind: 'queued' }, job: queuedJob });
 	});
 
 	it.each(['save', 'generate'] as const)(
@@ -350,7 +299,7 @@ describe('generate action execution', () => {
 				vi.mocked(updateSong).mockRejectedValueOnce(failure);
 			} else vi.mocked(generateSong).mockRejectedValueOnce(failure);
 			await generate();
-			expect(get(generateAction)).toMatchObject({ pending: false, disabled: false });
+			expect(get(generateAction)).toMatchObject({ state: { kind: 'idle' } });
 			expect(get(pinnedSeed)).toBe(42);
 			expect(addToast).toHaveBeenCalledWith(failure.message, 'error');
 			if (step === 'save') expect(generateSong).not.toHaveBeenCalled();
@@ -361,11 +310,11 @@ describe('generate action execution', () => {
 	);
 
 	it.each([
-		{ mode: 'repaint', variant: 'balanced', label: EDITOR_GENERATE_REPAINT_LABEL },
-		{ mode: 'repaint', variant: 'conservative', label: EDITOR_GENERATE_REPAINT_LABEL },
-		{ mode: 'cover', variant: 'noise', label: EDITOR_GENERATE_COVER_LABEL },
-		{ mode: 'cover', variant: 'no noise', label: EDITOR_GENERATE_COVER_LABEL }
-	] as const)('generates $mode with $variant recipe settings', async ({ mode, variant, label }) => {
+		{ mode: 'repaint', variant: 'balanced' },
+		{ mode: 'repaint', variant: 'conservative' },
+		{ mode: 'cover', variant: 'noise' },
+		{ mode: 'cover', variant: 'no noise' }
+	] as const)('generates $mode with $variant recipe settings', async ({ mode, variant }) => {
 		sourceGeneration.set(makeGeneration());
 		sourceMode.set(mode);
 		repaintStart.set(0.2);
@@ -374,7 +323,6 @@ describe('generate action execution', () => {
 		repaintStrength.set(0.6);
 		coverStrength.set(0.7);
 		coverNoiseStrength.set(variant === 'noise' ? 0.3 : 0);
-		expect(get(generateAction).label).toBe(label);
 		expect(get(generateAction).state).toEqual({ kind: 'idle', mode });
 		await generate();
 		const options = { model: 'turbo', seed: 42, versionId: 'v1', count: 2 };
@@ -406,6 +354,6 @@ describe('generate action execution', () => {
 		else recipeModel.set(null);
 		await generate();
 		expect(generateSong).not.toHaveBeenCalled();
-		expect(get(generateAction).pending).toBe(false);
+		expect(get(generateAction).state.kind).not.toBe('generating');
 	});
 });

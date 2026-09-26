@@ -12,6 +12,7 @@
 	import Breadcrumb from '../Breadcrumb.svelte';
 	import EditableTitle from '../EditableTitle.svelte';
 	import Icon from '../Icon.svelte';
+	import GenerateButton from './GenerateButton.svelte';
 	import SongMenu from './SongMenu.svelte';
 	import ShareButton from '../ShareButton.svelte';
 
@@ -55,12 +56,6 @@
 		coWriterOpen: boolean;
 		ontogglerecipe: () => void;
 		ontogglecowriter: () => void;
-		ongenerate: () => void;
-		generateLabel: string;
-		generateDisabled: boolean;
-		generateTitle: string;
-		generateQueueReason?: string | null;
-		generating: boolean;
 		saveDisabled: boolean;
 		onsave: () => void;
 	}
@@ -100,12 +95,6 @@
 		coWriterOpen,
 		ontogglerecipe,
 		ontogglecowriter,
-		ongenerate,
-		generateLabel,
-		generateDisabled,
-		generateTitle,
-		generateQueueReason = null,
-		generating,
 		saveDisabled,
 		onsave
 	}: Props = $props();
@@ -237,20 +226,7 @@
 			</button>
 		</div>
 		<span class="editor-header-divider" aria-hidden="true"></span>
-		<button
-			type="button"
-			class="generate-btn"
-			class:generating
-			data-hitbox="text"
-			onclick={ongenerate}
-			disabled={generateDisabled}
-			title={generateTitle}
-		>
-			{generateLabel}
-		</button>
-		{#if generateQueueReason}
-			<span class="generate-queue-reason">{generateQueueReason}</span>
-		{/if}
+		<GenerateButton />
 	</div>
 </div>
 
@@ -468,53 +444,6 @@
 		width: 1px;
 		align-self: stretch;
 		background: var(--border);
-	}
-
-	.generate-btn {
-		padding: var(--btn-padding-pill);
-		border: none;
-		border-radius: var(--btn-radius-pill);
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: var(--btn-font-size);
-		letter-spacing: var(--btn-letter-spacing);
-		text-transform: uppercase;
-		cursor: pointer;
-		white-space: nowrap;
-		transition: box-shadow 0.2s;
-	}
-
-	.generate-btn:hover:not(:disabled) {
-		box-shadow: 0 0 20px rgba(160, 32, 240, 0.3);
-	}
-
-	.generate-btn:disabled {
-		opacity: 0.4;
-		cursor: not-allowed;
-	}
-
-	.generate-queue-reason {
-		color: var(--text-muted);
-		font-size: 0.75rem;
-		max-width: 18rem;
-		overflow-wrap: anywhere;
-	}
-
-	@media (prefers-reduced-motion: no-preference) {
-		.generate-btn.generating {
-			animation: gen-pulse 1.5s ease-in-out infinite;
-		}
-	}
-
-	@keyframes gen-pulse {
-		0%,
-		100% {
-			box-shadow: 0 0 6px rgba(160, 32, 240, 0.2);
-		}
-		50% {
-			box-shadow: 0 0 20px rgba(160, 32, 240, 0.4);
-		}
 	}
 
 	@media (max-width: 768px) {
