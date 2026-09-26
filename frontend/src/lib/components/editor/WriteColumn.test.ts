@@ -1,5 +1,5 @@
 import { makeGeneration as generation, makeSong as song } from '$lib/test-utils/factories';
-import { mount, tick, unmount } from 'svelte';
+import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -16,13 +16,15 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
-import { editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { editLyrics, loadSongData } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { EDITOR_VIEW_COWRITER_LABEL } from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
 import WriteColumn from './WriteColumn.svelte';
 import writeColumnSource from './WriteColumn.svelte?raw';
+import CoWriterPanel from '../CoWriterPanel.svelte';
 import coWriterPanelSource from '../CoWriterPanel.svelte?raw';
 import takeStripSource from './TakeStrip.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
@@ -50,15 +52,38 @@ afterEach(async () => {
 	clearComponentStyles();
 });
 
+// SongDetailView owns the one composition of CoWriterPanel's props (#990/#2);
+// this stand-in mirrors that composition so WriteColumn's Co-Writer mode has
+// something real to render into `.cowriter-chat`.
+function makeCowriterPanel(forSong: SongItem) {
+	return createRawSnippet(() => ({
+		render: () => '<div></div>',
+		setup: (node) => {
+			const view = mount(CoWriterPanel, {
+				target: node,
+				props: {
+					currentSongId: forSong.id,
+					currentAlbumId: forSong.album_id,
+					currentAlbumTitle: forSong.album_title,
+					allSongs: [forSong],
+					versions: []
+				}
+			});
+			return () => unmount(view);
+		}
+	}));
+}
+
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
+	const testSong = song(draftSongDefaults());
 	const props = {
-		song: song(draftSongDefaults()),
-		allSongs: [song(draftSongDefaults())],
+		song: testSong,
 		coWriterOpen: false,
 		compact: false,
-		onturncompleted: vi.fn(),
+		cowriterPanel: makeCowriterPanel(testSong),
+		onopencowriter: vi.fn(),
 		...overrides
 	};
 	mounted.push(mount(WriteColumn, { target, props }));
@@ -79,32 +104,32 @@ describe('WriteColumn write mode', () => {
 		await tick();
 		expect(get(editLyrics)).toBe('verse two');
 	});
+
+	it('has no Co-Writer row on desktop', async () => {
+		const { target } = await render({ compact: false });
+		expect(target.querySelector('.cowriter-row')).toBeNull();
+	});
+
+	it('opens the co-writer from the compact "Co-Writer" row', async () => {
+		const onopencowriter = vi.fn();
+		const { target } = await render({ compact: true, onopencowriter });
+		const row = target.querySelector<HTMLButtonElement>('.cowriter-row');
+		expect(row?.textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
+		row?.click();
+		expect(onopencowriter).toHaveBeenCalledOnce();
+	});
 });
 
 describe('WriteColumn Co-Writer mode', () => {
-	it('shows Chat and Lyrics together on desktop with a take strip, no mobile sub-tabs', async () => {
-		const { target } = await render({ coWriterOpen: true, compact: false });
+	// The phone screen that replaces the page (#990) instantiates CoWriterPanel
+	// directly through SongPhoneView and never reaches WriteColumn's
+	// coWriterOpen branch, so this shape is desktop-only.
+	it('shows Chat, Lyrics and the take strip together, no mobile sub-tabs', async () => {
+		const { target } = await render({ coWriterOpen: true });
 		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
 		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
 		expect(target.querySelector('.cowriter-takes')).not.toBeNull();
 		expect(target.querySelector('.mobile-subtabs')).toBeNull();
-	});
-
-	it('splits Chat | Lyrics into tabs and leaves the take strip out of the Co-Writer sheet on mobile', async () => {
-		setDraftLyrics('verse one');
-		const { target } = await render({ coWriterOpen: true, compact: true });
-		expect(target.querySelector('.mobile-subtabs')).not.toBeNull();
-		expect(target.querySelector('.cowriter-chat')).not.toBeNull();
-		expect(target.querySelector('.cowriter-lyrics')).toBeNull();
-		expect(target.querySelector('.cowriter-takes')).toBeNull();
-
-		const lyricsTab = Array.from(
-			target.querySelectorAll<HTMLButtonElement>('.mobile-subtabs button')
-		).find((el) => el.textContent === 'Lyrics');
-		lyricsTab?.click();
-		await tick();
-		expect(target.querySelector('.cowriter-lyrics')).not.toBeNull();
-		expect(target.querySelector('.cowriter-chat')).toBeNull();
 	});
 
 	it('shows the kinetic take strip in compact Write mode only', async () => {
@@ -164,12 +189,11 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 
 	it('lets the stacked parts run on rather than share one squeezed height', () => {
 		// Sharing it cut the lyrics column below its content, which then spilled
-		// over the take strip; only a part with a column of its own, or alone in
-		// the compact sheet, can scroll in place.
+		// over the take strip; only a part with a column of its own can scroll
+		// in place.
 		const stacked = /\n\t\.cowriter-mode \{([^}]*)\}/.exec(writeColumnSource)?.[1];
 		expect(stacked).toBeDefined();
 		expect(stacked).not.toMatch(/\bheight: 100%/);
-		expect(writeColumnSource).toMatch(/\.cowriter-mode\.compact \{\s*height: 100%;/);
 		expect(writeColumnSource).toMatch(
 			/@container editor \(min-width: 680px\) \{\s*\.cowriter-mode \{\s*flex: 1;\s*min-height: 0;/
 		);
@@ -204,7 +228,7 @@ describe("WriteColumn Co-Writer at the editor's own width", () => {
 	// the dock open reads the composer against the real cascade.
 	it('bounds the stacked chat height to what a narrowed editor actually has, not just the window', () => {
 		expect(writeColumnSource).toMatch(
-			/\.cowriter-mode:not\(\.compact\) \.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
+			/\.cowriter-chat \{\s*height: min\(60dvh, calc\(100dvh - \d+px\)\);/
 		);
 	});
 

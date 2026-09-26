@@ -26,6 +26,7 @@ import {
 	EDITOR_UNSAVED_TITLE,
 	EDITOR_VIEW_COWRITER_LABEL,
 	EDITOR_VIEW_RECIPE_LABEL,
+	EDITOR_COWRITER_BACK_LABEL,
 	LIBRARY_NARROW_MEDIA,
 	SONG_COVER_ALT_TYPE,
 	SONG_COVER_REMOVE_LABEL,
@@ -1104,8 +1105,8 @@ describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
 	});
 });
 
-describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
-	it('keeps the Write surface underneath instead of replacing it', async () => {
+describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
+	it('replaces the Write surface instead of opening a sheet beside it', async () => {
 		openWriteTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
@@ -1114,9 +1115,66 @@ describe('SongDetailView mobile Co-Writer opens as a sheet', () => {
 		coWriterOpen.set(true);
 		await tick();
 
+		expect(target.querySelector('.write-surface')).toBeNull();
+		expect(target.querySelector('[role="tab"]')).toBeNull();
+		expect(target.querySelector('.cowriter')).not.toBeNull();
+
+		coWriterOpen.set(false);
+		await tick();
+
+		expect(target.querySelector('.cowriter')).toBeNull();
 		expect(target.querySelector('.write-surface .take-strip')).not.toBeNull();
-		expect(target.querySelector('.sheet-panel')).not.toBeNull();
-		expect(target.querySelector('.sheet-panel .cowriter-mode')).not.toBeNull();
+	});
+
+	it('opens from the Write column\'s "Co-writer" row', async () => {
+		openWriteTab();
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		const row = target.querySelector<HTMLButtonElement>('.cowriter-row');
+		expect(row?.textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
+
+		row?.click();
+		await tick();
+
+		expect(get(coWriterOpen)).toBe(true);
+		expect(target.querySelector('.cowriter')).not.toBeNull();
+	});
+
+	it('switches the one shell app bar to ‹ · Co-writer and back, never layering a second bar', async () => {
+		stubLibraryMedia({ narrow: false, compact: true });
+		const target = await renderView();
+		const bar = document.createElement('div');
+		document.body.append(bar);
+		mounted.push(mount(PhoneAppBar, { target: bar }));
+		await tick();
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
+		expect(bar.querySelector('[aria-label="Share song"]')).not.toBeNull();
+		expect(bar.querySelector('[aria-label="Song menu"]')).not.toBeNull();
+
+		coWriterOpen.set(true);
+		await tick();
+
+		expect(get(phoneAppBar)).toEqual({
+			kind: 'screen',
+			title: EDITOR_VIEW_COWRITER_LABEL,
+			onback: expect.any(Function)
+		});
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(EDITOR_VIEW_COWRITER_LABEL);
+		expect(bar.querySelector('[aria-label="Share song"]')).toBeNull();
+		expect(bar.querySelector('[aria-label="Song menu"]')).toBeNull();
+		const backButton = bar.querySelector<HTMLButtonElement>(
+			`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`
+		);
+		expect(backButton).not.toBeNull();
+		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+		expect(target.querySelector('.cowriter-back')).toBeNull();
+
+		backButton?.click();
+		await tick();
+
+		expect(get(coWriterOpen)).toBe(false);
+		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
+		expect(get(phoneAppBar)?.title).toBe(get(songList)[0].title);
 	});
 });
 
