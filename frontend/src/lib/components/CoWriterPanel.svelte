@@ -92,10 +92,7 @@
 	}
 
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
-
-	function isAbortedStream(error: unknown): boolean {
-		return error instanceof Error && error.name === 'AbortError';
-	}
+	const TURN_ALREADY_RUNNING_STATUS = 409;
 
 	let messages: Message[] = $state([]);
 	let input = $state('');
@@ -196,8 +193,54 @@
 			void scrollToBottom();
 		}
 		if (!conversation || conversationId !== activeConversationId || loading) return;
-		if (conversation.turn_running) void followRunningTurn(conversationId);
+		followOrSettleTurn(conversation);
+	}
+
+	function followOrSettleTurn(conversation: ConversationMessagesResponse): void {
+		if (conversation.turn_running) void followRunningTurn(conversation.conversation_id);
 		else markUnansweredLastMessage();
+	}
+
+	/**
+	 * A stream that drops without the server's own error frame did not fail
+	 * the turn: the server runs it to completion regardless. Show what the
+	 * conversation holds instead — the running turn, its reply, or the
+	 * unanswered message — and name a failure only when the message never
+	 * reached the server (#1014).
+	 */
+	async function reattachDroppedTurn(sentMessage: string, assistantIndex: number): Promise<void> {
+		const conversation = await readActiveConversation().catch(() => null);
+		const lastSent = conversation?.messages.findLast((message) => message.role === 'user');
+		if (!conversation || lastSent?.content !== sentMessage) {
+			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
+			return;
+		}
+		if (activeConversationId !== conversation.conversation_id) {
+			activeConversationId = conversation.conversation_id;
+			viewingConversationId = conversation.conversation_id;
+			void loadConversations();
+		}
+		messages = toMessages(conversation.messages);
+		followOrSettleTurn(conversation);
+		if (!conversation.turn_running && onturncompleted) onturncompleted();
+	}
+
+	async function readActiveConversation(): Promise<ConversationMessagesResponse | null> {
+		const conversationId =
+			activeConversationId ??
+			(await fetchConversations()).find((conversation) => conversation.archived_at === null)?.id;
+		return conversationId ? fetchConversationMessages(conversationId) : null;
+	}
+
+	/** Another tab or panel is still running a turn: follow it and keep what was typed. */
+	async function followTurnRunningElsewhere(
+		sentMessage: string,
+		assistantIndex: number
+	): Promise<void> {
+		messages = messages.slice(0, assistantIndex - 1);
+		input = sentMessage;
+		if (activeConversationId) await loadMessages(activeConversationId);
+		else await loadConversations();
 	}
 
 	/**
@@ -321,6 +364,7 @@
 
 		let streamError: string | null = null;
 		let turnCompleted = false;
+		let refusal: ApiError | null = null;
 		try {
 			const playing = audioPlayer.current;
 			const currentGenerationId = playerTakeIdForSong(
@@ -352,20 +396,26 @@
 				}
 				void scrollToBottom();
 			}
-			if (!turnCompleted && !streamError) streamError = INCOMPLETE_TURN_MESSAGE;
 		} catch (e) {
-			if (isAbortedStream(e)) {
-				streamError = INCOMPLETE_TURN_MESSAGE;
-			} else if (e instanceof ApiError && e.status === 503) {
-				streamError = e.detail || cowriterUnavailableLabel(providerName);
-			} else {
-				streamError = e instanceof Error ? e.message : 'Chat failed';
-			}
+			if (e instanceof ApiError) refusal = e;
 		} finally {
 			loading = false;
-			if (streamError) markTurnFailed(assistantIndex, streamError);
-			void scrollToBottom();
 		}
+		if (refusal?.status === TURN_ALREADY_RUNNING_STATUS) {
+			await followTurnRunningElsewhere(msg, assistantIndex);
+		} else if (refusal) {
+			markTurnFailed(assistantIndex, refusalMessage(refusal));
+		} else if (streamError) {
+			markTurnFailed(assistantIndex, streamError);
+		} else if (!turnCompleted) {
+			await reattachDroppedTurn(msg, assistantIndex);
+		}
+		void scrollToBottom();
+	}
+
+	function refusalMessage(refusal: ApiError): string {
+		if (refusal.status === 503) return refusal.detail || cowriterUnavailableLabel(providerName);
+		return refusal.message;
 	}
 
 	function applyStreamEvent(assistantIndex: number, event: CoWriterStreamEvent): void {
