@@ -126,6 +126,12 @@ describe('CoWriterPanel', () => {
 		expect(root).not.toBeNull();
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
 	});
+
+	it('renders no back control of its own — the phone push screen uses the shell app bar', async () => {
+		const target = await render();
+		expect(target.querySelector('.cowriter-back')).toBeNull();
+		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+	});
 });
 
 describe('CoWriterPanel failed turns', () => {

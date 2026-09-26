@@ -112,7 +112,7 @@
 	import TakesList from './editor/TakesList.svelte';
 	import { phoneAppBar } from '$lib/stores/ui';
 	import SongPhoneView from './editor/SongPhoneView.svelte';
-	import EditorSheet from './editor/EditorSheet.svelte';
+	import CoWriterPanel from './CoWriterPanel.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
@@ -554,9 +554,19 @@
 	}
 
 	$effect(() => {
+		if (!song) {
+			phoneAppBar.set(null);
+			return;
+		}
 		phoneAppBar.set(
-			song
+			$coWriterOpen && compact
 				? {
+						kind: 'screen',
+						title: EDITOR_VIEW_COWRITER_LABEL,
+						onback: () => coWriterOpen.set(false)
+					}
+				: {
+						kind: 'song',
 						title: song.title,
 						onrename: onRenameSong,
 						share: {
@@ -572,7 +582,6 @@
 							ondelete: () => (showDeleteConfirm = true)
 						}
 					}
-				: null
 		);
 		return () => phoneAppBar.set(null);
 	});
@@ -629,22 +638,17 @@
 		</div>
 	{/snippet}
 
-	{#snippet writeSurface(
-		current: SongItem,
-		withCowriter: boolean,
-		isCompact: boolean,
-		onTurnCompleted: () => void
-	)}
+	{#snippet writeSurface(current: SongItem, withCowriter: boolean, isCompact: boolean)}
 		<div class="write-surface">
 			{#if !compact}
 				{@render saveAction()}
 			{/if}
 			<WriteColumn
 				song={current}
-				allSongs={songs}
 				coWriterOpen={withCowriter}
 				compact={isCompact}
-				onturncompleted={onTurnCompleted}
+				{cowriterPanel}
+				onopencowriter={() => coWriterOpen.set(true)}
 			/>
 		</div>
 	{/snippet}
@@ -713,22 +717,40 @@
 	{/snippet}
 
 	{#snippet phoneWrite()}
-		{@render writeSurface(song, false, true, () => {})}
+		{@render writeSurface(song, false, true)}
+	{/snippet}
+
+	{#snippet cowriterPanel()}
+		<CoWriterPanel
+			currentSongId={song.id}
+			currentAlbumId={song.album_id}
+			currentAlbumTitle={song.album_title}
+			allSongs={songs}
+			versions={$versions}
+			onturncompleted={onTurnCompleted}
+		/>
 	{/snippet}
 
 	<div class="detail-panel" class:compact>
 		{#if compact}
-			<SongPhoneView {sharedLink} write={phoneWrite} {expiryDigest} {takeListProps} {chips} />
+			<SongPhoneView
+				{sharedLink}
+				write={phoneWrite}
+				cowriter={cowriterPanel}
+				{expiryDigest}
+				{takeListProps}
+				{chips}
+			/>
 		{:else}
 			{@render header()}
 			<div class="editor-body">
 				{@render sharedLink()}
 				{@render recipe()}
 				{#if $coWriterOpen}
-					{@render writeSurface(song, true, compact, onTurnCompleted)}
+					{@render writeSurface(song, true, compact)}
 				{:else}
 					<div class="editor-columns">
-						{@render writeSurface(song, false, compact, () => {})}
+						{@render writeSurface(song, false, compact)}
 						<div class="takes-column">
 							{@render expiryDigest()}
 							<TakesList {...takeListProps} />
@@ -765,16 +787,6 @@
 			}}
 			onclose={() => (songPlaylistPickerOpen = false)}
 		/>
-	{/if}
-
-	{#if compact}
-		<EditorSheet
-			open={$coWriterOpen}
-			label={EDITOR_VIEW_COWRITER_LABEL}
-			onclose={() => coWriterOpen.set(false)}
-		>
-			{@render writeSurface(song, true, true, onTurnCompleted)}
-		</EditorSheet>
 	{/if}
 {/if}
 

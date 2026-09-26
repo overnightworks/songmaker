@@ -187,6 +187,7 @@ export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
+export const EDITOR_COWRITER_BACK_LABEL = 'Back to Write';
 
 export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
 	claude_cli: 'Claude Code CLI login',
@@ -284,7 +285,6 @@ export const EDITOR_NO_MODELS_WARNING = 'No models enabled. Ask admin to enable 
 export const EDITOR_SELECT_MODEL_TITLE = 'Select a model first';
 export const EDITOR_MISSING_CONTENT_TITLE = 'Add lyrics and style prompt first';
 export const EDITOR_GPU_OFFLINE_TITLE = 'No ACE-Step worker online — generation unavailable';
-export const EDITOR_CHAT_LABEL = 'Chat';
 export const EDITOR_LYRICS_LABEL = 'Lyrics';
 export const EDITOR_STYLE_LABEL = 'Style';
 export const EDITOR_STYLE_PROMPT_LABEL = 'Style Prompt';

@@ -1,7 +1,7 @@
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab } from '$lib/stores/navigation';
-import type { RecipeChip } from '$lib/stores/recipe';
+import { coWriterOpen, type RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
@@ -20,11 +20,13 @@ const snippets = {
 	write: createRawSnippet(() => ({
 		render: () => '<textarea aria-label="Lyrics">Draft</textarea>'
 	})),
+	cowriter: createRawSnippet(() => ({ render: () => '<div class="cowriter-screen">Chat</div>' })),
 	expiryDigest: createRawSnippet(() => ({ render: () => '<div>Expiry digest</div>' }))
 };
 
 beforeEach(() => {
 	detailTab.set('write');
+	coWriterOpen.set(false);
 	generationFailures.set({});
 	clearSelection();
 });
@@ -33,6 +35,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	detailTab.set('write');
+	coWriterOpen.set(false);
 });
 
 const NO_CHIPS: RecipeChip[] = [];
@@ -118,4 +121,23 @@ describe('SongPhoneView', () => {
 			expect(target.querySelector('.generate-action')).toBeNull();
 		}
 	);
+
+	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
+		const target = await render();
+		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+
+		coWriterOpen.set(true);
+		await tick();
+
+		expect(target.querySelector('.cowriter-screen')).not.toBeNull();
+		expect(target.querySelector('[role="tab"]')).toBeNull();
+		expect(target.querySelector('#song-phone-panel')).toBeNull();
+		expect(target.querySelector('.generate-action')).toBeNull();
+
+		coWriterOpen.set(false);
+		await tick();
+
+		expect(target.querySelector('.cowriter-screen')).toBeNull();
+		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+	});
 });
