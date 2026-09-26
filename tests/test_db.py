@@ -26,6 +26,7 @@ from songmaker_cli.constants import (
     GENERATION_ETA_MIN_PROGRESS,
     STALE_JOB_THRESHOLDS,
     CoverExecutor,
+    GenerationPhase,
     JobStatus,
     JobType,
     stale_job_thresholds,
@@ -641,7 +642,8 @@ def test_create_job(seeded_session: Session) -> None:
     assert job.type == "generate"
     assert job.status == "queued"
     assert job.progress == 0.0
-    assert job.running_since is None
+    assert job.phase is None
+    assert job.generation_started_at is None
     assert job.take_index is None
     assert job.take_count is None
 
@@ -654,16 +656,20 @@ def test_update_job_status(seeded_session: Session) -> None:
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "running"
     assert fetched.progress == 0.5
-    assert fetched.running_since == fetched.heartbeat_at
+    assert fetched.heartbeat_at is not None
+    assert fetched.generation_started_at is None
 
 
-def test_job_progress_preserves_running_start_and_take_counters(seeded_session: Session) -> None:
+def test_job_progress_preserves_generation_start_phase_and_take_counters(
+    seeded_session: Session,
+) -> None:
     job = create_job(seeded_session, JobType.GENERATE)
     update_job_status(
-        seeded_session, job.id, JobStatus.RUNNING, take_index=1, take_count=2,
+        seeded_session, job.id, JobStatus.RUNNING,
+        take_index=1, take_count=2, phase=GenerationPhase.WRITING,
     )
-    running_since = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    job.running_since = running_since
+    generation_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    job.generation_started_at = generation_started_at
     seeded_session.commit()
 
     update_job_status(seeded_session, job.id, JobStatus.RUNNING, progress=0.25)
@@ -672,31 +678,56 @@ def test_job_progress_preserves_running_start_and_take_counters(seeded_session: 
     seeded_session.expire_all()
 
     fetched = get_job(seeded_session, job.id)
-    assert aware_timestamp(fetched.running_since) == running_since
+    assert aware_timestamp(fetched.generation_started_at) == generation_started_at
+    assert fetched.phase == GenerationPhase.WRITING
     assert (fetched.take_index, fetched.take_count, fetched.progress) == (1, 2, 0.25)
 
 
 @pytest.mark.parametrize("claim_cover", [False, True])
-def test_entering_running_excludes_previous_queue_time(
+def test_entering_running_starts_without_a_generation_start(
     seeded_session: Session, claim_cover: bool,
 ) -> None:
     job = create_job(seeded_session, JobType.COVER if claim_cover else JobType.GENERATE)
-    old_start = datetime(2020, 1, 1, tzinfo=timezone.utc)
-    job.started_at = old_start
-    job.running_since = old_start
+    job.started_at = datetime(2020, 1, 1, tzinfo=timezone.utc)
     seeded_session.commit()
 
     if claim_cover:
         assert job_queries.claim_next_cover_job(seeded_session).id == job.id
     else:
-        update_job_status(seeded_session, job.id, JobStatus.RUNNING)
+        update_job_status(
+            seeded_session, job.id, JobStatus.RUNNING, phase=GenerationPhase.LOADING_MODEL,
+        )
     seeded_session.commit()
     seeded_session.expire_all()
 
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == JobStatus.RUNNING
-    assert aware_timestamp(fetched.running_since) > old_start
-    assert fetched.running_since == fetched.heartbeat_at
+    assert fetched.generation_started_at is None
+
+
+def test_generation_start_is_the_first_generating_phase_after_each_running_entry(
+    seeded_session: Session,
+) -> None:
+    job = create_job(seeded_session, JobType.GENERATE)
+    earlier_start = datetime(2020, 1, 1, tzinfo=timezone.utc)
+
+    def generation_started_after(status: JobStatus, phase: GenerationPhase | None = None):
+        update_job_status(seeded_session, job.id, status, phase=phase)
+        seeded_session.commit()
+        seeded_session.expire_all()
+        started_at = get_job(seeded_session, job.id).generation_started_at
+        return None if started_at is None else aware_timestamp(started_at)
+
+    assert generation_started_after(JobStatus.RUNNING, GenerationPhase.LOADING_MODEL) is None
+    assert generation_started_after(JobStatus.RUNNING, GenerationPhase.WRITING) is not None
+    job.generation_started_at = earlier_start
+    seeded_session.commit()
+    assert generation_started_after(JobStatus.RUNNING, GenerationPhase.RENDERING) == earlier_start
+    assert generation_started_after(JobStatus.RUNNING) == earlier_start
+    assert generation_started_after(JobStatus.QUEUED) is None
+    assert generation_started_after(JobStatus.RUNNING) is None
+    assert generation_started_after(JobStatus.RUNNING, GenerationPhase.SAVING_TAKE) > earlier_start
+    assert generation_started_after(JobStatus.CANCELLED) is None
 
 
 def test_update_job_completed(seeded_session: Session) -> None:
@@ -863,7 +894,7 @@ def test_generation_eta_uses_elapsed_running_time_and_total_progress(
     job.status = JobStatus.RUNNING
     job.progress = progress
     job.started_at = now - timedelta(hours=1)
-    job.running_since = now - timedelta(seconds=elapsed) if elapsed is not None else None
+    job.generation_started_at = now - timedelta(seconds=elapsed) if elapsed is not None else None
     seeded_session.commit()
 
     response = JobResponse.from_orm(job, now=now)
@@ -893,7 +924,7 @@ def test_job_response_does_not_estimate_outside_running(
     job.current_epoch = 400
     job.train_epochs = 500
     job.training_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
-    job.running_since = job.training_started_at
+    job.generation_started_at = job.training_started_at
     job.progress = 0.8
     seeded_session.commit()
 
@@ -903,6 +934,20 @@ def test_job_response_does_not_estimate_outside_running(
     )
 
     assert response.remaining_time_estimate == remaining_time_estimate
+
+
+@pytest.mark.parametrize("status", list(JobStatus))
+def test_job_response_shows_the_phase_only_while_running(
+    seeded_session: Session, status: JobStatus,
+) -> None:
+    job = create_job(seeded_session, JobType.GENERATE)
+    job.status = status
+    job.phase = GenerationPhase.RENDERING
+    seeded_session.commit()
+
+    response = JobResponse.from_orm(job)
+
+    assert response.phase == (GenerationPhase.RENDERING if status == JobStatus.RUNNING else None)
 
 
 # ── Create generation + scores tests ─────────────────────────────────
@@ -2668,6 +2713,51 @@ def test_generation_progress_migration_preserves_existing_jobs(tmp_path: Path) -
         assert connection.execute(text(
             "SELECT progress FROM jobs WHERE id = 'existing'"
         )).scalar_one() == 0.25
+    engine.dispose()
+
+
+def test_generation_phase_migration_keeps_the_estimate_anchor_both_ways(tmp_path: Path) -> None:
+    import importlib
+
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.98acbb42010e_add_generation_phase_to_jobs"
+    )
+
+    url = f"sqlite:///{tmp_path / 'generation-phase.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO jobs (id, type, status, progress, started_at, running_since) "
+            "VALUES ('existing', 'generate', 'running', 0.36, CURRENT_TIMESTAMP, "
+            "'2030-01-01 00:00:00')"
+        ))
+        anchor = connection.execute(text(
+            "SELECT running_since FROM jobs WHERE id = 'existing'"
+        )).scalar_one()
+
+    command.upgrade(config, migration.revision)
+
+    columns = {column["name"] for column in inspect(engine).get_columns("jobs")}
+    assert {"phase", "generation_started_at"} <= columns
+    assert "running_since" not in columns
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT generation_started_at, phase FROM jobs WHERE id = 'existing'"
+        )).one() == (anchor, None)
+
+    command.downgrade(config, migration.down_revision)
+
+    columns = {column["name"] for column in inspect(engine).get_columns("jobs")}
+    assert not {"phase", "generation_started_at"} & columns
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT running_since FROM jobs WHERE id = 'existing'"
+        )).scalar_one() == anchor
     engine.dispose()
 
 
