@@ -17,12 +17,10 @@
 		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
 		TAKES_ERROR,
-		TAKES_GENERATING_LABEL,
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
 		TRANSPORT_PLAY_LABEL,
-		TRANSPORT_PAUSE_LABEL,
-		TAKES_QUEUED_LABEL
+		TRANSPORT_PAUSE_LABEL
 	} from '$lib/constants';
 	import {
 		nowPlayingTakeLabel,
@@ -50,12 +48,13 @@
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
 	import { handleDeleteVersion } from '$lib/stores/editor';
-	import { bulkDeleteGenerations, cancelJob } from '$lib/api/client';
+	import { bulkDeleteGenerations } from '$lib/api/client';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
+	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import TakeMenu from './TakeMenu.svelte';
 
 	interface Props {
@@ -268,15 +267,6 @@
 		}
 	}
 
-	async function onCancelGenerateJob(): Promise<void> {
-		if (!generateJob) return;
-		try {
-			await cancelJob(generateJob.id);
-		} catch {
-			/* best effort */
-		}
-	}
-
 	async function confirmDeleteVersion(): Promise<void> {
 		const group = deleteVersionFor;
 		deleteVersionFor = null;
@@ -289,7 +279,17 @@
 			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
 		}
 	}
+
+	// The running/queued job is what GenerationStatusSlot itself renders on
+	// (mirrors its own gate on the same job prop): a song's very first
+	// generation has zero takes yet, so the empty-state branches below must
+	// not hide the slot behind "No takes yet" while one is in flight.
+	const jobRunning = $derived(
+		generateJob !== null && (generateJob.status === 'queued' || generateJob.status === 'running')
+	);
 </script>
+
+<GenerationStatusSlot job={generateJob} {latestVersionNumber} />
 
 {#if loadStatus === 'error' && song.generations.length === 0}
 	<div class="empty" role="alert">
@@ -300,7 +300,7 @@
 	</div>
 {:else if loadStatus === 'loading' && song.generations.length === 0}
 	<div class="empty" role="status">{TAKES_LOADING}</div>
-{:else if song.generations.length === 0 && !dirty}
+{:else if song.generations.length === 0 && !dirty && !jobRunning}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
 	<div class="takes-list">
@@ -316,27 +316,6 @@
 		{#if dirty}
 			<div class="draft-banner">
 				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
-			</div>
-		{/if}
-
-		{#if generateJob && (generateJob.status === 'queued' || generateJob.status === 'running')}
-			<div class="generating-row">
-				<span class="generating-label">
-					v{latestVersionNumber} · {TAKES_GENERATING_LABEL}
-					{#if generateJob.status === 'queued'}
-						{generateJob.queue_position
-							? `· ${TAKES_QUEUED_LABEL} #${generateJob.queue_position}`
-							: `· ${TAKES_QUEUED_LABEL}`}
-						{#if generateJob.queue_reason}
-							· {generateJob.queue_reason}
-						{/if}
-					{/if}
-				</span>
-				<span class="generating-bar">
-					<span class="generating-fill" style="width: {Math.round(generateJob.progress * 100)}%"
-					></span>
-				</span>
-				<button type="button" class="generating-cancel" onclick={onCancelGenerateJob}>×</button>
 			</div>
 		{/if}
 
@@ -598,55 +577,6 @@
 		border-radius: var(--card-radius);
 		font-size: 0.8rem;
 		color: #d8b020;
-	}
-
-	.generating-row {
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		padding: 0.5rem 0.8rem;
-		background: var(--surface);
-		border: 1px dashed var(--border);
-		border-radius: var(--card-radius);
-		font-size: 0.75rem;
-		color: var(--text-muted);
-	}
-
-	.generating-label {
-		flex-shrink: 0;
-		font-family: var(--font-display);
-		text-transform: uppercase;
-		letter-spacing: 0.4px;
-	}
-
-	.generating-bar {
-		flex: 1;
-		height: 4px;
-		background: var(--border);
-		border-radius: 2px;
-		overflow: hidden;
-	}
-
-	.generating-fill {
-		display: block;
-		height: 100%;
-		background: var(--score-ok);
-		transition: width 0.3s ease;
-	}
-
-	.generating-cancel {
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: 3px;
-		color: var(--text-muted);
-		cursor: pointer;
-		line-height: 1;
-		padding: 0.1rem 0.35rem;
-	}
-
-	.generating-cancel:hover {
-		color: var(--score-bad);
-		border-color: var(--score-bad);
 	}
 
 	.version-section {

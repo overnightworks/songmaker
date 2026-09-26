@@ -21,11 +21,13 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 	updateSong: vi.fn(),
 	generateSong: vi.fn(),
 	repaintGeneration: vi.fn(),
-	coverGeneration: vi.fn()
+	coverGeneration: vi.fn(),
+	cancelJob: vi.fn()
 }));
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 import {
+	cancelJob,
 	coverGeneration,
 	fetchHealth,
 	fetchVersions,
@@ -41,7 +43,7 @@ import {
 	setDraftPrompt,
 	versions
 } from './editor';
-import { generate, generateAction } from './generateAction';
+import { cancelGeneration, generate, generateAction, progressPercent } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
 import { songList } from './libraryData';
@@ -196,21 +198,17 @@ describe('generate action presentation', () => {
 	});
 
 	it.each([100, 'calculating', null] as const)(
-		'exposes live progress and remaining time %s',
+		'exposes live progress and remaining time %s, scaled from the 0..1 job fraction to a percent',
 		(remaining) => {
-			activeJobs.set([
-				{
-					songId: 's1',
-					job: {
-						...queuedJob,
-						status: 'running',
-						take_index: 1,
-						take_count: 2,
-						progress: 36,
-						remaining_time_estimate: remaining
-					}
-				}
-			]);
+			const job: JobItem = {
+				...queuedJob,
+				status: 'running',
+				take_index: 1,
+				take_count: 2,
+				progress: 0.36,
+				remaining_time_estimate: remaining
+			};
+			activeJobs.set([{ songId: 's1', job }]);
 			expect(get(generateAction).state).toEqual({
 				kind: 'generating',
 				jobId: 'job1',
@@ -219,6 +217,7 @@ describe('generate action presentation', () => {
 				progress: 36,
 				remaining
 			});
+			expect(progressPercent(job)).toBe(36);
 		}
 	);
 
@@ -355,5 +354,20 @@ describe('generate action execution', () => {
 		await generate();
 		expect(generateSong).not.toHaveBeenCalled();
 		expect(get(generateAction).state.kind).not.toBe('generating');
+	});
+});
+
+describe('cancelGeneration', () => {
+	it('cancels the job, the single owner both the Generate button and the Takes status slot call', async () => {
+		vi.mocked(cancelJob).mockResolvedValue({ ...queuedJob, status: 'cancelled' });
+		await cancelGeneration('job1');
+		expect(cancelJob).toHaveBeenCalledExactlyOnceWith('job1');
+		expect(addToast).not.toHaveBeenCalled();
+	});
+
+	it('surfaces a cancellation failure as a toast', async () => {
+		vi.mocked(cancelJob).mockRejectedValue(new Error('Worker unavailable'));
+		await cancelGeneration('job1');
+		expect(addToast).toHaveBeenCalledWith('Worker unavailable', 'error');
 	});
 });

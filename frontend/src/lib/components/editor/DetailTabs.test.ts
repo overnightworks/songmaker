@@ -1,12 +1,23 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import { detailTab } from '$lib/stores/navigation';
+
+const action = await vi.hoisted(async () => {
+	const { writable } = await import('svelte/store');
+	return writable<{ state: GenerateState }>({ state: { kind: 'idle', mode: 'generate' } });
+});
+vi.mock('$lib/stores/generateAction', () => ({ generateAction: action }));
+
+import type { GenerateState } from '$lib/stores/generateAction';
 import DetailTabs from './DetailTabs.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-beforeEach(() => detailTab.set('write'));
+beforeEach(() => {
+	detailTab.set('write');
+	action.set({ state: { kind: 'idle', mode: 'generate' } });
+});
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
@@ -57,5 +68,28 @@ describe('DetailTabs', () => {
 		expect(document.activeElement).toBe(next);
 		expect(next.tabIndex).toBe(0);
 		expect(current.tabIndex).toBe(-1);
+	});
+
+	it.each([
+		['queued', { kind: 'queued', jobId: 'job1', position: 3, reason: null }, true],
+		[
+			'generating',
+			{
+				kind: 'generating',
+				jobId: 'job1',
+				takeIndex: 1,
+				takeCount: 2,
+				progress: 36,
+				remaining: null
+			},
+			true
+		],
+		['idle', { kind: 'idle', mode: 'generate' }, false],
+		['disabled', { kind: 'disabled', mode: 'generate', reason: 'No models' }, false],
+		['failed', { kind: 'failed', mode: 'generate', cause: 'Worker error' }, false]
+	] as const)('carries a ring on Takes exactly while %s', async (_label, state, expectRing) => {
+		action.set({ state: state as GenerateState });
+		const tabs = await render();
+		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
 	});
 });

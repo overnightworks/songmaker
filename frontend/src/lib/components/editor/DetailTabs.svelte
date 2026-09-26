@@ -5,6 +5,7 @@
 		EDITOR_TAB_WRITE_LABEL,
 		EDITOR_TABS_LABEL
 	} from '$lib/constants';
+	import { generateAction } from '$lib/stores/generateAction';
 
 	interface Props {
 		takeCount: number;
@@ -12,6 +13,9 @@
 
 	let { takeCount }: Props = $props();
 	const tabs: readonly DetailTab[] = ['write', 'takes'];
+	const jobRunning = $derived(
+		$generateAction.state.kind === 'queued' || $generateAction.state.kind === 'generating'
+	);
 
 	function onKeydown(event: KeyboardEvent): void {
 		let tab: DetailTab;
@@ -55,6 +59,7 @@
 				{EDITOR_TAB_WRITE_LABEL}
 			{:else}
 				{EDITOR_TAB_TAKES_LABEL} <span class="count">({takeCount})</span>
+				{#if jobRunning}<span class="ring" aria-hidden="true"></span>{/if}
 			{/if}
 		</button>
 	{/each}
@@ -71,6 +76,9 @@
 	}
 
 	button {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
 		min-height: var(--hitbox-frequent);
 		padding: var(--btn-padding-pill);
 		background: none;
@@ -86,6 +94,14 @@
 
 	.count {
 		color: var(--text-disabled);
+	}
+
+	.ring {
+		width: 9px;
+		height: 9px;
+		flex: none;
+		border: 2px solid var(--score-ok);
+		border-radius: 50%;
 	}
 
 	button.active,
