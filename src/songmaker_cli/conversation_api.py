@@ -522,7 +522,7 @@ class ChatTurnFrames:
 _running_chat_turns: set[asyncio.Task[None]] = set()
 
 
-def fail_chat_turns_ended_by_restart(db_factory: sessionmaker[Session]) -> int:
+def fail_chat_turns_ended_by_restart(db_factory: sessionmaker[Session]) -> None:
     """At web-process startup, fail every chat job a previous process left active.
 
     A turn runs only as a task of the web process that started it, so none
@@ -532,9 +532,8 @@ def fail_chat_turns_ended_by_restart(db_factory: sessionmaker[Session]) -> int:
     (#1014).
     """
     with db_factory() as session:
-        recovered = recover_stale_jobs_by_type(session, {JobType.CHAT: JOB_ACTIVE_STATUSES})
+        recover_stale_jobs_by_type(session, {JobType.CHAT: JOB_ACTIVE_STATUSES})
         session.commit()
-    return recovered.get(JobType.CHAT, 0)
 
 
 def _start_chat_turn(
