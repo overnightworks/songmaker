@@ -1131,6 +1131,25 @@ describe('resource sync owner', () => {
 		expect(sources).toHaveLength(beforeError + 1);
 	});
 
+	it('reopens a dropped live stream at once when the network comes back, resuming after the last seen event', async () => {
+		vi.useFakeTimers();
+		const { controller, sources } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '4' }, '4');
+		await flush();
+		await controller.waitForReady();
+
+		latestSource(sources).error();
+		await flush();
+		expect(sources).toHaveLength(1);
+		window.dispatchEvent(new Event('online'));
+
+		expect(sources).toHaveLength(2);
+		expect(latestSource(sources).url).toBe(`${RESOURCE_EVENT_STREAM_PATH}?last_event_id=4`);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources).toHaveLength(2);
+	});
+
 	it('resumes a dropped live stream after the last seen event and applies the take it missed', async () => {
 		vi.useFakeTimers();
 		const serverTakes = ['g5'];

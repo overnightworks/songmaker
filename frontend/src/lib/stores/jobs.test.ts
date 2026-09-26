@@ -31,6 +31,7 @@ import {
 import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
 import {
+	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
@@ -252,16 +253,16 @@ describe('jobs store', () => {
 
 	it('removes job after max connection errors', async () => {
 		trackJob(makeJob(), {});
-		// One error per connection: each of the first 9 closes the failing
-		// connection and reopens a new one after its backoff delay; the 10th
-		// gives up instead of reopening.
-		for (let i = 0; i < 9; i++) {
+		// One error per connection: each error before the limit closes the
+		// failing connection and reopens a new one after its backoff delay;
+		// the error at the limit gives up instead of reopening.
+		for (let i = 0; i < JOB_STREAM_MAX_CONNECTION_ERRORS - 1; i++) {
 			const source = latestSource();
 			source.simulateError();
 			expect(source.closed).toBe(true);
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		}
-		expect(MockEventSource.instances).toHaveLength(10);
+		expect(MockEventSource.instances).toHaveLength(JOB_STREAM_MAX_CONNECTION_ERRORS);
 		const last = latestSource();
 		last.simulateError();
 		expect(last.closed).toBe(true);
@@ -320,6 +321,30 @@ describe('jobs store', () => {
 			SSE_RECONNECT_BASE_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO)
 		);
 		expect(MockEventSource.instances).toHaveLength(4);
+	});
+
+	it('reopens a waiting job stream at once when the network comes back and reports its end', async () => {
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource().simulateError();
+		expect(MockEventSource.instances).toHaveLength(2);
+
+		window.dispatchEvent(new Event('online'));
+		expect(MockEventSource.instances).toHaveLength(3);
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+
+		expect(get(activeJobs)).toEqual([]);
+		expect(mockRequestSongRefresh).toHaveBeenCalledWith('song-1');
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(3);
+	});
+
+	it('leaves a live job stream alone when the window regains focus', () => {
+		trackJob(makeJob(), {});
+		window.dispatchEvent(new Event('focus'));
+		expect(MockEventSource.instances).toHaveLength(1);
+		expect(latestSource().closed).toBe(false);
 	});
 
 	it('removeJob cancels a pending reconnect', async () => {
