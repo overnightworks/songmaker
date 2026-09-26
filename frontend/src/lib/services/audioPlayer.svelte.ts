@@ -47,7 +47,7 @@ const RECOVERY_SEEK_BACK_SECONDS = 0.75;
 // this many still samples in a row as a stall.
 const PROGRESS_CHECK_MS = 1000;
 const STILL_CHECKS_BEFORE_RECOVERY = 4;
-// A take that has played on for as long as a freeze takes to detect has
+// Playback that has played on for as long as a freeze takes to detect has
 // recovered; its next freeze is a new one, not a failed recovery.
 const STEADY_CHECKS_BEFORE_RECOVERY_BUDGET_RESET = STILL_CHECKS_BEFORE_RECOVERY;
 
@@ -463,10 +463,6 @@ class AudioPlayer {
 		el.addEventListener('playing', () => {
 			this.clearStallRecoveryTimer();
 			this.startProgressWatchdog(el);
-			// Healthy playback resets the stream recovery budget: on a long ride
-			// each network blip may recover, as long as audio actually resumes
-			// between blips.
-			if (this.streamEngine.active) this.recoveryAttempts = 0;
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});

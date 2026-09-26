@@ -465,22 +465,36 @@ describe('frozen-clock watchdog', () => {
 		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
-	it.each([
+	const playbackModes = [
+		{ mode: 'a single take', loadMode: () => {} },
 		{
-			name: 'recovers a third freeze by itself when the take played on in between',
-			playOnSeconds: 10,
-			afterThirdFreeze: { status: 'loading', error: null }
-		},
-		{
-			name: 'offers Retry on a third freeze when the recoveries fail back to back',
-			playOnSeconds: 0,
-			afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+			mode: 'a queue stream',
+			loadMode: () => audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false })
 		}
-	])('$name', ({ playOnSeconds, afterThirdFreeze }) => {
+	];
+
+	it.each(
+		playbackModes.flatMap(({ mode, loadMode }) => [
+			{
+				name: `recovers a third freeze of ${mode} by itself when it played on in between`,
+				loadMode,
+				playOnSeconds: 10,
+				afterThirdFreeze: { status: 'loading', error: null }
+			},
+			{
+				name: `offers Retry on a third freeze of ${mode} when the recoveries fail back to back`,
+				loadMode,
+				playOnSeconds: 0,
+				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+			}
+		])
+	)('$name', async ({ loadMode, playOnSeconds, afterThirdFreeze }) => {
+		loadMode();
 		startPlayingAt(40);
 		for (let recovery = 1; recovery <= 2; recovery += 1) {
 			advanceSeconds(5);
 			expect(audioPlayer.status).toBe('loading');
+			await vi.advanceTimersByTimeAsync(0);
 			startPlayingAt(fakeAudio.currentTime);
 			advanceSeconds(playOnSeconds, 1);
 		}
