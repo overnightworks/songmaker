@@ -436,7 +436,7 @@ def test_generate_rejects_a_worker_held_for_lora_training(tmp_path: Path) -> Non
     assert resp.json()["detail"] == "GPU is held for LoRA training"
 
 
-def test_generate_returns_task_id(tmp_path: Path) -> None:
+def test_generate_returns_a_task_that_starts_loading_its_model(tmp_path: Path) -> None:
     deps, _ = _make_deps(tmp_path)
     app = create_app(deps)
     with TestClient(app) as client:
@@ -446,8 +446,10 @@ def test_generate_returns_task_id(tmp_path: Path) -> None:
             json={"mode": "sft", "config": {"prompt": "test", "lyrics": ""}},
             headers=_INTERNAL_HEADERS,
         )
+        task = client.get(f"/tasks/{resp.json()['task_id']}", headers=_INTERNAL_HEADERS)
     assert resp.status_code == 200
     assert resp.json()["task_id"].startswith("gen-")
+    assert task.json()["phase"] == "loading_model"
 
 
 def _full_ace_step_config_payload() -> dict[str, Any]:
