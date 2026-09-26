@@ -62,6 +62,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
+    JOB_ACTIVE_STATUSES,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
     MEMORY_SCOPE_USER,
@@ -101,6 +102,7 @@ from songmaker_cli.db.queries import (
     list_messages,
     list_songs,
     recent_conversations,
+    recover_stale_jobs_by_type,
     update_job_status,
     upsert_album_memory,
     upsert_song_memory,
@@ -518,6 +520,21 @@ class ChatTurnFrames:
 
 
 _running_chat_turns: set[asyncio.Task[None]] = set()
+
+
+def fail_chat_turns_ended_by_restart(db_factory: sessionmaker[Session]) -> int:
+    """At web-process startup, fail every chat job a previous process left active.
+
+    A turn runs only as a task of the web process that started it, so none
+    survives a restart. Failing its job at once lets the returning panel show
+    the unanswered message with Try again and accept a new one, instead of
+    following a turn that no longer runs until the stale-job reaper notices
+    (#1014).
+    """
+    with db_factory() as session:
+        recovered = recover_stale_jobs_by_type(session, {JobType.CHAT: JOB_ACTIVE_STATUSES})
+        session.commit()
+    return recovered.get(JobType.CHAT, 0)
 
 
 def _start_chat_turn(
@@ -1001,7 +1018,8 @@ def _turn_running(session: Session, conversation: Conversation, user: Authentica
 def _running_turn_count(session: Session, user: AuthenticatedUser) -> int:
     """Each running co-writer turn holds an active chat job.
 
-    The stale-job reaper ends the job of a turn whose process died.
+    A web-process restart fails the jobs its turns held; the stale-job reaper
+    ends any other whose heartbeat stopped.
     """
     return count_user_active_jobs(session, user.id, JobType.CHAT)
 

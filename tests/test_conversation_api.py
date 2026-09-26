@@ -474,6 +474,35 @@ def test_the_chat_job_decides_whether_a_turn_is_running(
     assert body["turn_running"] is turn_running
 
 
+@pytest.mark.parametrize("chat_job_status", ["queued", "running"])
+def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
+    tmp_path, mock_arq_pool, chat_job_status,
+):
+    """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
+    from conftest import login_and_csrf, make_test_app
+    from webauth.passwords import hash_password
+
+    from songmaker_cli.db.queries import create_user
+
+    def _seed_a_turn_the_restart_interrupted(session) -> None:
+        musician = create_user(session, "musician", hash_password("musician-pass"), role="user")
+        session.add(Conversation(id="conv-1", user_id=musician.id))
+        session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
+        session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
+
+    c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
+    with c:
+        login_and_csrf(c, "musician", "musician-pass")
+        body = c.get("/api/conversations/conv-1").json()
+
+    assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
+    assert body["turn_running"] is False
+    with factory() as session:
+        assert [job.error_type for job in session.query(Job).filter_by(type="chat")] == [
+            "server_restart",
+        ]
+
+
 def test_a_turn_stamps_its_events_with_the_chat_job_and_streams_none_of_it(client):
     """The turn's own job id reaches the deepest event producer and stops there.
 

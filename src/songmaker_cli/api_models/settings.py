@@ -312,7 +312,7 @@ class ConversationMessagesResponse(BaseModel):
     turn_running: bool = Field(
         description=(
             "A co-writer turn in this conversation is still running on the server; "
-            "its chat job decides, and the stale-job reaper ends a turn whose process died."
+            "its chat job decides, and a web-process restart ends a turn that process ran."
         ),
     )
 

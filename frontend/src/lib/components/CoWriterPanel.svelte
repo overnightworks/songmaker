@@ -271,7 +271,7 @@
 	/**
 	 * Wait out a turn the server still runs — started by a panel since left or
 	 * by another tab — and show how it ended. The server's chat job decides
-	 * whether a turn runs; the stale-job reaper ends one whose process died (#1014).
+	 * whether a turn runs; a web-process restart ends one that process ran (#1014).
 	 */
 	async function followRunningTurn(conversationId: string): Promise<void> {
 		const placeholderIndex = messages.length;
