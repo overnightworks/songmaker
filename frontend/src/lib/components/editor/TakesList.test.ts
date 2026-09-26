@@ -8,7 +8,11 @@ import {
 	TAKE_ARCHIVED_TITLE,
 	TAKE_PLAYLIST_LABEL,
 	TAKE_RESCORING_LABEL,
-	TAKES_MOBILE_HINT
+	TAKES_EMPTY,
+	TAKES_ERROR,
+	TAKES_LOADING,
+	TAKES_MOBILE_HINT,
+	TAKES_RETRY_LABEL
 } from '$lib/constants';
 import {
 	clearHitboxStyles,
@@ -1060,6 +1064,68 @@ describe('TakesList score pill', () => {
 			})
 		});
 		expect(target.querySelector('.score-badge')).toBeNull();
+	});
+});
+
+describe('TakesList load states', () => {
+	it.each([
+		{
+			name: 'empty',
+			loadStatus: 'ready' as const,
+			assert: (target: HTMLElement) => {
+				expect(target.textContent).toContain(TAKES_EMPTY);
+			}
+		},
+		{
+			name: 'loading',
+			loadStatus: 'loading' as const,
+			assert: (target: HTMLElement) => {
+				expect(target.textContent).toContain(TAKES_LOADING);
+				expect(target.querySelectorAll('.skeleton-row')).toHaveLength(3);
+			}
+		},
+		{
+			name: 'error',
+			loadStatus: 'error' as const,
+			assert: (target: HTMLElement) => {
+				expect(target.textContent).toContain(TAKES_ERROR);
+			}
+		}
+	])('draws the $name state instead of a blank area', async ({ loadStatus, assert }) => {
+		const { target } = await render({ song: song({}), loadStatus });
+		assert(target);
+	});
+
+	it('offers a retry icon named "Try again" that calls onretry when takes failed to load', async () => {
+		const onretry = vi.fn();
+		const { target } = await render({ song: song({}), loadStatus: 'error', onretry });
+		const retry = target.querySelector<HTMLButtonElement>('.retry-btn');
+		expect(retry?.getAttribute('aria-label')).toBe(TAKES_RETRY_LABEL);
+		retry?.click();
+		expect(onretry).toHaveBeenCalledOnce();
+	});
+
+	it('does not offer the tap-play hint on Takes while the first generation has zero takes yet', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query.includes('coarse'),
+				media: query,
+				onchange: null,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn(),
+				addListener: vi.fn(),
+				removeListener: vi.fn(),
+				dispatchEvent: vi.fn()
+			}))
+		);
+		const { target } = await render({
+			song: song({}),
+			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 }
+		});
+		expect(target.querySelector('.status-slot')).not.toBeNull();
+		expect(target.textContent).not.toContain(TAKES_MOBILE_HINT);
+		vi.unstubAllGlobals();
 	});
 });
 
