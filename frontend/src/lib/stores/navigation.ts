@@ -574,7 +574,7 @@ const historyLayers: HistoryLayer[] = [];
 // an entry whose library is already showing, so they apply nothing.
 let ownLayerStepBacks = 0;
 
-export function registerHistoryLayer(id: string, close: () => void): () => void {
+function registerHistoryLayer(id: string, close: () => void): () => void {
 	const base = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(base)) return () => undefined;
 	const layer: HistoryLayer = { id, close, base };
