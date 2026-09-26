@@ -448,6 +448,7 @@ class AudioPlayer {
 				this.updateStreamPosition(el.currentTime);
 				return;
 			}
+			if (this.pendingRecoverySeek !== null) return;
 			if (Math.abs(el.currentTime - this.lastObservedTime) > 0.05) {
 				this.lastObservedTime = el.currentTime;
 				this.clearStallRecoveryTimer();
@@ -519,12 +520,17 @@ class AudioPlayer {
 		return `${url}${url.includes('?') ? '&' : '?'}recover=${token}`;
 	}
 
+	// A download that still grows is a slow network, not a dead one: reloading
+	// it would throw its buffer away and fetch the take from byte 0 again.
 	private scheduleStallRecovery(): void {
-		if (this.stallRecoveryTimer || !this.current || !this.audio) return;
+		const el = this.audio;
+		if (this.stallRecoveryTimer || !this.current || !el) return;
+		const bufferedAtStall = bufferedUntil(el);
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
 			if (this.status !== 'buffering') return;
-			this.recoverFromStall('stall-timeout');
+			if (bufferedUntil(el) > bufferedAtStall) this.scheduleStallRecovery();
+			else this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
 	}
 
@@ -587,8 +593,7 @@ class AudioPlayer {
 			void this.recoverStream(reason);
 			return;
 		}
-		const position = this.audio?.currentTime || this.currentTime;
-		this.reloadAt(Math.max(0, position - RECOVERY_SEEK_BACK_SECONDS), reason);
+		if (this.audio) this.reloadAt(this.reachedPosition(this.audio), reason);
 	}
 
 	private pauseElement(el: HTMLAudioElement): void {
@@ -642,17 +647,25 @@ class AudioPlayer {
 		)
 			return false;
 
-		const observedTime = el.currentTime || this.currentTime || this.lastObservedTime;
-		if (observedTime < 1) return false;
+		const reachedTime = this.reachedPosition(el);
+		if (reachedTime < 1) return false;
 
 		this.recoveryAttempts += 1;
-		this.reloadAt(Math.max(0, observedTime - RECOVERY_SEEK_BACK_SECONDS), reason);
+		this.reloadAt(reachedTime, reason);
 		return true;
 	}
 
-	private reloadAt(seekTime: number, reason: RecoveryReason): void {
+	// A reload restarts the element clock at 0 before its seek lands; until
+	// then the player's own position is the one the listener reached.
+	private reachedPosition(el: HTMLAudioElement): number {
+		return el.currentTime || this.currentTime || this.lastObservedTime;
+	}
+
+	private reloadAt(reachedTime: number, reason: RecoveryReason): void {
 		const el = this.audio;
 		if (!el || !this.current || !this.currentUrl) return;
+		const seekTime =
+			this.pendingRecoverySeek ?? Math.max(0, reachedTime - RECOVERY_SEEK_BACK_SECONDS);
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = seekTime;
 		this.currentTime = seekTime;
@@ -828,6 +841,11 @@ class AudioPlayer {
 		this.current = current;
 		this.callbacks.onCurrentChange?.(current);
 	}
+}
+
+function bufferedUntil(el: HTMLAudioElement): number {
+	const ranges = el.buffered;
+	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
 function decodeMediaError(err: MediaError): string {
