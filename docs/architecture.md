@@ -1296,6 +1296,28 @@ never been observed; with a newer observation, it is `alive`.
   and closes its subscription. It does not remotely cancel the ACE-Step task,
   which can continue running after that local job ends.
 
+  A generate job's percent comes from ACE-Step's own `progress` value, never
+  from its free-text `progress_text` (which carries whatever the server logged
+  last — checkpoint-loading bars, LM chunk counters — and made the percent
+  jump and fall back). `acestep_engine/progress.py` reads the value against
+  the fork's fixed marks (0.1 writing starts, 0.51 rendering starts, 0.99
+  rendering ends) as an `AceStepPhase` plus the fraction within it; the
+  worker's `TaskStore` carries both on every generate event (a generate task
+  is born in `writing`); the scheduler hands them on as `(phase, fraction)`
+  and announces `loading_model` before a real `/load_model`. A generate
+  progress event without a known phase is logged and dropped — the take keeps
+  running and the job keeps its last value. In the Music-Worker,
+  `GenerationProgressTracker` (`jobs/generation.py`) is the single writer of a
+  running generate job's progress, because `update_job_status` resets progress
+  whenever a write omits it. It maps the phase to `GenerationPhase` and
+  combines `(take + phase start + phase share × fraction) / take count`, with
+  shares writing 0.55, rendering 0.15 and saving the take 0.30 (calibrated on
+  a traced warm take; loading a model has none). The value only rises, a phase
+  change is written at once while writes within a phase are throttled to one
+  per two seconds, and saving the take sits at its phase start, so the job
+  stays below 1.0 until `_finalize_generation_job` writes 1.0 after the take
+  row exists.
+
   `download_model_on_worker()` refreshes its job heartbeat through both
   `_on_progress` and `_on_heartbeat` for every consumed SSE event. The worker
   emits download progress from its 2-second poll. `DOWNLOAD_MAX_ATTEMPTS`
