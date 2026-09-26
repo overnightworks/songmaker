@@ -10,9 +10,9 @@ import type { PlaylistDetailItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import {
 	collectionPlayLabel,
-	collectionRowPlayLabel,
 	collectionShuffleLabel,
 	LIBRARY_RETRY_LABEL,
+	RAIL_PLAYING_MARKER_LABEL,
 	playlistEntryOverflowLabel
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
@@ -65,6 +65,7 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
+import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
@@ -431,17 +432,6 @@ describe('PlaylistDetailView row actions', () => {
 		expect(get(nowPlayingPanel)).toBe('take');
 	});
 
-	it('plays and nothing more from the row play button', async () => {
-		setShuffle(true);
-		const target = await renderTwoEntryPlaylist();
-
-		target.querySelectorAll<HTMLElement>('.entry-row .entry-play')[1].click();
-		await tick();
-
-		expectQueueStartsAtSecondEntry();
-		expect(get(nowPlayingOpen)).toBe(false);
-	});
-
 	it('never pauses the take its row body is clicked on while that take plays', async () => {
 		const target = await renderTwoEntryPlaylist();
 		const row = target.querySelectorAll<HTMLElement>('.entry-row')[1];
@@ -456,21 +446,27 @@ describe('PlaylistDetailView row actions', () => {
 		expect(get(nowPlayingOpen)).toBe(true);
 	});
 
-	it('pauses the playing entry from its play button instead of restarting it', async () => {
-		const target = await renderTwoEntryPlaylist();
+	it.each([
+		['playing', true],
+		['paused', false]
+	] as const)(
+		'marks the row the transport holds while %s, and only that row',
+		async (status, marked) => {
+			const target = await renderTwoEntryPlaylist();
+			const [tide, ebb] = target.querySelectorAll<HTMLElement>('.entry-row');
+			requireElement<HTMLButtonElement>(ebb, '.entry-info').click();
+			await tick();
+			audioPlayer.status = status;
+			await tick();
 
-		const play = target.querySelectorAll<HTMLElement>('.entry-row .entry-play')[1];
-		play.click();
-		await tick();
-		vi.mocked(audioPlayer.load).mockClear();
-		play.click();
-		await tick();
+			expect(findElementByRoleAndName(ebb, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(marked);
+			expect(ebb.classList.contains('current')).toBe(true);
+			expect(findElementByRoleAndName(tide, 'img', RAIL_PLAYING_MARKER_LABEL)).toBeNull();
+			expect(tide.classList.contains('current')).toBe(false);
+		}
+	);
 
-		expect(audioPlayer.status).toBe('paused');
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-	});
-
-	it('moves Move up/down and Remove into the … menu instead of inline, keeping only Play and … inline', async () => {
+	it('moves Move up/down and Remove into the … menu instead of inline, keeping only the row and … inline', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		openPlaylistDetail(
 			detail({
@@ -501,7 +497,7 @@ describe('PlaylistDetailView row actions', () => {
 		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
 	});
 
-	it('names the row play button and its … menu after the song they act on', async () => {
+	it('carries no play glyph: the row plays, and its … menu is named after the song', async () => {
 		openPlaylistDetail(
 			detail({
 				...populatedPlaylistDefaults(),
@@ -514,9 +510,10 @@ describe('PlaylistDetailView row actions', () => {
 		await tick();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
-		expect(requireElement(row, '.entry-play').getAttribute('aria-label')).toBe(
-			collectionRowPlayLabel('Tide')
-		);
+		expect(Array.from(row.querySelectorAll('button')).map((button) => button.className)).toEqual([
+			expect.stringContaining('entry-info'),
+			expect.stringContaining('overflow-btn')
+		]);
 		expect(requireElement(row, '.entry-info').textContent).toContain('Tide');
 		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
 			playlistEntryOverflowLabel('Tide')
