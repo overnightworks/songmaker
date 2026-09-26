@@ -46,8 +46,6 @@ import {
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
-	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
-	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
@@ -937,7 +935,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 // A row body never stops the music. The take a row stands for is left
 // running, and a paused one picks up where it stands rather than starting
 // over, so clicking the row that is already loaded only brings up the panel.
-// Pausing belongs to the row's own ▶ and to the transport.
+// Pausing belongs to a take row's own ▶ and to the transport.
 async function playTakeRow(row: {
 	alreadyLoaded: boolean;
 	start: () => void | Promise<void>;
@@ -968,7 +966,7 @@ export async function playPlaylistEntryAndShowNowPlaying(
 	const entry = playlist.entries[index];
 	await playTakeRow({
 		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
-		start: () => playPlaylistEntry(playlist, index)
+		start: () => playPlaylistFrom(playlist, index)
 	});
 }
 
@@ -1081,8 +1079,7 @@ export async function playPrevSong(): Promise<void> {
 // unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
 // own playStartIsCurrent check. A rejected load (e.g. 429) is left
-// uncaught here and propagates to the caller, which mirrors
-// playAlbumSong's handling of the same call.
+// uncaught here and propagates to the caller.
 async function firstPlayableAlbumTake(
 	albumId: string,
 	seq: number
@@ -1133,30 +1130,6 @@ export async function playAlbum(albumId: string): Promise<void> {
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, start.gen.id);
-}
-
-// A song row's play button inside an album. The row only knows the song's
-// `generation_count`; the takes themselves are loaded per song, so a row
-// tapped right after switching albums has none yet and must resolve one
-// before the album queue can be built from it. Silence is the failure this
-// replaces (#141): a song with no playable take now says so.
-export async function playAlbumSong(albumId: string, song: SongItem): Promise<void> {
-	try {
-		await ensureGenerationsLoaded(song.id);
-	} catch (err) {
-		addToast(albumSongsErrorMessage(err), 'error');
-		return;
-	}
-	const fresh = get(songList).find((item) => item.id === song.id) ?? song;
-	const gen = bestGen(fresh);
-	if (!gen) {
-		addToast(
-			fresh.generations.length > 0 ? ALBUM_ROW_ARCHIVED_ONLY_TOAST : ALBUM_ROW_NO_TAKE_TOAST,
-			'error'
-		);
-		return;
-	}
-	await playAlbumFromGeneration(albumId, fresh, gen);
 }
 
 async function playAlbumFromGeneration(
@@ -1265,18 +1238,6 @@ export function isPlaylistEntryCurrent(entry: PlaylistEntryItem): boolean {
 	return (
 		current?.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
 	);
-}
-
-// A playlist row's ▶: pause or resume the entry that is already playing,
-// otherwise start the playlist from it. Every playlist surface — the
-// interior, the rail — shares this, so a row means the same thing in both.
-export function playPlaylistEntry(playlist: PlaylistDetailItem, index: number): void {
-	const entry = playlist.entries[index];
-	if (entry && isPlaylistEntryCurrent(entry)) {
-		audioPlayer.toggle();
-		return;
-	}
-	playPlaylistFrom(playlist, index);
 }
 
 // A playlist entry's `position` is the playlist's order of record, so a
