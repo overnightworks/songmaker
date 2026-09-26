@@ -127,7 +127,13 @@ import {
 	selectNeighborSong,
 	selectSong
 } from './navigation';
-import { discardDraft, editLyrics, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import {
+	discardDraft,
+	editLyrics,
+	isDirty,
+	loadSongData,
+	setDraftLyrics
+} from '$lib/stores/editor';
 import { updateSong } from '$lib/api/client';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
@@ -1316,6 +1322,23 @@ describe('compact Now Playing owns one history entry', () => {
 			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
 		}
 	);
+
+	it('Back from the compact Now Playing leaves a dirty draft unsaved', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+		setDraftLyrics('unsaved edit');
+		const below = history.state.index;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+		history.back();
+
+		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+		expect(get(isDirty)).toBe(true);
+		expect(updateSong).not.toHaveBeenCalled();
+		discardDraft();
+	});
 
 	it('Back closes only the topmost history layer, and closing the one below steps back onto the library', async () => {
 		await openPlaylist('p1');
