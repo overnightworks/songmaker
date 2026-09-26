@@ -1,0 +1,8 @@
+claim_id = "fd26737aea8e41f6919e4edab1913192"
+agent = "claude-head"
+role = "builder"
+base = "3af8a94b9aac4ad59a8b5cba30e5b01cbe21d4d0"
+branch = "claude/issue-1014-cowriter-return"
+scope = ["frontend/e2e/cowriter-return.spec.ts", "frontend/src/lib/api/conversations.test.ts", "frontend/src/lib/api/conversations.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/constants.ts", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cowriter/history.py", "src/songmaker_cli/db/queries/chat.py", "src/songmaker_cli/db/queries/conversations.py", "tests/test_conversation_api.py", "tests/test_conversations.py"]
+opened_commit = "4a60e94a474fe4ce61e41504def9094ef82ff2c2"
+whole_reason = "the turn's persistence (backend) and the panel's re-sync (frontend) must change together"
