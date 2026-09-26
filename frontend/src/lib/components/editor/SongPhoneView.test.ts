@@ -9,6 +9,7 @@ import { watchTypingOnPhone } from '$lib/stores/ui';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { EDITOR_GENERATE_MODE_LABELS, EDITOR_GPU_OFFLINE_TITLE } from '$lib/constants';
 import type { GenerateState } from '$lib/stores/generateAction';
 
@@ -38,23 +39,6 @@ const snippets = {
 	cowriter: createRawSnippet(() => ({ render: () => '<div class="cowriter-screen">Chat</div>' })),
 	expiryDigest: createRawSnippet(() => ({ render: () => '<div>Expiry digest</div>' }))
 };
-
-// jsdom has no visual viewport; a phone's, shortened by the open on-screen
-// keyboard, is what sends the bars away while a field has focus.
-function openOnScreenKeyboard(): () => void {
-	Object.defineProperty(document.documentElement, 'clientHeight', {
-		configurable: true,
-		value: 844
-	});
-	Object.defineProperty(window, 'visualViewport', {
-		configurable: true,
-		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
-	});
-	return () => {
-		Reflect.deleteProperty(window, 'visualViewport');
-		Reflect.deleteProperty(document.documentElement, 'clientHeight');
-	};
-}
 
 beforeEach(() => {
 	generateAction.set(IDLE_GENERATE);

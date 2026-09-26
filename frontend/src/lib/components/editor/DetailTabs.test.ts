@@ -17,6 +17,7 @@ import DetailTabs from './DetailTabs.svelte';
 import detailTabsSource from './DetailTabs.svelte?raw';
 import { watchTypingOnPhone } from '$lib/stores/ui';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
@@ -31,23 +32,6 @@ afterEach(async () => {
 	detailTab.set('write');
 	clearComponentStyles();
 });
-
-// jsdom has no visual viewport; a phone's, shortened by the open on-screen
-// keyboard, is what sends the bars away while a field has focus.
-function openOnScreenKeyboard(): () => void {
-	Object.defineProperty(document.documentElement, 'clientHeight', {
-		configurable: true,
-		value: 844
-	});
-	Object.defineProperty(window, 'visualViewport', {
-		configurable: true,
-		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
-	});
-	return () => {
-		Reflect.deleteProperty(window, 'visualViewport');
-		Reflect.deleteProperty(document.documentElement, 'clientHeight');
-	};
-}
 
 async function render(takeCount = 4) {
 	const target = document.createElement('div');
