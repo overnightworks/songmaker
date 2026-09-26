@@ -256,16 +256,14 @@ export function writeLibraryHistory(
 	url: string,
 	mode: HistoryWriteMode
 ): Promise<void> {
-	const pathname = new URL(url, window.location.origin).pathname;
+	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
 	if (!crossesRoutes && queuedHistoryWrites === 0) {
 		applyHistoryWrite(state, url, mode);
 		return Promise.resolve();
 	}
-	plannedHistory = { pathname, state };
-	queuedHistoryWrites += 1;
-	const write = historyWrites.then(async () => {
+	return queueHistoryStep(state, pathname, async () => {
 		if (crossesRoutes) {
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
 			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
@@ -274,6 +272,34 @@ export function writeLibraryHistory(
 		}
 		applyHistoryWrite(state, url, mode);
 	});
+}
+
+// Steps back onto the entry below, whose state the caller already knows
+// (issue #1002: the compact Now Playing layer leaving for the library it
+// covers). A traversal is asynchronous -- it lands only when its `popstate`
+// fires -- so it joins the same queue as a crossing write: a write issued
+// straight afterwards (Go to song opening the playing song) lands on top of
+// the entry below instead of racing the traversal, and reads `landing` from
+// `currentLibraryHistoryState` meanwhile.
+export function backLibraryHistory(landing: LibraryHistoryState, url: string): Promise<void> {
+	return queueHistoryStep(landing, pathnameOf(url), traverseBack);
+}
+
+function traverseBack(): Promise<void> {
+	return new Promise((resolve) => {
+		window.addEventListener('popstate', () => resolve(), { once: true });
+		history.back();
+	});
+}
+
+function queueHistoryStep(
+	state: LibraryHistoryState,
+	pathname: string,
+	step: () => Promise<void>
+): Promise<void> {
+	plannedHistory = { pathname, state };
+	queuedHistoryWrites += 1;
+	const write = historyWrites.then(step);
 	historyWrites = write
 		.catch(() => undefined)
 		.finally(() => {
@@ -281,6 +307,10 @@ export function writeLibraryHistory(
 			if (queuedHistoryWrites === 0) plannedHistory = null;
 		});
 	return write;
+}
+
+function pathnameOf(url: string): string {
+	return new URL(url, window.location.origin).pathname;
 }
 
 // The library history entry as it will stand once every queued write has

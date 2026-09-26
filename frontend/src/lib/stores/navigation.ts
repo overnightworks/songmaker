@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
 import { isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
@@ -14,7 +14,10 @@ import {
 	selectedSong,
 	selectSong as playerSelectSong,
 	clearGenerationSelection as playerClearGeneration,
-	ensureGenerationsLoaded
+	closeNowPlaying,
+	ensureGenerationsLoaded,
+	nowPlayingDockable,
+	nowPlayingSurface
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
@@ -30,6 +33,7 @@ import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/const
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
+	backLibraryHistory,
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
@@ -549,6 +553,63 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
+// On a compact viewport the full Now Playing surface is a pushed screen, so
+// it owns one history entry of its own (issue #1002): the phone's Back then
+// closes it and leaves the library it covers exactly as it was -- no
+// workspace re-apply, no dirty-draft save -- instead of applying whatever
+// entry sits below that library while the overlay stays on top. The entry
+// repeats the library state and address it was opened on. Closing Now
+// Playing any other way (×, Done, Escape, Go to song, the viewport growing
+// room for the docked panel) steps back off that entry, so no stale copy of
+// the library is left for Back to land on. The docked panel and a desktop
+// full surface push nothing.
+const compactNowPlayingShown = derived(
+	[nowPlayingSurface, nowPlayingDockable],
+	([surface, dockable]) => surface === 'full' && !dockable
+);
+
+// The library entry the Now Playing layer sits on, for as long as the layer
+// is the top entry. Kept here rather than marked on the layer's own state:
+// every replace write snapshots the library afresh and would drop the mark.
+let nowPlayingLayerBase: LibraryHistoryState | null = null;
+// Set while the layer's own step back is on its way, so the popstate it
+// fires is recognised as ours and applies nothing.
+let leavingNowPlayingLayer = false;
+
+function followCompactNowPlaying(shown: boolean): void {
+	if (shown && !nowPlayingLayerBase) enterNowPlayingLayer();
+	else if (!shown && nowPlayingLayerBase) leaveNowPlayingLayer(nowPlayingLayerBase);
+}
+
+function enterNowPlayingLayer(): void {
+	const base = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(base)) return;
+	nowPlayingLayerBase = base;
+	void writeLibraryHistory({ ...base, index: base.index + 1 }, urlFromState(base), 'push');
+}
+
+function leaveNowPlayingLayer(base: LibraryHistoryState): void {
+	nowPlayingLayerBase = null;
+	leavingNowPlayingLayer = true;
+	void backLibraryHistory(base, urlFromState(base));
+}
+
+// A popstate arriving while the layer is the top entry has already left it:
+// Now Playing closes, and a step onto the library it was opened on keeps
+// that library as it stands. A longer jump (several entries back at once)
+// applies its own entry as usual.
+function popsNowPlayingLayer(state: unknown): boolean {
+	if (leavingNowPlayingLayer) {
+		leavingNowPlayingLayer = false;
+		return true;
+	}
+	const base = nowPlayingLayerBase;
+	if (!base) return false;
+	nowPlayingLayerBase = null;
+	closeNowPlaying();
+	return isLibraryHistoryState(state) && state.index === base.index;
+}
+
 // A cold tab's history.state carries no LibraryHistoryState until something
 // writes one -- this seeds a fresh root entry for that case, but only on a
 // plain `/` visit, which is the one library workspace path with no address
@@ -580,6 +641,7 @@ export function initNavigation(): () => void {
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
+		if (popsNowPlayingLayer(state)) return;
 		void (async () => {
 			await saveDirtyDraftBeforePopstate();
 			if (isLibraryHistoryState(state)) {
@@ -594,11 +656,17 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	return () => window.removeEventListener('popstate', onPopstate);
+	const stopFollowingNowPlaying = compactNowPlayingShown.subscribe(followCompactNowPlaying);
+	return () => {
+		window.removeEventListener('popstate', onPopstate);
+		stopFollowingNowPlaying();
+	};
 }
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
+	nowPlayingLayerBase = null;
+	leavingNowPlayingLayer = false;
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
 	addressedSong = null;

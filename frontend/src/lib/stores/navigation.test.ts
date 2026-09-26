@@ -21,7 +21,16 @@ import {
 } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList, updateSongInList } from '$lib/stores/libraryData';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import {
+	closeNowPlaying,
+	dockNowPlaying,
+	expandNowPlaying,
+	nowPlayingDockable,
+	nowPlayingOpen,
+	openNowPlaying,
+	selectedGenerationId,
+	selectedSongId
+} from '$lib/stores/player';
 import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/stores/playlists';
 import {
 	activeJobs,
@@ -1233,6 +1242,132 @@ describe('initNavigation', () => {
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(history.state)).toBe(true));
 		cleanup();
+	});
+});
+
+// On a phone the full Now Playing surface is a pushed screen, so the phone's
+// own Back must leave it for the library it covers rather than for whatever
+// entry sits below that library (issue #1002).
+describe('compact Now Playing owns one history entry', () => {
+	const origins = [
+		{
+			origin: 'a playlist',
+			open: () => openPlaylist('p1'),
+			library: { collection: { kind: 'playlist', id: 'p1' }, songId: null }
+		},
+		{
+			origin: 'a song opened from its album',
+			open: async () => {
+				await openAlbum('a1');
+				await selectSong('s1');
+			},
+			library: { collection: { kind: 'album', id: 'a1' }, songId: 's1' }
+		}
+	];
+
+	let stopNavigation: () => void = () => undefined;
+
+	beforeEach(() => {
+		nowPlayingDockable.set(false);
+		stopNavigation = initNavigation();
+	});
+
+	afterEach(() => {
+		stopNavigation();
+		closeNowPlaying();
+		nowPlayingDockable.set(false);
+	});
+
+	function libraryShown(): Record<string, unknown> {
+		return {
+			collection: get(openCollection),
+			songId: get(selectedSongId),
+			surface: get(librarySurface)
+		};
+	}
+
+	it.each(origins)(
+		'popstate while the compact Now Playing is open closes it and keeps the library state of $origin',
+		async ({ open, library }) => {
+			await open();
+			const below = history.state.index;
+
+			openNowPlaying('take');
+			history.back();
+
+			await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
+			expect(history.state).toMatchObject({ index: below, ...library });
+		}
+	);
+
+	it.each(origins)(
+		'closing the compact Now Playing steps back off its entry onto $origin',
+		async ({ open, library }) => {
+			await open();
+			const below = history.state.index;
+			openNowPlaying('take');
+			await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+			closeNowPlaying();
+
+			await vi.waitFor(() => expect(history.state.index).toBe(below));
+			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
+		}
+	);
+
+	it('opens the playing song from Now Playing straight on top of its origin', async () => {
+		await openPlaylist('p1');
+		const below = history.state.index;
+		openNowPlaying('take');
+
+		closeNowPlaying();
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
+
+		await vi.waitFor(() =>
+			expect(history.state).toMatchObject({ index: below + 1, songId: 's1', generationId: 'g1' })
+		);
+		history.back();
+		await vi.waitFor(() =>
+			expect(history.state).toMatchObject({
+				index: below,
+				collection: { kind: 'playlist', id: 'p1' },
+				songId: null
+			})
+		);
+	});
+
+	it.each([
+		['docked', () => undefined],
+		[
+			'switched to full and back',
+			() => {
+				expandNowPlaying();
+				dockNowPlaying();
+			}
+		]
+	])('the desktop panel %s leaves no history entry behind', async (_case, switchSurface) => {
+		nowPlayingDockable.set(true);
+		await openPlaylist('p1');
+		const before = { length: history.length, index: history.state.index };
+
+		openNowPlaying('queue');
+		switchSurface();
+		closeNowPlaying();
+
+		expect({ length: history.length, index: history.state.index }).toEqual(before);
+	});
+
+	it('steps back off its entry when the viewport grows room for the docked panel', async () => {
+		await openPlaylist('p1');
+		const below = history.state.index;
+		openNowPlaying('queue');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+		nowPlayingDockable.set(true);
+
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		expect(get(nowPlayingOpen)).toBe(true);
 	});
 });
 
