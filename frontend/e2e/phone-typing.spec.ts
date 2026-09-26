@@ -39,7 +39,13 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 	'\n'
 );
 const LYRICS_TYPED_ON = ' and on';
-const RUNNING_JOB = { progress: 0.36, takeIndex: 1, takeCount: 2, runningSinceOffsetSeconds: 64 };
+const RUNNING_JOB = {
+	progress: 0.36,
+	takeIndex: 1,
+	takeCount: 2,
+	phase: 'rendering',
+	generationStartedOffsetSeconds: 64
+} as const;
 const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	'{index}',
 	String(RUNNING_JOB.takeIndex)

@@ -26,7 +26,8 @@ mounted. Use the venv's Python directly:
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-running \\
         --song-id <id> --progress 0.36 --take-index 1 --take-count 2 \\
-        --running-since-offset 64 --owner-username e2e-ci-admin
+        --phase rendering --generation-started-offset 64 \\
+        --owner-username e2e-ci-admin
 
     docker compose exec -T songmaker-web /app/.venv/bin/python \\
         scripts/seed_e2e_job_states.py set-failed \\
@@ -48,7 +49,7 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 from pathlib import Path
 
 from _repo_path import prepend_own_checkout_src
@@ -58,7 +59,7 @@ prepend_own_checkout_src(__file__)
 
 from songmaker_cli.api_helpers import unique_song_slug
 from songmaker_cli.config import audio_file_path, find_project_root
-from songmaker_cli.constants import MODEL_DEFAULT_MODE, JobStatus, JobType
+from songmaker_cli.constants import MODEL_DEFAULT_MODE, GenerationPhase, JobStatus, JobType
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries import (
@@ -178,11 +179,9 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     ``update_job_status(..., JobStatus.RUNNING, ...)`` sets ``heartbeat_at``
     to now itself, so the job starts well inside
     ``GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS`` with no further work
-    here. ``running_since`` is backdated on the same ``Job`` instance
-    ``create_job`` returned, by ``running_since_offset`` seconds, so the
-    remaining-time estimate (``_remaining_time_estimate`` in
-    ``api_models/jobs.py``) has real elapsed time to divide the remaining
-    progress by.
+    here. ``generation_started_at``, which a generating phase sets to now,
+    moves ``generation_started_offset`` seconds into the past, so the
+    remaining-time estimate has elapsed time to work with.
     """
     owner = get_user_by_username(session, args.owner_username)
     if owner is None:
@@ -195,8 +194,12 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
         progress=args.progress,
         take_index=args.take_index,
         take_count=args.take_count,
+        phase=args.phase,
     )
-    job.running_since = datetime.now(timezone.utc) - timedelta(seconds=args.running_since_offset)
+    if args.generation_started_offset is not None:
+        if job.generation_started_at is None:
+            raise SystemExit(f"Phase {args.phase} has not started generating yet")
+        job.generation_started_at -= timedelta(seconds=args.generation_started_offset)
     session.commit()
     print(job.id)
 
@@ -267,7 +270,10 @@ def main(argv: list[str] | None = None) -> int:
     p_running.add_argument("--progress", type=float, required=True)
     p_running.add_argument("--take-index", type=int, required=True)
     p_running.add_argument("--take-count", type=int, required=True)
-    p_running.add_argument("--running-since-offset", type=float, required=True)
+    p_running.add_argument(
+        "--phase", type=GenerationPhase, choices=list(GenerationPhase), required=True,
+    )
+    p_running.add_argument("--generation-started-offset", type=float)
     p_running.add_argument("--owner-username", required=True)
     p_running.set_defaults(func=cmd_set_running)
 
