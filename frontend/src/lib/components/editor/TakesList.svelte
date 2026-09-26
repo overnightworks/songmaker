@@ -373,6 +373,7 @@
 					{@const flag = qualityFlag(gen.scores)}
 					{@const batchNotice = takeBatchReductionLabel(gen.generation_params)}
 					{@const voice = voiceForGeneration(gen)}
+					{@const takeName = nowPlayingTakeLabel(gen.version_number, gen.generation_number)}
 					<div
 						id={`take-${gen.id}`}
 						class="take-row"
@@ -393,7 +394,7 @@
 										data-hitbox-face
 										onclick={(event) => handlePlayClick(gen, event)}
 										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
-										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${nowPlayingTakeLabel(gen.version_number, gen.generation_number)}`}
+										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${takeName}`}
 									>
 										{#if $selectionMode}
 											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
@@ -504,7 +505,7 @@
 									actions.pick(gen.id, !gen.is_picked);
 								}}
 								aria-pressed={gen.is_picked}
-								aria-label={gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL}
+								aria-label={`${gen.is_picked ? NOW_PLAYING_UNPICK_LABEL : TAKE_PICK_LABEL} ${takeName}`}
 							>
 								<Icon name={gen.is_picked ? 'star-filled' : 'star'} size={16} />
 							</button>
@@ -518,7 +519,7 @@
 									actions.keep(gen.id, !gen.is_kept);
 								}}
 								aria-pressed={gen.is_kept}
-								aria-label={gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL}
+								aria-label={`${gen.is_kept ? TAKE_UNKEEP_LABEL : TAKE_KEEP_LABEL} ${takeName}`}
 							>
 								<Icon name={gen.is_kept ? 'heart-filled' : 'heart'} size={16} />
 							</button>
