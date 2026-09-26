@@ -2,8 +2,9 @@
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
 	import {
 		isPlaylistEntryCurrent,
-		playIdleStart,
-		playPlaylistEntryAndShowNowPlaying
+		playPlaylist,
+		playPlaylistEntryAndShowNowPlaying,
+		type CollectionStart
 	} from '$lib/stores/player';
 	import {
 		selectedPlaylist,
@@ -225,11 +226,12 @@
 		}
 	}
 
-	// The open playlist is this view's playlist, so the player's own start of
-	// the open collection is what plays it from the top.
-	function playFromTop(): void {
+	// The header can show a newly opened playlist before its detail arrives;
+	// until then this view has no playlist to start, so the header plays nothing
+	// rather than the previously opened playlist or the library.
+	function playWhole(start: CollectionStart): void {
 		if (!playlistDetail) return;
-		void playIdleStart();
+		playPlaylist(playlistDetail, start);
 	}
 
 	// The row is the play target: a tap plays this take from here, with the
@@ -337,7 +339,7 @@
 				artFill={null}
 				playlistCovers={playlistMeta.album_covers}
 				playlistCover={playlistMeta.cover}
-				onplay={playFromTop}
+				onplay={playWhole}
 				onrename={onPlaylistRename}
 				isShared={playlistMeta.is_shared}
 				shareSlug={playlistMeta.share_slug}

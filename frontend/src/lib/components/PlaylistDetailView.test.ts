@@ -20,6 +20,7 @@ import {
 	closeNowPlaying,
 	nowPlayingOpen,
 	nowPlayingPanel,
+	playStartNotice,
 	queueContext,
 	setShuffle,
 	shuffleEnabled
@@ -420,6 +421,29 @@ describe('PlaylistDetailView header play', () => {
 		expect(ctx.index).toBe(0);
 		expect(get(shuffleEnabled)).toBe(true);
 	});
+
+	it.each([
+		['loading', () => new Promise<PlaylistDetailItem>(() => {})],
+		['error', () => Promise.reject(new ApiError(429, 'Too many requests', '/api/playlists/p2'))]
+	] as const)(
+		'starts nothing from the shuffle square while the newly opened playlist is %s',
+		async (loadStatus, fetchNewPlaylist) => {
+			const target = await renderTwoEntryPlaylist();
+			addPlaylistToList({ id: 'p2', title: 'Party Mix', entry_count: 3 });
+			vi.mocked(fetchPlaylist).mockImplementationOnce(fetchNewPlaylist);
+			void loadPlaylistDetail('p2');
+			await vi.waitFor(() => expect(get(playlistDetailLoad).status).toBe(loadStatus));
+			await tick();
+
+			requireElement<HTMLButtonElement>(target, '.collection-header .shuffle-btn').click();
+			await tick();
+
+			expect(requireElement(target, '.collection-header').textContent).toContain('Party Mix');
+			expect(audioPlayer.current).toBeNull();
+			expect(get(queueContext)).toEqual({ type: 'library' });
+			expect(get(playStartNotice)).toBe('idle');
+		}
+	);
 });
 
 describe('PlaylistDetailView row actions', () => {

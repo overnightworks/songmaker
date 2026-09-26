@@ -94,7 +94,6 @@ import {
 	curationActive,
 	playAlbum,
 	playIdleStart,
-	playOpenCollectionShuffled,
 	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
@@ -2512,13 +2511,8 @@ describe('playIdleStart', () => {
 	});
 });
 
-describe('playOpenCollectionShuffled', () => {
-	beforeEach(() => {
-		setShuffle(false);
-		selectedPlaylistDetail.set(null);
-	});
-
-	it('turns shuffle on and starts the open album on a drawn song, not on track 1', async () => {
+describe('playAlbum', () => {
+	it('starts on a drawn song, not on track 1, when asked for a random start', async () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0);
 		songList.set(
 			['s1', 's2', 's3'].map((id, index) =>
@@ -2539,11 +2533,9 @@ describe('playOpenCollectionShuffled', () => {
 				})
 			)
 		);
-		openCollection.set({ kind: 'album', id: 'a1' });
 
-		await playOpenCollectionShuffled();
+		await playAlbum('a1', 'random');
 
-		expect(get(shuffleEnabled)).toBe(true);
 		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
 			restart: true
 		});

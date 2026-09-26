@@ -90,19 +90,13 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playAlbum: vi.fn(),
-		playOpenCollectionShuffled: vi.fn()
+		playAlbum: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import { selectSong } from '$lib/stores/navigation';
-import {
-	playAlbum,
-	playOpenCollectionShuffled,
-	setShuffle,
-	shuffleEnabled
-} from '$lib/stores/player';
+import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { activeJobs } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
@@ -233,11 +227,11 @@ describe('AlbumDetailView header', () => {
 			collectionPlayLabel('album')
 		).click();
 
-		expect(playAlbum).toHaveBeenCalledWith('a-local');
+		expect(playAlbum).toHaveBeenCalledWith('a-local', 'top');
 		expect(get(shuffleEnabled)).toBe(false);
 	});
 
-	it('starts the open album shuffled from its shuffle square', async () => {
+	it('starts this album shuffled from a drawn song from its shuffle square', async () => {
 		const target = await renderDetail();
 
 		getByRoleButton(
@@ -245,7 +239,8 @@ describe('AlbumDetailView header', () => {
 			collectionShuffleLabel('album')
 		).click();
 
-		expect(playOpenCollectionShuffled).toHaveBeenCalled();
+		expect(playAlbum).toHaveBeenCalledWith('a-local', 'random');
+		expect(get(shuffleEnabled)).toBe(true);
 	});
 
 	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(
