@@ -2,12 +2,18 @@ import { makeHealthResponse, makeSong as song } from '$lib/test-utils/factories'
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
-import { COWRITER_CLAUDE_UNVERIFIED_LABEL } from '$lib/constants';
+import type { ChatMessageItem } from '$lib/api/types';
+import {
+	COWRITER_CLAUDE_UNVERIFIED_LABEL,
+	COWRITER_RUNNING_TURN_POLL_MS,
+	COWRITER_TURN_TIMEOUT_MS
+} from '$lib/constants';
 
 import { ApiError } from '$lib/api/fetch';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
+const fetchConversationMessages = vi.hoisted(() => vi.fn());
 const fetchCowriterSettings = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
@@ -17,7 +23,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		fetchConversations: (...args: Parameters<typeof fetchConversations>) =>
 			fetchConversations(...args),
-		fetchConversationMessages: vi.fn().mockResolvedValue({ messages: [] }),
+		fetchConversationMessages: (...args: Parameters<typeof fetchConversationMessages>) =>
+			fetchConversationMessages(...args),
 		startNewConversation: vi.fn(async () => ({
 			id: 'c1',
 			title: null,
@@ -43,6 +50,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
+	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
 	fetchCowriterSettings.mockReset().mockResolvedValue({ provider: 'claude', model: 'sonnet' });
 	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
@@ -328,6 +336,100 @@ describe('CoWriterPanel failed turns', () => {
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
 		await vi.waitFor(() => expect(target.querySelector('.turn-error')).toBeNull());
 		expect(target.textContent).toContain('Here is a chorus');
+	});
+});
+
+describe('CoWriterPanel returning while a turn runs (#1014)', () => {
+	function chatMessage(id: string, role: 'user' | 'assistant', content: string): ChatMessageItem {
+		return { id, role, content, created_at: '2026-09-26T15:21:00+00:00' };
+	}
+
+	const sent = chatMessage('u1', 'user', 'Ja bitte');
+
+	function conversationHistory(...pages: ChatMessageItem[][]): void {
+		for (const messages of pages) {
+			fetchConversationMessages.mockResolvedValueOnce({ conversation_id: 'c1', messages });
+		}
+	}
+
+	async function leaveDuringATurnAndReturn(onturncompleted = vi.fn()): Promise<HTMLElement> {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield { type: 'assistant_text', text: 'Mach ich' } as CoWriterStreamEvent;
+				await new Promise(() => {});
+			})()
+		);
+		const left = await render();
+		await sendTurn(left, 'Ja bitte');
+		await vi.waitFor(() => expect(left.textContent).toContain('Mach ich'));
+		const leftPanel = mounted.pop();
+		if (!leftPanel) throw new Error('Expected the panel the musician left');
+		await unmount(leftPanel);
+
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		return render({ onturncompleted });
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('shows the message sent at once and the reply as soon as the turn completes', async () => {
+		conversationHistory([sent], [sent], [sent, chatMessage('a1', 'assistant', 'Erledigt.')]);
+		const onturncompleted = vi.fn();
+
+		const target = await leaveDuringATurnAndReturn(onturncompleted);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte')
+		);
+		expect(target.querySelector('.typing')).not.toBeNull();
+		expect(target.querySelector<HTMLButtonElement>('.send-btn')?.disabled).toBe(true);
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		expect(target.textContent).not.toContain('Erledigt.');
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelector('.turn-error')).toBeNull();
+		expect(onturncompleted).toHaveBeenCalledTimes(1);
+	});
+
+	it('names a turn that ended unanswered below the retained message, with a retry', async () => {
+		conversationHistory([sent], []);
+
+		const target = await leaveDuringATurnAndReturn();
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+	});
+
+	it('stops waiting and names the silence once the turn outlives its timeout', async () => {
+		fetchConversationMessages.mockResolvedValue({ conversation_id: 'c1', messages: [sent] });
+
+		const target = await leaveDuringATurnAndReturn();
+		await vi.advanceTimersByTimeAsync(COWRITER_TURN_TIMEOUT_MS);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
 	});
 });
 
