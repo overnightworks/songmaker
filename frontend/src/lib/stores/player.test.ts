@@ -94,6 +94,7 @@ import {
 	curationActive,
 	playAlbum,
 	playIdleStart,
+	playOpenCollectionShuffled,
 	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
@@ -2508,6 +2509,47 @@ describe('playIdleStart', () => {
 		selectedPlaylistDetail.set(null);
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+	});
+});
+
+describe('playOpenCollectionShuffled', () => {
+	beforeEach(() => {
+		setShuffle(false);
+		selectedPlaylistDetail.set(null);
+	});
+
+	it('turns shuffle on and starts the open album on a drawn song, not on track 1', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		songList.set(
+			['s1', 's2', 's3'].map((id, index) =>
+				makeSong({
+					...queuedSongDefaults(),
+					id,
+					title: id,
+					track_number: index + 1,
+					generations: [
+						makeGen({
+							...genDefaults,
+							id: `g-${id}`,
+							song_id: id,
+							is_picked: true,
+							mp3_path: `a1/${id}.mp3`
+						})
+					]
+				})
+			)
+		);
+		openCollection.set({ kind: 'album', id: 'a1' });
+
+		await playOpenCollectionShuffled();
+
+		expect(get(shuffleEnabled)).toBe(true);
+		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
+			restart: true
+		});
+		const ctx = get(queueContext);
+		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
+		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
 	});
 });
 

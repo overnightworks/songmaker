@@ -13,7 +13,7 @@
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
-	import { setShuffle } from '$lib/stores/player';
+	import { playOpenCollectionShuffled, setShuffle } from '$lib/stores/player';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -108,8 +108,7 @@
 	}
 
 	function playShuffled(): void {
-		setShuffle(true);
-		onplay();
+		void playOpenCollectionShuffled();
 	}
 </script>
 

@@ -4,7 +4,7 @@ import {
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
@@ -405,7 +405,9 @@ describe('PlaylistDetailView header play', () => {
 		expect(get(shuffleEnabled)).toBe(false);
 	});
 
-	it('plays the playlist shuffled from the shuffle square beside the circle', async () => {
+	it('plays the playlist shuffled from the shuffle square, starting on a drawn entry', async () => {
+		const drawLast = vi.spyOn(Math, 'random').mockReturnValue(0.99);
+		onTestFinished(() => drawLast.mockRestore());
 		const target = await renderTwoEntryPlaylist();
 
 		requireElement<HTMLButtonElement>(target, '.collection-header .shuffle-btn').click();
@@ -414,7 +416,8 @@ describe('PlaylistDetailView header play', () => {
 		const ctx = get(queueContext);
 		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
 		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
-		expect(ctx.entries.map((queued) => queued.id).sort()).toEqual(['pe1', 'pe2']);
+		expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe2', 'pe1']);
+		expect(ctx.index).toBe(0);
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 });
