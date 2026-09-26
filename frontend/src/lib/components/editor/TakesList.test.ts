@@ -596,14 +596,23 @@ describe('TakesList', () => {
 	);
 
 	it.each([
-		[false, 'Keep'],
-		[true, 'Unkeep']
-	] as const)('fills the heart when kept is %s and names its tap %s', async (is_kept, label) => {
-		const { target } = await render({ song: song({ generations: [generation({ is_kept })] }) });
-		const heart = target.querySelector<HTMLButtonElement>('.keep-btn');
-		expect(heart?.getAttribute('aria-label')).toBe(label);
-		expect(heart?.classList.contains('kept')).toBe(is_kept);
-	});
+		['.pick-btn', 'picked', 'is_picked', false, 'Pick v3 · take 2'],
+		['.pick-btn', 'picked', 'is_picked', true, 'Unpick v3 · take 2'],
+		['.keep-btn', 'kept', 'is_kept', false, 'Keep v3 · take 2'],
+		['.keep-btn', 'kept', 'is_kept', true, 'Unkeep v3 · take 2']
+	] as const)(
+		'marks %s %s when %s is %s and names its tap after its own take: %s',
+		async (selector, filledClass, flag, on, label) => {
+			const { target } = await render({
+				song: song({
+					generations: [generation({ version_number: 3, generation_number: 2, [flag]: on })]
+				})
+			});
+			const toggle = target.querySelector<HTMLButtonElement>(selector);
+			expect(toggle?.getAttribute('aria-label')).toBe(label);
+			expect(toggle?.classList.contains(filledClass)).toBe(on);
+		}
+	);
 
 	it.each(['fine', 'coarse'] as const)(
 		'has four symbol actions (▶ ★ ♥ ⋯) and one labelled row body on a %s pointer',
