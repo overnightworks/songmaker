@@ -20,7 +20,9 @@
 //
 // Coming back to a turn that ended unanswered shows the retained message with
 // Try again; the server answers that message when it is sent again instead of
-// storing it twice, so a retry that fails too still shows it once.
+// storing it twice, so a retry that fails too still shows it once. Only the
+// newest message offers Try again: an older one sent again would be stored a
+// second time.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
 import {
@@ -182,5 +184,36 @@ test.describe('co-writer return at phone width', () => {
 		await expect(page.getByText(RETRY_FAILURE)).toBeVisible();
 		await expect(page.getByText(SENT)).toHaveCount(1);
 		await expect(page.getByRole('button', { name: 'Try again' })).toHaveCount(1);
+	});
+
+	test('a failed message followed by a newer failed one no longer offers Try again', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		const older = 'Erste Nachricht, die scheitert';
+		const newer = 'Zweite Nachricht, die auch scheitert';
+		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
+		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
+			const failure = { type: 'error', status: 503, message: RETRY_FAILURE };
+			return route.fulfill({
+				contentType: 'text/event-stream',
+				body: `data: ${JSON.stringify(failure)}\n\n`
+			});
+		});
+
+		await openCowriterOnPickedSong(page);
+		const composer = page.getByPlaceholder(/Ask the co-writer/);
+		const tryAgain = page.getByRole('button', { name: 'Try again' });
+		await composer.fill(older);
+		await composer.press('Enter');
+		await expect(tryAgain).toHaveCount(1);
+		await composer.fill(newer);
+		await composer.press('Enter');
+
+		await expect(
+			page.locator('.message', { hasText: newer }).getByRole('button', { name: 'Try again' })
+		).toHaveCount(1);
+		await expect(tryAgain).toHaveCount(1);
 	});
 });

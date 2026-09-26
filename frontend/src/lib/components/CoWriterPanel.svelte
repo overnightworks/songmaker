@@ -450,6 +450,15 @@
 		return last?.role === 'user' && last.text === msg ? last : undefined;
 	}
 
+	/**
+	 * Only the newest message can be sent again: the server answers its stored
+	 * copy, while an older one would be stored a second time (#1014). An older
+	 * failure therefore reads as the reload shows it — a message without a reply.
+	 */
+	const retryableMessageIndex = $derived(
+		messages.findLastIndex((message) => message.role === 'user')
+	);
+
 	function refusalMessage(refusal: ApiError): string {
 		if (refusal.status === 503) return refusal.detail || cowriterUnavailableLabel(providerName);
 		return refusal.message;
@@ -789,7 +798,7 @@
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
 						<span class="typing">{cowriterThinkingLabel(providerName)}</span>
 					{/if}
-					{#if msg.error}
+					{#if msg.error && i === retryableMessageIndex}
 						<div class="turn-error" role="alert">
 							<span>{msg.error}</span>
 							<button type="button" class="retry-turn" onclick={() => retry(msg.text)}

@@ -274,6 +274,23 @@ describe('CoWriterPanel failed turns', () => {
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
 	});
 
+	it('offers Try again only on the newest message once a newer one failed too', async () => {
+		streamCoWriterTurn.mockImplementation(() =>
+			turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent])
+		);
+		const target = await render();
+
+		await sendTurn(target, 'older message');
+		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
+		await sendTurn(target, 'newer message');
+		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.typing')).toBeNull());
+
+		const retries = target.querySelectorAll<HTMLButtonElement>('.retry-turn');
+		expect(retries).toHaveLength(1);
+		expect(retries[0].closest('.message')?.textContent).toContain('newer message');
+	});
+
 	it.each(droppedStreams)(
 		'names %s whose message never reached the server, with a retry',
 		async (_shape, droppedStream) => {
