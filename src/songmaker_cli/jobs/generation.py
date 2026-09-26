@@ -90,7 +90,13 @@ _PROGRESS_THROTTLE_SECONDS = 2.0
 
 @dataclass(frozen=True)
 class _TakeShare:
-    """Where a phase starts within one take and how much of the take it spans."""
+    """Where a phase starts within one take and how much of the take it spans.
+
+    The shares are calibrated on a traced xl-turbo take with the model already
+    loaded (job 623c09fc, 26.09.2026): writing 49 s, rendering 12 s, saving
+    the take 31 s. Loading a model has no share: its length depends on the
+    model and the cache, not on the take.
+    """
 
     starts_at: float
     weight: float
@@ -98,9 +104,9 @@ class _TakeShare:
 
 _TAKE_SHARES: Final[dict[GenerationPhase, _TakeShare]] = {
     GenerationPhase.LOADING_MODEL: _TakeShare(starts_at=0.0, weight=0.0),
-    GenerationPhase.WRITING: _TakeShare(starts_at=0.0, weight=0.25),
-    GenerationPhase.RENDERING: _TakeShare(starts_at=0.25, weight=0.60),
-    GenerationPhase.SAVING_TAKE: _TakeShare(starts_at=0.85, weight=0.15),
+    GenerationPhase.WRITING: _TakeShare(starts_at=0.0, weight=0.55),
+    GenerationPhase.RENDERING: _TakeShare(starts_at=0.55, weight=0.15),
+    GenerationPhase.SAVING_TAKE: _TakeShare(starts_at=0.70, weight=0.30),
 }
 _GENERATION_PHASE_OF: Final[dict[AceStepPhase, GenerationPhase]] = {
     AceStepPhase.LOADING_MODEL: GenerationPhase.LOADING_MODEL,

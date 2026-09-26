@@ -251,7 +251,7 @@ def test_generation_job_happy_path(seeded_db, tmp_path: Path, count: int) -> Non
     assert job.progress == 1.0
     assert (job.take_index, job.take_count) == (count, count)
     assert observed_takes == [
-        (index + 1, count, pytest.approx((index + 0.25 + 0.6 * 0.5) / count))
+        (index + 1, count, pytest.approx((index + 0.55 + 0.15 * 0.5) / count))
         for index in range(count)
     ]
     assert running_starts[0] is not None
@@ -1633,7 +1633,7 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
 
     assert observed == sorted(observed)
     assert max(observed) < 1.0
-    assert observed[-1] == pytest.approx((count - 1 + 0.85) / count)
+    assert observed[-1] == pytest.approx((count - 1 + 0.70) / count)
     with seeded_db() as session:
         assert get_job(session, "j1").progress == 1.0
         assert session.query(Generation).filter_by(song_id="s1").count() == count
