@@ -62,6 +62,7 @@ from songmaker_cli.api_models import (
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
+    CURRENT_SONG_FRESHNESS_NOTE,
     JOB_ACTIVE_STATUSES,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
@@ -187,9 +188,13 @@ def build_cowriter_system_prompt(
 class TurnContextBlock:
     name: str
     body: str
+    preface: str | None = None
 
     def render(self) -> str:
-        return f"<{self.name}>\n{self.body}\n</{self.name}>"
+        tagged = f"<{self.name}>\n{self.body}\n</{self.name}>"
+        if self.preface is None:
+            return tagged
+        return f"{self.preface}\n{tagged}"
 
 
 @dataclass(frozen=True)
@@ -251,6 +256,7 @@ def compose_turn_context(
             TurnContextBlock(
                 TURN_BLOCK_CURRENT_SONG,
                 _format_current_song(current_song),
+                preface=CURRENT_SONG_FRESHNESS_NOTE,
             )
         )
     blocks.append(TurnContextBlock(TURN_BLOCK_USER_MEMORY, user_memory_body))
