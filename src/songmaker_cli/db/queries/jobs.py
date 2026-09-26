@@ -182,6 +182,8 @@ def update_job_status(
         return False
     now = datetime.now(timezone.utc)
     _move_generation_start(job, status, phase, now)
+    if _enters_running(job, status):
+        job.phase = None
     job.status = status
     job.progress = progress
     job.error = error
@@ -209,6 +211,10 @@ def update_job_status(
     return True
 
 
+def _enters_running(job: Job, status: str) -> bool:
+    return status == JobStatus.RUNNING and job.status != JobStatus.RUNNING
+
+
 def _move_generation_start(
     job: Job, status: str, phase: GenerationPhase | None, now: datetime,
 ) -> None:
@@ -218,7 +224,7 @@ def _move_generation_start(
     earlier queue time, and loading the model never counts: a cold start
     and a warm one reach the same progress in the same generating time.
     """
-    if status != JobStatus.RUNNING or job.status != JobStatus.RUNNING:
+    if status != JobStatus.RUNNING or _enters_running(job, status):
         job.generation_started_at = None
     if (
         status == JobStatus.RUNNING
