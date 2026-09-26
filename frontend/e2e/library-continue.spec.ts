@@ -1,6 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { collectionRowPlayLabel, TRANSPORT_PAUSE_LABEL } from '../src/lib/constants';
-import { FlowGuard, openLibraryWall, shellOf, type Shell } from './helpers';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import {
+	FlowGuard,
+	nameStartingWith,
+	openLibraryWall,
+	shellOf,
+	workspace,
+	type Shell
+} from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -64,21 +71,29 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		expect.arrayContaining(['Album'])
 	);
 
-	await page
+	const surface = workspace(page);
+	await surface
 		.locator('.library-wall .tile-grid')
 		.locator('.wall-tile-body')
 		.filter({ hasText: library.albumTitle })
 		.click();
+	// An album row opens the song (#1010); its take row's own play face plays it.
+	await surface
+		.locator('.item-row')
+		.filter({ hasText: listenedSong.title })
+		.getByRole('button')
+		.click();
+	if (shell === 'mobile') await surface.getByRole('tab', { name: /Takes/ }).click();
+	const take = surface.locator('.take-row');
+	await expect(take).toHaveCount(1);
 	const listenReport = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'POST' &&
 			new URL(response.url()).pathname === `/api/songs/${listenedSong.id}/listen`
 	);
-	await page
-		.getByRole('button', { name: collectionRowPlayLabel(listenedSong.title), exact: true })
-		.click();
+	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
 	await expect(
-		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+		take.getByRole('button', { name: nameStartingWith(TRANSPORT_PAUSE_LABEL) })
 	).toBeVisible();
 	expect((await listenReport).status()).toBe(200);
 
