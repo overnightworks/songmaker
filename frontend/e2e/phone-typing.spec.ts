@@ -10,6 +10,8 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import {
+	APP_NAME,
+	EDITOR_COWRITER_BACK_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_VIEW_COWRITER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
@@ -121,6 +123,26 @@ test.describe('typing on the phone', () => {
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
 		await expect(miniPlayer).toBeVisible();
+
+		guard.assertClean();
+	});
+
+	test('going back from a focused co-writer composer shows the album page with its own app bar', async ({
+		page
+	}) => {
+		const guard = new FlowGuard(page);
+		await openSeededSongFromItsAlbum(page);
+
+		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL }).click();
+		await page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER).click();
+		await page.goBack();
+
+		await expect(appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL })).toBeVisible();
+		await expect(appBar(page).getByRole('button', { name: APP_NAME })).toBeVisible();
+		await expect(
+			appBar(page).getByRole('button', { name: EDITOR_COWRITER_BACK_LABEL })
+		).toHaveCount(0);
+		await expect(page.getByRole('contentinfo')).toBeVisible();
 
 		guard.assertClean();
 	});
