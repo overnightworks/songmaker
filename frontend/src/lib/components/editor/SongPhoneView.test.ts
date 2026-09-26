@@ -1,15 +1,22 @@
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { detailTab } from '$lib/stores/navigation';
+import type { RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
 import SongPhoneView from './SongPhoneView.svelte';
 
+vi.mock('$lib/api/client', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/client')>()),
+	fetchBuiltinDefaults: vi.fn().mockResolvedValue({}),
+	fetchPresets: vi.fn().mockResolvedValue([]),
+	fetchGenerationDefaults: vi.fn().mockResolvedValue({})
+}));
+
 const mounted: Array<ReturnType<typeof mount>> = [];
 const snippets = {
 	sharedLink: createRawSnippet(() => ({ render: () => '<div>Share link</div>' })),
-	recipe: createRawSnippet(() => ({ render: () => '<div>Song recipe</div>' })),
 	write: createRawSnippet(() => ({
 		render: () => '<textarea aria-label="Lyrics">Draft</textarea>'
 	})),
@@ -28,6 +35,8 @@ afterEach(async () => {
 	detailTab.set('write');
 });
 
+const NO_CHIPS: RecipeChip[] = [];
+
 async function render(
 	overrides: Partial<ComponentProps<typeof SongPhoneView>['takeListProps']> = {}
 ) {
@@ -38,6 +47,7 @@ async function render(
 			target,
 			props: {
 				...snippets,
+				chips: NO_CHIPS,
 				takeListProps: {
 					song: makeSong({ generations: [], generation_count: 0 }),
 					dirty: false,
@@ -59,13 +69,13 @@ describe('SongPhoneView', () => {
 		const takes = [makeGeneration(), makeGeneration({ id: 'g2', generation_number: 2 })];
 		const target = await render({ song: makeSong({ generations: takes, generation_count: 2 }) });
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
+		expect(target.querySelector('section[aria-label="Recipe"]')).not.toBeNull();
 		expect(
 			target
 				.querySelector('[role="tabpanel"] > :last-child')
 				?.querySelector('button')
 				?.textContent?.trim()
 		).toBe('Generate');
-		expect(target.textContent).toContain('Song recipe');
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
 		tabs[1].click();
 		await tick();
@@ -73,8 +83,8 @@ describe('SongPhoneView', () => {
 			'song-tab-takes'
 		);
 		expect(target.querySelector('textarea')).toBeNull();
+		expect(target.querySelector('section[aria-label="Recipe"]')).toBeNull();
 		expect(target.querySelector('.generate-action')).toBeNull();
-		expect(target.textContent).not.toContain('Song recipe');
 		expect(target.querySelector('header')).toBeNull();
 		expect(target.textContent).toContain('Expiry digest');
 		expect(target.querySelectorAll('.take-row')).toHaveLength(2);
