@@ -98,13 +98,21 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		{ phase: 'Loading model…', readout: null, expected: 'Loading model…' },
-		{ phase: 'Writing', readout: '36% · ~1:40', expected: 'Writing · 36% · ~1:40' },
-		{ phase: 'Rendering', readout: '36% · ~1:40', expected: 'Rendering · 36% · ~1:40' },
-		{ phase: 'Saving take', readout: '36%', expected: 'Saving take · 36%' },
-		{ phase: 'Generating...', readout: '36% · ~1:40', expected: 'Generating... · 36% · ~1:40' }
+		{ phase: 'Loading model…', readout: null, expected: 'Take 1 of 2 · Loading model…' },
+		{ phase: 'Writing', readout: '36% · ~1:40', expected: 'Take 1 of 2 · Writing · 36% · ~1:40' },
+		{
+			phase: 'Rendering',
+			readout: '36% · ~1:40',
+			expected: 'Take 1 of 2 · Rendering · 36% · ~1:40'
+		},
+		{ phase: 'Saving take', readout: '36%', expected: 'Take 1 of 2 · Saving take · 36%' },
+		{
+			phase: 'Generating...',
+			readout: '36% · ~1:40',
+			expected: 'Take 1 of 2 · Generating... · 36% · ~1:40'
+		}
 	] as const)(
-		'names the phase and its readout as "$expected"',
+		'names the take, its phase and its readout as "$expected"',
 		async ({ phase, readout, expected }) => {
 			await render({ ...running, phase, readout });
 			expect(
@@ -115,6 +123,13 @@ describe('GenerateButton', () => {
 			expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
 		}
 	);
+
+	it('names only the phase and its readout for a single take', async () => {
+		await render({ ...running, takeCounter: null });
+		expect(
+			document.body.querySelector('[role="status"]')?.textContent?.replace(/\s+/g, ' ').trim()
+		).toBe('Rendering · 36% · ~1:40');
+	});
 
 	it('shows submission progress without offering cancellation before a job exists', async () => {
 		await render({

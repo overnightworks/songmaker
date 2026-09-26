@@ -31,6 +31,7 @@ import {
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
+	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
 	RAIL_LIBRARY_LABEL,
@@ -73,6 +74,7 @@ const RUNNING_JOB_PROGRESS = 0.36;
 // estimate lands well inside a plausible single-digit-minute ETA rather than
 // at either extreme.
 const RUNNING_JOB_PHASE = 'rendering';
+const RUNNING_JOB_PHASE_LABEL = GENERATION_PHASE_LABELS[RUNNING_JOB_PHASE];
 const RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS = 64;
 const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	'{index}',
@@ -163,14 +165,15 @@ test.describe('song page at phone width', () => {
 		});
 		await page.goto(songAddress);
 		const generateStatus = panel.getByRole('status');
-		await expect(generateStatus.getByText(RUNNING_JOB_TAKE_COUNTER)).toBeVisible();
-		await expect(
-			generateStatus.getByText(`${Math.round(RUNNING_JOB_PROGRESS * 100)}%`)
-		).toBeVisible();
-		await expect(generateStatus.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
+		await expect(generateStatus).toContainText(
+			new RegExp(
+				`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
+			)
+		);
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
+		await expect(panel.getByText(RUNNING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
 		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
 		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
 
