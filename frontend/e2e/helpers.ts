@@ -55,6 +55,18 @@ export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	mobile: 34
 };
 
+/**
+ * What `song-phone.spec.ts` costs the API, measured on a green run against a
+ * clean stack: a cold song open, the Takes tab, playing a take, two more cold
+ * opens of the same song (the running and the failed job states) — the
+ * running-job seeding and its later failure never touch this budget at all,
+ * since both run directly against the database (`seedRunningGenerationJob`,
+ * `failGenerationJob` in `seed.ts`), the same way the rail's filler albums
+ * and the kinetic-strip takes do. Mobile-only, matching the spec's own
+ * project restriction — no desktop number to carry.
+ */
+export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 40;
+
 const API_PATH_PREFIX = '/api';
 
 /** Which shell a test drives: the mobile project is the emulated phone. */

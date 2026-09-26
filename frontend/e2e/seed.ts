@@ -38,6 +38,10 @@ const SONG_TITLES = ['Opening Move', 'Second Wind', 'Closing Time'] as const;
 const ALBUM_TITLE_PREFIX = 'E2E Album';
 const PLAYLIST_TITLE_PREFIX = 'E2E Playlist';
 const KINETIC_STRIP_ALBUM_TITLE_PREFIX = 'E2E Kinetic Strip Album';
+// Dedicated album for song-phone.spec.ts (issue #995), same reasoning as the
+// kinetic-strip album above: its song is seeded well past v1 and mutated by
+// the flow's own job-state seeding, so it stays off the shared base library.
+const SONG_PHONE_ALBUM_TITLE_PREFIX = 'E2E Song Phone Album';
 // A second, sibling album: the rail's one-open-album rule (#323) and its
 // real CSS visibility (#326) only show up with two albums that can each be
 // opened in turn. No take is imported for it -- the rail only needs the
@@ -151,6 +155,8 @@ export interface SeededLibrary {
 	secondAlbumSongTitle: string;
 	/** Dedicated album the kinetic-strip flow can mutate without changing the base library. */
 	kineticStripAlbumId: string;
+	/** Dedicated album song-phone.spec.ts seeds its own song and job states into. */
+	songPhoneAlbumId: string;
 }
 
 /** Seeded per attempt, because the flow reorders and prunes it. */
@@ -400,6 +406,10 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		title: `${KINETIC_STRIP_ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: ALBUM_ARTIST
 	});
+	const songPhoneAlbum = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `${SONG_PHONE_ALBUM_TITLE_PREFIX} ${runMarker()}`,
+		artist: ALBUM_ARTIST
+	});
 
 	await seedFillerAlbums(`${RAIL_FILLER_ALBUM_TITLE_PREFIX} ${runMarker()}`);
 
@@ -413,6 +423,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 		secondAlbumTitle,
 		secondAlbumSongTitle: RAIL_ALBUM_SONG_TITLES[0],
 		kineticStripAlbumId: kineticStripAlbum.id,
+		songPhoneAlbumId: songPhoneAlbum.id,
 		playlistTakes: playlistSongTitles.map((songTitle) => ({
 			songTitle,
 			takeId: takeId(takeBySongTitle, songTitle)
@@ -670,6 +681,139 @@ export async function seedTakeStripSong(
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Seeding the kinetic-strip song's takes failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * A song already at `versionNumber` with `takeCount` real takes on that
+ * version, seeded directly against the database
+ * (`scripts/seed_e2e_job_states.py`) rather than through `versionNumber - 1`
+ * individual saves and `takeCount` reimports — the same reasoning
+ * `seedTakeStripSong` above already uses (issue #344): those requests would
+ * exercise no API semantics `song-phone.spec.ts` needs, only cost its
+ * budget. Returns the song's id.
+ */
+export async function seedSongPhoneSong(
+	albumId: string,
+	title: string,
+	versionNumber: number,
+	takeCount: number
+): Promise<string> {
+	try {
+		const { stdout } = await execWithStdin(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'create-song',
+				'--album-id',
+				albumId,
+				'--title',
+				title,
+				'--version-number',
+				String(versionNumber),
+				'--take-count',
+				String(takeCount),
+				'--owner-username',
+				requiredEnv('ADMIN_USERNAME')
+			],
+			{ cwd: REPO_ROOT },
+			readFileSync(TAKE_FIXTURE)
+		);
+		const songId = stdout.trim();
+		if (!songId) throw new Error('seed_e2e_job_states.py printed no song id on stdout');
+		return songId;
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Seeding the song-phone flow's song failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * A running generate job for `songId`, seeded directly against the database
+ * (`scripts/seed_e2e_job_states.py`) since CI's e2e stack runs no ACE-Step
+ * worker to produce one. `update_job_status`'s own RUNNING branch sets
+ * `heartbeat_at` to the moment the row is written, comfortably inside
+ * `JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS` for the rest of the test — nothing
+ * here needs to touch it by hand. `runningSinceOffsetSeconds` backdates
+ * `running_since` alone, so the remaining-time estimate has real elapsed
+ * time to divide the remaining progress by. Returns the job's id.
+ */
+export async function seedRunningGenerationJob(
+	songId: string,
+	options: {
+		progress: number;
+		takeIndex: number;
+		takeCount: number;
+		runningSinceOffsetSeconds: number;
+	}
+): Promise<string> {
+	try {
+		const { stdout } = await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'set-running',
+				'--song-id',
+				songId,
+				'--progress',
+				String(options.progress),
+				'--take-index',
+				String(options.takeIndex),
+				'--take-count',
+				String(options.takeCount),
+				'--running-since-offset',
+				String(options.runningSinceOffsetSeconds)
+			],
+			{ cwd: REPO_ROOT }
+		);
+		const jobId = stdout.trim();
+		if (!jobId) throw new Error('seed_e2e_job_states.py printed no job id on stdout');
+		return jobId;
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Seeding the running generate job failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * Fails an existing generate job in place — the same job id a running
+ * generation was seeded on, not a fresh one — so its own open
+ * `/api/jobs/{id}/stream` (which polls the row every
+ * `SSE_POLL_INTERVAL_SECONDS`) picks up the transition live, the way a real
+ * worker crash would report it. No reload needed.
+ */
+export async function failGenerationJob(jobId: string, error: string): Promise<void> {
+	try {
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'set-failed',
+				'--job-id',
+				jobId,
+				'--error',
+				error
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Failing the generate job failed: ${detail}`, { cause: err });
 	}
 }
 
