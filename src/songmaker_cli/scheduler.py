@@ -445,8 +445,9 @@ def _generation_progress_events(
 ) -> ProgressEventHandler:
     """Hand on a generate task's phase and fraction.
 
-    An event without a known phase is logged and dropped rather than failing
-    the take: the generation keeps running and the job keeps its last value.
+    An event without a known phase or without a progress value is logged and
+    dropped rather than failing the take: the generation keeps running and
+    the job keeps its last value.
     """
 
     async def handle(data: dict) -> None:
@@ -455,7 +456,10 @@ def _generation_progress_events(
         except ValueError:
             log.warning("Worker generate progress event without a known phase: %r", data)
             return
-        await _maybe_invoke(on_progress, phase, float(data.get("progress", 0.0)))
+        if "progress" not in data:
+            log.warning("Worker generate progress event without a progress value: %r", data)
+            return
+        await _maybe_invoke(on_progress, phase, float(data["progress"]))
 
     return handle
 

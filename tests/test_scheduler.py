@@ -380,7 +380,7 @@ def test_consume_task_stream_error_raises_with_the_workers_own_cause() -> None:
     assert str(exc_info.value) == "GPU OOM"
 
 
-def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_without_one(
+def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_missing_phase_or_progress(
     caplog: pytest.LogCaptureFixture,
 ) -> None:
     worker = _make_picked()
@@ -393,6 +393,7 @@ def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_without_one(
         ("progress", {"progress": 0.2, "phase": "writing"}),
         ("progress", {"progress": 0.9, "phase": None}),
         ("progress", {"progress": 0.9, "phase": "unheard-of"}),
+        ("progress", {"phase": "rendering"}),
         ("progress", {"progress": 0.5, "phase": "rendering"}),
         (
             "done",
@@ -407,7 +408,7 @@ def test_consume_task_stream_hands_on_each_phase_and_drops_an_event_without_one(
         _run(consume_task_stream(worker, "gen-1", on_progress=on_progress))
 
     assert captured == [(AceStepPhase.WRITING, 0.2), (AceStepPhase.RENDERING, 0.5)]
-    assert sum(record.levelname == "WARNING" for record in caplog.records) == 2
+    assert sum(record.levelname == "WARNING" for record in caplog.records) == 3
 
 
 def test_consume_task_stream_heartbeats_on_the_initial_stream_event() -> None:
