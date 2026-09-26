@@ -9,12 +9,16 @@ exactly the characters it receives, independent of the normalisation pipeline;
 see the #45 plan-review note.
 
 `alignments` — whole takes run through the reference implementation of the
-alignment contract below, covering both the word-timestamp path and the cue
-window fallback. Python is the reference: frontend/src/lib/utils/lyrics-align.ts
-must reproduce these intervals exactly.
+global word alignment below (#1030), covering takes with word timestamps and
+segments without them. Python is the reference:
+frontend/src/lib/utils/lyrics-align.ts must reproduce these intervals exactly.
 
 All fixture text is invented, never real lyrics, and ASCII-only so that
-case folding cannot differ between the two implementations.
+case folding cannot differ between the two implementations — except the one
+fixture that pins umlaut and number spelling, whose umlauts both casefold
+alike. The operator's measured takes live in
+frontend/src/lib/utils/fixtures/lyrics-align-takes.json and are pinned by
+coverage in lyrics-align.test.ts, not here.
 
 Run from the project root to (re)write the committed fixture; Prettier owns
 its final layout, so hand it the file afterwards:
@@ -29,6 +33,7 @@ import json
 import re
 import unicodedata
 from difflib import SequenceMatcher
+from enum import IntEnum
 from pathlib import Path
 from typing import Callable, Final, NamedTuple
 
@@ -101,21 +106,42 @@ def compute_golden_ratios() -> list[dict[str, object]]:
 
 # ── reference alignment ─────────────────────────────────────────────
 # Mirrors frontend/src/lib/utils/lyrics-align.ts; that file's header owns the
-# prose contract. Kept deliberately parallel so a drift in either shows up as
-# a failing golden fixture rather than as a silently wrong highlight.
+# prose contract. Kept deliberately parallel — the same scores, added in the
+# same order, the same preference between equal scores — so a drift in
+# either shows up as a failing golden fixture rather than as a silently
+# wrong highlight.
 
-MIN_RATIO: Final = 0.72
-AMBIGUITY_MARGIN: Final = 0.12
-MAX_WINDOW_LINES: Final = 3
+SKIP_LYRIC_WORD: Final = -0.6
+OPEN_HEARD_GAP: Final = -0.3
+EXTEND_HEARD_GAP: Final = -0.02
+BREAK_PAIR_RUN: Final = -0.1
+ANCHOR_MIN_SIMILARITY: Final = 0.6
+LINE_MIN_ANCHORED_SHARE: Final = 0.5
 VERBATIM_MAX_TOKENS: Final = 2
-REPEAT_MIN_RATIO: Final = 0.88
-WORD_STREAM_LOOKAHEAD: Final = 24
-RELEVANT_RATIO: Final = MIN_RATIO - AMBIGUITY_MARGIN
-LENGTH_FACTOR_MIN: Final = RELEVANT_RATIO / (2 - RELEVANT_RATIO)
-LENGTH_FACTOR_MAX: Final = (2 - RELEVANT_RATIO) / RELEVANT_RATIO
 
 SECTION_MARKER: Final = re.compile(r"^\[[^\[\]]+\]$")
 CURLY_APOSTROPHES: Final = re.compile("[‘’‛ʼ]")
+DIGITS: Final = re.compile(r"[0-9]+")
+
+UMLAUT_SPELLINGS: Final = str.maketrans({"ä": "ae", "ö": "oe", "ü": "ue"})
+UNITS: Final = (
+    "null", "eins", "zwei", "drei", "vier", "fünf", "sechs", "sieben", "acht", "neun",
+    "zehn", "elf", "zwölf", "dreizehn", "vierzehn", "fünfzehn", "sechzehn", "siebzehn",
+    "achtzehn", "neunzehn",
+)
+TENS: Final = (
+    "", "", "zwanzig", "dreißig", "vierzig", "fünfzig", "sechzig", "siebzig", "achtzig",
+    "neunzig",
+)
+LARGEST_SPELLED_NUMBER: Final = 9999
+
+
+class Ending(IntEnum):
+    """What an alignment ends in; the order is the preference between equal scores."""
+
+    HEARD_GAP = 0
+    PAIR = 1
+    LYRIC_GAP = 2
 
 
 class WordCue(NamedTuple):
@@ -136,11 +162,20 @@ class Interval(NamedTuple):
     end: float
 
 
-class Candidate(NamedTuple):
-    first: int
-    last: int
+class HeardWord(NamedTuple):
+    start: float
+    end: float
     text: str
-    score: float
+
+
+class LyricWord(NamedTuple):
+    line_index: int
+    text: str
+
+
+class Anchor(NamedTuple):
+    heard_index: int
+    similarity: float
 
 
 class AlignmentFixture(NamedTuple):
@@ -159,325 +194,201 @@ def _is_word_internal_apostrophe(text: str, index: int) -> bool:
     return _is_word_char(text[index - 1]) and _is_word_char(text[index + 1])
 
 
+def _number_prefix(count: int) -> str:
+    return "ein" if count == 1 else UNITS[count]
+
+
+def spell_german_number(value: int) -> str:
+    if value < len(UNITS):
+        return UNITS[value]
+    if value < 100:
+        unit = value % 10
+        tens = TENS[value // 10]
+        return tens if unit == 0 else f"{_number_prefix(unit)}und{tens}"
+    scale, word = (100, "hundert") if value < 1000 else (1000, "tausend")
+    rest = value % scale
+    return f"{_number_prefix(value // scale)}{word}{spell_german_number(rest) if rest else ''}"
+
+
+def _spell_out_number(token: str) -> str:
+    if not DIGITS.fullmatch(token) or int(token) > LARGEST_SPELLED_NUMBER:
+        return token
+    return spell_german_number(int(token))
+
+
 def normalize_lyrics_token(text: str) -> str:
-    casefolded = unicodedata.normalize("NFKC", CURLY_APOSTROPHES.sub("'", text)).casefold()
+    straightened = unicodedata.normalize("NFKC", CURLY_APOSTROPHES.sub("'", text))
     stripped = "".join(
         char
-        for index, char in enumerate(casefolded)
+        for index, char in enumerate(straightened)
         if not unicodedata.category(char).startswith("P")
-        or (char == "'" and _is_word_internal_apostrophe(casefolded, index))
+        or (char == "'" and _is_word_internal_apostrophe(straightened, index))
     )
-    return re.sub(r"\s+", " ", stripped).strip()
+    words = re.sub(r"\s+", " ", stripped).strip()
+    spelled = " ".join(_spell_out_number(token) for token in words.split(" "))
+    return spelled.casefold().translate(UMLAUT_SPELLINGS)
 
 
-def ratio(transcribed_text: str, lyric_text: str) -> float:
-    return SequenceMatcher(None, transcribed_text, lyric_text).ratio()
+def _tokens(text: str) -> list[str]:
+    normalized = normalize_lyrics_token(text)
+    return normalized.split(" ") if normalized else []
 
 
-def score_against_lyrics(transcribed_text: str, lyric_text: str) -> float:
-    tokens = len(lyric_text.split(" ")) if lyric_text else 0
-    if tokens <= VERBATIM_MAX_TOKENS and transcribed_text != lyric_text:
-        return 0.0
-    return ratio(transcribed_text, lyric_text)
+def _is_sung_line(raw_line: str) -> bool:
+    trimmed = raw_line.strip()
+    return bool(trimmed) and not SECTION_MARKER.match(trimmed)
 
 
-def collect_candidates(
-    unit_texts: list[str],
-    first_start: int,
-    start_limit: int,
-    max_units: int,
-    target_length: int,
-    score: Callable[[str], float],
-) -> list[Candidate]:
-    min_length = target_length * LENGTH_FACTOR_MIN
-    max_length = target_length * LENGTH_FACTOR_MAX
-    candidates: list[Candidate] = []
-
-    for first in range(first_start, start_limit):
-        text = ""
-        for last in range(first, min(len(unit_texts), first + max_units)):
-            text = unit_texts[last] if last == first else f"{text} {unit_texts[last]}"
-            if len(text) > max_length:
-                break
-            if len(text) < min_length:
-                continue
-            candidates.append(Candidate(first, last, text, score(text)))
-    return candidates
-
-
-def matched_word_range(
-    unit_texts: list[str], run: Candidate, lyric_text: str,
-) -> tuple[int, int]:
-    blocks = [
-        block
-        for block in SequenceMatcher(None, run.text, lyric_text).get_matching_blocks()
-        if block.size > 0
+def lyric_words(raw_lines: list[str]) -> list[LyricWord]:
+    return [
+        LyricWord(line_index, text)
+        for line_index, line in enumerate(raw_lines)
+        if _is_sung_line(line)
+        for text in _tokens(line)
     ]
 
-    first = -1
-    last = -1
-    word_start = 0
-    for index in range(run.first, run.last + 1):
-        word_end = word_start + len(unit_texts[index])
-        participates = any(
-            block.a < word_end and block.a + block.size > word_start for block in blocks
-        )
-        if participates:
-            if first == -1:
-                first = index
-            last = index
-        word_start = word_end + 1
-    return (run.first, run.last) if first == -1 else (first, last)
 
-
-def _overlaps(candidate: Candidate, other: Candidate) -> bool:
-    return candidate.first <= other.last and candidate.last >= other.first
-
-
-def repeats_of_winner(
-    unit_texts: list[str],
-    candidates: list[Candidate],
-    winner: Candidate,
-    tolerate_slips: bool,
-) -> list[Candidate]:
-    length = winner.last - winner.first + 1
-    earliest_start = min([winner.first, *(c.first for c in candidates)])
-    latest_end = max([winner.last, *(c.last for c in candidates)])
-
-    repeats: list[Candidate] = []
-    first_start = max(0, earliest_start - length + 1)
-    last_start = min(len(unit_texts) - length, latest_end)
-    for first in range(first_start, last_start + 1):
-        text = " ".join(unit_texts[first : first + length])
-        if not tolerate_slips:
-            if text != winner.text:
-                continue
+def join_hyphen_pieces(words: tuple[WordCue, ...]) -> list[WordCue]:
+    joined: list[WordCue] = []
+    for word in words:
+        if joined and word.text.lstrip().startswith("-"):
+            previous = joined[-1]
+            joined[-1] = WordCue(previous.start, word.end, previous.text + word.text.strip())
         else:
-            reach = (2 * min(len(text), len(winner.text))) / (len(text) + len(winner.text))
-            if reach < REPEAT_MIN_RATIO:
-                continue
-            if ratio(text, winner.text) < REPEAT_MIN_RATIO:
-                continue
-        repeats.append(winner._replace(first=first, last=first + length - 1, text=text))
-    return repeats
+            joined.append(word)
+    return joined
 
 
-def choose_candidate(
-    unit_texts: list[str], candidates: list[Candidate], tolerate_slips: bool,
-) -> Candidate | None:
-    best: Candidate | None = None
-    for candidate in candidates:
-        if best is None or candidate.score > best.score:
-            best = candidate
-    if best is None or best.score < MIN_RATIO:
+def heard_words(cues: tuple[Cue, ...]) -> list[HeardWord]:
+    timed: list[WordCue | Cue] = []
+    for cue in sorted(cues, key=lambda cue: (cue.start, cue.end)):
+        timed.extend(join_hyphen_pieces(cue.words) if cue.words else [cue])
+    return [HeardWord(word.start, word.end, text) for word in timed for text in _tokens(word.text)]
+
+
+def word_similarity(heard: str, lyric: str) -> float:
+    return 1.0 if heard == lyric else SequenceMatcher(None, heard, lyric).ratio()
+
+
+class AlignmentTable:
+    """Gotoh's three-state Needleman–Wunsch table, one score per ending per cell."""
+
+    def __init__(self, lyric_count: int, heard_count: int) -> None:
+        self.width = heard_count + 1
+        cells = (lyric_count + 1) * self.width
+        self.score = [[float("-inf")] * cells for _ in Ending]
+        self.previous = [[Ending.HEARD_GAP] * cells for _ in Ending]
+
+    def set(self, ending: Ending, cell: int, score: float, previous: Ending) -> None:
+        self.score[ending][cell] = score
+        self.previous[ending][cell] = previous
+
+    def best_ending(self, cell: int) -> Ending:
+        best = Ending.HEARD_GAP
+        for ending in Ending:
+            if self.score[ending][cell] > self.score[best][cell]:
+                best = ending
+        return best
+
+    def best(self, cell: int) -> float:
+        return self.score[self.best_ending(cell)][cell]
+
+
+def fill_alignment_table(
+    lyrics: list[str], heard: list[str], similarity: Callable[[int, int], float]
+) -> AlignmentTable:
+    table = AlignmentTable(len(lyrics), len(heard))
+    width = table.width
+    for heard_index in range(len(heard) + 1):
+        table.set(Ending.HEARD_GAP, heard_index, 0.0, Ending.HEARD_GAP)
+
+    for lyric_index in range(1, len(lyrics) + 1):
+        row = lyric_index * width
+        is_outro = lyric_index == len(lyrics)
+        open_gap = 0.0 if is_outro else OPEN_HEARD_GAP
+        extend_gap = 0.0 if is_outro else EXTEND_HEARD_GAP
+
+        for heard_index in range(len(heard) + 1):
+            cell = row + heard_index
+            above = cell - width
+            skipped = table.best(above) + SKIP_LYRIC_WORD
+            table.set(Ending.LYRIC_GAP, cell, skipped, table.best_ending(above))
+            if heard_index == 0:
+                continue
+
+            left = cell - 1
+            opened = table.best(left) + open_gap
+            extended = table.score[Ending.HEARD_GAP][left] + extend_gap
+            if extended >= opened:
+                table.set(Ending.HEARD_GAP, cell, extended, Ending.HEARD_GAP)
+            else:
+                table.set(Ending.HEARD_GAP, cell, opened, table.best_ending(left))
+
+            diagonal = above - 1
+            pair_score = 2 * similarity(lyric_index - 1, heard_index - 1) - 1
+            continued = table.score[Ending.PAIR][diagonal]
+            broken = table.best(diagonal) + BREAK_PAIR_RUN
+            if continued >= broken:
+                table.set(Ending.PAIR, cell, continued + pair_score, Ending.PAIR)
+            else:
+                table.set(Ending.PAIR, cell, broken + pair_score, table.best_ending(diagonal))
+    return table
+
+
+def align_words(lyrics: list[str], heard: list[str]) -> list[Anchor | None]:
+    cache: dict[tuple[str, str], float] = {}
+
+    def similarity(lyric_index: int, heard_index: int) -> float:
+        key = (lyrics[lyric_index], heard[heard_index])
+        if key not in cache:
+            cache[key] = word_similarity(heard[heard_index], lyrics[lyric_index])
+        return cache[key]
+
+    table = fill_alignment_table(lyrics, heard, similarity)
+    anchors: list[Anchor | None] = [None] * len(lyrics)
+    lyric_index, heard_index = len(lyrics), len(heard)
+    ending = table.best_ending(lyric_index * table.width + heard_index)
+    while lyric_index > 0:
+        cell = lyric_index * table.width + heard_index
+        previous = table.previous[ending][cell]
+        if ending == Ending.PAIR:
+            pair_similarity = similarity(lyric_index - 1, heard_index - 1)
+            if pair_similarity >= ANCHOR_MIN_SIMILARITY:
+                anchors[lyric_index - 1] = Anchor(heard_index - 1, pair_similarity)
+            lyric_index -= 1
+            heard_index -= 1
+        elif ending == Ending.LYRIC_GAP:
+            lyric_index -= 1
+        else:
+            heard_index -= 1
+        ending = previous
+    return anchors
+
+
+def _is_line_heard(line_anchors: list[Anchor | None]) -> bool:
+    if len(line_anchors) <= VERBATIM_MAX_TOKENS:
+        return all(anchor is not None and anchor.similarity == 1 for anchor in line_anchors)
+    anchored = sum(anchor is not None for anchor in line_anchors)
+    return anchored / len(line_anchors) >= LINE_MIN_ANCHORED_SHARE
+
+
+def _line_interval(line_anchors: list[Anchor | None], heard: list[HeardWord]) -> Interval | None:
+    if not line_anchors or not _is_line_heard(line_anchors):
         return None
-
-    repeats = repeats_of_winner(unit_texts, candidates, best, tolerate_slips)
-    rival_score = float("-inf")
-    for candidate in candidates:
-        if any(_overlaps(candidate, repeat) for repeat in repeats):
-            continue
-        rival_score = max(rival_score, candidate.score)
-    if rival_score != float("-inf") and best.score - rival_score < AMBIGUITY_MARGIN:
-        return None
-
-    earliest = best
-    for candidate in candidates:
-        if candidate.score < MIN_RATIO or candidate.first >= earliest.first:
-            continue
-        if not any(
-            repeat.first == candidate.first and repeat.last == candidate.last
-            for repeat in repeats
-        ):
-            continue
-        earliest = candidate
-    return earliest
-
-
-def collect_with_growing_window(
-    word_texts: list[str], cursor: int, line_text: str,
-) -> list[Candidate]:
-    candidates: list[Candidate] = []
-    scanned = cursor
-    plausible = False
-
-    while scanned < len(word_texts) and not plausible:
-        limit = min(len(word_texts), scanned + WORD_STREAM_LOOKAHEAD)
-        for candidate in collect_candidates(
-            word_texts,
-            scanned,
-            limit,
-            len(word_texts),
-            len(line_text),
-            lambda candidate_text, line=line_text: score_against_lyrics(candidate_text, line),
-        ):
-            candidates.append(candidate)
-            plausible = plausible or candidate.score >= MIN_RATIO
-        scanned = limit
-    return candidates
-
-
-def another_line_reads_run_as_well(
-    line_texts: list[str], floor_position: int, line_position: int, run: Candidate,
-) -> bool:
-    return any(
-        other != line_position
-        and line_texts[other] != line_texts[line_position]
-        and run.score - score_against_lyrics(run.text, line_texts[other]) < AMBIGUITY_MARGIN
-        for other in range(floor_position, len(line_texts))
-    )
-
-
-def contesting_lines(
-    word_texts: list[str],
-    line_texts: list[str],
-    line_position: int,
-    run: Candidate,
-    floor: int,
-) -> list[int]:
-    waiting = [
-        other
-        for other in range(line_position + 1, len(line_texts))
-        if line_texts[other] != line_texts[line_position]
-    ]
-    if not waiting:
-        return []
-    max_phrase_length = (
-        max(len(line_texts[other]) for other in waiting) * LENGTH_FACTOR_MAX
-    )
-
-    contesting: list[int] = []
-    opening = ""
-    for first in range(run.first, floor - 1, -1):
-        if first < run.first:
-            opening = word_texts[first] if not opening else f"{word_texts[first]} {opening}"
-        phrase = run.text if not opening else f"{opening} {run.text}"
-        if len(phrase) > max_phrase_length:
-            break
-
-        for last in range(run.last, len(word_texts)):
-            if last > run.last:
-                phrase = f"{phrase} {word_texts[last]}"
-            if len(phrase) > max_phrase_length:
-                break
-            if first == run.first and last == run.last:
-                continue
-            own_reading = score_against_lyrics(phrase, line_texts[line_position])
-            for other in waiting:
-                if other in contesting:
-                    continue
-                lyric_length = len(line_texts[other])
-                reach = (2 * min(len(phrase), lyric_length)) / (len(phrase) + lyric_length)
-                if reach < MIN_RATIO or reach <= own_reading:
-                    continue
-                reading = score_against_lyrics(phrase, line_texts[other])
-                if reading >= MIN_RATIO and reading > own_reading:
-                    contesting.append(other)
-    return contesting
-
-
-def align_against_words(
-    words: list[WordCue], line_texts: list[str],
-) -> dict[int, Interval]:
-    word_texts = [normalize_lyrics_token(word.text) for word in words]
-    lyrics_repeat_the_line = [line_texts.count(text) > 1 for text in line_texts]
-    intervals: dict[int, Interval] = {}
-    claims: dict[tuple[int, int], Candidate | None] = {}
-
-    def claim_of(line_position: int, start: int) -> Candidate | None:
-        if line_position >= len(line_texts):
-            return None
-        key = (line_position, start)
-        if key not in claims:
-            claims[key] = choose_candidate(
-                word_texts,
-                collect_with_growing_window(word_texts, start, line_texts[line_position]),
-                lyrics_repeat_the_line[line_position],
-            )
-        return claims[key]
-
-    cursor = 0
-    floor_position = 0
-
-    for line_position, line_text in enumerate(line_texts):
-        claim = claim_of(line_position, cursor)
-        if claim is None:
-            continue
-        if another_line_reads_run_as_well(line_texts, floor_position, line_position, claim):
-            continue
-
-        first, last = matched_word_range(word_texts, claim, line_text)
-        stranded = any(
-            claim_of(other, last + 1) is None
-            for other in contesting_lines(
-                word_texts, line_texts, line_position, claim, cursor,
-            )
-        )
-        if stranded:
-            continue
-
-        intervals[line_position] = Interval(words[first].start, words[last].end)
-        floor_position = line_position + 1
-        cursor = last + 1
-    return intervals
-
-
-def align_against_cue_windows(
-    cues: list[Cue], line_texts: list[str],
-) -> dict[int, Interval]:
-    intervals: dict[int, Interval] = {}
-
-    floor_position = 0
-    for cue in cues:
-        if floor_position >= len(line_texts):
-            break
-        cue_text = normalize_lyrics_token(cue.text)
-        chosen = choose_candidate(line_texts, collect_candidates(
-            line_texts,
-            floor_position,
-            len(line_texts),
-            MAX_WINDOW_LINES,
-            len(cue_text),
-            lambda candidate_text, text=cue_text: score_against_lyrics(text, candidate_text),
-        ), False)
-        if chosen is None:
-            continue
-        for position in range(chosen.first, chosen.last + 1):
-            intervals[position] = Interval(cue.start, cue.end)
-        floor_position = chosen.last + 1
-    return intervals
+    sung = [heard[anchor.heard_index] for anchor in line_anchors if anchor is not None]
+    return Interval(sung[0].start, sung[-1].end)
 
 
 def align_lyrics_to_cues(lyrics: str, cues: tuple[Cue, ...]) -> list[Interval | None]:
     raw_lines = re.split(r"\r?\n", lyrics)
-    normalized_lines = [
-        normalize_lyrics_token(line)
-        if line.strip() and not SECTION_MARKER.match(line.strip())
-        else ""
-        for line in raw_lines
-    ]
-    candidate_line_indices = [
-        index for index, text in enumerate(normalized_lines) if text
-    ]
-    line_texts = [normalized_lines[index] for index in candidate_line_indices]
+    words = lyric_words(raw_lines)
+    heard = heard_words(cues)
+    anchors = align_words([word.text for word in words], [word.text for word in heard])
 
-    sorted_cues = [
-        cue for cue in sorted(cues, key=lambda cue: (cue.start, cue.end))
-        if normalize_lyrics_token(cue.text)
-    ]
-    words = [
-        word for cue in sorted_cues for word in (cue.words or ())
-        if normalize_lyrics_token(word.text)
-    ]
-    by_position = (
-        align_against_words(words, line_texts) if words
-        else align_against_cue_windows(sorted_cues, line_texts)
-    )
-
-    intervals: list[Interval | None] = [None] * len(raw_lines)
-    for position, interval in by_position.items():
-        intervals[candidate_line_indices[position]] = interval
-    return intervals
+    anchors_by_line: list[list[Anchor | None]] = [[] for _ in raw_lines]
+    for word, anchor in zip(words, anchors, strict=True):
+        anchors_by_line[word.line_index].append(anchor)
+    return [_line_interval(line_anchors, heard) for line_anchors in anchors_by_line]
 
 
 # ── alignment fixtures ──────────────────────────────────────────────
@@ -622,14 +533,34 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (_sung_cue(0.0, 0.4, f"{NESTED_LONG}x {LINE_3} {NESTED_LONG}"),),
     ),
     AlignmentFixture(
-        "word path: two lines too alike to tell apart leave the run to neither",
+        "word path: of two near-identical lines the one sung word for word takes the run",
         "\n".join([RAIN_FALLS, RAIN_CALLS]),
         (_sung_cue(0.0, 0.4, RAIN_FALLS),),
     ),
     AlignmentFixture(
-        "word path: three lines too alike to tell apart leave the run to none of them",
+        "word path: of three near-identical lines the middle one sung takes the whole run",
         "\n".join([RAIN_FALLS, RAIN_CALLS, RAIN_WALLS]),
-        (_sung_cue(0.0, 0.4, RAIN_FALLS),),
+        (_sung_cue(0.0, 0.4, RAIN_CALLS),),
+    ),
+    AlignmentFixture(
+        "word path: two near-identical chorus variants each light where they are sung",
+        "\n".join([RAIN_FALLS, LINE_3, RAIN_CALLS]),
+        (_sung_cue(0.0, 0.4, f"{RAIN_FALLS} {LINE_3} {RAIN_CALLS}"),),
+    ),
+    AlignmentFixture(
+        "word path: a chorus line Whisper did not recognise leaves the verse behind it lit",
+        "\n".join([CHORUS, LINE_1, LINE_2, CHORUS]),
+        (_sung_cue(0.0, 0.4, f"ooh na na na ooh na {LINE_1} {LINE_2} {CHORUS}"),),
+    ),
+    AlignmentFixture(
+        "word path: hyphen-led pieces of a spelled-out word read as that one word",
+        "\n".join(["yeah, A-M-I-F", LINE_1]),
+        (_sung_cue(0.0, 0.4, f"yeah A -M -I -F {LINE_1}"),),
+    ),
+    AlignmentFixture(
+        "word path: a spelled-out umlaut and a sung number read as the words the lyrics spell",
+        "\n".join(["die laterne glueht siebzehn mal", LINE_2]),
+        (_sung_cue(0.0, 0.4, f"Die Laterne glüht 17 mal {LINE_2}"),),
     ),
     AlignmentFixture(
         "word path: a phrase sung twice takes the clearly better reading",
@@ -637,14 +568,27 @@ ALIGNMENT_FIXTURES: Final[tuple[AlignmentFixture, ...]] = (
         (_sung_cue(0.0, 0.4, f"{LINE_1} the lantern hums calmly tonight"),),
     ),
     AlignmentFixture(
-        "word path: two readings too alike to tell apart leave the line dark",
+        "word path: of two readings of a line the closer one takes it, even the later one",
         LINE_1,
-        (_sung_cue(0.0, 0.4, f"{LINE_1} the lantern hums quietly tonite"),),
+        (_sung_cue(0.0, 0.4, f"the lantern hums quietly tonite {LINE_1}"),),
     ),
     AlignmentFixture(
-        "cue window: two lines too alike to tell apart stay dark",
-        "\n".join(["silver rain falls on the roof", "silver rain calls on the roof"]),
-        (Cue(0.0, 3.0, "silver rain falls on the roof"),),
+        "mixed: a segment without word timestamps among timed ones carries its whole span",
+        "\n".join([LINE_1, LINE_2]),
+        (_sung_cue(0.0, 0.5, LINE_1), Cue(2.5, 5.0, LINE_2)),
+    ),
+    AlignmentFixture(
+        "cue window: a segment lights the line it reads word for word, not its near-twin",
+        "\n".join([RAIN_FALLS, RAIN_CALLS]),
+        (Cue(0.0, 3.0, RAIN_FALLS),),
+    ),
+    AlignmentFixture(
+        "cue window: a line split across two segments spans both",
+        "\n".join([LINE_1, LINE_2, LINE_3]),
+        (
+            Cue(0.0, 4.0, f"{LINE_1} we count the"),
+            Cue(4.0, 8.0, f"fading city lights {LINE_3}"),
+        ),
     ),
     AlignmentFixture(
         "cue window: both lines of a two-line window carry the whole cue span",
