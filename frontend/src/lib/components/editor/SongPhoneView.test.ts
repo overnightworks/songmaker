@@ -5,6 +5,7 @@ import { coWriterOpen, type RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
+import { watchTypingOnPhone } from '$lib/stores/ui';
 import SongPhoneView from './SongPhoneView.svelte';
 import songPhoneViewSource from './SongPhoneView.svelte?raw';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
@@ -166,6 +167,24 @@ describe('SongPhoneView', () => {
 		await tick();
 
 		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('140px');
+	});
+
+	it('steps the Generate bar and its reserved room aside while the lyrics have focus, and brings them back on leaving', async () => {
+		const stopWatching = watchTypingOnPhone(document, true);
+		const target = await render();
+		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea[aria-label="Lyrics"]');
+		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
+		if (!lyrics || !writeScroll) throw new Error('Expected the lyrics and the write scroll');
+
+		lyrics.focus();
+		await tick();
+		expect(target.querySelector('.write-actionbar')).toBeNull();
+		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('0px');
+
+		lyrics.blur();
+		await tick();
+		expectGenerateAsPrimaryAction(target);
+		stopWatching();
 	});
 
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
