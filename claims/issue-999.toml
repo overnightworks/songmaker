@@ -1,0 +1,7 @@
+claim_id = "afca6548b4314e309963e285c7d36bad"
+agent = "claude-head"
+role = "builder"
+base = "eb7fcbdd62ffc5cacc98a149a3b2bcef5064871a"
+branch = "claude/issue-999-freeze-typing"
+scope = ["docs/design/song-page-phone.html"]
+opened_commit = "8f6e112b0eb4f0712b6909578cdc8c5058836e61"
