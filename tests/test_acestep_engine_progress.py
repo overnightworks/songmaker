@@ -8,6 +8,7 @@ from acestep_engine.models import ResultItem
 from acestep_engine.progress import (
     RENDERING_ENDS_AT,
     RENDERING_STARTS_AT,
+    RUNNING_STARTS_AT,
     WRITING_STARTS_AT,
     AceStepPhase,
     progress_from_result,
@@ -15,13 +16,18 @@ from acestep_engine.progress import (
 
 
 def test_the_phase_marks_are_the_forks_own_progress_calls() -> None:
-    assert (WRITING_STARTS_AT, RENDERING_STARTS_AT, RENDERING_ENDS_AT) == (0.1, 0.51, 0.99)
+    assert (RUNNING_STARTS_AT, WRITING_STARTS_AT, RENDERING_STARTS_AT, RENDERING_ENDS_AT) == (
+        0.01,
+        0.1,
+        0.51,
+        0.99,
+    )
 
 
 @pytest.mark.parametrize(
     ("server_progress", "phase", "fraction"),
     [
-        (0.0, AceStepPhase.WRITING, 0.0),
+        (0.0, AceStepPhase.LOADING_MODEL, 0.0),
         (0.01, AceStepPhase.WRITING, 0.0),
         (0.1, AceStepPhase.WRITING, 0.0),
         (0.5, AceStepPhase.WRITING, (0.5 - 0.1) / (0.51 - 0.1)),
