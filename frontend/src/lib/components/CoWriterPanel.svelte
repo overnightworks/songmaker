@@ -253,15 +253,19 @@
 		return conversationId ? fetchConversationMessages(conversationId) : null;
 	}
 
-	/** Another tab or panel is still running a turn: follow it and keep what was typed. */
+	/**
+	 * Another tab or panel is still running a turn: follow it, and keep what
+	 * was typed unless the running turn is already answering that message.
+	 */
 	async function followTurnRunningElsewhere(
 		sentMessage: string,
 		assistantIndex: number
 	): Promise<void> {
 		messages = messages.slice(0, assistantIndex - 1);
-		input = sentMessage;
 		if (activeConversationId) await loadMessages(activeConversationId);
 		else await loadConversations();
+		const runningMessage = messages.findLast((message) => message.role === 'user')?.text;
+		if (runningMessage !== sentMessage) input = sentMessage;
 	}
 
 	/**

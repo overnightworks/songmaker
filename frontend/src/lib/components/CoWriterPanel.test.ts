@@ -576,6 +576,23 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.textContent).not.toContain('Ja bitte');
 	});
 
+	it('does not offer a message again that the running turn is already answering', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(409, 'A co-writer reply is still being written', '/api/chat/turn');
+			})()
+		);
+		conversationPages(conversation(false), conversation(true, sent));
+
+		const target = await sendInAnOpenConversation();
+
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('');
+	});
+
 	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {
 		conversationPages(conversation(false, sent));
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
