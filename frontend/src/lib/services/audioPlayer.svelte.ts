@@ -553,12 +553,12 @@ class AudioPlayer {
 		this.progressWatchdog = null;
 	}
 
-	// Only stillness while the player calls itself playing counts: buffering and a
-	// paused element are expected to stand still.
+	// Only stillness while the player calls itself playing counts: buffering, a
+	// seek and a paused element are expected to stand still.
 	private checkProgress(el: HTMLAudioElement): void {
 		const clockMoved = el.currentTime !== this.lastCheckedTime;
 		this.lastCheckedTime = el.currentTime;
-		if (clockMoved || this.status !== 'playing' || el.paused) {
+		if (clockMoved || this.status !== 'playing' || el.paused || el.seeking) {
 			this.stillChecks = 0;
 			return;
 		}
