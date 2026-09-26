@@ -337,10 +337,12 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 		// A playlist row plays in place (#1010, frame B2): the listener stays on
 		// the playlist page and the bar, not Now Playing, carries the transport.
-		await entryRows
-			.last()
-			.getByRole('button', { name: nameStartingWith(firstPlaylistSong) })
-			.click();
+		// The click lands in the card's bottom-left padding, outside the title
+		// text, because the whole card is the row's target.
+		const playedCard = entryRows.last();
+		const playedCardBox = await playedCard.boundingBox();
+		if (!playedCardBox) throw new Error('Expected a visible playlist row');
+		await playedCard.click({ position: { x: 4, y: playedCardBox.height - 4 } });
 		await expect(
 			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 		).toBeVisible();

@@ -231,10 +231,10 @@ const NOW_PLAYING_ORIGINS: {
 				.click();
 			const origin = workspace(page).getByRole('heading', { name: playlist.title });
 			await expect(origin).toBeVisible();
-			await playlistEntryRows(page)
-				.first()
-				.getByRole('button', { name: nameStartingWith(playing) })
-				.click();
+			const playedCard = playlistEntryRows(page).first();
+			const playedCardBox = await playedCard.boundingBox();
+			if (!playedCardBox) throw new Error('Expected a visible playlist row');
+			await playedCard.tap({ position: { x: 4, y: playedCardBox.height - 4 } });
 			await expect(page.getByRole('contentinfo').getByText(playing)).toBeVisible();
 			await expect(origin).toBeVisible();
 			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
