@@ -5,6 +5,7 @@ from datetime import timedelta
 
 import pytest
 
+from acestep_engine.progress import AceStepPhase
 from acestep_worker.clock import utcnow
 from acestep_worker.models import GenerationTaskResult
 from acestep_worker.task_store import TaskStore
@@ -84,6 +85,35 @@ def test_update_progress() -> None:
     snap = _run(go())
     assert snap is not None
     assert snap.progress == 0.42
+
+
+def test_generation_progress_carries_its_phase_into_every_event() -> None:
+    async def go():
+        store = TaskStore()
+        task_id = await store.create("generate", phase=AceStepPhase.WRITING)
+        events = store.subscribe(task_id)
+        born = await anext(events)
+        await store.mark_running(task_id)
+        running = await anext(events)
+        await store.update_progress(task_id, 0.25, phase=AceStepPhase.RENDERING)
+        rendering = await anext(events)
+        await events.aclose()
+        return born, running, rendering
+
+    born, running, rendering = _run(go())
+
+    events = (born, running, rendering)
+    assert [(event.data["phase"], event.data["progress"]) for event in events] == [
+        ("writing", 0.0),
+        ("writing", 0.0),
+        ("rendering", 0.25),
+    ]
+
+
+@pytest.mark.parametrize("kind", ["download", "train_lora"])
+def test_only_a_generation_task_has_a_phase(kind) -> None:
+    with pytest.raises(ValueError, match="Only generation tasks have phases"):
+        _run(TaskStore().create(kind, phase=AceStepPhase.WRITING))
 
 
 def test_training_progress_carries_real_epochs() -> None:

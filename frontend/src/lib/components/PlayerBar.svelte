@@ -21,7 +21,7 @@
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import { selectedPlaylistDetail } from '$lib/stores/playlists';
-	import { typingOnPhone } from '$lib/stores/ui';
+	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -148,10 +148,9 @@
 	</span>
 {/snippet}
 
-<!-- One player, never two: the full surface carries the only transport, so the
-	bar steps aside for it on every viewport. It steps aside for the keyboard
-	too while a field has focus on the phone; playback runs on untouched. -->
-{#if $nowPlayingSurface !== 'full' && !$typingOnPhone}
+<!-- The bar steps aside for the full surface and for the phone's keyboard;
+	playback runs on untouched. -->
+{#if !$transportBarHidden}
 	<TransportBarFrame
 		{isPlaying}
 		{isLoading}

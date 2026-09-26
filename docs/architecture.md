@@ -907,7 +907,7 @@ User (username, role: admin|user, bcrypt hash)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
-  ├── Job (type, status, progress, error, queue_position, album?)
+  ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
   └── AuditLog (action, resource_type, resource_id, detail)
 
 Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?, is_shared), PlaylistEntry,
@@ -1013,7 +1013,7 @@ stream.
 | POST | `/api/generations/{id}/score` | user | Submit scoring job (→ scoring queue) |
 | POST | `/api/generations/{id}/rate` | user | Rate a generation |
 | POST | `/api/generations/{id}/pick` | user | Pick best generation |
-| GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position) |
+| GET | `/api/jobs/{id}` | user | Poll job status (includes queue_position; a running generate job also its `phase`, take counters and `remaining_time_estimate`) |
 | POST | `/api/jobs/{id}/cancel` | user | Cancel a queued or running job (409 if not active). Terminal; later progress/finalize cannot overwrite. Does not stop in-flight GPU inference. |
 | POST | `/api/songs/{id}/chat` | user | Send chat message (multi-turn, rate-limited) |
 | GET | `/api/songs/{id}/chat` | user | Load chat history |
@@ -1083,7 +1083,7 @@ persist. Queued cancelled jobs are skipped by `check_job_still_valid`.
 In-flight ACE-Step GPU work is not interrupted (issue #30 Phase 2).
 ```
 
-The job stream projects the queued job's `queue_reason` and `queue_position` on every change, including a reason-only change; it does not decide or mutate GPU admission.
+The job stream emits on every change of status, progress, `phase`, take counters, `queue_reason` or `queue_position` — a phase-only or reason-only change included, never a change of `remaining_time_estimate` alone; it does not decide or mutate GPU admission.
 
 ## Scoring Flow
 
@@ -1304,6 +1304,41 @@ never been observed; with a newer observation, it is `alive`.
   remains the final mechanism: it cancels or fails the local Music-Worker job
   and closes its subscription. It does not remotely cancel the ACE-Step task,
   which can continue running after that local job ends.
+
+  A generate job's percent comes from ACE-Step's own `progress` value, never
+  from its free-text `progress_text` (which carries whatever the server logged
+  last — checkpoint-loading bars, LM chunk counters — and made the percent
+  jump and fall back). `acestep_engine/progress.py` reads the value against
+  the fork's fixed marks (0.1 writing starts, 0.51 rendering starts, 0.99
+  rendering ends) as an `AceStepPhase` plus the fraction within it; the
+  worker's `TaskStore` carries both on every generate event (a generate task
+  is born in `writing`); the scheduler hands them on as `(phase, fraction)`
+  and announces `loading_model` before a real `/load_model`. A generate
+  progress event without a known phase is logged and dropped — the take keeps
+  running and the job keeps its last value. In the Music-Worker,
+  `GenerationProgressTracker` (`jobs/generation.py`) is the single writer of a
+  running generate job's progress, because `update_job_status` resets progress
+  whenever a write omits it. It maps the phase to `GenerationPhase` and
+  combines `(take + phase start + phase share × fraction) / take count`, with
+  shares writing 0.55, rendering 0.15 and saving the take 0.30 (calibrated on
+  a traced warm take; loading a model has none). The value only rises, a phase
+  change is written at once while writes within a phase are throttled to one
+  per two seconds, and saving the take sits at its phase start, so the job
+  stays below 1.0 until `_finalize_generation_job` writes 1.0 after the take
+  row exists.
+
+  Every tracker write also carries the phase into `jobs.phase`
+  (`update_job_status(phase=)` keeps the stored value when a write omits it,
+  and the column keeps its last value after the job ends). `JobResponse`
+  exposes `phase` only while the job is RUNNING. The remaining-time estimate
+  is `elapsed × (1 − progress) / progress`, with elapsed counted from
+  `jobs.generation_started_at`: `update_job_status` sets it on the first write
+  carrying a generating phase (writing, rendering, saving the take — never
+  `loading_model`) after each RUNNING entry and clears it whenever the job
+  enters or leaves RUNNING. A cold start therefore gets the same estimate as a
+  warm one, a requeue excludes its queue and load time, and until the anchor
+  exists the estimate reads `calculating`. Cover claims and non-generate jobs
+  never set it.
 
   `download_model_on_worker()` refreshes its job heartbeat through both
   `_on_progress` and `_on_heartbeat` for every consumed SSE event. The worker
