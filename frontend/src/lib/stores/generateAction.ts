@@ -1,6 +1,6 @@
 import { derived, get, writable } from 'svelte/store';
 import { cancelJob, generateSong } from '$lib/api/client';
-import type { JobItem } from '$lib/api/types';
+import type { JobItem, SongItem } from '$lib/api/types';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GENERATE_QUEUED_TEMPLATE,
@@ -9,7 +9,8 @@ import {
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_QUEUED_LABEL,
-	EDITOR_SELECT_MODEL_TITLE
+	EDITOR_SELECT_MODEL_TITLE,
+	JOB_TYPE_GENERATE
 } from '$lib/constants';
 import {
 	currentVersionIndex,
@@ -21,7 +22,13 @@ import {
 	versions
 } from './editor';
 import { health } from './health';
-import { activeJobs, dismissGenerationFailure, generationFailures, trackJob } from './jobs';
+import {
+	activeJobs,
+	dismissGenerationFailure,
+	generationFailures,
+	trackJob,
+	type ActiveJob
+} from './jobs';
 import { selectedSong } from './player';
 import { activeModels } from './presets';
 import {
@@ -58,6 +65,28 @@ function takeCounterLabel(job: JobItem | null): string | null {
 		'{count}',
 		String(job.take_count)
 	);
+}
+
+/**
+ * Whether every take the job was asked for is already in the song's list.
+ * The job stream reports the job's end on its own schedule and can lag a
+ * dropped connection's retry behind the take a song refresh already
+ * brought in (#1032); the take list is what the musician sees, so the job
+ * presentation follows it. Takes created since the job started are its own.
+ */
+function jobTakesHaveLanded(job: JobItem, song: SongItem): boolean {
+	if (job.started_at == null) return false;
+	const startedAt = Date.parse(job.started_at);
+	const landed = song.generations.filter((take) => Date.parse(take.created_at) >= startedAt);
+	return landed.length >= (job.take_count ?? 1);
+}
+
+function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem | null {
+	const active = jobs.find(
+		({ songId, job }) =>
+			songId === song.id && job.type === JOB_TYPE_GENERATE && !jobTakesHaveLanded(job, song)
+	);
+	return active?.job ?? null;
 }
 
 export type GenerateState =
@@ -111,10 +140,7 @@ export const generateAction = derived(
 		mode,
 		failures
 	]): GenerateState => {
-		const job = song
-			? (jobs.find((entry) => entry.songId === song.id && entry.job.type === 'generate')?.job ??
-				null)
-			: null;
+		const job = song ? pendingGenerateJob(song, jobs) : null;
 		const pending = inFlight || job?.status === 'queued' || job?.status === 'running';
 		const gpuOffline = health?.acestep_workers_online === 0;
 		let disabledReason = '';

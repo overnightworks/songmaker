@@ -987,11 +987,15 @@ The owner remembers the id of the last event it saw and reopens a dropped stream
 with that `last_event_id` query cursor, so an event sent while the phone's screen
 was off or the connection was down is replayed rather than lost. A completed or
 partial job — a generate job included — also asks this owner to refresh its song
-when its job stream reports the end, so the new take is in the list when the job
-tab shows its success toast even if the `generation.created` event fell into a
-reconnect gap; both triggers are idempotent. Other tabs update through the event. Bootstrap failures retry a bounded
-number of times, then surface one accessible Retry status rather than hanging on
-`Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror` close the
+when its job stream reports the end, so the new take is in the list right after the
+job tab shows its success toast even if the `generation.created` event fell into a
+reconnect gap; both triggers are idempotent. Other tabs update through the event.
+The Generate button and the Takes status slot follow the take list rather than the
+job stream: `generateAction` stops presenting a generate job as running once as
+many takes as it was asked for, created since it started, are in the song's list,
+even while its own stream still waits to report the end. Bootstrap failures retry a
+bounded number of times, then surface one accessible Retry status rather than
+hanging on `Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror` close the
 stream.
 
 ## API Endpoints
