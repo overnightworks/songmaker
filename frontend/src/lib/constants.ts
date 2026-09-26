@@ -112,9 +112,6 @@ export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playa
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
-export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
-export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are archived';
-
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
 // A legacy `/?song=<id>&gen=<id>` link whose take is gone still opens the
