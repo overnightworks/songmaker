@@ -1,0 +1,8 @@
+claim_id = "4c394e1073684f4294b17cccdba5a9e2"
+agent = "claude-head"
+role = "builder"
+base = "592206c43409bc61b290c393198e22ede2262c61"
+branch = "claude/issue-995-phone-proof"
+scope = ["frontend/e2e/README.md", "frontend/e2e/helpers.ts", "frontend/e2e/seed.ts", "frontend/e2e/song-phone.spec.ts", "scripts/seed_e2e_job_states.py"]
+opened_commit = "cb0af40a2dc017a8f0152fc396f534611b995d3c"
+whole_reason = "E1: the phone proof spans its spec, its seed script and the shared e2e helpers in one change"
