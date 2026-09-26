@@ -1,8 +1,0 @@
-claim_id = "f070f1acbd20423ba4d8d0695121472a"
-agent = "claude-head"
-role = "builder"
-base = "9f5c98ef7127b5844cd37219119fff04940a637b"
-branch = "claude/issue-1032-sync-followups"
-scope = ["docs/architecture.md", "docs/security.md", "frontend/e2e/README.md", "frontend/e2e/helpers.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/lib/stores/sseReconnect.test.ts", "frontend/src/lib/stores/sseReconnect.ts", "src/songmaker_cli/resource_event_api.py", "tests/test_resource_event_api.py"]
-opened_commit = "9a43f0229cb4948329ed5febdbb1f7e45c62670a"
-whole_reason = "reconnect, job presentation and error wording of one live-sync path"
