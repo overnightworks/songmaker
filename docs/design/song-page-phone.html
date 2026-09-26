@@ -31,7 +31,7 @@
 	--font-body: 'Open Sans', Arial, sans-serif;
 	--header-height: 46px;
 	--player-height: 64px;
-	--editor-generate-bar-height: 64px;
+	--editor-generate-bar-height: 56px;
 	--btn-radius-pill: 16px;
 	--btn-radius-sm: 4px;
 	--btn-font-size: 1rem;
@@ -479,7 +479,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	flex-wrap: wrap;
 	align-items: center;
 	gap: .3rem;
-	padding: .35rem .5rem .35rem .75rem;
+	padding: 6px .5rem 6px .75rem;
 	background: var(--header-bg);
 	border-top: 1px solid var(--border);
 }
@@ -721,7 +721,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 <div class="board">
 
 <figure>
-	<figcaption><b>1 · Write</b> — recipe collapsed, unsaved draft</figcaption>
+	<figcaption><b>1 · Write</b> — recipe collapsed, unsaved draft; the Generate bar is one slim 56 px row, the 44 px primary with 6 px above and below. Blessed 26.09.2026, #1011 (frame A2).</figcaption>
 	<div class="device" id="f1">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -827,7 +827,7 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 		</div>
 	</div>
 	<div class="frame-note">
-		<p><b>Rule (phone, every screen).</b> While a text field has focus, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back when you leave the field. Only what belongs to the field stays — on the co-writer screen that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
+		<p><b>Rule (phone, every screen).</b> While a text field has focus and the on-screen keyboard is open, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back as soon as the keyboard closes — leaving the field, or closing the keyboard with Back while the field keeps focus (#1017). A hardware keyboard opens no on-screen keyboard, so the bars stay. Only what belongs to the field stays — on the co-writer screen that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
 		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
 		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Write; Send the only primary on the co-writer screen.</p>
 	</div>
@@ -902,7 +902,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>3 · Write</b> — generating: the action carries the progress</figcaption>
+	<figcaption><b>3 · Write</b> — generating: the action carries the progress, × cancels, the same 56 px bar. Blessed 26.09.2026, #1011 (frame A4).</figcaption>
 	<div class="device" id="f3">
 		<header class="appbar">
 			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -1266,7 +1266,7 @@ the morning gives away</div>
 </figure>
 
 <figure>
-	<figcaption><b>6 · States</b> — Takes empty (top) · Generate unavailable, GPU offline (bottom)</figcaption>
+	<figcaption><b>6 · States</b> — Takes empty (top) · Generate unavailable, GPU offline (bottom): the outline box keeps its height and carries the reason as one ⓘ line, nothing underneath. Blessed 26.09.2026, #1011 (frame A3).</figcaption>
 	<div class="split" id="f6">
 		<div class="device">
 		<header class="appbar">
@@ -1328,8 +1328,7 @@ the morning gives away</div>
 			</div>
 			</div>
 			<div class="actionbar">
-				<button class="btn-primary off" aria-disabled="true">GPU offline</button>
-				<button class="icon-btn" aria-label="Why generation is unavailable" title="Why generation is unavailable"><svg class="ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 11v5"/><path d="M12 8v.1"/></svg></button>
+				<button class="btn-primary off" aria-disabled="true" aria-label="Generate — No GPU worker online"><span aria-hidden="true">ⓘ</span> No GPU worker online</button>
 			</div>
 		<div class="player">
 			<span class="cover" aria-hidden="true"></span>

@@ -64,7 +64,7 @@
 				{@render write()}
 			</div>
 			<div class="write-actionbar" hidden={$typingOnPhone} bind:this={actionBarEl}>
-				<GenerateButton />
+				<GenerateButton reasonInside />
 			</div>
 		{:else}
 			{@render expiryDigest()}
