@@ -18,7 +18,7 @@ from arq.connections import ArqRedis
 from sqlalchemy.orm import Session, sessionmaker
 
 from acestep_engine.models import AceStepConfig
-from acestep_engine.progress import AceStepPhase
+from acestep_engine.progress import NOT_STARTED, AceStepPhase
 from songmaker_cli import jobs
 from songmaker_cli.acestep_state import decr_queue_depth
 from songmaker_cli.api_models import (
@@ -126,7 +126,9 @@ class GenerationProgressTracker:
     sits at its phase start, and only ``_finalize_generation_job`` writes 1.0,
     once the take row exists. A phase change is written at once; within a
     phase, writes are throttled. Every write carries the current phase, whose
-    first generating one anchors the remaining-time estimate.
+    first generating one anchors the remaining-time estimate. A take starts
+    where ACE-Step reports a task it has not started, so the previous take's
+    phase never shows beside the new take.
     """
 
     db_factory: sessionmaker[Session]
@@ -143,7 +145,7 @@ class GenerationProgressTracker:
 
     def start_take(self, index: int) -> None:
         self.take_index = index
-        self.phase = None
+        self.phase = _GENERATION_PHASE_OF[NOT_STARTED.phase]
         self._raise_to(index / self.take_count)
         self._write(take_index=index + 1, take_count=self.take_count)
 

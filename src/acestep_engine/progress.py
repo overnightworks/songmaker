@@ -19,8 +19,12 @@ The marks, as set by the vendored fork:
   (``api/jobs/store.py``) writes 1.0 only on success, which arrives as a
   completed entry, never as progress.
 
-Before the first mark the value is the store's own queued/running floor
-(0.0, then 0.01), which is the start of writing. A generation without the
+Before the first mark the value is the job store's own floor. It stays
+``0.0`` while the server loads the models it deferred at startup
+(``ACESTEP_NO_INIT``): ``api/job_execution_runtime.py`` awaits
+``ensure_models_initialized`` before ``mark_running`` (``api/jobs/store.py``)
+raises it to ``0.01``. A task below that mark has not started, so it is still
+loading its model; from ``0.01`` on it is writing. A generation without the
 language model skips writing and jumps straight to the rendering mark.
 
 The free-text ``progress_text`` is never read here: it carries whatever the
@@ -36,6 +40,7 @@ from typing import Final
 
 from acestep_engine.models import ResultItem
 
+RUNNING_STARTS_AT: Final[float] = 0.01
 WRITING_STARTS_AT: Final[float] = 0.1
 RENDERING_STARTS_AT: Final[float] = 0.51
 RENDERING_ENDS_AT: Final[float] = 0.99
@@ -57,6 +62,10 @@ class AceStepProgress:
     fraction: float
 
 
+NOT_STARTED: Final[AceStepProgress] = AceStepProgress(AceStepPhase.LOADING_MODEL, 0.0)
+"""Where a generation stands before ACE-Step has started running it."""
+
+
 def progress_from_result(item: ResultItem) -> AceStepProgress | None:
     """Read the phase and its fraction from one running result entry.
 
@@ -64,6 +73,8 @@ def progress_from_result(item: ResultItem) -> AceStepProgress | None:
     """
     if item.progress is None:
         return None
+    if item.progress < RUNNING_STARTS_AT:
+        return NOT_STARTED
     if item.progress < RENDERING_STARTS_AT:
         return AceStepProgress(
             AceStepPhase.WRITING,
