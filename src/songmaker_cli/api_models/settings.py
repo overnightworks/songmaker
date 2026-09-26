@@ -309,6 +309,12 @@ class ConversationMessagesResponse(BaseModel):
     title: str | None
     archived_at: str | None
     messages: list[ChatMessageResponse]
+    turn_running: bool = Field(
+        description=(
+            "A co-writer turn in this conversation is still running on the server; "
+            "its chat job decides, and the stale-job reaper ends a turn whose process died."
+        ),
+    )
 
 
 class ChatTurnV2Request(BaseModel):

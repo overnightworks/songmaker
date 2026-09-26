@@ -3,11 +3,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
 import type { ChatMessageItem } from '$lib/api/types';
-import {
-	COWRITER_CLAUDE_UNVERIFIED_LABEL,
-	COWRITER_RUNNING_TURN_POLL_MS,
-	COWRITER_TURN_TIMEOUT_MS
-} from '$lib/constants';
+import { COWRITER_CLAUDE_UNVERIFIED_LABEL, COWRITER_RUNNING_TURN_POLL_MS } from '$lib/constants';
 
 import { ApiError } from '$lib/api/fetch';
 
@@ -345,11 +341,20 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 	}
 
 	const sent = chatMessage('u1', 'user', 'Ja bitte');
+	const reply = chatMessage('a1', 'assistant', 'Erledigt.');
 
-	function conversationHistory(...pages: ChatMessageItem[][]): void {
-		for (const messages of pages) {
-			fetchConversationMessages.mockResolvedValueOnce({ conversation_id: 'c1', messages });
-		}
+	function conversation(turnRunning: boolean, ...messages: ChatMessageItem[]) {
+		return {
+			conversation_id: 'c1',
+			title: null,
+			archived_at: null,
+			messages,
+			turn_running: turnRunning
+		};
+	}
+
+	function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
+		for (const page of pages) fetchConversationMessages.mockResolvedValueOnce(page);
 	}
 
 	async function leaveDuringATurnAndReturn(onturncompleted = vi.fn()): Promise<HTMLElement> {
@@ -379,7 +384,11 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 	});
 
 	it('shows the message sent at once and the reply as soon as the turn completes', async () => {
-		conversationHistory([sent], [sent], [sent, chatMessage('a1', 'assistant', 'Erledigt.')]);
+		conversationPages(
+			conversation(true, sent),
+			conversation(true, sent),
+			conversation(false, sent, reply)
+		);
 		const onturncompleted = vi.fn();
 
 		const target = await leaveDuringATurnAndReturn(onturncompleted);
@@ -388,7 +397,6 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte')
 		);
 		expect(target.querySelector('.typing')).not.toBeNull();
-		expect(target.querySelector<HTMLButtonElement>('.send-btn')?.disabled).toBe(true);
 
 		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
 		expect(target.textContent).not.toContain('Erledigt.');
@@ -403,7 +411,7 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 	});
 
 	it('names a turn that ended unanswered below the retained message, with a retry', async () => {
-		conversationHistory([sent], []);
+		conversationPages(conversation(true, sent), conversation(false, sent));
 
 		const target = await leaveDuringATurnAndReturn();
 		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
@@ -418,11 +426,11 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
 	});
 
-	it('stops waiting and names the silence once the turn outlives its timeout', async () => {
-		fetchConversationMessages.mockResolvedValue({ conversation_id: 'c1', messages: [sent] });
+	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {
+		conversationPages(conversation(false, sent));
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
 
-		const target = await leaveDuringATurnAndReturn();
-		await vi.advanceTimersByTimeAsync(COWRITER_TURN_TIMEOUT_MS);
+		const target = await render();
 
 		await vi.waitFor(() =>
 			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
@@ -430,6 +438,11 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 			)
 		);
 		expect(target.querySelector('.typing')).toBeNull();
+		streamCoWriterTurn.mockReturnValue(turnEvents([]));
+		await sendTurn(target, 'Noch einmal');
+		expect(streamCoWriterTurn).toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'Noch einmal' })
+		);
 	});
 });
 

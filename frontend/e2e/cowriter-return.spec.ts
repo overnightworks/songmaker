@@ -10,8 +10,8 @@
 // once with its route failure and cannot be left while it runs. The turn and
 // the conversation it writes are therefore answered by `page.route`, playing
 // the backend contract tests/test_conversation_api.py pins: the user message
-// is in the conversation from the moment the turn starts, and the reply joins
-// it when the turn completes.
+// is in the conversation from the moment the turn starts, the conversation
+// reports the turn running until it ends, and the reply joins it then.
 //
 // The message is sent with Enter from the composer, not a tap on Send: with
 // the composer focused, the tap's own focus change brings the mini-player
@@ -85,7 +85,8 @@ test.describe('co-writer return at phone width', () => {
 					conversation_id: CONVERSATION_ID,
 					title: null,
 					archived_at: null,
-					messages: historyFor(turnState)
+					messages: historyFor(turnState),
+					turn_running: turnState === 'running'
 				}
 			})
 		);
