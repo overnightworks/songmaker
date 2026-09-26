@@ -102,8 +102,8 @@
 	});
 
 	// One fact behind every layout that reserves room for the transport bar:
-	// while the app's bar is hidden, it takes no room. The attribute is the only thing this file
-	// owns — app.css, which owns --player-height, owns the
+	// while the app's bar is hidden, it takes no room. The attribute is the
+	// only thing this file owns — app.css, which owns --player-height, owns the
 	// `html[data-transport-bar='hidden']` value that collapses it, so the shell
 	// rows, the toast stack, the queue-stream chip, the editor's bottom padding
 	// and Now Playing's own sheet all follow from one declaration instead of
