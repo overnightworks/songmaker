@@ -488,6 +488,49 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		}
 	);
 
+	it.each(droppedStreams)(
+		'names %s whose repeated message never reached the server, with a retry',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			conversationPages(conversation(false, sent, reply), conversation(false, sent, reply));
+			const onturncompleted = vi.fn();
+
+			const target = await sendInAnOpenConversation(onturncompleted);
+
+			await vi.waitFor(() =>
+				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+					'The co-writer did not answer. Try again.'
+				)
+			);
+			expect(target.querySelectorAll('.message.user')).toHaveLength(2);
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+			expect(onturncompleted).not.toHaveBeenCalled();
+		}
+	);
+
+	it('names a repeated message that never reached the server after a streamed exchange', async () => {
+		streamCoWriterTurn.mockReturnValueOnce(
+			turnEvents([
+				{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+			])
+		);
+		streamCoWriterTurn.mockReturnValueOnce(droppedStreams[2][1]());
+		const target = await render();
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		await sendTurn(target, 'Ja bitte');
+		await vi.waitFor(() => expect(target.textContent).toContain('Erledigt.'));
+		conversationPages(conversation(false, sent, reply));
+
+		await sendTurn(target, 'Ja bitte');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelectorAll('.message.user')).toHaveLength(2);
+	});
+
 	it('shows the reply of a turn that finished while its stream was down', async () => {
 		streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
 		conversationPages(conversation(false), conversation(false, sent, reply));

@@ -85,6 +85,7 @@
 	}
 
 	interface Message {
+		persistedId?: string;
 		role: 'user' | 'assistant';
 		text: string;
 		toolCalls?: ToolCall[];
@@ -173,6 +174,7 @@
 
 	function toMessages(history: ChatMessageItem[]): Message[] {
 		return history.map((m) => ({
+			persistedId: m.id,
 			role: m.role as 'user' | 'assistant',
 			text: m.content
 		}));
@@ -208,10 +210,13 @@
 	 * unanswered message — and name a failure only when the message never
 	 * reached the server (#1014).
 	 */
-	async function reattachDroppedTurn(sentMessage: string, assistantIndex: number): Promise<void> {
+	async function reattachDroppedTurn(
+		sentMessage: string,
+		lastKnownPersistedId: string | undefined,
+		assistantIndex: number
+	): Promise<void> {
 		const conversation = await readActiveConversation().catch(() => null);
-		const lastSent = conversation?.messages.findLast((message) => message.role === 'user');
-		if (!conversation || lastSent?.content !== sentMessage) {
+		if (!conversation || !reachedServer(conversation, sentMessage, lastKnownPersistedId)) {
 			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
 			return;
 		}
@@ -223,6 +228,22 @@
 		messages = toMessages(conversation.messages);
 		followOrSettleTurn(conversation);
 		if (!conversation.turn_running && onturncompleted) onturncompleted();
+	}
+
+	/**
+	 * Text alone cannot tell a repeated "ok" from the answered one before it:
+	 * the message reached the server only when its turn still runs or the
+	 * conversation grew past what the panel last knew persisted.
+	 */
+	function reachedServer(
+		conversation: ConversationMessagesResponse,
+		sentMessage: string,
+		lastKnownPersistedId: string | undefined
+	): boolean {
+		const persisted = conversation.messages;
+		const lastSent = persisted.findLast((message) => message.role === 'user');
+		if (lastSent?.content !== sentMessage) return false;
+		return conversation.turn_running || persisted.at(-1)?.id !== lastKnownPersistedId;
 	}
 
 	async function readActiveConversation(): Promise<ConversationMessagesResponse | null> {
@@ -354,6 +375,7 @@
 		}
 
 		input = '';
+		const lastKnownPersistedId = messages.findLast((message) => message.persistedId)?.persistedId;
 		const assistantIndex = messages.length + 1;
 		messages = [
 			...messages,
@@ -408,7 +430,7 @@
 		} else if (streamError) {
 			markTurnFailed(assistantIndex, streamError);
 		} else if (!turnCompleted) {
-			await reattachDroppedTurn(msg, assistantIndex);
+			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
 		}
 		void scrollToBottom();
 	}
@@ -431,8 +453,11 @@
 			return;
 		}
 		if (event.type === 'final') {
+			const sent = messages[assistantIndex - 1];
+			messages[assistantIndex - 1] = { ...sent, persistedId: event.user_message.id };
 			messages[assistantIndex] = {
 				...current,
+				persistedId: event.assistant_message.id,
 				text: event.assistant_message.content
 			};
 		}
