@@ -1345,7 +1345,9 @@ never been observed; with a newer observation, it is `alive`.
   shares writing 0.55, rendering 0.15 and saving the take 0.30 (calibrated on
   a traced warm take; loading a model has none). Each take starts in the
   not-started phase, so the previous take's `saving_take` never shows beside
-  the new take. The value only rises, a phase
+  the new take. Within a take the phase only moves forward: a report of an
+  earlier phase (ACE-Step's progress dropping below its running mark after
+  writing began) is ignored. The value only rises, a phase
   change is written at once while writes within a phase are throttled to one
   per two seconds, and saving the take sits at its phase start, so the job
   stays below 1.0 until `_finalize_generation_job` writes 1.0 after the take
@@ -1354,8 +1356,13 @@ never been observed; with a newer observation, it is `alive`.
   Every tracker write also carries the phase into `jobs.phase`
   (`update_job_status(phase=)` keeps the stored value when a write omits it,
   and the column keeps its last value after the job ends; a new RUNNING entry
-  clears it, so a requeue never shows the previous run's phase). `JobResponse`
-  exposes `phase` only while the job is RUNNING. The remaining-time estimate
+  clears it, so a requeue never shows the previous run's phase; a return to
+  QUEUED clears `take_index` and `take_count`, so a queued job never shows
+  the previous run's take counter). `JobResponse` exposes `phase` only while
+  the job is RUNNING; the frontend's `generateAction` store is the one place
+  that turns it into the Generate button's and the Takes slot's label
+  (Loading model… without percent or time; Writing, Rendering, Saving take
+  with them; a running job without a phase keeps "Generating..."). The remaining-time estimate
   is `elapsed × (1 − progress) / progress`, with elapsed counted from
   `jobs.generation_started_at`: `update_job_status` sets it on the first write
   carrying a generating phase (writing, rendering, saving the take — never

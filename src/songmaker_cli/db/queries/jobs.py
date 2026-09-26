@@ -184,6 +184,9 @@ def update_job_status(
     _move_generation_start(job, status, phase, now)
     if _enters_running(job, status):
         job.phase = None
+    if status == JobStatus.QUEUED:
+        job.take_index = None
+        job.take_count = None
     job.status = status
     job.progress = progress
     job.error = error

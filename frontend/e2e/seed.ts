@@ -743,15 +743,32 @@ export async function seedSongPhoneSong(
 type GenerationPhase = NonNullable<JobItem['phase']>;
 
 /**
+ * The phase a seeded running job is in. A generating `phase` starts the
+ * remaining-time estimate's clock; `generationStartedOffsetSeconds` moves that
+ * start into the past, so the estimate has elapsed time to work with. A phase
+ * that has not started generating (`loading_model`) has no clock to move and
+ * takes no offset.
+ */
+type PhaseMove = {
+	phase: GenerationPhase;
+	generationStartedOffsetSeconds?: number;
+};
+
+function phaseArgs({ phase, generationStartedOffsetSeconds }: PhaseMove): string[] {
+	const offsetArgs =
+		generationStartedOffsetSeconds === undefined
+			? []
+			: ['--generation-started-offset', String(generationStartedOffsetSeconds)];
+	return ['--phase', phase, ...offsetArgs];
+}
+
+/**
  * A running generate job for `songId`, seeded directly against the database
  * (`scripts/seed_e2e_job_states.py`) since CI's e2e stack runs no ACE-Step
  * worker to produce one. `update_job_status`'s own RUNNING branch sets
  * `heartbeat_at` to the moment the row is written, comfortably inside
  * `JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS` for the rest of the test — nothing
- * here needs to touch it by hand. A generating `phase` starts the estimate's
- * clock; `generationStartedOffsetSeconds` moves that start into the past, so
- * the remaining-time estimate has elapsed time to work with. Returns the
- * job's id.
+ * here needs to touch it by hand. Returns the job's id.
  */
 export async function seedRunningGenerationJob(
 	songId: string,
@@ -759,9 +776,7 @@ export async function seedRunningGenerationJob(
 		progress: number;
 		takeIndex: number;
 		takeCount: number;
-		phase: GenerationPhase;
-		generationStartedOffsetSeconds: number;
-	}
+	} & PhaseMove
 ): Promise<string> {
 	try {
 		const { stdout } = await execFileAsync(
@@ -782,10 +797,7 @@ export async function seedRunningGenerationJob(
 				String(options.takeIndex),
 				'--take-count',
 				String(options.takeCount),
-				'--phase',
-				options.phase,
-				'--generation-started-offset',
-				String(options.generationStartedOffsetSeconds),
+				...phaseArgs(options),
 				'--owner-username',
 				requiredEnv('ADMIN_USERNAME')
 			],
@@ -797,6 +809,42 @@ export async function seedRunningGenerationJob(
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Seeding the running generate job failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * Moves an existing running generate job on to a later phase in place — the
+ * same job id, so its own open `/api/jobs/{id}/stream` reports the move live,
+ * the way a worker leaving the model load would. No reload needed.
+ */
+export async function advanceGenerationJobPhase(
+	jobId: string,
+	options: { progress: number } & PhaseMove
+): Promise<void> {
+	try {
+		await execFileAsync(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'set-phase',
+				'--job-id',
+				jobId,
+				'--progress',
+				String(options.progress),
+				...phaseArgs(options)
+			],
+			{ cwd: REPO_ROOT }
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Moving the generate job to its next phase failed: ${detail}`, {
+			cause: err
+		});
 	}
 }
 

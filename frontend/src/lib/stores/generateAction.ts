@@ -5,13 +5,16 @@ import {
 	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GENERATE_QUEUED_TEMPLATE,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
+	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
 	EDITOR_QUEUED_LABEL,
 	EDITOR_SELECT_MODEL_TITLE,
+	GENERATION_PHASE_LABELS,
 	JOB_TYPE_GENERATE
 } from '$lib/constants';
+import { formatTime } from '$lib/utils/format';
 import {
 	currentVersionIndex,
 	editLyrics,
@@ -51,6 +54,22 @@ type GenerateMode = 'generate' | 'repaint' | 'cover';
 
 function progressPercent(job: JobItem | null): number {
 	return job ? Math.round(job.progress * 100) : 0;
+}
+
+function phaseLabel(job: JobItem | null): string {
+	return job?.phase ? GENERATION_PHASE_LABELS[job.phase] : EDITOR_GENERATING_LABEL;
+}
+
+/**
+ * The percent and remaining time beside the phase. Loading a model has
+ * neither: its length depends on the model and the cache, not on the take.
+ */
+function progressReadout(job: JobItem | null): string | null {
+	if (job?.phase === 'loading_model') return null;
+	const remaining = job?.remaining_time_estimate;
+	const parts = [`${progressPercent(job)}%`];
+	if (typeof remaining === 'number') parts.push(`~${formatTime(remaining)}`);
+	return parts.join(' · ');
 }
 
 function queuedLabel(position: number | null): string {
@@ -95,9 +114,10 @@ export type GenerateState =
 	| {
 			kind: 'generating';
 			jobId: string | null;
+			phase: string;
 			takeCounter: string | null;
 			progress: number;
-			remaining: number | 'calculating' | null;
+			readout: string | null;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string };
@@ -164,9 +184,10 @@ export const generateAction = derived(
 			return {
 				kind: 'generating',
 				jobId: job?.id ?? null,
+				phase: phaseLabel(job),
 				takeCounter: takeCounterLabel(job),
 				progress: progressPercent(job),
-				remaining: job?.remaining_time_estimate ?? null
+				readout: progressReadout(job)
 			};
 		}
 		if (disabled) return { kind: 'disabled', mode: actionMode, reason: disabledReason };
