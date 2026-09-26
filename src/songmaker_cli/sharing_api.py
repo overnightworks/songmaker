@@ -97,10 +97,13 @@ log = logging.getLogger(__name__)
 NOT_FOUND_DETAIL: Final = "Not found"
 QUEUE_STREAM_NOT_FOUND_DETAIL: Final = "Queue stream not found"
 DEFAULT_AUDIO_MEDIA_TYPE: Final = "application/octet-stream"
-# A take's file and a queue-stream snapshot are each written once under their
-# name and never change, so a browser may keep them for good; "private" forbids
-# any shared cache (CDN, proxy) from holding one.
+# A take's file is written once under its name and never changes, so a browser
+# may keep it for good; "private" forbids any shared cache (CDN, proxy) from
+# holding one.
 AUDIO_FILE_CACHE_CONTROL: Final = "private, max-age=31536000, immutable"
+# A queue-stream snapshot expires within hours and its share can be revoked, so
+# no cache may keep it past the request.
+QUEUE_STREAM_AUDIO_CACHE_CONTROL: Final = "no-store"
 
 
 # Public, unauthenticated share endpoints fail open: blocking real listeners
@@ -219,12 +222,16 @@ def _shared_cover_response(
     )
 
 
-def _audio_file_response(audio_path: Path) -> FileResponse:
+def _audio_response(audio_path: Path, cache_control: str) -> FileResponse:
     return FileResponse(
         audio_path,
         media_type=AUDIO_MEDIA_TYPES.get(audio_path.suffix, DEFAULT_AUDIO_MEDIA_TYPE),
-        headers={"Cache-Control": AUDIO_FILE_CACHE_CONTROL},
+        headers={"Cache-Control": cache_control},
     )
+
+
+def _audio_file_response(audio_path: Path) -> FileResponse:
+    return _audio_response(audio_path, AUDIO_FILE_CACHE_CONTROL)
 
 
 def _validate_shared_queue_manifest(manifest: QueueStreamManifest, db: Session) -> None:
@@ -818,4 +825,6 @@ def get_shared_queue_stream_audio(
     _check_shared_rate_limit(request)
     manifest = load_queue_stream_manifest(ctx, snapshot_id)
     _validate_shared_queue_manifest(manifest, db)
-    return _audio_file_response(queue_stream_audio_path(ctx, snapshot_id))
+    return _audio_response(
+        queue_stream_audio_path(ctx, snapshot_id), QUEUE_STREAM_AUDIO_CACHE_CONTROL,
+    )

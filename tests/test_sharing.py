@@ -809,6 +809,12 @@ def _stream_audio_url(client: TestClient, stream_path: str) -> str:
     return client.post(stream_path).json()["stream_url"]
 
 
+def _owner_stream_audio_url(client: TestClient, stream_path: str) -> str:
+    return client.post(stream_path, json={"tracks": [{"generation_id": "g1"}]}).json()[
+        "stream_url"
+    ]
+
+
 def _audio_url(client: TestClient, audio_path: str) -> str:
     return audio_path
 
@@ -824,49 +830,13 @@ def fake_queue_stream_build(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(queue_streams, "run_ffmpeg_concat", _write_stream)
 
 
-@pytest.mark.parametrize(
-    ("share_path", "audio_path", "seed", "resolve_audio_url"),
-    [
-        pytest.param(None, "/audio/admin_user/g1.mp3", None, _audio_url, id="owner"),
-        pytest.param(
-            "/api/albums/test_album/share", "/shared/{slug}/audio/admin_user/g1.mp3", None,
-            _audio_url,
-            id="album",
-        ),
-        pytest.param(
-            "/api/songs/s1/share", "/shared/song/{slug}/audio/admin_user/g1.mp3", None,
-            _audio_url,
-            id="song",
-        ),
-        pytest.param(
-            "/api/generations/g1/share", "/shared/gen/{slug}/audio/admin_user/g1.mp3", None,
-            _audio_url,
-            id="generation",
-        ),
-        pytest.param(
-            "/api/playlists/pl1/share", "/shared/playlist/{slug}/audio/admin_user/g1.mp3",
-            _seed_shared_playlist_audio, _audio_url,
-            id="playlist",
-        ),
-        pytest.param(
-            "/api/albums/test_album/share", "/shared/{slug}/stream", None, _stream_audio_url,
-            id="album-stream",
-        ),
-        pytest.param(
-            "/api/playlists/pl1/share", "/shared/playlist/{slug}/stream",
-            _seed_shared_playlist_audio, _stream_audio_url,
-            id="playlist-stream",
-        ),
-    ],
-)
-@pytest.mark.usefixtures("fake_queue_stream_build")
-def test_audio_is_cached_for_good_by_the_listeners_browser_only(
+def _cache_directives(
     sharing_app: TestClient,
     share_path: str | None,
     audio_path: str,
     seed: Callable | None,
     resolve_audio_url: Callable[[TestClient, str], str],
-) -> None:
+) -> set[str]:
     if seed is not None:
         with sharing_app.app.state.ctx.db() as session:
             seed(session)
@@ -881,12 +851,75 @@ def test_audio_is_cached_for_good_by_the_listeners_browser_only(
     response = client.get(resolve_audio_url(client, audio_path))
 
     assert response.status_code == 200
-    directives = {
-        directive.strip() for directive in response.headers["cache-control"].split(",")
-    }
+    return {directive.strip() for directive in response.headers["cache-control"].split(",")}
+
+
+@pytest.mark.parametrize(
+    ("share_path", "audio_path", "seed"),
+    [
+        pytest.param(None, "/audio/admin_user/g1.mp3", None, id="owner"),
+        pytest.param(
+            "/api/albums/test_album/share", "/shared/{slug}/audio/admin_user/g1.mp3", None,
+            id="album",
+        ),
+        pytest.param(
+            "/api/songs/s1/share", "/shared/song/{slug}/audio/admin_user/g1.mp3", None,
+            id="song",
+        ),
+        pytest.param(
+            "/api/generations/g1/share", "/shared/gen/{slug}/audio/admin_user/g1.mp3", None,
+            id="generation",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share", "/shared/playlist/{slug}/audio/admin_user/g1.mp3",
+            _seed_shared_playlist_audio,
+            id="playlist",
+        ),
+    ],
+)
+def test_generation_audio_is_cached_for_good_by_the_listeners_browser_only(
+    sharing_app: TestClient,
+    share_path: str | None,
+    audio_path: str,
+    seed: Callable | None,
+) -> None:
+    directives = _cache_directives(sharing_app, share_path, audio_path, seed, _audio_url)
+
     assert {"private", "immutable"} <= directives
     max_age = next(d for d in directives if d.startswith("max-age="))
     assert int(max_age.removeprefix("max-age=")) > 0
+
+
+@pytest.mark.parametrize(
+    ("share_path", "stream_path", "seed", "resolve_audio_url"),
+    [
+        pytest.param(
+            None, "/api/queue-streams", None, _owner_stream_audio_url, id="owner-stream",
+        ),
+        pytest.param(
+            "/api/albums/test_album/share", "/shared/{slug}/stream", None, _stream_audio_url,
+            id="album-stream",
+        ),
+        pytest.param(
+            "/api/playlists/pl1/share", "/shared/playlist/{slug}/stream",
+            _seed_shared_playlist_audio, _stream_audio_url,
+            id="playlist-stream",
+        ),
+    ],
+)
+@pytest.mark.usefixtures("fake_queue_stream_build")
+def test_stream_snapshot_audio_is_never_stored(
+    sharing_app: TestClient,
+    share_path: str | None,
+    stream_path: str,
+    seed: Callable | None,
+    resolve_audio_url: Callable[[TestClient, str], str],
+) -> None:
+    directives = _cache_directives(
+        sharing_app, share_path, stream_path, seed, resolve_audio_url,
+    )
+
+    assert directives == {"no-store"}
 
 
 def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
