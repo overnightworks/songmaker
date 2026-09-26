@@ -279,7 +279,17 @@
 			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
 		}
 	}
+
+	// The running/queued job is what GenerationStatusSlot itself renders on
+	// (mirrors its own gate on the same job prop): a song's very first
+	// generation has zero takes yet, so the empty-state branches below must
+	// not hide the slot behind "No takes yet" while one is in flight.
+	const jobRunning = $derived(
+		generateJob !== null && (generateJob.status === 'queued' || generateJob.status === 'running')
+	);
 </script>
+
+<GenerationStatusSlot job={generateJob} {latestVersionNumber} />
 
 {#if loadStatus === 'error' && song.generations.length === 0}
 	<div class="empty" role="alert">
@@ -290,7 +300,7 @@
 	</div>
 {:else if loadStatus === 'loading' && song.generations.length === 0}
 	<div class="empty" role="status">{TAKES_LOADING}</div>
-{:else if song.generations.length === 0 && !dirty}
+{:else if song.generations.length === 0 && !dirty && !jobRunning}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
 	<div class="takes-list">
@@ -308,8 +318,6 @@
 				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
 			</div>
 		{/if}
-
-		<GenerationStatusSlot job={generateJob} {latestVersionNumber} />
 
 		{#each groups as group (group.versionNumber ?? 'unknown')}
 			<div class="version-section">

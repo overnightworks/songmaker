@@ -334,6 +334,47 @@ describe('TakesList', () => {
 		expect(target.querySelector('.status-title')?.textContent).not.toContain('v2');
 	});
 
+	it.each([
+		{
+			name: 'a running job',
+			generateJob: { id: 'j1', type: 'generate', status: 'running', progress: 0.4 },
+			expectSlot: true,
+			expectEmpty: false
+		},
+		{
+			name: 'a queued job',
+			generateJob: {
+				id: 'j1',
+				type: 'generate',
+				status: 'queued',
+				progress: 0,
+				queue_position: 2
+			},
+			expectSlot: true,
+			expectEmpty: false
+		},
+		{ name: 'no job', generateJob: null, expectSlot: false, expectEmpty: true },
+		{
+			name: 'a failed job',
+			generateJob: { id: 'j1', type: 'generate', status: 'failed', progress: 0, error: 'boom' },
+			expectSlot: false,
+			expectEmpty: true
+		}
+	])(
+		'shows the slot and hides "No takes yet" for a song with zero takes and $name',
+		async ({ generateJob, expectSlot, expectEmpty }) => {
+			const { target } = await render({
+				song: song({ ...versionedSongDefaults(), generations: [] }),
+				generateJob
+			});
+			expect(target.querySelector('.status-slot') !== null).toBe(expectSlot);
+			expect(target.textContent?.includes('No takes yet · Generate on Write')).toBe(expectEmpty);
+			if (generateJob?.status === 'queued') {
+				expect(target.querySelector('.status-title')?.textContent).toContain('Queued #2');
+			}
+		}
+	);
+
 	it('deletes a version and its takes from the group header, with confirmation', async () => {
 		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
 		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
