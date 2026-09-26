@@ -1,0 +1,7 @@
+claim_id = "a2673aaa11724c53b0e49bc7f0e25ff4"
+agent = "claude-head"
+role = "builder"
+base = "5a49f24da328a556ab4e9ec0b677614b0984083b"
+branch = "claude/issue-1003-freeze-play"
+scope = ["docs/design/album-browsing.html", "docs/design/vocabulary.html"]
+opened_commit = "31e54214c7199cf691d001885757dda98f73bf9a"
