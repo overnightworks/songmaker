@@ -32,6 +32,7 @@ from agent_providers.errors import (
 )
 from agent_providers.events import (
     FinalEvent,
+    StreamEvent,
 )
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -798,14 +799,54 @@ async def _chat_event_generator(
     prepared: PreparedChatTurn,
     lifecycle: ChatTurnLifecycle,
 ) -> AsyncIterator[str]:
+    """Stream one turn's frames; whatever happens, even opening the stream, finishes its job."""
+    started = time.monotonic()
+    terminal = False
+    try:
+        stream = _open_cowriter_stream(user, session, prepared)
+        try:
+            assistant_text = ""
+            try:
+                async for event in stream:
+                    if isinstance(event, FinalEvent):
+                        assistant_text = event.text
+                        break
+                    yield _sse_format(event)
+                _log_chat_turn(prepared, started)
+            except ProviderUnavailableError as exc:
+                terminal = True
+                yield _provider_unavailable_event(session, prepared.job_id, exc)
+                return
+            except Exception as exc:
+                terminal = True
+                yield _chat_failure_event(session, prepared.job_id, exc)
+                return
+            try:
+                final_event = _complete_chat_turn(req, session, prepared, assistant_text)
+            except Exception:
+                terminal = True
+                yield _chat_completion_failure_event(session, prepared.job_id)
+                return
+            terminal = True
+            yield _sse_format(final_event)
+        finally:
+            await stream.aclose()
+    finally:
+        await lifecycle.finish(cancelled=not terminal)
+
+
+def _open_cowriter_stream(
+    user: AuthenticatedUser,
+    session: Session,
+    prepared: PreparedChatTurn,
+) -> AsyncIterator[StreamEvent]:
     from agent_providers.catalog import (
         ProviderRoute,
         ProviderRouteCapability,
         provider_route_capability,
     )
 
-    started = time.monotonic()
-    stream = stream_cowriter_turn(
+    return stream_cowriter_turn(
         provider=prepared.provider,
         route=prepared.route,
         model=prepared.model,
@@ -824,37 +865,6 @@ async def _chat_event_generator(
         user=user,
         correlation_id=prepared.job_id,
     )
-    terminal = False
-    try:
-        assistant_text = ""
-        try:
-            async for event in stream:
-                if isinstance(event, FinalEvent):
-                    assistant_text = event.text
-                    break
-                yield _sse_format(event)
-            _log_chat_turn(prepared, started)
-        except ProviderUnavailableError as exc:
-            terminal = True
-            yield _provider_unavailable_event(session, prepared.job_id, exc)
-            return
-        except Exception as exc:
-            terminal = True
-            yield _chat_failure_event(session, prepared.job_id, exc)
-            return
-        try:
-            final_event = _complete_chat_turn(req, session, prepared, assistant_text)
-        except Exception:
-            terminal = True
-            yield _chat_completion_failure_event(session, prepared.job_id)
-            return
-        terminal = True
-        yield _sse_format(final_event)
-    finally:
-        try:
-            await stream.aclose()
-        finally:
-            await lifecycle.finish(cancelled=not terminal)
 
 
 def _log_chat_turn(prepared: PreparedChatTurn, started: float) -> None:

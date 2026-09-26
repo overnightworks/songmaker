@@ -535,6 +535,21 @@ def test_chat_turn_completes_when_its_heartbeat_task_fails(client):
         assert job.status == "completed"
 
 
+def test_a_turn_that_cannot_open_its_stream_no_longer_counts_as_running(client):
+    """A turn failing before its first event still ends its job, so no panel waits on it forever."""
+    c, factory = client
+
+    def _unopenable(*_args, **_kwargs):
+        raise ImportError("provider module missing")
+
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _unopenable):
+        c.post("/api/chat/turn", json={"message": "hey"})
+
+    with factory() as session:
+        conversation_id = session.query(Conversation).one().id
+    assert c.get(f"/api/conversations/{conversation_id}").json()["turn_running"] is False
+
+
 async def _leave_mid_reply(response) -> None:
     import asyncio
 
