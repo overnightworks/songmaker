@@ -101,6 +101,32 @@ function activeConversation(id: string) {
 	};
 }
 
+function chatMessage(id: string, role: 'user' | 'assistant', content: string): ChatMessageItem {
+	return { id, role, content, created_at: '2026-09-26T15:21:00+00:00' };
+}
+
+function conversation(turnRunning: boolean, ...messages: ChatMessageItem[]) {
+	return {
+		conversation_id: 'c1',
+		title: null,
+		archived_at: null,
+		messages,
+		turn_running: turnRunning
+	};
+}
+
+/** Each page answers one read of the conversation, in order. */
+function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
+	for (const page of pages) fetchConversationMessages.mockResolvedValueOnce(page);
+}
+
+/** The chat as the musician reads it: one entry per bubble, including a failure note. */
+function chatView(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('.message'), (message) =>
+		(message.textContent ?? '').replace(/\s+/g, ' ').trim()
+	);
+}
+
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -131,8 +157,9 @@ async function sendMessage(target: HTMLElement, message: string): Promise<void> 
 	input.dispatchEvent(new Event('input', { bubbles: true }));
 	await tick();
 	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
-	await vi.waitFor(() => expect(target.querySelector('.tool-call')).not.toBeNull());
+	await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
 	await tick();
+	await vi.waitFor(() => expect(target.querySelector('.tool-call')).not.toBeNull());
 }
 
 async function sendTurn(target: HTMLElement, message: string): Promise<void> {
@@ -338,6 +365,14 @@ describe('CoWriterPanel failed turns', () => {
 			])
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		conversationPages(
+			conversation(false),
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'write a chorus'),
+				chatMessage('a1', 'assistant', 'Here is a chorus')
+			)
+		);
 		const target = await render();
 
 		await sendTurn(target, 'write a chorus');
@@ -354,33 +389,16 @@ describe('CoWriterPanel failed turns', () => {
 		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
 
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
-		await vi.waitFor(() => expect(target.textContent).toContain('Here is a chorus'));
-		expect(target.querySelector('.turn-error')).toBeNull();
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() =>
+			expect(chatView(target)).toEqual(['write a chorus', 'Here is a chorus'])
+		);
 	});
 });
 
 describe('CoWriterPanel returning while a turn runs (#1014)', () => {
-	function chatMessage(id: string, role: 'user' | 'assistant', content: string): ChatMessageItem {
-		return { id, role, content, created_at: '2026-09-26T15:21:00+00:00' };
-	}
-
 	const sent = chatMessage('u1', 'user', 'Ja bitte');
 	const reply = chatMessage('a1', 'assistant', 'Erledigt.');
-
-	function conversation(turnRunning: boolean, ...messages: ChatMessageItem[]) {
-		return {
-			conversation_id: 'c1',
-			title: null,
-			archived_at: null,
-			messages,
-			turn_running: turnRunning
-		};
-	}
-
-	function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
-		for (const page of pages) fetchConversationMessages.mockResolvedValueOnce(page);
-	}
 
 	async function leaveDuringATurnAndReturn(onturncompleted = vi.fn()): Promise<HTMLElement> {
 		streamCoWriterTurn.mockReturnValue(
@@ -555,9 +573,10 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		streamCoWriterTurn.mockReturnValueOnce(droppedStreams[2][1]());
 		const target = await render();
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		conversationPages(conversation(false, sent, reply), conversation(false, sent, reply));
 		await sendTurn(target, 'Ja bitte');
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() => expect(target.textContent).toContain('Erledigt.'));
-		conversationPages(conversation(false, sent, reply));
 
 		await sendTurn(target, 'Ja bitte');
 
@@ -582,6 +601,34 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.querySelector('.turn-error')).toBeNull();
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(onturncompleted).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps an older failed message once a newer one is answered, as a reload shows it', async () => {
+		const failed = chatMessage('u0', 'user', 'Refrain kürzer');
+		const persisted = conversation(false, failed, sent, reply);
+		streamCoWriterTurn
+			.mockReturnValueOnce(
+				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent])
+			)
+			.mockReturnValueOnce(
+				turnEvents([
+					{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+				])
+			);
+		conversationPages(conversation(false), persisted, persisted);
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const live = await render();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+
+		await sendTurn(live, 'Refrain kürzer');
+		await vi.waitFor(() => expect(live.querySelector('.retry-turn')).not.toBeNull());
+		await sendTurn(live, 'Ja bitte');
+
+		const expected = ['Refrain kürzer', 'Ja bitte', 'Erledigt.'];
+		await vi.waitFor(() => expect(chatView(live)).toEqual(expected));
+		const reloaded = await render();
+		await vi.waitFor(() => expect(chatView(reloaded)).toEqual(expected));
+		expect(live.querySelector('.retry-turn')).toBeNull();
 	});
 
 	it('follows a turn another tab is running and keeps what was typed', async () => {
@@ -652,6 +699,17 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 });
 
 describe('CoWriterPanel proposal target (#238)', () => {
+	beforeEach(() => {
+		conversationPages(
+			conversation(false),
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'the request'),
+				chatMessage('a1', 'assistant', 'Done')
+			)
+		);
+	});
+
 	// The co-writer is one global conversation: a tool call streamed while
 	// "Open Song" is showing can still target a different song entirely.
 	it('badges a proposal for a different song than the one currently open', async () => {

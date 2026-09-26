@@ -391,7 +391,7 @@
 		loading = true;
 
 		let streamError: string | null = null;
-		let turnCompleted = false;
+		let answeredConversationId: string | null = null;
 		let refusal: ApiError | null = null;
 		try {
 			const playing = audioPlayer.current;
@@ -413,8 +413,7 @@
 					break;
 				}
 				if (event.type === 'final') {
-					turnCompleted = true;
-					messages = messages.filter((message) => !message.error);
+					answeredConversationId = event.conversation_id;
 					if (activeConversationId !== event.conversation_id) {
 						activeConversationId = event.conversation_id;
 						viewingConversationId = event.conversation_id;
@@ -435,10 +434,30 @@
 			markTurnFailed(assistantIndex, refusalMessage(refusal));
 		} else if (streamError) {
 			markTurnFailed(assistantIndex, streamError);
-		} else if (!turnCompleted) {
+		} else if (answeredConversationId === null) {
 			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
+		} else {
+			await adoptPersistedHistory(answeredConversationId, messages[assistantIndex]);
 		}
 		void scrollToBottom();
+	}
+
+	/**
+	 * An answered turn shows what the conversation holds, so the chat reads
+	 * the same before and after a reload: an older failed message stays as the
+	 * server stored it, or leaves when it never reached the server (#1014).
+	 * The reply keeps the tool calls it streamed; they are not persisted. When
+	 * the history cannot be read, the streamed exchange stays as it is.
+	 */
+	async function adoptPersistedHistory(conversationId: string, reply: Message): Promise<void> {
+		const conversation = await fetchConversationMessages(conversationId).catch(() => null);
+		if (!conversation || loading || viewingConversationId !== conversationId) return;
+		messages = toMessages(conversation.messages).map((message) =>
+			message.persistedId === reply.persistedId
+				? { ...message, toolCalls: reply.toolCalls }
+				: message
+		);
+		followOrSettleTurn(conversation);
 	}
 
 	/**

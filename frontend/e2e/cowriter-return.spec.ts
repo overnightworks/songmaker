@@ -23,6 +23,10 @@
 // storing it twice, so a retry that fails too still shows it once. Only the
 // newest message offers Try again: an older one sent again would be stored a
 // second time.
+//
+// Once a newer message is answered, the chat shows what the conversation
+// holds: an older failed message the server stored stays, without Try again,
+// exactly as a reload shows it.
 
 import { expect, test, type Page, type Route } from '@playwright/test';
 import {
@@ -94,6 +98,10 @@ async function answerConversation(page: Page, read: () => ConversationState): Pr
 			}
 		});
 	});
+}
+
+function turnStream(event: object): string {
+	return `data: ${JSON.stringify(event)}\n\n`;
 }
 
 async function openCowriterOnPickedSong(page: Page): Promise<void> {
@@ -215,5 +223,54 @@ test.describe('co-writer return at phone width', () => {
 			page.locator('.message', { hasText: newer }).getByRole('button', { name: 'Try again' })
 		).toHaveCount(1);
 		await expect(tryAgain).toHaveCount(1);
+	});
+
+	test('a failed message stays once a newer one is answered, the same after a reload', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		const failed = 'Erste Nachricht, die scheitert';
+		const stored: ChatMessage[] = [];
+		await answerConversation(page, () => ({ messages: stored, turnRunning: false }));
+		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
+			const { message } = route.request().postDataJSON() as { message: string };
+			const userMessage = chatMessage(`e2e-user-${stored.length}`, 'user', message);
+			stored.push(userMessage);
+			if (message === failed) {
+				return route.fulfill({
+					contentType: 'text/event-stream',
+					body: turnStream({ type: 'error', status: 503, message: RETRY_FAILURE })
+				});
+			}
+			stored.push(replyMessage);
+			return route.fulfill({
+				contentType: 'text/event-stream',
+				body: turnStream({
+					type: 'final',
+					conversation_id: CONVERSATION_ID,
+					user_message: userMessage,
+					assistant_message: replyMessage
+				})
+			});
+		});
+
+		await openCowriterOnPickedSong(page);
+		const composer = page.getByPlaceholder(/Ask the co-writer/);
+		const tryAgain = page.getByRole('button', { name: 'Try again' });
+		await composer.fill(failed);
+		await composer.press('Enter');
+		await expect(tryAgain).toHaveCount(1);
+		await composer.fill(SENT);
+		await composer.press('Enter');
+
+		const chat = page.locator('.cowriter .message');
+		const shown = [failed, SENT, REPLY];
+		await expect(chat).toHaveText(shown);
+		await expect(tryAgain).toHaveCount(0);
+
+		await openCowriterOnPickedSong(page);
+		await expect(chat).toHaveText(shown);
+		await expect(tryAgain).toHaveCount(0);
 	});
 });
