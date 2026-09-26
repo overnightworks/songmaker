@@ -22,6 +22,7 @@
 		VersionItem
 	} from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
+	import { health } from '$lib/stores/health';
 	import {
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
@@ -514,6 +515,12 @@
 	const readOnly = $derived(
 		viewingConversationId !== null && viewingConversationId !== activeConversationId
 	);
+
+	// Grok and Codex have no pre-emptive signal; only Claude's drifted or
+	// unverified tool surface is caught before a turn is sent (ruling 26.09.2026).
+	const claudeUnavailable = $derived(
+		providerName === 'claude' && $health !== null && $health.claude_cli_tool_surface !== 'ok'
+	);
 </script>
 
 <div class="cowriter">
@@ -640,6 +647,10 @@
 		</div>
 	{/if}
 
+	{#if claudeUnavailable}
+		<div class="unavailable-banner" role="status">{cowriterUnavailableLabel(providerName)}</div>
+	{/if}
+
 	{#if mentionedSongs.length > 0 || mentionedVersions.length > 0 || mentionedAlbumId}
 		<div class="mentions-bar">
 			{#if mentionedAlbumId}
@@ -684,7 +695,7 @@
 		{/if}
 		<ChatInput
 			bind:value={input}
-			disabled={loading || !input.trim() || readOnly}
+			disabled={loading || !input.trim() || readOnly || claudeUnavailable}
 			bind:inputRef={inputEl}
 			oninput={handleInput}
 			onkeydown={handleKeydown}
@@ -1025,6 +1036,14 @@
 		padding: 6px 12px;
 		background: var(--surface);
 		color: var(--text-subtle);
+		font-size: 0.8rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.unavailable-banner {
+		padding: 6px 12px;
+		background: var(--surface);
+		color: var(--score-bad);
 		font-size: 0.8rem;
 		border-top: 1px solid var(--border);
 	}
