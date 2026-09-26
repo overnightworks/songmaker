@@ -19,7 +19,6 @@ import { setOpenCollection } from '$lib/stores/collection';
 import {
 	closeNowPlaying,
 	nowPlayingOpen,
-	nowPlayingPanel,
 	playStartNotice,
 	queueContext,
 	setShuffle,
@@ -447,7 +446,7 @@ describe('PlaylistDetailView header play', () => {
 });
 
 describe('PlaylistDetailView row actions', () => {
-	it('plays a clicked row as part of this playlist and shows the take in Now Playing', async () => {
+	it('plays a clicked row as part of this playlist and stays on the playlist page', async () => {
 		setShuffle(true);
 		const target = await renderTwoEntryPlaylist();
 
@@ -455,8 +454,7 @@ describe('PlaylistDetailView row actions', () => {
 		await tick();
 
 		expectQueueStartsAtSecondEntry();
-		expect(get(nowPlayingOpen)).toBe(true);
-		expect(get(nowPlayingPanel)).toBe('take');
+		expect(get(nowPlayingOpen)).toBe(false);
 	});
 
 	it('never pauses the take its row body is clicked on while that take plays', async () => {
@@ -464,13 +462,12 @@ describe('PlaylistDetailView row actions', () => {
 		const row = target.querySelectorAll<HTMLElement>('.entry-row')[1];
 		requireElement<HTMLButtonElement>(row, '.entry-info').click();
 		await tick();
-		closeNowPlaying();
 
 		requireElement<HTMLButtonElement>(row, '.entry-info').click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('playing');
-		expect(get(nowPlayingOpen)).toBe(true);
+		expect(get(nowPlayingOpen)).toBe(false);
 	});
 
 	it.each([

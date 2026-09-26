@@ -335,19 +335,17 @@ test('plays the album pick, curates a playlist and serves the public album link'
 			containing(firstPlaylistSong)
 		]);
 
+		// A playlist row plays in place (#1010, frame B2): the listener stays on
+		// the playlist page and the bar, not Now Playing, carries the transport.
 		await entryRows
 			.last()
 			.getByRole('button', { name: nameStartingWith(firstPlaylistSong) })
 			.click();
-		await expectTakeShownInNowPlaying(page, shell, firstPlaylistSong);
 		await expect(
-			shellTransport(page, shell, firstPlaylistSong).getByRole('button', {
-				name: TRANSPORT_PAUSE_LABEL,
-				exact: true
-			})
+			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 		).toBeVisible();
+		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toHaveCount(0);
 		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
-		await closeNowPlaying(page, shell);
 		await expect(entryRows).toHaveText([
 			containing(secondPlaylistSong),
 			containing(firstPlaylistSong)
