@@ -1,9 +1,10 @@
 // Normalizes a single lyrics/transcript token (or line) so that punctuation
 // and casing differences never register as sung deviations — only an
-// actually different word does. Contract from issue #45: unify curly
-// apostrophe variants to a straight one, NFKC-normalize, casefold, strip
-// punctuation (keeping an apostrophe that sits between two word
-// characters, e.g. "don't"), then collapse whitespace. Casefold must match
+// actually different word does. Contract from issue #45, extended on
+// #1030: unify curly apostrophe variants to a straight one, NFKC-normalize,
+// strip punctuation (keeping an apostrophe that sits between two word
+// characters, e.g. "don't"), collapse whitespace, spell out numbers as German
+// words, casefold, then spell out umlauts as ae/oe/ue. Casefold must match
 // Python's `str.casefold()` (issue #133), which JS has no native
 // equivalent for — `String.prototype.toLowerCase()` only implements
 // Unicode *simple* case mapping, not *full* case folding.
@@ -52,9 +53,88 @@ function stripPunctuation(text: string): string {
 	return result;
 }
 
+// Typed German lyrics often spell out umlauts ("glueht") where Whisper writes
+// them ("glüht"); folding both to the spelled-out form makes them one key.
+// Eszett already folds to "ss" with the casefold above.
+const UMLAUT_SPELLINGS: ReadonlyMap<string, string> = new Map([
+	['ä', 'ae'],
+	['ö', 'oe'],
+	['ü', 'ue']
+]);
+
+function spellOutUmlauts(text: string): string {
+	return text.replace(/[äöü]/g, (umlaut) => UMLAUT_SPELLINGS.get(umlaut) ?? umlaut);
+}
+
+// Whisper writes a sung number as digits ("17") where the lyrics spell it
+// ("siebzehn"). Digits are spelled out as German number words, the language
+// the lyrics that carry numbers are written in; for any other language the
+// digits simply stay as unmatched as they were.
+const UNITS = [
+	'null',
+	'eins',
+	'zwei',
+	'drei',
+	'vier',
+	'fünf',
+	'sechs',
+	'sieben',
+	'acht',
+	'neun',
+	'zehn',
+	'elf',
+	'zwölf',
+	'dreizehn',
+	'vierzehn',
+	'fünfzehn',
+	'sechzehn',
+	'siebzehn',
+	'achtzehn',
+	'neunzehn'
+];
+const TENS = [
+	'',
+	'',
+	'zwanzig',
+	'dreißig',
+	'vierzig',
+	'fünfzig',
+	'sechzig',
+	'siebzig',
+	'achtzig',
+	'neunzig'
+];
+const LARGEST_SPELLED_NUMBER = 9999;
+
+function numberPrefix(count: number): string {
+	return count === 1 ? 'ein' : UNITS[count];
+}
+
+function spellGermanNumber(value: number): string {
+	if (value < UNITS.length) return UNITS[value];
+	if (value < 100) {
+		const unit = value % 10;
+		const tens = TENS[Math.floor(value / 10)];
+		return unit === 0 ? tens : `${numberPrefix(unit)}und${tens}`;
+	}
+	const [scale, word] = value < 1000 ? [100, 'hundert'] : [1000, 'tausend'];
+	const rest = value % scale;
+	return `${numberPrefix(Math.floor(value / scale))}${word}${rest === 0 ? '' : spellGermanNumber(rest)}`;
+}
+
+function spellOutNumbers(text: string): string {
+	return text
+		.split(' ')
+		.map((token) => {
+			if (!/^\d+$/.test(token)) return token;
+			const value = Number(token);
+			return value <= LARGEST_SPELLED_NUMBER ? spellGermanNumber(value) : token;
+		})
+		.join(' ');
+}
+
 export function normalizeLyricsToken(text: string): string {
-	const straightened = text.replace(CURLY_APOSTROPHES, "'");
-	const casefolded = casefold(straightened.normalize('NFKC'));
-	const stripped = stripPunctuation(casefolded);
-	return stripped.replace(/\s+/g, ' ').trim();
+	const straightened = text.replace(CURLY_APOSTROPHES, "'").normalize('NFKC');
+	const words = stripPunctuation(straightened).replace(/\s+/g, ' ').trim();
+	return spellOutUmlauts(casefold(spellOutNumbers(words)));
 }
