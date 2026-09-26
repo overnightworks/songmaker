@@ -23,6 +23,13 @@
 	let { reasonInside = false }: Props = $props();
 
 	const presentation: GenerateState = $derived($generateAction);
+	const progressLabel: string | null = $derived(
+		presentation.kind === 'generating'
+			? [presentation.takeCounter, presentation.phase, presentation.readout]
+					.filter((part) => part !== null)
+					.join(' · ')
+			: null
+	);
 	const reasonInsideButton: string | null = $derived(
 		reasonInside && presentation.kind === 'disabled' ? presentation.reason : null
 	);
@@ -46,9 +53,7 @@
 			{:else}
 				<span class="progress-fill" style:width={`${presentation.progress}%`} aria-hidden="true"
 				></span>
-				<span class="progress-label">
-					{presentation.phase}{#if presentation.readout !== null}{` · ${presentation.readout}`}{/if}
-				</span>
+				<span class="progress-label">{progressLabel}</span>
 			{/if}
 		</div>
 		{#if presentation.jobId !== null}
