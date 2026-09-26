@@ -1,0 +1,8 @@
+claim_id = "bdd582555a824b158ceb27f5a32ac5b3"
+agent = "claude-head"
+role = "builder"
+base = "53cfd158ec8b48fb6c5920e0fd1e0688f502d24b"
+branch = "claude/issue-993-scroll-column"
+scope = ["frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/components/editor/WriteColumn.test.ts", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "8ae83dd39e8fdcb600bb6fb5ea1409013ad85f08"
+whole_reason = "F6: the phone scroll column and the one take identifier span view, player and their owner in one change"
