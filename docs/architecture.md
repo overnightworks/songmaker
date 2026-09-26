@@ -951,9 +951,11 @@ handshake use one function-local DB session that closes before the response begi
 polls use separate short sessions. A fresh stream sends `hello` with `id: H`. A
 reconnect reasserts its existing cursor with `hello` and `id: L`, replays only
 `L < sequence <= H`, then becomes
-live. Missing retained history, an internal sequence hole, or `L > H` produces one
+live. The cursor `L` arrives as the browser's `Last-Event-ID` header on a native
+retry, or as the `last_event_id` query parameter when the client opens a fresh
+`EventSource` itself after a drop; the header wins when both are sent. Missing retained history, an internal sequence hole, or `L > H` produces one
 `resync` at `H`. Heartbeats are SSE comments. Every connection ends after at most 60
-seconds so native EventSource reconnect rechecks the session. Sequence and high-water
+seconds so each reconnect rechecks the session. Sequence and high-water
 JSON fields are decimal strings, matching SSE IDs without JavaScript precision loss.
 
 The library page is the sole frontend owner of that stream. Each mount — including
@@ -975,8 +977,13 @@ The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect and is retried
 on the next `hello`; a later successful fetch clears Retry.
-Generation jobs no longer fetch the song themselves. The job tab still shows its
-success toast; other tabs update silently. Bootstrap failures retry a bounded
+The owner remembers the id of the last event it saw and reopens a dropped stream
+with that `last_event_id` query cursor, so an event sent while the phone's screen
+was off or the connection was down is replayed rather than lost. A completed or
+partial job — a generate job included — also asks this owner to refresh its song
+when its job stream reports the end, so the new take is in the list when the job
+tab shows its success toast even if the `generation.created` event fell into a
+reconnect gap; both triggers are idempotent. Other tabs update through the event. Bootstrap failures retry a bounded
 number of times, then surface one accessible Retry status rather than hanging on
 `Loading...`. Unmount, logout, and 401/403 on `EventSource.onerror` close the
 stream.
@@ -989,7 +996,7 @@ stream.
 | GET | `/api/songs?offset=0&limit=50` | user | List the caller's songs (`album_id`, `q`, `sort`). `has_more` is explicit. |
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
 | GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Same membership as `POST /api/queue-streams/library`. Shares the queue-stream per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
-| GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay, gap resync, comment heartbeats, and 60-second reauthentication boundary. |
+| GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay after a `Last-Event-ID` header or `last_event_id` query cursor (the header wins when both are sent), gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
 | GET/POST/PUT/DELETE | `/api/albums/{id}/cover` | user | Read, upload/replace, select a private suggestion, or remove the album cover (JPEG/PNG; ownership 404) |
 | POST/GET/DELETE | `/api/albums/{id}/cover-suggestions` | user | POST creates one `cover` job after the active-job and per-album UTC-day checks. The web container's one-at-a-time runner claims queued cover jobs; it owns startup recovery and reports interrupted running jobs as `server_restart`. The music worker neither registers nor recovers covers. GET inspects the latest job state and private suggestions; DELETE discards suggestions after the database commit. |
