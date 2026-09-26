@@ -1,5 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import { ApiError, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, NetworkError, handleSessionLost } from '$lib/api/fetch';
 import { fetchMe } from '$lib/api/auth';
 import {
 	compareDecimalId,
@@ -752,11 +752,11 @@ async function runLimited<T>(
 	);
 }
 
-// A fetch that got no answer at all rejects with a TypeError whose text is
-// the browser's own ("Failed to fetch"), not copy a musician should read.
+// A NetworkError carries the browser's own text ("Failed to fetch"), not
+// copy a musician should read.
 function errorMessage(err: unknown): string {
 	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof TypeError) return RESOURCE_SYNC_OFFLINE_MESSAGE;
+	if (err instanceof NetworkError) return RESOURCE_SYNC_OFFLINE_MESSAGE;
 	if (err instanceof Error) return err.message;
 	return RESOURCE_SYNC_ERROR;
 }

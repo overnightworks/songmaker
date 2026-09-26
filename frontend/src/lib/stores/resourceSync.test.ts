@@ -26,7 +26,7 @@ vi.mock('$lib/stores/auth', () => {
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { clearAuth, currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
@@ -142,6 +142,10 @@ async function flush(): Promise<void> {
 	for (let i = 0; i < 20; i++) {
 		await Promise.resolve();
 	}
+}
+
+function offlineFailure(songId: string): NetworkError {
+	return new NetworkError(`/api/songs/${songId}`, new TypeError('Failed to fetch'));
 }
 
 function setup(options?: {
@@ -839,7 +843,7 @@ describe('resource sync owner', () => {
 		let offline = true;
 		const { controller, sources, store } = setup({
 			fetchSong: async (songId) => {
-				if (offline) throw new TypeError('Failed to fetch');
+				if (offline) throw offlineFailure(songId);
 				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
 			}
 		});
@@ -858,11 +862,29 @@ describe('resource sync owner', () => {
 		expect(get(store)).toMatchObject({ status: 'live', error: null });
 	});
 
+	it('shows a bug in applying a fetched song as itself, not as the musician being offline', async () => {
+		const { controller, sources, store } = setup({
+			applySong: () => {
+				throw new TypeError("Cannot read properties of undefined (reading 'id')");
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store)).toMatchObject({
+			status: 'error',
+			error: "Cannot read properties of undefined (reading 'id')"
+		});
+	});
+
 	it('restarts a bootstrap that failed offline once the network comes back', async () => {
 		let offline = true;
 		const { controller, sources, store } = setup({
 			fetchSong: async (songId) => {
-				if (offline) throw new TypeError('Failed to fetch');
+				if (offline) throw offlineFailure(songId);
 				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
 			}
 		});
