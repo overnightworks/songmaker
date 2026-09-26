@@ -14,7 +14,7 @@
 // database (`seedSongPhoneSong`, `seedRunningGenerationJob`), into the album
 // song-phone.spec.ts already owns for phone-only songs.
 
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	APP_NAME,
 	EDITOR_COWRITER_BACK_LABEL,
@@ -38,6 +38,7 @@ const ON_SCREEN_KEYBOARD_HEIGHT_PX = 320;
 const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of the song`).join(
 	'\n'
 );
+const LYRICS_TYPED_ON = ' and on';
 const RUNNING_JOB = { progress: 0.36, takeIndex: 1, takeCount: 2, runningSinceOffsetSeconds: 64 };
 const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 	'{index}',
@@ -72,6 +73,15 @@ function reservedTransportBarRoom(page: Page): Promise<string> {
 	);
 }
 
+// The Generate bar's button, whether it can run or names inside its own box
+// why it cannot: CI's stack runs no ACE-Step worker, so once `/health` answers
+// it reads "Generate — No GPU worker online" (#1011).
+function generateButton(page: Page): Locator {
+	return page
+		.getByRole('tabpanel')
+		.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate) });
+}
+
 // Opens a freshly seeded song from its album row, the way a musician reaches
 // it, so browser back returns to that album page.
 // A song arranged beforehand (a running generation) is picked up by that
@@ -102,9 +112,7 @@ test.describe('typing on the phone', () => {
 		await openSeededSongFromItsAlbum(page);
 
 		const miniPlayer = page.getByRole('contentinfo');
-		const generate = page
-			.getByRole('tabpanel')
-			.getByRole('button', { name: EDITOR_GENERATE_MODE_LABELS.generate, exact: true });
+		const generate = generateButton(page);
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 		await expect(miniPlayer).toBeVisible();
 		await expect(generate).toBeVisible();
@@ -173,8 +181,10 @@ test.describe('typing on the phone', () => {
 		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 		await lyrics.click();
 		await showOnScreenKeyboard(page, true);
+		// A pasted block leaves the page where it was; typing on at its end is
+		// what carries the caret, and the page with it, down past the tabs.
 		await lyrics.fill(LONG_LYRICS);
-		await page.keyboard.press('Control+End');
+		await page.keyboard.type(LYRICS_TYPED_ON);
 		await expect(miniPlayer).toBeHidden();
 		await expect(progress).toBeHidden();
 		await expect(writeTab).not.toBeInViewport();
@@ -211,11 +221,7 @@ test.describe('typing on the phone', () => {
 		await expect(miniPlayer).toBeHidden();
 		await page.keyboard.press('Escape');
 		await expect(miniPlayer).toBeVisible();
-		await expect(
-			page
-				.getByRole('tabpanel')
-				.getByRole('button', { name: EDITOR_GENERATE_MODE_LABELS.generate, exact: true })
-		).toBeVisible();
+		await expect(generateButton(page)).toBeVisible();
 
 		await appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 		await page.getByRole('searchbox', { name: RAIL_SEARCH_LABEL }).click();
