@@ -42,6 +42,7 @@
 	--label-font-size: 11px;
 	--tab-font-size: 12px;
 	--hitbox-frequent: 44px;
+	--keyboard-height: 290px;
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -220,7 +221,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	padding: 0 .3rem;
 }
 
-/* ── tab strip — WriteColumn's .mobile-subtabs ────────────────────────── */
+/* ── tab strip: Write / Takes, the editor's own row ───────────────────── */
 .tabs {
 	flex: none;
 	display: flex;
@@ -526,6 +527,79 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .player .line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--border); }
 .player .line span { display: block; height: 100%; width: 38%; background: var(--action); }
 
+/* ── frame 1b: typing — the page has scrolled, the field has focus ────── */
+/* the tabs went up with the content; the page now starts mid-Style, under the app bar */
+.body.typing { padding-top: 0; padding-bottom: 0; }
+.body.typing > .scrolled-off { margin-top: -62px; }
+/* the focused field takes every pixel down to the keyboard; its box continues beneath it */
+.body.typing > .field.focused { flex: 1; min-height: 0; }
+.body.typing > .field.focused .textbox {
+	flex: 1;
+	min-height: 0;
+	margin-bottom: -8px;
+	border-color: var(--action);
+	box-shadow: 0 0 0 1px var(--action);
+}
+.type-caret {
+	display: inline-block;
+	width: 2px;
+	height: 1.15em;
+	margin-left: 1px;
+	vertical-align: text-bottom;
+	background: var(--action);
+}
+
+/* the on-screen keyboard: a neutral block, drawn only so the space it takes is honest */
+.keyboard {
+	flex: none;
+	height: var(--keyboard-height);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	padding: 8px 5px 0;
+	background: #d3d5db;
+	color: var(--text-muted);
+	font-family: var(--font-body);
+	font-size: 15px;
+	user-select: none;
+}
+.keyboard .suggest {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	font-size: 14px;
+	color: var(--text);
+}
+.keyboard .suggest span { flex: 1; text-align: center; }
+.keyboard .suggest span + span { border-left: 1px solid rgba(0,0,0,.12); }
+.keyboard .krow { display: flex; justify-content: center; gap: 6px; height: 42px; }
+.keyboard .krow.inset { padding: 0 19px; }
+.keyboard .key {
+	flex: 1 1 0;
+	max-width: 33px;
+	border-radius: 5px;
+	background: #fcfcfd;
+	box-shadow: 0 1px 0 rgba(0,0,0,.28);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text);
+	font-size: 17px;
+}
+.keyboard .key.wide { max-width: 45px; flex-basis: 45px; background: #aeb2bd; font-size: 13px; }
+.keyboard .key.space { max-width: 183px; flex-basis: 183px; font-size: 13px; }
+.keyboard .key.ret { max-width: 88px; flex-basis: 88px; background: #aeb2bd; font-size: 13px; }
+.keyboard .key.num { max-width: 88px; flex-basis: 88px; background: #aeb2bd; font-size: 13px; }
+.keyboard .home {
+	margin-top: auto;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.keyboard .home span { width: 134px; height: 5px; border-radius: 3px; background: var(--text); }
+
 /* ── the "…" menu: one popover, the destructive row last ─────────────── */
 .scrim { position: absolute; inset: 0; background: rgba(20, 16, 28, .22); }
 .popover {
@@ -611,6 +685,9 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	color: var(--text-disabled);
 	font-size: .95rem;
 }
+/* frame 7b: the message being written is real text, not the placeholder */
+.composer .input.draft { display: block; color: var(--text); }
+.composer .input.focused { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
 
 .freeze-note {
 	font-family: "IBM Plex Sans", system-ui, sans-serif;
@@ -620,6 +697,17 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	margin: 0 auto;
 	padding: .75rem 1.5rem 0;
 }
+
+/* ── frame 1b's rule sentences: the note lives with its frame, not the page ── */
+.frame-note {
+	font-family: "IBM Plex Sans", system-ui, sans-serif;
+	font-size: .8rem;
+	line-height: 1.55;
+	color: var(--text-muted);
+	max-width: 390px;
+}
+.frame-note p + p { margin-top: .5rem; }
+.frame-note b { color: var(--text); font-weight: 600; }
 </style>
 </head>
 <body>
@@ -692,6 +780,56 @@ the morning gives away</div>
 			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
 			<span class="line"><span></span></span>
 		</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>1b · Write — typing in the lyrics</b> — keyboard open: only the app bar stays, the Generate bar and mini-player have stepped aside, the tabs scrolled up with the page. Blessed 26.09.2026, #999.</figcaption>
+	<div class="device" id="f1b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<div class="body typing">
+			<div class="field scrolled-off" aria-hidden="true">
+				<span class="label">Style</span>
+				<div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div>
+			</div>
+			<div class="field focused">
+				<span class="label">Lyrics <span class="field-stamp">v7 · draft</span></span>
+				<div class="textbox lyrics-area" role="textbox" aria-multiline="true"><span class="mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to storm
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away
+
+<span class="mark">[Verse 2]</span>
+Streetlights count the exits down
+every one of them a town
+I don't take the<span class="type-caret" aria-hidden="true"></span></div>
+			</div>
+		</div>
+		<div class="keyboard" role="img" aria-label="On-screen keyboard">
+			<div class="suggest"><span>one</span><span>ones</span><span>on</span></div>
+			<div class="krow"><span class="key">q</span><span class="key">w</span><span class="key">e</span><span class="key">r</span><span class="key">t</span><span class="key">y</span><span class="key">u</span><span class="key">i</span><span class="key">o</span><span class="key">p</span></div>
+			<div class="krow inset"><span class="key">a</span><span class="key">s</span><span class="key">d</span><span class="key">f</span><span class="key">g</span><span class="key">h</span><span class="key">j</span><span class="key">k</span><span class="key">l</span></div>
+			<div class="krow"><span class="key wide">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key wide">⌫</span></div>
+			<div class="krow"><span class="key num">123</span><span class="key space">space</span><span class="key ret">return</span></div>
+			<div class="home"><span></span></div>
+		</div>
+	</div>
+	<div class="frame-note">
+		<p><b>Rule (phone, every screen).</b> While a text field has focus, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back when you leave the field. Only what belongs to the field stays — on the co-writer screen that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
+		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
+		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Write; Send the only primary on the co-writer screen.</p>
 	</div>
 </figure>
 
@@ -1242,6 +1380,43 @@ can wait a mile for me</span></div>
 			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
 			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
 			<span class="line"><span></span></span>
+		</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>7b · Co-writer — typing a message</b> — keyboard open: the conversation ends at the composer, Send sits directly on the keyboard, the mini-player has stepped aside. Blessed 26.09.2026, #999.</figcaption>
+	<div class="device" id="f7b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Back to Write" title="Back to Write"><svg class="ic" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg></button>
+			<h1>Co-writer</h1>
+			<button class="icon-btn" aria-label="Conversation menu" title="Conversation menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<div class="chat">
+			<div class="msg me">the chorus feels long. tighten it?</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Drop the third line — the hook lands twice and the last line keeps the turn.<span class="lines">All mine if I follow
+all mine if I stay
+the morning gives away</span></div>
+			<span class="tool-chip"><svg class="ic sm" viewBox="0 0 24 24"><path d="M5 12l4 4 10-10"/></svg> Wrote lyrics · v7 draft</span>
+			<div class="msg me">good. now a bridge in the same voice</div>
+			<span class="who">Claude · for AMIF</span>
+			<div class="msg them">Four lines, no chorus rhyme, so it reads as a held breath:<span class="lines">The tank runs low on purpose
+the exit signs agree
+whatever waits in morning
+can wait a mile for me</span></div>
+		</div>
+		<div class="composer">
+			<div class="input draft focused" role="textbox">keep it, but cut it to two lines — the tank and the mor<span class="type-caret" aria-hidden="true"></span></div>
+			<button class="btn-primary">Send</button>
+		</div>
+		<div class="keyboard" role="img" aria-label="On-screen keyboard">
+			<div class="suggest"><span>morning</span><span>more</span><span>mornings</span></div>
+			<div class="krow"><span class="key">q</span><span class="key">w</span><span class="key">e</span><span class="key">r</span><span class="key">t</span><span class="key">y</span><span class="key">u</span><span class="key">i</span><span class="key">o</span><span class="key">p</span></div>
+			<div class="krow inset"><span class="key">a</span><span class="key">s</span><span class="key">d</span><span class="key">f</span><span class="key">g</span><span class="key">h</span><span class="key">j</span><span class="key">k</span><span class="key">l</span></div>
+			<div class="krow"><span class="key wide">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key wide">⌫</span></div>
+			<div class="krow"><span class="key num">123</span><span class="key space">space</span><span class="key ret">return</span></div>
+			<div class="home"><span></span></div>
 		</div>
 	</div>
 </figure>
