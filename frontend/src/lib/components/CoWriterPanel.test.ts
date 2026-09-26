@@ -2,12 +2,18 @@ import { makeHealthResponse, makeSong as song } from '$lib/test-utils/factories'
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
-import { COWRITER_CLAUDE_UNVERIFIED_LABEL } from '$lib/constants';
+import type { ChatMessageItem } from '$lib/api/types';
+import {
+	COWRITER_CLAUDE_UNVERIFIED_LABEL,
+	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
+	COWRITER_RUNNING_TURN_POLL_MS
+} from '$lib/constants';
 
 import { ApiError } from '$lib/api/fetch';
 
 const streamCoWriterTurn = vi.hoisted(() => vi.fn());
 const fetchConversations = vi.hoisted(() => vi.fn());
+const fetchConversationMessages = vi.hoisted(() => vi.fn());
 const fetchCowriterSettings = vi.hoisted(() => vi.fn());
 const fetchHealth = vi.hoisted(() => vi.fn());
 
@@ -17,7 +23,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		...actual,
 		fetchConversations: (...args: Parameters<typeof fetchConversations>) =>
 			fetchConversations(...args),
-		fetchConversationMessages: vi.fn().mockResolvedValue({ messages: [] }),
+		fetchConversationMessages: (...args: Parameters<typeof fetchConversationMessages>) =>
+			fetchConversationMessages(...args),
 		startNewConversation: vi.fn(async () => ({
 			id: 'c1',
 			title: null,
@@ -43,6 +50,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	fetchConversations.mockReset().mockResolvedValue([]);
+	fetchConversationMessages.mockReset().mockResolvedValue({ messages: [] });
 	fetchCowriterSettings.mockReset().mockResolvedValue({ provider: 'claude', model: 'sonnet' });
 	fetchHealth.mockReset().mockResolvedValue(makeHealthResponse());
 });
@@ -58,6 +66,25 @@ async function* turnEvents(events: CoWriterStreamEvent[]) {
 	for (const event of events) yield event;
 }
 
+/** Streams that end without the server's own error frame: the turn itself may still run. */
+const droppedStreams: Array<[string, () => AsyncGenerator<CoWriterStreamEvent>]> = [
+	['a stream that ends before its final event', () => turnEvents([])],
+	[
+		'a timed out stream',
+		async function* () {
+			yield* [] as CoWriterStreamEvent[];
+			throw Object.assign(new Error('aborted'), { name: 'AbortError' });
+		}
+	],
+	[
+		'a stream the network dropped',
+		async function* () {
+			yield { type: 'assistant_text', text: 'Mach ich' } as CoWriterStreamEvent;
+			throw new TypeError('Failed to fetch');
+		}
+	]
+];
+
 /**
  * After a turn's "final" event, the panel reloads conversations to confirm
  * which one is active. The real backend already reflects the just-created
@@ -72,6 +99,32 @@ function activeConversation(id: string) {
 		archived_at: null,
 		created_at: '2026-01-01T00:00:00+00:00'
 	};
+}
+
+function chatMessage(id: string, role: 'user' | 'assistant', content: string): ChatMessageItem {
+	return { id, role, content, created_at: '2026-09-26T15:21:00+00:00' };
+}
+
+function conversation(turnRunning: boolean, ...messages: ChatMessageItem[]) {
+	return {
+		conversation_id: 'c1',
+		title: null,
+		archived_at: null,
+		messages,
+		turn_running: turnRunning
+	};
+}
+
+/** Each page answers one read of the conversation, in order. */
+function conversationPages(...pages: ReturnType<typeof conversation>[]): void {
+	for (const page of pages) fetchConversationMessages.mockResolvedValueOnce(page);
+}
+
+/** The chat as the musician reads it: one entry per bubble, including a failure note. */
+function chatView(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('.message'), (message) =>
+		(message.textContent ?? '').replace(/\s+/g, ' ').trim()
+	);
 }
 
 async function render(overrides: Partial<Record<string, unknown>> = {}) {
@@ -104,8 +157,9 @@ async function sendMessage(target: HTMLElement, message: string): Promise<void> 
 	input.dispatchEvent(new Event('input', { bubbles: true }));
 	await tick();
 	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
-	await vi.waitFor(() => expect(target.querySelector('.tool-call')).not.toBeNull());
+	await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
 	await tick();
+	await vi.waitFor(() => expect(target.querySelector('.tool-call')).not.toBeNull());
 }
 
 async function sendTurn(target: HTMLElement, message: string): Promise<void> {
@@ -247,40 +301,41 @@ describe('CoWriterPanel failed turns', () => {
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
 	});
 
-	it('names a stream that ends before its final event', async () => {
-		streamCoWriterTurn.mockReturnValue(turnEvents([]));
-		const target = await render();
-
-		await sendTurn(target, 'write a chorus');
-
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
-		expect(target.querySelector('.typing')).toBeNull();
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
-	});
-
-	it('names a timed out stream below the retained user message', async () => {
-		streamCoWriterTurn.mockReturnValue(
-			(async function* () {
-				yield* [] as CoWriterStreamEvent[];
-				throw Object.assign(new Error('aborted'), { name: 'AbortError' });
-			})()
+	it('offers Try again only on the newest message once a newer one failed too', async () => {
+		streamCoWriterTurn.mockImplementation(() =>
+			turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent])
 		);
 		const target = await render();
 
-		await sendTurn(target, 'write a chorus');
+		await sendTurn(target, 'older message');
+		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
+		await sendTurn(target, 'newer message');
+		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.typing')).toBeNull());
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'The co-writer did not answer. Try again.'
-			)
-		);
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		const retries = target.querySelectorAll<HTMLButtonElement>('.retry-turn');
+		expect(retries).toHaveLength(1);
+		expect(retries[0].closest('.message')?.textContent).toContain('newer message');
 	});
+
+	it.each(droppedStreams)(
+		'names %s whose message never reached the server, with a retry',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			const target = await render();
+
+			await sendTurn(target, 'write a chorus');
+
+			await vi.waitFor(() =>
+				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+					'The co-writer did not answer. Try again.'
+				)
+			);
+			expect(target.querySelector('.typing')).toBeNull();
+			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+		}
+	);
 
 	it('names a 503 below the user message, ends typing, and retries the retained message', async () => {
 		streamCoWriterTurn.mockReturnValueOnce(
@@ -310,6 +365,14 @@ describe('CoWriterPanel failed turns', () => {
 			])
 		);
 		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		conversationPages(
+			conversation(false),
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'write a chorus'),
+				chatMessage('a1', 'assistant', 'Here is a chorus')
+			)
+		);
 		const target = await render();
 
 		await sendTurn(target, 'write a chorus');
@@ -326,12 +389,327 @@ describe('CoWriterPanel failed turns', () => {
 		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
 
 		await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(2));
-		await vi.waitFor(() => expect(target.querySelector('.turn-error')).toBeNull());
-		expect(target.textContent).toContain('Here is a chorus');
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() =>
+			expect(chatView(target)).toEqual(['write a chorus', 'Here is a chorus'])
+		);
+	});
+});
+
+describe('CoWriterPanel returning while a turn runs (#1014)', () => {
+	const sent = chatMessage('u1', 'user', 'Ja bitte');
+	const reply = chatMessage('a1', 'assistant', 'Erledigt.');
+
+	async function leaveDuringATurnAndReturn(onturncompleted = vi.fn()): Promise<HTMLElement> {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield { type: 'assistant_text', text: 'Mach ich' } as CoWriterStreamEvent;
+				await new Promise(() => {});
+			})()
+		);
+		const left = await render();
+		await sendTurn(left, 'Ja bitte');
+		await vi.waitFor(() => expect(left.textContent).toContain('Mach ich'));
+		const leftPanel = mounted.pop();
+		if (!leftPanel) throw new Error('Expected the panel the musician left');
+		await unmount(leftPanel);
+
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		return render({ onturncompleted });
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'Date'] });
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it('shows the message sent at once and the reply as soon as the turn completes', async () => {
+		conversationPages(
+			conversation(true, sent),
+			conversation(true, sent),
+			conversation(false, sent, reply)
+		);
+		const onturncompleted = vi.fn();
+
+		const target = await leaveDuringATurnAndReturn(onturncompleted);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte')
+		);
+		expect(target.querySelector('.typing')).not.toBeNull();
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		expect(target.textContent).not.toContain('Erledigt.');
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelector('.turn-error')).toBeNull();
+		expect(onturncompleted).toHaveBeenCalledTimes(1);
+	});
+
+	it('names a turn that ended unanswered below the retained message, with a retry', async () => {
+		conversationPages(conversation(true, sent), conversation(false, sent));
+
+		const target = await leaveDuringATurnAndReturn();
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+	});
+
+	it('shows the retained unanswered message once when retrying it fails again', async () => {
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		fetchConversationMessages.mockResolvedValue(conversation(false, sent));
+		streamCoWriterTurn.mockReturnValue(
+			turnEvents([{ type: 'error', message: 'CLI is unavailable.' } as CoWriterStreamEvent])
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(target.querySelector('.retry-turn')).not.toBeNull());
+
+		target.querySelector<HTMLButtonElement>('.retry-turn')?.click();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'CLI is unavailable.'
+			)
+		);
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelectorAll('.retry-turn')).toHaveLength(1);
+	});
+
+	it('names a conversation it can no longer reach instead of waiting in silence', async () => {
+		conversationPages(conversation(true, sent));
+		fetchConversationMessages.mockRejectedValue(new Error('Failed to fetch'));
+
+		const target = await leaveDuringATurnAndReturn();
+		await vi.advanceTimersByTimeAsync(
+			COWRITER_RUNNING_TURN_POLL_MS * COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT
+		);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.history-error')?.textContent).toContain(
+				'Conversation history unavailable'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+	});
+
+	async function sendInAnOpenConversation(onturncompleted = vi.fn()): Promise<HTMLElement> {
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const target = await render({ onturncompleted });
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		await sendTurn(target, 'Ja bitte');
+		return target;
+	}
+
+	it.each(droppedStreams)(
+		'follows the turn the server still runs after %s, then shows its reply',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			conversationPages(
+				conversation(false),
+				conversation(true, sent),
+				conversation(false, sent, reply)
+			);
+			const onturncompleted = vi.fn();
+
+			const target = await sendInAnOpenConversation(onturncompleted);
+
+			await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+			await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+			expect(target.querySelector('.turn-error')).toBeNull();
+			expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
+
+			await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+			await vi.waitFor(() =>
+				expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+			);
+			expect(target.querySelector('.typing')).toBeNull();
+			expect(target.querySelector('.turn-error')).toBeNull();
+			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(streamCoWriterTurn).toHaveBeenCalledTimes(1);
+			expect(onturncompleted).toHaveBeenCalledTimes(1);
+		}
+	);
+
+	it.each(droppedStreams)(
+		'names %s whose repeated message never reached the server, with a retry',
+		async (_shape, droppedStream) => {
+			streamCoWriterTurn.mockReturnValue(droppedStream());
+			conversationPages(conversation(false, sent, reply), conversation(false, sent, reply));
+			const onturncompleted = vi.fn();
+
+			const target = await sendInAnOpenConversation(onturncompleted);
+
+			await vi.waitFor(() =>
+				expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+					'The co-writer did not answer. Try again.'
+				)
+			);
+			expect(target.querySelectorAll('.message.user')).toHaveLength(2);
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+			expect(onturncompleted).not.toHaveBeenCalled();
+		}
+	);
+
+	it('names a repeated message that never reached the server after a streamed exchange', async () => {
+		streamCoWriterTurn.mockReturnValueOnce(
+			turnEvents([
+				{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+			])
+		);
+		streamCoWriterTurn.mockReturnValueOnce(droppedStreams[2][1]());
+		const target = await render();
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		conversationPages(conversation(false, sent, reply), conversation(false, sent, reply));
+		await sendTurn(target, 'Ja bitte');
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(target.textContent).toContain('Erledigt.'));
+
+		await sendTurn(target, 'Ja bitte');
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelectorAll('.message.user')).toHaveLength(2);
+	});
+
+	it('shows the reply of a turn that finished while its stream was down', async () => {
+		streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+		conversationPages(conversation(false), conversation(false, sent, reply));
+		const onturncompleted = vi.fn();
+
+		const target = await sendInAnOpenConversation(onturncompleted);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.querySelector('.turn-error')).toBeNull();
+		expect(target.querySelector('.typing')).toBeNull();
+		expect(onturncompleted).toHaveBeenCalledTimes(1);
+	});
+
+	it('keeps an older failed message once a newer one is answered, as a reload shows it', async () => {
+		const failed = chatMessage('u0', 'user', 'Refrain kürzer');
+		const persisted = conversation(false, failed, sent, reply);
+		streamCoWriterTurn
+			.mockReturnValueOnce(
+				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent])
+			)
+			.mockReturnValueOnce(
+				turnEvents([
+					{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+				])
+			);
+		conversationPages(conversation(false), persisted, persisted);
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const live = await render();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+
+		await sendTurn(live, 'Refrain kürzer');
+		await vi.waitFor(() => expect(live.querySelector('.retry-turn')).not.toBeNull());
+		await sendTurn(live, 'Ja bitte');
+
+		const expected = ['Refrain kürzer', 'Ja bitte', 'Erledigt.'];
+		await vi.waitFor(() => expect(chatView(live)).toEqual(expected));
+		const reloaded = await render();
+		await vi.waitFor(() => expect(chatView(reloaded)).toEqual(expected));
+		expect(live.querySelector('.retry-turn')).toBeNull();
+	});
+
+	it('follows a turn another tab is running and keeps what was typed', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(409, 'A co-writer reply is still being written', '/api/chat/turn');
+			})()
+		);
+		const otherTab = chatMessage('u0', 'user', 'Refrain kürzer');
+		conversationPages(
+			conversation(false),
+			conversation(true, otherTab),
+			conversation(false, otherTab, reply)
+		);
+
+		const target = await sendInAnOpenConversation();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.user')?.textContent).toContain('Refrain kürzer')
+		);
+		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('Ja bitte');
+		expect(target.querySelector('.turn-error')).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.message.assistant')?.textContent).toContain('Erledigt.')
+		);
+		expect(target.textContent).not.toContain('Ja bitte');
+	});
+
+	it('does not offer a message again that the running turn is already answering', async () => {
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(409, 'A co-writer reply is still being written', '/api/chat/turn');
+			})()
+		);
+		conversationPages(conversation(false), conversation(true, sent));
+
+		const target = await sendInAnOpenConversation();
+
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.typing')).not.toBeNull());
+		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+		expect(target.querySelector<HTMLTextAreaElement>('.chat-input')?.value).toBe('');
+	});
+
+	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {
+		conversationPages(conversation(false, sent));
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+
+		const target = await render();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
+				'The co-writer did not answer. Try again.'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
+		streamCoWriterTurn.mockReturnValue(turnEvents([]));
+		await sendTurn(target, 'Noch einmal');
+		expect(streamCoWriterTurn).toHaveBeenCalledWith(
+			expect.objectContaining({ message: 'Noch einmal' })
+		);
 	});
 });
 
 describe('CoWriterPanel proposal target (#238)', () => {
+	beforeEach(() => {
+		conversationPages(
+			conversation(false),
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'the request'),
+				chatMessage('a1', 'assistant', 'Done')
+			)
+		);
+	});
+
 	// The co-writer is one global conversation: a tool call streamed while
 	// "Open Song" is showing can still target a different song entirely.
 	it('badges a proposal for a different song than the one currently open', async () => {
@@ -448,5 +826,53 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		await sendMessage(target, 'what songs do I have?');
 
 		expect(target.querySelector('.tool-target')).toBeNull();
+	});
+
+	it("keeps an earlier reply's proposal target after the next turn is answered", async () => {
+		const answered = (userId: string, assistantId: string): CoWriterStreamEvent => ({
+			type: 'final',
+			conversation_id: 'c1',
+			user_message: chatMessage(userId, 'user', 'request'),
+			assistant_message: chatMessage(assistantId, 'assistant', 'Done')
+		});
+		streamCoWriterTurn
+			.mockReturnValueOnce(
+				turnEvents([
+					{
+						type: 'tool_call',
+						tool_use_id: 't1',
+						name: 'update_song_lyrics',
+						input: { song_id: 's2', lyrics: 'new verse' }
+					},
+					answered('u1', 'a1')
+				])
+			)
+			.mockReturnValueOnce(turnEvents([answered('u2', 'a2')]));
+		conversationPages(
+			conversation(
+				false,
+				chatMessage('u1', 'user', 'the request'),
+				chatMessage('a1', 'assistant', 'Done'),
+				chatMessage('u2', 'user', 'thanks'),
+				chatMessage('a2', 'assistant', 'Done')
+			)
+		);
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		const target = await render({
+			allSongs: [
+				song({ slug: 'open-song', title: 'Open Song', generation_count: 0 }),
+				song({ slug: 'open-song', generation_count: 0, id: 's2', title: 'Other Song' })
+			]
+		});
+		await sendMessage(target, 'update the other song');
+
+		await sendTurn(target, 'thanks');
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(3));
+		await tick();
+		expect(chatView(target)).toHaveLength(4);
+
+		const badge = target.querySelector<HTMLElement>('.tool-target');
+		expect(badge?.textContent?.trim()).toBe('for: Other Song');
+		expect(badge?.classList.contains('foreign')).toBe(true);
 	});
 });

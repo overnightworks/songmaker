@@ -352,6 +352,157 @@ def test_chat_turn_streams_sse_and_stores_messages(client):
         assert job.status == "completed"
 
 
+_RETURNING_USER = make_authenticated_user("u-test", username="u-u-test")
+
+
+def _while_a_turn_runs(client, look):
+    """Hold one turn open on "Ja bitte", return what ``look`` sees meanwhile, then let it finish."""
+    import asyncio
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
+    c, factory = client
+
+    async def _exercise():
+        reply_released = asyncio.Event()
+
+        async def _slow_reply(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+            yield AssistantTextEvent(text="working on it")
+            await reply_released.wait()
+            yield FinalEvent(text="done")
+
+        request = Request({"type": "http", "app": c.app})
+        with factory() as session, patch(
+            "songmaker_cli.conversation_api.stream_cowriter_turn", _slow_reply,
+        ):
+            response = await api_chat_turn(
+                ChatTurnV2Request(message="Ja bitte"), request, _RETURNING_USER, session,
+            )
+            stream = response.body_iterator
+            await anext(stream)
+            seen_mid_turn = await look()
+            reply_released.set()
+            async for _frame in stream:
+                pass
+            return seen_mid_turn
+
+    return asyncio.run(_exercise())
+
+
+def _conversation_seen_by_a_returning_panel(factory) -> tuple[list[tuple[str, str]], bool]:
+    from songmaker_cli.conversation_api import api_conversation_messages, api_list_conversations
+
+    with factory() as reader:
+        active = api_list_conversations(_RETURNING_USER, reader).conversations[0]
+        conversation = api_conversation_messages(active.id, _RETURNING_USER, reader)
+        messages = [(message.role, message.content) for message in conversation.messages]
+        return messages, conversation.turn_running
+
+
+def test_a_running_turn_already_shows_its_user_message_in_the_conversation(client):
+    """A panel opened while the reply is still streaming finds the message sent (#1014)."""
+    _c, factory = client
+
+    async def _look():
+        return _conversation_seen_by_a_returning_panel(factory)
+
+    assert _while_a_turn_runs(client, _look) == ([("user", "Ja bitte")], True)
+    assert _conversation_seen_by_a_returning_panel(factory) == (
+        [("user", "Ja bitte"), ("assistant", "done")],
+        False,
+    )
+
+
+def test_a_turn_sent_while_another_runs_is_refused_and_the_message_answered_once(client):
+    """Try again or a second tab cannot start a second turn on the same message (#1014)."""
+    from fastapi import HTTPException
+
+    from songmaker_cli.api_models import ChatTurnV2Request
+    from songmaker_cli.conversation_api import api_chat_turn
+
+    c, factory = client
+
+    async def _send_it_again():
+        with factory() as session, pytest.raises(HTTPException) as refused:
+            await api_chat_turn(
+                ChatTurnV2Request(message="Ja bitte"),
+                Request({"type": "http", "app": c.app}),
+                _RETURNING_USER,
+                session,
+            )
+        return refused.value.status_code
+
+    assert _while_a_turn_runs(client, _send_it_again) == 409
+    assert _conversation_seen_by_a_returning_panel(factory) == (
+        [("user", "Ja bitte"), ("assistant", "done")],
+        False,
+    )
+    with factory() as session:
+        assert [job.status for job in session.query(Job).filter_by(type="chat")] == ["completed"]
+
+
+@pytest.mark.parametrize(
+    ("chat_job_status", "archived", "turn_running"),
+    [
+        ("running", False, True),
+        ("failed", False, False),
+        ("running", True, False),
+    ],
+    ids=["job-running", "job-reaped-after-process-death", "archived-conversation"],
+)
+def test_the_chat_job_decides_whether_a_turn_is_running(
+    client, chat_job_status, archived, turn_running,
+):
+    """A message left behind by a dead turn is not a running turn once the reaper ends its job."""
+    from datetime import UTC, datetime
+
+    c, factory = client
+    with factory() as session:
+        session.add(Conversation(
+            id="conv-1",
+            user_id="u-test",
+            archived_at=datetime.now(UTC) if archived else None,
+        ))
+        session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
+        session.add(Job(type="chat", user_id="u-test", status=chat_job_status))
+        session.commit()
+
+    body = c.get("/api/conversations/conv-1").json()
+
+    assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
+    assert body["turn_running"] is turn_running
+
+
+@pytest.mark.parametrize("chat_job_status", ["queued", "running"])
+def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
+    tmp_path, mock_arq_pool, chat_job_status,
+):
+    """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
+    from conftest import login_and_csrf, make_test_app
+    from webauth.passwords import hash_password
+
+    from songmaker_cli.db.queries import create_user
+
+    def _seed_a_turn_the_restart_interrupted(session) -> None:
+        musician = create_user(session, "musician", hash_password("musician-pass"), role="user")
+        session.add(Conversation(id="conv-1", user_id=musician.id))
+        session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
+        session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))
+
+    c, factory = make_test_app(tmp_path, seed_db=_seed_a_turn_the_restart_interrupted)
+    with c:
+        login_and_csrf(c, "musician", "musician-pass")
+        body = c.get("/api/conversations/conv-1").json()
+
+    assert [m["content"] for m in body["messages"]] == ["Ja bitte"]
+    assert body["turn_running"] is False
+    with factory() as session:
+        assert [job.error_type for job in session.query(Job).filter_by(type="chat")] == [
+            "server_restart",
+        ]
+
+
 def test_a_turn_stamps_its_events_with_the_chat_job_and_streams_none_of_it(client):
     """The turn's own job id reaches the deepest event producer and stops there.
 
@@ -413,163 +564,66 @@ def test_chat_turn_completes_when_its_heartbeat_task_fails(client):
         assert job.status == "completed"
 
 
-def test_chat_turn_disconnect_reaps_provider_before_asgi_23_response_returns(client):
-    import asyncio
-
-    from songmaker_cli.api_models import ChatTurnV2Request
-    from songmaker_cli.conversation_api import api_chat_turn
-
+def test_a_turn_that_cannot_open_its_stream_no_longer_counts_as_running(client):
+    """A turn failing before its first event still ends its job, so no panel waits on it forever."""
     c, factory = client
 
-    async def _exercise() -> None:
-        heartbeat_started = asyncio.Event()
-        heartbeat_stopped = asyncio.Event()
-        body_sent = asyncio.Event()
-        reaper_finished = asyncio.Event()
+    def _unopenable(*_args, **_kwargs):
+        raise ImportError("provider module missing")
 
-        async def _keep_heartbeat(*_args, **_kwargs) -> None:
-            heartbeat_started.set()
-            try:
-                await asyncio.Future()
-            finally:
-                heartbeat_stopped.set()
-
-        async def _consume(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
-            await heartbeat_started.wait()
-            yield AssistantTextEvent(text="partial")
-            await asyncio.Future()
-
-        async def _spawn(*_args, **_kwargs) -> MagicMock:
-            process = MagicMock()
-            process.stdin = None
-            return process
-
-        async def _reap(_process) -> bool:
-            await asyncio.sleep(0)
-            reaper_finished.set()
-            return False
-
-        request = Request({"type": "http", "app": c.app})
-        user = make_authenticated_user("u-test", username="u-u-test")
-        with factory() as session:
-            with patch(
-                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
-                _keep_heartbeat,
-            ), patch(
-                "agent_providers.claude.provider._spawn_reserved_async_cli_process",
-                _spawn,
-            ), patch(
-                "agent_providers.claude.provider._consume_stream",
-                _consume,
-            ), patch(
-                "agent_providers.claude.provider._reap_process_group",
-                _reap,
-            ):
-                response = await api_chat_turn(
-                    ChatTurnV2Request(message="hey"),
-                    request,
-                    user,
-                    session,
-                )
-
-                async def _receive() -> None:
-                    await body_sent.wait()
-                    return {"type": "http.disconnect"}
-
-                async def _send(message) -> None:
-                    if message["type"] == "http.response.body":
-                        body_sent.set()
-
-                await response(
-                    {"type": "http", "asgi": {"spec_version": "2.3"}},
-                    _receive,
-                    _send,
-                )
-
-                assert heartbeat_stopped.is_set()
-                assert reaper_finished.is_set()
-
-    asyncio.run(_exercise())
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _unopenable):
+        c.post("/api/chat/turn", json={"message": "hey"})
 
     with factory() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error_type == "cancelled"
-        assert job.error == "Turn cancelled by the client."
+        conversation_id = session.query(Conversation).one().id
+    assert c.get(f"/api/conversations/{conversation_id}").json()["turn_running"] is False
 
 
-def test_chat_turn_start_response_failure_cancels_unstarted_stream(client):
+async def _leave_mid_reply(response) -> None:
+    import asyncio
+
+    first_frame_sent = asyncio.Event()
+
+    async def _receive() -> dict:
+        await first_frame_sent.wait()
+        return {"type": "http.disconnect"}
+
+    async def _send(message) -> None:
+        if message["type"] == "http.response.body":
+            first_frame_sent.set()
+
+    await response({"type": "http", "asgi": {"spec_version": "2.3"}}, _receive, _send)
+
+
+async def _leave_before_the_reply_starts(response) -> None:
     import asyncio
 
     from starlette.requests import ClientDisconnect
 
-    from songmaker_cli.api_models import ChatTurnV2Request
-    from songmaker_cli.conversation_api import api_chat_turn
+    async def _receive() -> dict:
+        await asyncio.Future()
 
-    c, factory = client
+    async def _send(message) -> None:
+        if message["type"] == "http.response.start":
+            raise OSError("client disconnected before stream start")
 
-    async def _exercise() -> None:
-        heartbeat_started = asyncio.Event()
-        heartbeat_stopped = asyncio.Event()
-        provider_started = False
-
-        async def _keep_heartbeat(*_args, **_kwargs) -> None:
-            heartbeat_started.set()
-            try:
-                await asyncio.Future()
-            finally:
-                heartbeat_stopped.set()
-
-        async def _stream(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
-            nonlocal provider_started
-            provider_started = True
-            yield AssistantTextEvent(text="partial")
-
-        request = Request({"type": "http", "app": c.app})
-        user = make_authenticated_user("u-test", username="u-u-test")
-        with factory() as session:
-            with patch(
-                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
-                _keep_heartbeat,
-            ), patch(
-                "songmaker_cli.conversation_api.stream_cowriter_turn",
-                _stream,
-            ):
-                response = await api_chat_turn(
-                    ChatTurnV2Request(message="hey"),
-                    request,
-                    user,
-                    session,
-                )
-                await heartbeat_started.wait()
-
-                async def _receive() -> None:
-                    await asyncio.Future()
-
-                async def _send(message) -> None:
-                    if message["type"] == "http.response.start":
-                        raise OSError("client disconnected before stream start")
-
-                with pytest.raises(ClientDisconnect):
-                    await response(
-                        {"type": "http", "asgi": {"spec_version": "2.4"}},
-                        _receive,
-                        _send,
-                    )
-
-        assert heartbeat_stopped.is_set()
-        assert not provider_started
-
-    asyncio.run(_exercise())
-
-    with factory() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error_type == "cancelled"
-        assert job.error == "Turn cancelled by the client."
+    with pytest.raises(ClientDisconnect):
+        await response({"type": "http", "asgi": {"spec_version": "2.4"}}, _receive, _send)
 
 
-def test_chat_turn_marks_job_cancelled_when_stream_generator_closes(client):
+async def _stop_reading_the_reply(response) -> None:
+    stream = response.body_iterator
+    await anext(stream)
+    await stream.aclose()
+
+
+@pytest.mark.parametrize(
+    "leave",
+    [_leave_mid_reply, _leave_before_the_reply_starts, _stop_reading_the_reply],
+    ids=["disconnect-mid-reply", "disconnect-before-start", "stream-closed"],
+)
+def test_a_turn_whose_client_leaves_runs_to_completion_and_keeps_its_reply(client, leave):
+    """Head ruling on #1014: a started turn finishes; a client that leaves only stops listening."""
     import asyncio
 
     from songmaker_cli.api_models import ChatTurnV2Request
@@ -578,58 +632,37 @@ def test_chat_turn_marks_job_cancelled_when_stream_generator_closes(client):
     c, factory = client
 
     async def _exercise() -> None:
-        heartbeat_started = asyncio.Event()
-        heartbeat_stopped = asyncio.Event()
-        provider_reaped = asyncio.Event()
-        provider_close_count = 0
+        reply_released = asyncio.Event()
 
-        async def _keep_heartbeat(*_args, **_kwargs) -> None:
-            heartbeat_started.set()
-            try:
-                await asyncio.Future()
-            finally:
-                heartbeat_stopped.set()
-
-        async def _acall(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
-            nonlocal provider_close_count
-            await heartbeat_started.wait()
-            try:
-                yield AssistantTextEvent(text="partial")
-                await asyncio.Future()
-            finally:
-                provider_close_count += 1
-                provider_reaped.set()
+        async def _slow_reply(*_args, **_kwargs) -> AsyncIterator[StreamEvent]:
+            yield AssistantTextEvent(text="working on it")
+            await reply_released.wait()
+            yield FinalEvent(text="Erledigt.")
 
         request = Request({"type": "http", "app": c.app})
         user = make_authenticated_user("u-test", username="u-u-test")
-        with factory() as session:
-            with patch(
-                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
-                _keep_heartbeat,
-            ), patch(
-                "agent_providers.claude.adapter.acall_claude_with_mcp_stream",
-                _acall,
-            ):
-                response = await api_chat_turn(
-                    ChatTurnV2Request(message="hey"),
-                    request,
-                    user,
-                    session,
-                )
-                stream = response.body_iterator
-                await anext(stream)
-                await stream.aclose()
-                assert heartbeat_stopped.is_set()
-                assert provider_reaped.is_set()
-                assert provider_close_count == 1
+        with factory() as session, patch(
+            "songmaker_cli.conversation_api.stream_cowriter_turn", _slow_reply,
+        ):
+            response = await api_chat_turn(
+                ChatTurnV2Request(message="Ja bitte"), request, user, session,
+            )
+            await leave(response)
+            reply_released.set()
+            await asyncio.gather(
+                *(asyncio.all_tasks() - {asyncio.current_task()}), return_exceptions=True,
+            )
 
     asyncio.run(_exercise())
 
     with factory() as session:
         job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error_type == "cancelled"
-        assert job.error == "Turn cancelled by the client."
+        assert job.status == "completed"
+        messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
+        assert [(m.role, m.content) for m in messages] == [
+            ("user", "Ja bitte"),
+            ("assistant", "Erledigt."),
+        ]
 
 
 def test_chat_turn_closing_after_completion_keeps_job_completed(client):
@@ -872,6 +905,7 @@ def test_chat_turn_unexpected_error_emits_error_frame_and_marks_job_failed(
         jobs = session.query(Job).all()
         assert len(jobs) == 1
         assert jobs[0].status == "failed"
+        assert [(m.role, m.content) for m in session.query(ChatMessage)] == [("user", "oops")]
 
 
 def test_chat_turn_unavailable_emits_503_error_frame(client):
@@ -911,8 +945,37 @@ def test_chat_turn_unavailable_emits_503_error_frame(client):
     assert secret_sentinel not in resp.text
 
     with factory() as session:
-        assert session.query(Conversation).count() == 0
-        assert session.query(ChatMessage).count() == 0
+        assert [(m.role, m.content) for m in session.query(ChatMessage)] == [("user", "hi")]
+
+
+@pytest.mark.parametrize(
+    ("next_message", "expected_history"),
+    [
+        ("oops", [("user", "oops"), ("assistant", "ok")]),
+        ("never mind", [("user", "oops"), ("user", "never mind"), ("assistant", "ok")]),
+    ],
+    ids=["try-again-answers-the-kept-message", "a-new-message-follows-it"],
+)
+def test_a_turn_after_an_unanswered_one_keeps_the_message_it_left(
+    client, next_message, expected_history,
+):
+    c, factory = client
+
+    async def _boom(*_args, **_kwargs):
+        raise RuntimeError("kaboom")
+        yield  # pragma: no cover
+
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _boom):
+        c.post("/api/chat/turn", json={"message": "oops"})
+    with patch("songmaker_cli.conversation_api.stream_cowriter_turn", _mock_claude("ok")):
+        final = _final_event(_stream_events(
+            c.post("/api/chat/turn", json={"message": next_message}),
+        ))
+
+    assert final["user_message"]["content"] == next_message
+    with factory() as session:
+        messages = session.query(ChatMessage).order_by(ChatMessage.created_at).all()
+        assert [(m.role, m.content) for m in messages] == expected_history
 
 
 # ── /api/conversations ────────────────────────────────────────────────

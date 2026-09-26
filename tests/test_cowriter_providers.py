@@ -880,7 +880,7 @@ def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_c
         assert ctx.endswith("hello")
 
 
-def test_missing_credentials_named_error_no_persist(
+def test_missing_credentials_named_error_persists_no_reply(
     admin_client, monkeypatch, every_provider_is_configured,
 ):
     client, factory = admin_client
@@ -910,7 +910,7 @@ def test_missing_credentials_named_error_no_persist(
     assert called["claude"] is False
     assert called["oai"] is False
     with factory() as session:
-        assert session.query(ChatMessage).count() == 0
+        assert [(m.role, m.content) for m in session.query(ChatMessage)] == [("user", "hi")]
 
 
 def test_create_song_tool_hits_canonical_function(admin_client):

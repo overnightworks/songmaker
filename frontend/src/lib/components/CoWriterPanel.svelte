@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
+	import { onDestroy, tick } from 'svelte';
 	import {
 		streamCoWriterTurn,
 		fetchConversations,
@@ -17,6 +17,7 @@
 	import type {
 		ChatMessageItem,
 		ConversationItem,
+		ConversationMessagesResponse,
 		MemoryBundle,
 		SongItem,
 		VersionItem
@@ -25,6 +26,8 @@
 	import { health } from '$lib/stores/health';
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
+		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
+		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
@@ -82,6 +85,7 @@
 	}
 
 	interface Message {
+		persistedId?: string;
 		role: 'user' | 'assistant';
 		text: string;
 		toolCalls?: ToolCall[];
@@ -89,10 +93,7 @@
 	}
 
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
-
-	function isAbortedStream(error: unknown): boolean {
-		return error instanceof Error && error.name === 'AbortError';
-	}
+	const TURN_ALREADY_RUNNING_STATUS = 409;
 
 	let messages: Message[] = $state([]);
 	let input = $state('');
@@ -123,6 +124,11 @@
 	let selectedMentionIdx = $state(0);
 	let providerName = $state('claude');
 	let providerModel = $state('');
+	let unmounted = false;
+
+	onDestroy(() => {
+		unmounted = true;
+	});
 
 	$effect(() => {
 		void currentSongId;
@@ -166,21 +172,151 @@
 		}
 	}
 
+	function toMessages(history: ChatMessageItem[]): Message[] {
+		return history.map((m) => ({
+			persistedId: m.id,
+			role: m.role as 'user' | 'assistant',
+			text: m.content
+		}));
+	}
+
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
 		historyError = '';
+		let conversation: ConversationMessagesResponse | null = null;
 		try {
-			const result = await fetchConversationMessages(conversationId);
-			messages = result.messages.map((m: ChatMessageItem) => ({
-				role: m.role as 'user' | 'assistant',
-				text: m.content
-			}));
+			conversation = await fetchConversationMessages(conversationId);
+			messages = toMessages(conversation.messages);
 		} catch {
 			messages = [];
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
 			void scrollToBottom();
+		}
+		if (!conversation || conversationId !== activeConversationId || loading) return;
+		followOrSettleTurn(conversation);
+	}
+
+	function followOrSettleTurn(conversation: ConversationMessagesResponse): void {
+		if (conversation.turn_running) void followRunningTurn(conversation.conversation_id);
+		else markUnansweredLastMessage();
+	}
+
+	/**
+	 * A stream that drops without the server's own error frame did not fail
+	 * the turn: the server runs it to completion regardless. Show what the
+	 * conversation holds instead — the running turn, its reply, or the
+	 * unanswered message — and name a failure only when the message never
+	 * reached the server (#1014).
+	 */
+	async function reattachDroppedTurn(
+		sentMessage: string,
+		lastKnownPersistedId: string | undefined,
+		assistantIndex: number
+	): Promise<void> {
+		const conversation = await readActiveConversation().catch(() => null);
+		if (!conversation || !reachedServer(conversation, sentMessage, lastKnownPersistedId)) {
+			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
+			return;
+		}
+		if (activeConversationId !== conversation.conversation_id) {
+			activeConversationId = conversation.conversation_id;
+			viewingConversationId = conversation.conversation_id;
+			void loadConversations();
+		}
+		messages = toMessages(conversation.messages);
+		followOrSettleTurn(conversation);
+		if (!conversation.turn_running && onturncompleted) onturncompleted();
+	}
+
+	/**
+	 * Text alone cannot tell a repeated "ok" from the answered one before it:
+	 * the message reached the server only when its turn still runs or the
+	 * conversation grew past what the panel last knew persisted.
+	 */
+	function reachedServer(
+		conversation: ConversationMessagesResponse,
+		sentMessage: string,
+		lastKnownPersistedId: string | undefined
+	): boolean {
+		const persisted = conversation.messages;
+		const lastSent = persisted.findLast((message) => message.role === 'user');
+		if (lastSent?.content !== sentMessage) return false;
+		return conversation.turn_running || persisted.at(-1)?.id !== lastKnownPersistedId;
+	}
+
+	async function readActiveConversation(): Promise<ConversationMessagesResponse | null> {
+		const conversationId =
+			activeConversationId ??
+			(await fetchConversations()).find((conversation) => conversation.archived_at === null)?.id;
+		return conversationId ? fetchConversationMessages(conversationId) : null;
+	}
+
+	/**
+	 * Another tab or panel is still running a turn: follow it, and keep what
+	 * was typed unless the running turn is already answering that message.
+	 */
+	async function followTurnRunningElsewhere(
+		sentMessage: string,
+		assistantIndex: number
+	): Promise<void> {
+		messages = messages.slice(0, assistantIndex - 1);
+		if (activeConversationId) await loadMessages(activeConversationId);
+		else await loadConversations();
+		const runningMessage = messages.findLast((message) => message.role === 'user')?.text;
+		if (runningMessage !== sentMessage) input = sentMessage;
+	}
+
+	/**
+	 * Wait out a turn the server still runs — started by a panel since left or
+	 * by another tab — and show how it ended. The server's chat job decides
+	 * whether a turn runs; a web-process restart ends one that process ran (#1014).
+	 */
+	async function followRunningTurn(conversationId: string): Promise<void> {
+		const placeholderIndex = messages.length;
+		messages = [...messages, { role: 'assistant', text: '' }];
+		loading = true;
+		let consecutiveFailedPolls = 0;
+		try {
+			while (consecutiveFailedPolls < COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT) {
+				await new Promise((resolve) => setTimeout(resolve, COWRITER_RUNNING_TURN_POLL_MS));
+				if (unmounted || viewingConversationId !== conversationId) return;
+				let conversation: ConversationMessagesResponse;
+				try {
+					conversation = await fetchConversationMessages(conversationId);
+				} catch {
+					consecutiveFailedPolls += 1;
+					continue;
+				}
+				consecutiveFailedPolls = 0;
+				if (conversation.turn_running) continue;
+				messages = toMessages(conversation.messages);
+				markUnansweredLastMessage();
+				if (onturncompleted) onturncompleted();
+				return;
+			}
+			messages = messages.slice(0, placeholderIndex);
+			historyError = 'Conversation history unavailable';
+		} finally {
+			loading = false;
+			void scrollToBottom();
+		}
+	}
+
+	function markUnansweredLastMessage(): void {
+		const last = messages.at(-1);
+		if (last?.role !== 'user') return;
+		messages = [...messages.slice(0, -1), { ...last, error: INCOMPLETE_TURN_MESSAGE }];
+	}
+
+	function markTurnFailed(assistantIndex: number, failureMessage: string): void {
+		messages = messages.map((message, index) =>
+			index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
+		);
+		const current = messages[assistantIndex];
+		if (current && !current.text) {
+			messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
 		}
 	}
 
@@ -243,16 +379,20 @@
 		}
 
 		input = '';
-		const assistantIndex = messages.length + 1;
+		const lastKnownPersistedId = messages.findLast((message) => message.persistedId)?.persistedId;
+		const sentAgain = unansweredMessageSentAgain(msg);
+		const earlier = sentAgain ? messages.slice(0, -1) : messages;
+		const assistantIndex = earlier.length + 1;
 		messages = [
-			...messages,
-			{ role: 'user', text: msg },
+			...earlier,
+			{ role: 'user', text: msg, persistedId: sentAgain?.persistedId },
 			{ role: 'assistant', text: '', toolCalls: [] }
 		];
 		loading = true;
 
 		let streamError: string | null = null;
-		let turnCompleted = false;
+		let answeredConversationId: string | null = null;
+		let refusal: ApiError | null = null;
 		try {
 			const playing = audioPlayer.current;
 			const currentGenerationId = playerTakeIdForSong(
@@ -273,8 +413,7 @@
 					break;
 				}
 				if (event.type === 'final') {
-					turnCompleted = true;
-					messages = messages.filter((message) => !message.error);
+					answeredConversationId = event.conversation_id;
 					if (activeConversationId !== event.conversation_id) {
 						activeConversationId = event.conversation_id;
 						viewingConversationId = event.conversation_id;
@@ -284,29 +423,69 @@
 				}
 				void scrollToBottom();
 			}
-			if (!turnCompleted && !streamError) streamError = INCOMPLETE_TURN_MESSAGE;
 		} catch (e) {
-			if (isAbortedStream(e)) {
-				streamError = INCOMPLETE_TURN_MESSAGE;
-			} else if (e instanceof ApiError && e.status === 503) {
-				streamError = e.detail || cowriterUnavailableLabel(providerName);
-			} else {
-				streamError = e instanceof Error ? e.message : 'Chat failed';
-			}
+			if (e instanceof ApiError) refusal = e;
 		} finally {
 			loading = false;
-			if (streamError) {
-				const failureMessage = streamError;
-				messages = messages.map((message, index) =>
-					index === assistantIndex - 1 ? { ...message, error: failureMessage } : message
-				);
-				const current = messages[assistantIndex];
-				if (current && !current.text) {
-					messages = [...messages.slice(0, assistantIndex), ...messages.slice(assistantIndex + 1)];
-				}
-			}
-			void scrollToBottom();
 		}
+		if (refusal?.status === TURN_ALREADY_RUNNING_STATUS) {
+			await followTurnRunningElsewhere(msg, assistantIndex);
+		} else if (refusal) {
+			markTurnFailed(assistantIndex, refusalMessage(refusal));
+		} else if (streamError) {
+			markTurnFailed(assistantIndex, streamError);
+		} else if (answeredConversationId === null) {
+			await reattachDroppedTurn(msg, lastKnownPersistedId, assistantIndex);
+		} else {
+			await adoptPersistedHistory(answeredConversationId);
+		}
+		void scrollToBottom();
+	}
+
+	/**
+	 * An answered turn shows what the conversation holds, so the chat reads
+	 * the same before and after a reload: an older failed message stays as the
+	 * server stored it, or leaves when it never reached the server (#1014).
+	 * Every reply keeps the tool calls it streamed in this session; they are
+	 * not persisted. When the history cannot be read, the streamed exchange
+	 * stays as it is.
+	 */
+	async function adoptPersistedHistory(conversationId: string): Promise<void> {
+		const conversation = await fetchConversationMessages(conversationId).catch(() => null);
+		if (!conversation || loading || viewingConversationId !== conversationId) return;
+		const streamedToolCalls = new Map(
+			messages
+				.filter((message) => message.persistedId && message.toolCalls)
+				.map((message) => [message.persistedId, message.toolCalls])
+		);
+		messages = toMessages(conversation.messages).map((message) => ({
+			...message,
+			toolCalls: streamedToolCalls.get(message.persistedId)
+		}));
+		followOrSettleTurn(conversation);
+	}
+
+	/**
+	 * The server answers an unanswered last message that is sent again instead
+	 * of storing it twice (#1014), so the panel sends it in place of its bubble.
+	 */
+	function unansweredMessageSentAgain(msg: string): Message | undefined {
+		const last = messages.at(-1);
+		return last?.role === 'user' && last.text === msg ? last : undefined;
+	}
+
+	/**
+	 * Only the newest message can be sent again: the server answers its stored
+	 * copy, while an older one would be stored a second time (#1014). An older
+	 * failure therefore reads as the reload shows it — a message without a reply.
+	 */
+	const retryableMessageIndex = $derived(
+		messages.findLastIndex((message) => message.role === 'user')
+	);
+
+	function refusalMessage(refusal: ApiError): string {
+		if (refusal.status === 503) return refusal.detail || cowriterUnavailableLabel(providerName);
+		return refusal.message;
 	}
 
 	function applyStreamEvent(assistantIndex: number, event: CoWriterStreamEvent): void {
@@ -322,8 +501,11 @@
 			return;
 		}
 		if (event.type === 'final') {
+			const sent = messages[assistantIndex - 1];
+			messages[assistantIndex - 1] = { ...sent, persistedId: event.user_message.id };
 			messages[assistantIndex] = {
 				...current,
+				persistedId: event.assistant_message.id,
 				text: event.assistant_message.content
 			};
 		}
@@ -640,7 +822,7 @@
 					{:else if msg.role === 'assistant' && loading && i === messages.length - 1}
 						<span class="typing">{cowriterThinkingLabel(providerName)}</span>
 					{/if}
-					{#if msg.error}
+					{#if msg.error && i === retryableMessageIndex}
 						<div class="turn-error" role="alert">
 							<span>{msg.error}</span>
 							<button type="button" class="retry-turn" onclick={() => retry(msg.text)}

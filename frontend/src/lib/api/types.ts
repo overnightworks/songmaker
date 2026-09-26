@@ -219,6 +219,7 @@ export interface ConversationMessagesResponse {
 	title: string | null;
 	archived_at: string | null;
 	messages: ChatMessageItem[];
+	turn_running: boolean;
 }
 
 export interface CoverRequest {
