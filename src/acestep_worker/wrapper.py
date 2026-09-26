@@ -18,7 +18,9 @@ from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException
 from fastapi.responses import StreamingResponse
 from redis.asyncio import Redis
 
+from acestep_engine.constants import MODE_NOT_LOADED_DETAIL
 from acestep_engine.models import AceStepConfig
+from acestep_engine.progress import NOT_STARTED, AceStepProgress
 from acestep_worker.downloads import (
     list_available_modes,
     spawn_background,
@@ -381,10 +383,10 @@ async def _reserve_generation_task(deps: WorkerDeps, req: GenerateRequest) -> tu
         if loaded is None:
             raise HTTPException(
                 status_code=409,
-                detail=f"Mode {req.mode} not loaded; call /load_model first",
+                detail=MODE_NOT_LOADED_DETAIL.format(mode=req.mode),
             )
         try:
-            task_id = await deps.task_store.create("generate")
+            task_id = await deps.task_store.create("generate", phase=NOT_STARTED.phase)
         except Exception:
             await deps.cache.release(req.mode)
             raise
@@ -459,7 +461,7 @@ async def _acquire_training_model(deps: WorkerDeps, mode: str) -> Any:
     if loaded is None:
         raise HTTPException(
             status_code=409,
-            detail=f"Mode {mode} not loaded; call /load_model first",
+            detail=MODE_NOT_LOADED_DETAIL.format(mode=mode),
         )
     return loaded
 
@@ -1036,7 +1038,6 @@ async def default_generate_runner(
     from acestep_engine.client import AceStepClient
     from acestep_engine.errors import AceStepError
     from acestep_worker.models import GenerationTaskResult
-    from acestep_worker.progress import parse_step_fraction
 
     await task_store.mark_running(task_id)
     try:
@@ -1044,12 +1045,11 @@ async def default_generate_runner(
 
         loop = asyncio.get_running_loop()
 
-        def _on_progress(text: str) -> None:
-            fraction = parse_step_fraction(text)
-            if fraction is None:
-                return
+        def _on_progress(progress: AceStepProgress) -> None:
             asyncio.run_coroutine_threadsafe(
-                task_store.update_progress(task_id, fraction),
+                task_store.update_progress(
+                    task_id, progress.fraction, phase=progress.phase,
+                ),
                 loop,
             )
 

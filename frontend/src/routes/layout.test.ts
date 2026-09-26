@@ -9,7 +9,15 @@ import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { checkAuth, currentUser, authLoading, authCheckError } from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
-import { librarySurface } from '$lib/stores/libraryContext';
+import {
+	currentLibraryHistoryState,
+	isLibraryHistoryState,
+	libraryRootState,
+	librarySurface,
+	loadLibraryHistoryPageForTests,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
+import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
@@ -24,6 +32,7 @@ import {
 } from '$lib/constants/now-playing';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
+import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -95,7 +104,7 @@ vi.mock('$lib/api/songs', () => ({
 
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
-import { goto } from '$app/navigation';
+import { afterNavigate, goto } from '$app/navigation';
 
 // `?raw` yields an empty string for a stylesheet under this vitest config
 // (CSS processing is off), so app.css is read from disk instead.
@@ -451,12 +460,13 @@ describe('app shell', () => {
 		expect(rail.querySelector('.rail-collapse')).toBeNull();
 	});
 
-	// T1/T2/T6/T7 (#999): the shell alone decides that a field has focus on
-	// the phone; the bar and its reserved room step aside for the keyboard.
+	// T1/T2/T6 (#999, #1017): the shell alone decides that a field has focus
+	// on the phone with its keyboard open; the bar and its reserved room step aside for the keyboard.
 	// The room collapses through the one transport-bar fact, so the shell,
 	// the song page's panel, the toast stack and the queue-stream chip all
 	// give it back together.
 	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderLayout('/');
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -471,9 +481,11 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('keeps the transport bar and its room on the desktop while a field has focus', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderDesktopLayout();
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -482,6 +494,7 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
@@ -728,6 +741,43 @@ describe('auth check failure', () => {
 		await tick();
 
 		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+	});
+});
+
+// A phone tab reloaded over the full Now Playing comes back onto that layer's
+// entry; the history listener steps off it once the library starts -- but
+// only while the page still stands there (issue #1002).
+describe('a reload over the phone Now Playing', () => {
+	it('stays on the Library wall the sign-in redirect lands on', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		const playlist = {
+			...libraryRootState(),
+			index: 1,
+			surface: 'detail' as const,
+			collection: { kind: 'playlist' as const, id: 'p1' }
+		};
+		history.pushState(playlist, '', '/playlist/friday-night');
+		history.pushState(
+			{ ...playlist, index: 2, layer: 'now-playing' },
+			'',
+			'/playlist/friday-night'
+		);
+		loadLibraryHistoryPageForTests();
+		currentUser.set(null);
+		vi.mocked(checkAuth).mockImplementation(async () => null);
+		mountLayout('/');
+		await tick();
+		const onNavigated = vi.mocked(afterNavigate).mock.calls.at(-1)?.[0];
+		if (!onNavigated) throw new Error('Expected the layout to follow navigations');
+
+		history.replaceState({ 'sveltekit:history': 1 }, '', '/');
+		onNavigated({ type: 'goto' } as Parameters<typeof onNavigated>[0]);
+		currentUser.set(USER);
+
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
+		expect(location.pathname).toBe('/');
 	});
 });
 

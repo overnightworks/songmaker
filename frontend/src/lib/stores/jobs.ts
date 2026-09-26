@@ -93,20 +93,23 @@ function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	);
 }
 
-function refreshSongAfterTerminalJob(job: JobStatus, songId: string | undefined): void {
-	if (job.type !== JOB_TYPE_GENERATE && songId) {
-		void requestSongRefresh(songId);
-	}
+// A generate job refreshes its song too, not only the `generation.created`
+// resource event: that event can fall into a gap while the resource stream
+// reconnects (a phone's screen going off), and the take would then stay
+// missing until the next navigation (#1020). Both triggers are idempotent:
+// the resource-sync owner refetches the song and skips a take it already has.
+function refreshSongAfterTerminalJob(songId: string | undefined): void {
+	if (songId) void requestSongRefresh(songId);
 }
 
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.status === 'completed') {
-		refreshSongAfterTerminalJob(job, songId);
+		refreshSongAfterTerminalJob(songId);
 		addToast(`${job.type} completed`, 'success');
 		return;
 	}
 	if (job.status === 'partial') {
-		refreshSongAfterTerminalJob(job, songId);
+		refreshSongAfterTerminalJob(songId);
 		addToast(job.error || `${job.type} partially completed`, 'info');
 		return;
 	}

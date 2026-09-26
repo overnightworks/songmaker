@@ -16,7 +16,18 @@
 	import { formatTime } from '$lib/utils/format';
 	import Icon from '../Icon.svelte';
 
+	interface Props {
+		// The phone's Generate bar is one slim row (#1011): a disabled Generate
+		// explains itself inside its own outline box instead of on a line below.
+		reasonInside?: boolean;
+	}
+
+	let { reasonInside = false }: Props = $props();
+
 	const presentation: GenerateState = $derived($generateAction);
+	const reasonInsideButton: string | null = $derived(
+		reasonInside && presentation.kind === 'disabled' ? presentation.reason : null
+	);
 	let expanded = $state(false);
 	const failureId = $props.id();
 
@@ -24,6 +35,10 @@
 		if (presentation.kind !== 'failed') expanded = false;
 	});
 </script>
+
+{#snippet disabledReason(reason: string)}
+	<span class="reason"><span aria-hidden="true">ⓘ</span> {reason}</span>
+{/snippet}
 
 <div class="generate-action">
 	{#if isGenerateBusy(presentation)}
@@ -54,22 +69,28 @@
 			</button>
 		{/if}
 		{#if presentation.kind === 'queued' && presentation.reason}
-			<p class="reason">{presentation.reason}</p>
+			<p class="reason reason-below">{presentation.reason}</p>
 		{/if}
 	{:else}
+		{@const modeLabel = EDITOR_GENERATE_MODE_LABELS[presentation.mode]}
 		<button
 			type="button"
 			class="primary-button"
 			class:failed={presentation.kind === 'failed'}
 			disabled={presentation.kind === 'disabled'}
 			title={presentation.kind === 'disabled' ? presentation.reason : undefined}
+			aria-label={reasonInsideButton === null ? undefined : `${modeLabel} — ${reasonInsideButton}`}
 			onclick={() => void generate()}
 		>
-			{#if presentation.kind === 'failed'}<Icon name="triangle-alert" />{/if}
-			{EDITOR_GENERATE_MODE_LABELS[presentation.mode]}
+			{#if reasonInsideButton !== null}
+				{@render disabledReason(reasonInsideButton)}
+			{:else}
+				{#if presentation.kind === 'failed'}<Icon name="triangle-alert" />{/if}
+				{modeLabel}
+			{/if}
 		</button>
-		{#if presentation.kind === 'disabled'}
-			<p class="reason"><span aria-hidden="true">ⓘ</span> {presentation.reason}</p>
+		{#if presentation.kind === 'disabled' && reasonInsideButton === null}
+			<p class="reason-below">{@render disabledReason(presentation.reason)}</p>
 		{:else if presentation.kind === 'failed'}
 			<div class="failure" class:expanded>
 				<p id={failureId} class="cause">{presentation.cause}</p>
@@ -167,7 +188,14 @@
 		cursor: pointer;
 	}
 
-	.reason,
+	.primary-button .reason {
+		min-width: 0;
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.reason-below,
 	.failure {
 		flex: 0 0 100%;
 		min-width: 0;
