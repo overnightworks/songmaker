@@ -1327,10 +1327,13 @@ never been observed; with a newer observation, it is `alive`.
   from its free-text `progress_text` (which carries whatever the server logged
   last — checkpoint-loading bars, LM chunk counters — and made the percent
   jump and fall back). `acestep_engine/progress.py` reads the value against
-  the fork's fixed marks (0.1 writing starts, 0.51 rendering starts, 0.99
-  rendering ends) as an `AceStepPhase` plus the fraction within it; the
-  worker's `TaskStore` carries both on every generate event (a generate task
-  is born in `writing`); the scheduler hands them on as `(phase, fraction)`
+  the fork's fixed marks (0.01 the task runs, 0.1 writing starts, 0.51
+  rendering starts, 0.99 rendering ends) as an `AceStepPhase` plus the
+  fraction within it. Below 0.01 ACE-Step has not started the task — on a cold
+  start it is still loading the models it deferred (`ACESTEP_NO_INIT`) inside
+  the first `/generate` — so that value reads `loading_model`. The worker's
+  `TaskStore` carries both on every generate event (a generate task is born in
+  the same not-started phase, `NOT_STARTED`); the scheduler hands them on as `(phase, fraction)`
   and announces `loading_model` before a real `/load_model`. A generate
   progress event without a known phase is logged and dropped — the take keeps
   running and the job keeps its last value. In the Music-Worker,
@@ -1339,7 +1342,9 @@ never been observed; with a newer observation, it is `alive`.
   whenever a write omits it. It maps the phase to `GenerationPhase` and
   combines `(take + phase start + phase share × fraction) / take count`, with
   shares writing 0.55, rendering 0.15 and saving the take 0.30 (calibrated on
-  a traced warm take; loading a model has none). The value only rises, a phase
+  a traced warm take; loading a model has none). Each take starts in the
+  not-started phase, so the previous take's `saving_take` never shows beside
+  the new take. The value only rises, a phase
   change is written at once while writes within a phase are throttled to one
   per two seconds, and saving the take sits at its phase start, so the job
   stays below 1.0 until `_finalize_generation_job` writes 1.0 after the take
@@ -1347,7 +1352,8 @@ never been observed; with a newer observation, it is `alive`.
 
   Every tracker write also carries the phase into `jobs.phase`
   (`update_job_status(phase=)` keeps the stored value when a write omits it,
-  and the column keeps its last value after the job ends). `JobResponse`
+  and the column keeps its last value after the job ends; a new RUNNING entry
+  clears it, so a requeue never shows the previous run's phase). `JobResponse`
   exposes `phase` only while the job is RUNNING. The remaining-time estimate
   is `elapsed × (1 − progress) / progress`, with elapsed counted from
   `jobs.generation_started_at`: `update_job_status` sets it on the first write
