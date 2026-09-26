@@ -26,6 +26,7 @@
 	import { health } from '$lib/stores/health';
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
+		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
@@ -205,24 +206,30 @@
 	 * whether a turn runs; the stale-job reaper ends one whose process died (#1014).
 	 */
 	async function followRunningTurn(conversationId: string): Promise<void> {
+		const placeholderIndex = messages.length;
 		messages = [...messages, { role: 'assistant', text: '' }];
 		loading = true;
+		let consecutiveFailedPolls = 0;
 		try {
-			for (;;) {
+			while (consecutiveFailedPolls < COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT) {
 				await new Promise((resolve) => setTimeout(resolve, COWRITER_RUNNING_TURN_POLL_MS));
 				if (unmounted || viewingConversationId !== conversationId) return;
 				let conversation: ConversationMessagesResponse;
 				try {
 					conversation = await fetchConversationMessages(conversationId);
 				} catch {
+					consecutiveFailedPolls += 1;
 					continue;
 				}
+				consecutiveFailedPolls = 0;
 				if (conversation.turn_running) continue;
 				messages = toMessages(conversation.messages);
 				markUnansweredLastMessage();
 				if (onturncompleted) onturncompleted();
 				return;
 			}
+			messages = messages.slice(0, placeholderIndex);
+			historyError = 'Conversation history unavailable';
 		} finally {
 			loading = false;
 			void scrollToBottom();
