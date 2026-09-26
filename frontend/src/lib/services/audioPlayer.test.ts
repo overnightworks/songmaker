@@ -1122,9 +1122,13 @@ describe('toggle / play / pause', () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
+		expect(audioPlayer.status).toBe('error');
+		fakeAudio.currentTime = 40;
 		audioPlayer.toggle();
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 		expect(audioPlayer.status).toBe('loading');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
 	it('retries a failed stream in stream mode', async () => {
