@@ -9,6 +9,8 @@ type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffe
 
 type StreamEndReason = 'normal' | 'window-end';
 
+type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
+
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
 // restoreCallbacks move the whole set atomically so a new owner never
@@ -39,6 +41,15 @@ const ERROR_MSG_STALLED = 'Playback stalled. Click play to retry.';
 const STALL_RECOVERY_MS = 5000;
 const MAX_RECOVERY_ATTEMPTS = 2;
 const RECOVERY_SEEK_BACK_SECONDS = 0.75;
+// An element can report itself playing while its clock stands still and no
+// waiting/stalled event ever fires — silence that pause and play on the same
+// element do not cure. The watchdog samples the clock while playing and treats
+// this many still samples in a row as a stall.
+const PROGRESS_CHECK_MS = 1000;
+const STILL_CHECKS_BEFORE_RECOVERY = 4;
+// Playback that has played on for as long as a freeze takes to detect has
+// recovered; its next freeze is a new one, not a failed recovery.
+const STEADY_CHECKS_BEFORE_RECOVERY_BUDGET_RESET = STILL_CHECKS_BEFORE_RECOVERY;
 
 class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
@@ -58,6 +69,12 @@ class AudioPlayer {
 	private recoveryAttempts = 0;
 	private pendingRecoverySeek: number | null = null;
 	private lastObservedTime = 0;
+	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
+	private lastCheckedTime = 0;
+	private stillChecks = 0;
+	private steadyChecks = 0;
+	private recoveryUrlSerial = 0;
+	private pauseRequestedByApp = false;
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
 	private streamCanPrev = $state(false);
@@ -180,25 +197,25 @@ class AudioPlayer {
 			this.setCurrent(info);
 			this.currentUrl = url;
 			this.error = null;
-			if (autoplay && this.status !== 'playing') this.play();
+			if (autoplay && (this.status !== 'playing' || this.clockStoodStill)) this.play();
 			return;
 		}
 
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
+		this.stillChecks = 0;
 		this.pendingRecoverySeek = opts.startAt ?? null;
 		this.lastObservedTime = 0;
 		this.autoplayPending = autoplay;
 		const el = this.ensureAudio();
 		this.status = 'loading';
-		el.pause();
+		this.pauseElement(el);
 		this.setCurrent(info);
 		this.currentUrl = url;
 		this.error = null;
 		this.currentTime = 0;
 		this.duration = 0;
-		el.src = url;
-		el.load();
+		this.loadSource(el, url);
 	}
 
 	loadStream(
@@ -214,19 +231,19 @@ class AudioPlayer {
 		const el = this.ensureAudio();
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
+		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
 		this.mode = 'stream';
 		this.autoplayPending = autoplay;
 		this.status = 'loading';
-		el.pause();
+		this.pauseElement(el);
 		this.setCurrent(streamState.info);
 		this.currentUrl = manifest.stream_url;
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
 		this.error = null;
-		el.src = manifest.stream_url;
-		el.load();
+		this.loadSource(el, manifest.stream_url);
 		// The start-track seek is applied on loadedmetadata, never eagerly:
 		// browsers accept a currentTime assignment before metadata without
 		// error, then reset it to 0 when metadata arrives — which silently
@@ -236,16 +253,15 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error') {
-			if (this.streamEngine.active) {
-				this.recoveryAttempts = 0;
-				void this.recoverStream('media-error');
-				return;
-			}
-			this.load(this.current, { autoplay: true });
+			this.reloadOnPlay('media-error');
 			return;
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
 			this.autoplayPending = true;
+			return;
+		}
+		if (this.clockStoodStill) {
+			this.reloadOnPlay('frozen-clock');
 			return;
 		}
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
@@ -255,7 +271,7 @@ class AudioPlayer {
 		if (!this.audio) return;
 		this.autoplayPending = false;
 		this.clearStallRecoveryTimer();
-		this.audio.pause();
+		this.pauseElement(this.audio);
 		if (this.status !== 'error' && !this.audio.ended) this.status = 'paused';
 	}
 
@@ -334,8 +350,9 @@ class AudioPlayer {
 	unload(): void {
 		this.autoplayPending = false;
 		this.clearStallRecoveryTimer();
+		this.stopProgressWatchdog();
 		if (this.audio) {
-			this.audio.pause();
+			this.pauseElement(this.audio);
 			this.audio.src = '';
 			this.audio.removeAttribute('src');
 		}
@@ -349,6 +366,7 @@ class AudioPlayer {
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
+		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
 		this.streamEndSignaled = false;
@@ -364,7 +382,8 @@ class AudioPlayer {
 			return;
 		}
 		this.clearStallRecoveryTimer();
-		this.audio.pause();
+		this.stopProgressWatchdog();
+		this.pauseElement(this.audio);
 		this.audio.src = '';
 		this.audio.removeAttribute('src');
 		this.audio = null;
@@ -379,6 +398,7 @@ class AudioPlayer {
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
+		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
 	}
@@ -438,18 +458,18 @@ class AudioPlayer {
 		el.addEventListener('play', () => {
 			this.streamEndSignaled = false;
 			if (this.status !== 'error') this.status = 'playing';
+			this.startProgressWatchdog(el);
 		});
 		el.addEventListener('playing', () => {
 			this.clearStallRecoveryTimer();
-			// Healthy playback resets the stream recovery budget: on a long ride
-			// each network blip may recover, as long as audio actually resumes
-			// between blips.
-			if (this.streamEngine.active) this.recoveryAttempts = 0;
+			this.startProgressWatchdog(el);
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		el.addEventListener('pause', () => {
+			this.recordPauseSource(el);
 			this.clearStallRecoveryTimer();
+			this.stopProgressWatchdog();
 			if (this.status === 'loading') return;
 			if (this.status === 'error') return;
 			if (el.ended) return;
@@ -469,6 +489,7 @@ class AudioPlayer {
 		});
 		el.addEventListener('ended', () => {
 			this.clearStallRecoveryTimer();
+			this.stopProgressWatchdog();
 			if (this.streamEngine.active && this.nextStreamTrack({ autoplay: true })) return;
 			const reason: StreamEndReason =
 				this.streamEngine.active && this.streamEngine.windowed ? 'window-end' : 'normal';
@@ -489,8 +510,13 @@ class AudioPlayer {
 		});
 	}
 
-	private urlWithRecovery(url: string, recoveryAttempt: number): string {
-		return `${url}${url.includes('?') ? '&' : '?'}recover=${recoveryAttempt}`;
+	// A recovery URL is never reused, not across loads or page reloads either:
+	// the browser keeps a take for good, so only a URL it has not seen yet
+	// makes it fetch the take again.
+	private urlWithRecovery(url: string): string {
+		this.recoveryUrlSerial += 1;
+		const token = `${Date.now()}-${this.recoveryUrlSerial}`;
+		return `${url}${url.includes('?') ? '&' : '?'}recover=${token}`;
 	}
 
 	private scheduleStallRecovery(): void {
@@ -498,15 +524,103 @@ class AudioPlayer {
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
 			if (this.status !== 'buffering') return;
-			if (this.streamEngine.active) {
-				void this.recoverStream('stall-timeout');
-				return;
-			}
-			if (!this.recoverPlayback('stall-timeout')) {
-				this.status = 'error';
-				this.error = ERROR_MSG_STALLED;
-			}
+			this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
+	}
+
+	private recoverFromStall(reason: 'stall-timeout' | 'frozen-clock'): void {
+		if (this.streamEngine.active) {
+			void this.recoverStream(reason);
+			return;
+		}
+		if (!this.recoverPlayback(reason)) {
+			this.stopProgressWatchdog();
+			this.status = 'error';
+			this.error = ERROR_MSG_STALLED;
+		}
+	}
+
+	private startProgressWatchdog(el: HTMLAudioElement): void {
+		if (this.progressWatchdog) return;
+		this.lastCheckedTime = el.currentTime;
+		this.stillChecks = 0;
+		this.steadyChecks = 0;
+		this.progressWatchdog = setInterval(() => this.checkProgress(el), PROGRESS_CHECK_MS);
+	}
+
+	private stopProgressWatchdog(): void {
+		if (!this.progressWatchdog) return;
+		clearInterval(this.progressWatchdog);
+		this.progressWatchdog = null;
+	}
+
+	// Only stillness while the player calls itself playing counts: buffering, a
+	// seek and a paused element are expected to stand still.
+	private checkProgress(el: HTMLAudioElement): void {
+		const clockMoved = el.currentTime !== this.lastCheckedTime;
+		this.lastCheckedTime = el.currentTime;
+		this.trackSteadyPlayback(clockMoved && this.status === 'playing' && !el.seeking);
+		if (clockMoved || this.status !== 'playing' || el.paused || el.seeking) {
+			this.stillChecks = 0;
+			return;
+		}
+		this.stillChecks += 1;
+		if (this.stillChecks >= STILL_CHECKS_BEFORE_RECOVERY) this.recoverFromStall('frozen-clock');
+	}
+
+	private trackSteadyPlayback(playingSteadily: boolean): void {
+		this.steadyChecks = playingSteadily ? this.steadyChecks + 1 : 0;
+		if (this.steadyChecks >= STEADY_CHECKS_BEFORE_RECOVERY_BUDGET_RESET) this.recoveryAttempts = 0;
+	}
+
+	// Survives a pause on purpose: pause and play on an element whose clock
+	// stood still leave it silent, so the next play must reload instead.
+	private get clockStoodStill(): boolean {
+		return this.stillChecks > 0;
+	}
+
+	// A play on a broken or silent element fetches the take again rather than
+	// resuming what the element holds.
+	private reloadOnPlay(reason: 'media-error' | 'frozen-clock'): void {
+		this.recoveryAttempts = 0;
+		if (this.streamEngine.active) {
+			void this.recoverStream(reason);
+			return;
+		}
+		const position = this.audio?.currentTime || this.currentTime;
+		this.reloadAt(Math.max(0, position - RECOVERY_SEEK_BACK_SECONDS), reason);
+	}
+
+	private pauseElement(el: HTMLAudioElement): void {
+		if (!el.paused) this.pauseRequestedByApp = true;
+		el.pause();
+	}
+
+	// Loading a source drops the 'pause' event an app pause just queued, so the
+	// app's pause marker is settled here instead of by that event.
+	private loadSource(el: HTMLAudioElement, url: string): void {
+		this.pauseRequestedByApp = false;
+		el.src = url;
+		el.load();
+	}
+
+	// Android pauses the element on its own (audio focus, another app's sound);
+	// a debug line per pause tells that apart from the app's own pauses and
+	// from the pause a browser fires just before 'ended'.
+	private recordPauseSource(el: HTMLAudioElement): void {
+		const source = this.pauseSource(el);
+		this.pauseRequestedByApp = false;
+		console.debug('Audio paused', {
+			source,
+			status: this.status,
+			currentTime: el.currentTime,
+			generationId: this.current?.generation.id
+		});
+	}
+
+	private pauseSource(el: HTMLAudioElement): 'app' | 'ended' | 'outside' {
+		if (this.pauseRequestedByApp) return 'app';
+		return el.ended ? 'ended' : 'outside';
 	}
 
 	private clearStallRecoveryTimer(): void {
@@ -515,7 +629,7 @@ class AudioPlayer {
 		this.stallRecoveryTimer = null;
 	}
 
-	private recoverPlayback(reason: 'stall-timeout' | 'media-error'): boolean {
+	private recoverPlayback(reason: RecoveryReason): boolean {
 		const target = this.current;
 		const el = this.audio;
 		if (this.streamEngine.active) return false;
@@ -531,8 +645,15 @@ class AudioPlayer {
 		const observedTime = el.currentTime || this.currentTime || this.lastObservedTime;
 		if (observedTime < 1) return false;
 
-		const seekTime = Math.max(0, observedTime - RECOVERY_SEEK_BACK_SECONDS);
 		this.recoveryAttempts += 1;
+		this.reloadAt(Math.max(0, observedTime - RECOVERY_SEEK_BACK_SECONDS), reason);
+		return true;
+	}
+
+	private reloadAt(seekTime: number, reason: RecoveryReason): void {
+		const el = this.audio;
+		if (!el || !this.current || !this.currentUrl) return;
+		this.stillChecks = 0;
 		this.pendingRecoverySeek = seekTime;
 		this.currentTime = seekTime;
 		this.lastObservedTime = seekTime;
@@ -545,13 +666,11 @@ class AudioPlayer {
 			reason,
 			attempt: this.recoveryAttempts,
 			seekTime,
-			generationId: target.generation.id
+			generationId: this.current.generation.id
 		});
 
-		el.pause();
-		el.src = this.urlWithRecovery(this.currentUrl, this.recoveryAttempts);
-		el.load();
-		return true;
+		this.pauseElement(el);
+		this.loadSource(el, this.urlWithRecovery(this.currentUrl));
 	}
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
@@ -603,7 +722,7 @@ class AudioPlayer {
 	// path is the mode locked phones kill, so reinstating it on a blip would
 	// resurrect the exact defect stream mode exists to fix. Recovery is
 	// status-aware and stays in-stream.
-	private async recoverStream(reason: 'stall-timeout' | 'media-error'): Promise<void> {
+	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
 		if (!el || !this.streamEngine.active) return;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
@@ -614,6 +733,7 @@ class AudioPlayer {
 			return;
 		}
 		this.recoveryAttempts += 1;
+		this.stillChecks = 0;
 		this.clearStallRecoveryTimer();
 		this.status = 'loading';
 		this.error = null;
@@ -658,10 +778,9 @@ class AudioPlayer {
 			absoluteTime
 		});
 		this.streamEngine.resumeAt(absoluteTime);
-		el.pause();
+		this.pauseElement(el);
 		const url = state.manifest.stream_url;
-		el.src = this.urlWithRecovery(url, this.recoveryAttempts);
-		el.load();
+		this.loadSource(el, this.urlWithRecovery(url));
 	}
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {

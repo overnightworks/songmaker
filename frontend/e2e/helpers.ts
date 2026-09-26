@@ -79,6 +79,15 @@ export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 55;
  */
 export const TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET = 30;
 
+/**
+ * What `take-arrives.spec.ts`'s offline flow costs the API: the same open,
+ * song and Takes tab as `TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET` (23 measured),
+ * plus one job-stream attempt per backoff step while the stream is cut off
+ * (at most five in the flow's cut-off window) and the stream that reopens when
+ * the network returns.
+ */
+export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
+
 const API_PATH_PREFIX = '/api';
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
