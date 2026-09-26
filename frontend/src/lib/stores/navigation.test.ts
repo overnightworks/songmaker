@@ -121,6 +121,7 @@ import {
 	openRailSearchTarget,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
+	registerHistoryLayer,
 	resetNavigationForTests,
 	revealPlayingSong,
 	selectNeighborSong,
@@ -1315,6 +1316,28 @@ describe('compact Now Playing owns one history entry', () => {
 			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
 		}
 	);
+
+	it('Back closes only the topmost history layer, and closing the one below steps back onto the library', async () => {
+		await openPlaylist('p1');
+		const below = history.state.index;
+		const closed: string[] = [];
+		const leaveLower = registerHistoryLayer('lower', () => closed.push('lower'));
+		registerHistoryLayer('upper', () => closed.push('upper'));
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+
+		history.back();
+		await vi.waitFor(() => expect(closed).toEqual(['upper']));
+		expect(history.state.index).toBe(below + 1);
+
+		leaveLower();
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		expect(closed).toEqual(['upper']);
+		expect(libraryShown()).toEqual({
+			collection: { kind: 'playlist', id: 'p1' },
+			songId: null,
+			surface: 'detail'
+		});
+	});
 
 	it('opens the playing song from Now Playing straight on top of its origin', async () => {
 		await openPlaylist('p1');

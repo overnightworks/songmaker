@@ -552,56 +552,83 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
-// On a compact viewport the full Now Playing surface is a pushed screen, so
-// it owns one history entry of its own (issue #1002): the phone's Back then
-// closes it and leaves the library it covers exactly as it was -- no
-// workspace re-apply, no dirty-draft save -- instead of applying whatever
-// entry sits below that library while the overlay stays on top. The entry
-// repeats the library state and address it was opened on. Closing Now
-// Playing any other way (×, Done, Escape, Go to song, the viewport growing
-// room for the docked panel) steps back off that entry, so no stale copy of
-// the library is left for Back to land on. The docked panel and a desktop
-// full surface push nothing.
-// The library entry the Now Playing layer sits on, for as long as the layer
-// is the top entry. Kept here rather than marked on the layer's own state:
-// every replace write snapshots the library afresh and would drop the mark.
-let nowPlayingLayerBase: LibraryHistoryState | null = null;
-// Set while the layer's own step back is on its way, so the popstate it
-// fires is recognised as ours and applies nothing.
-let leavingNowPlayingLayer = false;
-
-function followCompactNowPlaying(shown: boolean): void {
-	if (shown && !nowPlayingLayerBase) enterNowPlayingLayer();
-	else if (!shown && nowPlayingLayerBase) leaveNowPlayingLayer(nowPlayingLayerBase);
+// History layers (issue #1002): an overlay that is a pushed screen on the
+// phone owns one history entry on top of the library it covers, at the same
+// address. The phone's Back then closes the topmost layer and leaves that
+// library exactly as it was -- no workspace re-apply, no dirty-draft save --
+// instead of applying whatever entry sits below it while the overlay stays
+// on top. An overlay registers when it opens and unregisters when it closes
+// any other way (×, Done, Escape, a surface change); unregistering steps
+// back off its entry, so no stale copy of the library is left for Back to
+// land on. The full Now Playing surface is the first registrant.
+interface HistoryLayer {
+	id: string;
+	close: () => void;
+	base: LibraryHistoryState;
 }
 
-function enterNowPlayingLayer(): void {
+const historyLayers: HistoryLayer[] = [];
+// Step-backs issued here rather than by the browser: their popstates land on
+// an entry whose library is already showing, so they apply nothing.
+let ownLayerStepBacks = 0;
+
+export function registerHistoryLayer(id: string, close: () => void): () => void {
 	const base = currentLibraryHistoryState();
-	if (!isLibraryHistoryState(base)) return;
-	nowPlayingLayerBase = base;
+	if (!isLibraryHistoryState(base)) return () => undefined;
+	const layer: HistoryLayer = { id, close, base };
+	historyLayers.push(layer);
 	void writeLibraryHistory({ ...base, index: base.index + 1 }, urlFromState(base), 'push');
+	return () => unregisterHistoryLayer(layer);
 }
 
-function leaveNowPlayingLayer(base: LibraryHistoryState): void {
-	nowPlayingLayerBase = null;
-	leavingNowPlayingLayer = true;
-	void backLibraryHistory(base, urlFromState(base));
+// A layer closed from below the top takes the layers above it along.
+function unregisterHistoryLayer(layer: HistoryLayer): void {
+	const depth = historyLayers.indexOf(layer);
+	if (depth === -1) return;
+	for (const leaving of historyLayers.splice(depth).reverse()) {
+		if (leaving !== layer) leaving.close();
+		stepBackOnto(leaving.base);
+	}
 }
 
-// A popstate arriving while the layer is the top entry has already left it:
-// Now Playing closes, and a step onto the library it was opened on keeps
-// that library as it stands. A longer jump (several entries back at once)
-// applies its own entry as usual.
-function popsNowPlayingLayer(state: unknown): boolean {
-	if (leavingNowPlayingLayer) {
-		leavingNowPlayingLayer = false;
+function stepBackOnto(landing: LibraryHistoryState): void {
+	ownLayerStepBacks += 1;
+	void backLibraryHistory(landing, urlFromState(landing));
+}
+
+function topHistoryLayer(): HistoryLayer | undefined {
+	return historyLayers[historyLayers.length - 1];
+}
+
+// A popstate that leaves layer entries closes those layers, topmost first.
+// A step onto the entry right below them keeps the library as it stands; a
+// longer jump (several entries back at once) applies its own entry as usual.
+function popsHistoryLayers(state: unknown): boolean {
+	if (ownLayerStepBacks > 0) {
+		ownLayerStepBacks -= 1;
 		return true;
 	}
-	const base = nowPlayingLayerBase;
-	if (!base) return false;
-	nowPlayingLayerBase = null;
-	closeNowPlaying();
-	return isLibraryHistoryState(state) && state.index === base.index;
+	const landing = isLibraryHistoryState(state) ? state.index : -1;
+	let lowestLeft: HistoryLayer | undefined;
+	for (let top = topHistoryLayer(); top && top.base.index >= landing; top = topHistoryLayer()) {
+		historyLayers.pop();
+		top.close();
+		lowestLeft = top;
+	}
+	return lowestLeft?.base.index === landing;
+}
+
+const NOW_PLAYING_LAYER = 'now-playing';
+let leaveNowPlayingLayer: (() => void) | null = null;
+
+function followNowPlayingScreen(pushed: boolean): void {
+	if (pushed && !leaveNowPlayingLayer) {
+		leaveNowPlayingLayer = registerHistoryLayer(NOW_PLAYING_LAYER, closeNowPlaying);
+	} else if (!pushed && leaveNowPlayingLayer) {
+		const leave = leaveNowPlayingLayer;
+		leaveNowPlayingLayer = null;
+		leave();
+	}
 }
 
 // A cold tab's history.state carries no LibraryHistoryState until something
@@ -635,7 +662,7 @@ export function initNavigation(): () => void {
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = e.state;
-		if (popsNowPlayingLayer(state)) return;
+		if (popsHistoryLayers(state)) return;
 		void (async () => {
 			await saveDirtyDraftBeforePopstate();
 			if (isLibraryHistoryState(state)) {
@@ -650,7 +677,7 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	const stopFollowingNowPlaying = nowPlayingIsPushedScreen.subscribe(followCompactNowPlaying);
+	const stopFollowingNowPlaying = nowPlayingIsPushedScreen.subscribe(followNowPlayingScreen);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		stopFollowingNowPlaying();
@@ -659,8 +686,9 @@ export function initNavigation(): () => void {
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
-	nowPlayingLayerBase = null;
-	leavingNowPlayingLayer = false;
+	historyLayers.length = 0;
+	ownLayerStepBacks = 0;
+	leaveNowPlayingLayer = null;
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
 	addressedSong = null;
