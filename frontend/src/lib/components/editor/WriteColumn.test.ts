@@ -197,21 +197,25 @@ describe('WriteColumn write mode', () => {
 	it.each([
 		['style prompt', '.edit-field textarea:not(.lyrics-area)'],
 		['lyrics', '.lyrics-area']
-	])('leaves the desktop %s field to its own resizable layout', async (_, selector) => {
+	])('keeps the height a desktop %s field was dragged to while typing', async (_, selector) => {
 		// A stubbed, non-zero scrollHeight is what actually proves the action
 		// leaves the desktop field alone (#993 regression: an `input` listener
 		// attached regardless of `active` grew a real Chromium textarea to
 		// 980px). Without the stub jsdom's own scrollHeight of 0 would pass
-		// trivially even with the listener still wired up.
+		// trivially even with the listener still wired up. The dragged height
+		// is the #999 regression: each keystroke's draft write cleared it.
 		const scrollHeightSpy = stubScrollHeight();
 		try {
 			const { target } = await render({ compact: false });
 			const field = target.querySelector<HTMLTextAreaElement>(selector);
 			if (!field) throw new Error(`Expected a ${_} textarea`);
+			field.style.height = '300px';
 			field.value = 'one\ntwo\nthree';
 			field.dispatchEvent(new Event('input', { bubbles: true }));
 			await tick();
-			expect(field.style.height).toBe('');
+			await Promise.resolve();
+			await tick();
+			expect(field.style.height).toBe('300px');
 		} finally {
 			scrollHeightSpy.mockRestore();
 		}
