@@ -564,7 +564,6 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 // stale copy of the library is left for Back to land on. The full Now
 // Playing surface is the first registrant.
 interface HistoryLayer {
-	id: string;
 	close: () => void;
 	base: LibraryHistoryState;
 }
@@ -577,7 +576,7 @@ let ownLayerStepBacks = 0;
 function registerHistoryLayer(id: string, close: () => void): () => void {
 	const base = currentLibraryHistoryState();
 	if (!isLibraryHistoryState(base)) return () => undefined;
-	const layer: HistoryLayer = { id, close, base };
+	const layer: HistoryLayer = { close, base };
 	historyLayers.push(layer);
 	void writeLibraryHistory(
 		{ ...base, index: base.index + 1, layer: id },
