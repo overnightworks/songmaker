@@ -822,6 +822,15 @@ nowPlayingDockable.subscribe((dockable) => {
 	if (!dockable && get(nowPlayingSurface) === 'docked') nowPlayingSurface.set('full');
 });
 
+// Whether Now Playing is a pushed screen: the full surface on a viewport with
+// no room for the docked panel beside the workspace. Such a screen leaves as a
+// whole (Escape closes it, the phone's Back pops it); a full surface with room
+// to dock steps down to the docked panel instead.
+export const nowPlayingIsPushedScreen = derived(
+	[nowPlayingSurface, nowPlayingDockable],
+	([surface, dockable]) => surface === 'full' && !dockable
+);
+
 // The element to return focus to when Now Playing closes. PlayerBar
 // registers its own "Now Playing" button here once on mount — every opener
 // (PlayerBar's button, a TakesList row, NowPlayingTake's Repaint/Cover action)
@@ -885,9 +894,9 @@ function chooseDesktopSurface(surface: NowPlayingSurfaceKind): void {
 
 // Escape leaves Now Playing one level at a time: the full surface falls back
 // to the docked panel wherever there is room for one, and the docked panel —
-// like a full surface on a compact viewport — closes.
+// like the pushed screen — closes.
 export function escapeNowPlaying(): void {
-	if (get(nowPlayingSurface) === 'full' && get(nowPlayingDockable)) {
+	if (get(nowPlayingSurface) === 'full' && !get(nowPlayingIsPushedScreen)) {
 		dockNowPlaying();
 		return;
 	}
