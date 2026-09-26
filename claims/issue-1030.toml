@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "ab67b451808edf8dad0d9bd803c092f9a7ed538f"
 branch = "claude/issue-1030-lyrics-align"
-scope = ["frontend/src/lib/services/lyricsAlignment.svelte.ts", "frontend/src/lib/services/lyricsAlignment.test.ts", "frontend/src/lib/utils/fixtures/lyrics-align-takes.json", "frontend/src/lib/utils/lyrics-align.test.ts", "frontend/src/lib/utils/lyrics-align.ts", "frontend/src/lib/utils/lyrics-align.worker.ts", "frontend/src/lib/utils/lyrics-normalize.test.ts", "frontend/src/lib/utils/lyrics-normalize.ts", "frontend/src/lib/utils/sequence-matcher.test.ts", "frontend/src/lib/utils/sequence-matcher.ts", "scripts/lyric_alignment_golden.py", "tests/test_lyric_alignment_golden.py"]
+scope = ["docs/architecture.md", "frontend/src/lib/services/lyricsAlignment.svelte.ts", "frontend/src/lib/services/lyricsAlignment.test.ts", "frontend/src/lib/utils/fixtures/lyrics-align-takes.json", "frontend/src/lib/utils/lyrics-align.fixtures.json", "frontend/src/lib/utils/lyrics-align.test.ts", "frontend/src/lib/utils/lyrics-align.ts", "frontend/src/lib/utils/lyrics-align.worker.ts", "frontend/src/lib/utils/lyrics-normalize.test.ts", "frontend/src/lib/utils/lyrics-normalize.ts", "frontend/src/lib/utils/sequence-matcher.test.ts", "frontend/src/lib/utils/sequence-matcher.ts", "scripts/lyric_alignment_golden.py", "tests/test_lyric_alignment_golden.py"]
 opened_commit = "000dd6b6a87f2bcb0275848f736a3362dfe96b49"
 whole_reason = "the alignment function, its worker, its normalisation, its fixture and its pinned Python reference change together"
