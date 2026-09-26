@@ -601,7 +601,14 @@ describe('frozen-clock watchdog', () => {
 
 	it.each([
 		{ source: 'app', pauseIt: () => audioPlayer.pause() },
-		{ source: 'outside', pauseIt: () => fakeAudio.pause() }
+		{ source: 'outside', pauseIt: () => fakeAudio.pause() },
+		{
+			source: 'ended',
+			pauseIt: () => {
+				fakeAudio.ended = true;
+				fakeAudio.pause();
+			}
+		}
 	])('records a pause that came from the $source', ({ source, pauseIt }) => {
 		const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
 		startPlayingAt(40);
