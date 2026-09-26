@@ -2,6 +2,7 @@
 	import type { JobItem } from '$lib/api/types';
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
+		EDITOR_GENERATE_QUEUED_TEMPLATE,
 		EDITOR_GENERATE_TAKE_TEMPLATE,
 		EDITOR_GENERATING_LABEL,
 		EDITOR_QUEUED_LABEL
@@ -26,12 +27,14 @@
 			String(job.take_count)
 		);
 	});
+	const queuedLabel = $derived.by(() => {
+		const position = job?.queue_position ?? null;
+		return position === null
+			? EDITOR_QUEUED_LABEL
+			: EDITOR_GENERATE_QUEUED_TEMPLATE.replace('{position}', String(position));
+	});
 	const statusLineText = $derived.by(() => {
-		if (!job) return null;
-		if (job.status === 'queued') {
-			const position = job.queue_position ?? null;
-			return position !== null ? `#${position}` : null;
-		}
+		if (!job || job.status === 'queued') return null;
 		const parts: string[] = [];
 		if (takeCounter) parts.push(takeCounter);
 		parts.push(`${percent}%`);
@@ -47,7 +50,7 @@
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
-				<b>{job.status === 'queued' ? EDITOR_QUEUED_LABEL : EDITOR_GENERATING_LABEL}</b>
+				<b>{job.status === 'queued' ? queuedLabel : EDITOR_GENERATING_LABEL}</b>
 			</span>
 			<button
 				type="button"

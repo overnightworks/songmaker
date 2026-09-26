@@ -11,9 +11,9 @@ import {
 } from '$lib/test-utils/hitbox';
 import { HITBOX_FREQUENT_PX } from '$lib/constants';
 
-vi.mock('$lib/stores/generateAction', () => ({
-	cancelGeneration: vi.fn(),
-	progressPercent: (job: JobItem | null) => (job ? Math.round(job.progress * 100) : 0)
+vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/generateAction')>()),
+	cancelGeneration: vi.fn()
 }));
 
 import { cancelGeneration } from '$lib/stores/generateAction';
@@ -98,19 +98,22 @@ describe('GenerationStatusSlot', () => {
 		expect(document.body.textContent).not.toContain('~');
 	});
 
-	it('shows the queue position without repeating "Queued", and the reason on its own line', async () => {
+	it('shows the queue position in the title, and the reason on its own line', async () => {
 		await render(queuedJob);
 		const slot = document.body.querySelector('.status-slot');
-		expect(slot?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
-			'v8 · Queued #3 Waiting for LoRA training on this GPU.'
+		expect(slot?.querySelector('.status-title')?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+			'v8 · Queued #3'
+		);
+		expect(slot?.querySelector('.status-line.reason')?.textContent).toBe(
+			'Waiting for LoRA training on this GPU.'
 		);
 	});
 
 	it('does not invent a missing queue position', async () => {
 		await render({ ...queuedJob, queue_position: null });
 		const slot = document.body.querySelector('.status-slot');
-		expect(slot?.textContent).toContain('Queued');
-		expect(slot?.textContent).not.toContain('#');
+		expect(slot?.querySelector('.status-title')?.textContent).toContain('Queued');
+		expect(slot?.querySelector('.status-title')?.textContent).not.toContain('#');
 	});
 
 	it('does not add a second live region for the job the Generate button already announces', async () => {

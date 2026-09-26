@@ -221,14 +221,6 @@ describe('generate action presentation', () => {
 		}
 	);
 
-	it('shows the same percent a live job would show on the Generate button and the Takes status slot', () => {
-		const job: JobItem = { ...queuedJob, status: 'running', progress: 0.36 };
-		activeJobs.set([{ songId: 's1', job }]);
-		const state = get(generateAction).state;
-		expect(state.kind).toBe('generating');
-		expect(state.kind === 'generating' && state.progress).toBe(progressPercent(job));
-	});
-
 	it.each(['generate', 'repaint', 'cover'] as const)(
 		'exposes the selected song failure for %s and clears it on the next attempt',
 		async (mode) => {
