@@ -1577,7 +1577,7 @@ _OLD_REGEX_FALSE_POSITIVES_AND_A_REAL_ACE_STEP_RUN = (
 )
 
 
-def _running_entry(progress_text: str, server_progress: float) -> TaskQueryEntry:
+def _running_query_entry(progress_text: str, server_progress: float) -> TaskQueryEntry:
     return TaskQueryEntry(
         task_id="t",
         status=0,
@@ -1600,7 +1600,7 @@ def test_generation_progress_never_falls_back_and_reaches_one_only_after_the_tak
         kwargs["on_progress"](AceStepPhase.LOADING_MODEL, 0.0)
         observed.append(job_progress())
         for progress_text, server_progress in _OLD_REGEX_FALSE_POSITIVES_AND_A_REAL_ACE_STEP_RUN:
-            [item] = _running_entry(progress_text, server_progress).parse_result_items()
+            [item] = _running_query_entry(progress_text, server_progress).parse_result_items()
             progress = progress_from_result(item)
             kwargs["on_progress"](progress.phase, progress.fraction)
             observed.append(job_progress())
