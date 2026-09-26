@@ -17,6 +17,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_OFFLINE_MESSAGE,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
 } from '$lib/constants';
@@ -657,9 +658,17 @@ export class ResourceSyncController {
 	}
 
 	private readonly onReconnectOpportunity = (): void => {
+		if (this.bootstrapFailed()) {
+			this.restartConnection();
+			return;
+		}
 		this.reconnectNowIfWaiting();
 		this.scheduleRevalidation();
 	};
+
+	private bootstrapFailed(): boolean {
+		return !this.syncedOnce && this.state.status === 'error';
+	}
 
 	private reconnectNowIfWaiting(): void {
 		if (this.reconnectTimer === null) return;
@@ -724,8 +733,11 @@ async function runLimited<T>(
 	);
 }
 
+// A fetch that got no answer at all rejects with a TypeError whose text is
+// the browser's own ("Failed to fetch"), not copy a musician should read.
 function errorMessage(err: unknown): string {
 	if (err instanceof ApiError) return err.detail || err.message;
+	if (err instanceof TypeError) return RESOURCE_SYNC_OFFLINE_MESSAGE;
 	if (err instanceof Error) return err.message;
 	return RESOURCE_SYNC_ERROR;
 }

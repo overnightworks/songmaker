@@ -36,6 +36,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
+	RESOURCE_SYNC_OFFLINE_MESSAGE,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
@@ -802,6 +803,52 @@ describe('resource sync owner', () => {
 		expect(await controller.retry()).toBe(true);
 		expect(get(store).status).toBe('live');
 		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
+	});
+
+	it('says the musician is offline, not the browser text, and clears it once back online', async () => {
+		vi.useFakeTimers();
+		let offline = true;
+		const { controller, sources, store } = setup({
+			fetchSong: async (songId) => {
+				if (offline) throw new TypeError('Failed to fetch');
+				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+
+		offline = false;
+		window.dispatchEvent(new Event('online'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'live', error: null });
+	});
+
+	it('restarts a bootstrap that failed offline once the network comes back', async () => {
+		let offline = true;
+		const { controller, sources, store } = setup({
+			fetchSong: async (songId) => {
+				if (offline) throw new TypeError('Failed to fetch');
+				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('generation.created', created('1', 'g1'));
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+
+		offline = false;
+		window.dispatchEvent(new Event('online'));
+		expect(sources).toHaveLength(2);
+		latestSource(sources).emit('hello', { high_water_mark: '1' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'live', error: null, ready: true });
 	});
 
 	it('returns a failed retry when the active owner stops during its refresh', async () => {
