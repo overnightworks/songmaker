@@ -132,6 +132,23 @@ function stubMatchMedia(matches: boolean): void {
 	);
 }
 
+// jsdom has no visual viewport; a phone's, shortened by the open on-screen
+// keyboard, is what sends the bars away while a field has focus.
+function openOnScreenKeyboard(): () => void {
+	Object.defineProperty(document.documentElement, 'clientHeight', {
+		configurable: true,
+		value: 844
+	});
+	Object.defineProperty(window, 'visualViewport', {
+		configurable: true,
+		value: Object.assign(new EventTarget(), { height: 544, scale: 1 })
+	});
+	return () => {
+		Reflect.deleteProperty(window, 'visualViewport');
+		Reflect.deleteProperty(document.documentElement, 'clientHeight');
+	};
+}
+
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
 	const element = root.querySelector<T>(selector);
 	if (!element) throw new Error(`Expected ${selector} to be rendered`);
@@ -451,12 +468,13 @@ describe('app shell', () => {
 		expect(rail.querySelector('.rail-collapse')).toBeNull();
 	});
 
-	// T1/T2/T6/T7 (#999): the shell alone decides that a field has focus on
-	// the phone; the bar and its reserved room step aside for the keyboard.
+	// T1/T2/T6 (#999, #1017): the shell alone decides that a field has focus
+	// on the phone with its keyboard open; the bar and its reserved room step aside for the keyboard.
 	// The room collapses through the one transport-bar fact, so the shell,
 	// the song page's panel, the toast stack and the queue-stream chip all
 	// give it back together.
 	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderLayout('/');
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -471,9 +489,11 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('keeps the transport bar and its room on the desktop while a field has focus', async () => {
+		const closeKeyboard = openOnScreenKeyboard();
 		const target = await renderDesktopLayout();
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
@@ -482,6 +502,7 @@ describe('app shell', () => {
 		await tick();
 		expect(target.querySelector('.player-bar')).not.toBeNull();
 		expect(document.documentElement.dataset.transportBar).toBeUndefined();
+		closeKeyboard();
 	});
 
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
