@@ -2521,16 +2521,73 @@
 					]
 				}
 			],
-			"intervals": [null, null],
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				null
+			],
 			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof",
-			"name": "word path: two lines too alike to tell apart leave the run to neither"
+			"name": "word path: of two near-identical lines the one sung word for word takes the run"
 		},
 		{
 			"cues": [
 				{
 					"end": 2.4,
 					"start": 0.0,
-					"text": "silver rain falls on the roof",
+					"text": "silver rain calls on the roof",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "silver"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "rain"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "calls"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "on"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "the"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "roof"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				null
+			],
+			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof\nsilver rain walls on the roof",
+			"name": "word path: of three near-identical lines the middle one sung takes the whole run"
+		},
+		{
+			"cues": [
+				{
+					"end": 6.8,
+					"start": 0.0,
+					"text": "silver rain falls on the roof another mile of rusted signs silver rain calls on the roof",
 					"words": [
 						{
 							"end": 0.4,
@@ -2561,13 +2618,375 @@
 							"end": 2.4,
 							"start": 2.0,
 							"text": "roof"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "another"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "mile"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "of"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "rusted"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "signs"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "silver"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "rain"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "calls"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "on"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "the"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "roof"
 						}
 					]
 				}
 			],
-			"intervals": [null, null, null],
-			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof\nsilver rain walls on the roof",
-			"name": "word path: three lines too alike to tell apart leave the run to none of them"
+			"intervals": [
+				{
+					"end": 2.4,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.4
+				},
+				{
+					"end": 6.8,
+					"start": 4.4
+				}
+			],
+			"lyrics": "silver rain falls on the roof\nanother mile of rusted signs\nsilver rain calls on the roof",
+			"name": "word path: two near-identical chorus variants each light where they are sung"
+		},
+		{
+			"cues": [
+				{
+					"end": 9.2,
+					"start": 0.0,
+					"text": "ooh na na na ooh na the lantern hums quietly tonight we count the fading city lights hold the line until the morning",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "ooh"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "na"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "na"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "na"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "ooh"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "na"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "the"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "lantern"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "hums"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "quietly"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "tonight"
+						},
+						{
+							"end": 4.8,
+							"start": 4.4,
+							"text": "we"
+						},
+						{
+							"end": 5.2,
+							"start": 4.8,
+							"text": "count"
+						},
+						{
+							"end": 5.6,
+							"start": 5.2,
+							"text": "the"
+						},
+						{
+							"end": 6.0,
+							"start": 5.6,
+							"text": "fading"
+						},
+						{
+							"end": 6.4,
+							"start": 6.0,
+							"text": "city"
+						},
+						{
+							"end": 6.8,
+							"start": 6.4,
+							"text": "lights"
+						},
+						{
+							"end": 7.2,
+							"start": 6.8,
+							"text": "hold"
+						},
+						{
+							"end": 7.6,
+							"start": 7.2,
+							"text": "the"
+						},
+						{
+							"end": 8.0,
+							"start": 7.6,
+							"text": "line"
+						},
+						{
+							"end": 8.4,
+							"start": 8.0,
+							"text": "until"
+						},
+						{
+							"end": 8.8,
+							"start": 8.4,
+							"text": "the"
+						},
+						{
+							"end": 9.2,
+							"start": 8.8,
+							"text": "morning"
+						}
+					]
+				}
+			],
+			"intervals": [
+				null,
+				{
+					"end": 4.4,
+					"start": 2.4
+				},
+				{
+					"end": 6.8,
+					"start": 4.4
+				},
+				{
+					"end": 9.2,
+					"start": 6.8
+				}
+			],
+			"lyrics": "hold the line until the morning\nthe lantern hums quietly tonight\nwe count the fading city lights\nhold the line until the morning",
+			"name": "word path: a chorus line Whisper did not recognise leaves the verse behind it lit"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.0,
+					"start": 0.0,
+					"text": "yeah A -M -I -F the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "yeah"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "A"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "-M"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "-I"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "-F"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "the"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "lantern"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "hums"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "quietly"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "tonight"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.0,
+					"start": 2.0
+				}
+			],
+			"lyrics": "yeah, A-M-I-F\nthe lantern hums quietly tonight",
+			"name": "word path: hyphen-led pieces of a spelled-out word read as that one word"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.4,
+					"start": 0.0,
+					"text": "Die Laterne gl\u00fcht 17 mal we count the fading city lights",
+					"words": [
+						{
+							"end": 0.4,
+							"start": 0.0,
+							"text": "Die"
+						},
+						{
+							"end": 0.8,
+							"start": 0.4,
+							"text": "Laterne"
+						},
+						{
+							"end": 1.2,
+							"start": 0.8,
+							"text": "gl\u00fcht"
+						},
+						{
+							"end": 1.6,
+							"start": 1.2,
+							"text": "17"
+						},
+						{
+							"end": 2.0,
+							"start": 1.6,
+							"text": "mal"
+						},
+						{
+							"end": 2.4,
+							"start": 2.0,
+							"text": "we"
+						},
+						{
+							"end": 2.8,
+							"start": 2.4,
+							"text": "count"
+						},
+						{
+							"end": 3.2,
+							"start": 2.8,
+							"text": "the"
+						},
+						{
+							"end": 3.6,
+							"start": 3.2,
+							"text": "fading"
+						},
+						{
+							"end": 4.0,
+							"start": 3.6,
+							"text": "city"
+						},
+						{
+							"end": 4.4,
+							"start": 4.0,
+							"text": "lights"
+						}
+					]
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.0,
+					"start": 0.0
+				},
+				{
+					"end": 4.4,
+					"start": 2.0
+				}
+			],
+			"lyrics": "die laterne glueht siebzehn mal\nwe count the fading city lights",
+			"name": "word path: a spelled-out umlaut and a sung number read as the words the lyrics spell"
 		},
 		{
 			"cues": [
@@ -2643,7 +3062,7 @@
 				{
 					"end": 4.0,
 					"start": 0.0,
-					"text": "the lantern hums quietly tonight the lantern hums quietly tonite",
+					"text": "the lantern hums quietly tonite the lantern hums quietly tonight",
 					"words": [
 						{
 							"end": 0.4,
@@ -2668,7 +3087,7 @@
 						{
 							"end": 2.0,
 							"start": 1.6,
-							"text": "tonight"
+							"text": "tonite"
 						},
 						{
 							"end": 2.4,
@@ -2693,14 +3112,72 @@
 						{
 							"end": 4.0,
 							"start": 3.6,
-							"text": "tonite"
+							"text": "tonight"
 						}
 					]
 				}
 			],
-			"intervals": [null],
+			"intervals": [
+				{
+					"end": 4.0,
+					"start": 2.0
+				}
+			],
 			"lyrics": "the lantern hums quietly tonight",
-			"name": "word path: two readings too alike to tell apart leave the line dark"
+			"name": "word path: of two readings of a line the closer one takes it, even the later one"
+		},
+		{
+			"cues": [
+				{
+					"end": 2.5,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight",
+					"words": [
+						{
+							"end": 0.5,
+							"start": 0.0,
+							"text": "the"
+						},
+						{
+							"end": 1.0,
+							"start": 0.5,
+							"text": "lantern"
+						},
+						{
+							"end": 1.5,
+							"start": 1.0,
+							"text": "hums"
+						},
+						{
+							"end": 2.0,
+							"start": 1.5,
+							"text": "quietly"
+						},
+						{
+							"end": 2.5,
+							"start": 2.0,
+							"text": "tonight"
+						}
+					]
+				},
+				{
+					"end": 5.0,
+					"start": 2.5,
+					"text": "we count the fading city lights"
+				}
+			],
+			"intervals": [
+				{
+					"end": 2.5,
+					"start": 0.0
+				},
+				{
+					"end": 5.0,
+					"start": 2.5
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights",
+			"name": "mixed: a segment without word timestamps among timed ones carries its whole span"
 		},
 		{
 			"cues": [
@@ -2710,9 +3187,45 @@
 					"text": "silver rain falls on the roof"
 				}
 			],
-			"intervals": [null, null],
+			"intervals": [
+				{
+					"end": 3.0,
+					"start": 0.0
+				},
+				null
+			],
 			"lyrics": "silver rain falls on the roof\nsilver rain calls on the roof",
-			"name": "cue window: two lines too alike to tell apart stay dark"
+			"name": "cue window: a segment lights the line it reads word for word, not its near-twin"
+		},
+		{
+			"cues": [
+				{
+					"end": 4.0,
+					"start": 0.0,
+					"text": "the lantern hums quietly tonight we count the"
+				},
+				{
+					"end": 8.0,
+					"start": 4.0,
+					"text": "fading city lights another mile of rusted signs"
+				}
+			],
+			"intervals": [
+				{
+					"end": 4.0,
+					"start": 0.0
+				},
+				{
+					"end": 8.0,
+					"start": 0.0
+				},
+				{
+					"end": 8.0,
+					"start": 4.0
+				}
+			],
+			"lyrics": "the lantern hums quietly tonight\nwe count the fading city lights\nanother mile of rusted signs",
+			"name": "cue window: a line split across two segments spans both"
 		},
 		{
 			"cues": [
