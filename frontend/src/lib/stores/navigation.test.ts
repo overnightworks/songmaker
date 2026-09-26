@@ -31,7 +31,7 @@ import {
 } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_RETRY_LABEL, SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR } from '$lib/constants';
+import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR, TAKES_RETRY_LABEL } from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -807,7 +807,9 @@ describe('song selection (dead song link, issue #237)', () => {
 					const alerts = target.querySelectorAll('[role="alert"]');
 					expect(alerts).toHaveLength(1);
 					expect(alerts[0]).toHaveTextContent(message);
-					expect(alerts[0].querySelector('button')).toHaveTextContent(LIBRARY_RETRY_LABEL);
+					expect(alerts[0].querySelector('button')?.getAttribute('aria-label')).toBe(
+						TAKES_RETRY_LABEL
+					);
 				});
 				expect(get(toasts)).toEqual([]);
 				expect(get(selectedSongId)).toBe('s1');

@@ -4,7 +4,6 @@
 	import {
 		COARSE_POINTER_MEDIA,
 		EXPIRY_WARN_DAYS,
-		LIBRARY_RETRY_LABEL,
 		TAKE_ARCHIVED_TITLE,
 		TAKE_DELETE_TITLE_TEMPLATE,
 		TAKE_DELETE_MESSAGE,
@@ -19,6 +18,7 @@
 		TAKES_ERROR,
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
+		TAKES_RETRY_LABEL,
 		TRANSPORT_PLAY_LABEL,
 		TRANSPORT_PAUSE_LABEL
 	} from '$lib/constants';
@@ -56,6 +56,9 @@
 	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import TakeMenu from './TakeMenu.svelte';
+
+	// Varying row widths draw the shape of what is coming, not a grey rectangle.
+	const SKELETON_ROW_WIDTHS_PX = [190, 150, 172];
 
 	interface Props {
 		song: SongItem;
@@ -280,10 +283,7 @@
 		}
 	}
 
-	// The running/queued job is what GenerationStatusSlot itself renders on
-	// (mirrors its own gate on the same job prop): a song's very first
-	// generation has zero takes yet, so the empty-state branches below must
-	// not hide the slot behind "No takes yet" while one is in flight.
+	// The first generation of a song has zero takes; the empty state must not hide a job in flight.
 	const jobRunning = $derived(
 		generateJob !== null && (generateJob.status === 'queued' || generateJob.status === 'running')
 	);
@@ -295,11 +295,30 @@
 	<div class="empty" role="alert">
 		<p>{loadError || TAKES_ERROR}</p>
 		{#if onretry}
-			<button type="button" class="retry-btn" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+			<button
+				type="button"
+				class="retry-btn"
+				data-hitbox="frequent"
+				data-hitbox-face
+				onclick={onretry}
+				aria-label={TAKES_RETRY_LABEL}
+				title={TAKES_RETRY_LABEL}
+			>
+				<Icon name="refresh-cw" size={16} />
+			</button>
 		{/if}
 	</div>
 {:else if loadStatus === 'loading' && song.generations.length === 0}
-	<div class="empty" role="status">{TAKES_LOADING}</div>
+	<div class="skeleton" role="status">
+		{#each SKELETON_ROW_WIDTHS_PX as width (width)}
+			<div class="skeleton-row">
+				<span class="skeleton-bar skeleton-disc"></span>
+				<span class="skeleton-bar skeleton-text" style:max-width={`${width}px`}></span>
+				<span class="skeleton-bar skeleton-badge"></span>
+			</div>
+		{/each}
+		<p class="skeleton-caption">{TAKES_LOADING}</p>
+	</div>
 {:else if song.generations.length === 0 && !dirty && !jobRunning}
 	<div class="empty">{TAKES_EMPTY}</div>
 {:else}
@@ -308,7 +327,17 @@
 			<div class="load-error" role="alert">
 				<span>{loadError || TAKES_ERROR}</span>
 				{#if onretry}
-					<button type="button" class="retry-btn" onclick={onretry}>{LIBRARY_RETRY_LABEL}</button>
+					<button
+						type="button"
+						class="retry-btn"
+						data-hitbox="frequent"
+						data-hitbox-face
+						onclick={onretry}
+						aria-label={TAKES_RETRY_LABEL}
+						title={TAKES_RETRY_LABEL}
+					>
+						<Icon name="refresh-cw" size={16} />
+					</button>
 				{/if}
 			</div>
 		{/if}
@@ -518,7 +547,7 @@
 			</div>
 		{/each}
 
-		{#if touchPointer}
+		{#if touchPointer && song.generations.length > 0}
 			<p class="mobile-hint">{TAKES_MOBILE_HINT}</p>
 		{/if}
 
@@ -973,23 +1002,84 @@
 	}
 
 	.retry-btn {
-		padding: 0.3rem 0.7rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		padding: 0;
 		background: none;
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		color: var(--text-muted);
-		font-size: var(--label-font-size);
-		font-family: var(--font-body);
+		border: none;
+		color: inherit;
 		cursor: pointer;
 	}
 
 	.retry-btn:hover {
-		border-color: var(--primary);
 		color: var(--primary);
+	}
+
+	.skeleton {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		padding: 0.9rem 0.6rem;
+	}
+
+	.skeleton-row {
+		display: flex;
+		align-items: center;
+		gap: 0.6rem;
+	}
+
+	.skeleton-bar {
+		border-radius: 4px;
+		background: linear-gradient(
+			110deg,
+			var(--surface-hover) 20%,
+			var(--border) 45%,
+			var(--surface-hover) 70%
+		);
+		background-size: 220% 100%;
+		animation: takes-skeleton-shimmer 1.2s linear infinite;
+	}
+
+	.skeleton-disc {
+		flex: none;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+	}
+
+	.skeleton-text {
+		flex: 1;
+		height: 14px;
+	}
+
+	.skeleton-badge {
+		flex: none;
+		width: 38px;
+		height: 14px;
+	}
+
+	.skeleton-caption {
+		margin: 0.4rem 0 0;
+		text-align: center;
+		font-size: var(--label-font-size);
+		font-style: italic;
+		color: var(--text-subtle);
+	}
+
+	@keyframes takes-skeleton-shimmer {
+		to {
+			background-position: -220% 0;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {
 		.take-row.buffering {
+			animation: none;
+		}
+
+		.skeleton-bar {
 			animation: none;
 		}
 	}

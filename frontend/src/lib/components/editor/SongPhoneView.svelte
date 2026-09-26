@@ -17,6 +17,25 @@
 	}
 
 	let { sharedLink, write, cowriter, expiryDigest, takeListProps, chips }: Props = $props();
+
+	let actionBarEl: HTMLDivElement | undefined = $state();
+	let generateBarHeight = $state<number | undefined>(undefined);
+
+	// The action bar's own content decides its height (#993 fixed padding
+	// undershot it once the failure state expanded the worker sentence); the
+	// Write column reserves exactly that much, read back live instead of
+	// guessed as a constant.
+	$effect(() => {
+		const el = actionBarEl;
+		if (!el) return;
+		const measure = () => {
+			generateBarHeight = el.offsetHeight;
+		};
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
 </script>
 
 {#if $coWriterOpen}
@@ -33,10 +52,15 @@
 		{#if $detailTab === 'write'}
 			{@render sharedLink()}
 			<PhoneRecipeSection {chips} />
-			<div class="write-scroll">
+			<div
+				class="write-scroll"
+				style:--generate-bar-height={generateBarHeight !== undefined
+					? `${generateBarHeight}px`
+					: undefined}
+			>
 				{@render write()}
 			</div>
-			<div class="write-actionbar">
+			<div class="write-actionbar" bind:this={actionBarEl}>
 				<GenerateButton />
 			</div>
 		{:else}
@@ -62,7 +86,7 @@
 	   scrolled to yet, so the lyrics need their own reserved gap the size of
 	   the bar or its rendered box would sit over their last lines. */
 	.write-scroll {
-		padding-bottom: var(--editor-generate-bar-height);
+		padding-bottom: var(--generate-bar-height, var(--editor-generate-bar-height));
 	}
 
 	.write-actionbar {

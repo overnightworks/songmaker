@@ -139,6 +139,37 @@ describe('SongPhoneView', () => {
 		expect(getComputedStyle(actionBar).position).toBe('sticky');
 	});
 
+	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
+		// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
+		// records the real callback so the test can fire it like the browser would
+		// once the action bar changes size.
+		const resizeCallbacks: ResizeObserverCallback[] = [];
+		vi.stubGlobal(
+			'ResizeObserver',
+			class {
+				constructor(callback: ResizeObserverCallback) {
+					resizeCallbacks.push(callback);
+				}
+				observe(): void {}
+				unobserve(): void {}
+				disconnect(): void {}
+			}
+		);
+		const triggerResize = () => {
+			for (const callback of resizeCallbacks) callback([], {} as ResizeObserver);
+		};
+		const target = await render();
+		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
+		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
+		if (!actionBar || !writeScroll) throw new Error('Expected the action bar and write scroll');
+
+		vi.spyOn(actionBar, 'offsetHeight', 'get').mockReturnValue(140);
+		triggerResize();
+		await tick();
+
+		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('140px');
+	});
+
 	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
 		const target = await render();
 		expect(target.querySelector('[role="tab"]')).not.toBeNull();

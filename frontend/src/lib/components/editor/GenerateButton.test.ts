@@ -5,6 +5,9 @@ import {
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
+	EDITOR_MISSING_CONTENT_TITLE,
+	EDITOR_NO_MODELS_WARNING,
+	EDITOR_SELECT_MODEL_TITLE,
 	HITBOX_FREQUENT_PX
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -134,15 +137,23 @@ describe('GenerateButton', () => {
 		expect(document.body.querySelector('button')).toBeNull();
 	});
 
-	it('disables generation with a visible reason and matching title', async () => {
-		await render({ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE });
-		const button = getByRoleButton(document.body, 'Generate');
-		expect(button.disabled).toBe(true);
-		expect(button.title).toBe(EDITOR_GPU_OFFLINE_TITLE);
-		expect(document.body.textContent).toContain(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
-		button.click();
-		expect(generate).not.toHaveBeenCalled();
-	});
+	it.each([
+		['GPU offline', EDITOR_GPU_OFFLINE_TITLE],
+		['no active models', EDITOR_NO_MODELS_WARNING],
+		['no model selected', EDITOR_SELECT_MODEL_TITLE],
+		['missing lyrics or style prompt', EDITOR_MISSING_CONTENT_TITLE]
+	] as const)(
+		'disables generation as an outline button with its %s reason under ⓘ',
+		async (_state, reason) => {
+			await render({ kind: 'disabled', mode: 'generate', reason });
+			const button = getByRoleButton(document.body, 'Generate');
+			expect(button.disabled).toBe(true);
+			expect(button.title).toBe(reason);
+			expect(document.body.textContent).toContain(`ⓘ ${reason}`);
+			button.click();
+			expect(generate).not.toHaveBeenCalled();
+		}
+	);
 
 	it('expands and collapses the literal worker sentence and retries through Generate', async () => {
 		const cause =
