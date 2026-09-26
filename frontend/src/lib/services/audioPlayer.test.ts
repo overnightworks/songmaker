@@ -465,6 +465,31 @@ describe('frozen-clock watchdog', () => {
 		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
+	it.each([
+		{
+			name: 'recovers a third freeze by itself when the take played on in between',
+			playOnSeconds: 10,
+			afterThirdFreeze: { status: 'loading', error: null }
+		},
+		{
+			name: 'offers Retry on a third freeze when the recoveries fail back to back',
+			playOnSeconds: 0,
+			afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+		}
+	])('$name', ({ playOnSeconds, afterThirdFreeze }) => {
+		startPlayingAt(40);
+		for (let recovery = 1; recovery <= 2; recovery += 1) {
+			advanceSeconds(5);
+			expect(audioPlayer.status).toBe('loading');
+			startPlayingAt(fakeAudio.currentTime);
+			advanceSeconds(playOnSeconds, 1);
+		}
+
+		advanceSeconds(5);
+
+		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(afterThirdFreeze);
+	});
+
 	it('asks for a new URL when the same take recovers again in a later load', () => {
 		startPlayingAt(40);
 		advanceSeconds(5);
