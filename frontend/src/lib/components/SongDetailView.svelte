@@ -522,13 +522,6 @@
 	let songPlaylistPickerOpen = $state(false);
 
 	/**
-	 * `updateSong` fails either as an `ApiError` (server responded with a
-	 * useful detail message) or a raw fetch rejection (offline, timeout —
-	 * `TypeError: Failed to fetch`, which is not user-facing copy). Reuse the
-	 * network-error copy already shown elsewhere in the app instead of
-	 * surfacing the raw browser message.
-	 */
-	/**
 	 * A takes load that got no answer at all carries the browser's own text
 	 * (`Failed to fetch`); name the network instead. Any other failure keeps
 	 * its own message.
@@ -538,6 +531,13 @@
 		return e instanceof Error ? e.message : TAKES_ERROR;
 	}
 
+	/**
+	 * `updateSong` fails either as an `ApiError` (server responded with a
+	 * useful detail message) or with no answer (offline, timeout — a
+	 * `NetworkError` or an abort whose text is not user-facing copy). Reuse the
+	 * network-error copy already shown elsewhere in the app instead of
+	 * surfacing the raw browser message.
+	 */
 	function describeSaveFailure(e: unknown): string {
 		if (e instanceof ApiError) return e.message || 'Save failed';
 		if (e instanceof Error) return EDITOR_NETWORK_ERROR;
