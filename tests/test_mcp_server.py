@@ -16,7 +16,7 @@ from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.constants import JobStatus, JobType
+from songmaker_cli.constants import GET_SONG_ONLY_FOR_OTHER_SONGS, JobStatus, JobType
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, Job, Score, Song, User, Version
 from songmaker_cli.mcp_server import auth, server, tools
@@ -514,6 +514,12 @@ def test_e2e_every_tool_wrapper(e2e_setup, db_factory):
         result = asyncio.run(srv.call_tool(name, args))
         payload = _extract_payload(result)
         assert payload is not None, f"{name} returned nothing"
+
+
+def test_get_song_description_reserves_it_for_other_songs(db_factory):
+    registered = asyncio.run(server.build_server(session_factory=db_factory).list_tools())
+    descriptions = {tool.name: tool.description for tool in registered}
+    assert GET_SONG_ONLY_FOR_OTHER_SONGS in descriptions["get_song"]
 
 
 def test_e2e_write_rolled_back_on_access_denied(e2e_setup, db_factory, monkeypatch):
