@@ -3,7 +3,11 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CoWriterStreamEvent } from '$lib/api/client';
 import type { ChatMessageItem } from '$lib/api/types';
-import { COWRITER_CLAUDE_UNVERIFIED_LABEL, COWRITER_RUNNING_TURN_POLL_MS } from '$lib/constants';
+import {
+	COWRITER_CLAUDE_UNVERIFIED_LABEL,
+	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
+	COWRITER_RUNNING_TURN_POLL_MS
+} from '$lib/constants';
 
 import { ApiError } from '$lib/api/fetch';
 
@@ -424,6 +428,23 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.querySelector('.message.user')?.textContent).toContain('Ja bitte');
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(target.querySelector<HTMLButtonElement>('.retry-turn')).not.toBeNull();
+	});
+
+	it('names a conversation it can no longer reach instead of waiting in silence', async () => {
+		conversationPages(conversation(true, sent));
+		fetchConversationMessages.mockRejectedValue(new Error('Failed to fetch'));
+
+		const target = await leaveDuringATurnAndReturn();
+		await vi.advanceTimersByTimeAsync(
+			COWRITER_RUNNING_TURN_POLL_MS * COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT
+		);
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLElement>('.history-error')?.textContent).toContain(
+				'Conversation history unavailable'
+			)
+		);
+		expect(target.querySelector('.typing')).toBeNull();
 	});
 
 	it('shows a message whose turn no longer runs as unanswered, without waiting for it', async () => {

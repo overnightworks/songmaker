@@ -186,6 +186,7 @@ export const EDITOR_TABS_LABEL = 'Editor tabs';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
 export const COWRITER_RUNNING_TURN_POLL_MS = 2_000;
+export const COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT = 3;
 export const COWRITER_CLAUDE_UNVERIFIED_LABEL =
 	"Claude's tools could not be verified yet — your next message checks again.";
 export const EDITOR_VIEWS_LABEL = 'Editor views';
