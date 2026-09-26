@@ -320,6 +320,30 @@ describe('a request that gets no answer', () => {
 		expect(failure).toMatchObject({ path: '/api/songs/s1', message: 'Failed to fetch' });
 	});
 
+	it.each([
+		{
+			client: 'apiFetch',
+			request: (path: string) => apiFetch(path),
+			brokenAnswer: { ok: true, json: () => Promise.reject(new TypeError('network error')) }
+		},
+		{
+			client: 'sseFetch',
+			request: firstEventFrom,
+			brokenAnswer: {
+				ok: true,
+				body: new ReadableStream({ pull: (stream) => stream.error(new TypeError('network error')) })
+			}
+		}
+	])(
+		'rejects through $client as a NetworkError when the answer breaks off mid-body',
+		async ({ request, brokenAnswer }) => {
+			mockFetch.mockResolvedValueOnce(brokenAnswer);
+			const failure = await request('/api/songs/s1').catch((err: unknown) => err);
+			expect(failure).toBeInstanceOf(NetworkError);
+			expect(failure).toMatchObject({ path: '/api/songs/s1', message: 'network error' });
+		}
+	);
+
 	it('leaves an aborted request as the abort, not as a network failure', async () => {
 		mockFetch.mockRejectedValueOnce(new DOMException('The operation was aborted.', 'AbortError'));
 		const failure = await apiFetch('/api/songs/s1').catch((err: unknown) => err);
