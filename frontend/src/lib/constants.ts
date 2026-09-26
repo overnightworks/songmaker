@@ -172,6 +172,7 @@ export const TAKE_RESCORE_QUEUED_TOAST = 'Re-scoring this take…';
 export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
+export const TAKES_RETRY_LABEL = 'Try again';
 // {version} is replaced with the version number Generate would create next.
 export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
 export const EDITOR_QUEUED_LABEL = 'Queued';
@@ -184,6 +185,8 @@ export const EDITOR_TAB_WRITE_LABEL = 'Write';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
+export const COWRITER_CLAUDE_UNVERIFIED_LABEL =
+	"Claude's tools could not be verified yet — your next message checks again.";
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
