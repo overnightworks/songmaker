@@ -1169,8 +1169,8 @@ parent's coherence budget, which is spent after the child returns.
   API ─→ route by type ──┤
                          └─ arq:queue:scoring → Scoring Worker(s)
 
-  Chat runs inline in the API process (no arq queue).
-  Client cancellation follows the `POST /api/chat/turn` contract.
+  Chat runs inline in the API process (no arq queue), as a task of its own:
+  a client that disconnects stops listening, not the turn.
 ```
 
 **Music worker** (`music_worker.py`):
@@ -1247,8 +1247,9 @@ never been observed; with a newer observation, it is `alive`.
   age/full-queue guard.
 - `chat` runs in the web process rather than a worker queue, so it has no
   worker liveness signal and queued chat can only use the age guard.
-  A client-aborted chat turn follows the `POST /api/chat/turn` cancellation
-  contract rather than waiting for the running-job heartbeat reaper.
+  A client that disconnects does not end its chat turn; the turn runs to
+  completion. A turn whose web process dies is ended by the running-job
+  heartbeat reaper.
 
 - `STALE_JOB_THRESHOLDS` in `constants.py` is the single policy table:
 
