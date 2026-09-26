@@ -138,6 +138,34 @@ def _install_finite_route_stream(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(resource_api, "_resource_event_generator", _finite)
 
 
+def _install_bounded_route_stream(monkeypatch: pytest.MonkeyPatch, frame_count: int) -> None:
+    original_generator = resource_api._resource_event_generator
+    monkeypatch.setattr(resource_api, "RESOURCE_EVENT_STREAM_POLL_SECONDS", 0.01)
+
+    async def _bounded(*args, **kwargs):
+        generator = original_generator(*args, **kwargs)
+        try:
+            yield await anext(generator)
+            for _ in range(frame_count - 1):
+                try:
+                    yield await asyncio.wait_for(anext(generator), timeout=0.05)
+                except (TimeoutError, StopAsyncIteration):
+                    return
+        finally:
+            await generator.aclose()
+
+    monkeypatch.setattr(resource_api, "_resource_event_generator", _bounded)
+
+
+def _created_generation_ids(body: str) -> list[str]:
+    frames = [_parse_sse(chunk) for chunk in body.split("\n\n") if chunk.strip()]
+    return [
+        frame["data"]["generation_id"]
+        for frame in frames
+        if frame.get("event") == ResourceEventKind.GENERATION_CREATED
+    ]
+
+
 @pytest.mark.parametrize("raw", ["-1", "nope", "+1", " 1", "1 ", "١"])
 def test_parse_last_event_id_rejects_non_ascii_non_negative_decimal(raw: str) -> None:
     with pytest.raises(HTTPException) as exc_info:
@@ -517,9 +545,16 @@ def test_poll_crossing_deadline_does_not_emit_a_late_heartbeat(
     assert asyncio.run(_run())["event"] == "hello"
 
 
-def test_route_requires_auth_and_validates_header_after_auth(
+@pytest.mark.parametrize(
+    ("headers", "params"),
+    [({"Last-Event-ID": "-1"}, {}), ({}, {"last_event_id": "-1"})],
+    ids=["header", "query"],
+)
+def test_route_requires_auth_and_validates_cursor_after_auth(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    headers: dict[str, str],
+    params: dict[str, str],
 ) -> None:
     clients, _, _ = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
@@ -527,10 +562,45 @@ def test_route_requires_auth_and_validates_header_after_auth(
     assert unauthenticated.get("/api/resource-events/stream").status_code == 401
     response = clients["alice"].get(
         "/api/resource-events/stream",
-        headers={"Last-Event-ID": "-1"},
+        headers=headers,
+        params=params,
     )
     assert response.status_code == 400
     assert response.json() == {"detail": LAST_EVENT_ID_INVALID}
+
+
+@pytest.mark.parametrize(
+    ("headers", "params", "replayed"),
+    [
+        ({"Last-Event-ID": "1"}, {}, ["generation-2", "generation-3"]),
+        ({}, {"last_event_id": "1"}, ["generation-2", "generation-3"]),
+        ({"Last-Event-ID": "2"}, {"last_event_id": "0"}, ["generation-3"]),
+    ],
+    ids=["header", "query", "header-newer-than-query"],
+)
+def test_route_replays_the_events_after_the_given_cursor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    headers: dict[str, str],
+    params: dict[str, str],
+    replayed: list[str],
+) -> None:
+    clients, factory, users = _authenticated_clients(tmp_path)
+    for number in range(1, 4):
+        _create_event(factory, users["alice"], number)
+    _install_bounded_route_stream(monkeypatch, frame_count=1 + len(replayed))
+
+    body = (
+        clients["alice"]
+        .get(
+            "/api/resource-events/stream",
+            headers=headers,
+            params=params,
+        )
+        .text
+    )
+
+    assert _created_generation_ids(body) == replayed
 
 
 def test_full_app_preserves_resource_sse_headers_and_other_api_cache_policy(
@@ -625,21 +695,7 @@ def test_authenticated_stream_isolates_two_users_and_admin(
 ) -> None:
     clients, factory, users = _authenticated_clients(tmp_path)
     generation_id = _create_event(factory, users["alice"], 1)
-    original_generator = resource_api._resource_event_generator
-    monkeypatch.setattr(resource_api, "RESOURCE_EVENT_STREAM_POLL_SECONDS", 0.01)
-
-    async def _bounded(*args, **kwargs):
-        generator = original_generator(*args, **kwargs)
-        try:
-            yield await anext(generator)
-            try:
-                yield await asyncio.wait_for(anext(generator), timeout=0.05)
-            except (TimeoutError, StopAsyncIteration):
-                return
-        finally:
-            await generator.aclose()
-
-    monkeypatch.setattr(resource_api, "_resource_event_generator", _bounded)
+    _install_bounded_route_stream(monkeypatch, frame_count=2)
     bodies = {
         username: client.get(
             "/api/resource-events/stream",
