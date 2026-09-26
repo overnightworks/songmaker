@@ -14,6 +14,7 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | `kinetic-strip.spec.ts`    | The take strip's kinetic scrolling (issue #358) against a real render, in both layouts its own container query switches it between: dragged, released with momentum that coasts past where the drag stopped, and a click that catches it mid-roll without opening the take it lands on — then a plain click still opens one, the wheel is proven directly against the dispatched event (native on the column layout, converted on the row layout), and Home/End/arrow keys follow the real axis. A third test proves the strip's absence on the compact shell at phone width, not kinetic behaviour — there is nothing of this action's to exercise there yet (WriteColumn.svelte's own `!compact` guard) |
 | `admin-models.spec.ts`     | The admin Models tab (issues #820, #846): one row per task with both routes offered and the unusable one greyed with its reason, `No models` where no route is set up, a collapsed Advanced, and every column — Status included — still on screen at 1920, 1440, 1280 and 1024px, where the card the table sits in is hundreds of pixels narrower than the viewport. Then a save the server keeps even though no route can run it, a co-writer turn that ends with its named reason instead of switching provider quietly, and, at 375px, one card per task with labelled lines and no sideways scroll. Replaces `admin-routes.spec.ts`, whose per-provider route cards Fassung 2 removed                 |
 | `auth-flows.spec.ts`       | The auth chain B1-B5 as a musician meets it (issue #872): signing in from a tab that knows nothing; wrong passwords repeated until the account is locked, with the readable refusal, its `Retry-After` waited out and the account admitted again; signing out, where the cookie the browser gave up is offered back and the server still refuses it; a session that survives a reload; the admin page refused for a non-admin, 403 on the wire and not one control rendered; and a session past the absolute maximum age landing back on the login page. Both shells drive all six, the compact one at 375px                                                                                              |
+| `song-phone.spec.ts`       | The song page at phone width (issue #995, #914's L12): the Takes tab lists each take with its own play control at least the frequent-hitbox size, playing one names it in the mini-player by its real seeded version and take number; a running generation shows its percent, take counter and an ETA in both the Generate button and the Takes status slot; failing that same job live, over its own open SSE stream, surfaces the worker's literal sentence under the Generate button, expandable by its chevron. Mobile project only — see the file's own header for why                                                                                                                               |
 
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
@@ -40,18 +41,30 @@ has the full reasoning). Its takes are seeded directly against the database
 than through individual reimport requests — the same reasoning as the rail's
 filler albums below.
 
+`song-phone.spec.ts` runs on **mobile only**, the mirror image of
+`kinetic-strip.spec.ts`'s own desktop-only reason: everything it proves —
+the compact Write/Takes tabs, the phone Generate button's progress and
+failure states, the Takes status slot — is compact-shell UI with no desktop
+counterpart to exercise. CI's e2e stack runs no ACE-Step worker, so its song
+(already at a version past v1, to prove the player names the real seeded
+version rather than an assumed v1) and both job states are seeded directly
+against the database (`scripts/seed_e2e_job_states.py`), the same reasoning
+as `kinetic-strip.spec.ts`'s own takes above; a job seeded as failed while its
+own SSE stream is still open reaches the page live, the way a real worker
+crash would report it, without a reload.
+
 Two Chromium projects walk that flow: **`desktop`** at 1440×900 and
 **`mobile`** at 390×844 with touch input. The spec is written once for the
 steps both shells share, and spells out the mobile expectation wherever the
 compact shell differs:
 
-| Compact shell | What the mobile project pins                                                    |
-| ------------- | ------------------------------------------------------------------------------- |
-| Rail          | The header opens it as a drawer, and the drawer's Library row closes it again   |
-| Song editor   | Opens on **Write**; the takes arrive through the **Takes** tab                  |
-| Now Playing   | Stacks, so the judging panel is a sheet — and Escape closes sheet, then overlay |
-| Transport     | One 64px row, with a play control at least the frequent-hitbox size             |
-| Album header  | Still a readable title over its breadcrumb when the shell narrows to 320        |
+| Compact shell | What the mobile project pins                                                                                                                                      |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rail          | The header opens it as a drawer, and the drawer's Library row closes it again                                                                                     |
+| Song editor   | Opens on **Write**; the **Takes** tab lists every take with its own play control, a running generation's progress and a failed one's cause (`song-phone.spec.ts`) |
+| Now Playing   | Stacks, so the judging panel is a sheet — and Escape closes sheet, then overlay                                                                                   |
+| Transport     | One 64px row, with a play control at least the frequent-hitbox size                                                                                               |
+| Album header  | Still a readable title over its breadcrumb when the shell narrows to 320                                                                                          |
 
 `fullyParallel: false` with one worker: both shells hit one stack behind one IP
 rate-limit window, so their cost stays additive instead of a burst.
@@ -151,6 +164,20 @@ three times the measured worst case -- and lowers `LOGIN_LOCKOUT_THRESHOLD` to
 3 with `LOGIN_LOCKOUT_WINDOW` at 60 seconds, so the refusal the spec drives is
 the per-_account_ lockout on its own throwaway user and the wait it honours
 fits inside a run. Production stays at 5 / 15 / 3600.
+
+`song-phone.spec.ts` carries `SONG_PHONE_FLOW_API_REQUEST_BUDGET`
+(`helpers.ts`, unlike the other file-local budgets above, since the flow
+seeds nothing through the run's API context at all) -- see that constant's
+own doc comment for the measured count, the flow it covers and its ceiling,
+rather than restating the numbers here (the same convention
+`LIBRARY_FLOW_API_REQUEST_BUDGET`'s own comment names, and the reason those
+numbers drifted apart before). Seeding the song and both job states never
+touches this budget: like the rail's filler albums and
+`kinetic-strip.spec.ts`'s own takes, all three run directly against the
+database rather than through the page (`seedSongPhoneSong`,
+`seedRunningGenerationJob`, `failGenerationJob` in `seed.ts`); the failed job
+state itself arrives live over the running job's still-open SSE stream, with
+no cold open of its own.
 
 Two things that flow needs and no other one does are worth naming here. Its
 tests start logged out, which takes an explicitly empty
