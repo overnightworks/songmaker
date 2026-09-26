@@ -161,7 +161,7 @@ export interface SeededLibrary {
 	secondAlbumSongTitle: string;
 	/** Dedicated album the kinetic-strip flow can mutate without changing the base library. */
 	kineticStripAlbumId: string;
-	/** Dedicated album song-phone.spec.ts seeds its own song and job states into. */
+	/** Dedicated album song-phone.spec.ts and take-arrives.spec.ts seed their own songs and job states into. */
 	songPhoneAlbumId: string;
 }
 
@@ -822,6 +822,39 @@ export async function failGenerationJob(jobId: string, error: string): Promise<v
 	} catch (err) {
 		const detail = err instanceof Error ? err.message : String(err);
 		throw new Error(`Failing the generate job failed: ${detail}`, { cause: err });
+	}
+}
+
+/**
+ * Completes an existing generate job with one new take on its song's latest
+ * version, in the same commit, so the job's own open
+ * `/api/jobs/{id}/stream` reports the end only once the take is readable.
+ * The `generation.created` resource event a real worker also writes is left
+ * out on purpose (`set-completed` in `scripts/seed_e2e_job_states.py`): it
+ * stands in for the event a phone's dropped resource stream never received,
+ * so only the job's own terminal refresh can bring the take into the list.
+ */
+export async function completeGenerationJobWithoutEvent(jobId: string): Promise<void> {
+	try {
+		await execWithStdin(
+			'docker',
+			[
+				...COMPOSE_ARGS,
+				'exec',
+				'-T',
+				'songmaker-web',
+				'/app/.venv/bin/python',
+				'scripts/seed_e2e_job_states.py',
+				'set-completed',
+				'--job-id',
+				jobId
+			],
+			{ cwd: REPO_ROOT },
+			readFileSync(TAKE_FIXTURE)
+		);
+	} catch (err) {
+		const detail = err instanceof Error ? err.message : String(err);
+		throw new Error(`Completing the generate job failed: ${detail}`, { cause: err });
 	}
 }
 

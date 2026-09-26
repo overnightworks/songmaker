@@ -21,7 +21,18 @@ describe('normalizeLyricsToken', () => {
 		['drops a leading punctuation-only apostrophe', "'tis", 'tis'],
 		['collapses internal whitespace', 'foo   bar', 'foo bar'],
 		['trims surrounding whitespace', '  foo  ', 'foo'],
-		['reduces pure punctuation to an empty string', '—', '']
+		['reduces pure punctuation to an empty string', '—', ''],
+		['spells out an umlaut the way typed German lyrics do', 'glüht', 'glueht'],
+		['spells out a capital umlaut as well', 'ÖFFNET Übermut', 'oeffnet uebermut'],
+		['spells a sung number out as its German word', '17', 'siebzehn'],
+		['spells a two-digit number with its units first', '27', 'siebenundzwanzig'],
+		['spells a one in a compound number as "ein"', '21', 'einundzwanzig'],
+		['spells a round ten with its eszett folded', '30', 'dreissig'],
+		['spells hundreds', '500', 'fuenfhundert'],
+		['spells a hundred and one with its trailing "eins"', '101', 'einhunderteins'],
+		['spells thousands', '2014', 'zweitausendvierzehn'],
+		['leaves a number beyond the spelled range as digits', '12345', '12345'],
+		['leaves digits inside a word alone', 'A1 bis B2', 'a1 bis b2']
 	])('%s', (_name, input, expected) => {
 		expect(normalizeLyricsToken(input)).toBe(expected);
 	});
@@ -30,5 +41,7 @@ describe('normalizeLyricsToken', () => {
 		expect(normalizeLyricsToken('Rahmen,')).toBe(normalizeLyricsToken('rahmen'));
 		expect(normalizeLyricsToken('don’t')).toBe(normalizeLyricsToken("don't"));
 		expect(normalizeLyricsToken('Straße')).toBe(normalizeLyricsToken('strasse'));
+		expect(normalizeLyricsToken('glüht,')).toBe(normalizeLyricsToken('Glueht'));
+		expect(normalizeLyricsToken('17')).toBe(normalizeLyricsToken('Siebzehn'));
 	});
 });
