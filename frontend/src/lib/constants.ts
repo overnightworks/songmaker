@@ -139,6 +139,19 @@ export function collectionRowPauseLabel(title: string): string {
 	return `${COLLECTION_ROW_PAUSE_ACTION} ${title}`;
 }
 
+// A collection header's play circle and the shuffle square beside it name
+// what they start by its kind: "Play album", "Shuffle playlist".
+export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
+const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
+
+export function collectionPlayLabel(kind: CollectionPlayKind): string {
+	return `${COLLECTION_ROW_PLAY_ACTION} ${kind}`;
+}
+
+export function collectionShuffleLabel(kind: CollectionPlayKind): string {
+	return `${COLLECTION_SHUFFLE_ACTION} ${kind}`;
+}
+
 // The transport's play button is named after the state its click leaves:
 // "Pause" while audio is really playing, "Retry" once it errored, otherwise
 // "Play". A flow reads the name to tell a sounding take from a dead one.

@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 
-import { ALBUM_ADD_SONG_LABEL } from '$lib/constants';
+import { get } from 'svelte/store';
+import { ALBUM_ADD_SONG_LABEL, collectionPlayLabel, collectionShuffleLabel } from '$lib/constants';
 import { openLibraryWall } from '$lib/stores/navigation';
+import { setShuffle, shuffleEnabled } from '$lib/stores/player';
 import CollectionHeader from './CollectionHeader.svelte';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
@@ -69,18 +71,47 @@ beforeEach(() => {
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+	setShuffle(false);
 	document.body.replaceChildren();
 });
 
 describe('CollectionHeader', () => {
-	it('shows cover, title, a Library › title breadcrumb, and calls onplay from the Play button', async () => {
-		const props = baseProps();
-		const target = await render(props);
+	it('shows cover, title and a Library › title breadcrumb', async () => {
+		const target = await render(baseProps());
 		expect(target.querySelector('.header-title')?.textContent).toContain('Night Drive');
 		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
 		expect(crumbs).toEqual(['Library', 'Night Drive']);
-		requireElement<HTMLButtonElement>(target, '.play-btn').click();
-		expect(props.onplay).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		{ kind: 'album' as const, button: 'play', shuffled: false },
+		{ kind: 'album' as const, button: 'shuffle', shuffled: true },
+		{ kind: 'playlist' as const, button: 'play', shuffled: false },
+		{ kind: 'playlist' as const, button: 'shuffle', shuffled: true }
+	])(
+		'starts the $kind from its $button button with shuffle $shuffled',
+		async ({ kind, button, shuffled }) => {
+			setShuffle(!shuffled);
+			const props = { ...baseProps(), kind };
+			const target = await render(props);
+			const label = button === 'play' ? collectionPlayLabel(kind) : collectionShuffleLabel(kind);
+
+			getByRoleButton(target, label).click();
+
+			expect(props.onplay).toHaveBeenCalledTimes(1);
+			expect(get(shuffleEnabled)).toBe(shuffled);
+		}
+	);
+
+	it('offers no word Play button, only the play circle and the shuffle square', async () => {
+		const target = await render(baseProps());
+		const actions = requireElement(target, '.header-actions');
+
+		expect(actions.textContent).not.toMatch(/play/i);
+		expect(requireElement(actions, '.play-circle').getAttribute('aria-label')).toBe('Play album');
+		expect(requireElement(actions, '.shuffle-btn').getAttribute('aria-label')).toBe(
+			'Shuffle album'
+		);
 	});
 
 	it('shows a Playlists › title breadcrumb for a playlist', async () => {
@@ -122,9 +153,10 @@ describe('CollectionHeader', () => {
 		expect(openLibraryWall).toHaveBeenCalledTimes(1);
 	});
 
-	it('renders only Play and the … menu, no separate visible share icon', async () => {
+	it('renders only play, shuffle and the … menu, no separate visible share icon', async () => {
 		const target = await render(baseProps());
-		expect(target.querySelector('.play-btn')).not.toBeNull();
+		expect(target.querySelector('.play-circle')).not.toBeNull();
+		expect(target.querySelector('.shuffle-btn')).not.toBeNull();
 		expect(target.querySelector('.collection-menu')).not.toBeNull();
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});

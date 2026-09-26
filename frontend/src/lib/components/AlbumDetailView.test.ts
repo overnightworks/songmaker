@@ -12,8 +12,11 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
-	collectionRowPlayLabel
+	collectionPlayLabel,
+	collectionRowPlayLabel,
+	collectionShuffleLabel
 } from '$lib/constants';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -86,13 +89,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
+		playAlbum: vi.fn(),
 		playAlbumSong: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbumSong } from '$lib/stores/player';
+import { playAlbum, playAlbumSong, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 
@@ -156,6 +160,8 @@ beforeEach(() => {
 	FakeJobEventSource.sources = [];
 	vi.mocked(selectSong).mockReset();
 	vi.mocked(playAlbumSong).mockReset();
+	vi.mocked(playAlbum).mockReset();
+	setShuffle(false);
 });
 
 afterEach(async () => {
@@ -200,25 +206,41 @@ describe('AlbumDetailView header', () => {
 		expect(target.textContent).not.toContain('Other Night');
 	});
 
-	it('shows the cover, title, and a single Play action beside the menu', async () => {
+	it('shows the cover, title, the play circle and shuffle beside the menu', async () => {
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.header-cover')).not.toBeNull();
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		expect(header.querySelector('.play-btn')?.textContent).toContain('Play');
+		expect(getByRoleButton(header, collectionPlayLabel('album'))).not.toBeNull();
+		expect(getByRoleButton(header, collectionShuffleLabel('album'))).not.toBeNull();
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 	});
 
-	it('sizes Play to the frequent hitbox on a coarse pointer', async () => {
-		// #163/6: the album header's Play is the shortest path to hearing the
-		// album, and on a phone it has to be reachable with a thumb.
-		injectHitboxStyles();
+	it.each([
+		{ label: collectionPlayLabel('album'), shuffled: false },
+		{ label: collectionShuffleLabel('album'), shuffled: true }
+	])('starts this album from "$label" with shuffle $shuffled', async ({ label, shuffled }) => {
 		const target = await renderDetail();
-		const play = requireElement(target, '.play-btn');
-		setPointer('coarse');
 
-		expect(minHeightPx(play, 'album Play')).toBe(HITBOX_FREQUENT_PX);
+		getByRoleButton(requireElement(target, '.collection-header'), label).click();
+
+		expect(playAlbum).toHaveBeenCalledWith('a-local');
+		expect(get(shuffleEnabled)).toBe(shuffled);
 	});
+
+	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(
+		'sizes "%s" to the frequent hitbox on a coarse pointer',
+		async (label) => {
+			// #163/6: the album header's play is the shortest path to hearing the
+			// album, and on a phone it has to be reachable with a thumb.
+			injectHitboxStyles();
+			const target = await renderDetail();
+			const button = getByRoleButton(requireElement(target, '.collection-header'), label);
+			setPointer('coarse');
+
+			expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
+		}
+	);
 
 	it('names the object and lists Share, Cover, Rename, Add to playlist, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();

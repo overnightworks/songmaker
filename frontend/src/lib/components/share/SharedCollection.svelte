@@ -144,6 +144,7 @@
 			{coverAlt}
 			initials={titleInitials(view.title)}
 			artFill={null}
+			kind={view.kind}
 			onplay={onHeaderPlay}
 			{titleArea}
 			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}

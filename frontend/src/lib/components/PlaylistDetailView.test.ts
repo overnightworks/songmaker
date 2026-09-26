@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import {
+	collectionPlayLabel,
 	collectionRowPlayLabel,
+	collectionShuffleLabel,
 	LIBRARY_RETRY_LABEL,
 	playlistEntryOverflowLabel
 } from '$lib/constants';
@@ -203,13 +205,18 @@ describe('PlaylistDetailView header', () => {
 		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
 	});
 
-	it('uses the collection header with a Play action and a … menu instead of a visible Share icon', async () => {
+	it('uses the collection header with play, shuffle and a … menu instead of a visible Share icon', async () => {
 		const target = document.createElement('div');
 		document.body.append(target);
 		mounted.push(mount(PlaylistDetailView, { target }));
 		await tick();
 		const header = requireElement(target, '.collection-header');
-		expect(header.querySelector('.play-btn')).not.toBeNull();
+		expect(header.querySelector('.play-circle')?.getAttribute('aria-label')).toBe(
+			collectionPlayLabel('playlist')
+		);
+		expect(header.querySelector('.shuffle-btn')?.getAttribute('aria-label')).toBe(
+			collectionShuffleLabel('playlist')
+		);
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
@@ -381,6 +388,35 @@ function expectQueueStartsAtSecondEntry(): void {
 	expect(ctx.index).toBe(1);
 	expect(get(shuffleEnabled)).toBe(false);
 }
+
+describe('PlaylistDetailView header play', () => {
+	it('plays the playlist in order from the top from its play circle', async () => {
+		setShuffle(true);
+		const target = await renderTwoEntryPlaylist();
+
+		requireElement<HTMLButtonElement>(target, '.collection-header .play-circle').click();
+		await tick();
+
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe1', 'pe2']);
+		expect(ctx.index).toBe(0);
+		expect(get(shuffleEnabled)).toBe(false);
+	});
+
+	it('plays the playlist shuffled from the shuffle square beside the circle', async () => {
+		const target = await renderTwoEntryPlaylist();
+
+		requireElement<HTMLButtonElement>(target, '.collection-header .shuffle-btn').click();
+		await tick();
+
+		const ctx = get(queueContext);
+		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
+		expect(ctx.entries.map((queued) => queued.id).sort()).toEqual(['pe1', 'pe2']);
+		expect(get(shuffleEnabled)).toBe(true);
+	});
+});
 
 describe('PlaylistDetailView row actions', () => {
 	it('plays a clicked row as part of this playlist and shows the take in Now Playing', async () => {
