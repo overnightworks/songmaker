@@ -33,7 +33,7 @@ import { appBar, FlowGuard, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedRunningGenerationJob, seedSongPhoneSong } from './seed';
 
 const PHONE_TYPING_SONG_TITLE = 'Phone Typing';
-const COWRITER_COMPOSER_PLACEHOLDER = /^Ask the co-writer/;
+const COWRITER_COMPOSER_PLACEHOLDER = /^Ask for a rewrite/;
 const COWRITER_SEND_LABEL = 'Send';
 const NO_RESERVED_ROOM = '0px';
 const ON_SCREEN_KEYBOARD_HEIGHT_PX = 320;
