@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 from mcp.server.mcpserver import MCPServer
 from sqlalchemy.orm import sessionmaker
 
-from songmaker_cli.constants import GET_SONG_ONLY_FOR_OTHER_SONGS
+from songmaker_cli.constants import GET_SONG_TOOL_DESCRIPTION
 from songmaker_cli.mcp_server import auth, tools
 from songmaker_cli.mcp_server.schemas import (
     AlbumSummary,
@@ -111,13 +111,7 @@ def build_server(
                 session, user, query=query, limit=limit,
             )
 
-    @mcp.tool(
-        description=(
-            "Read the full state of a song: current draft lyrics/prompt/"
-            "style, version history, and generation ids. "
-            f"{GET_SONG_ONLY_FOR_OTHER_SONGS}"
-        ),
-    )
+    @mcp.tool(description=GET_SONG_TOOL_DESCRIPTION)
     def get_song(song_id: str) -> SongDetail:
         with session_scope(write=False) as session:
             user = resolved_user(session)

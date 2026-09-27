@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
+from songmaker_cli.constants import GET_SONG_TOOL_DESCRIPTION
 from songmaker_cli.mcp_server.tools import (
     MCPToolError,
     tool_create_song,
@@ -90,7 +91,7 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
     ),
     CowriterTool(
         "get_song",
-        "Read the full state of a song.",
+        GET_SONG_TOOL_DESCRIPTION,
         _object({"song_id": _STRING}, ["song_id"]),
         False,
         tool_get_song,

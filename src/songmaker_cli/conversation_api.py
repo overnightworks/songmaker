@@ -63,6 +63,7 @@ from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     CURRENT_SONG_FRESHNESS_NOTE,
+    GET_SONG_ONLY_FOR_OTHER_SONGS,
     JOB_ACTIVE_STATUSES,
     MEMORY_SCOPE_ALBUM,
     MEMORY_SCOPE_SONG,
@@ -129,7 +130,8 @@ COWRITER_ROLE = (
 COWRITER_TOOLS_AVAILABLE_INSTRUCTIONS = (
     "You can call Songmaker tools to read and edit songs in the "
     "user's library. Before every write, briefly say what you are about to "
-    "change so the user can revert it if needed."
+    "change so the user can revert it if needed. "
+    f"{GET_SONG_ONLY_FOR_OTHER_SONGS}"
 )
 
 COWRITER_TEXT_ONLY_INSTRUCTIONS = (
