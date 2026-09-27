@@ -834,7 +834,7 @@
 		min-height: 0;
 	}
 
-	/* The phone's sticky Write/Takes tabs can only stick inside this box, so
+	/* The phone's sticky Edit/Takes tabs can only stick inside this box, so
 	   it must be as tall as the page it scrolls — shrunk to `main`'s height
 	   they let go after one screen (#1017). The co-writer keeps the bounded
 	   box: its message list scrolls inside it with the composer pinned. */
