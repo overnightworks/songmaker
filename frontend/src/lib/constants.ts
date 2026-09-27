@@ -105,6 +105,7 @@ export const LIBRARY_QUEUE_LOADING_TITLE = 'Loading';
 export const LIBRARY_QUEUE_EMPTY_TITLE = 'No takes';
 export const LIBRARY_QUEUE_RETRY_DETAIL = 'Press play to retry';
 export const LIBRARY_QUEUE_PLAY_DETAIL = 'Play';
+export const PLAYLIST_LOADING_LABEL = 'Loading playlist…';
 export const SHUFFLE_SCOPE_PLAYLIST = 'this playlist';
 export const SHUFFLE_SCOPE_ALBUM = 'this album';
 export const SHUFFLE_SCOPE_LIBRARY = 'all albums';
@@ -147,6 +148,13 @@ export const TRANSPORT_PAUSE_LABEL = 'Pause';
 export const TRANSPORT_RETRY_LABEL = 'Retry';
 
 export const NOW_PLAYING_LABEL = 'Now Playing';
+
+// The phone's mini player opens Now Playing from its cover and title. The
+// name starts with the visible title so a voice command naming what is on
+// screen reaches it (WCAG 2.5.3), then says what the tap opens.
+export function openNowPlayingLabel(songTitle: string): string {
+	return `${songTitle} — open ${NOW_PLAYING_LABEL}`;
+}
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';

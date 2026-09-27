@@ -392,15 +392,26 @@ its own. `idlePlayTarget` (in `stores/player.ts`)
 now takes the single `openCollection` instead of the old
 `albumId`/`songId`/`playlist` tuple, so a song open inside an album keeps
 that album as the idle Play target instead of falling back to the library
-pool. Per-track queue-skip feedback (`QueueStreamFeedback`) and the take-pool picker
+pool. A playlist opened while its detail is still loading stays the idle
+target too: Play joins that load (`loadPlaylistDetail`) and starts the
+playlist once it arrives — never the library, never the list just left. Per-track queue-skip feedback (`QueueStreamFeedback`) and the take-pool picker
 live inside the `NowPlaying` surface, not the bar; shuffle is transport and
-sits in both (issue #141), labelled from the single `shuffleLabel` derived so
-the two can never disagree about the scope they would shuffle. At ≤640px viewport width or any coarse pointer, the bar collapses to
-one 64px transport row: cover, title/subtitle, a 44×44px play/pause button,
-and the Now Playing chevron — Previous/Next and the seek timeline are not in
-the bar at that size, since Previous/Next live inside the `NowPlaying`
-overlay and the timeline becomes the decorative `.mobile-progress` line
-along the bar's top edge. `PlayerBar` tracks this breakpoint in script via
+sits in the desktop bar and in Now Playing (issue #141), labelled from the
+single `shuffleLabel` derived so the two can never disagree about the scope
+they would shuffle. At ≤640px viewport width or any coarse pointer, the bar
+collapses to one 64px mini-player row (issue #1058): cover and title with a
+source line ("from Nightdrive") form one button that opens Now Playing, then
+Previous (44px) · play/pause (48px, exactly centred in the bar) · Next
+(44px), and the empty right side is a second, pointer-only tap target for
+the same action. When playback fails, that right side also says why
+("Playback stalled. Press Retry."), because the line under the title has no
+room left for it; the title button names it in its description. The phone bar has no shuffle, no Now Playing chevron and no
+seek timeline — the timeline becomes the decorative `.mobile-progress` line
+along the bar's top edge. The source line reads `playbackSource` in
+`stores/player.ts`, the one owner of "where is this music from": it follows
+the player's queue context, never the page that is open, and a library queue
+has no source, so the bar keeps the take line there. `NowPlaying` reads the
+same derived store. `PlayerBar` tracks this breakpoint in script via
 `subscribeCompactLayout` (its own media string, not the shared 768px
 `COMPACT_LAYOUT_MEDIA`) and applies one `.mobile-transport` class, rather
 than duplicating the ruleset under both a `@media` block and a

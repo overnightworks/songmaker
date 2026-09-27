@@ -13,6 +13,7 @@ import type {
 	LibraryPoolTakeItem,
 	PlaylistDetailItem,
 	PlaylistEntryItem,
+	PlaylistItem,
 	QueueStreamManifest,
 	QueueStreamSkipItem,
 	SongItem
@@ -43,13 +44,19 @@ import {
 	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	loadPlaylistDetail,
+	playlistDetailLoad,
+	selectedPlaylist,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST,
+	PLAYLIST_LOADING_LABEL,
 	RAIL_LIBRARY_LABEL,
 	SHUFFLE_SCOPE_ALBUM,
 	SHUFFLE_SCOPE_LIBRARY,
@@ -58,7 +65,8 @@ import {
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-	type NowPlayingSurfaceKind
+	type NowPlayingSurfaceKind,
+	type PlaybackSource
 } from '$lib/constants/now-playing';
 
 // --- Browsing state ---
@@ -177,6 +185,25 @@ export const shuffleLabel = derived([shuffleEnabled, queueContext], ([$enabled, 
 	$enabled
 		? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScopeLabel($ctx)})`
 		: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScopeLabel($ctx)}`
+);
+
+// Where the playing music comes from, named by the queue itself — never by
+// the collection the listener happens to have open, which they are free to
+// leave mid-track. The mini player and Now Playing both read it here. A
+// library queue has no source, and neither has an album queue whose album is
+// not in the list to name it.
+export const playbackSource = derived(
+	[queueContext, albumList],
+	([$ctx, $albums]): PlaybackSource | null => {
+		if ($ctx.type === 'album') {
+			const title = albumTitle($albums, $ctx.albumId);
+			return title ? { kind: 'album', id: $ctx.albumId, title } : null;
+		}
+		if ($ctx.type === 'playlist') {
+			return { kind: 'playlist', id: $ctx.playlist.id, title: $ctx.playlist.title };
+		}
+		return null;
+	}
 );
 
 type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
@@ -498,7 +525,7 @@ async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<v
 }
 
 type IdlePlayTarget =
-	| { type: 'playlist'; label: string }
+	| { type: 'playlist'; label: string; playlistId: string }
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
 
@@ -510,14 +537,28 @@ type IdlePlayTarget =
 export function idlePlayTarget(input: {
 	collection: OpenCollection | null;
 	playlist: PlaylistDetailItem | null;
+	listedPlaylist: PlaylistItem | null;
+	playlistLoading: boolean;
 	albums: AlbumItem[];
 }): IdlePlayTarget {
 	if (input.collection?.kind === 'playlist') {
-		// A playlist whose detail failed to load (or hasn't loaded yet) has no
-		// title to show and nothing to natively play — fall back to the named
-		// library target instead of an empty label and a dead Play button.
-		if (!input.playlist) return { type: 'library', label: RAIL_LIBRARY_LABEL };
-		return { type: 'playlist', label: input.playlist.title };
+		const playlistId = input.collection.id;
+		if (input.playlist?.id === playlistId) {
+			return { type: 'playlist', label: input.playlist.title, playlistId };
+		}
+		// The listener opened this playlist: while its detail is still on the
+		// way, Play means this playlist and waits for it -- never the library,
+		// never the list they just left.
+		if (input.playlistLoading) {
+			return {
+				type: 'playlist',
+				label: input.listedPlaylist?.title ?? PLAYLIST_LOADING_LABEL,
+				playlistId
+			};
+		}
+		// A detail that failed to load has nothing to natively play -- fall
+		// back to the named library target instead of a dead Play button.
+		return { type: 'library', label: RAIL_LIBRARY_LABEL };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -533,12 +574,12 @@ export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
+		listedPlaylist: get(selectedPlaylist),
+		playlistLoading: get(playlistDetailLoad).status === 'loading',
 		albums: get(albumList)
 	});
 	if (target.type === 'playlist') {
-		const playlist = get(selectedPlaylistDetail);
-		if (!playlist) return;
-		playPlaylist(playlist, 'top');
+		await playOpenPlaylistOnceLoaded(target.playlistId);
 		return;
 	}
 	if (target.type === 'album') {
@@ -546,6 +587,24 @@ export async function playIdleStart(): Promise<void> {
 		return;
 	}
 	await playLibrary();
+}
+
+// The playlist store owns loading and joins the fetch already in flight; a
+// listener who moves on while it loads leaves nothing here to play, and a
+// play started meanwhile supersedes this wait even if they come back to it.
+async function playOpenPlaylistOnceLoaded(playlistId: string): Promise<void> {
+	if (get(selectedPlaylistDetail)?.id !== playlistId) {
+		const { seq } = beginPlayStart();
+		playStartNotice.set('building');
+		await loadPlaylistDetail(playlistId);
+		if (!playStartIsCurrent(seq)) return;
+	}
+	const playlist = get(selectedPlaylistDetail);
+	if (playlist?.id !== playlistId) {
+		playStartNotice.set('idle');
+		return;
+	}
+	playPlaylist(playlist, 'top');
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
