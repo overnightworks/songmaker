@@ -8,6 +8,7 @@ import { openCollection, resetCollectionForTests } from '$lib/stores/collection'
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, resourceSync } from '$lib/stores/resourceSync';
+import { resetConnectivityForTests } from '$lib/stores/connectivity';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
 const retryResourceSync = vi.hoisted(() => vi.fn(async () => true));
@@ -68,6 +69,8 @@ afterEach(() => {
 	for (const app of mounted.splice(0)) void unmount(app);
 	document.body.innerHTML = '';
 	resetResourceSyncForTests();
+	resetConnectivityForTests();
+	vi.restoreAllMocks();
 });
 
 describe('the library workspace', () => {
@@ -86,6 +89,33 @@ describe('the library workspace', () => {
 		target.querySelector<HTMLButtonElement>('.retry-btn')?.click();
 		expect(retryResourceSync).toHaveBeenCalled();
 		expect(target.textContent).not.toContain(RESOURCE_SYNC_ERROR + LIBRARY_RETRY_LABEL);
+	});
+
+	it('waits under the offline strip instead of showing a failure when the stream could not come up offline', async () => {
+		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+		window.dispatchEvent(new Event('offline'));
+		resourceSync.update((state) => ({ ...state, status: 'error', error: null }));
+
+		const target = renderWorkspace();
+		expect(target.textContent).toContain('Loading...');
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+
+		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
+		window.dispatchEvent(new Event('online'));
+		await tick();
+		expect(target.querySelector('[role="alert"]')?.textContent).toContain(RESOURCE_SYNC_ERROR);
+	});
+
+	it('shows no banner over a working library when a live refresh fails for lack of a network', async () => {
+		streamLive();
+		const target = renderWorkspace();
+		await vi.waitFor(() => expect(target.querySelector('.library-root')).not.toBeNull());
+
+		resourceSync.update((state) => ({ ...state, status: 'error', error: null, ready: true }));
+		await tick();
+
+		expect(target.querySelector('.library-root > [role="alert"]')).toBeNull();
+		expect(target.querySelector('.library-root')).not.toBeNull();
 	});
 
 	// What makes swapping between the workspace's two addresses free
