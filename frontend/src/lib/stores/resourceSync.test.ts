@@ -37,8 +37,10 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	SERVER_UNREACHABLE_STATUSES,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
@@ -253,9 +255,12 @@ function latestSource(sources: MockEventSource[]): MockEventSource {
 beforeEach(() => {
 	MockEventSource.instances = [];
 	mockClassifyAuthFailure.mockReset();
-	mockClassifyAuthFailure.mockImplementation((error: { status?: unknown }) => {
+	mockClassifyAuthFailure.mockImplementation((error: { status?: number }) => {
 		if (error.status === 401) return 'unauthorized';
 		if (error.status === 403) return 'disabled';
+		if (error instanceof NetworkError || SERVER_UNREACHABLE_STATUSES.has(error.status ?? 0)) {
+			return 'unreachable';
+		}
 		return 'retryable';
 	});
 });
@@ -880,6 +885,11 @@ describe('resource sync owner', () => {
 			'answered 503',
 			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`),
 			'error'
+		],
+		[
+			'answered 429',
+			(songId: string) => new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`),
+			'error'
 		]
 	] as const)(
 		'retries a live refresh that failed %s on its own, and brings the take in within 10 s of the network returning without any browser event',
@@ -906,6 +916,149 @@ describe('resource sync owner', () => {
 
 			expect(get(store)).toMatchObject({ status: 'live', error: null });
 			expect(upserted.at(-1)?.id).toBe('s1');
+		}
+	);
+
+	it('fetches a rate-limited refresh again no sooner than its Retry-After, then brings the take in', async () => {
+		vi.useFakeTimers();
+		const retryAfterSeconds = 30;
+		let rateLimited = true;
+		const { controller, sources, store, fetchCalls, upserted } = setup({
+			fetchSong: async (songId) => {
+				if (!rateLimited) return song({ slug: 'track', title: 'Track', id: songId });
+				rateLimited = false;
+				throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		await controller.requestSongRefresh('s1');
+		expect(get(store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+
+		await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1);
+		expect(fetchCalls).toEqual(['s1']);
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect(fetchCalls).toEqual(['s1', 's1']);
+		expect(get(store)).toMatchObject({ status: 'live', error: null });
+		expect(upserted.at(-1)?.id).toBe('s1');
+		controller.stop();
+	});
+
+	describe('a song rate-limited with a Retry-After of 30 s', () => {
+		const retryAfterSeconds = 30;
+
+		function setupAlwaysRateLimited() {
+			vi.useFakeTimers();
+			const harness = setup({
+				fetchSong: async (songId) => {
+					throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
+				}
+			});
+			return harness;
+		}
+
+		async function startLiveAndRateLimit(harness: ReturnType<typeof setup>): Promise<void> {
+			harness.controller.start();
+			latestSource(harness.sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await harness.controller.waitForReady();
+			await harness.controller.requestSongRefresh('s1');
+			expect(harness.fetchCalls).toEqual(['s1']);
+		}
+
+		it('is not fetched again by five focus events or a reopened stream until 30 s have passed, then once', async () => {
+			const harness = setupAlwaysRateLimited();
+			await startLiveAndRateLimit(harness);
+
+			for (let focus = 0; focus < 5; focus++) {
+				window.dispatchEvent(new Event('focus'));
+				await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+			}
+			latestSource(harness.sources).error();
+			await flush();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource(harness.sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			const elapsedMs = 5 * RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS + SAFE_RECONNECT_ADVANCE_MS;
+			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - elapsedMs - 1);
+			expect(harness.fetchCalls).toEqual(['s1']);
+
+			await vi.advanceTimersByTimeAsync(1);
+			expect(harness.fetchCalls).toEqual(['s1', 's1']);
+			harness.controller.stop();
+		});
+
+		it('is not fetched by a Retry tap inside the 30 s, keeps its error shown, and is fetched once they pass', async () => {
+			const harness = setupAlwaysRateLimited();
+			await startLiveAndRateLimit(harness);
+
+			await expect(harness.controller.retry()).resolves.toBe(false);
+			expect(harness.fetchCalls).toEqual(['s1']);
+			expect(get(harness.store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+
+			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000);
+			expect(harness.fetchCalls).toEqual(['s1', 's1']);
+			harness.controller.stop();
+		});
+	});
+
+	it('holds an already scheduled retry of failed refreshes until a later Retry-After has passed', async () => {
+		vi.useFakeTimers();
+		const retryAfterSeconds = 30;
+		let failing = true;
+		const { controller, sources, fetchCalls } = setup({
+			listLoadedSongIds: () => ['s1', 's2'],
+			fetchSong: async (songId) => {
+				if (!failing) return song({ slug: 'track', title: 'Track', id: songId });
+				if (songId === 's1') throw new ApiError(503, 'Service Unavailable', `/api/songs/s1`);
+				throw new ApiError(429, 'Too Many Requests', `/api/songs/s2`, retryAfterSeconds);
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		await controller.requestSongRefresh('s1');
+		await controller.requestSongRefresh('s2');
+		failing = false;
+
+		await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1);
+		expect(fetchCalls).toEqual(['s1', 's2']);
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect([...fetchCalls].sort()).toEqual(['s1', 's1', 's2', 's2']);
+		controller.stop();
+	});
+
+	it.each([403, 422])(
+		'shows a live refresh answered %s once and never fetches it again on its own',
+		async (status) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, fetchCalls } = setup({
+				fetchSong: async (songId) => {
+					throw new ApiError(status, 'Refused', `/api/songs/${songId}`);
+				}
+			});
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			await controller.requestSongRefresh('s1');
+			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			latestSource(sources).error();
+			await flush();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+
+			expect(fetchCalls).toEqual(['s1']);
+			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+			controller.stop();
 		}
 	);
 
@@ -1140,7 +1293,7 @@ describe('resource sync owner', () => {
 		let fail = true;
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
-				if (fail) throw new Error('boom');
+				if (fail) throw new ApiError(500, 'boom', '/api/songs/s1');
 				return song({
 					slug: 'track',
 					title: 'Track',
@@ -1262,7 +1415,8 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['gets no answer', 'retryable', false],
+		['gets no answer', 'unreachable', false],
+		['is answered with a failure such as a rate limit', 'retryable', true],
 		['is answered', 'ok', true]
 	] as const)(
 		'reports whether the server can be reached when the probe after a dropped stream %s',
@@ -1276,14 +1430,15 @@ describe('resource sync owner', () => {
 
 			latestSource(sources).error();
 			await flush();
+			controller.stop();
 
-			expect(reachability).toEqual([reachable]);
+			expect(reachability.slice(0, 1)).toEqual([reachable]);
 		}
 	);
 
 	it('reports the server reachable again once the reopened stream says hello', async () => {
 		vi.useFakeTimers();
-		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
@@ -1300,11 +1455,11 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['gets no answer', 'retryable'],
-		['is answered', 'ok']
+		['gets no answer', 'unreachable', false],
+		['is answered', 'ok', true]
 	] as const)(
 		'keeps restarting, without a visible error, a first sync whose stream never opens while the probe %s, until it says hello',
-		async (_case, probe) => {
+		async (_case, probe, reachableWhileRestarting) => {
 			vi.useFakeTimers();
 			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
 			controller.start();
@@ -1316,7 +1471,7 @@ describe('resource sync owner', () => {
 			expect(await ready).toBe(false);
 			expect(get(store)).toMatchObject({ status: 'error', error: null, ready: false });
 			expect(sources[0].closed).toBe(true);
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(reachableWhileRestarting);
 			const sourcesWhenFailed = sources.length;
 
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
@@ -1331,18 +1486,18 @@ describe('resource sync owner', () => {
 	);
 
 	it.each([
-		['gets no answer', 'retryable'],
-		['is answered', 'ok']
+		['gets no answer', 'unreachable', false],
+		['is answered', 'ok', true]
 	] as const)(
 		'restarts, without a visible error, a first sync whose stream the browser closed for good while the probe %s',
-		async (_case, probe) => {
+		async (_case, probe, reachableWhileRestarting) => {
 			vi.useFakeTimers();
 			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
 			controller.start();
 			latestSource(sources).failWithoutNativeRetry();
 			await flush();
 			expect(get(store).error).toBeNull();
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(reachableWhileRestarting);
 			const sourcesWhenClosed = sources.length;
 
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
@@ -1356,7 +1511,7 @@ describe('resource sync owner', () => {
 		}
 	);
 
-	it('reports the server unreachable while a dropped live stream keeps failing to reopen, though the probe is answered', async () => {
+	it('does not read as offline while a dropped live stream keeps failing to reopen but the server answers the probe', async () => {
 		vi.useFakeTimers();
 		const { controller, sources, reachability } = setup();
 		controller.start();
@@ -1372,13 +1527,204 @@ describe('resource sync owner', () => {
 			expect(sources).toHaveLength(1 + reopen);
 			latestSource(sources).failWithoutNativeRetry();
 			await flush();
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(true);
 		}
 		controller.stop();
 	});
 
+	it('clears the offline strip within 2 s of the server answering again and reopens the stream at once', async () => {
+		vi.useFakeTimers();
+		let serverDown = true;
+		const { controller, sources, reachability } = setup({
+			probeAuth: async () => (serverDown ? 'unreachable' : 'ok')
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).failWithoutNativeRetry();
+		await flush();
+		const sourcesWhileDown = sources.length;
+
+		serverDown = false;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+
+		expect(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS).toBeLessThanOrEqual(2000);
+		expect(reachability.at(-1)).toBe(true);
+		expect(sources).toHaveLength(sourcesWhileDown + 1);
+		controller.stop();
+	});
+
+	it('ignores a return probe answered after a newer probe found the server unreachable again', async () => {
+		vi.useFakeTimers();
+		const heldProbeAnswers: Array<(result: ResourceAuthProbe) => void> = [];
+		let holdNextProbe = false;
+		const { controller, sources, reachability } = setup({
+			probeAuth: () => {
+				if (!holdNextProbe) return Promise.resolve('unreachable');
+				holdNextProbe = false;
+				return new Promise((resolve) => heldProbeAnswers.push(resolve));
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		holdNextProbe = true;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+		const sourcesWhileDown = sources.length;
+
+		expect(heldProbeAnswers).toHaveLength(1);
+		heldProbeAnswers[0]('ok');
+		await flush();
+
+		expect(reachability.at(-1)).toBe(false);
+		expect(sources).toHaveLength(sourcesWhileDown);
+		controller.stop();
+	});
+
+	it('probes for the server once per interval while it stays unreachable and not after the owner stops', async () => {
+		vi.useFakeTimers();
+		const probeAuth = vi.fn(async () => 'unreachable' as const);
+		const { controller, sources } = setup({ probeAuth });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		const intervals = 5;
+
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS * intervals);
+		expect(probeAuth).toHaveBeenCalledTimes(1 + intervals);
+		controller.stop();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS * intervals);
+
+		expect(probeAuth).toHaveBeenCalledTimes(1 + intervals);
+	});
+
+	it('does not reopen the stream for a returning server inside the gap after a reopen on focus', async () => {
+		vi.useFakeTimers();
+		let serverDown = true;
+		const { controller, sources, reachability } = setup({
+			probeAuth: async () => (serverDown ? 'unreachable' : 'ok')
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).failWithoutNativeRetry();
+		await flush();
+		const sourcesAfterFocus = sources.length;
+
+		serverDown = false;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+
+		expect(reachability.at(-1)).toBe(true);
+		expect(sources).toHaveLength(sourcesAfterFocus);
+		controller.stop();
+	});
+
+	it('ignores an older return probe answering after a newer return probe found the server still unreachable', async () => {
+		vi.useFakeTimers();
+		const probeAnswers: Array<(result: ResourceAuthProbe) => void> = [];
+		const { controller, sources, reachability } = setup({
+			probeAuth: () => new Promise((resolve) => probeAnswers.push(resolve))
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		probeAnswers[0]('unreachable');
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		const [, streamProbe, olderReturnProbe] = probeAnswers;
+		streamProbe('unreachable');
+		await flush();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		expect(probeAnswers).toHaveLength(4);
+		probeAnswers[3]('unreachable');
+		await flush();
+		const sourcesWhileDown = sources.length;
+
+		olderReturnProbe('ok');
+		await flush();
+
+		expect(reachability.at(-1)).toBe(false);
+		expect(sources).toHaveLength(sourcesWhileDown);
+		controller.stop();
+	});
+
+	it('still revalidates on focus inside the reopen gap while the waiting stream keeps its backoff', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, fetchCalls } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+		latestSource(sources).error();
+		await flush();
+		const fetchesBefore = fetchCalls.length;
+
+		window.dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+
+		expect(sources).toHaveLength(2);
+		expect(fetchCalls.slice(fetchesBefore)).toEqual(['s1']);
+		controller.stop();
+	});
+
+	it('restarts a first sync that failed with a visible error on focus inside the reopen gap', async () => {
+		vi.useFakeTimers();
+		let snapshotLoads = 0;
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => ++snapshotLoads === 1
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('resync', { high_water_mark: '1' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+
+		window.dispatchEvent(new Event('focus'));
+
+		expect(sources).toHaveLength(3);
+		expect(get(store)).toMatchObject({ status: 'connecting', error: null });
+		controller.stop();
+	});
+
 	it('stops claiming the server is unreachable when the owner stops', async () => {
-		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();
 		latestSource(sources).error();
 		await flush();
@@ -1621,7 +1967,9 @@ describe('library resource sync wiring', () => {
 
 	it.each([
 		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE, false],
-		[500, 'reconnecting', null, true]
+		[429, 'reconnecting', null, false],
+		[500, 'reconnecting', null, false],
+		[502, 'reconnecting', null, true]
 	] as const)(
 		'handles a %s auth probe through the singleton owner',
 		async (status, syncStatus, error, pageOffline) => {
