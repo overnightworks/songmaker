@@ -35,7 +35,9 @@
 		onToggleShuffle?: () => void;
 		onTogglePlay: () => void;
 		onSeek: (seconds: number) => void;
-		trackInfo: Snippet<[titleGlowStyle: string]>;
+		// The frame owns the layout, so it alone says whether the track info
+		// carries why playback stopped or the phone's right side does.
+		trackInfo: Snippet<[titleGlowStyle: string, inlineFailure: string | null]>;
 		nowPlayingOpen: boolean;
 		onOpenNowPlaying: () => void;
 		// A docked Now Playing is a panel in the page, not a popup: the trigger
@@ -93,9 +95,9 @@
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
 	const phoneFailureId = $props.id();
-	const phoneFailure = $derived(isError ? errorMsg : null);
+	const playbackFailure = $derived(isError ? (errorMsg ?? 'Error') : null);
 	const nowPlayingTargetDescribedBy = $derived(
-		[nowPlayingTargetDescriptionId, phoneFailure && phoneFailureId].filter(Boolean).join(' ') ||
+		[nowPlayingTargetDescriptionId, playbackFailure && phoneFailureId].filter(Boolean).join(' ') ||
 			undefined
 	);
 
@@ -246,7 +248,7 @@
 		{#if mobileTransport}
 			{#if nowPlayingDisabled}
 				<div class="phone-side track-info" aria-live="polite">
-					{@render trackInfo(trackTitleGlowStyle)}
+					{@render trackInfo(trackTitleGlowStyle, null)}
 				</div>
 			{:else}
 				<button
@@ -259,7 +261,7 @@
 					aria-expanded={nowPlayingOpen}
 					aria-live="polite"
 				>
-					{@render trackInfo(trackTitleGlowStyle)}
+					{@render trackInfo(trackTitleGlowStyle, null)}
 				</button>
 			{/if}
 			<div class="transport-controls">
@@ -277,7 +279,8 @@
 					tabindex="-1"
 					aria-hidden="true"
 				>
-					{#if phoneFailure}<span class="phone-failure" id={phoneFailureId}>{phoneFailure}</span
+					{#if playbackFailure}<span class="phone-failure" id={phoneFailureId}
+							>{playbackFailure}</span
 						>{/if}
 				</button>
 			{/if}
@@ -299,7 +302,7 @@
 				{@render stepAndPlay()}
 			</div>
 			<div class="track-info" aria-live="polite">
-				{@render trackInfo(trackTitleGlowStyle)}
+				{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
 			</div>
 			<div class="timeline">
 				<span class="time">{formatTime(currentTime)}</span>

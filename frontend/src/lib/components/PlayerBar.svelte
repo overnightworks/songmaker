@@ -126,7 +126,7 @@
 	});
 </script>
 
-{#snippet trackInfo(titleGlowStyle: string)}
+{#snippet trackInfo(titleGlowStyle: string, inlineFailure: string | null)}
 	<span class="track-cover" aria-hidden="true">
 		{#if coverUrl}
 			<img src={coverUrl} alt="" />
@@ -137,13 +137,9 @@
 			<span class="track-title" class:glowing={isPlaying} style={titleGlowStyle}
 				>{current.songTitle}</span
 			>
-			<!-- The phone's line under the title has no room left for why playback
-				stopped; its bar says that in its own empty right side. -->
 			<span class="track-detail" id={detailId}
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
-					>{:else if isError && !mobileTransport}<span class="error-text"
-						>{errorMsg ?? 'Error'}</span
-					>{/if}</span
+					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
 		{:else if startNotice === 'building'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
