@@ -12,8 +12,6 @@
 	const open = $derived($sidebarOpen);
 
 	afterNavigate(() => closeSidebar());
-	// The drawer exists only in the compact shell; a window growing out of it
-	// must not leave an invisible drawer open for Back to close.
 	onDestroy(closeSidebar);
 
 	$effect(() => {

@@ -604,9 +604,6 @@ const historyLayers: HistoryLayer[] = [];
 let ownLayerStepBacks = 0;
 let libraryHistoryRunning = false;
 
-// `close` must end in the overlay calling its own `leave` synchronously: a
-// navigation straight after the close (a row tap in the drawer) then writes
-// its entry behind the step back off the layer's entry, not under it.
 export function registerHistoryLayer(id: string, close: () => void): HistoryLayerRegistration {
 	const base = currentLibraryHistoryState();
 	if (!libraryHistoryRunning || !isLibraryHistoryState(base)) return NOT_LAYERED;
@@ -680,9 +677,6 @@ function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	return { ...state, index: state.index - 1, layer: undefined };
 }
 
-// An overlay whose open state is a store is followed from here, never from a
-// component effect: the store's own close then unregisters in the same
-// synchronous step Back relies on.
 function followAsHistoryLayer(
 	id: string,
 	shown: Readable<boolean>,
@@ -710,9 +704,6 @@ function followAsHistoryLayer(
 const NOW_PLAYING_LAYER = 'now-playing';
 const RAIL_DRAWER_LAYER = 'rail-drawer';
 
-// Whether the open rail drawer owns a history entry. A link inside it then
-// replaces that entry (RailDrawer.svelte), so Back from where it leads returns
-// to the page the drawer was opened over.
 const railDrawerLayered = writable(false);
 export const railDrawerIsLayer = readonly(railDrawerLayered);
 
@@ -787,8 +778,6 @@ export function initNavigation(): () => void {
 	};
 }
 
-// Leaving the library leaves its layer entries to the history below: nothing
-// is listening for their popstates any more.
 export function forgetHistoryLayers(): void {
 	libraryHistoryRunning = false;
 	historyLayers.length = 0;
