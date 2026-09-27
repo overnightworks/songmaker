@@ -121,6 +121,7 @@ const RUNNING: GenerateState = {
 	takeCounter: null,
 	progress: 40,
 	readout: '40%',
+	ended: false,
 	reconnecting: false
 };
 const SUBMITTING: GenerateState = {
@@ -130,6 +131,7 @@ const SUBMITTING: GenerateState = {
 	takeCounter: null,
 	progress: 0,
 	readout: '0%',
+	ended: false,
 	reconnecting: false
 };
 const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {

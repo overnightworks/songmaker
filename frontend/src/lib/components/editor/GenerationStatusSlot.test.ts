@@ -36,6 +36,7 @@ const running: Extract<GenerateState, { kind: 'generating' }> = {
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
 	readout: '36% · ~1:40',
+	ended: false,
 	reconnecting: false
 };
 
@@ -172,6 +173,12 @@ describe('GenerationStatusSlot', () => {
 		cancel.click();
 		await tick();
 		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
+	});
+
+	it('keeps the card of a finished job waiting for its take, without a cancel', async () => {
+		await render({ ...running, progress: 100, ended: true });
+		expect(document.body.querySelector('[role="progressbar"]')).not.toBeNull();
+		expect(document.body.querySelector('button')).toBeNull();
 	});
 
 	describe('while the page is offline', () => {

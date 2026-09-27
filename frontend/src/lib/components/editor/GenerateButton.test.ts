@@ -43,6 +43,7 @@ const running: Extract<GenerateState, { kind: 'generating' }> = {
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
 	readout: '36% · ~1:40',
+	ended: false,
 	reconnecting: false
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {

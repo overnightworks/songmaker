@@ -45,7 +45,7 @@ import {
 } from './editor';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
-import { cancelGeneration, generate, generateAction } from './generateAction';
+import { cancelGeneration, generate, generateAction, offersCancel } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
 import { songList } from './libraryData';
@@ -210,6 +210,7 @@ describe('generate action presentation', () => {
 				takeCounter: null,
 				progress: 0,
 				readout: '0%',
+				ended: false,
 				reconnecting: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
@@ -223,6 +224,7 @@ describe('generate action presentation', () => {
 				takeCounter: null,
 				progress: 0,
 				readout: '0%',
+				ended: false,
 				reconnecting: false
 			},
 			setup: () =>
@@ -267,6 +269,7 @@ describe('generate action presentation', () => {
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
 				readout,
+				ended: false,
 				reconnecting: false
 			});
 		}
@@ -342,10 +345,17 @@ describe('generate action presentation', () => {
 					takeCounter: 'Take 1 of 2',
 					progress: 40,
 					readout: 'last seen at 40%',
+					ended: false,
 					reconnecting: true
 				});
 			}
 		);
+
+		it('a take loading its model keeps only its take counter, since loading never had a percent', () => {
+			activeJobs.set([{ songId: 's1', job: { ...runningAt40, phase: 'loading_model' } }]);
+			reportResourceStreamReachable(false);
+			expect(get(generateAction)).toMatchObject({ takeCounter: 'Take 1 of 2', readout: null });
+		});
 
 		it('a running take is live again by itself once the connection is back', () => {
 			activeJobs.set([{ songId: 's1', job: runningAt40 }]);
@@ -358,6 +368,7 @@ describe('generate action presentation', () => {
 				takeCounter: 'Take 1 of 2',
 				progress: 40,
 				readout: '40% · ~0:32',
+				ended: false,
 				reconnecting: false
 			});
 		});
@@ -470,6 +481,15 @@ describe('generate action presentation', () => {
 			songList.set([makeSong({ lyrics: 'verse', prompt: 'folk', generations: takes })]);
 			activeJobs.set(jobs.map((job) => ({ songId: 's1', job, awaitingTakes })));
 			expect(get(generateAction).kind).toBe(kind);
+		});
+
+		it('keeps the card of a finished job waiting for its take, with nothing left to cancel', () => {
+			songList.set([makeSong({ lyrics: 'verse', prompt: 'folk', generations: [takeBeforeJob] })]);
+			const finished = runningJob({ status: 'completed', progress: 1 });
+			activeJobs.set([{ songId: 's1', job: finished, awaitingTakes: true }]);
+			const presentation = get(generateAction);
+			expect(presentation).toMatchObject({ kind: 'generating', jobId: 'job1', ended: true });
+			expect(offersCancel(presentation)).toBe(false);
 		});
 	});
 

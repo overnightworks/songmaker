@@ -106,6 +106,7 @@ describe('DetailTabs', () => {
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
 				readout: '36%',
+				ended: false,
 				reconnecting: false
 			},
 			true
@@ -119,6 +120,7 @@ describe('DetailTabs', () => {
 				takeCounter: null,
 				progress: 0,
 				readout: '0%',
+				ended: false,
 				reconnecting: false
 			},
 			true
@@ -145,7 +147,8 @@ describe('DetailTabs', () => {
 				takeCounter: null,
 				progress: 40,
 				readout: '40%',
-				reconnecting
+				reconnecting,
+				ended: false
 			});
 			const tabs = await render();
 			const ring = tabNamed(tabs, 'takes').querySelector('.ring');
