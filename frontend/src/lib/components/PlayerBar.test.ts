@@ -735,9 +735,19 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 
 describe('PlayerBar failure line', () => {
 	it.each([
-		{ layout: 'phone', arrange: () => {} },
-		{ layout: 'desktop', arrange: useDesktopLayout }
-	])('shows why playback stopped on the $layout', async ({ arrange }) => {
+		{
+			layout: "phone, in the bar's empty right side beside the source line",
+			arrange: () => {},
+			failure: '.phone-side:not(.track-info)',
+			detailBeside: () => nowPlayingFromLabel('Nightdrive')
+		},
+		{
+			layout: 'desktop, after the take line',
+			arrange: useDesktopLayout,
+			failure: '.track-detail .error-text',
+			detailBeside: (why: string) => `${nowPlayingTakeLabel(null, 1)}${why}`
+		}
+	])('shows why playback stopped on the $layout', async ({ arrange, failure, detailBeside }) => {
 		arrange();
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
@@ -753,7 +763,9 @@ describe('PlayerBar failure line', () => {
 
 		await vi.waitFor(() => expect(audioPlayer.error).toBeTruthy());
 		await tick();
-		expect(target.querySelector('.error-text')?.textContent).toBe(audioPlayer.error);
+		const why = audioPlayer.error ?? '';
+		expect(target.querySelector(failure)?.textContent?.trim()).toBe(why);
+		expect(target.querySelector('.track-detail')?.textContent).toBe(detailBeside(why));
 	});
 });
 
