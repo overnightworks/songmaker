@@ -12,6 +12,7 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
+	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
 	collectionPauseLabel,
@@ -150,6 +151,16 @@ function networkFailure(): NetworkError {
 	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));
 }
 
+const ONE_SUGGESTION = { suggestions: [{ id: 'one', url: '/suggestion-one.png' }] };
+const RELOAD_ATTEMPTS = ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.length;
+const PAST_EVERY_RELOAD_MS =
+	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
+
+async function reachSuggestionsLoads(count: number): Promise<void> {
+	await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(count));
+	await tick();
+}
+
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 	let resolve!: (value: T) => void;
 	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
@@ -202,6 +213,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 	resetConnectivityForTests();
 });
 
@@ -538,21 +550,60 @@ describe('AlbumDetailView cover suggestions', () => {
 		}
 	);
 
-	it('reloads the suggestions card by itself once the connection is back', async () => {
+	it('keeps the suggestions card hidden while offline and reloads it once the connection is back', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 		reportResourceStreamReachable(false);
 		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
 		const target = await renderDetail();
-		await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1));
-		await tick();
+		await reachSuggestionsLoads(1);
+		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('.cover-suggestions')).toBeNull();
 
-		fetchAlbumCoverSuggestions.mockResolvedValue(
-			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
-		);
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 		reportResourceStreamReachable(true);
 
 		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
+	});
+
+	it('reloads a card that found no network while online and shows it once the server answers', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		fetchAlbumCoverSuggestions
+			.mockRejectedValueOnce(networkFailure())
+			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+		expect(target.querySelector('.cover-suggestions')).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS[0]);
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
+	});
+
+	it('offers a quiet Try again once the bounded reloads still find no network while online', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+		for (const [attempt, delay] of ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.entries()) {
+			expect(target.querySelector('.cover-suggestions')).toBeNull();
+			await vi.advanceTimersByTimeAsync(delay);
+			await reachSuggestionsLoads(attempt + 2);
+		}
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-suggestions')?.textContent?.trim()).toBe('Try again')
+		);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1 + RELOAD_ATTEMPTS);
+
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		requireElement<HTMLButtonElement>(target, '.cover-suggestions-retry').click();
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
 	});
 
 	it('keeps a delayed previous album response from replacing the current album state', async () => {

@@ -46,6 +46,7 @@
 		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTIONS_LOADING,
 		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
+		ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS,
 		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SUGGESTIONS_TITLE,
 		ALBUM_COVER_SUGGESTING_LABEL,
@@ -121,6 +122,7 @@
 	let coverSuggestionsState = $state<CoverSuggestionsState | null>(null);
 	let coverSuggestionsBusyAlbumId = $state<string | null>(null);
 	let suggestionsRequest = 0;
+	let coverSuggestionsReloads = $state(0);
 	let completedCoverJobId: string | null = null;
 
 	const activeCoverJob = $derived(
@@ -139,6 +141,12 @@
 	);
 	const coverSuggestionsLoading = $derived(
 		coverSuggestionsState?.albumId === currentAlbumId && coverSuggestionsState.isLoading
+	);
+	const coverSuggestionsReloadsExhausted = $derived(
+		coverSuggestionsUnreachable &&
+			!$offline &&
+			!coverSuggestionsLoading &&
+			coverSuggestionsReloads >= ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.length
 	);
 	const coverSuggestionsBusy = $derived(coverSuggestionsBusyAlbumId === currentAlbumId);
 	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
@@ -159,15 +167,17 @@
 	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
 	// A card that cannot reach the server is absent rather than an error of its
 	// own: the one offline strip already says it, and it reloads once online.
+	// Without the strip it reloads on a bounded backoff, then offers Try again.
 	const showCoverSuggestionsPanel = $derived(
-		!coverSuggestionsUnreachable &&
-			Boolean(
-				coverSuggestionsLoading ||
-				isCoverSuggestionGenerating ||
-				hasSuggestions ||
-				coverSuggestionFailure ||
-				!selectedAlbum?.cover
-			)
+		coverSuggestionsReloadsExhausted ||
+			(!coverSuggestionsUnreachable &&
+				Boolean(
+					coverSuggestionsLoading ||
+					isCoverSuggestionGenerating ||
+					hasSuggestions ||
+					coverSuggestionFailure ||
+					!selectedAlbum?.cover
+				))
 	);
 	const coverSuggestionsProgressMessage = $derived(
 		coverSuggestions
@@ -187,6 +197,7 @@
 			...COVER_SUGGESTIONS_SETTLED,
 			isLoading: true
 		};
+		coverSuggestionsReloads = 0;
 		queueMicrotask(() => void loadCoverSuggestions(albumId));
 	});
 
@@ -195,6 +206,22 @@
 		untrack(() => {
 			if (coverSuggestionsUnreachable && currentAlbumId) void loadCoverSuggestions(currentAlbumId);
 		});
+	});
+
+	$effect(() => {
+		if ($offline) {
+			coverSuggestionsReloads = 0;
+			return;
+		}
+		if (!coverSuggestionsUnreachable || coverSuggestionsLoading || !currentAlbumId) return;
+		const delay = ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS[coverSuggestionsReloads];
+		if (delay === undefined) return;
+		const albumId = currentAlbumId;
+		const timer = setTimeout(() => {
+			coverSuggestionsReloads += 1;
+			void loadCoverSuggestions(albumId);
+		}, delay);
+		return () => clearTimeout(timer);
 	});
 
 	$effect(() => {
@@ -221,6 +248,7 @@
 				...COVER_SUGGESTIONS_SETTLED,
 				isLoading: false
 			};
+			coverSuggestionsReloads = 0;
 			if (response.job?.status === 'queued' || response.job?.status === 'running') {
 				trackJob(response.job, { albumId });
 			}
@@ -245,6 +273,14 @@
 				? coverSuggestionsState
 				: { albumId, data: null, ...COVER_SUGGESTIONS_SETTLED, isLoading: false };
 		coverSuggestionsState = update(state);
+	}
+
+	function retryCoverSuggestions(): void {
+		if (!currentAlbumId) return;
+		const albumId = currentAlbumId;
+		coverSuggestionsReloads = 0;
+		updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...COVER_SUGGESTIONS_SETTLED }));
+		void loadCoverSuggestions(albumId);
 	}
 
 	function coverSuggestionsOutcomeOf(error: unknown): CoverSuggestionsOutcome {
@@ -548,7 +584,11 @@
 		</CollectionHeader>
 		{#if showCoverSuggestionsPanel}
 			<section class="cover-suggestions" aria-live="polite">
-				{#if coverSuggestionsLoading && !isCoverSuggestionGenerating}
+				{#if coverSuggestionsReloadsExhausted}
+					<button class="cover-suggestions-retry" type="button" onclick={retryCoverSuggestions}
+						>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
+					>
+				{:else if coverSuggestionsLoading && !isCoverSuggestionGenerating}
 					<p class="cover-suggestions-loading" role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</p>
 				{:else if isCoverSuggestionGenerating}
 					<h3>{ALBUM_COVER_SUGGESTING_LABEL}</h3>
@@ -731,6 +771,20 @@
 		border-radius: var(--btn-radius-sm);
 		background: var(--accent);
 		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		cursor: pointer;
+	}
+
+	.cover-suggestions-retry {
+		align-self: flex-start;
+		padding: 0.45rem 0.8rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: transparent;
+		color: var(--text-muted);
 		font-family: var(--font-display);
 		font-size: 0.78rem;
 		letter-spacing: 0.04em;
