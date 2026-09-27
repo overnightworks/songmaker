@@ -88,9 +88,13 @@ describe('the names Now Playing gives its ways out (#1052)', () => {
 	});
 
 	it.each([
-		{ kind: 'album' as const, title: 'Nightdrive', label: 'Open album Nightdrive' },
-		{ kind: 'playlist' as const, title: 'Late Drives', label: 'Open playlist Late Drives' }
-	])('names opening the $kind', ({ kind, title, label }) => {
+		{ kind: 'album' as const, title: 'Nightdrive', label: 'from Nightdrive — open album' },
+		{
+			kind: 'playlist' as const,
+			title: 'Late Drives',
+			label: 'from Late Drives — open playlist'
+		}
+	])('names opening the $kind, starting with the text it shows', ({ kind, title, label }) => {
 		expect(nowPlayingOpenSourceLabel(kind, title)).toBe(label);
 	});
 });

@@ -419,11 +419,7 @@
 		background: var(--bg);
 		overflow: hidden;
 	}
-	/* The take sheet's backdrop dims the surface, yet × and "Go to song" stay
-	   above it: a tap meant for them must not only close the sheet. */
 	.np-header {
-		position: relative;
-		z-index: 2;
 		flex-shrink: 0;
 		display: flex;
 		align-items: flex-start;
@@ -658,8 +654,6 @@
 		justify-content: center;
 	}
 	.go-song {
-		position: relative;
-		z-index: 2;
 		align-self: flex-start;
 		padding: 0.5rem 0.9rem;
 		border-radius: var(--btn-radius-sm);
@@ -774,5 +768,18 @@
 	}
 	.now-playing.stacked .np-right-col {
 		display: none;
+	}
+	/* The take sheet's backdrop dims the surface, yet × and "Go to song" stay
+	   above it: a tap meant for them must not only close the sheet. */
+	.now-playing.stacked .np-header,
+	.now-playing.stacked .go-song {
+		position: relative;
+		z-index: 2;
+	}
+	/* Four 44 px controls and play need a narrower gap to fit a 320 px phone's
+	   column; the equal sides keep play on its centre line all the same. */
+	.now-playing.stacked .transport,
+	.now-playing.stacked .transport-side {
+		gap: 0.5rem;
 	}
 </style>

@@ -618,6 +618,9 @@ describe('NowPlaying source line on the phone (#1052)', () => {
 				`button[aria-label="${nowPlayingOpenSourceLabel(kind, title)}"]`
 			);
 			expect(from?.textContent).toContain(`${nowPlayingFromLabel(title)} ›`);
+			expect(from?.getAttribute('aria-label')?.startsWith(`${nowPlayingFromLabel(title)} `)).toBe(
+				true
+			);
 			expect(target.textContent).not.toContain('Nachtstrom · Artist');
 			expect(target.textContent).toContain(nowPlayingTakeLabel(1, 2));
 
