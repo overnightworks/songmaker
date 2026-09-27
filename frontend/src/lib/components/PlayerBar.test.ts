@@ -42,6 +42,7 @@ import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
@@ -1025,11 +1026,6 @@ describe('PlayerBar failure line', () => {
 });
 
 describe('PlayerBar offline strip (#1080)', () => {
-	function goOffline(): void {
-		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-		window.dispatchEvent(new Event('offline'));
-	}
-
 	function offlineStrip(): HTMLElement | null {
 		return target.querySelector('.offline-strip');
 	}
@@ -1044,7 +1040,7 @@ describe('PlayerBar offline strip (#1080)', () => {
 	});
 
 	it('sits on the top edge of the bar while the page is offline', async () => {
-		goOffline();
+		browserReportsOnline(false);
 		await tick();
 
 		expect(offlineStrip()?.textContent?.trim()).toBe(OFFLINE_STRIP_MESSAGE);
@@ -1052,7 +1048,7 @@ describe('PlayerBar offline strip (#1080)', () => {
 	});
 
 	it('hides with the bar in full Now Playing and comes back with it', async () => {
-		goOffline();
+		browserReportsOnline(false);
 		nowPlayingSurface.set('full');
 		await tick();
 		expect(offlineStrip()).toBeNull();
@@ -1063,7 +1059,7 @@ describe('PlayerBar offline strip (#1080)', () => {
 	});
 
 	it('steps aside with the bar while typing on the phone', async () => {
-		goOffline();
+		browserReportsOnline(false);
 		const closeKeyboard = openOnScreenKeyboard();
 		const stopWatching = watchTypingOnPhone(document, true);
 		const lyrics = document.createElement('textarea');

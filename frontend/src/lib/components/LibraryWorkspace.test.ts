@@ -1,4 +1,5 @@
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -92,16 +93,14 @@ describe('the library workspace', () => {
 	});
 
 	it('waits under the offline strip instead of showing a failure when the stream could not come up offline', async () => {
-		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-		window.dispatchEvent(new Event('offline'));
+		browserReportsOnline(false);
 		resourceSync.update((state) => ({ ...state, status: 'error', error: null }));
 
 		const target = renderWorkspace();
 		expect(target.textContent).toContain('Loading...');
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 
-		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(true);
-		window.dispatchEvent(new Event('online'));
+		browserReportsOnline(true);
 		await tick();
 		expect(target.querySelector('[role="alert"]')?.textContent).toContain(RESOURCE_SYNC_ERROR);
 	});

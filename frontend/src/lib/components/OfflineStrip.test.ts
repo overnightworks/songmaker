@@ -3,15 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { OFFLINE_STRIP_MESSAGE } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import OfflineStrip from './OfflineStrip.svelte';
 
 let component: ReturnType<typeof mount>;
 let target: HTMLDivElement;
-
-function browserReportsOnline(online: boolean): void {
-	vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(online);
-	window.dispatchEvent(new Event(online ? 'online' : 'offline'));
-}
 
 function liveRegion(): HTMLElement | null {
 	return target.querySelector('[role="status"]');

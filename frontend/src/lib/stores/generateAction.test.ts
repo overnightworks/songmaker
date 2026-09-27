@@ -43,6 +43,7 @@ import {
 	setDraftPrompt,
 	versions
 } from './editor';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { cancelGeneration, generate, generateAction } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
@@ -109,11 +110,6 @@ afterEach(() => {
 	resetConnectivityForTests();
 });
 
-function browserGoesOffline(): void {
-	vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
-	window.dispatchEvent(new Event('offline'));
-}
-
 describe('generate action presentation', () => {
 	it.each([
 		{
@@ -159,7 +155,7 @@ describe('generate action presentation', () => {
 		{
 			state: 'browser offline',
 			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
-			setup: browserGoesOffline
+			setup: () => browserReportsOnline(false)
 		},
 		{
 			state: 'server unreachable while the browser is online',

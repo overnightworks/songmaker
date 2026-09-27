@@ -1,12 +1,8 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { offline, reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
-
-function browserReportsOnline(online: boolean): void {
-	vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(online);
-	window.dispatchEvent(new Event(online ? 'online' : 'offline'));
-}
 
 afterEach(() => {
 	resetConnectivityForTests();
