@@ -1,9 +1,9 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { browserReportsOnline } from '$lib/test-utils/network';
+import { browserReportsOnline, lostNetwork } from '$lib/test-utils/network';
 import {
 	offline,
 	reloadWhileUnreachable,
@@ -127,8 +127,6 @@ describe('reloadWhileUnreachable', () => {
 
 	describe('nameLoadFailure', () => {
 		const FALLBACK = 'Failed to load users';
-		const lostNetwork = (): NetworkError =>
-			new NetworkError('/api/users', new TypeError('Failed to fetch'));
 
 		it('names nothing for a lost network while a reload is still coming', () => {
 			vi.useFakeTimers();

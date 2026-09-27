@@ -2,7 +2,8 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerPoolResponse } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
+import { lostNetwork } from '$lib/test-utils/network';
 import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
@@ -368,9 +369,6 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 });
 
 describe('WorkerPoolPanel failures', () => {
-	const lostNetwork = (): NetworkError =>
-		new NetworkError('/api/admin/workers', new TypeError('Failed to fetch'));
-
 	async function renderPanel(): Promise<HTMLElement> {
 		const target = document.createElement('div');
 		document.body.append(target);

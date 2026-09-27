@@ -1,7 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
+import { lostNetwork } from '$lib/test-utils/network';
 import { COMPACT_LAYOUT_MEDIA, MODEL_REGISTRY_LOAD_FAILED } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { COMPACT_STACK_CLASS } from '$lib/styles/compact-ui';
@@ -147,9 +148,6 @@ describe('ModelRegistryPanel with no worker online', () => {
 });
 
 describe('ModelRegistryPanel failures', () => {
-	const lostNetwork = (): NetworkError =>
-		new NetworkError('/api/admin/registry', new TypeError('Failed to fetch'));
-
 	it.each([
 		{
 			failure: 'a server reason',
