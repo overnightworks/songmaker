@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
-	import { albumList } from '$lib/stores/libraryData';
+	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -12,11 +12,7 @@
 	} from '$lib/stores/playlists';
 	import { openCollection } from '$lib/stores/collection';
 	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
-	import {
-		libraryBrowse,
-		loadLibraryBrowse,
-		loadMoreLibraryAlbums
-	} from '$lib/stores/librarySearch';
+	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import { compareByCreatedAt } from '$lib/utils/recency';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
@@ -78,6 +74,7 @@
 
 	onMount(() => {
 		initLibraryWallOrder();
+		void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
 		if ($libraryWallOrder === 'recent') void loadRecentWork();
 	});
@@ -85,10 +82,6 @@
 	$effect(() => {
 		void wallItems.length;
 		if (browseEl) browseEl.scrollTop = restoredScroll;
-	});
-
-	$effect(() => {
-		if (browseState.status === 'ready' && browseState.albumHasMore) void loadMoreLibraryAlbums();
 	});
 
 	function placeKey(type: WallItem['type'], id: string): string {

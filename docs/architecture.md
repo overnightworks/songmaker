@@ -160,10 +160,11 @@ re-sorting Continue. A–Z compares titles ignoring case and accents (one
 endpoint gives each place, asked with `limit=200`, so there is no second
 activity rule; Added is newest `created_at` first. Each tile's second line
 follows the order: the size, the last work, or "added 3 Aug", a playlist's
-line starting "Playlist ·". The wall sorts the complete set: while the browse
-pager reports more albums it reads the next album page
-(`loadMoreLibraryAlbums` in `stores/librarySearch.ts`), also after a live
-stream reconnect resets the list to its first page. Share inventory is the
+line starting "Playlist ·". The wall sorts the complete set from the same
+route-independent loader the rail uses (`ensureAllAlbumsLoaded` in
+`stores/libraryData.ts`); a browse reset, which a live stream reconnect runs,
+puts only its first page back, so it has that loader read every album again
+and neither surface shrinks to one page. Share inventory is the
 complete server list of the current user's public slugs
 (`GET /api/library/shares`); membership, `N`, and the DELETE endpoints are
 unchanged.

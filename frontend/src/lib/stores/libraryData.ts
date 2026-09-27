@@ -165,11 +165,11 @@ interface AllAlbumsLoadState {
 }
 
 // Tracks a route-independent full load of every album, for surfaces (the
-// rail) that need the complete list regardless of which library page is
-// open. loadLibraryBrowse() keeps paginating and resetting albumList for
-// the active browse view -- this loader must only ever merge into it, never
-// .set() its own page alone, or the two would repeatedly kick each other's
-// results out of the store.
+// rail, the library wall) that need the complete list regardless of which
+// library page is open. loadLibraryBrowse() keeps paginating and resetting
+// albumList for the active browse view -- this loader must only ever merge
+// into it, never .set() its own page alone, or the two would repeatedly kick
+// each other's results out of the store.
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
 let allAlbumsInflight: Promise<boolean> | null = null;
@@ -177,6 +177,14 @@ let allAlbumsInflight: Promise<boolean> | null = null;
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
 	return loadAllAlbums();
+}
+
+// A browse reset puts only its first page back into albumList (a reconnect
+// runs one), so a surface that asked for every album gets the complete set
+// again instead of silently shrinking to that page.
+export function reloadAllAlbumsIfRequested(): void {
+	if (get(allAlbumsLoad).status === 'idle') return;
+	void loadAllAlbums();
 }
 
 function loadAllAlbums(): Promise<boolean> {
