@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
+	import { PLAYING_MARK_LABEL } from '$lib/constants';
 
 	interface Props {
 		/** Whether this row holds the take the transport is on. */
@@ -13,7 +13,7 @@
 </script>
 
 {#if sounding}
-	<span class="playing-mark" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
+	<span class="playing-mark" role="img" aria-label={PLAYING_MARK_LABEL}>
 		<span></span><span></span><span></span>
 	</span>
 {/if}

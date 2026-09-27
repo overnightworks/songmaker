@@ -13,7 +13,7 @@ import {
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
 	collectionPlayLabel,
-	RAIL_PLAYING_MARKER_LABEL,
+	PLAYING_MARK_LABEL,
 	collectionShuffleLabel
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -783,12 +783,10 @@ describe('AlbumDetailView song row', () => {
 			const target = await renderTwoSongs();
 
 			expect(
-				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', RAIL_PLAYING_MARKER_LABEL) !== null
+				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL) !== null
 			).toBe(marked);
 			expect(rowOf(target, 'Tide').classList.contains('current')).toBe(true);
-			expect(
-				findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', RAIL_PLAYING_MARKER_LABEL)
-			).toBeNull();
+			expect(findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', PLAYING_MARK_LABEL)).toBeNull();
 			expect(rowOf(target, 'Ebb').classList.contains('current')).toBe(false);
 		}
 	);

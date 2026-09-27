@@ -12,7 +12,7 @@ import {
 	collectionPlayLabel,
 	collectionShuffleLabel,
 	LIBRARY_RETRY_LABEL,
-	RAIL_PLAYING_MARKER_LABEL,
+	PLAYING_MARK_LABEL,
 	playlistEntryOverflowLabel
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
@@ -484,9 +484,9 @@ describe('PlaylistDetailView row actions', () => {
 			audioPlayer.status = status;
 			await tick();
 
-			expect(findElementByRoleAndName(ebb, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(marked);
+			expect(findElementByRoleAndName(ebb, 'img', PLAYING_MARK_LABEL) !== null).toBe(marked);
 			expect(ebb.classList.contains('current')).toBe(true);
-			expect(findElementByRoleAndName(tide, 'img', RAIL_PLAYING_MARKER_LABEL)).toBeNull();
+			expect(findElementByRoleAndName(tide, 'img', PLAYING_MARK_LABEL)).toBeNull();
 			expect(tide.classList.contains('current')).toBe(false);
 		}
 	);
@@ -496,7 +496,7 @@ describe('PlaylistDetailView row actions', () => {
 		const target = await renderPlaylist([tide, entry({ ...tide, id: 'pe2', position: 1 })]);
 		const rows = Array.from(target.querySelectorAll<HTMLElement>('.entry-row'));
 		const marks = (): boolean[] =>
-			rows.map((row) => findElementByRoleAndName(row, 'img', RAIL_PLAYING_MARKER_LABEL) !== null);
+			rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null);
 
 		requireElement<HTMLButtonElement>(rows[1], '.entry-info').click();
 		await tick();

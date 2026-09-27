@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
+import { PLAYING_MARK_LABEL } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
@@ -176,7 +176,7 @@ describe('RailPlaylistsGroup', () => {
 				entries.map((_, index) => index === played)
 			);
 			expect(
-				rows.map((row) => findElementByRoleAndName(row, 'img', RAIL_PLAYING_MARKER_LABEL) !== null)
+				rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null)
 			).toEqual(marks);
 		}
 	);

@@ -464,7 +464,9 @@ export const RAIL_SETTINGS_OPEN_STORAGE_KEY = 'songmaker.rail-settings-open';
 // apart from the rail's outer RAIL_NAV_LABEL and from each other.
 export const RAIL_LIBRARY_NAV_LABEL = 'Library albums';
 export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
-export const RAIL_PLAYING_MARKER_LABEL = 'Playing';
+
+// Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
+export const PLAYING_MARK_LABEL = 'Playing';
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";

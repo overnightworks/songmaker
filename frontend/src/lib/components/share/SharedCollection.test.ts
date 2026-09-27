@@ -1,5 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { PLAYING_MARK_LABEL } from '$lib/constants';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import type { SharedTrack } from '$lib/share/sharedCollection';
+import { findElementByRoleAndName } from '../shell/rail-test-fixtures';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
 
@@ -19,12 +23,15 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	audioPlayer.status = 'idle';
+	vi.unstubAllGlobals();
 });
 
 async function renderShare(
 	cover: { card: string; detail: string } | null,
 	playlistCovers: { card: string; detail: string }[] = [],
-	kind: 'song' | 'playlist' = 'song'
+	kind: 'song' | 'playlist' = 'song',
+	tracks: SharedTrack[] = []
 ): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -42,7 +49,7 @@ async function renderShare(
 				year: null,
 				cover,
 				playlistCovers,
-				tracks: []
+				tracks
 			},
 			fetchStream: null
 		}
@@ -113,5 +120,41 @@ describe('SharedCollection page root', () => {
 		expect(fallback.querySelectorAll('.playlist-cover-cell')).toHaveLength(4);
 		expect(fallback.querySelectorAll('.playlist-cover-cell img')).toHaveLength(0);
 		expect(fallback.querySelectorAll('.playlist-cover-initials')).toHaveLength(4);
+	});
+});
+
+describe('SharedCollection track rows', () => {
+	function sharedTrack(key: string, title: string): SharedTrack {
+		return {
+			key,
+			title,
+			subtitle: null,
+			audioUrl: `/shared/playlist/mix/audio/${key}.mp3`,
+			durationSec: 120,
+			lyrics: null,
+			cues: null
+		};
+	}
+
+	it('marks the row that plays, and only that row', async () => {
+		// The transport a playing row brings up asks the media query for its visualizer.
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		const target = await renderShare(null, [], 'playlist', [
+			sharedTrack('e1', 'Tide'),
+			sharedTrack('e2', 'Ebb')
+		]);
+		const rows = Array.from(target.querySelectorAll<HTMLButtonElement>('.track-row'));
+
+		rows[1].click();
+		await tick();
+		audioPlayer.status = 'playing';
+		await tick();
+
+		expect(
+			rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null)
+		).toEqual([false, true]);
 	});
 });
