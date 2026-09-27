@@ -7,7 +7,9 @@ import {
 	makeVersion
 } from '$lib/test-utils/factories';
 import type { JobItem } from '$lib/api/types';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
+	EDITOR_GENERATE_CANCEL_FAILED,
 	EDITOR_GPU_OFFLINE_TITLE,
 	EDITOR_MISSING_CONTENT_TITLE,
 	EDITOR_NO_MODELS_WARNING,
@@ -543,7 +545,7 @@ describe('generate action execution', () => {
 	it.each(['save', 'generate'] as const)(
 		'keeps the seed and allows another attempt after a %s failure',
 		async (step) => {
-			const failure = new Error('Request failed');
+			const failure = new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'));
 			if (step === 'save') {
 				setDraftLyrics('new verse');
 				vi.mocked(updateSong).mockRejectedValueOnce(failure);
@@ -551,7 +553,7 @@ describe('generate action execution', () => {
 			await generate();
 			expect(get(generateAction)).toMatchObject({ kind: 'idle' });
 			expect(get(pinnedSeed)).toBe(42);
-			expect(addToast).toHaveBeenCalledWith(failure.message, 'error');
+			expect(addToast).toHaveBeenCalledExactlyOnceWith('Generation failed', 'error');
 			if (step === 'save') expect(generateSong).not.toHaveBeenCalled();
 			vi.mocked(updateSong).mockResolvedValue(makeSong({ lyrics: 'new verse', prompt: 'folk' }));
 			await generate();
@@ -616,9 +618,28 @@ describe('cancelGeneration', () => {
 		expect(addToast).not.toHaveBeenCalled();
 	});
 
-	it('surfaces a cancellation failure as a toast', async () => {
-		vi.mocked(cancelJob).mockRejectedValue(new Error('Worker unavailable'));
+	it.each([
+		{
+			failure: 'with no network answer',
+			error: new NetworkError('/api/jobs/job1/cancel', new TypeError('Failed to fetch')),
+			shown: EDITOR_GENERATE_CANCEL_FAILED
+		},
+		{
+			failure: 'refused by the server',
+			error: new ApiError(409, 'Worker unavailable', '/api/jobs/job1/cancel'),
+			shown: 'Worker unavailable'
+		}
+	])('says $shown once when a cancel fails $failure', async ({ error, shown }) => {
+		vi.mocked(cancelJob).mockRejectedValue(error);
 		await cancelGeneration('job1');
-		expect(addToast).toHaveBeenCalledWith('Worker unavailable', 'error');
+		expect(addToast).toHaveBeenCalledExactlyOnceWith(shown, 'error');
+	});
+
+	it('names a generation start the server refused in its own words', async () => {
+		vi.mocked(generateSong).mockRejectedValueOnce(
+			new ApiError(429, 'Two generations already run', '/api/songs/s1/generate')
+		);
+		await generate();
+		expect(addToast).toHaveBeenCalledExactlyOnceWith('Two generations already run', 'error');
 	});
 });

@@ -8,11 +8,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import {
-	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
-	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
-	HITBOX_FREQUENT_PX
-} from '$lib/constants';
+import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const action = await vi.hoisted(async () => {
@@ -214,11 +210,11 @@ describe('GenerationStatusSlot', () => {
 			{ state: 'running', presentation: reconnecting },
 			{ state: 'queued', presentation: { ...queued, reconnecting: true } }
 		])(
-			'greys the cancel of a $state take, which cannot reach the server',
+			'greys the cancel of a $state take and names it unavailable, not waiting, while offline',
 			async ({ presentation }) => {
 				await render(presentation);
 				const slot = styledSlot();
-				const cancel = getByRoleButton(slot, EDITOR_GENERATE_CANCEL_OFFLINE_LABEL);
+				const cancel = getByRoleButton(slot, 'Cancel generation (unavailable while offline)');
 				expect(cancel.getAttribute('aria-disabled')).toBe('true');
 				expect(getComputedStyle(cancel).color).toBe('var(--text-disabled)');
 				cancel.click();

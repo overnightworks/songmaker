@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { RecipeChip } from '$lib/stores/recipe';
 	import { uploadReferenceAudio } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import {
 		editBpm,
 		editAudioDuration,
@@ -163,7 +164,7 @@
 			setDraftGenParams({ ...($editGenParams ?? {}), reference_audio_path: result.path });
 			referenceFilename = result.filename;
 		} catch (error) {
-			referenceError = error instanceof Error ? error.message : PHONE_RECIPE_UPLOAD_ERROR;
+			referenceError = describeFailure(error, PHONE_RECIPE_UPLOAD_ERROR);
 		} finally {
 			referenceUploading = false;
 			input.value = '';

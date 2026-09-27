@@ -41,8 +41,14 @@ import {
 	resetGenerationFailures
 } from '$lib/stores/jobs';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
-import { ApiError } from '$lib/api/fetch';
-import { SONG_LINK_NOT_FOUND_TOAST, TAKES_ERROR, TAKES_RETRY_LABEL } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import {
+	API_ERROR_GENERIC_MESSAGE,
+	EDITOR_SAVE_FAILED,
+	SONG_LINK_NOT_FOUND_TOAST,
+	TAKES_ERROR,
+	TAKES_RETRY_LABEL
+} from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
 
 const fetchSong = vi.fn();
@@ -747,16 +753,28 @@ describe('opening a song recovers its generation state', () => {
 		expect(fetchActiveGeneration).toHaveBeenCalledWith('s1');
 	});
 
-	it('surfaces an active generation lookup error while keeping the song open', async () => {
-		fetchActiveGeneration.mockRejectedValue(new Error('Generation service unavailable'));
+	it.each([
+		{
+			failure: 'with no network answer',
+			error: new NetworkError('/api/songs/s1/active-generation', new TypeError('Failed to fetch')),
+			shown: API_ERROR_GENERIC_MESSAGE
+		},
+		{
+			failure: 'refused by the server',
+			error: new ApiError(503, 'Generation service unavailable', '/api/songs/s1/active-generation'),
+			shown: 'Generation service unavailable'
+		}
+	])(
+		'says $shown once when the active generation lookup fails $failure, keeping the song open',
+		async ({ error, shown }) => {
+			fetchActiveGeneration.mockRejectedValue(error);
 
-		await selectSong('s1');
+			await selectSong('s1');
 
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ type: 'error', message: 'Generation service unavailable' })
-		]);
-	});
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message: shown })]);
+		}
+	);
 
 	it('shows the cause of the last failed generation for a song opened after reload', async () => {
 		fetchLastFailedGeneration.mockResolvedValue({
@@ -800,7 +818,7 @@ describe('song selection (dead song link, issue #237)', () => {
 
 	it.each([
 		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
-		[new Error('Network unavailable'), 'Network unavailable'],
+		[new TypeError('generations is not iterable'), TAKES_ERROR],
 		[null, TAKES_ERROR]
 	])(
 		'shows the context-loading error with retry in Takes without a toast or clearing selection (%s)',
@@ -1244,13 +1262,17 @@ describe('initNavigation', () => {
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
-		vi.mocked(updateSong).mockRejectedValue(new Error('Network error'));
+		vi.mocked(updateSong).mockRejectedValue(
+			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
+		);
 
 		const cleanup = initNavigation();
 		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
-		expect(get(toasts).some((t) => t.type === 'error')).toBe(true);
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ type: 'error', message: EDITOR_SAVE_FAILED })
+		]);
 		cleanup();
 	});
 

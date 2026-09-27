@@ -95,25 +95,25 @@
 		return value;
 	}
 
-	function fieldErrorMessage(error: unknown): string {
-		return error instanceof Error ? error.message : DEFAULT_MISSING_PREFIX;
+	function fieldErrorMessage(key: keyof VersionGenerationParams): string {
+		return `${DEFAULT_MISSING_PREFIX} ${key}`;
 	}
 
-	function reportFieldError(error: unknown): void {
+	function reportFieldError(key: keyof VersionGenerationParams, error: unknown): void {
 		console.error(error);
-		addToast(fieldErrorMessage(error), 'error');
+		addToast(fieldErrorMessage(key), 'error');
 	}
 </script>
 
-{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string }, error: unknown)}
+{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string })}
 	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{f.label}</span>
-		<p class="param-error-text">{fieldErrorMessage(error)}</p>
+		<p class="param-error-text">{fieldErrorMessage(f.key)}</p>
 	</div>
 {/snippet}
 
 {#snippet numberField(f: NumberParamField)}
-	<svelte:boundary onerror={reportFieldError}>
+	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<input
@@ -127,14 +127,14 @@
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
 		</label>
-		{#snippet failed(error)}
-			{@render fieldError(f, error)}
+		{#snippet failed()}
+			{@render fieldError(f)}
 		{/snippet}
 	</svelte:boundary>
 {/snippet}
 
 {#snippet selectField(f: SelectParamField)}
-	<svelte:boundary onerror={reportFieldError}>
+	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<select
@@ -150,8 +150,8 @@
 				{/each}
 			</select>
 		</label>
-		{#snippet failed(error)}
-			{@render fieldError(f, error)}
+		{#snippet failed()}
+			{@render fieldError(f)}
 		{/snippet}
 	</svelte:boundary>
 {/snippet}
