@@ -447,23 +447,30 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(conversationLine(target)).toBe('Claude · conversation since today');
 	});
 
-	it('shows the current message count in its ⋯ menu after a turn', async () => {
+	it('shows the current message count in its ⋯ menu as soon as the reply is in', async () => {
+		const earlier = [
+			chatMessage('m1', 'user', 'write a verse'),
+			chatMessage('m2', 'assistant', 'Here it is.')
+		];
 		const sent = chatMessage('m3', 'user', 'now a bridge');
 		const reply = chatMessage('m4', 'assistant', 'Four lines.');
-		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
+		fetchConversations
+			.mockResolvedValueOnce([conversationStartedAt('2026-09-22T10:00:00')])
+			.mockReturnValue(new Promise(() => {}));
+		conversationPages(
+			conversation(false, ...earlier),
+			conversation(false, ...earlier, sent, reply)
+		);
 		streamCoWriterTurn.mockReturnValue(
 			turnEvents([
 				{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
 			])
 		);
 		const target = await render();
-		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
-		fetchConversations.mockResolvedValue([
-			{ ...conversationStartedAt('2026-09-22T10:00:00'), message_count: 4 }
-		]);
+		await vi.waitFor(() => expect(target.textContent).toContain('Here it is.'));
 
 		await sendTurn(target, sent.content);
-		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.textContent).toContain('Four lines.'));
 		const menu = await openConversationMenu(target);
 
 		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('4 msgs');
