@@ -337,7 +337,15 @@ export function takeRestoredLibraryHistory(): unknown {
 // load is this module's own cue that the page left the entry it loaded onto.
 function holdRestoredLibraryHistory(): void {
 	restoredHistory = history.state;
+	rememberRestoredSongTab(restoredHistory);
 	window.addEventListener('popstate', leaveRestoredLibraryHistory, { once: true });
+}
+
+// The song address resolves only after SvelteKit has replaced the loaded
+// entry, so the tab that entry was left on reaches it as that song's memory.
+function rememberRestoredSongTab(restored: unknown): void {
+	if (!isLibraryHistoryState(restored) || !restored.songId) return;
+	songTabs.set(restored.songId, normalizeDetailTab(restored.detailTab));
 }
 
 export function leaveRestoredLibraryHistory(): void {

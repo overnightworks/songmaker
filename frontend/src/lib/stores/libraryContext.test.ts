@@ -94,6 +94,7 @@ import {
 	isLibraryHistoryState,
 	libraryHistoryUrl,
 	librarySurface,
+	loadLibraryHistoryPageForTests,
 	openAlbumAddress,
 	openPlaylistAddress,
 	openSongAddress,
@@ -833,6 +834,48 @@ describe('openSongAddress', () => {
 		expect(history.state.detailTab).toBe('takes');
 		expect(get(detailTab)).toBe('takes');
 	});
+
+	it.each([
+		['takes', 'takes'],
+		['generations', 'takes'],
+		['write', 'edit']
+	] as const)(
+		'reopens a reloaded song on the tab its %s history entry was left on (%s)',
+		async (leftOn, restored) => {
+			fetchSongs.mockResolvedValueOnce({
+				...emptyPage([
+					song({
+						title: 'Tide',
+						generation_count: 0,
+						id: 's9',
+						slug: 'tide',
+						album_id: 'a9',
+						album_title: 'Remote'
+					})
+				]),
+				limit: 200
+			});
+			history.replaceState(
+				{
+					...libraryRootState(),
+					surface: 'detail',
+					collection: { kind: 'album', id: 'a9' },
+					songId: 's9',
+					detailTab: leftOn as never
+				},
+				'',
+				'/album/a9/tide'
+			);
+			loadLibraryHistoryPageForTests();
+			history.replaceState(null, '', '/album/a9/tide');
+
+			await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
+
+			expect(history.state.detailTab).toBe(restored);
+			expect(get(detailTab)).toBe(restored);
+			expect(rememberedSongTab('s8')).toBe('edit');
+		}
+	);
 
 	it('seeds the take named by the take query and opens Takes', async () => {
 		fetchSongs.mockResolvedValueOnce({
