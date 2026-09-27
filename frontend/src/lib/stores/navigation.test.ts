@@ -1865,6 +1865,27 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		playlistStands(below);
 	});
 
+	it('a sheet in Now Playing closed and opened again in quick succession keeps both entries for Back', async () => {
+		const below = history.state.index;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		const sheet = ownedMenu('a-sheet');
+		sheet.set(true);
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+
+		sheet.set(false);
+		sheet.set(true);
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
+		expect(history.state.index).toBe(below + 2);
+		history.back();
+		await vi.waitFor(() => expect(get(sheet)).toBe(false));
+		expect(get(nowPlayingOpen)).toBe(true);
+		history.back();
+
+		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+		playlistStands(below);
+	});
+
 	it('closing Now Playing under an open sheet closes the sheet and leaves both entries', async () => {
 		const below = history.state.index;
 		openNowPlaying('take');

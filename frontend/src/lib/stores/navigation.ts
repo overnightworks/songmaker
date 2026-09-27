@@ -671,10 +671,15 @@ function stepOffStackedStaleLayerEntry(state: unknown): void {
 // An entry marked as a layer that no open layer owns -- left behind by a
 // reload, or reached again with Forward after Back closed its layer -- is a
 // copy of the library below it, where Back would visibly do nothing; the
-// caller steps off it onto that library.
+// caller steps off it onto that library. Any open layer can own it, not only
+// the top one: a sheet reopened over Now Playing before the step back off its
+// old entry lands already sits above the Now Playing entry that step reaches.
 function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
-	if (topHistoryLayer()?.base.index === state.index - 1) return null;
+	const ownedByOpenLayer = historyLayers.some(
+		(layer) => layer.id === state.layer && layer.base.index === state.index - 1
+	);
+	if (ownedByOpenLayer) return null;
 	return { ...state, index: state.index - 1, layer: undefined };
 }
 
