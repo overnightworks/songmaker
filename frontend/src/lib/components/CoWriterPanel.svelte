@@ -544,7 +544,7 @@
 
 	async function keepLatestInView(): Promise<void> {
 		await tick();
-		if (container && followsLatest) scrollChatTo(container, container.scrollHeight);
+		if (container && chatShown && followsLatest) scrollChatTo(container, container.scrollHeight);
 	}
 
 	function scrollChatTo(chat: HTMLElement, top: number): void {
