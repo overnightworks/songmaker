@@ -6,6 +6,7 @@ import type { ChatMessageItem } from '$lib/api/types';
 import {
 	COWRITER_CLAUDE_UNVERIFIED_LABEL,
 	COWRITER_CONVERSATION_MENU_LABEL,
+	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
 } from '$lib/constants';
@@ -187,6 +188,22 @@ async function openConversationMenu(target: HTMLElement): Promise<HTMLElement> {
 	return menu;
 }
 
+async function openMemoryFromMenu(target: HTMLElement): Promise<void> {
+	const menu = await openConversationMenu(target);
+	Array.from(menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+		.find((item) => item.textContent?.trim() === 'Memory')
+		?.click();
+	await tick();
+}
+
+function userMemoryField(target: HTMLElement): HTMLTextAreaElement | null {
+	return target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
+}
+
+function focusedConversationMenuTrigger(): boolean {
+	return document.activeElement?.getAttribute('aria-label') === COWRITER_CONVERSATION_MENU_LABEL;
+}
+
 function conversationStartedAt(createdAt: string) {
 	return { ...activeConversation('c1'), created_at: createdAt };
 }
@@ -314,15 +331,22 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 			created_at: '2026-09-17T10:00:00',
 			archived_at: '2026-09-22T10:00:00'
 		};
-		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
+		const empty = { ...activeConversation('c2'), message_count: 0 };
+		fetchConversations.mockResolvedValue([
+			empty,
+			conversationStartedAt('2026-09-22T10:00:00'),
+			older
+		]);
 		const target = await render();
 
 		const menu = await openConversationMenu(target);
 
 		expect(Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent)).toEqual([
+			'New conversation',
 			'Conversation since Tue',
 			'Conversation from Sep 17'
 		]);
+		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('0 msgs');
 	});
 
 	it('reads “conversation since today” once the first message is sent, before the reply arrives', async () => {
@@ -395,37 +419,85 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(escape.defaultPrevented).toBe(true);
 	});
 
-	it('keeps Memory in its ⋯ menu rather than a row above the chat, opens the memory editor from there, and returns focus to ⋯ on close', async () => {
+	it('keeps Memory in its ⋯ menu rather than a row above the chat, moves focus into the memory editor it opens, and returns focus to ⋯ on close', async () => {
 		vi.mocked(fetchMemory).mockResolvedValueOnce({
 			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
 		});
 		const target = await render();
-		const userMemory = () =>
-			target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
 		expect(
 			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
 		).not.toContainEqual(expect.stringMatching(/^Memory/));
 
-		const menu = await openConversationMenu(target);
-		const memoryItem = Array.from(
-			menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
-		).find((item) => item.textContent?.trim() === 'Memory');
-		memoryItem?.click();
-		await tick();
+		await openMemoryFromMenu(target);
 
 		expect(target.querySelector('[role="menu"]')).toBeNull();
-		await vi.waitFor(() => expect(userMemory()?.value).toBe('Prefers short lines'));
+		await vi.waitFor(() => expect(userMemoryField(target)?.value).toBe('Prefers short lines'));
+		expect(
+			target.querySelector('section[aria-label="Memory"]')?.contains(document.activeElement)
+		).toBe(true);
 
-		const closeMemory = target.querySelector<HTMLButtonElement>(
-			'button[aria-label="Close memory"]'
-		);
-		closeMemory?.focus();
-		closeMemory?.click();
+		target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click();
 		await tick();
-		expect(userMemory()).toBeNull();
-		expect(document.activeElement?.getAttribute('aria-label')).toBe(
-			COWRITER_CONVERSATION_MENU_LABEL
+		expect(userMemoryField(target)).toBeNull();
+		expect(focusedConversationMenuTrigger()).toBe(true);
+	});
+
+	it('closes Memory on Escape from inside the editor without leaving the song', async () => {
+		vi.mocked(fetchMemory).mockResolvedValueOnce({
+			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
+		});
+		const target = await render();
+		await openMemoryFromMenu(target);
+		await vi.waitFor(() => expect(userMemoryField(target)).not.toBeNull());
+		userMemoryField(target)?.focus();
+		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+		userMemoryField(target)?.dispatchEvent(escape);
+		await tick();
+
+		expect(userMemoryField(target)).toBeNull();
+		expect(escape.defaultPrevented).toBe(true);
+		expect(focusedConversationMenuTrigger()).toBe(true);
+	});
+
+	it('marks ⋯ and its Memory item while a memory proposal waits, until it is answered', async () => {
+		vi.mocked(fetchMemory).mockResolvedValue({
+			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
+		});
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		fetchConversationMessages.mockResolvedValue(
+			conversation(
+				false,
+				chatMessage('m1', 'user', 'remember that I hate rhymes'),
+				chatMessage(
+					'm2',
+					'assistant',
+					'Noted. <memory_proposal scope="user"><current>Prefers short lines</current>' +
+						'<proposed>Prefers short lines, no rhymes</proposed></memory_proposal>'
+				)
+			)
 		);
+		const target = await render();
+		const waitingMarks = () =>
+			target.querySelectorAll(
+				`[role="img"][aria-label="${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}"]`
+			);
+		const trigger = target.querySelector(
+			`button[aria-label="${COWRITER_CONVERSATION_MENU_LABEL}"]`
+		);
+
+		await vi.waitFor(() => expect(trigger?.querySelectorAll('[role="img"]')).toHaveLength(1));
+		const menu = await openConversationMenu(target);
+		const memoryItem = menu.querySelector<HTMLButtonElement>('.convo-memory');
+		expect(memoryItem?.querySelector('[role="img"]')).not.toBeNull();
+
+		memoryItem?.click();
+		await tick();
+		await vi.waitFor(() => expect(target.querySelector('.proposal .reject')).not.toBeNull());
+		target.querySelector<HTMLButtonElement>('.proposal .reject')?.click();
+		await tick();
+
+		expect(waitingMarks()).toHaveLength(0);
 	});
 });
 
@@ -621,29 +693,33 @@ describe('CoWriterPanel unavailable before any turn', () => {
 });
 
 describe('CoWriterPanel failed turns', () => {
-	it('names a server error frame below the retained user message', async () => {
-		streamCoWriterTurn.mockReturnValue(
-			turnEvents([
-				{
-					type: 'error',
-					status: 503,
-					reason: { message: 'Selected route failed.' }
-				}
-			])
-		);
-		const target = await render();
+	it.each([
+		[
+			'the provider’s reason after its name',
+			{ type: 'error', status: 503, reason: { message: 'CLI is unavailable.' } },
+			'Claude: CLI is unavailable.'
+		],
+		[
+			'the endpoint’s own failure as it is',
+			{ type: 'error', status: 500, message: 'Chat request failed' },
+			'Chat request failed'
+		]
+	] as Array<[string, CoWriterStreamEvent, string]>)(
+		'names %s below the retained user message',
+		async (_case, frame, failure) => {
+			streamCoWriterTurn.mockReturnValue(turnEvents([frame]));
+			const target = await render();
 
-		await sendTurn(target, 'write a chorus');
+			await sendTurn(target, 'write a chorus');
 
-		await vi.waitFor(() =>
-			expect(target.querySelector<HTMLElement>('.turn-error')?.textContent).toContain(
-				'Selected route failed.'
-			)
-		);
-		expect(target.querySelector('.typing')).toBeNull();
-		expect(target.querySelectorAll('.message.user')).toHaveLength(1);
-		expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
-	});
+			await vi.waitFor(() =>
+				expect(target.querySelector<HTMLElement>('.turn-error span')?.textContent).toBe(failure)
+			);
+			expect(target.querySelector('.typing')).toBeNull();
+			expect(target.querySelectorAll('.message.user')).toHaveLength(1);
+			expect(target.querySelector<HTMLButtonElement>('.retry-turn')?.textContent).toBe('Try again');
+		}
+	);
 
 	it('offers Try again only on the newest message once a newer one failed too', async () => {
 		streamCoWriterTurn.mockImplementation(() =>
