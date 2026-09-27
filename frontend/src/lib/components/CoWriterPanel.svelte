@@ -88,6 +88,7 @@
 		visible = true,
 		onturncompleted
 	}: Props = $props();
+	const proposalWaitingMarkId = $props.id();
 
 	interface ToolCall {
 		name: string;
@@ -845,8 +846,8 @@
 	);
 </script>
 
-{#snippet proposalWaitingMark()}
-	<span class="proposal-waiting" role="img" aria-label={COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}
+{#snippet proposalWaitingMark(id?: string)}
+	<span {id} class="proposal-waiting" role="img" aria-label={COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}
 	></span>
 {/snippet}
 
@@ -865,11 +866,12 @@
 				aria-haspopup="menu"
 				aria-expanded={conversationMenuOpen}
 				aria-label={COWRITER_CONVERSATION_MENU_LABEL}
+				aria-describedby={memoryProposalWaiting ? proposalWaitingMarkId : undefined}
 				title={COWRITER_CONVERSATION_MENU_LABEL}
 				onclick={toggleConversationMenu}
 			>
 				<Icon name="more-horizontal" size={18} />
-				{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
+				{#if memoryProposalWaiting}{@render proposalWaitingMark(proposalWaitingMarkId)}{/if}
 			</button>
 			{#if conversationMenuOpen}
 				<div

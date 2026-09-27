@@ -487,6 +487,10 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		);
 
 		await vi.waitFor(() => expect(trigger?.querySelectorAll('[role="img"]')).toHaveLength(1));
+		const describedBy = trigger?.getAttribute('aria-describedby') ?? '';
+		expect(document.getElementById(describedBy)?.getAttribute('aria-label')).toBe(
+			COWRITER_MEMORY_PROPOSAL_WAITING_LABEL
+		);
 		const menu = await openConversationMenu(target);
 		const memoryItem = menu.querySelector<HTMLButtonElement>('.convo-memory');
 		expect(memoryItem?.querySelector('[role="img"]')).not.toBeNull();
@@ -498,6 +502,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 
 		expect(waitingMarks()).toHaveLength(0);
+		expect(trigger?.hasAttribute('aria-describedby')).toBe(false);
 	});
 });
 
