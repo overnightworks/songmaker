@@ -14,6 +14,9 @@ import {
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
+	LIBRARY_WALL_ORDER_GROUP_LABEL,
+	LIBRARY_WALL_ORDER_LABELS,
+	type LibraryWallOrder,
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
@@ -866,4 +869,45 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 
 	console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
+});
+
+test('the albums wall opens in A–Z, re-sorts by Recent and Added with their own lines, keeps the choice across a reload and leaves Continue alone', async ({
+	page
+}) => {
+	const surface = workspace(page);
+	const orders = surface.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL });
+	const choice = (order: LibraryWallOrder) =>
+		orders.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
+	const firstLine = tiles.first().locator('.tile-subtitle');
+	const continueTiles = surface.locator('.continue-item .tile-title');
+
+	await page.goto('/');
+	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
+	await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
+	await expect(continueTiles.first()).toBeVisible();
+	const continueOrder = await continueTiles.allTextContents();
+	const alphabetical = await tiles.locator('.tile-title').allTextContents();
+	const byTitle = new Intl.Collator('en', { sensitivity: 'base' }).compare;
+	expect(alphabetical).toEqual([...alphabetical].sort(byTitle));
+	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
+		/^Playlist · \d+ songs?$/
+	);
+	const recentBox = await choice('recent').boundingBox();
+	expect(recentBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+
+	// The playlist seeded for this attempt is the newest work and the newest place.
+	await choice('recent').click();
+	await expect(tiles.first()).toContainText(playlist.title);
+	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
+	await expect(continueTiles).toHaveText(continueOrder);
+
+	await choice('added').click();
+	await expect(tiles.first()).toContainText(playlist.title);
+	await expect(firstLine).toHaveText(/^Playlist · added \d{1,2} [A-Z][a-z]{2}$/);
+
+	await page.reload();
+	await expect(choice('added')).toHaveAttribute('aria-pressed', 'true');
+	await expect(firstLine).toHaveText(/^Playlist · added /);
+	await expect(continueTiles).toHaveText(continueOrder);
 });
