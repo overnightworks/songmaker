@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
+import { describeFailure } from '$lib/api/fetch';
 import {
 	offlineStreamUrl,
 	saveStream,
@@ -236,7 +237,9 @@ describe('saveStream', () => {
 		mockCache.put.mockImplementation(async () => {
 			serviceWorker.controller = null;
 		});
-		await expect(saveStream(makeManifest())).rejects.toThrow(
+		const failure = await saveStream(makeManifest()).catch((err: unknown) => err);
+
+		expect(describeFailure(failure, 'Offline save failed')).toBe(
 			'Service worker not active — cannot save for offline'
 		);
 		expect(mockController.postMessage).not.toHaveBeenCalled();

@@ -29,7 +29,8 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onPlaybackStarted: null,
 	onAuthLost: null,
 	onStreamRebuild: null,
-	onCurrentChange: null
+	onCurrentChange: null,
+	networkFailureIsAnnounced: () => false
 };
 
 function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null): SharedTrack[] {
@@ -117,7 +118,8 @@ export class SharePlayback {
 			},
 			onAuthLost: null,
 			onStreamRebuild: this.fetchStream ? () => this.rebuildManifest() : null,
-			onCurrentChange: (current) => this.resyncActiveIndex(current)
+			onCurrentChange: (current) => this.resyncActiveIndex(current),
+			networkFailureIsAnnounced: () => false
 		});
 	}
 

@@ -6,6 +6,7 @@ import {
 	SESSION_LOST_REDIRECT_PARAM
 } from '$lib/constants';
 import { addToast, toasts } from '$lib/stores/toast';
+import { UserFacingError } from './userFacingError';
 
 const API_TIMEOUT_MS = 30_000;
 
@@ -46,11 +47,12 @@ export class NetworkError extends Error {
 
 /**
  * The one place a failure becomes user-facing text: the server's own words
- * when it answered with a reason, otherwise the caller's named fallback --
- * never a browser error's text.
+ * when it answered with a reason, a module's own worded failure, otherwise
+ * the caller's named fallback -- never a browser error's text.
  */
 export function describeFailure(err: unknown, fallback: string): string {
 	if (err instanceof ApiError && err.detail) return err.detail;
+	if (err instanceof UserFacingError) return err.message;
 	return fallback;
 }
 

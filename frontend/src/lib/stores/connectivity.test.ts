@@ -1,9 +1,11 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import {
 	offline,
+	reloadWhileUnreachable,
 	reportResourceStreamReachable,
 	resetConnectivityForTests,
 	whenBackOnline
@@ -12,6 +14,7 @@ import {
 afterEach(() => {
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe('connectivity', () => {
@@ -60,23 +63,64 @@ describe('connectivity', () => {
 		stop();
 	});
 
-	it('calls back each time the page comes back online, never while it stays online', () => {
-		const callback = vi.fn();
-		const stop = whenBackOnline(callback);
-		expect(callback).not.toHaveBeenCalled();
+	it('calls back each time the connection comes back, not while it stays up', () => {
+		const comeBack = vi.fn();
+		const stop = whenBackOnline(comeBack);
+
+		reportResourceStreamReachable(true);
+		expect(comeBack).not.toHaveBeenCalled();
 
 		browserReportsOnline(false);
-		expect(callback).not.toHaveBeenCalled();
 		browserReportsOnline(true);
-		expect(callback).toHaveBeenCalledOnce();
-
 		reportResourceStreamReachable(false);
 		reportResourceStreamReachable(true);
-		expect(callback).toHaveBeenCalledTimes(2);
-
 		stop();
 		browserReportsOnline(false);
 		browserReportsOnline(true);
-		expect(callback).toHaveBeenCalledTimes(2);
+
+		expect(comeBack).toHaveBeenCalledTimes(2);
+	});
+
+	it('calls back when a page opened offline gets its connection', () => {
+		reportResourceStreamReachable(false);
+		const comeBack = vi.fn();
+		const stop = whenBackOnline(comeBack);
+
+		reportResourceStreamReachable(true);
+		stop();
+
+		expect(comeBack).toHaveBeenCalledOnce();
+	});
+});
+
+describe('reloadWhileUnreachable', () => {
+	it('while offline, reloads once when the connection is back', () => {
+		reportResourceStreamReachable(false);
+		const reload = vi.fn();
+		const reloads = reloadWhileUnreachable(reload);
+
+		expect(reloads.afterNetworkFailure()).toBe('on-reconnect');
+		reportResourceStreamReachable(true);
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+
+		expect(reload).toHaveBeenCalledOnce();
+	});
+
+	it('once its backoff is spent, still reloads when a dropped connection comes back', () => {
+		vi.useFakeTimers();
+		const reload = vi.fn();
+		const reloads = reloadWhileUnreachable(reload);
+
+		const outcomes = UNREACHABLE_RELOAD_DELAYS_MS.map(() => reloads.afterNetworkFailure());
+		expect(outcomes).toEqual(UNREACHABLE_RELOAD_DELAYS_MS.map(() => 'scheduled'));
+		expect(reloads.afterNetworkFailure()).toBe('exhausted');
+		expect(reload).not.toHaveBeenCalled();
+
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+		reloads.stop();
+
+		expect(reload).toHaveBeenCalledOnce();
 	});
 });

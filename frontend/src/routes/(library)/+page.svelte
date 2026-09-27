@@ -14,6 +14,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { describeFailure } from '$lib/api/fetch';
 	import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 	import { readLegacySongQuery } from '$lib/routes/addresses';
 	import {
@@ -101,7 +102,7 @@
 			if (resolved.droppedUnknownTake) addToast(LEGACY_TAKE_LINK_NOT_FOUND_TOAST, 'error');
 		} catch (err) {
 			if (request !== openRequests) return;
-			failure = err instanceof Error ? err.message : UNREACHABLE_SONG_MESSAGE;
+			failure = describeFailure(err, UNREACHABLE_SONG_MESSAGE);
 			addressState = 'unreachable';
 		}
 	}

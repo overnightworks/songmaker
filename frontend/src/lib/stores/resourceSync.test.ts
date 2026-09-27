@@ -452,26 +452,23 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['hello', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
-		['resync', { high_water_mark: 1 }, 'Malformed resource event field: high_water_mark', true],
-		['generation.created', { sequence: 1 }, 'Malformed resource event field: kind', false]
-	])(
-		'surfaces malformed %s events with their parse error',
-		async (type, data, error, closesSource) => {
-			const { controller, sources, store } = setup();
-			controller.start();
+		['hello', { high_water_mark: 1 }, true],
+		['resync', { high_water_mark: 1 }, true],
+		['generation.created', { sequence: 1 }, false]
+	])('surfaces malformed %s events as a named sync failure', async (type, data, closesSource) => {
+		const { controller, sources, store } = setup();
+		controller.start();
 
-			latestSource(sources).emit(type, data);
-			await flush();
+		latestSource(sources).emit(type, data);
+		await flush();
 
-			expect(get(store)).toMatchObject({ status: 'error', error, ready: false });
-			expect(latestSource(sources).closed).toBe(closesSource);
-		}
-	);
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR, ready: false });
+		expect(latestSource(sources).closed).toBe(closesSource);
+	});
 
 	it('keeps a song refresh error when bootstrap would otherwise use its generic fallback', async () => {
 		const { controller, sources, store } = setup({
-			fetchSong: async () => Promise.reject(new Error('song unavailable'))
+			fetchSong: async () => Promise.reject(new ApiError(409, 'song unavailable', '/api/songs/s1'))
 		});
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
@@ -680,7 +677,7 @@ describe('resource sync owner', () => {
 		let clearError = false;
 		const { controller, sources, store } = setup({
 			fetchSong: async () => {
-				throw new Error('transient detail');
+				throw new ApiError(409, 'transient detail', '/api/songs/s1');
 			}
 		});
 		const unsubscribe = store.subscribe((state) => {
@@ -835,7 +832,7 @@ describe('resource sync owner', () => {
 		let fail = true;
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
-				if (fail) throw new Error('boom');
+				if (fail) throw new ApiError(409, 'boom', '/api/songs/s1');
 				return song({
 					slug: 'track',
 					title: 'Track',
@@ -1066,7 +1063,7 @@ describe('resource sync owner', () => {
 		}
 	);
 
-	it('shows a bug in applying a fetched song as itself, not as the musician being offline', async () => {
+	it('shows a bug in applying a fetched song as a named sync failure, not as the musician being offline', async () => {
 		const { controller, sources, store } = setup({
 			applySong: () => {
 				throw new TypeError("Cannot read properties of undefined (reading 'id')");
@@ -1078,10 +1075,7 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
-		expect(get(store)).toMatchObject({
-			status: 'error',
-			error: "Cannot read properties of undefined (reading 'id')"
-		});
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
 	});
 
 	it('restarts a bootstrap that failed offline once the network comes back', async () => {
@@ -1873,11 +1867,16 @@ describe('resource sync owner', () => {
 	it.each([
 		['an API detail', new ApiError(500, 'server detail', '/api/songs/s1'), 'server detail'],
 		[
-			'an API fallback message',
+			'its named fallback for a server answer without a reason',
 			new ApiError(500, '', '/api/songs/s1'),
-			'Something went wrong. Try again.'
+			RESOURCE_SYNC_ERROR
 		],
-		['an unknown failure', null, RESOURCE_SYNC_ERROR]
+		[
+			'its named fallback for a browser error',
+			new TypeError('undefined is not a function'),
+			RESOURCE_SYNC_ERROR
+		],
+		['its named fallback for an unknown failure', null, RESOURCE_SYNC_ERROR]
 	])('shows %s from a live refresh failure', async (_caseName, failure, error) => {
 		const { controller, sources, store } = setup({
 			fetchSong: async () => Promise.reject(failure)

@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { describeFailure, isNotFound } from '$lib/api/fetch';
+import { describeFailure, isNotFound, NetworkError } from '$lib/api/fetch';
 import {
 	fetchPlaylists,
 	fetchPlaylist,
@@ -17,12 +17,21 @@ import {
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
+import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { addToast } from '$lib/stores/toast';
 
 type PlaylistLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+// 'unreachable' is a detail load the network swallowed: the offline strip
+// says so, and the open playlist loads again once the connection is back.
+type PlaylistDetailLoadStatus = PlaylistLoadStatus | 'unreachable';
 
 interface PlaylistLoadState {
 	status: PlaylistLoadStatus;
+	error: string | null;
+}
+
+interface PlaylistDetailLoadState {
+	status: PlaylistDetailLoadStatus;
 	error: string | null;
 }
 
@@ -41,7 +50,10 @@ export const selectedPlaylistId = derived(openCollection, ($collection) =>
 );
 export const selectedPlaylistDetail = writable<PlaylistDetailItem | null>(null);
 export const playlistLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
-export const playlistDetailLoad = writable<PlaylistLoadState>({ status: 'idle', error: null });
+export const playlistDetailLoad = writable<PlaylistDetailLoadState>({
+	status: 'idle',
+	error: null
+});
 
 export const selectedPlaylist = derived(
 	[playlistList, selectedPlaylistId],
@@ -50,6 +62,12 @@ export const selectedPlaylist = derived(
 
 let playlistsInflight: Promise<boolean> | null = null;
 let playlistDetailRequest = 0;
+const playlistDetailReloads = reloadWhileUnreachable(reloadOpenPlaylistDetail);
+
+function reloadOpenPlaylistDetail(): void {
+	const id = get(selectedPlaylistId);
+	if (id) void loadPlaylistDetail(id);
+}
 
 interface CachedPlaylistDetail {
 	detail: PlaylistDetailItem;
@@ -137,6 +155,7 @@ export function resetPlaylists(): void {
 	playlistLoad.set({ status: 'idle', error: null });
 	playlistDetailLoad.set({ status: 'idle', error: null });
 	playlistDetailRequest += 1;
+	playlistDetailReloads.stop();
 	playlistDetailCache.clear();
 	playlistDetailInflight.clear();
 }
@@ -158,6 +177,7 @@ export async function loadPlaylistDetail(
 	} else {
 		const fresh = freshPlaylistDetail(id);
 		if (fresh) {
+			playlistDetailReloads.stop();
 			selectedPlaylistDetail.set(fresh);
 			playlistDetailLoad.set({ status: 'ready', error: null });
 			return;
@@ -167,6 +187,7 @@ export async function loadPlaylistDetail(
 	try {
 		const detail = await fetchPlaylistDetailDeduped(id, { force: options.forceRefresh });
 		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
+		playlistDetailReloads.stop();
 		selectedPlaylistDetail.set(detail);
 		playlistDetailLoad.set({ status: 'ready', error: null });
 	} catch (err) {
@@ -176,10 +197,16 @@ export async function loadPlaylistDetail(
 			// transient error. Close the collection instead of showing a
 			// retry that can never succeed (matches hydrateCollection's
 			// former not-found handling, now owned here).
+			playlistDetailReloads.stop();
 			selectedPlaylistDetail.set(null);
 			playlistDetailLoad.set({ status: 'idle', error: null });
 			setOpenCollection(null);
 			return;
+		}
+		if (err instanceof NetworkError) {
+			if (reloadAfterNetworkFailure()) return;
+		} else {
+			playlistDetailReloads.stop();
 		}
 		const message = describeFailure(err, LIBRARY_PLAYLISTS_ERROR);
 		selectedPlaylistDetail.set(null);
@@ -188,8 +215,21 @@ export async function loadPlaylistDetail(
 	}
 }
 
+// A load the network swallowed shows no failure while it waits for the
+// connection or its bounded backoff; only a spent backoff falls through to
+// the named failure with its Retry.
+function reloadAfterNetworkFailure(): boolean {
+	const reload = playlistDetailReloads.afterNetworkFailure();
+	if (reload === 'on-reconnect') {
+		playlistDetailLoad.set({ status: 'unreachable', error: null });
+		return true;
+	}
+	return reload === 'scheduled';
+}
+
 export function deselectPlaylist(): void {
 	playlistDetailRequest += 1;
+	playlistDetailReloads.stop();
 	if (get(openCollection)?.kind === 'playlist') {
 		setOpenCollection(null);
 	}

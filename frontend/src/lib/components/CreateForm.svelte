@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { fetchAlbums, createAlbum, createSong } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import { albumList, addSongToList } from '$lib/stores/libraryData';
 	import { selectSong } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
@@ -28,7 +29,7 @@
 			newAlbumTitle = '';
 			newAlbumArtist = '';
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Album creation failed', 'error');
+			addToast(describeFailure(e, 'Album creation failed'), 'error');
 		} finally {
 			creatingAlbum = false;
 		}
@@ -46,7 +47,7 @@
 			selectSong(created.id);
 			newTitle = '';
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Create failed', 'error');
+			addToast(describeFailure(e, 'Create failed'), 'error');
 		} finally {
 			creating = false;
 		}
