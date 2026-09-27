@@ -354,10 +354,65 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 
 		expect(Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent)).toEqual([
 			'New conversation',
-			'Conversation since Tue',
-			'Conversation from Sep 17'
+			'Conversation since Tue 10:00',
+			'Archived · Sep 17 10:00'
 		]);
 		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('0 msgs');
+	});
+
+	describe('with two conversations started the same day', () => {
+		const archivedThisMorning = {
+			...activeConversation('c0'),
+			created_at: '2026-09-27T07:30:00',
+			archived_at: '2026-09-27T09:12:00'
+		};
+		const runningSinceNine = { ...conversationStartedAt('2026-09-27T09:12:00'), message_count: 4 };
+
+		function rowNames(menu: HTMLElement): Array<string | null> {
+			return Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent);
+		}
+
+		it('tells them apart and keeps the active one first after the list is read again', async () => {
+			const sent = chatMessage('m5', 'user', 'now a bridge');
+			const reply = chatMessage('m6', 'assistant', 'Four lines.');
+			fetchConversations.mockResolvedValue([archivedThisMorning, runningSinceNine]);
+			streamCoWriterTurn.mockReturnValue(
+				turnEvents([
+					{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+				])
+			);
+			const target = await render();
+			await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+			const firstOpening = rowNames(await openConversationMenu(target));
+			target.querySelector<HTMLButtonElement>('button.convo-menu-btn')?.click();
+			await tick();
+
+			fetchConversations.mockResolvedValue([
+				{ ...archivedThisMorning, updated_at: '2026-09-27T11:00:00' },
+				{ ...runningSinceNine, message_count: 6 }
+			]);
+			await sendTurn(target, sent.content);
+			await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+
+			expect(firstOpening).toEqual(['Conversation since today 09:12', 'Archived · today 07:30']);
+			expect(rowNames(await openConversationMenu(target))).toEqual(firstOpening);
+		});
+
+		it('names the conversation whose ✕ was tapped in the delete confirm', async () => {
+			fetchConversations.mockResolvedValue([runningSinceNine, archivedThisMorning]);
+			const target = await render();
+			await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+			const menu = await openConversationMenu(target);
+
+			menu
+				.querySelectorAll<HTMLButtonElement>('button[aria-label="Delete conversation"]')[1]
+				.click();
+			await tick();
+
+			expect(document.querySelector('[role="dialog"] li')?.textContent).toBe(
+				'Archived · today 07:30 · 2 msgs'
+			);
+		});
 	});
 
 	it('reads “conversation since today” once the first message is sent, before the reply arrives', async () => {

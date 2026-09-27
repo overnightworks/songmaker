@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 
 import type { ConversationItem } from '$lib/api/types';
 import {
+	conversationConfirmLabel,
 	conversationLineLabel,
+	conversationMenuOrder,
+	conversationMessageCountLabel,
 	conversationRowLabel,
 	cowriterHeaderLabel,
 	cowriterThinkingLabel,
@@ -147,21 +150,30 @@ describe('conversation day and line copy', () => {
 	});
 
 	it.each([
-		['one started today', conversationFrom('2026-09-27T08:00:00'), 'Conversation since today'],
+		[
+			'one started today',
+			conversationFrom('2026-09-27T09:12:00'),
+			'Conversation since today 09:12'
+		],
+		[
+			'an archived one started earlier today',
+			conversationFrom('2026-09-27T07:30:00', { archived_at: '2026-09-27T09:12:00' }),
+			'Archived · today 07:30'
+		],
 		[
 			'one started this week by weekday',
 			conversationFrom('2026-09-22T10:00:00'),
-			'Conversation since Tue'
+			'Conversation since Tue 10:00'
 		],
 		[
 			'one started earlier this year by month and day',
 			conversationFrom('2026-09-12T10:00:00'),
-			'Conversation since Sep 12'
+			'Conversation since Sep 12 10:00'
 		],
 		[
 			'an archived one from an earlier year with the year',
 			conversationFrom('2025-09-17T10:00:00', { archived_at: '2025-09-20T10:00:00' }),
-			'Conversation from Sep 17, 2025'
+			'Archived · Sep 17, 2025 10:00'
 		],
 		[
 			'an empty one as a new conversation, like the line above the chat',
@@ -174,7 +186,7 @@ describe('conversation day and line copy', () => {
 				message_count: 0,
 				archived_at: '2026-09-22T10:00:00'
 			}),
-			'Conversation from Sep 20'
+			'Archived · Sep 20 10:00'
 		],
 		[
 			'a titled one',
@@ -183,5 +195,45 @@ describe('conversation day and line copy', () => {
 		]
 	])('names %s in the conversation menu with the same day form', (_case, conversation, label) => {
 		expect(conversationRowLabel(conversation, now)).toBe(label);
+	});
+
+	it.each([
+		[1, '1 msg'],
+		[4, '4 msgs'],
+		[0, '0 msgs']
+	])('counts %i message(s) as “%s”', (count, label) => {
+		expect(conversationMessageCountLabel(count)).toBe(label);
+	});
+
+	it('names the conversation a delete confirm asks about by its row name and count', () => {
+		expect(
+			conversationConfirmLabel(conversationFrom('2026-09-27T09:12:00', { message_count: 4 }), now)
+		).toBe('Conversation since today 09:12 · 4 msgs');
+		expect(
+			conversationConfirmLabel(
+				conversationFrom('2026-09-27T07:30:00', {
+					message_count: 2,
+					archived_at: '2026-09-27T09:12:00'
+				}),
+				now
+			)
+		).toBe('Archived · today 07:30 · 2 msgs');
+	});
+
+	it('lists the active conversation first, then the rest newest first, whatever order they arrive in', () => {
+		const active = conversationFrom('2026-09-20T10:00:00', { id: 'active' });
+		const newer = conversationFrom('2026-09-26T10:00:00', {
+			id: 'newer',
+			archived_at: '2026-09-27T08:00:00'
+		});
+		const older = conversationFrom('2026-09-24T10:00:00', {
+			id: 'older',
+			archived_at: '2026-09-25T08:00:00'
+		});
+		const order = (list: ConversationItem[]) =>
+			conversationMenuOrder(list, 'active').map((conversation) => conversation.id);
+
+		expect(order([older, active, newer])).toEqual(['active', 'newer', 'older']);
+		expect(order([newer, older, active])).toEqual(['active', 'newer', 'older']);
 	});
 });

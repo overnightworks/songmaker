@@ -55,7 +55,10 @@
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
 	import {
+		conversationConfirmLabel,
 		conversationLineLabel,
+		conversationMenuOrder,
+		conversationMessageCountLabel,
 		conversationRowLabel,
 		cowriterTurnFailureLabel,
 		cowriterHeaderLabel,
@@ -808,6 +811,8 @@
 		)
 	);
 
+	const menuConversations = $derived(conversationMenuOrder(conversations, activeConversationId));
+
 	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
 		event.stopPropagation();
 		conversationMenuOpen = !conversationMenuOpen;
@@ -923,7 +928,7 @@
 						onclick={() => chooseFromConversationMenu(openMemory)}
 						>{COWRITER_MEMORY_LABEL}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
-					{#each conversations as conv (conv.id)}
+					{#each menuConversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
 							<button
 								type="button"
@@ -932,10 +937,7 @@
 								onclick={() => chooseFromConversationMenu(() => openConversation(conv))}
 							>
 								<span class="conv-title">{conversationRowLabel(conv, new Date())}</span>
-								<span class="conv-meta">
-									{conv.message_count} msg{conv.message_count === 1 ? '' : 's'}
-									{#if conv.archived_at}· archived{/if}
-								</span>
+								<span class="conv-meta">{conversationMessageCountLabel(conv.message_count)}</span>
 							</button>
 							<button
 								type="button"
@@ -955,7 +957,7 @@
 	{#if conversationAwaitingDelete}
 		<ConfirmDeleteDialog
 			title={COWRITER_DELETE_CONVERSATION_TITLE}
-			items={[conversationRowLabel(conversationAwaitingDelete, new Date())]}
+			items={[conversationConfirmLabel(conversationAwaitingDelete, new Date())]}
 			warning={COWRITER_DELETE_CONVERSATION_WARNING}
 			onconfirm={confirmDelete}
 			oncancel={closeDeleteConfirm}
