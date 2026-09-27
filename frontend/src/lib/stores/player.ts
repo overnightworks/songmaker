@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { ApiError, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, describeFailure, handleSessionLost } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -972,6 +972,8 @@ export function escapeNowPlaying(): void {
 	closeNowPlaying();
 }
 
+const PLAYBACK_FAILED_TOAST = 'Playback failed';
+
 // The single playback entry point for a take row (TakesList, TakeStrip):
 // toggles pause if the row's take is already playing, otherwise starts it
 // through the active queue-playback mode (stream or classic), reporting any
@@ -994,7 +996,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 		setQueueContext(albumId ? { type: 'album', albumId } : { type: 'library' });
 		playGeneration(gen, song, { restart: true });
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Playback failed', 'error');
+		addToast(describeFailure(e, PLAYBACK_FAILED_TOAST), 'error');
 	}
 }
 

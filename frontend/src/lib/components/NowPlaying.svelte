@@ -42,7 +42,7 @@
 	import { libraryTakePool, type LibraryTakePool } from '$lib/stores/playbackSettings';
 	import { setKeep, setPick } from '$lib/stores/takeActions';
 	import { addToast } from '$lib/stores/toast';
-	import { ApiError } from '$lib/api/fetch';
+	import { describeFailure, NetworkError } from '$lib/api/fetch';
 	import { isEditableElement } from '$lib/utils/escape-level-up';
 	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
@@ -53,6 +53,8 @@
 	// wiring — every one of its actions is a player-store action, so the mount
 	// site only has to say which take is playing.
 	let { info }: { info: PlaybackInfo } = $props();
+
+	const TAKE_DETAILS_LOAD_FAILED = 'Failed to load take details';
 
 	// Seeded once from the shared request store, not bound to it: a take-row
 	// click (playTakeAndShowNowPlaying) leaves it on 'take' before opening
@@ -124,10 +126,8 @@
 		const trackedGenerationId = info.generation.id;
 		void trackedGenerationId;
 		void ensureGenerationsLoaded(songId).catch((err: unknown) => {
-			addToast(
-				err instanceof ApiError ? err.detail || err.message : 'Failed to load take details',
-				'error'
-			);
+			if (err instanceof NetworkError) return;
+			addToast(describeFailure(err, TAKE_DETAILS_LOAD_FAILED), 'error');
 		});
 	});
 

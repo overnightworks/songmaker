@@ -1,13 +1,15 @@
 import { get, writable } from 'svelte/store';
 
+import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import { offline } from '$lib/stores/connectivity';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 
-type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error';
+type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
 
 type RailSearchPageHref =
 	| '/'
@@ -67,6 +69,8 @@ interface RailSearchState {
 	hits: LibrarySearchHit[];
 }
 
+const SEARCH_FAILED_MESSAGE = 'Search failed';
+
 const SETTINGS_SECTION = 'Settings';
 
 const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
@@ -104,6 +108,7 @@ export const railSearch = writable<RailSearchState>({ ...EMPTY_RAIL_SEARCH });
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchGeneration = 0;
+let stopAwaitingReconnect: (() => void) | null = null;
 
 export function syncRailSearch(rawQuery: string): void {
 	const query = rawQuery.trim();
@@ -195,6 +200,8 @@ function isRailSearchUnderwayFor(query: string): boolean {
 }
 
 function cancelPendingRailSearch(): void {
+	stopAwaitingReconnect?.();
+	stopAwaitingReconnect = null;
 	if (searchTimer === null) return;
 	clearTimeout(searchTimer);
 	searchTimer = null;
@@ -220,13 +227,32 @@ async function runRailSearch(query: string): Promise<void> {
 		railSearch.set({ query, status: 'ready', error: null, hits: response.items });
 	} catch (error) {
 		if (generation !== searchGeneration) return;
+		if (error instanceof NetworkError) {
+			railSearch.set({ query, status: 'unreachable', error: null, hits: [] });
+			searchAgainOnReconnect();
+			return;
+		}
 		railSearch.set({
 			query,
 			status: 'error',
-			error: error instanceof Error ? error.message : 'Search failed',
+			error: describeFailure(error, SEARCH_FAILED_MESSAGE),
 			hits: []
 		});
 	}
+}
+
+// A search the network swallowed is not this panel's to word: the one
+// offline strip says it (#1039), and the search runs again by itself once
+// the connection that dropped is back.
+function searchAgainOnReconnect(): void {
+	let droppedSinceFailure = false;
+	stopAwaitingReconnect = offline.subscribe((isOffline) => {
+		if (isOffline) {
+			droppedSinceFailure = true;
+			return;
+		}
+		if (droppedSinceFailure) retryRailSearch();
+	});
 }
 
 type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord' | 'detailParts'> & {

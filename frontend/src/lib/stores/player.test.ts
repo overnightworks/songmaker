@@ -3072,16 +3072,26 @@ describe('playTake', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
-	it('reports a generic toast when the queue-stream path rejects a non-Error value', async () => {
+	it.each([
+		{ failure: 'a non-Error value', thrown: 'offline', toast: 'Playback failed' },
+		{
+			failure: 'a browser error',
+			thrown: new TypeError('Failed to fetch'),
+			toast: 'Playback failed'
+		},
+		{
+			failure: 'a refusal with a reason',
+			thrown: new ApiError(409, 'Take is still rendering', '/api/generations/g1'),
+			toast: 'Take is still rendering'
+		}
+	])('names $failure as $toast, never browser text', async ({ thrown, toast }) => {
 		vi.mocked(audioPlayer.load).mockImplementationOnce(() => {
-			throw 'offline';
+			throw thrown;
 		});
 
 		await playTake(makeGen(genDefaults), makeSong(queuedSongDefaults()));
 
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ type: 'error', message: 'Playback failed' })
-		]);
+		expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message: toast })]);
 	});
 });
 

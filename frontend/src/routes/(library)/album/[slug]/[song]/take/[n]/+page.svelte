@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path, and the URL is already a resolved library address built by songRoutePath/albumRoutePath */
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { describeFailure } from '$lib/api/fetch';
 	import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 	import { openTakeAddress } from '$lib/stores/libraryContext';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
@@ -54,7 +55,7 @@
 			addressState = address === 'found' ? 'open' : address;
 		} catch (err) {
 			if (request !== openRequests) return;
-			failure = err instanceof Error ? err.message : UNREACHABLE_TAKE_MESSAGE;
+			failure = describeFailure(err, UNREACHABLE_TAKE_MESSAGE);
 			addressState = 'unreachable';
 		}
 	}
