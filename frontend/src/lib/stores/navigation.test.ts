@@ -1467,6 +1467,31 @@ describe('full Now Playing owns one history entry', () => {
 		});
 	});
 
+	it('a reload on a sheet entry over Now Playing steps off both entries onto the playlist', async () => {
+		await openPlaylist('p1');
+		const below = history.state.index;
+		openNowPlaying('take');
+		const sheet = historyLayerState('a-sheet', false);
+		const leaveSheetOwner = sheet.subscribe(() => undefined);
+		sheet.set(true);
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+
+		reloadBeforeNavigationStarts();
+		stopNavigation = initNavigation();
+
+		await vi.waitFor(() => {
+			expect(history.state.index).toBe(below);
+			expect(currentLibraryHistoryState()).toBe(history.state);
+		});
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(libraryShown()).toEqual({
+			collection: { kind: 'playlist', id: 'p1' },
+			songId: null,
+			surface: 'detail'
+		});
+		leaveSheetOwner();
+	});
+
 	it('stays on the playlist Back reaches from the Now Playing entry a reload left before navigation started', async () => {
 		await openPlaylist('p1');
 		const below = history.state.index;

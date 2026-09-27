@@ -637,6 +637,7 @@ function topHistoryLayer(): HistoryLayer | undefined {
 function popsHistoryLayers(state: unknown): boolean {
 	if (ownLayerStepBacks > 0) {
 		ownLayerStepBacks -= 1;
+		stepOffStackedStaleLayerEntry(state);
 		return true;
 	}
 	const landing = isLibraryHistoryState(state) ? state.index : -1;
@@ -655,6 +656,16 @@ function popsHistoryLayers(state: unknown): boolean {
 		return true;
 	}
 	return lowestLeft?.base.index === landing;
+}
+
+// Layers stack (a menu over Now Playing), so the last of this module's own
+// step-backs off a stale layer entry -- after a reload on the top one -- can
+// land on the stale entry of the layer below, and steps on until it reaches
+// the library.
+function stepOffStackedStaleLayerEntry(state: unknown): void {
+	if (ownLayerStepBacks > 0) return;
+	const staleLanding = staleLayerEntryLanding(state);
+	if (staleLanding) stepBackOnto(staleLanding);
 }
 
 // An entry marked as a layer that no open layer owns -- left behind by a
