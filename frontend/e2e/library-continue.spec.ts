@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
 import {
+	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
 	openLibraryWall,
@@ -11,7 +12,9 @@ import {
 import { readSeededLibrary } from './seed';
 
 /**
- * A full green suite run measures 39 requests on desktop and 44 on mobile.
+ * A full green suite run measured 39 requests on desktop and 44 on mobile
+ * before the return to the foreground on Home fetched Continue once more.
+ * Continue is never cached beyond one showing of Home (#1077).
  * Since the album row opens the song (#1010), the flow pays for the song
  * page's own loads (the song, its versions, its active and last failed take,
  * models, LoRAs) before it plays the take. Earlier flows create enough albums
@@ -20,11 +23,11 @@ import { readSeededLibrary } from './seed';
  * new round trips are a regression to find rather than a budget to raise.
  */
 const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 42,
-	mobile: 45
+	desktop: 43,
+	mobile: 46
 };
 
-test('Continue shows up to six tagged entries and moves a played song to the front after reload', async ({
+test('Continue shows up to six tagged entries, follows a listen made elsewhere on a return to the foreground, and moves a played song to the front after reload', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -73,6 +76,35 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 		expect.arrayContaining(['Album'])
 	);
 
+	// Home stays open while the same musician listens somewhere else; the app
+	// coming back to the foreground must show that, not the list it opened with.
+	const listenElsewhere = await page.request.post(`/api/songs/${listenedSong.id}/listen`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(listenElsewhere.status()).toBe(200);
+	const continueAfterForeground = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'GET' &&
+			new URL(response.url()).pathname === '/api/library/continue'
+	);
+	await page.evaluate(() => {
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		document.dispatchEvent(new Event('visibilitychange'));
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+		document.dispatchEvent(new Event('visibilitychange'));
+	});
+	expect((await continueAfterForeground).status()).toBe(200);
+	await expect(
+		continueRow.getByRole('button', { name: listenedSongLabel, exact: true })
+	).toBeVisible();
+	expect(continueRequests).toBe(2);
+	const afterForeground = await entries.evaluateAll((buttons) =>
+		buttons.map((button) => button.getAttribute('aria-label'))
+	);
+	expect(afterForeground).not.toEqual(before);
+	expect(afterForeground.slice(0, 2)).toContain(listenedSongLabel);
+	await page.evaluate(() => Reflect.deleteProperty(document, 'visibilityState'));
+
 	const surface = workspace(page);
 	await surface
 		.locator('.library-wall .tile-grid')
@@ -101,7 +133,7 @@ test('Continue shows up to six tagged entries and moves a played song to the fro
 
 	await openLibraryWall(page, shell);
 	await expect(entries.first()).toBeVisible();
-	expect(continueRequests).toBe(2);
+	expect(continueRequests).toBe(3);
 	const afterSpaReturn = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
