@@ -125,15 +125,20 @@ export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
 	'This take no longer exists — opened the song instead';
 
 // A collection header's play circle and the shuffle square beside it name
-// what they start by its kind: "Play album", "Shuffle playlist". Every
-// surface that renders the header, and every flow that finds it by name,
-// builds the label here.
+// what they do to it by its kind: "Play album", "Pause playlist", "Shuffle
+// album". Every surface that renders the header, and every flow that finds it
+// by name, builds the label here.
 export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
 const COLLECTION_PLAY_ACTION = 'Play';
+const COLLECTION_PAUSE_ACTION = 'Pause';
 const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
 
 export function collectionPlayLabel(kind: CollectionPlayKind): string {
 	return `${COLLECTION_PLAY_ACTION} ${kind}`;
+}
+
+export function collectionPauseLabel(kind: CollectionPlayKind): string {
+	return `${COLLECTION_PAUSE_ACTION} ${kind}`;
 }
 
 export function collectionShuffleLabel(kind: CollectionPlayKind): string {

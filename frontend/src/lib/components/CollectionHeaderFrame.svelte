@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import {
+		collectionPauseLabel,
 		collectionPlayLabel,
 		collectionShuffleLabel,
 		type CollectionPlayKind
@@ -15,7 +16,13 @@
 		initials: string;
 		artFill: string | null;
 		kind: CollectionPlayKind;
-		onplay: () => void;
+		/** Whether this collection is sounding, so the circle offers to pause it. */
+		playing: boolean;
+		/**
+		 * The circle's action; null while the collection has nothing to start,
+		 * which dims the circle and the shuffle square alike.
+		 */
+		onplay: (() => void) | null;
 		onshuffle?: () => void;
 		titleArea: Snippet;
 		actions?: Snippet;
@@ -30,12 +37,15 @@
 		initials,
 		artFill,
 		kind,
+		playing,
 		onplay,
 		onshuffle,
 		titleArea,
 		actions,
 		coverFallback
 	}: Props = $props();
+
+	const playLabel = $derived(playing ? collectionPauseLabel(kind) : collectionPlayLabel(kind));
 </script>
 
 <div class="collection-header">
@@ -58,17 +68,19 @@
 			type="button"
 			class="play-circle"
 			data-hitbox="frequent"
-			onclick={onplay}
-			aria-label={collectionPlayLabel(kind)}
-			title={collectionPlayLabel(kind)}
+			disabled={!onplay}
+			onclick={() => onplay?.()}
+			aria-label={playLabel}
+			title={playLabel}
 		>
-			<Icon name="play" size={22} />
+			<Icon name={playing ? 'pause' : 'play'} size={22} />
 		</button>
 		{#if onshuffle}
 			<button
 				type="button"
 				class="shuffle-btn"
 				data-hitbox="frequent"
+				disabled={!onplay}
 				onclick={onshuffle}
 				aria-label={collectionShuffleLabel(kind)}
 				title={collectionShuffleLabel(kind)}
@@ -142,7 +154,7 @@
 		color: #fff;
 	}
 
-	.play-circle:hover {
+	.play-circle:hover:not(:disabled) {
 		box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 45%, transparent);
 	}
 
@@ -155,8 +167,13 @@
 		color: var(--text-muted);
 	}
 
-	.shuffle-btn:hover {
+	.shuffle-btn:hover:not(:disabled) {
 		color: var(--primary);
+	}
+
+	.play-circle:disabled,
+	.shuffle-btn:disabled {
+		opacity: 0.4;
 	}
 
 	@media (max-width: 768px) {

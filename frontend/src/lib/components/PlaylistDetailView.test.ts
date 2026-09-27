@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import {
+	collectionPauseLabel,
 	collectionPlayLabel,
 	collectionShuffleLabel,
 	LIBRARY_RETRY_LABEL,
@@ -66,6 +67,7 @@ vi.mock('$lib/stores/navigation', () => ({
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
@@ -421,6 +423,57 @@ describe('PlaylistDetailView header play', () => {
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 
+	it('pauses the playlist from its circle while it plays, keeps its mark, and resumes on the next tap', async () => {
+		const pause = vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
+			audioPlayer.status = 'paused';
+		});
+		const resume = vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
+			audioPlayer.status = 'playing';
+		});
+		onTestFinished(() => {
+			pause.mockRestore();
+			resume.mockRestore();
+		});
+		const target = await renderTwoEntryPlaylist();
+		const header = requireElement(target, '.collection-header');
+		getByRoleButton(header, collectionPlayLabel('playlist')).click();
+		await tick();
+		const queueBeforePause = get(queueContext);
+
+		getByRoleButton(header, collectionPauseLabel('playlist')).click();
+		await tick();
+
+		expect(audioPlayer.status).toBe('paused');
+		expect(
+			findElementByRoleAndName(target.querySelectorAll('.entry-row')[0], 'img', PLAYING_MARK_LABEL)
+		).not.toBeNull();
+		getByRoleButton(header, collectionPlayLabel('playlist')).click();
+		await tick();
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(getByRoleButton(header, collectionPauseLabel('playlist'))).not.toBeNull();
+		expect(get(queueContext)).toBe(queueBeforePause);
+	});
+
+	it('dims play and shuffle on an empty playlist, and a tap keeps the running queue', async () => {
+		setShuffle(true);
+		const running = { type: 'album' as const, albumId: 'a-running' };
+		queueContext.set(running);
+		const target = await renderPlaylist([]);
+		const header = requireElement(target, '.collection-header');
+		const buttons = [collectionPlayLabel('playlist'), collectionShuffleLabel('playlist')].map(
+			(label) => getByRoleButton(header, label)
+		);
+
+		for (const button of buttons) button.click();
+		await tick();
+
+		expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
+		expect(get(queueContext)).toBe(running);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(get(shuffleEnabled)).toBe(true);
+	});
+
 	it.each([
 		['loading', () => new Promise<PlaylistDetailItem>(() => {})],
 		['error', () => Promise.reject(new ApiError(429, 'Too many requests', '/api/playlists/p2'))]
@@ -471,12 +524,9 @@ describe('PlaylistDetailView row actions', () => {
 		expect(get(nowPlayingOpen)).toBe(false);
 	});
 
-	it.each([
-		['playing', true],
-		['paused', false]
-	] as const)(
+	it.each(['playing', 'paused'] as const)(
 		'marks the row the transport holds while %s, and only that row',
-		async (status, marked) => {
+		async (status) => {
 			const target = await renderTwoEntryPlaylist();
 			const [tide, ebb] = target.querySelectorAll<HTMLElement>('.entry-row');
 			requireElement<HTMLButtonElement>(ebb, '.entry-info').click();
@@ -484,7 +534,7 @@ describe('PlaylistDetailView row actions', () => {
 			audioPlayer.status = status;
 			await tick();
 
-			expect(findElementByRoleAndName(ebb, 'img', PLAYING_MARK_LABEL) !== null).toBe(marked);
+			expect(findElementByRoleAndName(ebb, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
 			expect(ebb.classList.contains('current')).toBe(true);
 			expect(findElementByRoleAndName(tide, 'img', PLAYING_MARK_LABEL)).toBeNull();
 			expect(tide.classList.contains('current')).toBe(false);
