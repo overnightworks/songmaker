@@ -11,6 +11,8 @@ type StreamEndReason = 'normal' | 'window-end';
 
 type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
 
+type FailureKind = 'stalled' | 'failed';
+
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
 // restoreCallbacks move the whole set atomically so a new owner never
@@ -68,6 +70,7 @@ class AudioPlayer {
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 	private recoveryAttempts = 0;
 	private pendingRecoverySeek: number | null = null;
+	private failure: FailureKind | null = null;
 	private lastObservedTime = 0;
 	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
 	private lastCheckedTime = 0;
@@ -529,7 +532,7 @@ class AudioPlayer {
 		const bufferedAtStall = bufferedUntil(el);
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
-			if (this.status !== 'buffering') return;
+			if (this.status !== 'buffering' && this.status !== 'loading') return;
 			if (bufferedUntil(el) > bufferedAtStall) this.scheduleStallRecovery();
 			else this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
@@ -547,13 +550,18 @@ class AudioPlayer {
 	// the stalled message.
 	private giveUpOnStall(): void {
 		this.stopProgressWatchdog();
-		this.status = 'error';
-		this.error = ERROR_MSG_STALLED;
+		this.fail('stalled', ERROR_MSG_STALLED);
 		if (this.audio) this.pauseElement(this.audio);
 	}
 
+	private fail(kind: FailureKind, message: string): void {
+		this.status = 'error';
+		this.failure = kind;
+		this.error = message;
+	}
+
 	private get gaveUpOnStall(): boolean {
-		return this.status === 'error' && this.error === ERROR_MSG_STALLED;
+		return this.status === 'error' && this.failure === 'stalled';
 	}
 
 	private resumeAfterGivingUp(): void {
@@ -614,6 +622,15 @@ class AudioPlayer {
 	private pauseElement(el: HTMLAudioElement): void {
 		if (!el.paused) this.pauseRequestedByApp = true;
 		el.pause();
+	}
+
+	// A reload whose data stops arriving is a stall of its own: watching it the
+	// way a buffering stall is watched lets it spend the recovery budget and end
+	// in Retry instead of loading forever.
+	private reloadSource(el: HTMLAudioElement, url: string): void {
+		this.pauseElement(el);
+		this.loadSource(el, this.urlWithRecovery(url));
+		this.scheduleStallRecovery();
 	}
 
 	// Loading a source drops the 'pause' event an app pause just queued, so the
@@ -697,8 +714,7 @@ class AudioPlayer {
 			generationId: this.current.generation.id
 		});
 
-		this.pauseElement(el);
-		this.loadSource(el, this.urlWithRecovery(this.currentUrl));
+		this.reloadSource(el, this.currentUrl);
 	}
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
@@ -794,8 +810,7 @@ class AudioPlayer {
 				});
 				return;
 			}
-			this.status = 'error';
-			this.error = ERROR_MSG_NOT_FOUND;
+			this.fail('failed', ERROR_MSG_NOT_FOUND);
 			return;
 		}
 
@@ -805,9 +820,7 @@ class AudioPlayer {
 			absoluteTime
 		});
 		this.streamEngine.resumeAt(absoluteTime);
-		this.pauseElement(el);
-		const url = state.manifest.stream_url;
-		this.loadSource(el, this.urlWithRecovery(url));
+		this.reloadSource(el, state.manifest.stream_url);
 	}
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
@@ -831,8 +844,7 @@ class AudioPlayer {
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
-		this.status = 'error';
-		this.error = ERROR_MSG_GENERIC;
+		this.fail('failed', ERROR_MSG_GENERIC);
 
 		const target = this.current;
 		const url = this.currentUrl;
