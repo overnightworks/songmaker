@@ -61,13 +61,15 @@ vi.mock('$lib/services/offline', () => ({
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
-vi.mock('$lib/stores/navigation', () => ({
+vi.mock('$lib/stores/navigation', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
 	selectSong: vi.fn()
 }));
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import {
@@ -408,6 +410,33 @@ describe('PlaylistDetailView row overflow menu', () => {
 		expect(selectSong).toHaveBeenCalledWith('s1');
 		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
 	});
+});
+
+let openSongSawHistoryAt: number | undefined;
+
+describeBackClosesOverlay({
+	name: 'the playlist entry menu',
+	render: async () => {
+		vi.mocked(selectSong).mockImplementation(async () => {
+			openSongSawHistoryAt = plannedHistoryIndex();
+		});
+		return renderTwoEntryPlaylist();
+	},
+	open: (target) => requireElement<HTMLButtonElement>(target, '.overflow-btn').click(),
+	isShown: (target) => target.querySelector('.entry-overflow-menu') !== null,
+	closeWays: [
+		{ way: 'a tap outside', close: () => document.body.click() },
+		{
+			way: 'Escape',
+			close: () =>
+				document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		},
+		{
+			way: 'choosing Open song in editor',
+			close: (target) => requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click(),
+			actionSawHistoryAt: () => openSongSawHistoryAt
+		}
+	]
 });
 
 async function renderPlaylist(entries: PlaylistEntryItem[]): Promise<HTMLElement> {

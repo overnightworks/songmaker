@@ -2,7 +2,10 @@ import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'sve
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
-vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
+vi.mock('$lib/stores/navigation', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
+	openLibraryWall: vi.fn()
+}));
 
 import { get } from 'svelte/store';
 import {
