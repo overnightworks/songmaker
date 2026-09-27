@@ -1,10 +1,10 @@
 // Leaving the co-writer mid-reply and coming back (issue #1014, operator
 // ruling 26.09.2026: "Wechseln sollte keinen Einfluss darauf haben"). The
 // message sent stays on screen with the thinking line, and the reply appears
-// once the turn completes — without sending again. Mobile project only: the
-// co-writer is a screen of its own on the phone (#990), so Back really tears
-// the panel down and opening it again mounts a fresh one, which is exactly
-// the return this pins.
+// once the turn completes — without sending again; an unsent draft is still
+// in the composer. Mobile project only: the co-writer is the phone song
+// page's middle tab (#1016), and switching to Edit and Takes and back is the
+// return this pins.
 //
 // CI's e2e stack configures no co-writer provider, so a real turn ends at
 // once with its route failure and cannot be left while it runs. The turn and
@@ -31,8 +31,8 @@
 import { expect, test, type Page, type Route } from '@playwright/test';
 import {
 	COWRITER_TURN_PATH,
-	EDITOR_COWRITER_BACK_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_TAB_TAKES_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL
 } from '../src/lib/constants';
 import { nameStartingWith, workspace } from './helpers';
@@ -111,7 +111,18 @@ async function openCowriterOnPickedSong(page: Page): Promise<void> {
 		.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) })
 		.click();
 	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-	await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+	await showCowriterTab(page);
+}
+
+async function showCowriterTab(page: Page): Promise<void> {
+	await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+}
+
+async function lookAtEditAndTakes(page: Page): Promise<void> {
+	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
+	await page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) }).click();
+	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
 }
 
 test.describe('co-writer return at phone width', () => {
@@ -119,7 +130,7 @@ test.describe('co-writer return at phone width', () => {
 		page,
 		isMobile
 	}) => {
-		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		let turnState: TurnState = 'idle';
 		let completeTurn = (): void => {};
 		const turnCompleted = new Promise<void>((resolve) => {
@@ -152,10 +163,9 @@ test.describe('co-writer return at phone width', () => {
 		await expect(page.getByText(THINKING)).toBeVisible();
 		await expect.poll(() => turnState).toBe('running');
 
-		await page.getByRole('button', { name: EDITOR_COWRITER_BACK_LABEL }).click();
-		await expect(page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL })).toBeVisible();
+		await lookAtEditAndTakes(page);
 
-		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		await showCowriterTab(page);
 		await expect(page.getByText(SENT)).toBeVisible();
 		await expect(page.getByText(THINKING)).toBeVisible();
 		await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled();
@@ -168,11 +178,27 @@ test.describe('co-writer return at phone width', () => {
 		await expect(page.getByText(SENT)).toHaveCount(1);
 	});
 
+	test('an unsent message waits in the composer while Edit and Takes are looked at', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
+		const draft = 'Noch nicht gesendet: der zweite Vers';
+		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
+
+		await openCowriterOnPickedSong(page);
+		await page.getByPlaceholder(/Ask the co-writer/).fill(draft);
+		await lookAtEditAndTakes(page);
+		await showCowriterTab(page);
+
+		await expect(page.getByPlaceholder(/Ask the co-writer/)).toHaveValue(draft);
+	});
+
 	test('retrying the unanswered message it came back to shows it once when the retry fails too', async ({
 		page,
 		isMobile
 	}) => {
-		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		let retried = false;
 		await answerConversation(page, () => ({ messages: [sentMessage], turnRunning: false }));
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
@@ -198,7 +224,7 @@ test.describe('co-writer return at phone width', () => {
 		page,
 		isMobile
 	}) => {
-		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const older = 'Erste Nachricht, die scheitert';
 		const newer = 'Zweite Nachricht, die auch scheitert';
 		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
@@ -229,7 +255,7 @@ test.describe('co-writer return at phone width', () => {
 		page,
 		isMobile
 	}) => {
-		test.skip(!isMobile, 'The co-writer is its own screen only on the phone; see the file header.');
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const failed = 'Erste Nachricht, die scheitert';
 		const stored: ChatMessage[] = [];
 		await answerConversation(page, () => ({ messages: stored, turnRunning: false }));

@@ -433,7 +433,7 @@ describe('applyLibraryHistory', () => {
 
 	it.each([
 		['write', 'edit'],
-		['chat', 'edit'],
+		['chat', 'cowriter'],
 		['generations', 'takes']
 	] as const)('restores an old %s history entry on the %s tab', async (legacy, restored) => {
 		detailTab.set(restored === 'edit' ? 'takes' : 'edit');
@@ -837,6 +837,7 @@ describe('openSongAddress', () => {
 
 	it.each([
 		['takes', 'takes'],
+		['cowriter', 'cowriter'],
 		['generations', 'takes'],
 		['write', 'edit']
 	] as const)(
