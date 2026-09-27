@@ -10,11 +10,11 @@ import {
 } from './cowriter-ui';
 
 describe('co-writer provider copy', () => {
-	it('uses the active provider instead of a hardcoded Claude name', () => {
+	it('names the active provider by its display name in the header, thinking and unavailable copy', () => {
 		expect(cowriterHeaderLabel('grok', 'grok-4.6')).toBe('Grok · grok-4.6');
-		expect(cowriterThinkingLabel('codex')).toBe('codex is thinking...');
-		expect(cowriterUnavailableLabel('grok')).toBe('grok is currently unavailable');
-		expect(cowriterThinkingLabel('claude')).not.toContain('Claude Co-Writer');
+		expect(cowriterThinkingLabel('claude')).toBe('Claude is thinking…');
+		expect(cowriterThinkingLabel('codex')).toBe('Codex is thinking…');
+		expect(cowriterUnavailableLabel('grok')).toBe('Grok is currently unavailable');
 	});
 
 	it.each([

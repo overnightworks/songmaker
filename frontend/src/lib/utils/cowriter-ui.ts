@@ -39,11 +39,11 @@ export function cowriterToolCallTarget(
 }
 
 export function cowriterThinkingLabel(provider: string): string {
-	return `${provider} is thinking...`;
+	return `${providerDisplayName(provider)} is thinking…`;
 }
 
 export function cowriterUnavailableLabel(provider: string): string {
-	return `${provider} is currently unavailable`;
+	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
 export function providerDisplayName(provider: string): string {
