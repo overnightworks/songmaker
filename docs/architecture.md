@@ -993,10 +993,11 @@ not the whole browse page — a 200-song library would otherwise exceed the 120/
 IP limiter. The same three events reopen a dropped resource or job stream at once
 instead of waiting out its backoff (`watchReconnectOpportunities` in
 `sseReconnect.ts`), at most once per stream per `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS`
-(2 s, `ImmediateReopenGap`) — an event inside the gap is dropped whole: the
-stream keeps its backoff, and the revalidation and the restart of a failed
-bootstrap that event would start wait for the next event after the gap or for
-Retry, so switching apps back and forth cannot open dozens of streams — and that backoff never waits longer than 10 seconds, so a take
+(2 s, `ImmediateReopenGap`) — inside the gap a waiting stream keeps its
+backoff, so switching apps back and forth cannot open dozens of streams; the gap
+spaces only that reopen, so the event's debounced revalidation still runs, and so
+does the restart of a first sync that failed with a visible error, which has no
+backoff to wait on — and that backoff never waits longer than 10 seconds, so a take
 finished while the phone was away arrives within seconds of its return. Missed
 takes for other loaded songs arrive through EventSource replay. Song fetches run
 with bounded concurrency. A 404 drops the song from the loaded set instead of
