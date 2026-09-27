@@ -46,6 +46,7 @@ import {
 	libraryRootState,
 	libraryWallStateFrom,
 	rememberedSongTab,
+	remountLibraryHistory,
 	setLibrarySurface,
 	showSongTab,
 	snapshotLibraryHistory,
@@ -792,6 +793,15 @@ export function forgetHistoryLayers(): void {
 	libraryHistoryRunning = false;
 	historyLayers.length = 0;
 	ownLayerStepBacks = 0;
+}
+
+export function followBackIntoLibrary(): () => void {
+	function remountLibraryEntry(event: PopStateEvent): void {
+		if (!isLibraryHistoryState(event.state)) return;
+		void remountLibraryHistory(event.state, `${location.pathname}${location.search}`);
+	}
+	window.addEventListener('popstate', remountLibraryEntry);
+	return () => window.removeEventListener('popstate', remountLibraryEntry);
 }
 
 export function resetNavigationForTests(): void {
