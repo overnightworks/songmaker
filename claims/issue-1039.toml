@@ -1,0 +1,7 @@
+claim_id = "16eb8176ffa5478b8af65ae29688412a"
+agent = "claude-head"
+role = "builder"
+base = "faa8e23eefc103882610ea8b0a2c2d43a1fc37ca"
+branch = "claude/issue-1039-freeze-offline"
+scope = ["docs/design/song-page-phone.html", "docs/design/vocabulary.html"]
+opened_commit = "9ada235937a9ee17ad62191c7bee5070db76a18b"
