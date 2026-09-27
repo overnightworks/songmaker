@@ -908,9 +908,9 @@ describe('CoWriterPanel failed turns', () => {
 			'Grok: Route is unavailable.'
 		],
 		[
-			'the endpoint’s own failure as it is',
+			'the endpoint’s own failure after the panel’s provider',
 			{ type: 'error', status: 500, message: 'Chat request failed' },
-			'Chat request failed'
+			'Claude: Chat request failed'
 		]
 	] as Array<[string, CoWriterStreamEvent, string]>)(
 		'names %s below the retained user message',

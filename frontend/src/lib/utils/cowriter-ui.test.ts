@@ -21,10 +21,28 @@ describe('co-writer provider copy', () => {
 		expect(cowriterUnavailableLabel('grok')).toBe('Grok is currently unavailable');
 	});
 
-	it('names the provider in front of the reason its turn failed for', () => {
-		expect(cowriterTurnFailureLabel('claude', 'CLI is unavailable.')).toBe(
+	it.each([
+		[
+			'the provider its frame names',
+			{ provider: 'grok', reason: { message: 'Route is unavailable.' } },
+			'Grok: Route is unavailable.'
+		],
+		[
+			'the panel’s provider when the frame names none',
+			{ reason: { message: 'CLI is unavailable.' } },
 			'Claude: CLI is unavailable.'
-		);
+		],
+		[
+			'the panel’s provider in front of the endpoint’s own message',
+			{ message: 'Chat request failed' },
+			'Claude: Chat request failed'
+		]
+	])('names %s in front of the reason a turn failed for', (_case, frame, label) => {
+		expect(cowriterTurnFailureLabel(frame, 'claude')).toBe(label);
+	});
+
+	it('names no failure for a frame that carries no reason', () => {
+		expect(cowriterTurnFailureLabel({ provider: 'grok' }, 'claude')).toBeNull();
 	});
 
 	it.each([
