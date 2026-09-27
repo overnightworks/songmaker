@@ -410,6 +410,7 @@ export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
+export const RAIL_SEARCH_CLEAR_LABEL = 'Clear search';
 export const LIBRARY_RETRY_LABEL = 'Retry';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;

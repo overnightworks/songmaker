@@ -3,6 +3,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_NAV_LABEL,
+	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SEARCH_LABEL
 } from '../src/lib/constants';
 import { FlowGuard, appBar, nameStartingWith, workspace } from './helpers';
@@ -16,6 +17,16 @@ async function openRail(page: Page, mobile: boolean): Promise<Locator> {
 	if (mobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 	const scope = mobile ? page.getByRole('dialog', { name: RAIL_DRAWER_LABEL }) : page;
 	return scope.getByRole('navigation', { name: RAIL_NAV_LABEL });
+}
+
+const PHONE_SEARCH_BAR_PX = 44;
+const PHONE_RESULT_ROW_MIN_PX = 48;
+const QUERY_MATCHING_EVERY_SEEDED_ALBUM = 'E2E';
+
+async function expectPhoneBarHeight(rail: Locator, mobile: boolean): Promise<void> {
+	if (!mobile) return;
+	const bar = await rail.locator('.rail-search').boundingBox();
+	expect(bar?.height).toBe(PHONE_SEARCH_BAR_PX);
 }
 
 test('the rail search finds a server song and closes the drawer on desktop and 375 px', async ({
@@ -36,13 +47,55 @@ test('the rail search finds a server song and closes the drawer on desktop and 3
 	await expect(surface.locator('.search')).toHaveCount(0);
 
 	await search.fill(library.secondAlbumSongTitle);
-	await expect(rail.locator('[aria-label="Library results"]')).toBeVisible();
+	await expect(rail.locator('[aria-label="Songs results"]')).toBeVisible();
 	await rail.getByRole('button', { name: nameStartingWith(library.secondAlbumSongTitle) }).click();
 	const songHeading = isMobile ? appBar(page) : surface;
 	await expect(
 		songHeading.getByRole('heading', { name: library.secondAlbumSongTitle })
 	).toBeVisible();
 	if (isMobile) await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	guard.assertClean();
+});
+
+test('the rail search tells an album from its songs and finds a settings page in one bar at desktop and 390 px', async ({
+	page,
+	isMobile
+}) => {
+	await page.setViewportSize(isMobile ? { width: 390, height: 844 } : { width: 1440, height: 900 });
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+
+	await page.goto(`/album/${library.albumId}`);
+	const rail = await openRail(page, Boolean(isMobile));
+	const search = rail.getByRole('searchbox', { name: RAIL_SEARCH_LABEL });
+	await expectPhoneBarHeight(rail, Boolean(isMobile));
+
+	await search.fill(QUERY_MATCHING_EVERY_SEEDED_ALBUM);
+	const albumResults = rail.locator('[aria-label="Albums results"]');
+	await expect(albumResults).toBeVisible();
+	await expectPhoneBarHeight(rail, Boolean(isMobile));
+	if (isMobile) {
+		const row = await albumResults.getByRole('button').first().boundingBox();
+		expect(row?.height).toBeGreaterThanOrEqual(PHONE_RESULT_ROW_MIN_PX);
+	}
+
+	await search.fill(library.albumTitle);
+	await expect(search).toHaveCSS('box-shadow', 'none');
+	const albums = rail.locator('[aria-label="Albums results"]');
+	await expect(
+		albums.getByRole('button', { name: nameStartingWith(library.albumTitle) })
+	).toContainText('Album ·');
+	await expect(rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })).toBeVisible();
+
+	await search.fill('gen');
+	const generation = rail
+		.locator('[aria-label="Pages results"]')
+		.getByRole('button', { name: nameStartingWith('Generation') });
+	await expect(generation).toContainText('Page · Settings');
+
+	await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
+	await expect(search).toHaveValue('');
+	await expect(search).toBeFocused();
 	guard.assertClean();
 });
 
