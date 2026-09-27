@@ -53,14 +53,20 @@
 		if (document.visibilityState === 'visible') void refreshItems();
 	}
 
+	function songOf(item: LibraryContinueItem): { id: string; title: string } | null {
+		return item.song_id ? { id: item.song_id, title: item.song_title ?? '' } : null;
+	}
+
 	function itemLabel(item: LibraryContinueItem): string {
-		return item.song_id
-			? `Open song ${item.song_title} in ${item.type} ${item.title}`
+		const song = songOf(item);
+		return song
+			? `Open song ${song.title} in ${item.type} ${item.title}`
 			: `Open ${item.type} ${item.title}`;
 	}
 
 	function openItem(item: LibraryContinueItem): void {
-		if (item.song_id) void selectSong(item.song_id);
+		const song = songOf(item);
+		if (song) void selectSong(song.id);
 		else if (item.type === 'album') void openAlbum(item.id);
 		else void openPlaylist(item.id);
 	}
@@ -102,7 +108,7 @@
 					>
 						<LibraryTileContent
 							title={item.title}
-							subtitle={item.song_title ?? ''}
+							subtitle={songOf(item)?.title ?? ''}
 							coverAlt={`${item.type} cover for ${item.title}`}
 							coverUrl={item.cover?.card ?? null}
 							playlistCovers={item.type === 'playlist' ? item.album_covers : null}
