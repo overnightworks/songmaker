@@ -26,6 +26,7 @@ import {
 	clearPointer,
 	injectHitboxStyles,
 	minHeightPx,
+	px,
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
@@ -184,6 +185,12 @@ const INVENTORY = [
 		name: 'playlist-remove',
 		selector: '.entry-overflow-item[data-hitbox="frequent"]',
 		text: PLAYLIST_ENTRY_REMOVE_LABEL,
+		component: 'PlaylistDetailView'
+	},
+	{
+		name: 'playlist-row',
+		selector: '.entry-info[data-hitbox="text"]',
+		shape: 'text',
 		component: 'PlaylistDetailView'
 	},
 	{
@@ -583,6 +590,18 @@ describe('frequent action hitboxes', () => {
 				}
 			}
 		}
+	});
+
+	it('leaves a playlist row no padding outside its play target', async () => {
+		const { root } = await renderInventory();
+		const row = root.querySelector('.entry-row');
+		if (!row) throw new Error('playlist row is missing');
+		injectComponentStyles(playlistDetailViewSource, 'PlaylistDetailView.svelte', row);
+
+		const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
+		expect([paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))).toEqual([
+			0, 0, 0, 0
+		]);
 	});
 
 	it('keeps reorder and remove on the same button hitbox for pointer and keyboard', async () => {
