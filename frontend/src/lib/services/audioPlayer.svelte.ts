@@ -40,7 +40,6 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 const AUDIO_URL_PREFIX = '/audio/';
 const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
-const ERROR_MSG_NETWORK = 'Network error. Check connection and retry.';
 const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const STALL_RECOVERY_MS = 5000;
 const MAX_RECOVERY_ATTEMPTS = 2;
@@ -866,7 +865,6 @@ class AudioPlayer {
 			return;
 		}
 		if (probe.status === 404) this.failure = { kind: 'failed', message: ERROR_MSG_NOT_FOUND };
-		else if (probe.status === 0) this.failure = { kind: 'failed', message: ERROR_MSG_NETWORK };
 		else if (probe.ok && mediaError)
 			this.failure = { kind: 'failed', message: decodeMediaError(mediaError) };
 	}
@@ -882,12 +880,12 @@ function bufferedUntil(el: HTMLAudioElement): number {
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
+// A lost network is left to the generic message: the one offline strip names
+// it (#1039), so the player adds no network wording of its own.
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:
 			return 'Playback aborted.';
-		case MediaError.MEDIA_ERR_NETWORK:
-			return ERROR_MSG_NETWORK;
 		case MediaError.MEDIA_ERR_DECODE:
 			return 'Audio file is corrupted.';
 		case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:

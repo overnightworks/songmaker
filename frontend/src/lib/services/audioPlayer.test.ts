@@ -1158,12 +1158,27 @@ describe('error handling', () => {
 		expect(audioPlayer.error).toMatch(/not found/i);
 	});
 
-	it('network failure (probe rejects) yields network error message', async () => {
-		fetchMock.mockRejectedValueOnce(new Error('offline'));
-		fakeAudio.fire('error');
-		await new Promise((r) => setTimeout(r, 0));
-		expect(audioPlayer.error).toMatch(/network/i);
-	});
+	it.each([
+		{
+			loss: 'the probe finding no network',
+			arrange: () => fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+		},
+		{
+			loss: 'the element reporting a network error',
+			arrange: () => {
+				fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+			}
+		}
+	])(
+		'adds no network text of its own after $loss — the offline strip says it',
+		async ({ arrange }) => {
+			arrange();
+			fakeAudio.fire('error');
+			await new Promise((r) => setTimeout(r, 0));
+			expect(audioPlayer.status).toBe('error');
+			expect(audioPlayer.error).toBe('Playback failed. Click play to retry.');
+		}
+	);
 
 	it('decodes MEDIA_ERR_DECODE', async () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_DECODE } as MediaError;
@@ -1184,13 +1199,6 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.error).toMatch(/aborted/i);
-	});
-
-	it('decodes MEDIA_ERR_NETWORK', async () => {
-		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
-		fakeAudio.fire('error');
-		await new Promise((r) => setTimeout(r, 0));
-		expect(audioPlayer.error).toMatch(/network/i);
 	});
 
 	it('unknown media error code falls back to generic message', async () => {
