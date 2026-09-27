@@ -842,6 +842,12 @@
 		cursor: pointer;
 	}
 
+	/* The global press scale would shrink the target mid-press and send a release
+	   near the row's edge to the row. */
+	.item-row .item-body:active:not(:disabled) {
+		transform: none;
+	}
+
 	.item-title {
 		flex: 1;
 		overflow: hidden;
