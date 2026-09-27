@@ -1,4 +1,3 @@
-import { makeSongSummary as songSummary } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -9,7 +8,11 @@ vi.mock('$lib/api/library', () => ({
 
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
 import {
-	firstRailSearchTarget,
+	buildAlbumSearchHit,
+	buildPlaylist,
+	buildSongSearchHit
+} from '$lib/components/shell/rail-test-fixtures';
+import {
 	groupRailSearchResults,
 	railSearch,
 	resetRailSearchForTests,
@@ -17,17 +20,6 @@ import {
 	syncRailSearch,
 	visibleRailSearchPages
 } from './railSearch';
-
-const playlist = {
-	id: 'p1',
-	title: 'Stadion nights',
-	slug: 'stadion-nights',
-	entry_count: 2,
-	is_shared: false,
-	share_slug: null,
-	album_covers: [],
-	created_at: '2026-01-01T00:00:00+00:00'
-};
 
 beforeEach(() => {
 	vi.useFakeTimers();
@@ -101,6 +93,23 @@ describe('syncRailSearch', () => {
 });
 
 describe('groupRailSearchResults', () => {
+	const vernissageState = {
+		query: 'verni',
+		status: 'ready' as const,
+		error: null,
+		hits: [
+			buildSongSearchHit({ id: 's1', title: 'After the Vernissage' }, 'Whoever You Are'),
+			buildAlbumSearchHit({
+				id: 'a1',
+				title: 'Vernissage',
+				song_count: 6,
+				cover: { card: '/covers/a1-card.webp', detail: '/covers/a1.webp' }
+			}),
+			buildSongSearchHit({ id: 's2', title: 'Vernissage' }, 'Vernissage')
+		]
+	};
+	const picks = buildPlaylist({ id: 'p1', title: 'Vernissage picks', entry_count: 9 });
+
 	it('excludes admin-only pages for non-administrators', () => {
 		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Admin');
 		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Cleanup');
@@ -109,37 +118,91 @@ describe('groupRailSearchResults', () => {
 		);
 	});
 
-	it('groups library, playlist, and page targets without giving a result two actions', () => {
-		const state = {
-			query: 'stadion',
-			status: 'ready' as const,
-			error: null,
-			hits: [
-				{
-					type: 'song' as const,
-					album_id: 'a1',
-					album_title: 'Anfield',
-					song: songSummary({
-						bpm: 120,
-						audio_duration: 180,
-						key_scale: 'Am',
-						generation_params: null,
-						share_slug: null,
-						best_scores: null,
-						best_rating: null,
-						cover: null
-					})
-				}
+	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
+		const pages = [
+			{ label: 'Vernissage guide', href: '/settings/playback', keywords: [] }
+		] as const;
+
+		const groups = groupRailSearchResults(vernissageState, [picks], pages);
+
+		expect(groups.map((group) => group.label)).toEqual(['Albums', 'Songs', 'Playlists', 'Pages']);
+		expect(groups.map((group) => group.results.map((result) => result.target))).toEqual([
+			[{ kind: 'album', id: 'a1' }],
+			[
+				{ kind: 'song', id: 's1' },
+				{ kind: 'song', id: 's2' }
+			],
+			[{ kind: 'playlist', id: 'p1' }],
+			[{ kind: 'page', href: '/settings/playback' }]
+		]);
+	});
+
+	it.each([
+		['an album', 'a1', 'Album', '6 songs'],
+		['a song', 's2', 'Song', 'Vernissage'],
+		['a playlist', 'p1', 'Playlist', '9 songs']
+	])('names %s by its kind word before its detail', (_, id, kindWord, detail) => {
+		const results = groupRailSearchResults(vernissageState, [picks]).flatMap(
+			(group) => group.results
+		);
+
+		expect(
+			results.find((result) => result.target.kind !== 'page' && result.target.id === id)
+		).toMatchObject({ kindWord, detail });
+	});
+
+	it('names a settings page as a Settings page and the library as a plain page', () => {
+		const settings = groupRailSearchResults({ ...vernissageState, query: 'gen', hits: [] }, []);
+		const library = groupRailSearchResults({ ...vernissageState, query: 'libr', hits: [] }, []);
+
+		expect(settings[0]?.results[0]).toMatchObject({
+			label: 'Generation',
+			kindWord: 'Page',
+			detail: 'Settings'
+		});
+		expect(library[0]?.results[0]).toMatchObject({
+			label: 'Library',
+			kindWord: 'Page',
+			detail: null
+		});
+	});
+
+	it('carries the picture that tells an album from a song of the same name', () => {
+		const results = groupRailSearchResults(vernissageState, [picks]).flatMap(
+			(group) => group.results
+		);
+
+		expect(results.map((result) => result.picture)).toEqual([
+			{ kind: 'album', cover: { card: '/covers/a1-card.webp', detail: '/covers/a1.webp' } },
+			{ kind: 'song', glyph: '♪' },
+			{ kind: 'song', glyph: '♪' },
+			{ kind: 'playlist', covers: [], cover: null }
+		]);
+	});
+
+	it.each([
+		[
+			'Vernissage',
+			'verni',
+			[
+				{ text: 'Verni', matched: true },
+				{ text: 'ssage', matched: false }
 			]
-		};
-		const pages = [{ label: 'Stadion guide', href: '/settings/playback', keywords: [] }] as const;
+		],
+		[
+			'After the Vernissage',
+			'VERNI',
+			[
+				{ text: 'After the ', matched: false },
+				{ text: 'Verni', matched: true },
+				{ text: 'ssage', matched: false }
+			]
+		],
+		['Playback', 'settings', [{ text: 'Playback', matched: false }]]
+	])('highlights the letters of %s that match %s', (label, query, parts) => {
+		const page = { label, href: '/settings/playback', keywords: ['settings'] } as const;
+		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
-		const groups = groupRailSearchResults(state, [playlist], pages);
-
-		expect(groups.map((group) => group.label)).toEqual(['Library', 'Playlists', 'Pages']);
-		expect(groups[0]?.results[0]?.target).toEqual({ kind: 'song', id: 's1' });
-		expect(groups[1]?.results[0]?.target).toEqual({ kind: 'playlist', id: 'p1' });
-		expect(groups[2]?.results[0]?.target).toEqual({ kind: 'page', href: '/settings/playback' });
-		expect(firstRailSearchTarget(state, [playlist], pages)).toEqual({ kind: 'song', id: 's1' });
+		expect(group?.results[0]?.labelParts).toEqual(parts);
 	});
 });

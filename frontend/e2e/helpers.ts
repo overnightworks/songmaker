@@ -72,9 +72,13 @@ export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
  * run directly against the database (`seedRunningGenerationJob`,
  * `failGenerationJob` in `seed.ts`), the same way the rail's filler albums
  * and the kinetic-strip takes do. Mobile-only, matching the spec's own
- * project restriction — no desktop number to carry.
+ * project restriction — no desktop number to carry. The flow has grown since:
+ * main's own Boot stack jobs measured 52, 54, 55, 55 and 55, and a lane's run
+ * of the same green flow hit 56 and 57 on retry, so a ceiling at main's
+ * observed maximum failed green runs by chance. The ceiling of 62 keeps about
+ * 12 % headroom over that maximum while a refetch loop still breaks it.
  */
-export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 55;
+export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 62;
 
 /**
  * What `take-arrives.spec.ts` costs the API, measured on a green run against a
