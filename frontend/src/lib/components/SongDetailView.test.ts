@@ -20,8 +20,8 @@ import {
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
-	EDITOR_NETWORK_ERROR,
 	EDITOR_SAVE_ACCESSIBLE_LABEL,
+	EDITOR_SAVE_FAILED,
 	EDITOR_SAVE_LABEL,
 	EDITOR_UNSAVED_SAVE_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -36,7 +36,8 @@ import {
 	SONG_PREVIOUS_LABEL,
 	TAKE_REPAINT_LABEL,
 	TAKE_COVER_LABEL,
-	TAKE_PLAYLIST_LABEL
+	TAKE_PLAYLIST_LABEL,
+	TAKES_ERROR
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
@@ -149,6 +150,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		deleteAlbumCover: (...args: unknown[]) => deleteAlbumCover(...args),
 		generateSong: (...args: unknown[]) => generateSong(...args),
 		updateSong: vi.fn(),
+		renameSong: vi.fn(),
+		deleteSong: vi.fn(),
 		deleteVersion: vi.fn(),
 		deleteGeneration: vi.fn().mockResolvedValue(undefined),
 		addGenerationToPlaylist: vi.fn().mockResolvedValue(undefined),
@@ -166,8 +169,14 @@ import editorHeaderSource from './editor/EditorHeader.svelte?raw';
 import recipePanelSource from './editor/RecipePanel.svelte?raw';
 import takesListSource from './editor/TakesList.svelte?raw';
 import writeColumnSource from './editor/WriteColumn.svelte?raw';
-import { addGenerationToPlaylist, fetchSong } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import {
+	addGenerationToPlaylist,
+	deleteSong,
+	fetchSong,
+	renameSong,
+	updateSong
+} from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
@@ -481,30 +490,128 @@ describe('SongDetailView adding a take to a playlist', () => {
 	});
 });
 
+describe('SongDetailView failure wording', () => {
+	const OWN_COVER = {
+		card: '/api/songs/s1/cover?variant=card&v=own.jpg',
+		detail: '/api/songs/s1/cover?variant=detail&v=own.jpg'
+	};
+
+	function appBar() {
+		const state = get(phoneAppBar);
+		if (!state) throw new Error('Expected the song app bar');
+		return state;
+	}
+
+	function chooseCoverFile(target: HTMLElement): void {
+		const input = target.querySelector<HTMLInputElement>('.cover-file-input');
+		if (!input) throw new Error('Expected the cover file input');
+		const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+	}
+
+	const actions = [
+		{
+			action: 'renaming the song',
+			fallback: 'Rename failed',
+			fail: (error: Error) => vi.mocked(renameSong).mockRejectedValueOnce(error),
+			run: () =>
+				appBar()
+					.onrename('New title')
+					.catch(() => undefined)
+		},
+		{
+			action: 'uploading a cover',
+			fallback: 'Cover upload failed',
+			fail: (error: Error) => uploadSongCover.mockRejectedValueOnce(error),
+			run: (target: HTMLElement) => chooseCoverFile(target)
+		},
+		{
+			action: 'removing the cover',
+			fallback: 'Cover remove failed',
+			ownCover: true,
+			fail: (error: Error) => deleteSongCover.mockRejectedValueOnce(error),
+			run: (target: HTMLElement) =>
+				target.querySelector<HTMLButtonElement>('.cover-remove')?.click()
+		},
+		{
+			action: 'saving a version',
+			fallback: EDITOR_SAVE_FAILED,
+			fail: (error: Error) => vi.mocked(updateSong).mockRejectedValueOnce(error),
+			run: () => appBar().menu.onsave()
+		},
+		{
+			action: 'deleting the song',
+			fallback: 'Delete failed',
+			fail: (error: Error) => vi.mocked(deleteSong).mockRejectedValueOnce(error),
+			run: async () => {
+				appBar().menu.ondelete();
+				await tick();
+				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
+			}
+		}
+	];
+
+	it.each(
+		actions.flatMap((entry) => [
+			{
+				...entry,
+				failure: 'with no network answer',
+				error: new NetworkError('/api/songs/s1', new TypeError('Failed to fetch')),
+				shown: entry.fallback
+			},
+			{
+				...entry,
+				failure: 'refused by the server',
+				error: new ApiError(409, 'The server keeps this song as it is', '/api/songs/s1'),
+				shown: 'The server keeps this song as it is'
+			}
+		])
+	)(
+		'says $shown once when $action fails $failure',
+		async ({ ownCover, fail, run, error, shown }) => {
+			if (ownCover) songList.set([song({ ...editableSongDefaults(), cover: OWN_COVER })]);
+			fail(error);
+			const target = await renderView();
+			await run(target);
+			await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
+		}
+	);
+});
+
 describe('SongDetailView recipe and takes', () => {
 	it.each([
 		{
 			failure: 'no network answer',
 			error: new NetworkError('/api/songs/s1', new TypeError('Failed to fetch')),
-			shown: EDITOR_NETWORK_ERROR,
+			shown: TAKES_ERROR,
 			hidden: 'Failed to fetch'
+		},
+		{
+			failure: 'a server refusal',
+			error: new ApiError(503, 'Takes are resting', '/api/songs/s1'),
+			shown: 'Takes are resting',
+			hidden: TAKES_ERROR
 		},
 		{
 			failure: 'a bug that is not the network',
 			error: new TypeError('generations is not iterable'),
-			shown: 'generations is not iterable',
-			hidden: EDITOR_NETWORK_ERROR
+			shown: TAKES_ERROR,
+			hidden: 'generations is not iterable'
 		}
-	])('names $failure honestly when the takes cannot load', async ({ error, shown, hidden }) => {
-		vi.mocked(fetchSong).mockRejectedValueOnce(error);
-		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
-		const target = await renderView();
-		await tick();
-		await Promise.resolve();
-		await tick();
-		expect(target.textContent).toContain(shown);
-		expect(target.textContent).not.toContain(hidden);
-	});
+	])(
+		'names $failure in its own words when the takes cannot load',
+		async ({ error, shown, hidden }) => {
+			vi.mocked(fetchSong).mockRejectedValueOnce(error);
+			songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
+			const target = await renderView();
+			await tick();
+			await Promise.resolve();
+			await tick();
+			expect(target.textContent).toContain(shown);
+			expect(target.textContent).not.toContain(hidden);
+		}
+	);
 
 	it('edits the phone recipe inline without opening a sheet', async () => {
 		stubLibraryMedia({ narrow: true, compact: true });
@@ -875,7 +982,7 @@ describe('SongDetailView Generate double-click guard (#234)', () => {
 		const btn = generateBtn(target);
 
 		btn.click();
-		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('boom', 'error'));
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Generation failed', 'error'));
 
 		generateSong.mockResolvedValueOnce(jobStatus({ status: 'completed' }));
 		generateBtn(target).click();

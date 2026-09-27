@@ -15,6 +15,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		]),
 		fetchGenerationDefaults: vi.fn().mockResolvedValue({}),
 		uploadReferenceAudio: vi.fn(),
+		createPreset: vi.fn(),
 		fetchVersions: vi.fn().mockResolvedValue([])
 	};
 });
@@ -29,7 +30,11 @@ import {
 	setSourceFromGeneration,
 	sourceGeneration
 } from '$lib/stores/recipe';
-import { RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
+import { RECIPE_SAVE_AS_PRESET_LABEL, RECIPE_SOURCE_MODE_HINT } from '$lib/constants';
+import { createPreset, uploadReferenceAudio } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { addToast } from '$lib/stores/toast';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 
 import RecipePanel from './RecipePanel.svelte';
 import recipePanelSource from './RecipePanel.svelte?raw';
@@ -153,5 +158,56 @@ describe("RecipePanel at the editor's own width", () => {
 		expect(recipePanelSource).toMatch(
 			/\.recipe-groups \{[^}]*grid-template-columns: repeat\(auto-fit, minmax\(13rem, 1fr\)\);/
 		);
+	});
+
+	const failingActions = [
+		{
+			action: 'uploading a reference track',
+			fallback: 'Upload failed',
+			fail: (error: Error) => vi.mocked(uploadReferenceAudio).mockRejectedValueOnce(error),
+			run: (target: HTMLElement) => {
+				const input = target.querySelector<HTMLInputElement>('.ref-upload input[type="file"]');
+				if (!input) throw new Error('Expected the reference upload input');
+				Object.defineProperty(input, 'files', { value: [new File(['audio'], 'reference.wav')] });
+				input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		},
+		{
+			action: 'saving a preset',
+			fallback: 'Failed to save preset',
+			fail: (error: Error) => vi.mocked(createPreset).mockRejectedValueOnce(error),
+			run: async (target: HTMLElement) => {
+				getByRoleButton(target, RECIPE_SAVE_AS_PRESET_LABEL).click();
+				await tick();
+				const name = target.querySelector<HTMLInputElement>('.preset-name-input');
+				if (!name) throw new Error('Expected the preset name input');
+				name.value = 'Night drive';
+				name.dispatchEvent(new Event('input', { bubbles: true }));
+				target.querySelector<HTMLButtonElement>('.preset-save-confirm')?.click();
+			}
+		}
+	];
+
+	it.each(
+		failingActions.flatMap((entry) => [
+			{
+				...entry,
+				failure: 'with no network answer',
+				error: new NetworkError('/api/presets', new TypeError('Failed to fetch')),
+				shown: entry.fallback
+			},
+			{
+				...entry,
+				failure: 'refused by the server',
+				error: new ApiError(413, 'That file is too large', '/api/presets'),
+				shown: 'That file is too large'
+			}
+		])
+	)('says $shown once when $action fails $failure', async ({ fail, run, error, shown }) => {
+		vi.mocked(addToast).mockClear();
+		fail(error);
+		const target = await render();
+		await run(target);
+		await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
 	});
 });

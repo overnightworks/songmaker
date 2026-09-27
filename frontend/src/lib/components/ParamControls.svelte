@@ -17,6 +17,7 @@
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { addToast } from '$lib/stores/toast';
+	import { describeFailure } from '$lib/api/fetch';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -95,25 +96,25 @@
 		return value;
 	}
 
-	function fieldErrorMessage(error: unknown): string {
-		return error instanceof Error ? error.message : DEFAULT_MISSING_PREFIX;
+	function fieldErrorMessage(key: keyof VersionGenerationParams, error: unknown): string {
+		return describeFailure(error, `${DEFAULT_MISSING_PREFIX} ${key}`);
 	}
 
-	function reportFieldError(error: unknown): void {
+	function reportFieldError(key: keyof VersionGenerationParams, error: unknown): void {
 		console.error(error);
-		addToast(fieldErrorMessage(error), 'error');
+		addToast(fieldErrorMessage(key, error), 'error');
 	}
 </script>
 
 {#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string }, error: unknown)}
 	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{f.label}</span>
-		<p class="param-error-text">{fieldErrorMessage(error)}</p>
+		<p class="param-error-text">{fieldErrorMessage(f.key, error)}</p>
 	</div>
 {/snippet}
 
 {#snippet numberField(f: NumberParamField)}
-	<svelte:boundary onerror={reportFieldError}>
+	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<input
@@ -134,7 +135,7 @@
 {/snippet}
 
 {#snippet selectField(f: SelectParamField)}
-	<svelte:boundary onerror={reportFieldError}>
+	<svelte:boundary onerror={(error) => reportFieldError(f.key, error)}>
 		<label class="setting" title={tooltip(f.key)}>
 			<span>{f.label}</span>
 			<select
