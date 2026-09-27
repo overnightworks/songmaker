@@ -1,0 +1,8 @@
+claim_id = "ecb8c15677f34f77b336608feede2b60"
+agent = "claude-head"
+role = "builder"
+base = "03578d2e0727a50c0a471f21fcb9a5d1412bbe9a"
+branch = "claude/issue-1099-offline-retry-policy"
+scope = ["docs/architecture.md", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/connectivity.test.ts", "frontend/src/lib/stores/connectivity.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/lib/stores/sseReconnect.test.ts", "frontend/src/lib/stores/sseReconnect.ts"]
+opened_commit = "b89cc7582a3fb94511c0e0d8ee267165f5233c0b"
+whole_reason = "retry policy and reachability classification across resource sync, stream reconnect and the connectivity owner"
