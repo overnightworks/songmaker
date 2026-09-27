@@ -44,6 +44,7 @@
 		watchTypingOnPhone
 	} from '$lib/stores/ui';
 	import { transportBarHidden } from '$lib/stores/transportBar';
+	import { offline } from '$lib/stores/connectivity';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
@@ -116,6 +117,18 @@
 		if (barHidden) root.dataset.transportBar = 'hidden';
 		else delete root.dataset.transportBar;
 		return () => delete root.dataset.transportBar;
+	});
+
+	// The offline strip rests on the private transport bar, so while it shows,
+	// app.css adds its height to the same room — Generate and the rest of the
+	// page stay above it instead of under it.
+	$effect(() => {
+		const stripShown = !isPublicRoute && hasPrivatePlayer && $offline;
+		if (!browser) return;
+		const root = document.documentElement;
+		if (stripShown) root.dataset.offline = '';
+		else delete root.dataset.offline;
+		return () => delete root.dataset.offline;
 	});
 
 	// A navigation before the library starts -- the sign-in redirect, or

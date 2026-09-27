@@ -20,7 +20,7 @@
 		position: fixed;
 		left: 0;
 		right: 0;
-		bottom: var(--player-height);
+		bottom: var(--transport-bar-height);
 		z-index: 101;
 	}
 
@@ -28,7 +28,7 @@
 		display: flex;
 		align-items: center;
 		gap: 9px;
-		height: 36px;
+		height: var(--offline-strip-height);
 		padding: 0 14px;
 		background: var(--bg-deep);
 		border-top: 1px solid var(--border);

@@ -388,7 +388,7 @@
 		bottom: 0;
 		left: 0;
 		right: 0;
-		height: var(--player-height);
+		height: var(--transport-bar-height);
 		background: var(--card-bg);
 		border-top: 2px solid transparent;
 		border-image: linear-gradient(90deg, var(--primary), var(--accent), var(--primary)) 1;
