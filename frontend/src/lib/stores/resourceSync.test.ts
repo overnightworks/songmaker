@@ -1521,6 +1521,40 @@ describe('resource sync owner', () => {
 		controller.stop();
 	});
 
+	it('ignores an older return probe answering after a newer return probe found the server still unreachable', async () => {
+		vi.useFakeTimers();
+		const probeAnswers: Array<(result: ResourceAuthProbe) => void> = [];
+		const { controller, sources, reachability } = setup({
+			probeAuth: () => new Promise((resolve) => probeAnswers.push(resolve))
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		probeAnswers[0]('unreachable');
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).error();
+		await flush();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		const [, streamProbe, olderReturnProbe] = probeAnswers;
+		streamProbe('unreachable');
+		await flush();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		expect(probeAnswers).toHaveLength(4);
+		probeAnswers[3]('unreachable');
+		await flush();
+		const sourcesWhileDown = sources.length;
+
+		olderReturnProbe('ok');
+		await flush();
+
+		expect(reachability.at(-1)).toBe(false);
+		expect(sources).toHaveLength(sourcesWhileDown);
+		controller.stop();
+	});
+
 	it('stops claiming the server is unreachable when the owner stops', async () => {
 		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();
