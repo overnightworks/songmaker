@@ -5,7 +5,9 @@ import {
 	COWRITER_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_CONVERSATION_SINCE_TEMPLATE,
 	COWRITER_CONVERSATION_STARTED_TODAY,
-	COWRITER_NEW_CONVERSATION_LINE
+	COWRITER_NEW_CONVERSATION_LABEL,
+	COWRITER_NEW_CONVERSATION_LINE,
+	COWRITER_TURN_FAILURE_TEMPLATE
 } from '$lib/constants';
 
 const DAYS_NAMED_BY_WEEKDAY = 7;
@@ -56,6 +58,14 @@ export function cowriterThinkingLabel(provider: string): string {
 
 export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
+}
+
+/** The reason text comes from the provider library; the panel only says whose it is. */
+export function cowriterTurnFailureLabel(provider: string, reason: string): string {
+	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
+		'{provider}',
+		providerDisplayName(provider)
+	).replace('{reason}', reason);
 }
 
 export function providerDisplayName(provider: string): string {
@@ -113,6 +123,9 @@ export function conversationLineLabel(
 
 export function conversationRowLabel(conversation: ConversationItem, now: Date): string {
 	if (conversation.title) return conversation.title;
+	if (!conversation.archived_at && conversation.message_count === 0) {
+		return COWRITER_NEW_CONVERSATION_LABEL;
+	}
 	const template = conversation.archived_at
 		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
 		: COWRITER_CONVERSATION_ROW_TEMPLATE;

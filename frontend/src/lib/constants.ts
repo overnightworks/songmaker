@@ -208,6 +208,7 @@ export const COWRITER_ARCHIVED_CONVERSATION_TEMPLATE = 'archived conversation fr
 export const COWRITER_CONVERSATION_STARTED_TODAY = 'today';
 export const COWRITER_CONVERSATION_ROW_TEMPLATE = 'Conversation since {day}';
 export const COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE = 'Conversation from {day}';
+export const COWRITER_TURN_FAILURE_TEMPLATE = '{provider}: {reason}';
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
