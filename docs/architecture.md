@@ -992,35 +992,44 @@ the loaded set for the buffer flush. Window `focus` and `online` and document
 not the whole browse page — a 200-song library would otherwise exceed the 120/min
 IP limiter. The same three events reopen a dropped resource or job stream at once
 instead of waiting out its backoff (`watchReconnectOpportunities` in
-`sseReconnect.ts`), and that backoff never waits longer than 10 seconds, so a take
+`sseReconnect.ts`), at most once per stream per `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS`
+(2 s, `ImmediateReopenGap`) — an event inside the gap is dropped and the stream
+keeps its backoff, so switching apps back and forth cannot open dozens of
+streams — and that backoff never waits longer than 10 seconds, so a take
 finished while the phone was away arrives within seconds of its return. Missed
 takes for other loaded songs arrive through EventSource replay. Song fetches run
 with bounded concurrency. A 404 drops the song from the loaded set instead of
 retrying forever.
 The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
-A live refresh error stays visible across the 60-second reconnect and is retried
-on the next `hello`; a later successful fetch clears Retry. A refresh that got no
+A live refresh error stays visible across the 60-second reconnect; a later
+successful fetch clears Retry. Only a refresh that failed for the network or with
+a 5xx is fetched again on its own (on the next `hello`, on focus and on the
+backoff below); one the server refused with a 4xx is shown once and waits for the
+musician's Retry, since another try would only repeat the refusal. A refresh that got no
 answer at all is not an error of this owner: it sets no visible error and no Retry,
 and the library shows no failure of its own. Whether the page can reach the server
 has one owner, `stores/connectivity.ts`: it combines `navigator.onLine`, the
 `online`/`offline` events and the resource stream's health, which the resource
-sync owner reports (a `hello` means reachable; a stream that fails before its
-`hello`, to open or to reopen, means not, whatever the auth probe answers, and so
-does a probe that gets no answer; a live stream that drops after its `hello`
-stays reachable until its reopen fails). Surfaces read its
+sync owner reports (a `hello` means reachable; a stream failure carries no
+status, so the auth probe decides, and only a probe the server never answered —
+a network error or the edge's 502/503/504, `classifyAuthFailure` in
+`stores/auth.ts` — means not reachable, while a 429 or a 500 comes from a server
+that is there. While unreachable the owner probes once per
+`RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS` (1 s); the first answer clears the strip
+and reopens the stream at once through the same reopen gap). Surfaces read its
 `offline` store and never decide on their own: the one `OfflineStrip` — a calm
 neutral "You're offline — retrying" with no button — rests on the top edge of the
 private transport bar, steps aside with it for the phone keyboard and full Now
 Playing, and goes by itself once back online; the root layout marks
 `html[data-offline]` so `app.css` adds the strip's height to `--player-height`
 and the page (the phone's Generate bar included) stays above it; and Generate is
-disabled with no reason text of its own. A failed live refresh also retries on its own, on the streams'
+disabled with no reason text of its own. Such a self-healing failed refresh retries on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries
-at once, and the same events restart a bootstrap that failed. A bootstrap that
-failed because the server could not be reached also restarts itself on that
-backoff, so the strip's "retrying" holds even when none of those events fires.
+at once, and the same events restart a bootstrap that failed. A bootstrap whose
+stream never opened, or whose probe got no clean answer, also restarts itself on
+that backoff, so the strip's "retrying" holds even when none of those events fires.
 A first stream the browser closed for good — a non-200 answer, such as the
 edge's 5xx while the server restarts, ends its native retries — counts as such a
 failed bootstrap at once rather than waiting for errors that will never come.
