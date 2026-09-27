@@ -1,0 +1,8 @@
+claim_id = "7d1f0d240d2945f380564aba2cefcd60"
+agent = "claude-head"
+role = "builder"
+base = "9d6bb9d18b960b962a70e25dbb1f0d503b65bf68"
+branch = "claude/issue-1090-cowriter-menu-order"
+scope = ["frontend/e2e/cowriter-return.spec.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/ConfirmDeleteDialog.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts"]
+opened_commit = "ef5fdd6df8f08c1049677b7a244f05e70a1a2df3"
+whole_reason = "co-writer conversation list order and names, count freshness, provider fallback and the confirm's label"
