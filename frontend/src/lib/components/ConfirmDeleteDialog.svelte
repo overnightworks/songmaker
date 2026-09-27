@@ -15,6 +15,8 @@
 		oncancel: () => void;
 	} = $props();
 
+	const titleId = $props.id();
+
 	// Claiming the key keeps the page's global Escape from also leaving the view (escape-level-up.ts).
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key !== 'Escape') return;
@@ -31,8 +33,14 @@
 	onkeydown={(e) => e.key === 'Escape' && oncancel()}
 	role="presentation"
 >
-	<div class="dialog" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-		<h3>{title}</h3>
+	<div
+		class="dialog"
+		onclick={(e) => e.stopPropagation()}
+		role="dialog"
+		aria-modal="true"
+		aria-labelledby={titleId}
+	>
+		<h3 id={titleId}>{title}</h3>
 		<ul>
 			{#each items as item (item)}
 				<li>{item}</li>

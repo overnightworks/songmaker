@@ -629,6 +629,19 @@ describe('CoWriterPanel deleting a conversation', () => {
 		expect(deleteConversation).not.toHaveBeenCalled();
 	});
 
+	it('names the confirmation by its title for assistive technology', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+
+		const dialog = await openDeleteConfirm(target);
+		const labelId = dialog.getAttribute('aria-labelledby');
+
+		expect(labelId).toBeTruthy();
+		expect(document.getElementById(labelId ?? '')?.textContent).toBe(
+			COWRITER_DELETE_CONVERSATION_TITLE
+		);
+	});
+
 	it('keeps the conversation when Cancel answers the confirmation', async () => {
 		const target = await render();
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
