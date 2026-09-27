@@ -32,9 +32,11 @@ import { loras } from '$lib/stores/loras';
 import {
 	VOICE_PICKER_NONE_LABEL,
 	VOICE_PICKER_DELETED_LABEL,
-	PHONE_RECIPE_CUSTOM
+	PHONE_RECIPE_CUSTOM,
+	PHONE_RECIPE_UPLOAD_ERROR
 } from '$lib/constants';
 import { fetchActiveModels, fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { reactiveProps } from '../../../tests/reactive-fixtures.svelte';
 import PhoneRecipeSection from './PhoneRecipeSection.svelte';
 
@@ -296,7 +298,19 @@ describe('PhoneRecipeSection', () => {
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
 
-	it.each([false, true])('handles a reference upload (failure: %s)', async (fails) => {
+	it.each([
+		{ outcome: 'succeeds', error: null, shown: null },
+		{
+			outcome: 'is refused by the server',
+			error: new ApiError(413, 'Upload refused', '/api/reference-audio'),
+			shown: 'Upload refused'
+		},
+		{
+			outcome: 'gets no network answer',
+			error: new NetworkError('/api/reference-audio', new TypeError('Failed to fetch')),
+			shown: PHONE_RECIPE_UPLOAD_ERROR
+		}
+	])('handles a reference upload that $outcome', async ({ error, shown }) => {
 		const response = Promise.withResolvers<{ path: string; filename: string }>();
 		vi.mocked(uploadReferenceAudio).mockReturnValueOnce(response.promise);
 		const target = await render();
@@ -307,12 +321,12 @@ describe('PhoneRecipeSection', () => {
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await tick();
 		expect(input.disabled).toBe(true);
-		if (fails) response.reject(new Error('Upload refused'));
+		if (error) response.reject(error);
 		else response.resolve({ path: '/reference.wav', filename: 'reference.wav' });
 		await tick();
 		await tick();
-		if (fails) {
-			expect(target.querySelector('[role="alert"]')?.textContent).toBe('Upload refused');
+		if (shown) {
+			expect(target.querySelector('[role="alert"]')?.textContent).toBe(shown);
 			expect(input.disabled).toBe(false);
 		} else {
 			expect(get(editGenParams)?.reference_audio_path).toBe('/reference.wav');

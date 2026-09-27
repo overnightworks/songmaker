@@ -78,6 +78,8 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import { addToast } from '$lib/stores/toast';
+import { bulkDeleteGenerations, deleteVersion } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { GenerateState } from '$lib/stores/generateAction';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
@@ -798,6 +800,65 @@ describe('TakesList', () => {
 
 		expect(addToPlaylist).toHaveBeenCalledWith('p1', 'g1');
 		expect(playTake).not.toHaveBeenCalled();
+	});
+
+	const failingActions = [
+		{
+			action: 'deleting the selected takes',
+			fallback: 'Bulk delete failed',
+			fail: (error: Error) => vi.mocked(bulkDeleteGenerations).mockRejectedValueOnce(error),
+			run: async (target: HTMLElement) => {
+				enterSelectionMode();
+				await tick();
+				target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
+			}
+		},
+		{
+			action: 'deleting a version',
+			fallback: 'Delete failed',
+			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
+			run: async (target: HTMLElement) => {
+				target.querySelector<HTMLButtonElement>('.version-delete-btn')?.click();
+				await tick();
+				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
+			}
+		},
+		{
+			action: 'adding a take to a playlist',
+			fallback: 'Failed to add',
+			fail: (error: Error) => addToPlaylist.mockRejectedValueOnce(error),
+			run: async (target: HTMLElement) => {
+				const row = target.querySelector<HTMLElement>('.take-row');
+				if (!row) throw new Error('Expected a take row');
+				openTakeMenu(row);
+				await tick();
+				clickMenuItem(row, TAKE_PLAYLIST_LABEL);
+				await tick();
+				row.querySelector<HTMLButtonElement>('.picker-item')?.click();
+			}
+		}
+	];
+
+	it.each(
+		failingActions.flatMap((entry) => [
+			{
+				...entry,
+				failure: 'with no network answer',
+				error: new NetworkError('/api/generations', new TypeError('Failed to fetch')),
+				shown: entry.fallback
+			},
+			{
+				...entry,
+				failure: 'refused by the server',
+				error: new ApiError(409, 'A picked take stays', '/api/generations'),
+				shown: 'A picked take stays'
+			}
+		])
+	)('says $shown once when $action fails $failure', async ({ fail, run, error, shown }) => {
+		fail(error);
+		const { target } = await render();
+		await run(target);
+		await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
 	});
 
 	it('marks a take while its scoring job runs elsewhere', async () => {
