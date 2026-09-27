@@ -243,10 +243,7 @@ export async function openPlaylist(playlistId: string): Promise<void> {
 
 // The rail search has one selected result and therefore one destination. Its
 // data owner only describes that destination; this navigation owner performs
-// the transition and closes the compact drawer on every successful choice. A
-// page outside the library takes the drawer's own history entry when it has
-// one, and the drawer closes only once the page is reached: closing first
-// would step back off that entry while the navigation is still under way.
+// the transition and closes the compact drawer on every successful choice.
 export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
 	if (target.kind === 'album') {
 		await openAlbum(target.id);
@@ -581,13 +578,7 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 // (libraryContext.ts). An overlay registers when it opens and unregisters when
 // it closes any other way (×, Done, Escape, a surface change); unregistering
 // steps back off its entry, so no stale copy of the library is left for Back to
-// land on. A navigation off the library that replaces the layer's entry
-// instead (a link inside the rail drawer) leaves nothing to step back off, and
-// stepping back would pop the page it went to.
-//
-// Only a running library (initNavigation) has entries to layer; anywhere else
-// -- /settings, say -- registering answers "not layered" and the overlay stays
-// a plain one there.
+// land on.
 type HistoryLayerRegistration = { layered: true; leave: () => void } | { layered: false };
 
 const NOT_LAYERED: HistoryLayerRegistration = { layered: false };
