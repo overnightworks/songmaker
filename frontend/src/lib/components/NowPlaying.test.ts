@@ -17,9 +17,11 @@ import {
 } from '$lib/constants';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
+	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
 	nowPlayingFromLabel,
 	nowPlayingOpenSourceLabel,
+	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel
 } from '$lib/constants/now-playing';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -508,8 +510,14 @@ describe('NowPlaying', () => {
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
+		// Only × is named Close: the backdrop around the sheet closes the sheet.
+		expect(target.querySelectorAll(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)).toHaveLength(1);
 
-		target.querySelector<HTMLButtonElement>('.mobile-sheet-backdrop')?.click();
+		target
+			.querySelector<HTMLButtonElement>(
+				`button[aria-label="${nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)}"]`
+			)
+			?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 	});

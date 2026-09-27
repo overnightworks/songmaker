@@ -9,6 +9,12 @@ export const NOW_PLAYING_QUEUE_TAB = 'Queue';
 export const NOW_PLAYING_TAKE_TAB = 'This take';
 export const NOW_PLAYING_RIGHT_PANEL_LABEL = 'Now Playing panel';
 
+// The backdrop around the stacked layout's sheet closes the sheet, not Now
+// Playing, so it never carries the name of the × that does.
+export function nowPlayingSheetCloseLabel(sheetLabel: string): string {
+	return `Close ${sheetLabel}`;
+}
+
 // What separates the parts of a take's one-line description, everywhere one
 // is written out.
 const META_SEPARATOR = ' · ';
@@ -83,7 +89,7 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 
 // Where the playing queue comes from — the album or playlist it was built
 // from — and how to go back there. A library queue has no source.
-export type NowPlayingSourceKind = 'album' | 'playlist';
+type NowPlayingSourceKind = 'album' | 'playlist';
 
 export interface NowPlayingSource {
 	kind: NowPlayingSourceKind;

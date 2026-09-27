@@ -224,10 +224,10 @@ test.describe('song page at phone width', () => {
 // pushed screen, so the phone's Back -- and × right after open -- shows the
 // screen it was opened from again, never the entry below that screen, and
 // leaves no copy of it behind for the next Back to land on. A take row opens
-// Now Playing on This take, whose sheet backdrop still takes the first tap
-// meant for × (#1003), so the × case closes that sheet with Escape first. A
-// playlist row only plays in place (#1010), so that origin opens Now Playing
-// through the mini-player's own entry, which brings no sheet up.
+// Now Playing on This take with its sheet up, whose backdrop never covers ×
+// (#1052), so one tap on × closes Now Playing there too. A playlist row only
+// plays in place (#1010), so that origin opens Now Playing through the
+// mini-player's own entry, which brings no sheet up.
 // The base library's songs each carry one reimported take, their first.
 const SEEDED_TAKE_NUMBER = 1;
 
@@ -331,16 +331,12 @@ const NOW_PLAYING_LEAVES: {
 	{
 		name: '× right after open',
 		leave: async (page, { playing, opensOnTakeSheet }) => {
-			if (opensOnTakeSheet) {
-				await page.keyboard.press('Escape');
-				await expect(
-					page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })
-				).toBeHidden();
-			}
+			const takeSheet = page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
+			if (opensOnTakeSheet) await expect(takeSheet).toBeVisible();
 			await page
 				.getByRole('dialog', { name: playing })
 				.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true })
-				.click();
+				.tap();
 		}
 	}
 ];
