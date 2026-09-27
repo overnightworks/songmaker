@@ -141,11 +141,45 @@ describe('groupRailSearchResults', () => {
 		expect(groups.map((group) => group.results.map((result) => result.target))).toEqual([
 			[{ kind: 'album', id: 'a1' }],
 			[
-				{ kind: 'song', id: 's1' },
-				{ kind: 'song', id: 's2' }
+				{ kind: 'song', id: 's2' },
+				{ kind: 'song', id: 's1' }
 			],
 			[{ kind: 'playlist', id: 'p1' }],
 			[{ kind: 'page', href: '/settings/playback' }]
+		]);
+	});
+
+	it('lists titles that start with the query before titles that only contain it, newest first within each', () => {
+		const state = {
+			...vernissageState,
+			hits: [
+				buildSongSearchHit({ id: 'newest-contains', title: 'After the Vernissage' }),
+				buildSongSearchHit({ id: 'newest-prefix', title: 'Vernissage II' }),
+				buildSongSearchHit({ id: 'older-contains', title: 'Before the Vernissage' }),
+				buildSongSearchHit({ id: 'older-prefix', title: 'Vernissage' })
+			]
+		};
+		const playlists = [
+			buildPlaylist({ id: 'old-prefix', title: 'Vernissage', created_at: '2026-01-01T00:00:00Z' }),
+			buildPlaylist({
+				id: 'new-contains',
+				title: 'My Vernissage',
+				created_at: '2026-03-01T00:00:00Z'
+			}),
+			buildPlaylist({
+				id: 'new-prefix',
+				title: 'Vernissage picks',
+				created_at: '2026-02-01T00:00:00Z'
+			})
+		];
+
+		const ids = groupRailSearchResults(state, playlists).map((group) =>
+			group.results.map((result) => result.id)
+		);
+
+		expect(ids).toEqual([
+			['song:newest-prefix', 'song:older-prefix', 'song:newest-contains', 'song:older-contains'],
+			['playlist:new-prefix', 'playlist:old-prefix', 'playlist:new-contains']
 		]);
 	});
 
