@@ -94,6 +94,13 @@ export const TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET = 30;
  */
 export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
 
+/**
+ * What `offline.spec.ts` costs the API: opening a seeded song on the phone,
+ * then losing the network and getting it back, with the live stream that
+ * reopens on the return — measured 23. Mobile-only.
+ */
+export const OFFLINE_FLOW_API_REQUEST_BUDGET = 30;
+
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away:
 // the flow drives that loss on purpose, so neither the failed request nor the

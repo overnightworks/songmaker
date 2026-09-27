@@ -21,6 +21,7 @@ import {
 	boundingBoxes,
 	FlowGuard,
 	loseNetwork,
+	OFFLINE_FLOW_API_REQUEST_BUDGET,
 	nameStartingWith,
 	regainNetwork,
 	workspace
@@ -91,5 +92,6 @@ test.describe('losing the network on the phone', () => {
 
 		console.log(`Offline flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();
+		guard.assertWithinBudget(OFFLINE_FLOW_API_REQUEST_BUDGET);
 	});
 });
