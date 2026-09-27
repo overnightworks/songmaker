@@ -534,12 +534,21 @@ def test_listen_song_from_an_own_playlist_moves_the_playlist_without_editing_it(
         assert playlist.updated_at == updated_at_before_listen
 
 
+@pytest.mark.parametrize(
+    "request_body",
+    [{}, {"content": "null"}, {"json": {}}, {"json": {"playlist_id": None}}],
+    ids=["no-body", "null-body", "empty-object", "null-playlist"],
+)
 def test_listen_song_without_a_playlist_leaves_every_playlist_untouched(
-    client: TestClient,
+    client: TestClient, request_body: dict,
 ) -> None:
     _seed_listen_playlists(client)
 
-    resp = client.post("/api/songs/s1/listen")
+    resp = client.post(
+        "/api/songs/s1/listen",
+        headers={"Content-Type": "application/json"},
+        **request_body,
+    )
 
     assert resp.status_code == 200
     with client.app.state.ctx.db() as session:
