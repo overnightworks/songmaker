@@ -1,6 +1,7 @@
 <script lang="ts">
 	import {
 		EDITOR_GENERATE_CANCEL_LABEL,
+		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 		EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 		EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 		EDITOR_GENERATE_MODE_LABELS
@@ -23,6 +24,7 @@
 	let { reasonInside = false }: Props = $props();
 
 	const presentation: GenerateState = $derived($generateAction);
+	const reconnecting: boolean = $derived(isGenerateBusy(presentation) && presentation.reconnecting);
 	const progressLabel: string | null = $derived(
 		presentation.kind === 'generating'
 			? [presentation.takeCounter, presentation.phase, presentation.readout]
@@ -47,7 +49,7 @@
 
 <div class="generate-action">
 	{#if isGenerateBusy(presentation)}
-		<div class="progress-button" role="status">
+		<div class="progress-button" class:reconnecting role="status">
 			{#if presentation.kind === 'queued'}
 				<span class="progress-label">{presentation.label}</span>
 			{:else}
@@ -62,8 +64,13 @@
 				type="button"
 				class="icon-button"
 				data-hitbox="frequent"
-				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-				onclick={() => void cancelGeneration(jobId)}
+				aria-label={reconnecting
+					? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
+					: EDITOR_GENERATE_CANCEL_LABEL}
+				aria-disabled={reconnecting}
+				onclick={() => {
+					if (!reconnecting) void cancelGeneration(jobId);
+				}}
 			>
 				<Icon name="x" />
 			</button>
@@ -171,6 +178,22 @@
 		position: absolute;
 		inset: 0 auto 0 0;
 		background: color-mix(in srgb, var(--score-ok) 20%, transparent);
+	}
+
+	/* Offline nothing about the take can arrive and a cancel cannot leave, so
+	   the readout stops looking live: its last state, in grey. */
+	.progress-button.reconnecting {
+		border-color: var(--border);
+		color: var(--text-subtle);
+	}
+
+	.reconnecting .progress-fill {
+		background: color-mix(in srgb, var(--text-disabled) 20%, transparent);
+	}
+
+	.reconnecting + .icon-button {
+		color: var(--text-disabled);
+		cursor: default;
 	}
 
 	.progress-label {
