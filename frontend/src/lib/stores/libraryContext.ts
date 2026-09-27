@@ -345,7 +345,7 @@ function holdRestoredLibraryHistory(): void {
 // entry, so the tab that entry was left on reaches it as that song's memory.
 function rememberRestoredSongTab(restored: unknown): void {
 	if (!isLibraryHistoryState(restored) || !restored.songId) return;
-	songTabs.set(restored.songId, normalizeDetailTab(restored.detailTab));
+	rememberSongTab(restored.songId, normalizeDetailTab(restored.detailTab));
 }
 
 export function leaveRestoredLibraryHistory(): void {
@@ -743,7 +743,11 @@ export function rememberedSongTab(songId: string): DetailTab {
 
 export function showSongTab(songId: string | null, tab: DetailTab): void {
 	detailTab.set(tab);
-	if (songId) songTabs.set(songId, tab);
+	if (songId) rememberSongTab(songId, tab);
+}
+
+function rememberSongTab(songId: string, tab: DetailTab): void {
+	songTabs.set(songId, tab);
 }
 
 export function snapshotLibraryHistory(index: number): LibraryHistoryState {
