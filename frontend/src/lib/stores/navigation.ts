@@ -41,7 +41,9 @@ import {
 	librarySurface,
 	libraryRootState,
 	libraryWallStateFrom,
+	rememberedSongTab,
 	setLibrarySurface,
+	showSongTab,
 	snapshotLibraryHistory,
 	takeRestoredLibraryHistory,
 	writeLibraryHistory,
@@ -379,7 +381,7 @@ function applySelectedSong(
 	songId: string,
 	knownSong: SongItem | undefined,
 	historyMode: 'stack' | 'replace',
-	tab: 'keep' | 'write'
+	tab: 'keep' | 'remembered'
 ): Promise<void> {
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
@@ -391,7 +393,7 @@ function applySelectedSong(
 	}
 	playerSelectSong(songId);
 	void loadSongContext(songId);
-	if (tab === 'write') openWriteTab();
+	showSongTab(songId, tab === 'keep' ? get(detailTab) : rememberedSongTab(songId));
 	setLibrarySurface('detail');
 	closeSidebar();
 	if (historyMode === 'replace') return replaceLibraryHistory();
@@ -431,7 +433,7 @@ export function selectSong(songId: string, knownSong?: SongItem): Promise<void> 
 	// become once that later run starts.
 	const historyMode = selectSongHistoryMode(songId, knownSong);
 	return guardDirtyNavigation(async () => {
-		await applySelectedSong(songId, knownSong, historyMode, 'write');
+		await applySelectedSong(songId, knownSong, historyMode, 'remembered');
 	});
 }
 
@@ -471,11 +473,20 @@ export function clearGenerationSelection(): void {
 
 export function navigateToSongTab(tab: DetailTab): void {
 	playerClearGeneration();
-	detailTab.set(tab);
+	chooseSongTab(tab);
 }
 
-export function openWriteTab(): void {
-	detailTab.set('write');
+export function openEditTab(): void {
+	chooseSongTab('edit');
+}
+
+// The open entry carries the choice too, so a reload restores the tab the
+// song was left on; the address itself does not change.
+function chooseSongTab(tab: DetailTab): void {
+	showSongTab(get(selectedSongId), tab);
+	const current = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(current)) return;
+	void writeLibraryHistory({ ...current, detailTab: tab }, urlFromState(current), 'replace');
 }
 
 function openTakesTab(): void {
@@ -489,7 +500,7 @@ function openTakesTab(): void {
 // pushed off wherever they were, e.g. Settings).
 export async function revealPlayingSong(song: SongItem, generationId: string): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		await applySelectedSong(song.id, song, 'stack', 'write');
+		await applySelectedSong(song.id, song, 'stack', 'remembered');
 		selectedGenerationId.set(generationId);
 		persistLibraryHistory();
 	});
