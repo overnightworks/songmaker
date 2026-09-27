@@ -7,7 +7,8 @@
 	import {
 		cancelGeneration,
 		generateAction,
-		isGenerateJobActive
+		isGenerateJobActive,
+		offersCancel
 	} from '$lib/stores/generateAction';
 	import Icon from '../Icon.svelte';
 
@@ -34,20 +35,22 @@
 				v{latestVersionNumber} ·
 				<b>{presentation.kind === 'queued' ? presentation.label : presentation.phase}</b>
 			</span>
-			<button
-				type="button"
-				class="icon-button"
-				data-hitbox="frequent"
-				aria-label={reconnecting
-					? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
-					: EDITOR_GENERATE_CANCEL_LABEL}
-				aria-disabled={reconnecting}
-				onclick={() => {
-					if (!reconnecting) void cancelGeneration(presentation.jobId);
-				}}
-			>
-				<Icon name="x" />
-			</button>
+			{#if offersCancel(presentation)}
+				<button
+					type="button"
+					class="icon-button"
+					data-hitbox="frequent"
+					aria-label={reconnecting
+						? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
+						: EDITOR_GENERATE_CANCEL_LABEL}
+					aria-disabled={reconnecting}
+					onclick={() => {
+						if (!reconnecting) void cancelGeneration(presentation.jobId);
+					}}
+				>
+					<Icon name="x" />
+				</button>
+			{/if}
 		</div>
 		<div
 			class="bar"

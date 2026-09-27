@@ -11,6 +11,7 @@
 		generate,
 		generateAction,
 		isGenerateBusy,
+		offersCancel,
 		type GenerateState
 	} from '$lib/stores/generateAction';
 	import Icon from '../Icon.svelte';
@@ -58,7 +59,7 @@
 				<span class="progress-label">{progressLabel}</span>
 			{/if}
 		</div>
-		{#if presentation.jobId !== null}
+		{#if offersCancel(presentation)}
 			{@const jobId = presentation.jobId}
 			<button
 				type="button"

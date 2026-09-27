@@ -75,7 +75,9 @@ function progressReadout(job: JobItem | null): string | null {
 	return parts.join(' · ');
 }
 
-function lastSeenReadout(job: JobItem | null): string {
+/** The progress the job last reported, offline; loading a model reports none (see `progressReadout`). */
+function lastSeenReadout(job: JobItem | null): string | null {
+	if (job?.phase === 'loading_model') return null;
 	return EDITOR_GENERATE_LAST_SEEN_TEMPLATE.replace('{percent}', String(progressPercent(job)));
 }
 
@@ -135,7 +137,9 @@ function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem
 /**
  * A busy state is `reconnecting` while the page is offline: nothing the
  * server says about the job can arrive, and a cancel cannot reach it, so the
- * surfaces grey out instead of looking live (#1039 O2).
+ * surfaces grey out instead of looking live (#1039 O2). A generating state is
+ * `ended` while a finished job waits for its take to reach the list: its
+ * card stays, but there is nothing left to cancel (#1039 O3).
  */
 export type GenerateState =
 	| { kind: 'idle'; mode: GenerateMode }
@@ -154,6 +158,7 @@ export type GenerateState =
 			progress: number;
 			readout: string | null;
 			reconnecting: boolean;
+			ended: boolean;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string | null };
@@ -167,6 +172,10 @@ export function isGenerateBusy(state: GenerateState): state is GenerateBusyState
 
 export function isGenerateJobActive(state: GenerateState): state is GenerateJobState {
 	return isGenerateBusy(state) && state.jobId !== null;
+}
+
+export function offersCancel(state: GenerateState): state is GenerateJobState {
+	return isGenerateJobActive(state) && !(state.kind === 'generating' && state.ended);
 }
 
 export const generateAction = derived(
@@ -227,7 +236,8 @@ export const generateAction = derived(
 				takeCounter: takeCounterLabel(job),
 				progress: progressPercent(job),
 				readout: isOffline ? lastSeenReadout(job) : progressReadout(job),
-				reconnecting: isOffline
+				reconnecting: isOffline,
+				ended: job !== null && !isStillWorking(job)
 			};
 		}
 		// Offline, Generate has no words of its own: the one offline strip says it.
