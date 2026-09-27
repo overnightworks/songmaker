@@ -25,12 +25,20 @@
 	import { addToast } from '$lib/stores/toast';
 	import { health } from '$lib/stores/health';
 	import {
+		COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
+		COWRITER_CONVERSATION_MENU_LABEL,
+		COWRITER_CONVERSATION_SINCE_TEMPLATE,
+		COWRITER_CONVERSATION_STARTED_TODAY,
+		COWRITER_NEW_CONVERSATION_LABEL,
+		COWRITER_NEW_CONVERSATION_LINE,
+		COWRITER_PROVIDER_LABELS,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
+	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		collectPendingProposals,
 		proposalKey,
@@ -54,6 +62,7 @@
 		cowriterUnavailableLabel
 	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
+	import Icon from './Icon.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
 	import MentionDropdown from './MentionDropdown.svelte';
 
@@ -94,6 +103,10 @@
 
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
 	const TURN_ALREADY_RUNNING_STATUS = 409;
+	const LATEST_MESSAGE_SLACK_PX = 32;
+	const DAYS_NAMED_BY_WEEKDAY = 7;
+	const DAY_MS = 86_400_000;
+	const CONVERSATION_DAY_LOCALE = 'en-US';
 
 	let messages: Message[] = $state([]);
 	let input = $state('');
@@ -102,11 +115,14 @@
 	let historyError = $state('');
 	let container: HTMLDivElement | undefined = $state();
 	let inputEl: HTMLTextAreaElement | undefined = $state();
+	let inputArea: HTMLDivElement | undefined = $state();
 
 	let conversations: ConversationItem[] = $state([]);
 	let activeConversationId: string | null = $state(null);
 	let viewingConversationId: string | null = $state(null);
-	let showConversations = $state(false);
+	let conversationMenuOpen = $state(false);
+	let conversationMenuTrigger: HTMLButtonElement | undefined = $state();
+	let conversationMenu: HTMLDivElement | undefined = $state();
 
 	let memoryBundle: MemoryBundle | null = $state(null);
 	let memoryLoading = $state(false);
@@ -192,7 +208,7 @@
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
-			void scrollToBottom();
+			followLatest();
 		}
 		if (!conversation || conversationId !== activeConversationId || loading) return;
 		followOrSettleTurn(conversation);
@@ -300,7 +316,7 @@
 			historyError = 'Conversation history unavailable';
 		} finally {
 			loading = false;
-			void scrollToBottom();
+			void keepLatestInView();
 		}
 	}
 
@@ -321,7 +337,6 @@
 	}
 
 	async function openConversation(conv: ConversationItem): Promise<void> {
-		showConversations = false;
 		viewingConversationId = conv.id;
 		await loadMessages(conv.id);
 	}
@@ -333,7 +348,6 @@
 			activeConversationId = conv.id;
 			viewingConversationId = conv.id;
 			messages = [];
-			showConversations = false;
 		} catch {
 			addToast('Failed to start new conversation', 'error');
 		}
@@ -389,6 +403,7 @@
 			{ role: 'assistant', text: '', toolCalls: [] }
 		];
 		loading = true;
+		followLatest();
 
 		let streamError: string | null = null;
 		let answeredConversationId: string | null = null;
@@ -421,7 +436,7 @@
 					}
 					if (onturncompleted) onturncompleted();
 				}
-				void scrollToBottom();
+				void keepLatestInView();
 			}
 		} catch (e) {
 			if (e instanceof ApiError) refusal = e;
@@ -439,7 +454,7 @@
 		} else {
 			await adoptPersistedHistory(answeredConversationId);
 		}
-		void scrollToBottom();
+		void keepLatestInView();
 	}
 
 	/**
@@ -511,10 +526,74 @@
 		}
 	}
 
-	async function scrollToBottom(): Promise<void> {
-		await tick();
-		if (container) container.scrollTop = container.scrollHeight;
+	/*
+	 * The chat follows the newest message unless the musician scrolled up to
+	 * read. A pane hidden behind Edit or Takes has no box to scroll and loses
+	 * its offset, so the place is taken again when the pane is shown (#1063).
+	 * Only a scroll upwards stops the following: content growing under a
+	 * scroll the chat made itself must not read as the musician leaving.
+	 */
+	let followsLatest = true;
+	let readingScrollTop = 0;
+	let chatShown = false;
+
+	function followLatest(): void {
+		followsLatest = true;
+		void keepLatestInView();
 	}
+
+	async function keepLatestInView(): Promise<void> {
+		await tick();
+		if (container && followsLatest) scrollChatTo(container, container.scrollHeight);
+	}
+
+	function scrollChatTo(chat: HTMLElement, top: number): void {
+		chat.scrollTop = top;
+		readingScrollTop = chat.scrollTop;
+	}
+
+	function rememberReadingPlace(): void {
+		if (!container || !chatShown) return;
+		const { scrollTop, scrollHeight, clientHeight } = container;
+		if (scrollHeight - scrollTop - clientHeight <= LATEST_MESSAGE_SLACK_PX) followsLatest = true;
+		else if (scrollTop < readingScrollTop) followsLatest = false;
+		readingScrollTop = scrollTop;
+	}
+
+	function takeReadingPlace(chat: HTMLElement): void {
+		scrollChatTo(chat, followsLatest ? chat.scrollHeight : readingScrollTop);
+	}
+
+	$effect(() => {
+		const chat = container;
+		if (!chat) return;
+		chatShown = false;
+		const shownAgain = new ResizeObserver(() => {
+			const shown = chat.clientHeight > 0;
+			if (shown && !chatShown) takeReadingPlace(chat);
+			chatShown = shown;
+		});
+		shownAgain.observe(chat);
+		return () => shownAgain.disconnect();
+	});
+
+	/*
+	 * Pressing a composer button keeps focus in the composer. On the phone the
+	 * composer losing focus brings the mini-player back, which moves Send up
+	 * before the tap lands, so the tap missed it (#1063); the keyboard also
+	 * stays open for the next message.
+	 */
+	$effect(() => {
+		const area = inputArea;
+		if (!area) return;
+		function keepComposerFocus(event: MouseEvent): void {
+			if (event.target instanceof Element && event.target.closest('button')) {
+				event.preventDefault();
+			}
+		}
+		area.addEventListener('mousedown', keepComposerFocus);
+		return () => area.removeEventListener('mousedown', keepComposerFocus);
+	});
 
 	async function loadCowriterSettings(): Promise<void> {
 		try {
@@ -691,13 +770,70 @@
 		return `Conversation ${when}`;
 	}
 
-	function currentLabel(): string {
-		if (viewingConversationId === null) return 'New conversation';
-		const viewing = conversations.find((c) => c.id === viewingConversationId);
-		if (!viewing) return 'Conversation';
-		if (viewing.archived_at) return `${conversationLabel(viewing)} (archived)`;
-		return conversationLabel(viewing);
+	function startOfDay(moment: Date): number {
+		return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
 	}
+
+	function conversationStartDay(createdAt: string): string {
+		const started = new Date(createdAt);
+		const today = new Date();
+		const daysAgo = Math.round((startOfDay(today) - startOfDay(started)) / DAY_MS);
+		if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;
+		if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
+			return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, { weekday: 'short' });
+		}
+		const sameYear = started.getFullYear() === today.getFullYear();
+		return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, {
+			day: 'numeric',
+			month: 'short',
+			year: sameYear ? undefined : 'numeric'
+		});
+	}
+
+	const conversationLine = $derived.by(() => {
+		const viewing = conversations.find((c) => c.id === viewingConversationId);
+		if (!viewing) return COWRITER_NEW_CONVERSATION_LINE;
+		const template = viewing.archived_at
+			? COWRITER_ARCHIVED_CONVERSATION_TEMPLATE
+			: COWRITER_CONVERSATION_SINCE_TEMPLATE;
+		return template.replace('{day}', conversationStartDay(viewing.created_at));
+	});
+
+	const providerLabel = $derived(COWRITER_PROVIDER_LABELS[providerName] ?? providerName);
+
+	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
+		event.stopPropagation();
+		conversationMenuOpen = !conversationMenuOpen;
+		if (!conversationMenuOpen) return;
+		await tick();
+		if (conversationMenu) focusFirstIn(conversationMenu);
+	}
+
+	function chooseFromConversationMenu(choice: () => Promise<void>): void {
+		conversationMenuOpen = false;
+		conversationMenuTrigger?.focus();
+		void choice();
+	}
+
+	$effect(() => {
+		if (!conversationMenuOpen) return;
+		function closeOnOutsideClick(): void {
+			conversationMenuOpen = false;
+		}
+		function trapMenuKeys(event: KeyboardEvent): void {
+			if (!conversationMenu) return;
+			handleFocusTrapKeydown(conversationMenu, event, () => {
+				conversationMenuOpen = false;
+				conversationMenuTrigger?.focus();
+			});
+		}
+		document.addEventListener('click', closeOnOutsideClick);
+		document.addEventListener('keydown', trapMenuKeys, true);
+		return () => {
+			document.removeEventListener('click', closeOnOutsideClick);
+			document.removeEventListener('keydown', trapMenuKeys, true);
+		};
+	});
 
 	const readOnly = $derived(
 		viewingConversationId !== null && viewingConversationId !== activeConversationId
@@ -718,49 +854,71 @@
 </script>
 
 <div class="cowriter">
-	<div class="cowriter-header">
-		<div class="header-left">
-			<h3>
-				Co-Writer
-				{#if providerModel}
-					<span class="provider-label">{cowriterHeaderLabel(providerName, providerModel)}</span>
-				{/if}
-			</h3>
-			<div class="conv-wrapper">
-				<button
-					class="conv-toggle"
-					onclick={() => (showConversations = !showConversations)}
-					aria-label="Conversations"
-					title={currentLabel()}
+	<div class="convo">
+		<span class="convo-line">
+			{#if providerModel}<b>{providerLabel}</b> ·{/if}
+			{conversationLine}
+		</span>
+		<div class="convo-menu-anchor">
+			<button
+				bind:this={conversationMenuTrigger}
+				type="button"
+				class="convo-menu-btn"
+				data-hitbox="frequent"
+				aria-haspopup="menu"
+				aria-expanded={conversationMenuOpen}
+				aria-label={COWRITER_CONVERSATION_MENU_LABEL}
+				title={COWRITER_CONVERSATION_MENU_LABEL}
+				onclick={toggleConversationMenu}
+			>
+				<Icon name="more-horizontal" size={18} />
+			</button>
+			{#if conversationMenuOpen}
+				<div
+					bind:this={conversationMenu}
+					class="convo-menu"
+					role="menu"
+					data-escape-overlay="true"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+					onkeydown={(e) => e.stopPropagation()}
 				>
-					{currentLabel()}
-					<span class="caret">▾</span>
-				</button>
-				{#if showConversations}
-					<div class="conv-dropdown">
-						<button class="conv-new" onclick={startNew}>+ New conversation</button>
-						{#each conversations as conv (conv.id)}
-							<div class="conv-row" class:active={conv.id === viewingConversationId}>
-								<button class="conv-pick" onclick={() => openConversation(conv)}>
-									<span class="conv-title">{conversationLabel(conv)}</span>
-									<span class="conv-meta">
-										{conv.message_count} msg{conv.message_count === 1 ? '' : 's'}
-										{#if conv.archived_at}· archived{/if}
-									</span>
-								</button>
-								<button
-									class="conv-del"
-									onclick={() => handleDelete(conv)}
-									aria-label="Delete conversation">&#x2715;</button
-								>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			</div>
-		</div>
-		<div class="header-actions">
-			<button class="new-btn" onclick={startNew} aria-label="New conversation">+ New</button>
+					{#if providerModel}
+						<p class="menu-heading">{cowriterHeaderLabel(providerName, providerModel)}</p>
+					{/if}
+					<button
+						type="button"
+						role="menuitem"
+						class="convo-new"
+						data-hitbox="text"
+						onclick={() => chooseFromConversationMenu(startNew)}
+						>{COWRITER_NEW_CONVERSATION_LABEL}</button
+					>
+					{#each conversations as conv (conv.id)}
+						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
+							<button
+								type="button"
+								role="menuitem"
+								class="conv-pick"
+								onclick={() => chooseFromConversationMenu(() => openConversation(conv))}
+							>
+								<span class="conv-title">{conversationLabel(conv)}</span>
+								<span class="conv-meta">
+									{conv.message_count} msg{conv.message_count === 1 ? '' : 's'}
+									{#if conv.archived_at}· archived{/if}
+								</span>
+							</button>
+							<button
+								type="button"
+								role="menuitem"
+								class="conv-del"
+								onclick={() => handleDelete(conv)}
+								aria-label="Delete conversation">&#x2715;</button
+							>
+						</div>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	</div>
 
@@ -780,7 +938,7 @@
 	{:else if historyError}
 		<div class="history-error" role="alert">{historyError}</div>
 	{:else}
-		<div class="messages" bind:this={container}>
+		<div class="messages" bind:this={container} onscroll={rememberReadingPlace}>
 			{#if messages.length === 0}
 				<p class="empty-hint">
 					I can see the song you have open. Tell me what you want to work on, or ask me to browse
@@ -879,7 +1037,7 @@
 		</div>
 	{/if}
 
-	<div class="input-area">
+	<div class="input-area" bind:this={inputArea}>
 		{#if showMentions}
 			<MentionDropdown
 				items={activeMentionResults}
@@ -909,90 +1067,77 @@
 		background: var(--bg);
 	}
 
-	.cowriter-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 8px 12px;
-		border-bottom: 1px solid var(--border);
-		gap: 8px;
-	}
-
-	.header-left {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.header-left h3 {
-		margin: 0;
-		font-size: 1rem;
-		white-space: nowrap;
-		display: inline-flex;
-		align-items: baseline;
-		gap: 8px;
-	}
-
-	.provider-label {
-		font-size: 0.75rem;
-		font-weight: 400;
-		color: var(--text-subtle);
-	}
-
-	.conv-wrapper {
+	.convo {
 		position: relative;
-		min-width: 0;
+		flex: none;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-height: 40px;
+		padding: 0 0.1rem 0 0.75rem;
+		border-bottom: 1px solid var(--border);
+		font-size: 0.78rem;
+		color: var(--text-subtle);
 	}
 
-	.conv-toggle {
-		background: none;
-		border: 1px solid var(--border);
-		color: var(--text-subtle);
-		font-size: 0.8rem;
-		padding: 2px 8px;
-		border-radius: 4px;
-		cursor: pointer;
-		display: inline-flex;
-		align-items: center;
-		gap: 4px;
-		max-width: 100%;
+	.convo-line {
+		flex: 1;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
-	.conv-toggle:hover {
-		border-color: var(--primary);
-		color: var(--text);
+	.convo-line b {
+		color: var(--text-light);
+		font-weight: 600;
 	}
 
-	.caret {
-		font-size: 0.7rem;
-		opacity: 0.7;
+	.convo-menu-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
 	}
 
-	.conv-dropdown {
+	.convo-menu-btn:hover,
+	.convo-menu-btn[aria-expanded='true'] {
+		color: var(--primary);
+	}
+
+	.convo-menu {
 		position: absolute;
-		top: 100%;
-		left: 0;
-		margin-top: 4px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 4px;
-		min-width: 240px;
-		max-width: 360px;
+		right: 0.25rem;
+		top: calc(100% + 4px);
+		z-index: 10;
+		width: 18rem;
+		max-width: calc(100vw - 2rem);
 		max-height: 360px;
 		overflow-y: auto;
-		z-index: 10;
-		padding: 4px;
 		display: flex;
 		flex-direction: column;
 		gap: 2px;
+		padding: 0.25rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: var(--card-radius);
 	}
 
-	.conv-new {
+	.menu-heading {
+		margin: 0 0 0.25rem;
+		padding: 0.3rem 0.55rem 0.4rem;
+		font-size: var(--label-font-size);
+		color: var(--text-subtle);
+		border-bottom: 1px solid var(--border);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.convo-new {
 		background: none;
 		border: 1px solid var(--primary);
 		color: var(--primary);
@@ -1003,7 +1148,7 @@
 		margin-bottom: 4px;
 	}
 
-	.conv-new:hover {
+	.convo-new:hover {
 		background: var(--primary);
 		color: #fff;
 	}
@@ -1060,27 +1205,6 @@
 
 	.conv-del:hover {
 		color: var(--score-bad);
-	}
-
-	.header-actions {
-		display: flex;
-		align-items: center;
-		gap: 4px;
-	}
-
-	.new-btn {
-		background: none;
-		border: 1px solid var(--primary);
-		color: var(--primary);
-		padding: 2px 10px;
-		border-radius: 4px;
-		font-size: 0.75rem;
-		cursor: pointer;
-	}
-
-	.new-btn:hover {
-		background: var(--primary);
-		color: #fff;
 	}
 
 	.history-loading {
