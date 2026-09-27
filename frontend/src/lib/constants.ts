@@ -612,7 +612,11 @@ export const RATE_LIMITED_TOAST_MESSAGE =
 // relative to the math below, never speed it up. A waiting stream also
 // reopens at once when the page becomes visible, regains focus or the
 // browser reports the network back (`watchReconnectOpportunities`); those
-// reopens follow the musician's own actions, one per waiting stream each.
+// reopens follow the musician's own actions, one per waiting stream each,
+// and at most one per `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS` per stream -- 20
+// app switches in 3s once opened 40 streams (#1099). An opportunity inside
+// the gap is dropped and the stream keeps its backoff, so the gap can only
+// slow a reopen down to the backoff, never add opens to the math below.
 //
 // The ruling on #1032 (26.09.2026) caps the wait at 10s: a phone whose
 // network returned without an `online` event showed its new take 22-27s
@@ -641,6 +645,7 @@ export const SSE_RECONNECT_BASE_DELAY_MS = 2000;
 export const SSE_RECONNECT_BACKOFF_FACTOR = 2;
 export const SSE_RECONNECT_MAX_DELAY_MS = 8000;
 export const SSE_RECONNECT_JITTER_RATIO = 0.2;
+export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
 // A job stream gives up -- drops the job and says "Lost connection to
 // server" -- on this many consecutive connection errors. Twenty-four retries
 // at the delays above (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three
