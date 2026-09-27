@@ -60,11 +60,25 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
-/** The reason text comes from the provider library; the panel only says whose it is. */
-export function cowriterTurnFailureLabel(provider: string, reason: string): string {
+interface CowriterTurnFailureFrame {
+	provider?: string;
+	message?: string;
+	reason?: { message?: string };
+}
+
+/**
+ * The reason text comes from the provider library or the endpoint; the panel
+ * only says whose it is — the provider the frame names, else its own.
+ */
+export function cowriterTurnFailureLabel(
+	frame: CowriterTurnFailureFrame,
+	panelProvider: string
+): string | null {
+	const reason = frame.reason?.message ?? frame.message;
+	if (!reason) return null;
 	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
 		'{provider}',
-		providerDisplayName(provider)
+		providerDisplayName(frame.provider ?? panelProvider)
 	).replace('{reason}', reason);
 }
 

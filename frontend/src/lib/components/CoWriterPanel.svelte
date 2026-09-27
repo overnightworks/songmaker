@@ -523,10 +523,7 @@
 	);
 
 	function streamFailureMessage(frame: Extract<CoWriterStreamEvent, { type: 'error' }>): string {
-		if (frame.reason?.message) {
-			return cowriterTurnFailureLabel(frame.provider ?? providerName, frame.reason.message);
-		}
-		return frame.message ?? INCOMPLETE_TURN_MESSAGE;
+		return cowriterTurnFailureLabel(frame, providerName) ?? INCOMPLETE_TURN_MESSAGE;
 	}
 
 	function refusalMessage(refusal: ApiError): string {
