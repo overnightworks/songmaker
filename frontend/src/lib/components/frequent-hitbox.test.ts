@@ -124,7 +124,6 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
-import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import PlayerBar from './PlayerBar.svelte';
@@ -133,9 +132,9 @@ import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
-import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
+import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
@@ -149,9 +148,12 @@ import railSearchSource from './shell/RailSearch.svelte?raw';
 const COMPONENT_STYLE_SOURCES = {
 	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
-	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
+	CollectionHeaderFrame: {
+		source: collectionHeaderFrameSource,
+		filename: 'CollectionHeaderFrame.svelte'
+	},
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
 	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
 	RailSearch: { source: railSearchSource, filename: 'RailSearch.svelte' },
@@ -185,16 +187,6 @@ const INVENTORY = [
 		component: 'PlaylistDetailView'
 	},
 	{
-		name: 'playlist-row-play',
-		selector: '.entry-play[data-hitbox="frequent"]',
-		component: 'PlaylistDetailView'
-	},
-	{
-		name: 'album-row-play',
-		selector: '.item-play[data-hitbox="frequent"]',
-		component: 'AlbumDetailView'
-	},
-	{
 		name: 'playlist-picker-add',
 		selector: '.picker-add[data-hitbox="frequent"]',
 		component: 'PlaylistPicker'
@@ -203,6 +195,16 @@ const INVENTORY = [
 		name: 'drawer-trigger',
 		selector: '.drawer-trigger[data-hitbox="frequent"]',
 		component: 'Layout'
+	},
+	{
+		name: 'collection-play',
+		selector: '.play-circle[data-hitbox="frequent"]',
+		component: 'CollectionHeaderFrame'
+	},
+	{
+		name: 'collection-shuffle',
+		selector: '.shuffle-btn[data-hitbox="frequent"]',
+		component: 'CollectionHeaderFrame'
 	},
 	{
 		name: 'collection-menu',
@@ -425,7 +427,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 
 	const themeTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
-	const albumTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const railSearchTarget = document.createElement('div');
 	const layoutTarget = document.createElement('div');
@@ -433,7 +434,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 	root.append(
 		themeTarget,
 		playlistTarget,
-		albumTarget,
 		pickerTarget,
 		railSearchTarget,
 		layoutTarget,
@@ -444,9 +444,6 @@ async function renderInventory(): Promise<RenderedInventory> {
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
-	// The album interior is asked for by id rather than by opening it, since the
-	// playlist interior above needs the open collection to stay its own.
-	mounted.push(mount(AlbumDetailView, { target: albumTarget, props: { albumId: 'a-local' } }));
 	mounted.push(
 		mount(PlaylistPicker, {
 			target: pickerTarget,

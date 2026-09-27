@@ -29,8 +29,6 @@ import {
 } from '$lib/api/client';
 import { toasts } from '$lib/stores/toast';
 import {
-	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
-	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST
@@ -86,7 +84,6 @@ import {
 	openNowPlaying,
 	playTake,
 	playTakeAndShowNowPlaying,
-	playPlaylistEntry,
 	playPlaylistEntryAndShowNowPlaying,
 	registerNowPlayingTrigger,
 	chooseLibraryTakePool,
@@ -96,7 +93,6 @@ import {
 	curateAlbum,
 	curationActive,
 	playAlbum,
-	playAlbumSong,
 	playIdleStart,
 	retryLastPlayIntent,
 	playNextSong,
@@ -458,7 +454,7 @@ describe('playback dispatch', () => {
 		});
 	});
 
-	it('playback completion advances playlist playback to the next entry', () => {
+	it('playback completion advances playlist playback to the next entry', async () => {
 		const entries = [
 			makePlaylistEntry({ ...playlistEntryDefaults, song_title: 'First', mp3_path: 'a.mp3' }),
 			makePlaylistEntry({
@@ -469,7 +465,10 @@ describe('playback dispatch', () => {
 				mp3_path: 'b.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 
 		audioPlayer.currentCallbacks.onEnded?.('normal');
 
@@ -627,11 +626,11 @@ describe('playback dispatch', () => {
 		sharePlayback.stop();
 	});
 
-	it('clears library feedback when playback switches to a playlist', () => {
+	it('clears library feedback when playback switches to a playlist', async () => {
 		libraryQueueSkipped.set([{ song_id: 's1', generation_id: 'g1', reason: 'missing_file' }]);
 		windowEnded.set(true);
 
-		playPlaylistEntry(
+		await playPlaylistEntryAndShowNowPlaying(
 			makeDetail({ ...playlistDefaults, entries: [makePlaylistEntry(playlistEntryDefaults)] }),
 			0
 		);
@@ -668,7 +667,10 @@ describe('playback dispatch', () => {
 			})
 		];
 		shuffleEnabled.set(true);
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 
 		await playNextSong();
 
@@ -699,7 +701,10 @@ describe('playback dispatch', () => {
 				mp3_path: 'c.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 2);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			2
+		);
 		const inOrder = get(queueContext);
 		if (inOrder.type !== 'playlist') throw new Error('expected a playlist queue');
 		expect(inOrder.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe2', 'pe3']);
@@ -727,7 +732,10 @@ describe('playback dispatch', () => {
 				mp3_path: 'b.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 1);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			1
+		);
 
 		await playNextSong();
 
@@ -748,7 +756,10 @@ describe('playback dispatch', () => {
 				mp3_path: 'b.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 
 		await playPrevSong();
 
@@ -1025,8 +1036,8 @@ function startPlayingWithoutAnAudioElement(): void {
 	});
 }
 
-describe('playPlaylistEntry', () => {
-	it('sets playlist context and triggers load', () => {
+describe('starting a playlist from a row', () => {
+	it('sets playlist context and triggers load', async () => {
 		const entries = [
 			makePlaylistEntry({
 				...playlistEntryDefaults,
@@ -1042,14 +1053,17 @@ describe('playPlaylistEntry', () => {
 				mp3_path: 'y.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ songTitle: 'First' }), {
 			restart: true
 		});
 	});
 
-	it('playPlaylistEntry uses entry lyrics, not a later song draft', () => {
+	it('uses entry lyrics, not a later song draft', async () => {
 		const entries = [
 			makePlaylistEntry({
 				...playlistEntryDefaults,
@@ -1058,7 +1072,10 @@ describe('playPlaylistEntry', () => {
 				album_title: 'Nachtstrom'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
 				lyrics: 'old verse',
@@ -1069,7 +1086,7 @@ describe('playPlaylistEntry', () => {
 		);
 	});
 
-	it('can start playback from a requested playlist entry', () => {
+	it('can start playback from a requested playlist entry', async () => {
 		const entries = [
 			makePlaylistEntry({
 				...playlistEntryDefaults,
@@ -1085,7 +1102,10 @@ describe('playPlaylistEntry', () => {
 				mp3_path: 'y.mp3'
 			})
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 1);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			1
+		);
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({
@@ -1096,10 +1116,13 @@ describe('playPlaylistEntry', () => {
 		);
 	});
 
-	it('does nothing for empty entries', () => {
+	it('does nothing for empty entries', async () => {
 		audioPlayer.current = null;
 		queueContext.set({ type: 'library' });
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: 0 }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: 0 }),
+			0
+		);
 		expect(audioPlayer.current).toBeNull();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual({ type: 'library' });
@@ -1132,24 +1155,6 @@ describe('a clicked playlist row', () => {
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(get(nowPlayingOpen)).toBe(true);
 		expect(get(nowPlayingPanel)).toBe('take');
-	});
-
-	it('leaves Now Playing alone when only the row play button was used', () => {
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 1);
-
-		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
-		expect(get(nowPlayingOpen)).toBe(false);
-	});
-
-	it('toggles playback rather than restarting the entry that is already playing', () => {
-		const toggle = vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {});
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 1);
-		vi.mocked(audioPlayer.load).mockClear();
-
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 1);
-
-		expect(toggle).toHaveBeenCalledTimes(1);
-		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
 	it('leaves the entry it is already playing playing, and does not start it over', async () => {
@@ -1199,9 +1204,9 @@ describe('a playlist queue keeps its own identity', () => {
 		return { playlist: ctx.playlist, entries: ctx.entries };
 	}
 
-	it('still names the playlist it plays after the listener opens an album', () => {
+	it('still names the playlist it plays after the listener opens an album', async () => {
 		const queued = entries();
-		playPlaylistEntry(
+		await playPlaylistEntryAndShowNowPlaying(
 			makeDetail({ ...playlistDefaults, entry_count: queued.length, entries: queued }),
 			0
 		);
@@ -1220,7 +1225,7 @@ describe('a playlist queue keeps its own identity', () => {
 	it('still names the playlist it plays after a shuffle toggle reorders the queue', async () => {
 		const queued = entries();
 		vi.spyOn(Math, 'random').mockReturnValue(0);
-		playPlaylistEntry(
+		await playPlaylistEntryAndShowNowPlaying(
 			makeDetail({ ...playlistDefaults, entry_count: queued.length, entries: queued }),
 			0
 		);
@@ -1276,9 +1281,12 @@ describe('native first play ignores stream settings', () => {
 		toasts.set([]);
 	});
 
-	it('playPlaylistEntry loads the first take natively without concat', async () => {
+	it('loads the first take natively without concat', async () => {
 		const entries = [makePlaylistEntry(playlistEntryDefaults)];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(audioPlayer.load).toHaveBeenCalledWith(
 			expect.objectContaining({ songTitle: 'Playlist Song' }),
@@ -1833,131 +1841,6 @@ describe('starting album playback from a take', () => {
 	});
 });
 
-describe('playAlbumSong', () => {
-	beforeEach(() => {
-		setQueuePlaybackMode('classic');
-		toasts.set([]);
-	});
-
-	it('loads the takes of a song whose album was just switched to, then plays its pick', async () => {
-		// #141/4: the album list only carries generation_count, so a row's play
-		// button on a freshly opened album has no take to hand the player yet.
-		const picked = makeGen({
-			...genDefaults,
-			id: 'g-pick',
-			song_id: 's9',
-			is_picked: true,
-			mp3_path: 'b/p.mp3'
-		});
-		const listed = makeSong({
-			...queuedSongDefaults(),
-			id: 's9',
-			album_id: 'a2',
-			generations: [],
-			generation_count: 2
-		});
-		songList.set([listed]);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's9',
-				album_id: 'a2',
-				generation_count: 2,
-				generations: [makeGen({ ...genDefaults, id: 'g-first', song_id: 's9' }), picked]
-			})
-		);
-
-		await playAlbumSong('a2', listed);
-
-		expect(fetchSong).toHaveBeenCalledWith('s9');
-		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({
-				generation: expect.objectContaining({ id: 'g-pick' })
-			}),
-			{ restart: true }
-		);
-		expect(get(queueContext)).toEqual(expect.objectContaining({ type: 'album', albumId: 'a2' }));
-	});
-
-	it('skips an archived take, which its row offers no way to play', async () => {
-		const listed = makeSong({
-			...queuedSongDefaults(),
-			id: 's-arch',
-			album_id: 'a3',
-			generations: [],
-			generation_count: 2
-		});
-		songList.set([listed]);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's-arch',
-				album_id: 'a3',
-				generation_count: 2,
-				generations: [
-					makeGen({
-						...genDefaults,
-						id: 'g-arch',
-						song_id: 's-arch',
-						is_picked: true,
-						is_archived: true
-					}),
-					makeGen({ ...genDefaults, id: 'g-live', song_id: 's-arch', mp3_path: 'a3/live.mp3' })
-				]
-			})
-		);
-
-		await playAlbumSong('a3', listed);
-
-		expect(audioPlayer.load).toHaveBeenCalledWith(
-			expect.objectContaining({ generation: expect.objectContaining({ id: 'g-live' }) }),
-			{ restart: true }
-		);
-	});
-
-	it('reports an all-archived song as archived, not as having no take', async () => {
-		const listed = makeSong({
-			...queuedSongDefaults(),
-			id: 's-arch-only',
-			generations: []
-		});
-		songList.set([listed]);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			makeSong({
-				...queuedSongDefaults(),
-				id: 's-arch-only',
-				generations: [
-					makeGen({ ...genDefaults, id: 'g-a', song_id: 's-arch-only', is_archived: true })
-				]
-			})
-		);
-
-		await playAlbumSong('a1', listed);
-
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: ALBUM_ROW_ARCHIVED_ONLY_TOAST, type: 'error' })
-		]);
-	});
-
-	it('says so instead of failing silently when the song has no take', async () => {
-		const empty = makeSong({
-			...queuedSongDefaults(),
-			id: 's-empty',
-			generations: [],
-			generation_count: 0
-		});
-		songList.set([empty]);
-
-		await playAlbumSong('a1', empty);
-
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ message: ALBUM_ROW_NO_TAKE_TOAST, type: 'error' })
-		]);
-	});
-});
-
 describe('playAlbum start track', () => {
 	beforeEach(() => {
 		setQueuePlaybackMode('classic');
@@ -2328,7 +2211,10 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ ...playlistEntryDefaults, id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ ...playlistEntryDefaults, id: 'pe3', generation_id: 'g3' })
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 	});
@@ -2341,7 +2227,10 @@ describe('shuffle rebuilds the playing queue', () => {
 			makePlaylistEntry({ ...playlistEntryDefaults, id: 'pe2', generation_id: 'g2' }),
 			makePlaylistEntry({ ...playlistEntryDefaults, id: 'pe3', generation_id: 'g3' })
 		];
-		playPlaylistEntry(makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }), 0);
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: entries.length, entries }),
+			0
+		);
 		expect(createQueueStreamSnapshot).not.toHaveBeenCalled();
 		expect(get(shuffleEnabled)).toBe(false);
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
@@ -2619,6 +2508,40 @@ describe('playIdleStart', () => {
 		selectedPlaylistDetail.set(null);
 		await playIdleStart();
 		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+	});
+});
+
+describe('playAlbum', () => {
+	it('starts on a drawn song, not on track 1, when asked for a random start', async () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0);
+		songList.set(
+			['s1', 's2', 's3'].map((id, index) =>
+				makeSong({
+					...queuedSongDefaults(),
+					id,
+					title: id,
+					track_number: index + 1,
+					generations: [
+						makeGen({
+							...genDefaults,
+							id: `g-${id}`,
+							song_id: id,
+							is_picked: true,
+							mp3_path: `a1/${id}.mp3`
+						})
+					]
+				})
+			)
+		);
+
+		await playAlbum('a1', 'random');
+
+		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
+			restart: true
+		});
+		const ctx = get(queueContext);
+		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
+		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
 	});
 });
 

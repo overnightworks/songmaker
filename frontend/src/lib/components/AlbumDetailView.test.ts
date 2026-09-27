@@ -12,8 +12,12 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
-	collectionRowPlayLabel
+	collectionPlayLabel,
+	RAIL_PLAYING_MARKER_LABEL,
+	collectionShuffleLabel
 } from '$lib/constants';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -86,13 +90,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playAlbumSong: vi.fn()
+		playAlbum: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbumSong } from '$lib/stores/player';
+import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { activeJobs } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 
@@ -155,7 +160,8 @@ beforeEach(() => {
 	activeJobs.set([]);
 	FakeJobEventSource.sources = [];
 	vi.mocked(selectSong).mockReset();
-	vi.mocked(playAlbumSong).mockReset();
+	vi.mocked(playAlbum).mockReset();
+	setShuffle(false);
 });
 
 afterEach(async () => {
@@ -170,6 +176,8 @@ afterEach(async () => {
 	curationActive.set(false);
 	nowPlayingSurface.set('closed');
 	activeJobs.set([]);
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
 	vi.unstubAllGlobals();
 });
 
@@ -200,25 +208,54 @@ describe('AlbumDetailView header', () => {
 		expect(target.textContent).not.toContain('Other Night');
 	});
 
-	it('shows the cover, title, and a single Play action beside the menu', async () => {
+	it('shows the cover, title, the play circle and shuffle beside the menu', async () => {
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.header-cover')).not.toBeNull();
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		expect(header.querySelector('.play-btn')?.textContent).toContain('Play');
+		expect(getByRoleButton(header, collectionPlayLabel('album'))).not.toBeNull();
+		expect(getByRoleButton(header, collectionShuffleLabel('album'))).not.toBeNull();
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 	});
 
-	it('sizes Play to the frequent hitbox on a coarse pointer', async () => {
-		// #163/6: the album header's Play is the shortest path to hearing the
-		// album, and on a phone it has to be reachable with a thumb.
-		injectHitboxStyles();
+	it('starts this album in order from its play circle', async () => {
+		setShuffle(true);
 		const target = await renderDetail();
-		const play = requireElement(target, '.play-btn');
-		setPointer('coarse');
 
-		expect(minHeightPx(play, 'album Play')).toBe(HITBOX_FREQUENT_PX);
+		getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionPlayLabel('album')
+		).click();
+
+		expect(playAlbum).toHaveBeenCalledWith('a-local', 'top');
+		expect(get(shuffleEnabled)).toBe(false);
 	});
+
+	it('starts this album shuffled from a drawn song from its shuffle square', async () => {
+		const target = await renderDetail();
+
+		getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionShuffleLabel('album')
+		).click();
+
+		expect(playAlbum).toHaveBeenCalledWith('a-local', 'random');
+		expect(get(shuffleEnabled)).toBe(true);
+	});
+
+	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(
+		'sizes "%s" to the frequent hitbox on a coarse pointer',
+		async (label) => {
+			// #163/6: the album header's play is the shortest path to hearing the
+			// album, and on a phone it has to be reachable with a thumb.
+			injectHitboxStyles();
+			const target = await renderDetail();
+			const button = getByRoleButton(requireElement(target, '.collection-header'), label);
+			setPointer('coarse');
+
+			expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
+		}
+	);
 
 	it('names the object and lists Share, Cover, Rename, Add to playlist, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
@@ -683,96 +720,76 @@ describe('AlbumDetailView subtitle and year', () => {
 	});
 });
 
-describe('AlbumDetailView song row Play', () => {
-	it('plays the row inside the open album, letting the player resolve the take', async () => {
-		// The row knows the song, not which take to play — a song whose takes
-		// are not loaded yet (just switched albums, #141/4) still plays.
-		songList.set([
-			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
-		]);
-		const target = await renderDetail();
-
-		requireElement<HTMLButtonElement>(target, '.item-play').click();
-		await tick();
-
-		expect(playAlbumSong).toHaveBeenCalledWith(
-			'a-local',
-			expect.objectContaining({ id: 's-local' })
-		);
-	});
-
-	it('counts takes, not gens, on a song row', async () => {
-		songList.set([
-			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 2 })
-		]);
-		const target = await renderDetail();
-		expect(requireElement(target, '.item-meta').textContent?.trim()).toBe('2 takes');
-	});
-
-	it('names the row play action after the song it starts', async () => {
+describe('AlbumDetailView song row', () => {
+	function renderTwoSongs(): Promise<HTMLElement> {
 		songList.set([
 			song({
-				id: 's-local',
+				id: 's-tide',
 				album_id: 'a-local',
 				album_title: 'Night Drive',
 				title: 'Tide',
-				generations: [generation({ song_id: 's-local' })],
+				generations: [generation({ song_id: 's-tide' })],
+				generation_count: 2
+			}),
+			song({
+				id: 's-ebb',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				title: 'Ebb',
 				generation_count: 1
 			})
 		]);
-		const target = await renderDetail();
+		return renderDetail();
+	}
 
-		expect(requireElement(target, '.item-play').getAttribute('aria-label')).toBe(
-			collectionRowPlayLabel('Tide')
+	function rowOf(target: HTMLElement, title: string): HTMLElement {
+		const row = Array.from(target.querySelectorAll<HTMLElement>('.item-row')).find(
+			(candidate) => candidate.querySelector('.item-title')?.textContent === title
 		);
+		if (!row) throw new Error(`Expected a row for ${title}`);
+		return row;
+	}
+
+	it('counts takes, not gens, on a song row', async () => {
+		const target = await renderTwoSongs();
+		expect(rowOf(target, 'Tide').querySelector('.item-meta')?.textContent?.trim()).toBe('2 takes');
 	});
 
-	it('disables Play when the song has no generations', async () => {
-		songList.set([
-			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
-		]);
-		const target = await renderDetail();
+	it('opens the song in the editor when the row is tapped, without playing it', async () => {
+		const target = await renderTwoSongs();
 
-		const playBtn = requireElement<HTMLButtonElement>(target, '.item-play');
-		expect(playBtn.disabled).toBe(true);
-	});
-
-	it('does not open the song when Play is clicked', async () => {
-		const first = generation({ song_id: 's-local', id: 'g-first' });
-		songList.set([
-			song({
-				id: 's-local',
-				album_id: 'a-local',
-				album_title: 'Night Drive',
-				generations: [first],
-				generation_count: 1
-			})
-		]);
-		const target = await renderDetail();
-
-		requireElement<HTMLButtonElement>(target, '.item-play').click();
+		requireElement<HTMLButtonElement>(rowOf(target, 'Tide'), '.item-body').click();
 		await tick();
 
-		expect(selectSong).not.toHaveBeenCalled();
+		expect(selectSong).toHaveBeenCalledWith('s-tide');
+		expect(playAlbum).not.toHaveBeenCalled();
 	});
 
-	it('opens the song when the row body is clicked, not Play', async () => {
-		const first = generation({ song_id: 's-local', id: 'g-first' });
-		songList.set([
-			song({
-				id: 's-local',
-				album_id: 'a-local',
-				album_title: 'Night Drive',
-				generations: [first],
-				generation_count: 1
-			})
-		]);
-		const target = await renderDetail();
+	it('carries no play glyph of its own: the row is its only button', async () => {
+		const target = await renderTwoSongs();
 
-		requireElement<HTMLButtonElement>(target, '.item-body').click();
-		await tick();
-
-		expect(selectSong).toHaveBeenCalledWith('s-local');
-		expect(playAlbumSong).not.toHaveBeenCalled();
+		expect(rowOf(target, 'Tide').querySelectorAll('button')).toHaveLength(1);
 	});
+
+	it.each([
+		['playing', true],
+		['paused', false]
+	] as const)(
+		'marks the row the transport holds while %s, and only that row',
+		async (status, marked) => {
+			audioPlayer.current = { songId: 's-tide' } as unknown as typeof audioPlayer.current;
+			audioPlayer.status = status;
+
+			const target = await renderTwoSongs();
+
+			expect(
+				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', RAIL_PLAYING_MARKER_LABEL) !== null
+			).toBe(marked);
+			expect(rowOf(target, 'Tide').classList.contains('current')).toBe(true);
+			expect(
+				findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', RAIL_PLAYING_MARKER_LABEL)
+			).toBeNull();
+			expect(rowOf(target, 'Ebb').classList.contains('current')).toBe(false);
+		}
+	);
 });

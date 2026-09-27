@@ -7,15 +7,10 @@
 		selectedPlaylistId
 	} from '$lib/stores/playlists';
 	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
-	import {
-		RAIL_PLAYING_MARKER_LABEL,
-		RAIL_PLAYLISTS_LABEL,
-		RAIL_PLAYLISTS_NAV_LABEL
-	} from '$lib/constants';
-	import type { PlaylistEntryItem } from '$lib/api/types';
+	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
+	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
 	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
 
@@ -30,7 +25,6 @@
 	// with no chevron in any state.
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
-	const playing = $derived(audioPlayer.status === 'playing');
 	const query = $derived($railTreeQuery.trim().toLowerCase());
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
@@ -46,10 +40,6 @@
 	$effect(() => {
 		void ensurePlaylistsLoaded();
 	});
-
-	function isEntryPlaying(entry: PlaylistEntryItem): boolean {
-		return isPlaylistEntryCurrent(entry) && playing;
-	}
 
 	function onPlaylistLabelClick(playlistId: string): void {
 		void openPlaylist(playlistId);
@@ -121,11 +111,7 @@
 												class:row-active={isPlaylistEntryCurrent(entry)}
 												onclick={() => onEntryClick(index)}
 											>
-												{#if isEntryPlaying(entry)}
-													<span class="equalizer" role="img" aria-label={RAIL_PLAYING_MARKER_LABEL}>
-														<span></span><span></span><span></span>
-													</span>
-												{/if}
+												<PlayingMark current={isPlaylistEntryCurrent(entry)} />
 												<span class="row-title">{entry.song_title}</span>
 											</button>
 										</li>
@@ -239,51 +225,6 @@
 	@media (prefers-reduced-motion: reduce) {
 		.playlist-songs {
 			transition: none;
-		}
-	}
-
-	.equalizer {
-		display: inline-flex;
-		align-items: flex-end;
-		gap: 2px;
-		width: 12px;
-		height: 12px;
-		flex-shrink: 0;
-	}
-
-	.equalizer span {
-		width: 2px;
-		background: var(--accent);
-		animation: equalize 0.9s ease-in-out infinite;
-	}
-
-	.equalizer span:nth-child(1) {
-		height: 40%;
-		animation-delay: -0.6s;
-	}
-
-	.equalizer span:nth-child(2) {
-		height: 100%;
-		animation-delay: -0.3s;
-	}
-
-	.equalizer span:nth-child(3) {
-		height: 65%;
-	}
-
-	@media (prefers-reduced-motion: reduce) {
-		.equalizer span {
-			animation: none;
-		}
-	}
-
-	@keyframes equalize {
-		0%,
-		100% {
-			height: 30%;
-		}
-		50% {
-			height: 100%;
 		}
 	}
 </style>
