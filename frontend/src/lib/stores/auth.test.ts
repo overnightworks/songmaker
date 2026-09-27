@@ -34,6 +34,7 @@ import {
 	clearAuth
 } from './auth';
 import { ApiError } from '$lib/api/client';
+import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { shareCount } from '$lib/stores/shares';
 import { generationFailures } from '$lib/stores/jobs';
@@ -73,7 +74,11 @@ describe('classifyAuthFailure', () => {
 		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'disabled'],
 		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'retryable'],
 		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'retryable'],
-		['a network error', new TypeError('Failed to fetch'), 'retryable']
+		[
+			'a network error',
+			new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch')),
+			'retryable'
+		]
 	])('classifies %s as %s', (_label, error, expected) => {
 		expect(classifyAuthFailure(error)).toBe(expected);
 	});
@@ -127,7 +132,7 @@ describe('checkAuth', () => {
 	it.each([
 		['a 429 rate limit', new ApiError(429, 'slow down', AUTH_ME_PATH)],
 		['a 503 outage', new ApiError(503, 'unavailable', AUTH_ME_PATH)],
-		['a network error', new TypeError('Failed to fetch')]
+		['a network error', new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'))]
 	])('keeps the known user through %s and records a retryable error', async (_label, error) => {
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockRejectedValueOnce(error);
