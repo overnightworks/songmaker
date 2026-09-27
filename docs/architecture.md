@@ -1001,8 +1001,19 @@ The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect and is retried
 on the next `hello`; a later successful fetch clears Retry. A refresh that got no
-answer at all reads "You're offline — retrying" rather than the browser's own
-`Failed to fetch`. A failed live refresh also retries on its own, on the streams'
+answer at all is not an error of this owner: it sets no visible error and no Retry,
+and the library shows no failure of its own. Whether the page can reach the server
+has one owner, `stores/connectivity.ts`: it combines `navigator.onLine`, the
+`online`/`offline` events and the resource stream's health, which the resource
+sync owner reports (a `hello` or an answering auth probe means reachable, a stream
+that fails to reopen while the browser is online means not). Surfaces read its
+`offline` store and never decide on their own: the one `OfflineStrip` — a calm
+neutral "You're offline — retrying" with no button — rests on the top edge of the
+private transport bar, steps aside with it for the phone keyboard and full Now
+Playing, and goes by itself once back online; the root layout marks
+`html[data-offline]` so `app.css` adds the strip's height to `--player-height`
+and the page (the phone's Generate bar included) stays above it; and Generate is
+disabled with no reason text of its own. A failed live refresh also retries on its own, on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries
 at once, and the same events restart a bootstrap that failed.
