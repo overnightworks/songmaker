@@ -5,15 +5,24 @@ import {
 	cowriterHeaderLabel,
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
-	cowriterUnavailableLabel
+	cowriterUnavailableLabel,
+	providerDisplayName
 } from './cowriter-ui';
 
 describe('co-writer provider copy', () => {
 	it('uses the active provider instead of a hardcoded Claude name', () => {
-		expect(cowriterHeaderLabel('grok', 'grok-4.6')).toBe('grok · grok-4.6');
+		expect(cowriterHeaderLabel('grok', 'grok-4.6')).toBe('Grok · grok-4.6');
 		expect(cowriterThinkingLabel('codex')).toBe('codex is thinking...');
 		expect(cowriterUnavailableLabel('grok')).toBe('grok is currently unavailable');
 		expect(cowriterThinkingLabel('claude')).not.toContain('Claude Co-Writer');
+	});
+
+	it.each([
+		['claude', 'Claude'],
+		['codex', 'Codex'],
+		['openai', 'Openai']
+	])('shows the provider id %s as %s, the one spelling every surface uses', (id, name) => {
+		expect(providerDisplayName(id)).toBe(name);
 	});
 });
 

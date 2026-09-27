@@ -189,11 +189,6 @@ export const COWRITER_RUNNING_TURN_POLL_MS = 2_000;
 export const COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT = 3;
 export const COWRITER_CLAUDE_UNVERIFIED_LABEL =
 	"Claude's tools could not be verified yet — your next message checks again.";
-export const COWRITER_PROVIDER_LABELS: Record<string, string> = {
-	claude: 'Claude',
-	grok: 'Grok',
-	codex: 'Codex'
-};
 export const COWRITER_CONVERSATION_MENU_LABEL = 'Conversation menu';
 export const COWRITER_NEW_CONVERSATION_LABEL = 'New conversation';
 export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';

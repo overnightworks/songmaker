@@ -290,7 +290,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const target = await render();
 
 		const menu = await openConversationMenu(target);
-		expect(menu.textContent).toContain('claude · sonnet');
+		expect(menu.textContent).toContain('Claude · sonnet');
 		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
 		expect(conversationRows).toHaveLength(2);
 
