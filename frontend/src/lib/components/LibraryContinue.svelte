@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { LibraryContinueItem } from '$lib/api/library';
-	import { loadLibraryContinueItems } from '$lib/stores/libraryData';
+	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 	import { openAlbum, selectSong } from '$lib/stores/navigation';
 	import {
 		initLibraryContinueCollapsed,
@@ -19,19 +18,36 @@
 
 	const visibleItems = $derived(items.slice(0, MAX_CONTINUE_ITEMS));
 
+	let inflightRefresh: Promise<void> | null = null;
+
 	onMount(() => {
 		initLibraryContinueCollapsed();
-		void loadItems();
+		void refreshItems();
 	});
 
-	async function loadItems(): Promise<void> {
-		loadState = 'loading';
+	// Continue ranks what the musician touched last, so it is never cached
+	// beyond one visit: every show of Home and every return to the foreground
+	// asks the server again, and a signal that repeats mid-request joins it.
+	function refreshItems(): Promise<void> {
+		inflightRefresh ??= fetchItems().finally(() => (inflightRefresh = null));
+		return inflightRefresh;
+	}
+
+	// A list already on screen stays when a refresh fails (#1039): the phone may
+	// wake before its network does, and the offline notice owns saying so. Only
+	// a Home that never had a list names the failure and offers Retry.
+	async function fetchItems(): Promise<void> {
+		if (loadState === 'error') loadState = 'loading';
 		try {
-			items = await loadLibraryContinueItems();
+			items = (await fetchLibraryContinue()).items;
 			loadState = 'ready';
 		} catch {
-			loadState = 'error';
+			if (loadState !== 'ready') loadState = 'error';
 		}
+	}
+
+	function refreshOnReturnToForeground(): void {
+		if (document.visibilityState === 'visible') void refreshItems();
 	}
 
 	function itemSubtitle(item: LibraryContinueItem): string {
@@ -51,6 +67,8 @@
 	}
 </script>
 
+<svelte:document onvisibilitychange={refreshOnReturnToForeground} />
+
 <section class="library-continue" aria-label="Continue">
 	<button
 		type="button"
@@ -68,7 +86,9 @@
 		{:else if loadState === 'error'}
 			<div class="continue-state" role="alert">
 				<p>Could not load continue items.</p>
-				<button type="button" class="continue-retry" onclick={() => void loadItems()}>Retry</button>
+				<button type="button" class="continue-retry" onclick={() => void refreshItems()}
+					>Retry</button
+				>
 			</div>
 		{:else if visibleItems.length === 0}
 			<p class="continue-state">Nothing to continue yet.</p>
