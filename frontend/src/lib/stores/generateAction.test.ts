@@ -43,6 +43,7 @@ import {
 	setDraftPrompt,
 	versions
 } from './editor';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { cancelGeneration, generate, generateAction } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
 import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
@@ -104,7 +105,14 @@ afterEach(() => {
 	stopHealthPolling();
 	for (const { job } of get(activeJobs)) removeJob(job.id);
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
+	resetConnectivityForTests();
 });
+
+function browserGoesOffline(): void {
+	vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+	window.dispatchEvent(new Event('offline'));
+}
 
 describe('generate action presentation', () => {
 	it.each([
@@ -146,6 +154,24 @@ describe('generate action presentation', () => {
 			expectedState: { kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE },
 			setup: () => {
 				vi.mocked(fetchHealth).mockResolvedValue(makeHealthResponse({ acestep_workers_online: 0 }));
+			}
+		},
+		{
+			state: 'browser offline',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			setup: browserGoesOffline
+		},
+		{
+			state: 'server unreachable while the browser is online',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			setup: () => reportResourceStreamReachable(false)
+		},
+		{
+			state: 'offline with missing lyrics',
+			expectedState: { kind: 'disabled', mode: 'generate', reason: null },
+			setup: () => {
+				setDraftLyrics('');
+				reportResourceStreamReachable(false);
 			}
 		},
 		{
