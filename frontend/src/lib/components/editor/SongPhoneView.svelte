@@ -10,21 +10,21 @@
 
 	interface Props {
 		sharedLink: Snippet;
-		write: Snippet;
+		edit: Snippet;
 		cowriter: Snippet;
 		expiryDigest: Snippet;
 		takeListProps: ComponentProps<typeof TakesList>;
 		chips: RecipeChip[];
 	}
 
-	let { sharedLink, write, cowriter, expiryDigest, takeListProps, chips }: Props = $props();
+	let { sharedLink, edit, cowriter, expiryDigest, takeListProps, chips }: Props = $props();
 
 	let actionBarEl: HTMLDivElement | undefined = $state();
 	let generateBarHeight = $state<number | undefined>(undefined);
 
 	// The action bar's own content decides its height (#993 fixed padding
 	// undershot it once the failure state expanded the worker sentence); the
-	// Write column reserves exactly that much, read back live instead of
+	// Edit tab reserves exactly that much, read back live instead of
 	// guessed as a constant. A bar that stepped aside for the keyboard measures
 	// zero and so takes no room at all; it stays mounted so the Generate
 	// button keeps its own state across the typing.
@@ -52,18 +52,18 @@
 		aria-labelledby={`song-tab-${$detailTab}`}
 		tabindex="0"
 	>
-		{#if $detailTab === 'write'}
+		{#if $detailTab === 'edit'}
 			{@render sharedLink()}
 			<PhoneRecipeSection {chips} />
 			<div
-				class="write-scroll"
+				class="edit-scroll"
 				style:--generate-bar-height={generateBarHeight !== undefined
 					? `${generateBarHeight}px`
 					: undefined}
 			>
-				{@render write()}
+				{@render edit()}
 			</div>
-			<div class="write-actionbar" hidden={$typingOnPhone} bind:this={actionBarEl}>
+			<div class="edit-actionbar" hidden={$typingOnPhone} bind:this={actionBarEl}>
 				<GenerateButton reasonInside />
 			</div>
 		{:else}
@@ -81,18 +81,18 @@
 		min-width: 0;
 	}
 
-	/* The Write tab's own content keeps growing the page (#993); the action
+	/* The Edit tab's own content keeps growing the page (#993); the action
 	   bar below it is what must stay put. A sticky box near the bottom of a
 	   scrolling ancestor (`<main>`, per SongDetailView/LibraryWorkspace) stays
 	   pinned to `bottom` for the whole scroll, not just once it is reached —
 	   but that also means it visually renders above wherever the flow hasn't
 	   scrolled to yet, so the lyrics need their own reserved gap the size of
 	   the bar or its rendered box would sit over their last lines. */
-	.write-scroll {
+	.edit-scroll {
 		padding-bottom: var(--generate-bar-height, var(--editor-generate-bar-height));
 	}
 
-	.write-actionbar {
+	.edit-actionbar {
 		position: sticky;
 		bottom: 0;
 		z-index: 1;
@@ -104,7 +104,7 @@
 		border-top: 1px solid var(--border);
 	}
 
-	.write-actionbar[hidden] {
+	.edit-actionbar[hidden] {
 		display: none;
 	}
 </style>

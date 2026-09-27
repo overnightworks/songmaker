@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { fetchAlbums, createAlbum, createSong } from '$lib/api/client';
 	import { albumList, addSongToList } from '$lib/stores/libraryData';
-	import { openWriteTab, selectSong } from '$lib/stores/navigation';
+	import { selectSong } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
 	import type { AlbumItem } from '$lib/api/types';
 
@@ -44,7 +44,6 @@
 			});
 			addSongToList(created);
 			selectSong(created.id);
-			openWriteTab();
 			newTitle = '';
 		} catch (e) {
 			addToast(e instanceof Error ? e.message : 'Create failed', 'error');

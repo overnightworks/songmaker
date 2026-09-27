@@ -214,7 +214,7 @@ them.
 Two Chromium projects walk the same flow: `desktop` at 1440×900 and `mobile` at
 390×844 with touch input. The steps the two shells share are written once; the
 mobile project adds what the compact shell does differently — the rail as a
-drawer, the editor opening on Write, Now Playing's judging panel as a sheet,
+drawer, the editor opening on Edit, Now Playing's judging panel as a sheet,
 the one 64px transport row with a thumb-sized play control — plus a 320-wide
 check that the album header still reads as a title over its breadcrumb.
 
