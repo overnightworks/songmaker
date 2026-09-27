@@ -818,7 +818,7 @@ describe('song selection (dead song link, issue #237)', () => {
 
 	it.each([
 		[new ApiError(500, 'Song loading failed', '/api/songs/s1'), 'Song loading failed'],
-		[new NetworkError('/api/songs/s1', new TypeError('Failed to fetch')), TAKES_ERROR],
+		[new TypeError('generations is not iterable'), TAKES_ERROR],
 		[null, TAKES_ERROR]
 	])(
 		'shows the context-loading error with retry in Takes without a toast or clearing selection (%s)',

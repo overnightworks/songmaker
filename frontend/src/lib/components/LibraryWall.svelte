@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { get } from 'svelte/store';
 	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
@@ -13,7 +12,7 @@
 	} from '$lib/stores/playlists';
 	import { openCollection } from '$lib/stores/collection';
 	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
-	import { offline } from '$lib/stores/connectivity';
+	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import { compareByCreatedAt } from '$lib/utils/recency';
@@ -127,14 +126,6 @@
 		void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
 		if ($libraryWallOrder === 'recent') void loadRecentWork();
-	}
-
-	function whenBackOnline(callback: () => void): () => void {
-		let wasOffline = get(offline);
-		return offline.subscribe((isOffline) => {
-			if (wasOffline && !isOffline) callback();
-			wasOffline = isOffline;
-		});
 	}
 
 	async function loadRecentWork(): Promise<void> {
