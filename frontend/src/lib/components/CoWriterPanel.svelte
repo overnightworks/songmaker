@@ -27,6 +27,8 @@
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_CONVERSATION_MENU_LABEL,
+		COWRITER_DELETE_CONVERSATION_TITLE,
+		COWRITER_DELETE_CONVERSATION_WARNING,
 		COWRITER_MEMORY_LABEL,
 		COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 		COWRITER_NEW_CONVERSATION_LABEL,
@@ -65,6 +67,7 @@
 	import ChatInput from './ChatInput.svelte';
 	import Icon from './Icon.svelte';
 	import MemoryEditor from './MemoryEditor.svelte';
+	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import MentionDropdown from './MentionDropdown.svelte';
 
 	interface Props {
@@ -122,6 +125,7 @@
 	let conversationMenuTrigger: HTMLButtonElement | undefined = $state();
 	let conversationMenu: HTMLDivElement | undefined = $state();
 
+	let conversationAwaitingDelete: ConversationItem | null = $state(null);
 	let memoryOpen = $state(false);
 	let memoryBundle: MemoryBundle | null = $state(null);
 	let memoryLoading = $state(false);
@@ -359,7 +363,17 @@
 		}
 	}
 
-	async function handleDelete(conv: ConversationItem): Promise<void> {
+	function askToDelete(conv: ConversationItem): void {
+		conversationAwaitingDelete = conv;
+	}
+
+	async function confirmDelete(): Promise<void> {
+		const conv = conversationAwaitingDelete;
+		conversationAwaitingDelete = null;
+		if (conv) await deleteConversationNow(conv);
+	}
+
+	async function deleteConversationNow(conv: ConversationItem): Promise<void> {
 		try {
 			await deleteConversation(conv.id);
 			conversations = conversations.filter((c) => c.id !== conv.id);
@@ -923,7 +937,8 @@
 								type="button"
 								role="menuitem"
 								class="conv-del"
-								onclick={() => handleDelete(conv)}
+								data-hitbox="frequent"
+								onclick={() => chooseFromConversationMenu(() => askToDelete(conv))}
 								aria-label="Delete conversation">&#x2715;</button
 							>
 						</div>
@@ -932,6 +947,16 @@
 			{/if}
 		</div>
 	</div>
+
+	{#if conversationAwaitingDelete}
+		<ConfirmDeleteDialog
+			title={COWRITER_DELETE_CONVERSATION_TITLE}
+			items={[conversationRowLabel(conversationAwaitingDelete, new Date())]}
+			warning={COWRITER_DELETE_CONVERSATION_WARNING}
+			onconfirm={confirmDelete}
+			oncancel={() => (conversationAwaitingDelete = null)}
+		/>
+	{/if}
 
 	<MemoryEditor
 		open={memoryOpen}
