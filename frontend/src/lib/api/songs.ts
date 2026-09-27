@@ -1,4 +1,11 @@
-import type { CleanupResult, PaginatedResponse, ShareResult, SongItem, VersionItem } from './types';
+import type {
+	CleanupResult,
+	PaginatedResponse,
+	ShareResult,
+	SongItem,
+	SongListenRequest,
+	VersionItem
+} from './types';
 import { apiFetch } from './fetch';
 import type { LibraryListOptions } from './library';
 
@@ -76,8 +83,17 @@ export async function restoreSong(songId: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}/restore`, { method: 'POST' });
 }
 
-export async function recordSongListen(songId: string): Promise<void> {
-	await apiFetch(`/api/songs/${songId}/listen`, { method: 'POST' });
+export async function recordSongListen(songId: string, playlistId: string | null): Promise<void> {
+	if (playlistId === null) {
+		await apiFetch(`/api/songs/${songId}/listen`, { method: 'POST' });
+		return;
+	}
+	const request: SongListenRequest = { playlist_id: playlistId };
+	await apiFetch(`/api/songs/${songId}/listen`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(request)
+	});
 }
 
 export async function moveSong(songId: string, albumId: string): Promise<SongItem> {

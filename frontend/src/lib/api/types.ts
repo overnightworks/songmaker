@@ -1033,6 +1033,10 @@ export interface SongItem {
 	generations: GenerationItem[];
 }
 
+export interface SongListenRequest {
+	playlist_id?: string | null;
+}
+
 export interface SongMoveRequest {
 	album_id: string;
 }

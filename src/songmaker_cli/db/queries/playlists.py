@@ -85,6 +85,16 @@ def get_playlist(session: Session, playlist_id: str) -> Playlist | None:
     )
 
 
+def playlist_holds_song(session: Session, playlist: Playlist, song: Song) -> bool:
+    """Whether the playlist holds any take of the song."""
+    return session.query(
+        session.query(PlaylistEntry)
+        .join(Generation, PlaylistEntry.generation_id == Generation.id)
+        .filter(PlaylistEntry.playlist_id == playlist.id, Generation.song_id == song.id)
+        .exists(),
+    ).scalar()
+
+
 def create_playlist(session: Session, title: str, user_id: str, slug: str) -> Playlist:
     """Create a playlist.
 
