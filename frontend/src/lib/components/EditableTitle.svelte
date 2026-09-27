@@ -36,7 +36,10 @@
 		});
 	}
 
+	// Disabling the focused field for the save makes the browser blur it, and
+	// that blur must not start a second save of the same draft.
 	async function commit(): Promise<void> {
+		if (saving) return;
 		const trimmed = draft.trim();
 		if (trimmed === value || (!trimmed && !allowEmpty)) {
 			editing = false;

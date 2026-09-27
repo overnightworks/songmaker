@@ -132,6 +132,25 @@ describe('EditableTitle', () => {
 		expect(stillEditing.disabled).toBe(false);
 	});
 
+	it('saves once when the browser blurs the field it disabled for the save', async () => {
+		let rejectSave: (reason: Error) => void = () => {};
+		const onsave = vi.fn(() => new Promise<void>((_resolve, reject) => (rejectSave = reject)));
+		const target = await render({ value: 'Night Drive', onsave });
+		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+		await tick();
+		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
+		input.value = 'Sunset Drive';
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+		await tick();
+		expect(input.disabled).toBe(true);
+		input.dispatchEvent(new FocusEvent('blur'));
+		rejectSave(new Error('Rename failed'));
+		await tick();
+
+		expect(onsave).toHaveBeenCalledTimes(1);
+	});
+
 	it('shows the placeholder in place of an empty value and keeps it clickable', async () => {
 		const target = await render({
 			value: '',
