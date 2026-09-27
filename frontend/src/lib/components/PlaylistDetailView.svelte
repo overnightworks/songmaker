@@ -4,6 +4,7 @@
 		isPlaylistEntryCurrent,
 		playPlaylist,
 		playPlaylistEntry,
+		queueContext,
 		type CollectionStart
 	} from '$lib/stores/player';
 	import {
@@ -368,7 +369,7 @@
 				     strips in Safari/VoiceOver. -->
 				<ul class="entry-rows" role="list">
 					{#each playlistDetail.entries as entry, i (entry.id)}
-						{@const current = isPlaylistEntryCurrent(entry)}
+						{@const current = isPlaylistEntryCurrent(entry, $queueContext)}
 						<li class="entry-row" class:current>
 							<button type="button" class="entry-info" onclick={() => playEntry(i)}>
 								<PlayingMark {current} />
