@@ -1,6 +1,7 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import {
@@ -122,5 +123,42 @@ describe('reloadWhileUnreachable', () => {
 		reloads.stop();
 
 		expect(reload).toHaveBeenCalledOnce();
+	});
+
+	describe('nameLoadFailure', () => {
+		const FALLBACK = 'Failed to load users';
+		const lostNetwork = (): NetworkError =>
+			new NetworkError('/api/users', new TypeError('Failed to fetch'));
+
+		it('names nothing for a lost network while a reload is still coming', () => {
+			vi.useFakeTimers();
+			const reloads = reloadWhileUnreachable(vi.fn());
+
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBeNull();
+			reportResourceStreamReachable(false);
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBeNull();
+		});
+
+		it('names the fallback, never the browser text, once the backoff is spent', () => {
+			vi.useFakeTimers();
+			const reloads = reloadWhileUnreachable(vi.fn());
+			UNREACHABLE_RELOAD_DELAYS_MS.forEach(() => reloads.afterNetworkFailure());
+
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBe(FALLBACK);
+		});
+
+		it.each([
+			{ answer: 'its reason', err: new ApiError(503, 'Database is migrating', '/api/users') },
+			{ answer: 'no reason', err: new ApiError(500, '', '/api/users') }
+		])('names a server answer with $answer and stops a pending reload', ({ err }) => {
+			vi.useFakeTimers();
+			const reload = vi.fn();
+			const reloads = reloadWhileUnreachable(reload);
+			reloads.afterNetworkFailure();
+
+			expect(reloads.nameLoadFailure(err, FALLBACK)).toBe(err.detail || FALLBACK);
+			vi.runAllTimers();
+			expect(reload).not.toHaveBeenCalled();
+		});
 	});
 });

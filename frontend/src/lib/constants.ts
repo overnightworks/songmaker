@@ -206,6 +206,10 @@ export const TAKES_RETRY_LABEL = 'Try again';
 export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
 export const EDITOR_QUEUED_LABEL = 'Queued';
 export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
+// Named when an admin panel's first read fails while no offline strip says why.
+export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
+export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
+export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 

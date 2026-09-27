@@ -1,4 +1,5 @@
 import { writable, type Readable } from 'svelte/store';
+import { whenBackOnline } from './connectivity';
 
 const DEFAULT_MAX_ERRORS = 5;
 
@@ -31,6 +32,7 @@ export function createPollingStore<T>(
 	let consecutiveErrors = 0;
 	let intervalId: ReturnType<typeof setInterval> | null = null;
 	let visibilityListener: (() => void) | null = null;
+	let stopListeningForReconnect: (() => void) | null = null;
 	let active = false;
 
 	async function tick(): Promise<void> {
@@ -45,14 +47,17 @@ export function createPollingStore<T>(
 			consecutiveErrors++;
 			error.set(e instanceof Error ? e : new Error(String(e)));
 			if (consecutiveErrors >= maxErrors) {
-				stop();
+				halt();
 			}
 		} finally {
 			loading.set(false);
 		}
 	}
 
+	// The connection coming back reads at once, and resumes a polling its
+	// failures halted: a lost network is no reason to stay stale (#1107).
 	function start(): void {
+		stopListeningForReconnect ??= whenBackOnline(readAgain);
 		if (active) return;
 		active = true;
 		consecutiveErrors = 0;
@@ -68,7 +73,18 @@ export function createPollingStore<T>(
 		}
 	}
 
+	function readAgain(): void {
+		if (active) void tick();
+		else start();
+	}
+
 	function stop(): void {
+		stopListeningForReconnect?.();
+		stopListeningForReconnect = null;
+		halt();
+	}
+
+	function halt(): void {
 		if (!active) return;
 		active = false;
 		if (intervalId !== null) {
