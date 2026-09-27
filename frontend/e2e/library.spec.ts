@@ -3,9 +3,8 @@
 // public album link while logged out.
 //
 // Both shells walk the same playback and sharing steps. The desktop flow also
-// curates a playlist through the detailed take list; on mobile, that list is
-// intentionally absent and the Write tab's take strip is the one playback
-// entry point.
+// curates a playlist through the detailed take list; on mobile, the Edit tab
+// carries no take strip and the Takes tab is the one playback entry point.
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {

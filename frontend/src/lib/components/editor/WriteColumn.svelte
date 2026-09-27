@@ -13,8 +13,7 @@
 		EDITOR_LYRICS_LABEL,
 		EDITOR_STYLE_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
-		EDITOR_TAB_TAKES_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL
+		EDITOR_TAB_TAKES_LABEL
 	} from '$lib/constants';
 	import TakeStrip from './TakeStrip.svelte';
 
@@ -23,10 +22,9 @@
 		coWriterOpen: boolean;
 		compact: boolean;
 		cowriterPanel: Snippet;
-		onopencowriter: () => void;
 	}
 
-	let { song, coWriterOpen, compact, cowriterPanel, onopencowriter }: Props = $props();
+	let { song, coWriterOpen, compact, cowriterPanel }: Props = $props();
 
 	const dirty = $derived($isDirty);
 	const latestVersion = $derived<VersionItem | null>($versions[0] ?? null);
@@ -135,12 +133,6 @@
 				value={$editLyrics}
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
 		</label>
-		{#if compact}
-			<button type="button" class="cowriter-row" data-hitbox="text" onclick={onopencowriter}>
-				<span class="cowriter-row-label">{EDITOR_VIEW_COWRITER_LABEL}</span>
-				<span class="chevron" aria-hidden="true">›</span>
-			</button>
-		{/if}
 	</div>
 {/if}
 
@@ -149,34 +141,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-	}
-
-	.cowriter-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.6rem 0.8rem;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		color: var(--text);
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	.cowriter-row-label {
-		flex: 1;
-		font-size: var(--label-font-size);
-		color: var(--text-muted);
-		text-transform: uppercase;
-		font-family: var(--font-display);
-		letter-spacing: 1px;
-	}
-
-	.cowriter-row .chevron {
-		flex-shrink: 0;
-		color: var(--text-subtle);
 	}
 
 	.edit-field {
@@ -248,9 +212,9 @@
 	   own to scroll in — the editor above its two-up floor. Stacked, they run
 	   on and the workspace scrolls — sharing one height squeezed the lyrics
 	   column below its content, which then spilled over the take strip
-	   (#185). Co-Writer mode itself is desktop-only now: the phone screen
-	   that replaces the page (#990) instantiates CoWriterPanel directly, so
-	   this block never renders compact. */
+	   (#185). Co-Writer mode itself is desktop-only: the phone's Co-writer
+	   tab (#1016) instantiates CoWriterPanel directly, so this block never
+	   renders compact. */
 	.cowriter-mode {
 		display: flex;
 		flex-direction: column;
