@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
@@ -8,6 +8,7 @@ import {
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
+import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
@@ -16,6 +17,16 @@ export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
 export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
+// A session check the network swallowed (#1118): the offline strip or the
+// coming reload says it, and the gate that asked runs again by itself.
+export const authCheckUnreachable = writable(false);
+let sessionGate: () => void = () => {};
+const sessionCheckReloads = reloadWhileUnreachable(() => sessionGate());
+/**
+ * The words for a session check the network swallowed, once its bounded
+ * backoff is spent; null while the strip or a coming reload says it.
+ */
+export const authCheckLostNetwork: Readable<string | null> = sessionCheckReloads.loadFailure;
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 type AuthNotice = 'unauthorized' | 'disabled';
@@ -45,28 +56,50 @@ function describeAuthCheckFailure(error: unknown): string {
 	return AUTH_CHECK_NETWORK_ERROR;
 }
 
-export async function checkAuth(): Promise<AuthUser | null> {
+/**
+ * `checkAgain` is the gate asking: when the network swallows the check, the
+ * gate runs again once the server is reachable, so its routing follows too.
+ */
+export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null> {
+	sessionGate = checkAgain;
 	authLoading.set(true);
 	try {
 		const user = await fetchMe();
+		forgetUnreachableSessionCheck();
 		currentUser.set(user);
 		authCheckError.set(null);
 		authNotice.set(null);
 		return user;
 	} catch (err) {
+		authNotice.set(null);
+		authCheckError.set(null);
+		if (err instanceof NetworkError) {
+			authCheckUnreachable.set(true);
+			sessionCheckReloads.nameLoadFailure(err, AUTH_CHECK_NETWORK_ERROR);
+			return get(currentUser);
+		}
+		forgetUnreachableSessionCheck();
 		const failure = classifyAuthFailure(err);
 		if (failure === 'unauthorized' || failure === 'disabled') {
-			authCheckError.set(null);
 			authNotice.set(failure);
 			currentUser.set(null);
 			return null;
 		}
-		authNotice.set(null);
 		authCheckError.set(describeAuthCheckFailure(err));
 		return get(currentUser);
 	} finally {
 		authLoading.set(false);
 	}
+}
+
+function forgetUnreachableSessionCheck(): void {
+	sessionCheckReloads.stop();
+	authCheckUnreachable.set(false);
+}
+
+export function resetAuthForTests(): void {
+	forgetUnreachableSessionCheck();
+	sessionGate = () => {};
 }
 
 export async function login(username: string, password: string): Promise<AuthUser> {
