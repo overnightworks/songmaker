@@ -7,6 +7,7 @@
 		nowPlayingSurface,
 		openNowPlaying,
 		playIdleStart,
+		playbackSource,
 		playNextSong,
 		playPrevSong,
 		canPlayPrevSong,
@@ -27,7 +28,8 @@
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
 		LIBRARY_QUEUE_PLAY_DETAIL,
-		LIBRARY_QUEUE_RETRY_DETAIL
+		LIBRARY_QUEUE_RETRY_DETAIL,
+		openNowPlayingLabel
 	} from '$lib/constants';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import {
@@ -36,7 +38,7 @@
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
+	import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
@@ -64,6 +66,16 @@
 			albums: $albumList
 		})
 	);
+	// The phone names where the music comes from under the title; the
+	// desktop row, and a queue with no source, name the take.
+	const detailLine = $derived.by(() => {
+		if (!current) return '';
+		if (mobileTransport && $playbackSource) return nowPlayingFromLabel($playbackSource.title);
+		return nowPlayingTakeLabel(
+			current.generation.version_number,
+			current.generation.generation_number
+		);
+	});
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 
@@ -125,12 +137,8 @@
 				>{current.songTitle}</span
 			>
 			<span class="track-detail"
-				>{nowPlayingTakeLabel(
-					current.generation.version_number,
-					current.generation.generation_number
-				)}{#if isLoading}<span class="loading-text">Loading...</span>{:else if isError}<span
-						class="error-text">{errorMsg ?? 'Error'}</span
-					>{/if}</span
+				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
+					>{:else if isError}<span class="error-text">{errorMsg ?? 'Error'}</span>{/if}</span
 			>
 		{:else if startNotice === 'building'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
@@ -173,6 +181,7 @@
 		onOpenNowPlaying={onNowPlayingClick}
 		nowPlayingDocked={docked}
 		nowPlayingDisabled={!current}
+		nowPlayingTargetLabel={current ? openNowPlayingLabel(current.songTitle) : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>
