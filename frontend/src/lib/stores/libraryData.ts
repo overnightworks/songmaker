@@ -167,9 +167,10 @@ interface AllAlbumsLoadState {
 // Tracks a route-independent full load of every album, for surfaces (the
 // rail, the library wall) that need the complete list regardless of which
 // library page is open. loadLibraryBrowse() keeps paginating and resetting
-// albumList for the active browse view -- this loader must only ever merge
-// into it, never .set() its own page alone, or the two would repeatedly kick
-// each other's results out of the store.
+// albumList for the active browse view -- this loader never .set()s a single
+// page, or the two would repeatedly kick each other's results out of the
+// store: ensureAllAlbumsLoaded merges into the list, and only the gap re-read
+// (rereadAllAlbums) replaces it, with the complete fetched set.
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
 let allAlbumsInflight: Promise<boolean> | null = null;
