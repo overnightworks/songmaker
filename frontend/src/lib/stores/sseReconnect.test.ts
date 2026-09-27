@@ -1,12 +1,17 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+	SSE_IMMEDIATE_REOPEN_MIN_GAP_MS,
 	SSE_RECONNECT_BACKOFF_FACTOR,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
-import { nextReconnectDelayMs, watchReconnectOpportunities } from './sseReconnect';
+import {
+	ImmediateReopenGap,
+	nextReconnectDelayMs,
+	watchReconnectOpportunities
+} from './sseReconnect';
 
 function expectedRange(attempt: number): { min: number; max: number } {
 	const exponential = SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_BACKOFF_FACTOR ** (attempt - 1);
@@ -75,6 +80,40 @@ describe('watchReconnectOpportunities', () => {
 		dispatch();
 		stop();
 		expect(reconnectNow).toHaveBeenCalledOnce();
+	});
+
+	it('reopens at most once per minimum gap however often the musician switches back', () => {
+		vi.useFakeTimers();
+		const reconnectNow = vi.fn();
+		const stop = watchReconnectOpportunities(reconnectNow);
+		const switchesBack = 20;
+		const switchInterval = 150;
+		for (let i = 0; i < switchesBack; i++) {
+			window.dispatchEvent(new Event('focus'));
+			vi.advanceTimersByTime(switchInterval);
+		}
+		stop();
+		vi.useRealTimers();
+
+		const window3s = switchesBack * switchInterval;
+		expect(reconnectNow).toHaveBeenCalledTimes(
+			Math.ceil(window3s / SSE_IMMEDIATE_REOPEN_MIN_GAP_MS)
+		);
+	});
+
+	it('shares one gap between the watcher and a stream reopening on its own', () => {
+		vi.useFakeTimers();
+		const gap = new ImmediateReopenGap();
+		const reconnectNow = vi.fn();
+		const stop = watchReconnectOpportunities(reconnectNow, gap);
+		gap.run(reconnectNow);
+		window.dispatchEvent(new Event('online'));
+		vi.advanceTimersByTime(SSE_IMMEDIATE_REOPEN_MIN_GAP_MS);
+		window.dispatchEvent(new Event('online'));
+		stop();
+		vi.useRealTimers();
+
+		expect(reconnectNow).toHaveBeenCalledTimes(2);
 	});
 
 	it('waits while the page is hidden and after watching stopped', () => {
