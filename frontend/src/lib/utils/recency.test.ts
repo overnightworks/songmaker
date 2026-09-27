@@ -34,6 +34,19 @@ describe('compareByCreatedAt', () => {
 		]);
 	});
 
+	it('sorts titles ignoring case and accents, so "für" sorts like "fur"', () => {
+		const titles = [
+			{ id: 'b', title: 'fur' },
+			{ id: 'c', title: 'sonne' },
+			{ id: 'a', title: 'Für' },
+			{ id: 'd', title: 'Ärger' }
+		];
+
+		expect(
+			titles.sort((a, b) => compareByCreatedAt(a, b, 'title')).map((item) => item.title)
+		).toEqual(['Ärger', 'Für', 'fur', 'sonne']);
+	});
+
 	it('places missing or invalid dates last', () => {
 		expect(
 			[missing, older, { id: 'bad', title: 'Bad', created_at: 'nope' }].sort((a, b) =>
