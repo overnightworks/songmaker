@@ -6,7 +6,11 @@ import {
 	JOB_TYPE_GENERATE
 } from '$lib/constants';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
-import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
+import {
+	ImmediateReopenGap,
+	nextReconnectDelayMs,
+	watchReconnectOpportunities
+} from '$lib/stores/sseReconnect';
 import { addToast } from '$lib/stores/toast';
 
 const SERVER_RESTART_MESSAGE = 'Server restarted — please retry';
@@ -92,6 +96,7 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 interface PendingReconnect {
 	timer: ReturnType<typeof setTimeout>;
 	attempt: number;
+	reopenGap: ImmediateReopenGap;
 }
 
 const eventSources = new Map<string, EventSource>();
@@ -217,9 +222,15 @@ function stopTracking(jobId: string): void {
  * attempt it interrupted, so returning to the app during an outage never
  * spends the give-up budget -- otherwise every return dropped a running job
  * sooner (#1032). Any message resets the count, so a connection that recovers
- * goes back to the short delay on its next drop.
+ * goes back to the short delay on its next drop. `reopenGap` travels with the
+ * job across every reopen, so the page's chances reopen it at most once per
+ * gap however often the musician switches apps (#1099).
  */
-function streamJob(jobId: string, attemptOnFailure = 1): void {
+function streamJob(
+	jobId: string,
+	attemptOnFailure = 1,
+	reopenGap = new ImmediateReopenGap()
+): void {
 	let failedAttempt = attemptOnFailure;
 
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
@@ -244,24 +255,27 @@ function streamJob(jobId: string, attemptOnFailure = 1): void {
 			addToast('Lost connection to server', 'error');
 			return;
 		}
-		scheduleReconnect(jobId, failedAttempt);
+		scheduleReconnect(jobId, failedAttempt, reopenGap);
 	};
 }
 
-function scheduleReconnect(jobId: string, attempt: number): void {
+function scheduleReconnect(jobId: string, attempt: number, reopenGap: ImmediateReopenGap): void {
 	const timer = setTimeout(() => retryAfterBackoff(jobId), nextReconnectDelayMs(attempt));
-	pendingReconnects.set(jobId, { timer, attempt });
+	pendingReconnects.set(jobId, { timer, attempt, reopenGap });
 	stopWatchingReconnectOpportunities ??= watchReconnectOpportunities(reconnectAllWaitingJobs);
 }
 
 function retryAfterBackoff(jobId: string): void {
 	const pending = takePendingReconnect(jobId);
-	if (pending !== undefined) streamJob(jobId, pending.attempt + 1);
+	if (pending !== undefined) streamJob(jobId, pending.attempt + 1, pending.reopenGap);
 }
 
 function reconnectNow(jobId: string): void {
-	const pending = takePendingReconnect(jobId);
-	if (pending !== undefined) streamJob(jobId, pending.attempt);
+	const pending = pendingReconnects.get(jobId);
+	pending?.reopenGap.run(() => {
+		cancelPendingReconnect(jobId);
+		streamJob(jobId, pending.attempt, pending.reopenGap);
+	});
 }
 
 function takePendingReconnect(jobId: string): PendingReconnect | undefined {
