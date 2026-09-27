@@ -2,6 +2,7 @@ import type { ComponentProps } from 'svelte';
 import type ShareButton from '$lib/components/ShareButton.svelte';
 import type SongMenu from '$lib/components/editor/SongMenu.svelte';
 import { readonly, writable } from 'svelte/store';
+import { LIBRARY_WALL_ORDERS, type LibraryWallOrder } from '$lib/constants';
 import { isEditableElement } from '$lib/utils/escape-level-up';
 
 interface PhoneAppBarState {
@@ -112,6 +113,9 @@ const STORAGE_KEY = 'theme';
 const RAIL_COLLAPSED_STORAGE_KEY = 'songmaker.rail-collapsed';
 const RAIL_WIDTH_STORAGE_KEY = 'songmaker.rail-width';
 const LIBRARY_CONTINUE_COLLAPSED_STORAGE_KEY = 'songmaker.library-continue-collapsed';
+const LIBRARY_WALL_ORDER_STORAGE_KEY = 'songmaker.library-wall-order';
+const DEFAULT_LIBRARY_WALL_ORDER: LibraryWallOrder = 'title';
+const VALID_LIBRARY_WALL_ORDERS: ReadonlySet<string> = new Set(LIBRARY_WALL_ORDERS);
 export const RAIL_MIN_WIDTH_PX = 220;
 export const RAIL_MAX_WIDTH_PX = 360;
 export const RAIL_WIDTH_STEP_PX = 8;
@@ -151,6 +155,25 @@ export function toggleLibraryContinueCollapsed(): void {
 
 export function initLibraryContinueCollapsed(): void {
 	libraryContinueCollapsed.set(getInitialLibraryContinueCollapsed());
+}
+
+function getInitialLibraryWallOrder(): LibraryWallOrder {
+	if (typeof window === 'undefined') return DEFAULT_LIBRARY_WALL_ORDER;
+	const stored = localStorage.getItem(LIBRARY_WALL_ORDER_STORAGE_KEY);
+	return stored && VALID_LIBRARY_WALL_ORDERS.has(stored)
+		? (stored as LibraryWallOrder)
+		: DEFAULT_LIBRARY_WALL_ORDER;
+}
+
+export const libraryWallOrder = writable(getInitialLibraryWallOrder());
+
+export function chooseLibraryWallOrder(order: LibraryWallOrder): void {
+	libraryWallOrder.set(order);
+	localStorage.setItem(LIBRARY_WALL_ORDER_STORAGE_KEY, order);
+}
+
+export function initLibraryWallOrder(): void {
+	libraryWallOrder.set(getInitialLibraryWallOrder());
 }
 
 function clampRailWidth(width: number): number {
