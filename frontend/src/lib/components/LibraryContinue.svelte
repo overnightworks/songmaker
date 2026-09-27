@@ -33,13 +33,16 @@
 		return inflightRefresh;
 	}
 
+	// A list already on screen stays when a refresh fails (#1039): the phone may
+	// wake before its network does, and the offline notice owns saying so. Only
+	// a Home that never had a list names the failure and offers Retry.
 	async function fetchItems(): Promise<void> {
 		if (loadState === 'error') loadState = 'loading';
 		try {
 			items = (await fetchLibraryContinue()).items;
 			loadState = 'ready';
 		} catch {
-			loadState = 'error';
+			if (loadState !== 'ready') loadState = 'error';
 		}
 	}
 
