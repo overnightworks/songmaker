@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
@@ -37,6 +37,31 @@ async function openFrom(opener: HTMLElement): Promise<HTMLElement> {
 		target,
 		props: { title: TITLE, items: ['Night Drive'], onconfirm: closeDialog, oncancel: closeDialog }
 	});
+	await tick();
+	const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
+	if (!dialog) throw new Error('Expected the confirm dialog to be rendered');
+	return dialog;
+}
+
+// SongMenu and CollectionMenu close in the same click that opens the confirm:
+// the removed menu item drops focus to <body>, Svelte's flush mounts the dialog,
+// and only then does the menu's own microtask hand focus back to its trigger.
+async function openFromMenu(trigger: HTMLElement): Promise<HTMLElement> {
+	const menuItem = document.createElement('button');
+	document.body.append(menuItem);
+	menuItem.focus();
+	menuItem.remove();
+	const target = document.createElement('div');
+	document.body.append(target);
+	queueMicrotask(() => {
+		openDialog = mount(ConfirmDeleteDialog, {
+			target,
+			props: { title: TITLE, items: ['Night Drive'], onconfirm: closeDialog, oncancel: closeDialog }
+		});
+		flushSync();
+	});
+	queueMicrotask(() => trigger.focus());
+	await tick();
 	await tick();
 	const dialog = document.querySelector<HTMLElement>('[role="dialog"]');
 	if (!dialog) throw new Error('Expected the confirm dialog to be rendered');
@@ -91,6 +116,15 @@ describe('ConfirmDeleteDialog', () => {
 		await tick();
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
 		expect(document.activeElement).toBe(opener);
+	});
+
+	it('takes focus and later returns it to the menu trigger when a closing menu opened it', async () => {
+		const trigger = renderOpener();
+		const dialog = await openFromMenu(trigger);
+		expect(document.activeElement).toBe(button(dialog, 'Cancel'));
+		pressKey(button(dialog, 'Cancel'), 'Escape');
+		await tick();
+		expect(document.activeElement).toBe(trigger);
 	});
 
 	it('closes only itself on Escape, never also taking the page one level up', async () => {

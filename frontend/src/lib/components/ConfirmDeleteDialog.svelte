@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
 	let {
@@ -22,9 +22,14 @@
 	let dialog: HTMLDivElement;
 	let cancelButton: HTMLButtonElement;
 
+	// A menu that opens this confirm hands focus back to its trigger in a
+	// microtask queued behind the mount, so the opener is read after that.
 	onMount(() => {
-		const opener = document.activeElement;
-		cancelButton.focus();
+		let opener: Element | null = null;
+		void tick().then(() => {
+			opener = document.activeElement;
+			cancelButton.focus();
+		});
 		return () => {
 			if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
 		};
