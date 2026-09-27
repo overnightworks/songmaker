@@ -239,7 +239,7 @@ describe('shared album page', () => {
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		expect(audioPlayer.current?.lyrics).toBeNull();
 
-		document.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await vi.waitFor(() => expect(document.querySelector('.lyrics-synced')).not.toBeNull());
 		audioPlayer.currentTime = 7.5;
 		await tick();
@@ -323,7 +323,7 @@ describe('shared album page', () => {
 		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 
-		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await tick();
 		// jsdom's stubbed matchMedia matches every query, so Now Playing always
 		// renders its stacked (mobile) layout here — open the queue sheet to
@@ -350,7 +350,7 @@ describe('shared album page', () => {
 
 		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await tick();
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
@@ -373,7 +373,7 @@ describe('shared album page', () => {
 
 		target.querySelectorAll<HTMLButtonElement>('.track-row')[0].click();
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		target.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		target.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await tick();
 
 		const surface = target.querySelector('.now-playing');
