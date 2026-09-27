@@ -101,7 +101,7 @@ vi.mock('$app/environment', () => ({
 	dev: true
 }));
 vi.mock('$app/state', () => ({
-	page: { url: new URL('https://songmaker.test/') }
+	page: { url: new URL('https://songmaker.test/'), route: { id: '/(library)' } }
 }));
 // The shell owns the live library stream since issue #269; jsdom has no
 // EventSource and this file measures hitboxes, not the stream.
