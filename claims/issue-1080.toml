@@ -1,8 +1,0 @@
-claim_id = "a949ccbcf2d643f4be93583159a73911"
-agent = "claude-head"
-role = "builder"
-base = "373031d67b483e5f20c6ec3272b70cef2dd13f0b"
-branch = "claude/issue-1080-connectivity-strip"
-scope = ["docs/architecture.md", "docs/testing.md", "frontend/e2e/helpers.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/src/app.css", "frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/OfflineStrip.svelte", "frontend/src/lib/components/OfflineStrip.test.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/editor/GenerateButton.svelte", "frontend/src/lib/components/editor/GenerateButton.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/connectivity.test.ts", "frontend/src/lib/stores/connectivity.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
-opened_commit = "1eec7fcc5afc31b0ed8c80a4eedc08e17a681e78"
-whole_reason = "one connectivity owner, the strip in the player bar, generate disabled offline, and their tests, specs and docs"
