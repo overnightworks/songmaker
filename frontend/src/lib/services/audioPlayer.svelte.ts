@@ -847,7 +847,7 @@ class AudioPlayer {
 			this.status = 'paused';
 			this.failure = {
 				kind: 'autoplay-blocked',
-				message: 'Autoplay blocked. Click play to start.'
+				message: 'Autoplay blocked. Press Play to start.'
 			};
 			return;
 		}
