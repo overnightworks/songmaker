@@ -575,6 +575,10 @@ export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = 'Library sync failed';
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
+// The edge's own answers for a server it cannot reach (down or restarting).
+// Only these, besides a request the network never carried, read as offline:
+// a 429 or a 500 comes from a server that is there (#1099).
+export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 // `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
 export const EVENT_SOURCE_CLOSED = 2;

@@ -32,7 +32,7 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
-import { classifyAuthFailure } from '$lib/stores/auth';
+import { classifyAuthFailure, type AuthFailureKind } from '$lib/stores/auth';
 import { reportResourceStreamReachable } from '$lib/stores/connectivity';
 import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
 
@@ -44,7 +44,7 @@ const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
 type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
-type ResourceAuthProbe = 'ok' | 'unauthorized' | 'disabled' | 'retryable';
+type ResourceAuthProbe = 'ok' | AuthFailureKind;
 
 // A song refresh fails either because the network did not carry it -- the
 // offline strip says that, not this owner -- or with a failure worth showing.
@@ -395,10 +395,10 @@ export class ResourceSyncController {
 	}
 
 	/**
-	 * A stream that fails before it says hello did not open: the server cannot
-	 * be reached, whatever the auth probe answers, and the offline strip says so
-	 * while the stream keeps retrying. A stream that drops after its hello is
-	 * only unreachable once the probe gets no answer or its reopen fails too.
+	 * A stream failure carries no status, so the auth probe decides what it
+	 * means: only a probe the server never answered reads as offline (#1099).
+	 * A stream that failed before its hello is still worth another try
+	 * whatever the probe answers -- the server may just be coming back.
 	 */
 	private async handleStreamError(): Promise<void> {
 		if (!this.started) return;
@@ -424,15 +424,14 @@ export class ResourceSyncController {
 			await this.deps.onUnauthorized();
 			return;
 		}
-		const serverUnreachable = failedToOpen || result === 'retryable';
-		this.deps.reportStreamReachable(!serverUnreachable);
+		this.deps.reportStreamReachable(result !== 'unreachable');
 		if (!this.syncedOnce) {
 			this.bootstrapErrors += 1;
 			// A non-200 answer (the edge's 5xx while the server restarts) closes the
 			// source for good: the browser will not retry it, so this attempt is over.
 			const browserGaveUp = source?.readyState === EVENT_SOURCE_CLOSED;
 			if (browserGaveUp || this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
-				if (!serverUnreachable) {
+				if (!failedToOpen && result === 'ok') {
 					this.failBootstrap(RESOURCE_SYNC_ERROR);
 					return;
 				}
@@ -850,8 +849,7 @@ async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 		await fetchMe();
 		return 'ok';
 	} catch (err) {
-		const failure = classifyAuthFailure(err);
-		return failure === 'retryable' ? 'retryable' : failure;
+		return classifyAuthFailure(err);
 	}
 }
 
