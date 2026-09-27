@@ -23,8 +23,7 @@ import {
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
-	SSE_RECONNECT_JITTER_RATIO,
-	SSE_RECONNECT_MAX_DELAY_MS,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
@@ -51,11 +50,12 @@ const OFFLINE_SONG_TITLE = 'Offline Strip';
 const OFFLINE_NOTICE_MS = 1_500;
 // The ruling on #1032: back online, the page has caught up within 10 seconds.
 const BACK_ONLINE_MS = 10_000;
-// A server that comes back while the browser stayed online is found by the
-// stream's own backoff, so the page catches up within its longest wait more.
-const SERVER_BACK_MS =
-	BACK_ONLINE_MS + SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
+// The ruling on #1099: a server that comes back while the browser stayed
+// online is found by the page's return probe, at most one interval until it
+// asks and one more for its answer -- about 2 seconds.
+const SERVER_BACK_MS = 2 * RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS;
 const RESOURCE_STREAM = `**${RESOURCE_EVENT_STREAM_PATH}**`;
+const SESSION_CHECK = '**/api/auth/me';
 const GENERATE_LABEL = EDITOR_GENERATE_MODE_LABELS.generate;
 // CI's stack runs no ACE-Step worker, so online the Generate bar names that
 // reason inside its own box (#1011).
@@ -79,6 +79,37 @@ function resolvedToken(page: Page, token: string): Promise<string> {
 		probe.remove();
 		return color;
 	}, token);
+}
+
+type ServerAnswer = (route: Route) => Promise<void>;
+
+/**
+ * The server fails right after the page has checked its session: the live
+ * stream and every later session check -- the probe that tells the page
+ * whether the server is there at all -- get `answer` until `serverReturns`.
+ * Returns how many of those later checks it has answered so far.
+ */
+async function serverFailsAfterSessionCheck(
+	page: Page,
+	answer: ServerAnswer
+): Promise<() => number> {
+	let sessionChecked = false;
+	let answeredChecks = 0;
+	await page.route(RESOURCE_STREAM, answer);
+	await page.route(SESSION_CHECK, (route) => {
+		if (!sessionChecked) {
+			sessionChecked = true;
+			return route.continue();
+		}
+		answeredChecks += 1;
+		return answer(route);
+	});
+	return () => answeredChecks;
+}
+
+async function serverReturns(page: Page): Promise<void> {
+	await page.unroute(RESOURCE_STREAM);
+	await page.unroute(SESSION_CHECK);
 }
 
 test.describe('losing the network on the phone', () => {
@@ -136,21 +167,35 @@ test.describe('a server the online browser cannot reach', () => {
 		['refuses the connection', (route: Route) => route.abort('connectionrefused')],
 		['answers 502', (route: Route) => route.fulfill({ status: 502, body: 'bad gateway' })]
 	] as const) {
-		test(`shows the same calm strip while the live stream ${failure} as the page loads, and recovers by itself`, async ({
+		test(`shows the same calm strip while the server ${failure} as the page loads, and drops it within about 2 s of the server's return`, async ({
 			page
 		}) => {
-			await page.route(RESOURCE_STREAM, answer);
+			await serverFailsAfterSessionCheck(page, answer);
 			await page.goto('/');
 
 			await expect(offlineStrip(page)).toBeVisible();
 			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
 
-			await page.unroute(RESOURCE_STREAM);
+			await serverReturns(page);
 
 			await expect(offlineStrip(page)).toHaveCount(0, { timeout: SERVER_BACK_MS });
 			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
 		});
 	}
+
+	test('shows no strip while the server answers the live stream and its session check with a rate limit', async ({
+		page
+	}) => {
+		const answeredSessionChecks = await serverFailsAfterSessionCheck(page, (route) =>
+			route.fulfill({ status: 429, body: 'too many requests' })
+		);
+		await page.goto('/');
+
+		// The second rate-limited check follows the stream's first retry, long
+		// after the page acted on the first one.
+		await expect.poll(answeredSessionChecks, { timeout: BACK_ONLINE_MS }).toBeGreaterThanOrEqual(2);
+		await expect(offlineStrip(page)).toHaveCount(0);
+	});
 });
 
 test.describe('losing the network while a take plays on the phone', () => {
