@@ -32,6 +32,7 @@ import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
 import {
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	SSE_IMMEDIATE_REOPEN_MIN_GAP_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
@@ -346,16 +347,43 @@ describe('jobs store', () => {
 		latestSource().simulateError();
 		const returnsToTheApp = JOB_STREAM_MAX_CONNECTION_ERRORS * 2;
 		for (let i = 0; i < returnsToTheApp; i++) {
+			vi.setSystemTime(Date.now() + SSE_IMMEDIATE_REOPEN_MIN_GAP_MS);
 			document.dispatchEvent(new Event('visibilitychange'));
 			window.dispatchEvent(new Event('focus'));
 			latestSource().simulateError();
 		}
+		expect(MockEventSource.instances).toHaveLength(returnsToTheApp + 1);
 
 		window.dispatchEvent(new Event('online'));
 		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.4 }));
 
 		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.4]);
 		expect(get(toasts).map((toast) => toast.message)).not.toContain('Lost connection to server');
+	});
+
+	it('reopens a failing job stream at most once per minimum gap however often the user switches apps', async () => {
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		const failTheOpenStream = (): void => {
+			if (!latestSource().closed) latestSource().simulateError();
+		};
+		failTheOpenStream();
+		const opensBeforeTheStorm = MockEventSource.instances.length;
+		const appSwitches = 20;
+		const switchIntervalMs = 150;
+		for (let i = 0; i < appSwitches; i++) {
+			if (i % 2 === 0) window.dispatchEvent(new Event('focus'));
+			else document.dispatchEvent(new Event('visibilitychange'));
+			failTheOpenStream();
+			await vi.advanceTimersByTimeAsync(switchIntervalMs);
+			failTheOpenStream();
+		}
+
+		const stormMs = appSwitches * switchIntervalMs;
+		const immediateReopens = Math.ceil(stormMs / SSE_IMMEDIATE_REOPEN_MIN_GAP_MS);
+		const backoffReopens = Math.ceil(stormMs / SSE_RECONNECT_BASE_DELAY_MS);
+		expect(MockEventSource.instances.length - opensBeforeTheStorm).toBeLessThanOrEqual(
+			immediateReopens + backoffReopens
+		);
 	});
 
 	it('leaves a live job stream alone when the window regains focus', () => {

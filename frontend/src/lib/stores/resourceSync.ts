@@ -158,10 +158,7 @@ export class ResourceSyncController {
 		if (this.started) return;
 		this.started = true;
 		this.bootstrapErrors = 0;
-		this.stopWatchingOpportunities ??= watchReconnectOpportunities(
-			this.onReconnectOpportunity,
-			this.reopenGap
-		);
+		this.stopWatchingOpportunities ??= watchReconnectOpportunities(this.reopenSpaced);
 		this.bindLoadedWatch();
 		this.setStatus('connecting');
 		this.openSource();
@@ -495,7 +492,7 @@ export class ResourceSyncController {
 			return;
 		}
 		this.reportReachable(true);
-		this.reopenGap.run(this.onReconnectOpportunity);
+		this.reopenSpaced();
 	}
 
 	private stopReturnProbe(): void {
@@ -819,6 +816,10 @@ export class ResourceSyncController {
 		const waiters = this.readyWaiters.splice(0);
 		for (const waiter of waiters) waiter(ok);
 	}
+
+	private readonly reopenSpaced = (): void => {
+		this.reopenGap.run(this.onReconnectOpportunity);
+	};
 
 	private readonly onReconnectOpportunity = (): void => {
 		if (this.bootstrapFailed()) {

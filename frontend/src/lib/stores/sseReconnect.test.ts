@@ -84,8 +84,9 @@ describe('watchReconnectOpportunities', () => {
 
 	it('reopens at most once per minimum gap however often the musician switches back', () => {
 		vi.useFakeTimers();
+		const gap = new ImmediateReopenGap();
 		const reconnectNow = vi.fn();
-		const stop = watchReconnectOpportunities(reconnectNow);
+		const stop = watchReconnectOpportunities(() => gap.run(reconnectNow));
 		const switchesBack = 20;
 		const switchInterval = 150;
 		for (let i = 0; i < switchesBack; i++) {
@@ -105,7 +106,7 @@ describe('watchReconnectOpportunities', () => {
 		vi.useFakeTimers();
 		const gap = new ImmediateReopenGap();
 		const reconnectNow = vi.fn();
-		const stop = watchReconnectOpportunities(reconnectNow, gap);
+		const stop = watchReconnectOpportunities(() => gap.run(reconnectNow));
 		gap.run(reconnectNow);
 		window.dispatchEvent(new Event('online'));
 		vi.advanceTimersByTime(SSE_IMMEDIATE_REOPEN_MIN_GAP_MS);
