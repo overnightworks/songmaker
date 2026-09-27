@@ -286,6 +286,10 @@ test.describe('losing the network while a take generates on the phone', () => {
 		await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
 		await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
 		await expect(playButtons).toHaveCount(seededTakes);
+		// The card shows before the song's route module has loaded; the address
+		// moves to the song only once it has, and cutting the network earlier
+		// fails that load into SvelteKit's error page.
+		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 
 		await loseNetwork(page, context);
 
