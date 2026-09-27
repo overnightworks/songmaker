@@ -187,6 +187,19 @@ TURN_BLOCK_MENTIONED_ALBUM = "mentioned_album"
 TURN_BLOCK_CURRENT_TAKE = "current_take"
 TURN_BLOCK_NO_TAKE = "no_take"
 
+GET_SONG_ONLY_FOR_OTHER_SONGS = (
+    "Call get_song only for other songs, or for the current song after you "
+    "changed it yourself in this turn."
+)
+GET_SONG_TOOL_DESCRIPTION = (
+    "Read the full state of a song: current draft lyrics/prompt/style, "
+    f"version history, and generation ids. {GET_SONG_ONLY_FOR_OTHER_SONGS}"
+)
+CURRENT_SONG_FRESHNESS_NOTE = (
+    "The current_song block below is this song's saved state as of this turn; "
+    "fields it does not show are not set."
+)
+
 COWRITER_DEFAULT_PROVIDER = "claude"
 COWRITER_DEFAULT_TAIL_TOKEN_BUDGET = 24_000
 COWRITER_MIN_TAIL_TOKEN_BUDGET = 2_000

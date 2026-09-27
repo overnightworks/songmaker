@@ -12,7 +12,7 @@ Available tools:
   JSON schema: {"additionalProperties":false,"properties":{"album_id":{"type":"string"}},"type":"object"}
 - search_songs: Search songs by title substring. Limit defaults to 20, max 50.
   JSON schema: {"additionalProperties":false,"properties":{"limit":{"type":"integer"},"query":{"type":"string"}},"required":["query"],"type":"object"}
-- get_song: Read the full state of a song.
+- get_song: Read the full state of a song: current draft lyrics/prompt/style, version history, and generation ids. Call get_song only for other songs, or for the current song after you changed it yourself in this turn.
   JSON schema: {"additionalProperties":false,"properties":{"song_id":{"type":"string"}},"required":["song_id"],"type":"object"}
 - get_version: Read a specific version snapshot of a song.
   JSON schema: {"additionalProperties":false,"properties":{"song_id":{"type":"string"},"version_id":{"type":"string"}},"required":["song_id","version_id"],"type":"object"}
