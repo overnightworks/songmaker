@@ -255,6 +255,10 @@ class Playlist(ShareMixin, Base):
     )
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow, onupdate=utcnow)
+    last_played_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    last_played_song_id: Mapped[str | None] = mapped_column(
+        ForeignKey(SONGS_ID, ondelete=SET_NULL), nullable=True, index=True,
+    )
 
     entries: Mapped[list[PlaylistEntry]] = relationship(
         back_populates="playlist", cascade=DELETE_ORPHANS,

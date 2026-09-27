@@ -57,6 +57,7 @@ from songmaker_cli.db.queries import (
     create_job,
     get_album,
     get_generation,
+    get_playlist,
     get_song,
     list_worker_identities,
     recover_stale_jobs_by_age_and_type,
@@ -80,6 +81,7 @@ SONG_NOT_FOUND_DETAIL: Final = "Song not found"
 LORA_NOT_FOUND_DETAIL: Final = "LoRA not found"
 LORA_SAMPLE_NOT_FOUND_DETAIL: Final = "LoRA sample not found"
 GENERATION_NOT_FOUND_DETAIL: Final = "Generation not found"
+PLAYLIST_NOT_FOUND_DETAIL: Final = "Playlist not found"
 
 _UNBOUNDED_SLUG_LENGTH = 0
 _SLUG_COUNTER_SUFFIX_BUDGET = 20
@@ -482,6 +484,31 @@ def check_song_access_including_deleted(
         if not album or album.created_by != user.id:
             raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
+
+
+def check_playlist_access(
+    session: Session, playlist_id: str, user: AuthenticatedUser,
+    *, require_owner: bool = False,
+) -> Playlist:
+    """Load a playlist and verify ownership. Returns the playlist or raises 404."""
+    playlist = get_playlist(session, playlist_id)
+    if not playlist:
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+    if (require_owner or user.role != ROLE_ADMIN) and playlist.created_by != user.id:
+        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
+    return playlist
+
+
+def check_own_playlist_access(
+    session: Session, playlist_id: str, user: AuthenticatedUser,
+) -> Playlist:
+    """Load a playlist and require it to belong to the caller.
+
+    Unlike the general playlist access helper, this does not grant
+    administrators another musician's playlist: a listen an administrator
+    starts must never reorder that musician's Continue.
+    """
+    return check_playlist_access(session, playlist_id, user, require_owner=True)
 
 
 def check_lora_access(lora: UserLora | None, user: AuthenticatedUser) -> UserLora:
