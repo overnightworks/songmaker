@@ -9,9 +9,9 @@ import {
 	COWRITER_NEW_CONVERSATION_LINE,
 	COWRITER_TURN_FAILURE_TEMPLATE
 } from '$lib/constants';
+import { localDaysBetween } from '$lib/utils/format';
 
 const DAYS_NAMED_BY_WEEKDAY = 7;
-const DAY_MS = 86_400_000;
 const CONVERSATION_DAY_LOCALE = 'en-US';
 
 const SONG_ID_TARGETING_TOOLS = new Set([
@@ -77,14 +77,10 @@ export function cowriterHeaderLabel(provider: string, model: string): string {
 	return `${providerDisplayName(provider)} · ${model}`;
 }
 
-function startOfDay(moment: Date): number {
-	return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
-}
-
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
 function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);
-	const daysAgo = Math.round((startOfDay(now) - startOfDay(started)) / DAY_MS);
+	const daysAgo = localDaysBetween(started, now);
 	if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
 		return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, { weekday: 'short' });

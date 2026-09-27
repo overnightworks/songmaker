@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
-import { albumSummaryLabel, formatTime, playlistSummaryLabel, titleInitials } from './format.ts';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+	activityTimeLabel,
+	albumSummaryLabel,
+	formatTime,
+	playlistSummaryLabel,
+	titleInitials
+} from './format.ts';
 
 describe('formatTime', () => {
 	it('formats zero seconds', () => {
@@ -55,5 +61,34 @@ describe('titleInitials', () => {
 		['🎵 Song', '🎵S']
 	])('turns %j into %j', (title, expected) => {
 		expect(titleInitials(title)).toBe(expected);
+	});
+});
+
+describe('activityTimeLabel', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	const sundayNoonInBerlin = '2026-09-27T10:00:00Z';
+
+	it.each([
+		['earlier today', '2026-09-27T03:47:00Z', sundayNoonInBerlin, 'today 05:47'],
+		[
+			'after local midnight, while UTC still dates it the day before',
+			'2026-09-26T22:30:00Z',
+			sundayNoonInBerlin,
+			'today 00:30'
+		],
+		['yesterday', '2026-09-26T21:40:00Z', sundayNoonInBerlin, 'yesterday 23:40'],
+		['this week by weekday', '2026-09-24T18:31:00Z', sundayNoonInBerlin, 'Thu 20:31'],
+		['a week or more ago by day and month', '2026-09-20T10:00:00Z', sundayNoonInBerlin, '20 Sep'],
+		['in another year with the year', '2025-09-21T10:00:00Z', sundayNoonInBerlin, '21 Sep 2025'],
+		[
+			'across the night the clocks go back',
+			'2026-10-25T09:00:00Z',
+			'2026-10-26T10:00:00Z',
+			'yesterday 10:00'
+		]
+	])('reads a moment %s', (_case, activityAt, now, label) => {
+		expect(activityTimeLabel(activityAt, new Date(now))).toBe(label);
 	});
 });
