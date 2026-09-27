@@ -4,21 +4,13 @@ import type SongMenu from '$lib/components/editor/SongMenu.svelte';
 import { readonly, writable } from 'svelte/store';
 import { isEditableElement } from '$lib/utils/escape-level-up';
 
-interface PhoneAppBarSongState {
+interface PhoneAppBarState {
 	kind: 'song';
 	title: string;
 	onrename: (title: string) => Promise<void>;
 	share: ComponentProps<typeof ShareButton>;
 	menu: Omit<ComponentProps<typeof SongMenu>, 'title' | 'onrename'>;
 }
-
-interface PhoneAppBarScreenState {
-	kind: 'screen';
-	title: string;
-	onback: () => void;
-}
-
-type PhoneAppBarState = PhoneAppBarSongState | PhoneAppBarScreenState;
 
 export const phoneAppBar = writable<PhoneAppBarState | null>(null);
 

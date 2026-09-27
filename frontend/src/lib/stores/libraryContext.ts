@@ -34,10 +34,12 @@ import { CREATED_SORTS } from '$lib/utils/recency';
 // whichever collection is currently open; 'create' shows the create form.
 // Song detail always wins over all three (see LibraryWorkspace.svelte).
 type LibrarySurface = 'browse' | 'detail' | 'create';
-// Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate; 'takes'
-// lists generations. LEGACY_DETAIL_TAB_MAP below keeps history entries written
-// under the older 'write' and pre-#100 'generations'|'chat' names valid.
-export type DetailTab = 'edit' | 'takes';
+// Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate;
+// 'cowriter' hosts the conversation; 'takes' lists generations.
+// LEGACY_DETAIL_TAB_MAP below keeps history entries written under the older
+// 'write' and pre-#100 'generations'|'chat' names valid.
+export type DetailTab = 'edit' | 'cowriter' | 'takes';
+export const DETAIL_TABS: readonly DetailTab[] = ['edit', 'cowriter', 'takes'];
 
 type CollectionSnapshot = OpenCollection | null;
 
@@ -70,11 +72,10 @@ export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
-const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['edit', 'takes']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 	write: 'edit',
 	generations: 'takes',
-	chat: 'edit'
+	chat: 'cowriter'
 };
 // Session memory only (#1047): a reload restores the open song's tab from its
 // history entry, and every other song lands on Edit again.
@@ -933,7 +934,7 @@ function isLibrarySurface(value: unknown): value is LibrarySurface {
 }
 
 function isDetailTab(value: unknown): value is DetailTab {
-	return typeof value === 'string' && DETAIL_TABS.has(value as DetailTab);
+	return typeof value === 'string' && DETAIL_TABS.includes(value as DetailTab);
 }
 
 function isDetailTabToken(value: unknown): boolean {

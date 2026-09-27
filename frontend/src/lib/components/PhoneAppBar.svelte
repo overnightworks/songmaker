@@ -1,10 +1,5 @@
 <script lang="ts">
-	import {
-		APP_NAME,
-		EDITOR_COWRITER_BACK_LABEL,
-		RAIL_DRAWER_OPEN_LABEL,
-		SONG_TITLE_LABEL
-	} from '$lib/constants';
+	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import EditableTitle from './EditableTitle.svelte';
@@ -15,59 +10,46 @@
 </script>
 
 <header class="mobile-strip">
-	{#if $phoneAppBar?.kind === 'screen'}
-		<button
-			type="button"
-			class="back-trigger"
-			data-hitbox="frequent"
-			aria-label={EDITOR_COWRITER_BACK_LABEL}
-			onclick={$phoneAppBar.onback}
+	<button
+		class="drawer-trigger"
+		data-hitbox="frequent"
+		aria-haspopup="dialog"
+		aria-expanded={$sidebarOpen}
+		aria-label={RAIL_DRAWER_OPEN_LABEL}
+		onclick={toggleSidebar}
+	>
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			aria-hidden="true"
 		>
-			‹
-		</button>
-		<h1 class="bar-title">{$phoneAppBar.title}</h1>
-	{:else}
-		<button
-			class="drawer-trigger"
-			data-hitbox="frequent"
-			aria-haspopup="dialog"
-			aria-expanded={$sidebarOpen}
-			aria-label={RAIL_DRAWER_OPEN_LABEL}
-			onclick={toggleSidebar}
-		>
-			<svg
-				width="20"
-				height="20"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="2"
-				stroke-linecap="round"
-				aria-hidden="true"
-			>
-				<path d="M4 7h16M4 12h16M4 17h16" />
-			</svg>
-		</button>
-		{#if $phoneAppBar}
-			<h1 class="bar-title" aria-label={$phoneAppBar.title}>
-				<EditableTitle
-					bind:this={titleEditor}
-					value={$phoneAppBar.title}
-					onsave={$phoneAppBar.onrename}
-					ariaLabel={SONG_TITLE_LABEL}
-				/>
-			</h1>
-			<ShareButton {...$phoneAppBar.share} iconOnly />
-			<SongMenu
-				{...$phoneAppBar.menu}
-				title={$phoneAppBar.title}
-				onrename={() => titleEditor?.startEdit()}
+			<path d="M4 7h16M4 12h16M4 17h16" />
+		</svg>
+	</button>
+	{#if $phoneAppBar}
+		<h1 class="bar-title" aria-label={$phoneAppBar.title}>
+			<EditableTitle
+				bind:this={titleEditor}
+				value={$phoneAppBar.title}
+				onsave={$phoneAppBar.onrename}
+				ariaLabel={SONG_TITLE_LABEL}
 			/>
-		{:else}
-			<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
-				>{APP_NAME}</button
-			>
-		{/if}
+		</h1>
+		<ShareButton {...$phoneAppBar.share} iconOnly />
+		<SongMenu
+			{...$phoneAppBar.menu}
+			title={$phoneAppBar.title}
+			onrename={() => titleEditor?.startEdit()}
+		/>
+	{:else}
+		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
+			>{APP_NAME}</button
+		>
 	{/if}
 </header>
 
@@ -96,19 +78,6 @@
 		border: none;
 		background: none;
 		color: var(--text);
-	}
-
-	.back-trigger {
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border: none;
-		background: none;
-		color: var(--text);
-		font-size: 1.4rem;
-		line-height: 1;
-		cursor: pointer;
 	}
 
 	.bar-title {

@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { detailTab } from '$lib/stores/navigation';
+import { detailTab, type DetailTab } from '$lib/stores/navigation';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
@@ -41,34 +41,47 @@ async function render(takeCount = 4) {
 	return Array.from(target.querySelectorAll<HTMLButtonElement>('[role="tab"]'));
 }
 
+function tabNamed(tabs: HTMLButtonElement[], tab: DetailTab): HTMLButtonElement {
+	const found = tabs.find((button) => button.dataset.tab === tab);
+	if (!found) throw new Error(`Expected the ${tab} tab`);
+	return found;
+}
+
 describe('DetailTabs', () => {
 	it.each([0, 4, 123])(
-		'shows two tabs with %i takes and follows navigation state',
+		'shows Edit, Co-writer and Takes with %i takes and follows navigation state',
 		async (count) => {
 			const tabs = await render(count);
-			expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Edit', `Takes (${count})`]);
+			expect(tabs.map((tab) => tab.textContent?.trim())).toEqual([
+				'Edit',
+				'Co-writer',
+				`Takes (${count})`
+			]);
 			expect(tabs[0].getAttribute('aria-selected')).toBe('true');
 			tabs[1].click();
 			await tick();
-			expect(get(detailTab)).toBe('takes');
+			expect(get(detailTab)).toBe('cowriter');
 			expect(tabs[1].getAttribute('aria-selected')).toBe('true');
-			detailTab.set('edit');
+			detailTab.set('takes');
 			await tick();
-			expect(tabs[0].getAttribute('aria-selected')).toBe('true');
+			expect(tabs[2].getAttribute('aria-selected')).toBe('true');
 		}
 	);
 
 	it.each([
-		['ArrowRight', 'edit', 'takes'],
-		['ArrowLeft', 'edit', 'takes'],
+		['ArrowRight', 'edit', 'cowriter'],
+		['ArrowRight', 'cowriter', 'takes'],
 		['ArrowRight', 'takes', 'edit'],
+		['ArrowLeft', 'edit', 'takes'],
+		['ArrowLeft', 'takes', 'cowriter'],
+		['ArrowLeft', 'cowriter', 'edit'],
 		['Home', 'takes', 'edit'],
 		['End', 'edit', 'takes']
 	] as const)('selects and focuses the tab for %s from %s', async (key, from, to) => {
 		detailTab.set(from);
 		const tabs = await render();
-		const current = tabs[from === 'edit' ? 0 : 1];
-		const next = tabs[to === 'edit' ? 0 : 1];
+		const current = tabNamed(tabs, from);
+		const next = tabNamed(tabs, to);
 		current.focus();
 		current.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 		await tick();
@@ -110,7 +123,7 @@ describe('DetailTabs', () => {
 	] as const)('carries a ring on Takes exactly while %s', async (_label, state, expectRing) => {
 		action.set(state as GenerateState);
 		const tabs = await render();
-		expect(tabs[1].querySelector('.ring') !== null).toBe(expectRing);
+		expect(tabNamed(tabs, 'takes').querySelector('.ring') !== null).toBe(expectRing);
 	});
 
 	it('sticks to the top, but scrolls away with the text while typing on the phone keyboard', async () => {
