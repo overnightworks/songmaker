@@ -20,6 +20,7 @@ async function openRail(page: Page, mobile: boolean): Promise<Locator> {
 }
 
 const PHONE_SEARCH_BAR_PX = 44;
+const PHONE_RESULT_ROW_MIN_PX = 48;
 const QUERY_MATCHING_EVERY_SEEDED_ALBUM = 'E2E';
 
 async function expectPhoneBarHeight(rail: Locator, mobile: boolean): Promise<void> {
@@ -70,8 +71,13 @@ test('the rail search tells an album from its songs and finds a settings page in
 	await expectPhoneBarHeight(rail, Boolean(isMobile));
 
 	await search.fill(QUERY_MATCHING_EVERY_SEEDED_ALBUM);
-	await expect(rail.locator('[aria-label="Albums results"]')).toBeVisible();
+	const albumResults = rail.locator('[aria-label="Albums results"]');
+	await expect(albumResults).toBeVisible();
 	await expectPhoneBarHeight(rail, Boolean(isMobile));
+	if (isMobile) {
+		const row = await albumResults.getByRole('button').first().boundingBox();
+		expect(row?.height).toBeGreaterThanOrEqual(PHONE_RESULT_ROW_MIN_PX);
+	}
 
 	await search.fill(library.albumTitle);
 	await expect(search).toHaveCSS('box-shadow', 'none');

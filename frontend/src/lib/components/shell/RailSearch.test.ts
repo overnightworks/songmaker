@@ -32,6 +32,8 @@ vi.mock('$lib/stores/navigation', () => navigation);
 const { render, cleanup } = createComponentMount(RailSearch);
 
 const scrollIntoView = vi.fn();
+const TOUCH_RESULT_ROW_PX = 48;
+const TOUCH_RESULT_PICTURE_PX = 32;
 
 function showVernissageResults(): void {
 	railTreeQuery.set('verni');
@@ -220,13 +222,22 @@ describe('RailSearch', () => {
 		expect(root.querySelector(`button[aria-label="${RAIL_SEARCH_CLEAR_LABEL}"]`)).toBeNull();
 	});
 
-	it('is one 44 px bar on a touch screen, not a padded box around the field', async () => {
+	async function renderResultsOnTouchScreen(): Promise<HTMLElement> {
 		showVernissageResults();
 		const root = await render();
-		const bar = requireElement<HTMLElement>(root, '.rail-search');
 		injectHitboxStyles();
-		injectComponentStyles(railSearchSource, 'RailSearch.svelte', bar);
+		injectComponentStyles(
+			railSearchSource,
+			'RailSearch.svelte',
+			requireElement(root, '.rail-search')
+		);
 		setPointer('coarse');
+		return root;
+	}
+
+	it('is one 44 px bar on a touch screen, not a padded box around the field', async () => {
+		const root = await renderResultsOnTouchScreen();
+		const bar = requireElement<HTMLElement>(root, '.rail-search');
 
 		const barStyle = getComputedStyle(bar);
 		expect([barStyle.paddingTop, barStyle.paddingBottom]).toEqual(['0px', '0px']);
@@ -238,6 +249,19 @@ describe('RailSearch', () => {
 			width: HITBOX_FREQUENT_PX,
 			height: HITBOX_FREQUENT_PX
 		});
+	});
+
+	it('gives every result a 48 px row with a 32 px picture on a touch screen', async () => {
+		const root = await renderResultsOnTouchScreen();
+
+		expect(minHeightPx(requireElement(root, '.rail-search-result'), 'rail search result')).toBe(
+			TOUCH_RESULT_ROW_PX
+		);
+		expect(
+			getComputedStyle(requireElement(root, '.rail-search-region')).getPropertyValue(
+				'--rail-search-picture'
+			)
+		).toBe(`${TOUCH_RESULT_PICTURE_PX}px`);
 	});
 
 	it('names its loading, empty, and error states', async () => {

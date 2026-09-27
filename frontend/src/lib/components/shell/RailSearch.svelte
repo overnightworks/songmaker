@@ -344,6 +344,14 @@
 		}
 	}
 
+	:global(html[data-pointer='coarse']) .rail-search-region {
+		--rail-search-picture: 32px;
+	}
+
+	:global(html[data-pointer='coarse']) .rail-search-result {
+		min-height: 48px;
+	}
+
 	.rail-search-result:hover,
 	.rail-search-result:focus-visible,
 	.rail-search-result-active {
