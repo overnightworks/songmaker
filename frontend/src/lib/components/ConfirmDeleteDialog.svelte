@@ -20,13 +20,14 @@
 
 	const titleId = $props.id();
 	let dialog: HTMLDivElement;
-	let cancelButton: HTMLButtonElement;
+	let cancelButton: HTMLButtonElement | undefined;
 
 	// A menu that opens this confirm hands focus back to its trigger in a
 	// microtask queued behind the mount, so the opener is read after that.
 	onMount(() => {
 		let opener: Element | null = null;
 		void tick().then(() => {
+			if (!cancelButton?.isConnected) return;
 			opener = document.activeElement;
 			cancelButton.focus();
 		});
