@@ -3045,7 +3045,6 @@ def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path:
     assert "cover_key" not in columns
 
 
-
 def test_playlist_last_played_migration_keeps_existing_playlists_both_ways(
     tmp_path: Path,
 ) -> None:
