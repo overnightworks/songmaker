@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	NOW_PLAYING_LABEL,
+	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
@@ -707,6 +708,97 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		const rightSide = openTargets()[1];
 		expect(rightSide.tabIndex).toBe(-1);
 		expect(rightSide.getAttribute('aria-hidden')).toBe('true');
+	});
+
+	// A finger lands on the bar and lifts wherever the move ended, usually
+	// above the bar, so the lift is dispatched on the page, not on the bar.
+	function swipe(from: Element, { rise, drift = 0 }: { rise: number; drift?: number }): void {
+		const start = { clientX: 120, clientY: 800 };
+		from.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, ...start }));
+		document.body.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: start.clientX + drift,
+				clientY: start.clientY - rise
+			})
+		);
+	}
+
+	const swipeStarts = {
+		title: () => openTargets()[0],
+		rightSide: () => openTargets()[1],
+		control: (name: string) => () => {
+			const control = bar().querySelector(`.transport-controls button[aria-label="${name}"]`);
+			if (!control) throw new Error(`Expected the ${name} button`);
+			return control;
+		}
+	};
+
+	it.each([
+		{ gesture: 'a swipe up from the title', start: swipeStarts.title },
+		{ gesture: 'a swipe up from the empty right side', start: swipeStarts.rightSide }
+	])('opens Now Playing on $gesture', async ({ start }) => {
+		loadTake();
+		await mountBar();
+
+		swipe(start(), { rise: NOW_PLAYING_SWIPE_RISE_PX });
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it.each([
+		{
+			gesture: 'a move up too short',
+			start: swipeStarts.title,
+			rise: NOW_PLAYING_SWIPE_RISE_PX - 1
+		},
+		{
+			gesture: 'a move more sideways than up',
+			start: swipeStarts.title,
+			rise: NOW_PLAYING_SWIPE_RISE_PX,
+			drift: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{ gesture: 'a move down', start: swipeStarts.title, rise: -NOW_PLAYING_SWIPE_RISE_PX },
+		{
+			gesture: 'a swipe up from Previous',
+			start: swipeStarts.control('Previous'),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{
+			gesture: 'a swipe up from play',
+			start: swipeStarts.control(TRANSPORT_PLAY_LABEL),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{
+			gesture: 'a swipe up from Next',
+			start: swipeStarts.control('Next'),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		}
+	])('leaves Now Playing closed on $gesture', async ({ start, rise, drift }) => {
+		loadTake();
+		await mountBar();
+
+		swipe(start(), { rise, drift });
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	it('keeps a docked panel open when the swipe that opened it ends in a click on the title', async () => {
+		nowPlayingDockable.set(true);
+		loadTake();
+		await mountBar();
+
+		swipe(openTargets()[0], { rise: NOW_PLAYING_SWIPE_RISE_PX });
+		openTargets()[0].click();
+		await tick();
+		expect(get(nowPlayingSurface)).toBe('docked');
+
+		openTargets()[0].click();
+		await tick();
+		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
 	it.each([

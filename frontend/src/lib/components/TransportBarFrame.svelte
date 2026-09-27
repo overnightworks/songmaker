@@ -4,6 +4,7 @@
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		NOW_PLAYING_LABEL,
+		NOW_PLAYING_SWIPE_RISE_PX,
 		TRANSPORT_PAUSE_LABEL,
 		TRANSPORT_PLAY_LABEL,
 		TRANSPORT_RETRY_LABEL
@@ -82,6 +83,9 @@
 	}: Props = $props();
 
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
+	let phoneTransportControls: HTMLDivElement | undefined = $state();
+	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
+	let swipeOpenedNowPlaying = false;
 	let vizCanvas: HTMLCanvasElement | undefined = $state();
 	let analyser: AnalyserNode | undefined;
 	let frequencyData: Uint8Array<ArrayBuffer> | undefined;
@@ -171,6 +175,38 @@
 		if (isPlaying) startVisualizerLoop();
 	}
 
+	// The whole phone bar is a handle for Now Playing, except its transport:
+	// a finger that lands on previous, play or next means that button.
+	function startSwipe(e: PointerEvent): void {
+		swipeOpenedNowPlaying = false;
+		swipeStart = null;
+		if (!mobileTransport || nowPlayingDisabled) return;
+		if (phoneTransportControls?.contains(e.target as Node)) return;
+		swipeStart = { pointerId: e.pointerId, x: e.clientX, y: e.clientY };
+	}
+
+	function endSwipe(e: PointerEvent): void {
+		if (swipeStart?.pointerId !== e.pointerId) return;
+		const rise = swipeStart.y - e.clientY;
+		const drift = Math.abs(e.clientX - swipeStart.x);
+		swipeStart = null;
+		if (rise < NOW_PLAYING_SWIPE_RISE_PX || rise <= drift) return;
+		swipeOpenedNowPlaying = true;
+		onOpenNowPlaying();
+	}
+
+	function cancelSwipe(): void {
+		swipeStart = null;
+	}
+
+	// A swipe that starts and ends on the title also clicks it, and that click
+	// would put a docked panel the swipe just opened away again.
+	function swallowClickEndingSwipe(e: MouseEvent): void {
+		if (!swipeOpenedNowPlaying) return;
+		swipeOpenedNowPlaying = false;
+		e.stopPropagation();
+	}
+
 	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
 		if (duration <= 0) return;
 		const target = el ?? (e.currentTarget as HTMLElement);
@@ -232,13 +268,19 @@
 	</button>
 {/snippet}
 
-<svelte:document onvisibilitychange={handleVisibilityChange} />
+<svelte:document
+	onvisibilitychange={handleVisibilityChange}
+	onpointerup={endSwipe}
+	onpointercancel={cancelSwipe}
+/>
 
 <footer
 	class="player-bar"
 	class:now-playing-open={nowPlayingOpen}
 	class:mobile-transport={mobileTransport}
 	style={boxShadow}
+	onpointerdown={startSwipe}
+	onclickcapture={swallowClickEndingSwipe}
 >
 	<canvas class="viz-fullscreen" bind:this={vizCanvas}></canvas>
 	<div class="mobile-progress" aria-hidden="true">
@@ -264,7 +306,7 @@
 					{@render trackInfo(trackTitleGlowStyle, null)}
 				</button>
 			{/if}
-			<div class="transport-controls">
+			<div class="transport-controls" bind:this={phoneTransportControls}>
 				{@render stepAndPlay()}
 			</div>
 			<!-- The empty right side is only a wider tap target for the same
@@ -643,7 +685,10 @@
 	   decorative .mobile-progress line stands in for the timeline here.
 	   `.mobile-transport` is set from `subscribeCompactLayout` (JS mirrors
 	   the same media query so jsdom tests can drive it via data-pointer). */
+	/* The browser must not take a swipe on the bar for a page scroll, or it
+	   cancels the pointer before the swipe can open Now Playing. */
 	.player-bar.mobile-transport {
+		touch-action: none;
 		overflow: visible;
 		padding: 0 14px env(safe-area-inset-bottom, 0px);
 	}
