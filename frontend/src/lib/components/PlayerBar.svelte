@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Attachment } from 'svelte/attachments';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import {
 		closeNowPlaying,
@@ -33,6 +34,10 @@
 		LIBRARY_QUEUE_LOADING_TITLE,
 		LIBRARY_QUEUE_PLAY_DETAIL,
 		LIBRARY_QUEUE_RETRY_DETAIL,
+		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
+		MINI_PLAYER_TITLE_SCROLL_REST_MS,
+		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
+		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
 	} from '$lib/constants';
 	import TransportBarFrame from './TransportBarFrame.svelte';
@@ -93,6 +98,31 @@
 		return album?.cover?.card ?? null;
 	});
 
+	// A cut title shows the rest of itself once, then rests at its start with
+	// its ellipsis again; a title that fits, or a listener who asked for less
+	// motion, never moves.
+	const scrollTitleOnceWhenCut: Attachment<HTMLElement> = (title) => {
+		if (window.matchMedia(REDUCED_MOTION_MEDIA).matches) return;
+		const overflow = title.scrollWidth - title.clientWidth;
+		if (overflow <= 0) return;
+		const rest = MINI_PLAYER_TITLE_SCROLL_REST_MS;
+		const travel = (overflow / MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND) * 1000;
+		const duration = rest + travel + rest + MINI_PLAYER_TITLE_SCROLL_RETURN_MS;
+		const atStart = { textIndent: '0px' };
+		const atEnd = { textIndent: `-${overflow}px` };
+		const scroll = title.animate(
+			[
+				{ ...atStart, offset: 0 },
+				{ ...atStart, offset: rest / duration },
+				{ ...atEnd, offset: (rest + travel) / duration },
+				{ ...atEnd, offset: (rest + travel + rest) / duration },
+				{ ...atStart, offset: 1 }
+			],
+			{ duration }
+		);
+		return () => scroll.cancel();
+	};
+
 	function togglePlay(): void {
 		if (!current) {
 			void playIdleStart();
@@ -140,9 +170,14 @@
 	</span>
 	<span class="track-text">
 		{#if current}
-			<span class="track-title" class:glowing={isPlaying} style={titleGlowStyle}
-				>{current.songTitle}</span
-			>
+			{#key current.songTitle}
+				<span
+					class="track-title"
+					class:glowing={isPlaying}
+					style={titleGlowStyle}
+					{@attach mobileTransport && scrollTitleOnceWhenCut}>{current.songTitle}</span
+				>
+			{/key}
 			<span class="track-detail" id={detailId}
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span

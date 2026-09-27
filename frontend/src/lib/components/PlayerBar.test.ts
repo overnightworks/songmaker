@@ -5,13 +5,14 @@ import {
 	makePlaylistDetail as playlistItem
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	NOW_PLAYING_LABEL,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
+	REDUCED_MOTION_MEDIA,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -814,6 +815,81 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		bar().querySelector<HTMLButtonElement>(`button[aria-label="${step}"]`)?.click();
 
 		expect(played).toHaveBeenCalledOnce();
+	});
+
+	const LONG_TITLE = 'An Opening Move Across The Longest Night';
+
+	// jsdom lays nothing out: a test says how wide the title runs and how much
+	// room it has, and records each motion the bar asks the browser for.
+	function arrangeTitle({
+		cut,
+		reducedMotion = false,
+		phone = true
+	}: {
+		cut: boolean;
+		reducedMotion?: boolean;
+		phone?: boolean;
+	}): { element: Element; keyframes: Keyframe[] }[] {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query === REDUCED_MOTION_MEDIA ? reducedMotion : phone,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn()
+			}))
+		);
+		vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(60);
+		vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(cut ? 180 : 60);
+		const motions: { element: Element; keyframes: Keyframe[] }[] = [];
+		Object.defineProperty(HTMLElement.prototype, 'animate', {
+			configurable: true,
+			value(this: Element, keyframes: Keyframe[]) {
+				motions.push({ element: this, keyframes });
+				return { cancel: () => {} };
+			}
+		});
+		onTestFinished(() => {
+			delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+		});
+		return motions;
+	}
+
+	it('scrolls a cut title once to its end and back to its start, and once for each new title', async () => {
+		const motions = arrangeTitle({ cut: true });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(motions).toHaveLength(1);
+		const [{ element, keyframes }] = motions;
+		expect(element).toBe(bar().querySelector('.track-title'));
+		expect(keyframes.at(0)?.textIndent).toBe('0px');
+		expect(keyframes.map((frame) => frame.textIndent)).toContain('-120px');
+		expect(keyframes.at(-1)?.textIndent).toBe('0px');
+
+		loadTake(`${LONG_TITLE} Again`);
+		await tick();
+		expect(motions).toHaveLength(2);
+	});
+
+	it.each([
+		{ title: 'a title that fits', cut: false },
+		{ title: 'a cut title under reduced motion', cut: true, reducedMotion: true },
+		{ title: 'a cut title on the desktop bar', cut: true, phone: false }
+	])('keeps $title still', async ({ cut, reducedMotion, phone }) => {
+		const motions = arrangeTitle({ cut, reducedMotion, phone });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(motions).toHaveLength(0);
+	});
+
+	it('names the open target after the full title while the title is cut', async () => {
+		arrangeTitle({ cut: true, reducedMotion: true });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(openTargets()[0].getAttribute('aria-label')).toBe(openNowPlayingLabel(LONG_TITLE));
+		expect(bar().querySelector('.track-title')?.textContent).toBe(LONG_TITLE);
 	});
 
 	it('shows the idle target as plain words that open nothing', async () => {
