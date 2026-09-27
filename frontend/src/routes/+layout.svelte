@@ -15,10 +15,8 @@
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import {
 		backToCollection,
-		followBackIntoLibrary,
 		forgetHistoryLayers,
 		initNavigation,
-		isLibraryRouteId,
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
@@ -139,12 +137,6 @@
 	// loaded onto, whose restored state must not steer `initNavigation` then.
 	afterNavigate(({ type }) => {
 		if (type !== 'enter') leaveRestoredLibraryHistory();
-	});
-
-	const libraryRouteMounted = $derived(isLibraryRouteId(page.route.id));
-
-	$effect(() => {
-		if (hasPrivatePlayer && !libraryRouteMounted) return followBackIntoLibrary();
 	});
 
 	// The live-sync stream and the history listener outlive a route swap

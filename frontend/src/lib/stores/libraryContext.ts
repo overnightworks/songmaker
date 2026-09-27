@@ -281,26 +281,14 @@ export function writeLibraryHistory(
 	}
 	return queueHistoryStep(state, pathname, async () => {
 		if (crossesRoutes) {
-			await navigateOnto(state, url, mode);
+			const written = mode === 'replace' ? keepEntryLayer(state) : state;
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
+			applyHistoryWrite(written, url, 'replace');
 			return;
 		}
 		applyHistoryWrite(state, url, mode);
 	});
-}
-
-export function remountLibraryHistory(state: LibraryHistoryState, url: string): Promise<void> {
-	return queueHistoryStep(state, pathnameOf(url), () => navigateOnto(state, url, 'replace'));
-}
-
-async function navigateOnto(
-	state: LibraryHistoryState,
-	url: string,
-	mode: HistoryWriteMode
-): Promise<void> {
-	const written = mode === 'replace' ? keepEntryLayer(state) : state;
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address
-	await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
-	applyHistoryWrite(written, url, 'replace');
 }
 
 // Steps back onto the entry below, whose state the caller already knows

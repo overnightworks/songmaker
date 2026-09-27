@@ -17,7 +17,7 @@ import {
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
-import { isLibraryWorkspacePath, resetNavigationForTests } from '$lib/stores/navigation';
+import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
@@ -38,10 +38,7 @@ import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState, liveStream } = vi.hoisted(() => ({
-	pageState: {
-		url: new URL('https://songmaker.test/'),
-		route: { id: '/(library)' as string | null }
-	},
+	pageState: { url: new URL('https://songmaker.test/') },
 	liveStream: {
 		start: vi.fn(),
 		stop: vi.fn(),
@@ -166,13 +163,8 @@ function minUsedWidth(el: Element): number {
 	return px(style.minWidth) || px(style.width);
 }
 
-function mountRouteAt(path: string): void {
-	pageState.url = new URL(`https://songmaker.test${path}`);
-	pageState.route = { id: isLibraryWorkspacePath(path) ? '/(library)' : path };
-}
-
 async function renderLayout(path: string): Promise<HTMLElement> {
-	mountRouteAt(path);
+	pageState.url = new URL(`https://songmaker.test${path}`);
 	currentUser.set(USER);
 	authLoading.set(false);
 	const target = document.createElement('div');
@@ -185,7 +177,7 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 }
 
 function mountLayout(path: string): HTMLElement {
-	mountRouteAt(path);
+	pageState.url = new URL(`https://songmaker.test${path}`);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(Layout, { target, props: { children } });
@@ -830,22 +822,6 @@ describe('signing out from the phone rail drawer', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
 		expect(currentLibraryHistoryState()).toMatchObject({ layer: 'rail-drawer' });
-	});
-});
-
-describe('Back from Settings onto a library entry', () => {
-	it('mounts the library route for that entry again', async () => {
-		resetLibraryContextForTests();
-		resetNavigationForTests();
-		history.replaceState(libraryRootState(), '', '/');
-		history.pushState({ 'sveltekit:history': 2 }, '', '/settings/voices');
-		await renderLayout('/settings/voices');
-
-		history.back();
-
-		await vi.waitFor(() =>
-			expect(goto).toHaveBeenCalledWith('/', expect.objectContaining({ replaceState: true }))
-		);
 	});
 });
 

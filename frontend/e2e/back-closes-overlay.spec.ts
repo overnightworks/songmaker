@@ -12,6 +12,7 @@ import { FlowGuard, openLibraryWall, openRailNav, shellOf, workspace, type Shell
 import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
 const SETTINGS_SECTION = 'Voices';
+const SETTINGS_SECTION_HEADING = 'My Voices';
 
 interface Pages {
 	wall: Locator;
@@ -27,7 +28,7 @@ interface OverlayRow {
 	open: (page: Page, playlist: SeededPlaylist) => Promise<void>;
 	leave: (page: Page, playlist: SeededPlaylist) => Promise<void>;
 	expectLeft: (page: Page, pages: Pages, playlist: SeededPlaylist) => Promise<void>;
-	backReaches: LibraryPage;
+	afterwards: (page: Page, pages: Pages) => Promise<void>;
 }
 
 function railDrawer(page: Page): Locator {
@@ -67,6 +68,20 @@ async function expectReached(page: Page, pages: Pages, reached: LibraryPage): Pr
 	await expect(page).toHaveURL(/\/$/);
 }
 
+function backReaches(reached: LibraryPage): OverlayRow['afterwards'] {
+	return async (page, pages) => {
+		await page.goBack();
+		await expectReached(page, pages, reached);
+	};
+}
+
+async function backThenForwardReturnsToSettings(page: Page): Promise<void> {
+	await page.goBack();
+	await page.goForward();
+	await expect(page).toHaveURL(/\/settings\/voices$/);
+	await expect(page.getByRole('heading', { name: SETTINGS_SECTION_HEADING })).toBeVisible();
+}
+
 const OVERLAY_ROWS: OverlayRow[] = [
 	{
 		name: 'Back closes the phone rail drawer and keeps the playlist',
@@ -79,7 +94,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await expect(railDrawer(page)).toBeHidden();
 			await expectPlaylistStands(page, pages);
 		},
-		backReaches: 'wall'
+		afterwards: backReaches('wall')
 	},
 	{
 		name: 'a row tap in the phone rail drawer leaves one Back to the playlist',
@@ -91,10 +106,10 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		expectLeft: async (_page, pages) => {
 			await expect(pages.wall).toBeVisible();
 		},
-		backReaches: 'playlist'
+		afterwards: backReaches('playlist')
 	},
 	{
-		name: 'a Settings link in the phone rail drawer leaves one Back to the playlist',
+		name: 'a Settings link in the phone rail drawer closes it, and Back then Forward return to Settings',
 		shell: 'mobile',
 		open: openRailDrawer,
 		leave: async (page) => {
@@ -106,7 +121,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await expect(page).toHaveURL(/\/settings\/voices$/);
 			await expect(railDrawer(page)).toBeHidden();
 		},
-		backReaches: 'playlist'
+		afterwards: backThenForwardReturnsToSettings
 	},
 	{
 		name: 'Back docks the full Now Playing on the desktop and keeps the playlist',
@@ -121,7 +136,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await expect(page.getByRole('dialog', { name: playing })).toBeHidden();
 			await expectPlaylistStands(page, pages);
 		},
-		backReaches: 'wall'
+		afterwards: backReaches('wall')
 	}
 ];
 
@@ -149,8 +164,7 @@ test.describe('Back closes the open overlay first', () => {
 			await row.leave(page, playlist);
 			await row.expectLeft(page, pages, playlist);
 
-			await page.goBack();
-			await expectReached(page, pages, row.backReaches);
+			await row.afterwards(page, pages);
 			guard.assertClean();
 		});
 	}
