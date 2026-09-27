@@ -590,11 +590,14 @@ export async function playIdleStart(): Promise<void> {
 }
 
 // The playlist store owns loading and joins the fetch already in flight; a
-// listener who moves on while it loads leaves nothing here to play.
+// listener who moves on while it loads leaves nothing here to play, and a
+// play started meanwhile supersedes this wait even if they come back to it.
 async function playOpenPlaylistOnceLoaded(playlistId: string): Promise<void> {
 	if (get(selectedPlaylistDetail)?.id !== playlistId) {
+		const { seq } = beginPlayStart();
 		playStartNotice.set('building');
 		await loadPlaylistDetail(playlistId);
+		if (!playStartIsCurrent(seq)) return;
 	}
 	const playlist = get(selectedPlaylistDetail);
 	if (playlist?.id !== playlistId) {
