@@ -1,6 +1,12 @@
 // Shared guards, shell facts and name matchers for the browser flows.
 
-import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
+import {
+	expect,
+	type BrowserContext,
+	type Locator,
+	type Page,
+	type TestInfo
+} from '@playwright/test';
 import {
 	COWRITER_TURN_PATH,
 	RAIL_DRAWER_LABEL,
@@ -89,6 +95,10 @@ export const TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET = 30;
 export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
 
 const API_PATH_PREFIX = '/api';
+// How Chromium fails a request while `loseNetwork` holds the network away:
+// the flow drives that loss on purpose, so neither the failed request nor the
+// console line Chromium adds for it is a guard failure.
+const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
 // Streams the client closes on purpose: leaving the library route (Settings,
@@ -104,6 +114,27 @@ function isClosedOnPurpose(url: string): boolean {
 	return (
 		path === RESOURCE_EVENT_STREAM_PATH || path === COWRITER_TURN_PATH || JOB_STREAM_PATH.test(path)
 	);
+}
+
+const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
+
+/**
+ * Takes the page's network away the way a phone loses it. `setOffline` alone
+ * leaves a live event stream the page already holds running (see
+ * docs/testing.md), so the page's open loads are stopped the way a dropped
+ * network ends them, and every reopen of the library's resource stream is
+ * refused until `regainNetwork`.
+ */
+export async function loseNetwork(page: Page, context: BrowserContext): Promise<void> {
+	await page.route(isResourceEventStream, (route) => route.abort('internetdisconnected'));
+	await context.setOffline(true);
+	await page.evaluate(() => window.stop());
+}
+
+/** Gives the page its network back: the browser reports online and the stream may reopen. */
+export async function regainNetwork(page: Page, context: BrowserContext): Promise<void> {
+	await page.unroute(isResourceEventStream);
+	await context.setOffline(false);
 }
 
 /** Which shell a test drives: the mobile project is the emulated phone. */
@@ -235,6 +266,7 @@ export class FlowGuard {
 			if (errorText === 'net::ERR_ABORTED' && isClosedOnPurpose(request.url())) {
 				return;
 			}
+			if (errorText === NETWORK_LOST_ERROR) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
@@ -246,6 +278,7 @@ export class FlowGuard {
 		});
 		page.on('console', (message) => {
 			if (message.type() !== 'error') return;
+			if (message.text().includes(NETWORK_LOST_ERROR)) return;
 			const reportsAnExpectedRefusal =
 				REFUSED_RESOURCE_CONSOLE_MESSAGE.test(message.text()) &&
 				refusalIsExpectedOn(message.location().url);
