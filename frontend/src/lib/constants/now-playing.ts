@@ -101,8 +101,10 @@ export function nowPlayingFromLabel(title: string): string {
 	return `from ${title}`;
 }
 
+// Starts with the visible "from …" text so a voice command naming what is
+// on screen reaches the link (WCAG 2.5.3), then says what it opens.
 export function nowPlayingOpenSourceLabel(kind: NowPlayingSourceKind, title: string): string {
-	return `Open ${kind} ${title}`;
+	return `${nowPlayingFromLabel(title)} — open ${kind}`;
 }
 
 export const NOW_PLAYING_UP_NEXT_PREFIX = 'Up next:';
