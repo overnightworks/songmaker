@@ -1,6 +1,4 @@
-import { get } from 'svelte/store';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { offline } from '$lib/stores/connectivity';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -15,7 +13,7 @@ type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
 
 type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
 
-// 'unreachable' carries no words: the one offline strip names the cause.
+// 'unreachable' carries no words: the owner's offline strip names the cause.
 type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
 
 // One typed object per owner of the singleton audioPlayer (the logged-in app
@@ -30,6 +28,9 @@ export interface AudioPlayerCallbacks {
 	onAuthLost: (() => void | Promise<void>) | null;
 	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null;
 	onCurrentChange: ((current: PlaybackInfo | null) => void) | null;
+	// Only the owner knows whether its page shows the offline strip; a page
+	// without one needs the player's own failure line.
+	networkFailureIsAnnounced: () => boolean;
 }
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
@@ -37,7 +38,8 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onPlaybackStarted: null,
 	onAuthLost: null,
 	onStreamRebuild: null,
-	onCurrentChange: null
+	onCurrentChange: null,
+	networkFailureIsAnnounced: () => false
 };
 
 const AUDIO_URL_PREFIX = '/audio/';
@@ -874,7 +876,7 @@ class AudioPlayer {
 	}
 
 	private failForAnUnknownReason(): void {
-		if (get(offline)) {
+		if (this.callbacks.networkFailureIsAnnounced()) {
 			this.status = 'error';
 			this.failure = { kind: 'unreachable' };
 			return;
@@ -893,8 +895,8 @@ function bufferedUntil(el: HTMLAudioElement): number {
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
-// A lost network is never decoded here: offline the one strip names it
-// (#1039), so the player adds no network wording of its own.
+// A lost network is never decoded here: where the owner's strip names it
+// (#1039), the player adds no network wording of its own.
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:

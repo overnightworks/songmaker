@@ -1,8 +1,9 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+
+const NO_STRIP_SHOWN = (): boolean => false;
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
@@ -11,6 +12,7 @@ function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCa
 		onAuthLost: null,
 		onStreamRebuild: null,
 		onCurrentChange: null,
+		networkFailureIsAnnounced: NO_STRIP_SHOWN,
 		...overrides
 	};
 }
@@ -167,7 +169,6 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-	resetConnectivityForTests();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -1171,16 +1172,19 @@ describe('error handling', () => {
 				fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 			}
 		}
-	])('offline, adds no text of its own after $loss — the strip says it', async ({ arrange }) => {
-		reportResourceStreamReachable(false);
-		arrange();
-		fakeAudio.fire('error');
-		await new Promise((r) => setTimeout(r, 0));
-		expect(audioPlayer.status).toBe('error');
-		expect(audioPlayer.error).toBeNull();
-	});
+	])(
+		'adds no text of its own after $loss when the owner strip already says it',
+		async ({ arrange }) => {
+			audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => true }));
+			arrange();
+			fakeAudio.fire('error');
+			await new Promise((r) => setTimeout(r, 0));
+			expect(audioPlayer.status).toBe('error');
+			expect(audioPlayer.error).toBeNull();
+		}
+	);
 
-	it('online, names a failure no strip explains and offers the Retry', async () => {
+	it('names a failure no strip explains and offers the Retry', async () => {
 		fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
