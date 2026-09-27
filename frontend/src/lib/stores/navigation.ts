@@ -788,7 +788,7 @@ export function initNavigation(): () => void {
 
 // Leaving the library leaves its layer entries to the history below: nothing
 // is listening for their popstates any more.
-function forgetHistoryLayers(): void {
+export function forgetHistoryLayers(): void {
 	libraryHistoryRunning = false;
 	historyLayers.length = 0;
 	ownLayerStepBacks = 0;

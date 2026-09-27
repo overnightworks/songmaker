@@ -806,6 +806,25 @@ describe('a reload over the phone Now Playing', () => {
 	});
 });
 
+describe('signing out from the phone rail drawer', () => {
+	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		history.replaceState(null, '', '/');
+		const target = await renderLayout('/');
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		sidebarOpen.set(true);
+		await vi.waitFor(() =>
+			expect(currentLibraryHistoryState()).toMatchObject({ layer: 'rail-drawer' })
+		);
+
+		requireElement<HTMLButtonElement>(target, '[role="dialog"] button.logout').click();
+
+		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
+		expect(currentLibraryHistoryState()).toMatchObject({ layer: 'rail-drawer' });
+	});
+});
+
 // The live library stream and the history listener used to belong to the
 // workspace page. Three addresses share that workspace now (`/`,
 // `/album/<slug>` and `/album/<slug>/<song-slug>`, issues #269, #275, #276)
