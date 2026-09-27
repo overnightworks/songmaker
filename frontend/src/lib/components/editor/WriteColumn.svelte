@@ -250,8 +250,11 @@
 	   header (147.75px) + the panel's own padding and the gaps around
 	   `.editor-body` (~56px) + the Recipe chip row this song's params render
 	   above the chat column (~69px) + the player bar's reserved height
-	   (`--player-height`, 88px) ≈ 441px. 100dvh minus that is the room `.cowriter-chat`
-	   actually has below its own top before the fold, and 60dvh remains the
+	   (`--player-height`: 88px online; while offline it also holds the offline
+	   strip on the bar's top edge, which this fixed estimate leaves out, so
+	   offline the strip overlaps the foot of the chat by its own height) ≈
+	   441px. 100dvh minus that is the room `.cowriter-chat` actually has below
+	   its own top before the fold, and 60dvh remains the
 	   cap on a window tall enough to make it the smaller side. A song whose
 	   params render a taller (wrapped) chip row eats into this margin — the
 	   same approximation the wrapped-header estimate already carries. */
