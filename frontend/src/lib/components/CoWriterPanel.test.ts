@@ -670,6 +670,23 @@ describe('CoWriterPanel deleting a conversation', () => {
 		expect(await conversationRows(target)).toBe(0);
 	});
 
+	it.each(['Cancel', 'Delete'])(
+		'returns focus to ⋯ once %s answers the confirmation',
+		async (answer) => {
+			const target = await render();
+			await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+			const dialog = await openDeleteConfirm(target);
+			const answerButton = dialogButton(dialog, answer);
+
+			answerButton?.focus();
+			answerButton?.click();
+			await tick();
+
+			expect(document.querySelector('[role="dialog"]')).toBeNull();
+			expect(focusedConversationMenuTrigger()).toBe(true);
+		}
+	);
+
 	it('gives the delete ✕ the frequent touch target, 44px on a phone', async () => {
 		const target = await render();
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
