@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { EDITOR_LYRICS_LABEL } from '$lib/constants';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -318,6 +318,14 @@ describe('/album/<slug>/<song-slug> whose song cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Album service is down'));
 		expect(target.textContent).not.toContain('No such');
+	});
+
+	it('names a lost connection in its own words, never the browser text', async () => {
+		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
+		const target = openAddress();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
+		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
 	it('shows the song after Try again once the failure is over', async () => {

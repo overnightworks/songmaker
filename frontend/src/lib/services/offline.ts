@@ -1,5 +1,6 @@
 import type { QueueStreamManifest } from '$lib/api/types';
 import { parseRangeHeader } from './httpRange';
+import { UserFacingError } from '$lib/api/userFacingError';
 
 /** Cache name shared with the service worker's fetch handler. */
 export const OFFLINE_STREAMS_CACHE = 'offline-streams';
@@ -212,7 +213,7 @@ export async function saveStream(
 	onPin?: PinCallback
 ): Promise<void> {
 	if (!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) {
-		throw new Error(SERVICE_WORKER_INACTIVE);
+		throw new UserFacingError(SERVICE_WORKER_INACTIVE);
 	}
 
 	const cache = await caches.open(OFFLINE_STREAMS_CACHE);
@@ -232,7 +233,7 @@ export async function saveStream(
 	return new Promise<void>((resolve, reject) => {
 		const controller = navigator.serviceWorker.controller;
 		if (!controller) {
-			reject(new Error(SERVICE_WORKER_INACTIVE));
+			reject(new UserFacingError(SERVICE_WORKER_INACTIVE));
 			return;
 		}
 

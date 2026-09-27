@@ -28,6 +28,7 @@ import { openCollection, resetCollectionForTests } from '$lib/stores/collection'
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
 	curationActive,
+	ensureGenerationsLoaded,
 	libraryQueueSkipped,
 	nowPlayingDockable,
 	nowPlayingPanel,
@@ -42,6 +43,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import { toasts } from '$lib/stores/toast';
 import {
 	clearHitboxStyles,
 	injectHitboxStyles,
@@ -567,6 +569,43 @@ describe('NowPlaying', () => {
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 		expect(get(nowPlayingSurface)).toBe('full');
+	});
+});
+
+describe('NowPlaying when the take details cannot load', () => {
+	afterEach(() => {
+		toasts.set([]);
+	});
+
+	it('adds no text of its own when the network is gone — the offline strip says it', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+		await renderSurface(info());
+
+		await ensureGenerationsLoaded('s1').catch(() => undefined);
+		await tick();
+
+		expect(fetch).toHaveBeenCalledWith('/api/songs/s1', expect.anything());
+		const shown = [...get(toasts).map((toast) => toast.message), target.textContent];
+		expect(shown.join(' ')).not.toMatch(/Failed to (fetch|load take details)/);
+	});
+
+	it("names a refusal in the server's own words", async () => {
+		vi.stubGlobal(
+			'fetch',
+			vi.fn().mockResolvedValue({
+				ok: false,
+				status: 503,
+				headers: new Headers(),
+				json: async () => ({ detail: 'Song store is down' })
+			})
+		);
+		await renderSurface(info());
+
+		await vi.waitFor(() =>
+			expect(get(toasts)).toEqual([
+				expect.objectContaining({ type: 'error', message: 'Song store is down' })
+			])
+		);
 	});
 });
 

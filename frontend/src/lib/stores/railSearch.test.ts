@@ -6,7 +6,9 @@ vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
 
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
@@ -30,6 +32,7 @@ beforeEach(() => {
 afterEach(() => {
 	vi.useRealTimers();
 	resetRailSearchForTests();
+	resetConnectivityForTests();
 });
 
 describe('syncRailSearch', () => {
@@ -87,11 +90,22 @@ describe('syncRailSearch', () => {
 		expect(get(railSearch)).toMatchObject({ query: 'Vernissage', status: 'ready' });
 	});
 
-	it('records a server error and retries the same query', async () => {
-		searchLibrary.mockRejectedValueOnce(new Error('Offline'));
+	it.each([
+		{
+			failure: 'a refusal with a reason',
+			err: new ApiError(503, 'Search is paused', '/api/x'),
+			error: 'Search is paused'
+		},
+		{
+			failure: 'a browser error',
+			err: new TypeError('undefined is not a function'),
+			error: 'Search failed'
+		}
+	])('names $failure without browser text and retries the same query', async ({ err, error }) => {
+		searchLibrary.mockRejectedValueOnce(err);
 		syncRailSearch('stadion');
 		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'error', error: 'Offline' });
+		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'error', error });
 
 		searchLibrary.mockResolvedValueOnce({ items: [], next_cursor: null, has_more: false });
 		retryRailSearch();
@@ -101,6 +115,50 @@ describe('syncRailSearch', () => {
 			status: 'ready' as const,
 			error: null
 		});
+	});
+});
+
+describe('syncRailSearch offline', () => {
+	const unreachable = new NetworkError('/api/library/search', new TypeError('Failed to fetch'));
+
+	it('shows no failure of its own while offline and searches again once back online', async () => {
+		reportResourceStreamReachable(false);
+		searchLibrary.mockRejectedValueOnce(unreachable);
+		syncRailSearch('stadion');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		expect(get(railSearch)).toMatchObject({ status: 'unreachable', error: null });
+
+		searchLibrary.mockResolvedValueOnce({ items: [], next_cursor: null, has_more: false });
+		reportResourceStreamReachable(true);
+		await vi.runAllTimersAsync();
+
+		expect(searchLibrary).toHaveBeenCalledTimes(2);
+		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'ready', error: null });
+	});
+
+	it('does not search again on its own while the connection never dropped', async () => {
+		searchLibrary.mockRejectedValueOnce(unreachable);
+		syncRailSearch('stadion');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		reportResourceStreamReachable(true);
+		await vi.runAllTimersAsync();
+
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(get(railSearch)).toMatchObject({ status: 'unreachable', error: null });
+	});
+
+	it('forgets the pending search again once the query is cleared', async () => {
+		reportResourceStreamReachable(false);
+		searchLibrary.mockRejectedValueOnce(unreachable);
+		syncRailSearch('stadion');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+		syncRailSearch('');
+
+		reportResourceStreamReachable(true);
+		await vi.runAllTimersAsync();
+
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(get(railSearch)).toMatchObject({ query: '', status: 'idle' });
 	});
 });
 

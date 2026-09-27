@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 
 const mockListLoras = vi.fn();
 const mockGetLora = vi.fn();
@@ -70,10 +71,21 @@ describe('LoRA store', () => {
 		expect(get(lorasError)).toBeNull();
 	});
 
-	it('loadLoras captures error message and rethrows', async () => {
-		mockListLoras.mockRejectedValueOnce(new Error('boom'));
-		await expect(loadLoras()).rejects.toThrow('boom');
-		expect(get(lorasError)).toBe('boom');
+	it.each([
+		{
+			failure: 'a refusal with a reason',
+			err: new ApiError(403, 'Voices are admin-only', '/api/loras'),
+			shown: 'Voices are admin-only'
+		},
+		{
+			failure: 'a network failure',
+			err: new NetworkError('/api/loras', new TypeError('Failed to fetch')),
+			shown: 'Failed to load voices'
+		}
+	])('loadLoras names $failure without browser text and rethrows', async ({ err, shown }) => {
+		mockListLoras.mockRejectedValueOnce(err);
+		await expect(loadLoras()).rejects.toBe(err);
+		expect(get(lorasError)).toBe(shown);
 	});
 
 	it('loadLoras passes includeDeleted flag through', async () => {

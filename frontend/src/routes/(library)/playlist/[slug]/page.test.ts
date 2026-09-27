@@ -7,7 +7,7 @@ import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -221,6 +221,21 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Playlist service is down'));
 		expect(target.textContent).not.toContain('No such playlist');
+	});
+
+	it.each([
+		{ loss: 'a lost connection', reason: 'unreachable' as const },
+		{ loss: 'a request the server never answered', reason: 'timeout' as const }
+	])('names $loss in its own words, never the browser text', async ({ reason }) => {
+		api.fetchPlaylists.mockRejectedValue(
+			new NetworkError('/api/playlists', new TypeError('Failed to fetch'), reason)
+		);
+		const target = openAddress();
+
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain('This playlist could not be loaded.')
+		);
+		expect(target.textContent).not.toMatch(/Failed to fetch|No answer from/);
 	});
 
 	it('shows the playlist after Try again once the failure is over', async () => {

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { resolve } from '$app/paths';
+	import { describeFailure } from '$lib/api/fetch';
 	import { openPlaylistAddress } from '$lib/stores/libraryContext';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 
@@ -45,7 +46,7 @@
 			addressState = address === 'found' ? 'open' : 'unknown';
 		} catch (err) {
 			if (request !== openRequests) return;
-			failure = err instanceof Error ? err.message : UNREACHABLE_PLAYLIST_MESSAGE;
+			failure = describeFailure(err, UNREACHABLE_PLAYLIST_MESSAGE);
 			addressState = 'unreachable';
 		}
 	}
