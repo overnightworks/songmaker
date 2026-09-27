@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import {
 		fetchUsers,
 		fetchAdminVoices,
@@ -16,6 +16,8 @@
 		updateUserRateLimits,
 		deleteUserRateLimits
 	} from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import type {
 		UserItem,
 		SessionItem,
@@ -113,7 +115,7 @@
 	let attempts = $state<LoginAttemptItem[]>([]);
 	let voices = $state<AdminUserLoraItem[]>([]);
 	let loadingVoices = $state(false);
-	let voicesLoadError = $state('');
+	let voicesLoaded = $state(false);
 	let error = $state('');
 	let compact = $state(false);
 
@@ -188,7 +190,6 @@
 	let creating = $state(false);
 
 	let providerStatuses = $state<ProviderStatus[]>([]);
-	let providerStatusError = $state('');
 
 	let cowriterSettings = $state<CowriterSettings | null>(null);
 	let cowriterBudget = $state(0);
@@ -217,7 +218,66 @@
 	const admin = $derived($isAdmin);
 	const me = $derived($currentUser);
 
+	// Each read the page makes (#1107): a lost network shows no words of its
+	// own while the offline strip says it or a reload is coming, and the read
+	// runs again by itself; any other failure shows the server's reason.
+	type AdminLoad =
+		| 'users'
+		| 'voices'
+		| 'rateLimits'
+		| 'userLimits'
+		| 'providerStatus'
+		| 'cowriter'
+		| 'cover'
+		| 'scoring';
+
+	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
+		users: 'Failed to load users',
+		voices: ADMIN_VOICES_LOAD_FAILED,
+		rateLimits: 'Failed to load rate limits',
+		userLimits: 'Failed to load user limits',
+		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
+		cowriter: 'Failed to load co-writer settings',
+		cover: 'Failed to load cover settings',
+		scoring: 'Failed to load scoring settings'
+	};
+	const PAGE_WIDE_LOADS: readonly AdminLoad[] = [
+		'users',
+		'rateLimits',
+		'userLimits',
+		'cowriter',
+		'cover',
+		'scoring'
+	];
+
+	const loadReloads: Record<AdminLoad, ReturnType<typeof reloadWhileUnreachable>> = {
+		users: reloadWhileUnreachable(() => void loadAll()),
+		voices: reloadWhileUnreachable(() => void loadVoices()),
+		rateLimits: reloadWhileUnreachable(() => void loadGlobalLimits()),
+		userLimits: reloadWhileUnreachable(() => void reloadExpandedUserLimits()),
+		providerStatus: reloadWhileUnreachable(() => void loadProviderStatuses()),
+		cowriter: reloadWhileUnreachable(() => void loadCowriterSettings()),
+		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
+		scoring: reloadWhileUnreachable(() => void loadJudgeSettings())
+	};
+	let loadFailures = $state<Partial<Record<AdminLoad, string | null>>>({});
+	const pageLoadFailures = $derived([
+		...new Set(PAGE_WIDE_LOADS.flatMap((load) => loadFailures[load] ?? []))
+	]);
+
+	function settleLoad(load: AdminLoad): void {
+		loadReloads[load].stop();
+		loadFailures[load] = null;
+	}
+
+	function failLoad(load: AdminLoad, e: unknown): void {
+		loadFailures[load] = loadReloads[load].nameLoadFailure(e, LOAD_FAILURE_FALLBACKS[load]);
+	}
+
 	onMount(loadAll);
+	onDestroy(() => {
+		for (const reloads of Object.values(loadReloads)) reloads.stop();
+	});
 
 	async function loadAll() {
 		try {
@@ -229,18 +289,20 @@
 			users = u;
 			sessions = s.items;
 			attempts = a.items;
+			settleLoad('users');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load';
+			failLoad('users', e);
 		}
 	}
 
 	async function loadVoices() {
 		loadingVoices = true;
-		voicesLoadError = '';
 		try {
 			voices = await fetchAdminVoices();
+			voicesLoaded = true;
+			settleLoad('voices');
 		} catch (e) {
-			voicesLoadError = e instanceof Error ? e.message : ADMIN_VOICES_LOAD_FAILED;
+			failLoad('voices', e);
 		} finally {
 			loadingVoices = false;
 		}
@@ -251,8 +313,9 @@
 			const res = await fetchRateLimits();
 			globalLimits = res.settings;
 			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
+			settleLoad('rateLimits');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load rate limits';
+			failLoad('rateLimits', e);
 		}
 	}
 
@@ -268,7 +331,7 @@
 			globalLimits = res.settings;
 			globalEdits = Object.fromEntries(res.settings.map((s) => [s.setting_key, String(s.value)]));
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save';
+			error = describeFailure(e, 'Failed to save');
 		} finally {
 			savingGlobal = false;
 		}
@@ -278,23 +341,33 @@
 		if (expandedUserId === userId) {
 			expandedUserId = null;
 			userLimitsData = null;
+			settleLoad('userLimits');
 			return;
 		}
 		expandedUserId = userId;
 		userEdits = {};
+		await loadUserLimits(userId);
+	}
+
+	async function reloadExpandedUserLimits(): Promise<void> {
+		if (expandedUserId) await loadUserLimits(expandedUserId);
+	}
+
+	async function loadUserLimits(userId: string): Promise<void> {
 		try {
-			userLimitsData = await fetchUserRateLimits(userId);
-			const overrideMap = Object.fromEntries(
-				userLimitsData.overrides.map((o) => [o.setting_key, o.value])
-			);
+			const limits = await fetchUserRateLimits(userId);
+			if (userId !== expandedUserId) return;
+			userLimitsData = limits;
+			const overrideMap = Object.fromEntries(limits.overrides.map((o) => [o.setting_key, o.value]));
 			userEdits = Object.fromEntries(
-				userLimitsData.effective.map((e) => [
+				limits.effective.map((e) => [
 					e.setting_key,
 					e.is_override ? String(overrideMap[e.setting_key] ?? e.value) : ''
 				])
 			);
+			settleLoad('userLimits');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load user limits';
+			failLoad('userLimits', e);
 		}
 	}
 
@@ -314,7 +387,7 @@
 				userLimitsData = await updateUserRateLimits(expandedUserId, settings);
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to save user limits';
+			error = describeFailure(e, 'Failed to save user limits');
 		} finally {
 			savingUser = false;
 		}
@@ -329,7 +402,7 @@
 			userLimitsData = await fetchUserRateLimits(expandedUserId);
 			userEdits = Object.fromEntries(userLimitsData.effective.map((e) => [e.setting_key, '']));
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to clear';
+			error = describeFailure(e, 'Failed to clear');
 		} finally {
 			savingUser = false;
 		}
@@ -377,12 +450,12 @@
 	}
 
 	async function loadProviderStatuses(): Promise<void> {
-		providerStatusError = '';
 		try {
 			providerStatuses = await fetchProviderStatus();
+			settleLoad('providerStatus');
 		} catch (e) {
 			providerStatuses = [];
-			providerStatusError = e instanceof Error ? e.message : PROVIDER_STATUS_UNAVAILABLE_DETAIL;
+			failLoad('providerStatus', e);
 		}
 	}
 
@@ -390,27 +463,31 @@
 		try {
 			cowriterSettings = await fetchCowriterSettings();
 			cowriterBudget = cowriterSettings.tail_token_budget;
+			settleLoad('cowriter');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load co-writer settings';
+			failLoad('cowriter', e);
 		}
 	}
 
 	async function loadCoverSettings(): Promise<void> {
 		try {
 			coverSettings = await fetchCoverSettings();
+			settleLoad('cover');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load cover settings';
+			failLoad('cover', e);
 		}
 	}
 
 	async function loadJudgeSettings(): Promise<void> {
 		try {
 			judgeSettings = await fetchJudgeSettings();
+			settleLoad('scoring');
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load scoring settings';
+			failLoad('scoring', e);
 		}
 	}
 
+	const providerStatusError = $derived(loadFailures.providerStatus ?? '');
 	const providerStatusFailure = $derived<SafeRouteReason | null>(
 		providerStatusError === '' ? null : { code: 'route_failed', message: providerStatusError }
 	);
@@ -554,7 +631,7 @@
 			}
 			return isNonEmptyString(e.responseDetail) ? e.responseDetail : MODELS_SAVE_FAILED_FALLBACK;
 		}
-		return e instanceof Error ? e.message : MODELS_SAVE_FAILED_FALLBACK;
+		return describeFailure(e, MODELS_SAVE_FAILED_FALLBACK);
 	}
 
 	function routeMapWith(selection: ModelsTaskSelection): Record<string, ModelsRouteKey> {
@@ -629,7 +706,7 @@
 			newRole = 'user';
 			users = await fetchUsers();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to create user';
+			error = describeFailure(e, 'Failed to create user');
 		} finally {
 			creating = false;
 		}
@@ -640,7 +717,7 @@
 			await updateUser(user.id, { is_active: !user.is_active });
 			users = await fetchUsers();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to update user';
+			error = describeFailure(e, 'Failed to update user');
 		}
 	}
 
@@ -650,7 +727,7 @@
 			await updateUser(user.id, { role: newRoleValue });
 			users = await fetchUsers();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to update role';
+			error = describeFailure(e, 'Failed to update role');
 		}
 	}
 
@@ -666,7 +743,7 @@
 			resetPasswordUserId = null;
 			resetPasswordValue = '';
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to reset password';
+			error = describeFailure(e, 'Failed to reset password');
 		} finally {
 			resettingPassword = false;
 		}
@@ -681,7 +758,7 @@
 			deleteConfirmInput = '';
 			users = await fetchUsers();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to delete user';
+			error = describeFailure(e, 'Failed to delete user');
 		} finally {
 			deleting = false;
 		}
@@ -692,7 +769,7 @@
 			await forceLogout(sessionId);
 			sessions = (await fetchSessions()).items;
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed';
+			error = describeFailure(e, 'Failed');
 		}
 	}
 
@@ -778,6 +855,9 @@
 		{#if error}
 			<p class="error">{error}</p>
 		{/if}
+		{#each pageLoadFailures as failure (failure)}
+			<p class="error">{failure}</p>
+		{/each}
 
 		{#if tab === 'users'}
 			<section>
@@ -966,11 +1046,11 @@
 				<h2>{ADMIN_VOICES_HEADING}</h2>
 				{#if loadingVoices}
 					<p class="text-muted">{ADMIN_VOICES_LOADING}</p>
-				{:else if voicesLoadError}
-					<p class="error">{voicesLoadError}</p>
-				{:else if voices.length === 0}
+				{:else if loadFailures.voices}
+					<p class="error">{loadFailures.voices}</p>
+				{:else if voicesLoaded && voices.length === 0}
 					<p class="text-muted">{ADMIN_VOICES_EMPTY}</p>
-				{:else}
+				{:else if voices.length > 0}
 					<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
 						<thead>
 							<tr>
