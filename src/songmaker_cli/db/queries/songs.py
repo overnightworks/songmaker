@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from songmaker_cli.db.models import (
     Album,
     Generation,
+    Playlist,
     Song,
     Version,
     aware_timestamp,
@@ -102,16 +103,31 @@ def list_continue_candidates(
     )[:limit]
 
 
-def record_song_listen(session: Session, song: Song) -> None:
-    """Persist the server time at which an owner started listening to a song."""
+def record_song_listen(
+    session: Session, song: Song, *, playlist: Playlist | None,
+) -> None:
+    """Persist the server time at which an owner started listening to a song.
+
+    A listen started from a playlist also marks that playlist as played, with
+    the song it was playing. Neither mark is an edit, so both keep their
+    ``updated_at``.
+    """
+    played_at = datetime.now(timezone.utc)
     session.execute(
         update(Song)
         .where(Song.id == song.id)
-        .values(
-            last_played_at=datetime.now(timezone.utc),
-            updated_at=Song.updated_at,
-        ),
+        .values(last_played_at=played_at, updated_at=Song.updated_at),
     )
+    if playlist is not None:
+        session.execute(
+            update(Playlist)
+            .where(Playlist.id == playlist.id)
+            .values(
+                last_played_at=played_at,
+                last_played_song_id=song.id,
+                updated_at=Playlist.updated_at,
+            ),
+        )
 
 
 def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
