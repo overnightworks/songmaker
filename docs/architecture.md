@@ -401,7 +401,9 @@ collapses to one 64px mini-player row (issue #1058): cover and title with a
 source line ("from Nightdrive") form one button that opens Now Playing, then
 Previous (44px) · play/pause (48px, exactly centred in the bar) · Next
 (44px), and the empty right side is a second, pointer-only tap target for
-the same action. The phone bar has no shuffle, no Now Playing chevron and no
+the same action. When playback fails, that right side also says why
+("Playback stalled. Press Retry."), because the line under the title has no
+room left for it; the title button names it in its description. The phone bar has no shuffle, no Now Playing chevron and no
 seek timeline — the timeline becomes the decorative `.mobile-progress` line
 along the bar's top edge. The source line reads `playbackSource` in
 `stores/player.ts`, the one owner of "where is this music from": it follows
