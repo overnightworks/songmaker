@@ -21,7 +21,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
-	RAIL_PLAYING_MARKER_LABEL,
+	PLAYING_MARK_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
@@ -261,7 +261,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	).toBeVisible();
 	if (shell === 'mobile') await expectCompactTransport(transport);
 	await expect(
-		pickedSongRow.getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+		pickedSongRow.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 	).toBeVisible();
 
 	await pickedSongRow.getByRole('button').click();
@@ -353,10 +353,10 @@ test('plays the album pick, curates a playlist and serves the public album link'
 			containing(firstPlaylistSong)
 		]);
 		await expect(
-			entryRows.last().getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+			entryRows.last().getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 		).toBeVisible();
 		await expect(
-			entryRows.first().getByRole('img', { name: RAIL_PLAYING_MARKER_LABEL, exact: true })
+			entryRows.first().getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 		).toHaveCount(0);
 	}
 
