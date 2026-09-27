@@ -88,6 +88,8 @@
 	// its own press feedback.
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
+	const phoneFailure = $derived(isError ? errorMsg : null);
+
 	const viz = new AudioVisualizer();
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
@@ -254,7 +256,8 @@
 				{@render stepAndPlay()}
 			</div>
 			<!-- The empty right side is only a wider tap target for the same
-				action, so keyboards and screen readers meet the one on the left. -->
+				action, so keyboards and screen readers meet the one on the left.
+				It is also the only room wide enough to say why playback stopped. -->
 			{#if nowPlayingDisabled}
 				<span class="phone-side"></span>
 			{:else}
@@ -264,7 +267,9 @@
 					tabindex="-1"
 					aria-hidden="true"
 					aria-label={NOW_PLAYING_LABEL}
-				></button>
+				>
+					{#if phoneFailure}<span class="phone-failure">{phoneFailure}</span>{/if}
+				</button>
 			{/if}
 		{:else}
 			<div class="transport-controls">
@@ -648,6 +653,14 @@
 	.phone-side {
 		flex: 1 1 0;
 		min-width: 0;
+	}
+	.phone-failure {
+		display: block;
+		padding-left: 8px;
+		font-size: 0.73rem;
+		line-height: 1.25;
+		color: #d34;
+		overflow: hidden;
 	}
 	.open-now-playing {
 		margin: 0;
