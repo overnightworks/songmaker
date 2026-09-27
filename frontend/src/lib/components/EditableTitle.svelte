@@ -37,6 +37,7 @@
 	}
 
 	async function commit(): Promise<void> {
+		if (saving) return;
 		const trimmed = draft.trim();
 		if (trimmed === value || (!trimmed && !allowEmpty)) {
 			editing = false;

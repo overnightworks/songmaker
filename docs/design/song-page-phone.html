@@ -465,7 +465,7 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .status-line { font-size: .78rem; color: var(--text-muted); padding-right: .45rem; }
 .status-line.reason { color: var(--text-subtle); }
 /* offline (#1039): not live — the amber leaves, the ticking numbers leave,
-   the bar holds its last width in grey, and cancel waits for the connection */
+   the bar holds its last width in grey, and cancel is unavailable while offline */
 .status-slot.reconnecting .status-title b { color: var(--text-light); }
 .status-slot.reconnecting .bar span { background: var(--text-disabled); }
 .status-slot.reconnecting .status-line { color: var(--text-subtle); }
@@ -1510,7 +1510,7 @@ can wait a mile for me</span></div>
 			<div class="status-slot reconnecting">
 				<div class="status-head">
 					<span class="status-title">v8 · <b>Reconnecting…</b></span>
-					<button class="icon-btn" aria-label="Cancel generation (waits for the connection)" title="Cancel generation" aria-disabled="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+					<button class="icon-btn" aria-label="Cancel generation (unavailable while offline)" title="Cancel generation" aria-disabled="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
 				</div>
 				<div class="bar" role="progressbar" aria-valuenow="40" aria-label="Last known progress"><span style="width:40%"></span></div>
 				<div class="status-line">Take 1 of 1 · last seen at 40%</div>
