@@ -64,6 +64,7 @@ test('the rail search tells an album from its songs and finds a settings page in
 	}
 
 	await search.fill(library.albumTitle);
+	await expect(search).toHaveCSS('box-shadow', 'none');
 	const albums = rail.locator('[aria-label="Albums results"]');
 	await expect(
 		albums.getByRole('button', { name: nameStartingWith(library.albumTitle) })
