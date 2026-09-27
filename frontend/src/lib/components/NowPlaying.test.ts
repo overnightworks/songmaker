@@ -27,12 +27,15 @@ import {
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
+	closeNowPlaying,
 	curationActive,
 	ensureGenerationsLoaded,
 	libraryQueueSkipped,
 	nowPlayingDockable,
+	nowPlayingOpen,
 	nowPlayingPanel,
 	nowPlayingSurface,
+	openNowPlaying,
 	queueContext,
 	selectedSongId,
 	setShuffle,
@@ -45,6 +48,7 @@ import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { toasts } from '$lib/stores/toast';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import {
 	clearHitboxStyles,
 	injectHitboxStyles,
@@ -166,7 +170,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	audioPlayer.destroy();
 	selectedSongId.set(null);
-	nowPlayingSurface.set('closed');
+	closeNowPlaying();
 	nowPlayingDockable.set(false);
 	songList.set([]);
 	albumList.set([]);
@@ -571,6 +575,38 @@ describe('NowPlaying', () => {
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 		expect(get(nowPlayingSurface)).toBe('full');
 	});
+});
+
+function sheetBackdrop(target: HTMLElement): HTMLButtonElement | null {
+	return target.querySelector<HTMLButtonElement>(
+		`button[aria-label="${nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)}"]`
+	);
+}
+
+describeBackClosesOverlay({
+	name: "the phone's Queue sheet over Now Playing",
+	render: async () => {
+		document.documentElement.dataset.pointer = 'coarse';
+		const playback = info();
+		audioPlayer.current = playback;
+		openNowPlaying('queue');
+		target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(NowPlaying, { target, props: { info: playback } });
+		await tick();
+		return target;
+	},
+	open: (target) => target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click(),
+	isShown: (target) => target.querySelector('.mobile-sheet') !== null,
+	closeWays: [
+		{ way: 'a tap on the backdrop', close: (target) => sheetBackdrop(target)?.click() },
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	],
+	over: { name: 'Now Playing', isShown: () => get(nowPlayingOpen) }
 });
 
 describe('NowPlaying when the take details cannot load', () => {
