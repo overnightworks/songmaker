@@ -50,6 +50,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import { handleDeleteVersion } from '$lib/stores/editor';
 	import { bulkDeleteGenerations } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
@@ -253,7 +254,7 @@
 			clearSelection();
 			addToast(`Deleted ${ids.length} take${ids.length !== 1 ? 's' : ''}`, 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Bulk delete failed', 'error');
+			addToast(describeFailure(e, 'Bulk delete failed'), 'error');
 		}
 	}
 
@@ -263,7 +264,7 @@
 			await actions.addToPlaylist(playlistId, playlistFor);
 			addToast('Added to playlist', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
+			addToast(describeFailure(e, 'Failed to add'), 'error');
 		} finally {
 			playlistFor = null;
 		}
@@ -278,7 +279,7 @@
 			await handleDeleteVersion(song.id, versionId, true);
 			addToast(`Deleted v${group.versionNumber}`, 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
+			addToast(describeFailure(e, 'Delete failed'), 'error');
 		}
 	}
 

@@ -2,7 +2,12 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { browserReportsOnline } from '$lib/test-utils/network';
-import { offline, reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
+import {
+	offline,
+	reportResourceStreamReachable,
+	resetConnectivityForTests,
+	whenBackOnline
+} from './connectivity';
 
 afterEach(() => {
 	resetConnectivityForTests();
@@ -53,5 +58,25 @@ describe('connectivity', () => {
 		reportResourceStreamReachable(true);
 		expect(get(offline)).toBe(false);
 		stop();
+	});
+
+	it('calls back each time the page comes back online, never while it stays online', () => {
+		const callback = vi.fn();
+		const stop = whenBackOnline(callback);
+		expect(callback).not.toHaveBeenCalled();
+
+		browserReportsOnline(false);
+		expect(callback).not.toHaveBeenCalled();
+		browserReportsOnline(true);
+		expect(callback).toHaveBeenCalledOnce();
+
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+		expect(callback).toHaveBeenCalledTimes(2);
+
+		stop();
+		browserReportsOnline(false);
+		browserReportsOnline(true);
+		expect(callback).toHaveBeenCalledTimes(2);
 	});
 });

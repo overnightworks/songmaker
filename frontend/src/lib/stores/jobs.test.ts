@@ -468,6 +468,26 @@ describe('jobs store', () => {
 			expect(get(activeJobs)).toEqual([]);
 		});
 
+		it('says it ended only once its take is in, never while its card still waits offline', async () => {
+			toasts.set([]);
+			reportResourceStreamReachable(false);
+			const { refreshRuns } = endWhileTheSongRefreshes();
+			refreshRuns();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(toasts)).toEqual([]);
+
+			const refreshBackOnlineRuns = songRefreshThatRunsLater();
+			reportResourceStreamReachable(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(toasts)).toEqual([]);
+
+			refreshBackOnlineRuns();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(toasts).map((toast) => toast.message)).toEqual([
+				status === 'completed' ? 'generate completed' : 'generate partially completed'
+			]);
+		});
+
 		it('goes after the take-arrival wait when the song refresh never runs', async () => {
 			const { ended } = endWhileTheSongRefreshes();
 			await vi.advanceTimersByTimeAsync(GENERATE_TAKE_ARRIVAL_WAIT_MS - 1);
