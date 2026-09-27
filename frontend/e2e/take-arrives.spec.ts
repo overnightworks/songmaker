@@ -12,11 +12,18 @@
 // through the job's own terminal refresh — the path this flow pins.
 
 import { expect, test } from '@playwright/test';
-import { JOB_TYPE_GENERATE, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import {
+	JOB_TYPE_GENERATE,
+	OFFLINE_STRIP_MESSAGE,
+	RESOURCE_SYNC_ERROR,
+	TRANSPORT_PLAY_LABEL
+} from '../src/lib/constants';
 import { takeGroupLabel } from '../src/lib/constants/now-playing';
 import {
 	FlowGuard,
+	loseNetwork,
 	nameStartingWith,
+	regainNetwork,
 	TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET,
 	TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -143,14 +150,16 @@ test.describe('a take that finished while the phone was offline', () => {
 		).toHaveCount(0);
 
 		await page.unroute(JOB_STREAM_ROUTE);
-		await context.setOffline(true);
-		await context.setOffline(false);
+		await loseNetwork(page, context);
+		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toBeVisible();
+		await regainNetwork(page, context);
 
 		await expect(
 			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT + 1))
 		).toBeVisible({ timeout: TAKE_AFTER_RETURN_MS });
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
-		await expect(page.getByText('Failed to fetch')).toHaveCount(0);
+		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toHaveCount(0);
+		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
 
 		console.log(`Take-after-return flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();

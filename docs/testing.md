@@ -261,6 +261,17 @@ request budget per shell.
   flakiness — reset the stack or wait out the window.
 - The CI stack allows 200 resource-event stream opens per user. In the
   2026-09-05 CI run, 30 opens succeeded and the 31st returned 429.
+- **`setOffline` does not cut an open event stream.** Chromium's offline
+  emulation flips `navigator.onLine` and fires `offline`, but an SSE
+  connection the page already holds keeps delivering, and nothing tells the
+  page it dropped (checked 27.09.2026 against a plain `EventSource`). A flow
+  that loses the network uses `loseNetwork` / `regainNetwork` from
+  `frontend/e2e/helpers.ts`: it also stops the page's open loads
+  (`window.stop()`, which ends the stream with an `error` the way a dropped
+  network does) and refuses every reopen of the resource stream until the
+  network returns. The flow guard does not count a request failed with
+  `net::ERR_INTERNET_DISCONNECTED` — only a flow that took the network away
+  on purpose makes one.
 
 `frontend/e2e/README.md` has the exact commands, the audio fixture, and the
 budget rule.
