@@ -32,8 +32,8 @@
 	let loraPendingDelete = $state<UserLoraItem | null>(null);
 	let pollHandle: ReturnType<typeof setInterval> | null = null;
 	let voicesLoaded = $state(false);
-	let loadFailure = $state<string | null>(null);
 	const voicesReloads = reloadWhileUnreachable(() => void refresh());
+	const loadFailure = voicesReloads.loadFailure;
 
 	const list = $derived($loras);
 	const visible = $derived(showDeleted ? list : list.filter((l) => l.deleted_at === null));
@@ -43,10 +43,9 @@
 		try {
 			await loadLoras(showDeleted);
 			voicesLoaded = true;
-			loadFailure = null;
 			voicesReloads.stop();
 		} catch (e) {
-			loadFailure = voicesReloads.nameLoadFailure(e, VOICES_LOAD_FAILED);
+			voicesReloads.nameLoadFailure(e, VOICES_LOAD_FAILED);
 		}
 	}
 
@@ -166,8 +165,8 @@
 		{/if}
 	{/if}
 
-	{#if loadFailure}
-		<p class="error">{loadFailure}</p>
+	{#if $loadFailure}
+		<p class="error">{$loadFailure}</p>
 	{/if}
 
 	{#if $lorasLoading && list.length === 0}

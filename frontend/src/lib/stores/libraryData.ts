@@ -1,5 +1,5 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import { describeFailure } from '$lib/api/fetch';
+import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import {
@@ -7,10 +7,9 @@ import {
 	LIBRARY_SONG_PAGE_SIZE,
 	RAIL_LIBRARY_LOAD_ERROR
 } from '$lib/constants';
-import { offline, reloadWhileUnreachable } from './connectivity';
+import { reloadWhileUnreachable } from './connectivity';
 
 const ALBUM_SONGS_LOAD_ERROR = 'Failed to load songs';
-const ALL_ALBUMS_LOAD_ERROR = 'Failed to load albums';
 
 // The library's in-memory cache of every browsed album and song. Every
 // surface that lists, filters, or mutates library data reads and writes
@@ -162,13 +161,14 @@ export function addAlbumToList(album: AlbumItem): void {
 	});
 }
 
-// 'unreachable' is a load the network swallowed: the albums already listed
-// stay and the load runs again by itself (see reloadWhileUnreachable);
-// `reloadsExhausted` says its bounded backoff is spent.
-type AllAlbumsLoadState =
-	| { status: 'idle' | 'loading' | 'ready'; error: null }
-	| { status: 'error'; error: string }
-	| { status: 'unreachable'; error: null; reloadsExhausted: boolean };
+// 'unreachable' is a load the network swallowed, 'error' one the server
+// refused; either keeps the albums already listed. Whether it runs again by
+// itself and what it says are allAlbumsReloads' answer, so the state holds
+// no words of its own.
+interface AllAlbumsLoadState {
+	status: 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
+	error: null;
+}
 
 type CombineAlbums = (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[];
 
@@ -181,22 +181,6 @@ type CombineAlbums = (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[]
 // (rereadAllAlbums) replaces it, with the complete fetched set.
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
-/**
- * The failure a surface names about the full album load, or null while there
- * is none to name: a load the network swallowed stays quiet while it reloads
- * and while the offline strip says it; only a spent backoff is named (#1107).
- */
-export const allAlbumsLoadFailure: Readable<string | null> = derived(
-	[allAlbumsLoad, offline],
-	([load, isOffline]) => {
-		if (load.status === 'error') return load.error;
-		if (load.status === 'unreachable' && load.reloadsExhausted && !isOffline) {
-			return RAIL_LIBRARY_LOAD_ERROR;
-		}
-		return null;
-	}
-);
-
 let allAlbumsInflight: Promise<boolean> | null = null;
 // A reload repeats the load the network swallowed: a gap re-read reads every
 // album again rather than merging into a list that may hold deleted ones.
@@ -204,6 +188,16 @@ let unreachableLoadCombine: CombineAlbums = mergeFetchedAlbums;
 const allAlbumsReloads = reloadWhileUnreachable(() => {
 	void loadAllAlbums(unreachableLoadCombine);
 });
+
+/**
+ * The failure a surface names about the full album load, or null while there
+ * is none to name (#1107): the reload owner's answer, quiet again while a
+ * load is under way.
+ */
+export const allAlbumsLoadFailure: Readable<string | null> = derived(
+	[allAlbumsLoad, allAlbumsReloads.loadFailure],
+	([load, failure]) => (load.status === 'loading' ? null : failure)
+);
 
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
@@ -260,22 +254,18 @@ function loadAllAlbums(combine: CombineAlbums): Promise<boolean> {
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsLoad.set(allAlbumsFailure(err, combine));
+			unreachableLoadCombine = combine;
+			allAlbumsReloads.nameLoadFailure(err, RAIL_LIBRARY_LOAD_ERROR);
+			allAlbumsLoad.set({
+				status: err instanceof NetworkError ? 'unreachable' : 'error',
+				error: null
+			});
 			return false;
 		} finally {
 			allAlbumsInflight = null;
 		}
 	})();
 	return allAlbumsInflight;
-}
-
-function allAlbumsFailure(err: unknown, combine: CombineAlbums): AllAlbumsLoadState {
-	unreachableLoadCombine = combine;
-	const reload = allAlbumsReloads.afterLoadFailure(err);
-	if (reload === null) {
-		return { status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) };
-	}
-	return { status: 'unreachable', error: null, reloadsExhausted: reload === 'exhausted' };
 }
 
 // Existing entries win on a conflicting id, matching loadLibraryBrowse's
