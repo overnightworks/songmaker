@@ -170,8 +170,6 @@ interface AllAlbumsLoadState {
 	error: null;
 }
 
-type CombineAlbums = (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[];
-
 // Tracks a route-independent full load of every album, for surfaces (the
 // rail, the library wall) that need the complete list regardless of which
 // library page is open. loadLibraryBrowse() keeps paginating and resetting
@@ -182,11 +180,13 @@ type CombineAlbums = (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[]
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
 let allAlbumsInflight: Promise<boolean> | null = null;
-// A reload repeats the load the network swallowed: a gap re-read reads every
-// album again rather than merging into a list that may hold deleted ones.
-let unreachableLoadCombine: CombineAlbums = mergeFetchedAlbums;
+// A gap re-read the network swallowed still owes its replace until a load
+// succeeds: whichever load runs first once back online -- the wall's own
+// catch-up merge or the reload -- reads every album and replaces the list,
+// so one deleted on another device cannot survive a merge.
+let replaceOwed = false;
 const allAlbumsReloads = reloadWhileUnreachable(() => {
-	void loadAllAlbums(unreachableLoadCombine);
+	void loadAllAlbums({ replace: false });
 });
 
 /**
@@ -201,7 +201,7 @@ export const allAlbumsLoadFailure: Readable<string | null> = derived(
 
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
-	return loadAllAlbums(mergeFetchedAlbums);
+	return loadAllAlbums({ replace: false });
 }
 
 // A browse reset never removes an album, so after a stream gap one deleted or
@@ -212,7 +212,7 @@ export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 export async function rereadAllAlbums(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'idle') return true;
 	if (allAlbumsInflight !== null) await allAlbumsInflight;
-	return loadAllAlbums(replaceWithFetched);
+	return loadAllAlbums({ replace: true });
 }
 
 // A browse reset reads only the first album page (history navigation and a
@@ -236,8 +236,10 @@ function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
 	];
 }
 
-function loadAllAlbums(combine: CombineAlbums): Promise<boolean> {
+function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 	if (allAlbumsInflight !== null) return allAlbumsInflight;
+	replaceOwed ||= replace;
+	const combine = replaceOwed ? replaceWithFetched : mergeFetchedAlbums;
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
 		try {
@@ -250,11 +252,11 @@ function loadAllAlbums(combine: CombineAlbums): Promise<boolean> {
 				if (!page.has_more || page.items.length === 0) break;
 			}
 			albumList.update((current) => combine(current, collected));
+			replaceOwed = false;
 			allAlbumsReloads.stop();
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			unreachableLoadCombine = combine;
 			allAlbumsReloads.nameLoadFailure(err, RAIL_LIBRARY_LOAD_ERROR);
 			allAlbumsLoad.set({
 				status: err instanceof NetworkError ? 'unreachable' : 'error',
@@ -314,5 +316,6 @@ export function removeGenerationFromSong(songId: string, genId: string): void {
 export function resetLibraryDataForTests(): void {
 	allAlbumsReloads.stop();
 	allAlbumsInflight = null;
+	replaceOwed = false;
 	allAlbumsLoad.set({ status: 'idle', error: null });
 }

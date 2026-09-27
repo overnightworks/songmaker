@@ -4,7 +4,11 @@ import { get } from 'svelte/store';
 import type { AlbumItem, PaginatedResponse, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { RAIL_LIBRARY_LOAD_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
+import {
+	reportResourceStreamReachable,
+	resetConnectivityForTests,
+	whenBackOnline
+} from './connectivity';
 
 const OFFLINE = new NetworkError('/api/x', new TypeError('Failed to fetch'));
 
@@ -434,6 +438,29 @@ describe('ensureAllAlbumsLoaded', () => {
 
 		expect(get(allAlbumsLoad).status).toBe('ready');
 		expect(get(albumList).map((a) => a.id)).toEqual(['a1']);
+	});
+
+	it('a gap re-read swallowed offline still replaces the list when a merge reads first on reconnect', async () => {
+		albumList.set([makeAlbum({ id: 'a1' }), makeAlbum({ id: 'deleted-elsewhere' })]);
+		allAlbumsLoad.set({ status: 'ready', error: null });
+		const stopWallCatchUp = whenBackOnline(() => void ensureAllAlbumsLoaded());
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchAlbums)
+			.mockRejectedValueOnce(OFFLINE)
+			.mockResolvedValueOnce({
+				items: [makeAlbum({ id: 'a1' })],
+				total: 1,
+				offset: 0,
+				limit: 50,
+				has_more: false
+			});
+		expect(await rereadAllAlbums()).toBe(false);
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(get(allAlbumsLoad).status).toBe('ready'));
+		expect(get(albumList).map((a) => a.id)).toEqual(['a1']);
+		stopWallCatchUp();
 	});
 
 	it.each([
