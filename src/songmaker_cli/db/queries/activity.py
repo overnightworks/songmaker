@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Final
 
-from sqlalchemy import ColumnElement, Exists, Subquery, and_, case, exists, func, select
+from sqlalchemy import ColumnElement, Subquery, and_, case, exists, func, select
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST
@@ -26,6 +26,7 @@ from songmaker_cli.db.models import (
     Song,
     aware_timestamp,
 )
+from songmaker_cli.db.queries.playlists import playlist_holds_song_clause
 
 CONTINUE_MAX_PLACES: Final[int] = 6
 
@@ -183,21 +184,20 @@ def _newest_live_entry_per_playlist() -> Subquery:
     )
 
 
-def _holds_its_last_played_song() -> Exists:
+def _holds_its_last_played_song() -> ColumnElement[bool]:
     """Whether the playlist still holds a take of the live song it was last played from.
 
-    Aliased so the correlated check never binds to the ``Song`` the outer
-    query joins for the song line.
+    The song is aliased so the correlated check never binds to the ``Song``
+    the outer query joins for the song line.
     """
-    entry = aliased(PlaylistEntry)
-    take = aliased(Generation)
-    song = aliased(Song)
-    return exists().where(
-        entry.playlist_id == Playlist.id,
-        entry.generation_id == take.id,
-        take.song_id == song.id,
-        song.id == Playlist.last_played_song_id,
-        song.deleted_at.is_(None),
+    last_played = aliased(Song)
+    last_played_is_live = exists().where(
+        last_played.id == Playlist.last_played_song_id,
+        last_played.deleted_at.is_(None),
+    )
+    return and_(
+        playlist_holds_song_clause(Playlist.id, Playlist.last_played_song_id),
+        last_played_is_live,
     )
 
 
