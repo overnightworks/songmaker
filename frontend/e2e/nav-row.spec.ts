@@ -42,13 +42,13 @@ test('the rail search finds a server song and closes the drawer on desktop and 3
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
 	const rail = await openRail(page, Boolean(isMobile));
-	const search = rail.getByRole('searchbox', { name: RAIL_SEARCH_LABEL });
+	const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
 	await expect(search).toHaveCount(1);
 	await expect(surface.locator('.search')).toHaveCount(0);
 
 	await search.fill(library.secondAlbumSongTitle);
-	await expect(rail.locator('[aria-label="Songs results"]')).toBeVisible();
-	await rail.getByRole('button', { name: nameStartingWith(library.secondAlbumSongTitle) }).click();
+	await expect(rail.getByRole('group', { name: 'Songs' })).toBeVisible();
+	await rail.getByRole('option', { name: nameStartingWith(library.secondAlbumSongTitle) }).click();
 	const songHeading = isMobile ? appBar(page) : surface;
 	await expect(
 		songHeading.getByRole('heading', { name: library.secondAlbumSongTitle })
@@ -67,30 +67,30 @@ test('the rail search tells an album from its songs and finds a settings page in
 
 	await page.goto(`/album/${library.albumId}`);
 	const rail = await openRail(page, Boolean(isMobile));
-	const search = rail.getByRole('searchbox', { name: RAIL_SEARCH_LABEL });
+	const search = rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL });
 	await expectPhoneBarHeight(rail, Boolean(isMobile));
 
 	await search.fill(QUERY_MATCHING_EVERY_SEEDED_ALBUM);
-	const albumResults = rail.locator('[aria-label="Albums results"]');
+	const albumResults = rail.getByRole('group', { name: 'Albums' });
 	await expect(albumResults).toBeVisible();
 	await expectPhoneBarHeight(rail, Boolean(isMobile));
 	if (isMobile) {
-		const row = await albumResults.getByRole('button').first().boundingBox();
+		const row = await albumResults.getByRole('option').first().boundingBox();
 		expect(row?.height).toBeGreaterThanOrEqual(PHONE_RESULT_ROW_MIN_PX);
 	}
 
 	await search.fill(library.albumTitle);
 	await expect(search).toHaveCSS('box-shadow', 'none');
-	const albums = rail.locator('[aria-label="Albums results"]');
+	const albums = rail.getByRole('group', { name: 'Albums' });
 	await expect(
-		albums.getByRole('button', { name: nameStartingWith(library.albumTitle) })
+		albums.getByRole('option', { name: nameStartingWith(library.albumTitle) })
 	).toContainText('Album ·');
 	await expect(rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })).toBeVisible();
 
 	await search.fill('gen');
 	const generation = rail
-		.locator('[aria-label="Pages results"]')
-		.getByRole('button', { name: nameStartingWith('Generation') });
+		.getByRole('group', { name: 'Pages' })
+		.getByRole('option', { name: nameStartingWith('Generation') });
 	await expect(generation).toContainText('Page · Settings');
 
 	await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();

@@ -61,12 +61,23 @@ function press(root: HTMLElement, key: string): KeyboardEvent {
 	return event;
 }
 
-function resultRows(root: HTMLElement): HTMLButtonElement[] {
-	return Array.from(root.querySelectorAll<HTMLButtonElement>('.rail-search-result'));
+function resultRows(root: HTMLElement): HTMLElement[] {
+	return Array.from(root.querySelectorAll<HTMLElement>('[role="option"]'));
+}
+
+function selectedRows(root: HTMLElement): HTMLElement[] {
+	return resultRows(root).filter((row) => row.getAttribute('aria-selected') === 'true');
 }
 
 function activeRowTitle(root: HTMLElement): string | undefined {
-	return requireElement(root, '.rail-search-result-active .rail-search-title').textContent?.trim();
+	return requireElement(root, '[aria-selected="true"] .rail-search-title').textContent?.trim();
+}
+
+function expectSelectedRow(root: HTMLElement, index: number): void {
+	expect(selectedRows(root)).toEqual([resultRows(root)[index]]);
+	expect(requireElement(root, 'input').getAttribute('aria-activedescendant')).toBe(
+		resultRows(root)[index]?.id
+	);
 }
 
 beforeEach(() => {
@@ -120,7 +131,12 @@ describe('RailSearch', () => {
 		const root = await render();
 
 		expect(
-			Array.from(root.querySelectorAll('.rail-search-group h2'), (h) => h.textContent)
+			Array.from(root.querySelectorAll('[role="group"]'), (group) =>
+				requireElement(
+					root,
+					`#${CSS.escape(group.getAttribute('aria-labelledby') ?? '')}`
+				).textContent?.trim()
+			)
 		).toEqual(['Albums', 'Songs', 'Playlists']);
 		const [album, titleSong, otherSong, playlist] = resultRows(root);
 		expect(album?.querySelector('img')?.getAttribute('src')).toBe('/covers/a1-card.webp');
@@ -171,7 +187,7 @@ describe('RailSearch', () => {
 		const root = await render();
 
 		expect(activeRowTitle(root)).toBe('Vernissage');
-		expect(resultRows(root)[0]?.classList).toContain('rail-search-result-active');
+		expectSelectedRow(root, 0);
 		const enter = press(root, 'Enter');
 		await tick();
 
@@ -186,20 +202,87 @@ describe('RailSearch', () => {
 		const down = press(root, 'ArrowDown');
 		await tick();
 		expect(down.defaultPrevented).toBe(true);
-		expect(resultRows(root)[1]?.classList).toContain('rail-search-result-active');
+		expectSelectedRow(root, 1);
 		expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' });
 
 		press(root, 'ArrowDown');
 		press(root, 'ArrowDown');
 		press(root, 'ArrowDown');
 		await tick();
-		expect(resultRows(root)[3]?.classList).toContain('rail-search-result-active');
+		expectSelectedRow(root, 3);
 
 		press(root, 'ArrowUp');
 		await tick();
 		press(root, 'Enter');
 		await tick();
 		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'song', id: 's2' });
+	});
+
+	it('announces the search field as a combobox that owns a listbox of grouped options', async () => {
+		showVernissageResults();
+		const root = await render();
+		const input = requireElement<HTMLInputElement>(root, 'input');
+
+		expect(input.getAttribute('role')).toBe('combobox');
+		expect(input.getAttribute('aria-expanded')).toBe('true');
+		const listbox = requireElement(
+			root,
+			`#${CSS.escape(input.getAttribute('aria-controls') ?? '')}`
+		);
+		expect(listbox.getAttribute('role')).toBe('listbox');
+		expect(listbox.querySelectorAll('[role="group"] > [role="option"]')).toHaveLength(
+			resultRows(root).length
+		);
+		expect(resultRows(root).map((row) => row.getAttribute('aria-selected'))).toEqual([
+			'true',
+			'false',
+			'false',
+			'false'
+		]);
+	});
+
+	it('names the arrow-key row as the active descendant and selected option', async () => {
+		showVernissageResults();
+		const root = await render();
+
+		press(root, 'ArrowDown');
+		press(root, 'ArrowDown');
+		await tick();
+		expectSelectedRow(root, 2);
+		expect(activeRowTitle(root)).toBe('After the Vernissage');
+
+		press(root, 'ArrowUp');
+		await tick();
+		expectSelectedRow(root, 1);
+	});
+
+	it('collapses the combobox when the query is cleared', async () => {
+		showVernissageResults();
+		const root = await render();
+		const input = requireElement<HTMLInputElement>(root, 'input');
+
+		press(root, 'Escape');
+		await tick();
+
+		expect(input.getAttribute('aria-expanded')).toBe('false');
+		expect(input.hasAttribute('aria-activedescendant')).toBe(false);
+		expect(resultRows(root)).toHaveLength(0);
+	});
+
+	it('keeps one selected row while the pointer hovers another, and a click opens the hovered one', async () => {
+		showVernissageResults();
+		const root = await render();
+		press(root, 'ArrowDown');
+		await tick();
+
+		const hovered = resultRows(root)[3];
+		hovered?.dispatchEvent(new MouseEvent('mouseover', { bubbles: true }));
+		await tick();
+		expectSelectedRow(root, 1);
+
+		hovered?.click();
+		await tick();
+		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'playlist', id: 'p1' });
 	});
 
 	it('returns the focus edge to the first hit when the query changes', async () => {
@@ -213,7 +296,7 @@ describe('RailSearch', () => {
 		input.dispatchEvent(new Event('input', { bubbles: true }));
 		await tick();
 
-		expect(resultRows(root)[0]?.classList).toContain('rail-search-result-active');
+		expectSelectedRow(root, 0);
 	});
 
 	it('clears the query with the × in the bar and keeps the field focused', async () => {
