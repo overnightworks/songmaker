@@ -118,7 +118,7 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	try {
 		await load;
 		if (generation !== albumSongsGeneration) return;
-		albumSongsReloadsFor(albumId).stop();
+		albumSongsReloads.get(albumId)?.stop();
 		setAlbumSongsLoad(albumId, 'idle');
 	} catch (err) {
 		if (generation !== albumSongsGeneration) return;
