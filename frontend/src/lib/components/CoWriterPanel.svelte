@@ -55,7 +55,10 @@
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
 	import {
+		conversationConfirmLabel,
 		conversationLineLabel,
+		conversationMenuOrder,
+		conversationMessageCountLabel,
 		conversationRowLabel,
 		cowriterTurnFailureLabel,
 		cowriterHeaderLabel,
@@ -250,10 +253,23 @@
 		else if (conversationChanged) void loadConversations();
 	}
 
-	/** A turn ended: the conversation list re-reads its counts and the host hears of it. */
+	/**
+	 * A turn ended: its conversation's row counts what the chat now holds at
+	 * once, the conversation list re-reads its counts, and the host hears of it.
+	 */
 	function announceEndedTurn(): void {
+		countPersistedChatInItsRow();
 		void loadConversations();
 		if (onturncompleted) onturncompleted();
+	}
+
+	function countPersistedChatInItsRow(): void {
+		const persistedCount = messages.filter((message) => message.persistedId).length;
+		conversations = conversations.map((conversation) =>
+			conversation.id === viewingConversationId
+				? { ...conversation, message_count: persistedCount }
+				: conversation
+		);
 	}
 
 	/**
@@ -501,6 +517,7 @@
 			...message,
 			toolCalls: streamedToolCalls.get(message.persistedId)
 		}));
+		countPersistedChatInItsRow();
 		followOrSettleTurn(conversation);
 	}
 
@@ -523,10 +540,7 @@
 	);
 
 	function streamFailureMessage(frame: Extract<CoWriterStreamEvent, { type: 'error' }>): string {
-		if (frame.reason?.message) {
-			return cowriterTurnFailureLabel(frame.provider ?? providerName, frame.reason.message);
-		}
-		return frame.message ?? INCOMPLETE_TURN_MESSAGE;
+		return cowriterTurnFailureLabel(frame, providerName) ?? INCOMPLETE_TURN_MESSAGE;
 	}
 
 	function refusalMessage(refusal: ApiError): string {
@@ -811,6 +825,8 @@
 		)
 	);
 
+	const menuConversations = $derived(conversationMenuOrder(conversations, activeConversationId));
+
 	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
 		event.stopPropagation();
 		conversationMenuOpen = !conversationMenuOpen;
@@ -926,7 +942,7 @@
 						onclick={() => chooseFromConversationMenu(openMemory)}
 						>{COWRITER_MEMORY_LABEL}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
-					{#each conversations as conv (conv.id)}
+					{#each menuConversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
 							<button
 								type="button"
@@ -935,10 +951,7 @@
 								onclick={() => chooseFromConversationMenu(() => openConversation(conv))}
 							>
 								<span class="conv-title">{conversationRowLabel(conv, new Date())}</span>
-								<span class="conv-meta">
-									{conv.message_count} msg{conv.message_count === 1 ? '' : 's'}
-									{#if conv.archived_at}· archived{/if}
-								</span>
+								<span class="conv-meta">{conversationMessageCountLabel(conv.message_count)}</span>
 							</button>
 							<button
 								type="button"
@@ -958,7 +971,7 @@
 	{#if conversationAwaitingDelete}
 		<ConfirmDeleteDialog
 			title={COWRITER_DELETE_CONVERSATION_TITLE}
-			items={[conversationRowLabel(conversationAwaitingDelete, new Date())]}
+			items={[conversationConfirmLabel(conversationAwaitingDelete, new Date())]}
 			warning={COWRITER_DELETE_CONVERSATION_WARNING}
 			onconfirm={confirmDelete}
 			oncancel={closeDeleteConfirm}

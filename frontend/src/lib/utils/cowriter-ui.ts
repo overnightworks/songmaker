@@ -2,11 +2,14 @@ import type { ConversationItem, SongItem } from '$lib/api/types';
 import {
 	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
+	COWRITER_CONVERSATION_CONFIRM_TEMPLATE,
 	COWRITER_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_CONVERSATION_SINCE_TEMPLATE,
 	COWRITER_CONVERSATION_STARTED_TODAY,
 	COWRITER_NEW_CONVERSATION_LABEL,
+	COWRITER_MESSAGE_COUNT_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LINE,
+	COWRITER_SINGLE_MESSAGE_COUNT,
 	COWRITER_TURN_FAILURE_TEMPLATE
 } from '$lib/constants';
 import { localDaysBetween } from '$lib/utils/format';
@@ -60,11 +63,25 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
-/** The reason text comes from the provider library; the panel only says whose it is. */
-export function cowriterTurnFailureLabel(provider: string, reason: string): string {
+interface CowriterTurnFailureFrame {
+	provider?: string;
+	message?: string;
+	reason?: { message?: string };
+}
+
+/**
+ * The reason text comes from the provider library or the endpoint; the panel
+ * only says whose it is — the provider the frame names, else its own.
+ */
+export function cowriterTurnFailureLabel(
+	frame: CowriterTurnFailureFrame,
+	panelProvider: string
+): string | null {
+	const reason = frame.reason?.message ?? frame.message;
+	if (!reason) return null;
 	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
 		'{provider}',
-		providerDisplayName(provider)
+		providerDisplayName(frame.provider ?? panelProvider)
 	).replace('{reason}', reason);
 }
 
@@ -90,6 +107,15 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 		day: 'numeric',
 		month: 'short',
 		year: sameYear ? undefined : 'numeric'
+	});
+}
+
+/** The clock time a menu row adds, so two conversations started the same day read apart: "09:12". */
+function conversationStartTime(createdAt: string): string {
+	return new Date(createdAt).toLocaleTimeString(CONVERSATION_DAY_LOCALE, {
+		hour: '2-digit',
+		minute: '2-digit',
+		hourCycle: 'h23'
 	});
 }
 
@@ -131,5 +157,36 @@ export function conversationRowLabel(conversation: ConversationItem, now: Date):
 	const template = conversation.archived_at
 		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
 		: COWRITER_CONVERSATION_ROW_TEMPLATE;
-	return template.replace('{day}', conversationDayLabel(conversation.created_at, now));
+	return template
+		.replace('{day}', conversationDayLabel(conversation.created_at, now))
+		.replace('{time}', conversationStartTime(conversation.created_at));
+}
+
+export function conversationMessageCountLabel(count: number): string {
+	if (count === 1) return COWRITER_SINGLE_MESSAGE_COUNT;
+	return COWRITER_MESSAGE_COUNT_TEMPLATE.replace('{count}', String(count));
+}
+
+/** The delete confirm names the conversation as its menu row does, count included. */
+export function conversationConfirmLabel(conversation: ConversationItem, now: Date): string {
+	return COWRITER_CONVERSATION_CONFIRM_TEMPLATE.replace(
+		'{name}',
+		conversationRowLabel(conversation, now)
+	).replace('{count}', conversationMessageCountLabel(conversation.message_count));
+}
+
+/**
+ * The menu keeps one order however the server sorts its answer: the active
+ * conversation first, then the rest by when they started, newest first —
+ * a start never moves, so a re-read list never reshuffles the rows.
+ */
+export function conversationMenuOrder(
+	conversations: ConversationItem[],
+	activeConversationId: string | null
+): ConversationItem[] {
+	const newestFirst = conversations
+		.filter((conversation) => conversation.id !== activeConversationId)
+		.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+	const active = conversations.filter((conversation) => conversation.id === activeConversationId);
+	return [...active, ...newestFirst];
 }
