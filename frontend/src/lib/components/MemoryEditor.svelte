@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
+	import { COWRITER_MEMORY_LABEL } from '$lib/constants';
+	import Icon from './Icon.svelte';
 	import {
 		shouldReplaceMemoryDraft,
 		type MemoryProposal,
@@ -7,6 +9,8 @@
 	} from '$lib/utils/memory-proposals';
 
 	interface Props {
+		open: boolean;
+		onClose: () => void;
 		bundle: MemoryBundle | null;
 		loading: boolean;
 		error: string;
@@ -17,13 +21,22 @@
 		onReject: (proposal: MemoryProposal) => void;
 	}
 
-	let { bundle, loading, error, savingScope, proposals, onSave, onAccept, onReject }: Props =
-		$props();
+	let {
+		open,
+		onClose,
+		bundle,
+		loading,
+		error,
+		savingScope,
+		proposals,
+		onSave,
+		onAccept,
+		onReject
+	}: Props = $props();
 
 	let userDraft = $state('');
 	let songDraft = $state('');
 	let albumDraft = $state('');
-	let open = $state(false);
 	let userSourceTarget: string | null = null;
 	let songSourceTarget: string | null = null;
 	let albumSourceTarget: string | null = null;
@@ -88,12 +101,20 @@
 	}
 </script>
 
-<div class="memory">
-	<button class="memory-toggle" onclick={() => (open = !open)} aria-expanded={open}>
-		Memory
-		<span class="caret">{open ? '▴' : '▾'}</span>
-	</button>
-	{#if open}
+{#if open}
+	<section class="memory" aria-label={COWRITER_MEMORY_LABEL}>
+		<header class="memory-head">
+			<span class="memory-title">{COWRITER_MEMORY_LABEL}</span>
+			<button
+				type="button"
+				class="memory-close"
+				aria-label="Close memory"
+				title="Close memory"
+				onclick={onClose}
+			>
+				<Icon name="x" size={16} />
+			</button>
+		</header>
 		<div class="memory-body">
 			{#if loading}
 				<p class="hint">Loading memory…</p>
@@ -160,32 +181,41 @@
 				</div>
 			{/if}
 		</div>
-	{/if}
-</div>
+	</section>
+{/if}
 
 <style>
 	.memory {
 		border-bottom: 1px solid var(--border);
 	}
 
-	.memory-toggle {
-		width: 100%;
-		background: none;
-		border: none;
-		color: var(--text-subtle);
-		font-size: 0.8rem;
-		padding: 6px 12px;
+	.memory-head {
 		display: flex;
+		align-items: center;
 		justify-content: space-between;
-		cursor: pointer;
+		padding: 0 4px 0 12px;
 	}
 
-	.memory-toggle:hover {
+	.memory-title {
+		font-size: 0.8rem;
+		font-weight: 600;
 		color: var(--text);
 	}
 
-	.caret {
-		opacity: 0.7;
+	.memory-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: var(--hitbox-frequent);
+		min-height: var(--hitbox-frequent);
+		background: none;
+		border: none;
+		color: var(--text-subtle);
+		cursor: pointer;
+	}
+
+	.memory-close:hover {
+		color: var(--text);
 	}
 
 	.memory-body {

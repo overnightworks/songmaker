@@ -27,6 +27,7 @@
 	import {
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_CONVERSATION_MENU_LABEL,
+		COWRITER_MEMORY_LABEL,
 		COWRITER_NEW_CONVERSATION_LABEL,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
@@ -119,6 +120,7 @@
 	let conversationMenuTrigger: HTMLButtonElement | undefined = $state();
 	let conversationMenu: HTMLDivElement | undefined = $state();
 
+	let memoryOpen = $state(false);
 	let memoryBundle: MemoryBundle | null = $state(null);
 	let memoryLoading = $state(false);
 	let memoryError = $state('');
@@ -775,7 +777,11 @@
 		if (conversationMenu) focusFirstIn(conversationMenu);
 	}
 
-	function chooseFromConversationMenu(choice: () => Promise<void>): void {
+	function openMemory(): void {
+		memoryOpen = true;
+	}
+
+	function chooseFromConversationMenu(choice: () => void | Promise<void>): void {
 		conversationMenuOpen = false;
 		conversationMenuTrigger?.focus();
 		void choice();
@@ -860,6 +866,12 @@
 						onclick={() => chooseFromConversationMenu(startNew)}
 						>{COWRITER_NEW_CONVERSATION_LABEL}</button
 					>
+					<button
+						type="button"
+						role="menuitem"
+						class="convo-memory"
+						onclick={() => chooseFromConversationMenu(openMemory)}>{COWRITER_MEMORY_LABEL}</button
+					>
 					{#each conversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
 							<button
@@ -889,6 +901,8 @@
 	</div>
 
 	<MemoryEditor
+		open={memoryOpen}
+		onClose={() => (memoryOpen = false)}
 		bundle={memoryBundle}
 		loading={memoryLoading}
 		error={memoryError}
@@ -1117,6 +1131,22 @@
 	.convo-new:hover {
 		background: var(--primary);
 		color: #fff;
+	}
+
+	.convo-memory {
+		background: none;
+		border: none;
+		border-bottom: 1px solid var(--border);
+		color: var(--text);
+		padding: 6px;
+		margin-bottom: 4px;
+		text-align: left;
+		font-size: 0.85rem;
+		cursor: pointer;
+	}
+
+	.convo-memory:hover {
+		background: var(--bg);
 	}
 
 	.conv-row {

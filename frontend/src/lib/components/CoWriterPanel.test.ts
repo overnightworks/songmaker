@@ -44,7 +44,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { startNewConversation } from '$lib/api/client';
+import { fetchMemory, startNewConversation } from '$lib/api/client';
 import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -393,6 +393,32 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		expect(escape.defaultPrevented).toBe(true);
+	});
+
+	it('keeps Memory in its ⋯ menu rather than a row above the chat, and opens the memory editor from there', async () => {
+		vi.mocked(fetchMemory).mockResolvedValueOnce({
+			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
+		});
+		const target = await render();
+		const userMemory = () =>
+			target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
+		expect(
+			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
+		).not.toContainEqual(expect.stringMatching(/^Memory/));
+
+		const menu = await openConversationMenu(target);
+		const memoryItem = Array.from(
+			menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+		).find((item) => item.textContent?.trim() === 'Memory');
+		memoryItem?.click();
+		await tick();
+
+		expect(target.querySelector('[role="menu"]')).toBeNull();
+		await vi.waitFor(() => expect(userMemory()?.value).toBe('Prefers short lines'));
+
+		target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click();
+		await tick();
+		expect(userMemory()).toBeNull();
 	});
 });
 
