@@ -213,6 +213,7 @@
 		display: flex;
 		align-items: center;
 		gap: 8px;
+		flex-shrink: 0;
 		min-width: 0;
 		min-height: 32px;
 		margin: 0 12px 8px;
