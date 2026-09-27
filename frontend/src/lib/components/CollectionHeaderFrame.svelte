@@ -1,5 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+	import {
+		collectionPlayLabel,
+		collectionShuffleLabel,
+		type CollectionPlayKind
+	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -9,7 +14,9 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
+		kind: CollectionPlayKind;
 		onplay: () => void;
+		onshuffle?: () => void;
 		titleArea: Snippet;
 		actions?: Snippet;
 		coverFallback?: Snippet;
@@ -22,7 +29,9 @@
 		coverAlt,
 		initials,
 		artFill,
+		kind,
 		onplay,
+		onshuffle,
 		titleArea,
 		actions,
 		coverFallback
@@ -45,16 +54,35 @@
 		{@render titleArea()}
 	</div>
 	<div class="header-actions">
-		<button class="play-btn" data-hitbox="text" onclick={onplay} aria-label="Play">
-			<Icon name="play" size={16} />
-			<span>Play</span>
+		<button
+			type="button"
+			class="play-circle"
+			data-hitbox="frequent"
+			onclick={onplay}
+			aria-label={collectionPlayLabel(kind)}
+			title={collectionPlayLabel(kind)}
+		>
+			<Icon name="play" size={22} />
 		</button>
+		{#if onshuffle}
+			<button
+				type="button"
+				class="shuffle-btn"
+				data-hitbox="frequent"
+				onclick={onshuffle}
+				aria-label={collectionShuffleLabel(kind)}
+				title={collectionShuffleLabel(kind)}
+			>
+				<Icon name="shuffle" size={20} />
+			</button>
+		{/if}
 		{#if actions}{@render actions()}{/if}
 	</div>
 </div>
 
 <style>
 	.collection-header {
+		--collection-play-circle: 48px;
 		display: flex;
 		align-items: center;
 		gap: 1rem;
@@ -105,24 +133,30 @@
 		flex-shrink: 0;
 	}
 
-	.play-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4rem;
-		padding: 0.5rem 1.1rem;
-		border-radius: var(--btn-radius-pill);
+	.play-circle {
+		width: var(--collection-play-circle);
+		height: var(--collection-play-circle);
+		border-radius: 50%;
 		border: none;
-		background: linear-gradient(135deg, var(--primary), var(--accent));
+		background: var(--primary);
 		color: #fff;
-		font-family: var(--font-display);
-		font-size: 0.85rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		cursor: pointer;
 	}
 
-	.play-btn:hover {
-		box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 40%, transparent);
+	.play-circle:hover {
+		box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 45%, transparent);
+	}
+
+	.shuffle-btn {
+		width: var(--hitbox-frequent);
+		height: var(--hitbox-frequent);
+		border: none;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-muted);
+	}
+
+	.shuffle-btn:hover {
+		color: var(--primary);
 	}
 
 	@media (max-width: 768px) {
