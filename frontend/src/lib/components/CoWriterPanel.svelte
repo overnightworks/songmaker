@@ -787,6 +787,11 @@
 		memoryOpen = true;
 	}
 
+	function closeMemory(): void {
+		memoryOpen = false;
+		conversationMenuTrigger?.focus();
+	}
+
 	function chooseFromConversationMenu(choice: () => void | Promise<void>): void {
 		conversationMenuOpen = false;
 		conversationMenuTrigger?.focus();
@@ -908,7 +913,7 @@
 
 	<MemoryEditor
 		open={memoryOpen}
-		onClose={() => (memoryOpen = false)}
+		onClose={closeMemory}
 		bundle={memoryBundle}
 		loading={memoryLoading}
 		error={memoryError}
