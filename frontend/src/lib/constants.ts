@@ -331,6 +331,7 @@ export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
 export const EDITOR_GENERATE_RECONNECTING_LABEL = 'Reconnecting…';
 export const EDITOR_GENERATE_LAST_SEEN_TEMPLATE = 'last seen at {percent}%';
 export const EDITOR_GENERATE_CANCEL_OFFLINE_LABEL = 'Cancel generation (waits for the connection)';
+export const EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL = 'Last known progress';
 export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
 export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
 export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error';

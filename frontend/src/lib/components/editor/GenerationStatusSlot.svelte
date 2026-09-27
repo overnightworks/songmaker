@@ -1,5 +1,9 @@
 <script lang="ts">
-	import { EDITOR_GENERATE_CANCEL_LABEL } from '$lib/constants';
+	import {
+		EDITOR_GENERATE_CANCEL_LABEL,
+		EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
+		EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
+	} from '$lib/constants';
 	import {
 		cancelGeneration,
 		generateAction,
@@ -14,6 +18,7 @@
 	let { latestVersionNumber }: Props = $props();
 
 	const presentation = $derived($generateAction);
+	const reconnecting = $derived(isGenerateJobActive(presentation) && presentation.reconnecting);
 	const percent = $derived(presentation.kind === 'generating' ? presentation.progress : 0);
 	const statusLineText = $derived.by(() => {
 		if (presentation.kind !== 'generating') return null;
@@ -23,7 +28,7 @@
 </script>
 
 {#if isGenerateJobActive(presentation)}
-	<div class="status-slot">
+	<div class="status-slot" class:reconnecting>
 		<div class="status-head">
 			<span class="status-title">
 				v{latestVersionNumber} ·
@@ -33,8 +38,13 @@
 				type="button"
 				class="icon-button"
 				data-hitbox="frequent"
-				aria-label={EDITOR_GENERATE_CANCEL_LABEL}
-				onclick={() => void cancelGeneration(presentation.jobId)}
+				aria-label={reconnecting
+					? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
+					: EDITOR_GENERATE_CANCEL_LABEL}
+				aria-disabled={reconnecting}
+				onclick={() => {
+					if (!reconnecting) void cancelGeneration(presentation.jobId);
+				}}
 			>
 				<Icon name="x" />
 			</button>
@@ -42,6 +52,7 @@
 		<div
 			class="bar"
 			role="progressbar"
+			aria-label={reconnecting ? EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL : undefined}
 			aria-valuenow={percent}
 			aria-valuemin={0}
 			aria-valuemax={100}
@@ -124,5 +135,24 @@
 
 	.status-line.reason {
 		color: var(--text-subtle);
+	}
+
+	/* Offline nothing about the take can arrive and a cancel cannot leave, so
+	   the card stops looking live: its last state, in grey. */
+	.reconnecting .status-title b {
+		color: var(--text-light);
+	}
+
+	.reconnecting .bar span {
+		background: var(--text-disabled);
+	}
+
+	.reconnecting .status-line {
+		color: var(--text-subtle);
+	}
+
+	.reconnecting .icon-button {
+		color: var(--text-disabled);
+		cursor: default;
 	}
 </style>
