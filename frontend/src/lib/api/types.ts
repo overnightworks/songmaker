@@ -484,12 +484,14 @@ export interface LibraryAlbumHit {
 }
 
 export interface LibraryContinueItem {
-	type: 'album' | 'song';
+	type: 'album' | 'playlist';
 	id: string;
 	title: string;
 	cover?: AlbumCoverUrls | null;
-	album_id?: string | null;
-	album_title?: string | null;
+	album_covers: AlbumCoverUrls[];
+	song_id?: string | null;
+	song_title?: string | null;
+	activity_at: string;
 }
 
 export interface LibraryContinueResponse {

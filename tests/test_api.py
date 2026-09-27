@@ -589,6 +589,34 @@ def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> 
     _assert_no_listen_recorded(client)
 
 
+def test_admin_listen_on_a_foreign_song_leaves_the_song_unmarked(tmp_path: Path) -> None:
+    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+
+    resp = client.post("/api/songs/s1/listen")
+
+    assert resp.status_code == 200
+    _assert_no_listen_recorded(client)
+
+
+def test_admin_listen_on_a_foreign_song_from_an_own_playlist_marks_only_the_playlist(
+    tmp_path: Path,
+) -> None:
+    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    with client.app.state.ctx.db() as session:
+        session.add(Playlist(id="p-admin", title="Mine", slug="p-admin", created_by="u-admin"))
+        session.add(PlaylistEntry(playlist_id="p-admin", generation_id="g1", position=0))
+        session.commit()
+
+    resp = client.post("/api/songs/s1/listen", json={"playlist_id": "p-admin"})
+
+    assert resp.status_code == 200
+    with client.app.state.ctx.db() as session:
+        playlist = session.get(Playlist, "p-admin")
+        assert playlist.last_played_song_id == "s1"
+        assert playlist.last_played_at is not None
+        assert session.get(Song, "s1").last_played_at is None
+
+
 @pytest.mark.parametrize(
     "body", [None, {"playlist_id": "p-unknown"}], ids=["no-playlist", "from-a-playlist"],
 )
