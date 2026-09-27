@@ -253,10 +253,23 @@
 		else if (conversationChanged) void loadConversations();
 	}
 
-	/** A turn ended: the conversation list re-reads its counts and the host hears of it. */
+	/**
+	 * A turn ended: its conversation's row counts what the chat now holds at
+	 * once, the conversation list re-reads its counts, and the host hears of it.
+	 */
 	function announceEndedTurn(): void {
+		countPersistedChatInItsRow();
 		void loadConversations();
 		if (onturncompleted) onturncompleted();
+	}
+
+	function countPersistedChatInItsRow(): void {
+		const persistedCount = messages.filter((message) => message.persistedId).length;
+		conversations = conversations.map((conversation) =>
+			conversation.id === viewingConversationId
+				? { ...conversation, message_count: persistedCount }
+				: conversation
+		);
 	}
 
 	/**
