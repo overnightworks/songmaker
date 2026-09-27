@@ -340,7 +340,7 @@ test.describe('co-writer return at phone width', () => {
 	}) => {
 		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
-		const stored: ChatMessage[] = [];
+		const stored: ChatMessage[] = earlierHistory.slice(0, 2);
 		const running = {
 			id: CONVERSATION_ID,
 			title: null,
