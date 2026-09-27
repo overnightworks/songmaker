@@ -88,7 +88,6 @@
 		visible = true,
 		onturncompleted
 	}: Props = $props();
-	const proposalWaitingMarkId = $props.id();
 
 	interface ToolCall {
 		name: string;
@@ -642,6 +641,12 @@
 
 	const memoryProposalWaiting = $derived(pendingProposals.length > 0);
 
+	// The waiting dot is only drawn, so the controls that carry it say it in their names.
+	function announcingProposalWaiting(label: string): string {
+		if (!memoryProposalWaiting) return label;
+		return `${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
+	}
+
 	async function saveMemoryScope(
 		scope: MemoryScope,
 		targetId: string,
@@ -846,9 +851,8 @@
 	);
 </script>
 
-{#snippet proposalWaitingMark(id?: string)}
-	<span {id} class="proposal-waiting" role="img" aria-label={COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}
-	></span>
+{#snippet proposalWaitingMark()}
+	<span class="proposal-waiting" aria-hidden="true"></span>
 {/snippet}
 
 <div class="cowriter">
@@ -865,13 +869,12 @@
 				data-hitbox="frequent"
 				aria-haspopup="menu"
 				aria-expanded={conversationMenuOpen}
-				aria-label={COWRITER_CONVERSATION_MENU_LABEL}
-				aria-describedby={memoryProposalWaiting ? proposalWaitingMarkId : undefined}
+				aria-label={announcingProposalWaiting(COWRITER_CONVERSATION_MENU_LABEL)}
 				title={COWRITER_CONVERSATION_MENU_LABEL}
 				onclick={toggleConversationMenu}
 			>
 				<Icon name="more-horizontal" size={18} />
-				{#if memoryProposalWaiting}{@render proposalWaitingMark(proposalWaitingMarkId)}{/if}
+				{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
 			</button>
 			{#if conversationMenuOpen}
 				<div
@@ -898,6 +901,7 @@
 						type="button"
 						role="menuitem"
 						class="convo-memory"
+						aria-label={announcingProposalWaiting(COWRITER_MEMORY_LABEL)}
 						onclick={() => chooseFromConversationMenu(openMemory)}
 						>{COWRITER_MEMORY_LABEL}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>

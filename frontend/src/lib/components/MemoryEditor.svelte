@@ -58,10 +58,15 @@
 
 	// Answering the last proposal removes the button that held focus; keep focus
 	// inside the editor so the next Escape closes it instead of leaving the song.
+	// Focus the musician moved elsewhere during a slow answer stays where it is.
 	async function answerProposal(answer: () => void | Promise<void>): Promise<void> {
 		await answer();
 		await tick();
-		if (!editor?.contains(document.activeElement)) closeButton?.focus();
+		if (focusDropped()) closeButton?.focus();
+	}
+
+	function focusDropped(): boolean {
+		return document.activeElement === null || document.activeElement === document.body;
 	}
 
 	let userDraft = $state('');

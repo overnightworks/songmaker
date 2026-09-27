@@ -6,6 +6,7 @@ import type { ChatMessageItem } from '$lib/api/types';
 import {
 	COWRITER_CLAUDE_UNVERIFIED_LABEL,
 	COWRITER_CONVERSATION_MENU_LABEL,
+	COWRITER_MEMORY_LABEL,
 	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
@@ -50,7 +51,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { fetchMemory, startNewConversation } from '$lib/api/client';
+import { fetchMemory, saveUserMemory, startNewConversation } from '$lib/api/client';
 import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -184,9 +185,7 @@ function conversationLine(target: HTMLElement): string {
 }
 
 async function openConversationMenu(target: HTMLElement): Promise<HTMLElement> {
-	target
-		.querySelector<HTMLButtonElement>(`button[aria-label="${COWRITER_CONVERSATION_MENU_LABEL}"]`)
-		?.click();
+	target.querySelector<HTMLButtonElement>('button.convo-menu-btn')?.click();
 	await tick();
 	const menu = target.querySelector<HTMLElement>('[role="menu"]');
 	if (!menu) throw new Error('Expected the conversation menu');
@@ -513,24 +512,46 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		}
 	);
 
-	it('marks ⋯ and its Memory item while a memory proposal waits, until it is answered', async () => {
+	it('keeps focus where the musician moved it while a slow answer to a proposal completes', async () => {
+		let finishSave: () => void = () => {};
+		vi.mocked(saveUserMemory).mockImplementationOnce(
+			(body: string) =>
+				new Promise((resolve) => {
+					finishSave = () => resolve({ scope: 'user', target_id: 'u1', body });
+				})
+		);
 		const target = await renderWithOneWaitingProposal();
-		const waitingMarks = () =>
-			target.querySelectorAll(
-				`[role="img"][aria-label="${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}"]`
-			);
-		const trigger = target.querySelector(
-			`button[aria-label="${COWRITER_CONVERSATION_MENU_LABEL}"]`
-		);
+		await openMemoryFromMenu(target);
+		await vi.waitFor(() => expect(target.querySelector('.proposal .accept')).not.toBeNull());
+		target.querySelector<HTMLButtonElement>('.proposal .accept')?.click();
+		await tick();
 
-		await vi.waitFor(() => expect(trigger?.querySelectorAll('[role="img"]')).toHaveLength(1));
-		const describedBy = trigger?.getAttribute('aria-describedby') ?? '';
-		expect(document.getElementById(describedBy)?.getAttribute('aria-label')).toBe(
-			COWRITER_MEMORY_PROPOSAL_WAITING_LABEL
+		const composer = target.querySelector<HTMLTextAreaElement>('.chat-input');
+		composer?.focus();
+		finishSave();
+		await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
+		await tick();
+
+		expect(composer).not.toBeNull();
+		expect(document.activeElement).toBe(composer);
+	});
+
+	it('marks ⋯ and its Memory item while a memory proposal waits, and says so in their names until it is answered', async () => {
+		const target = await renderWithOneWaitingProposal();
+		const trigger = target.querySelector<HTMLButtonElement>('button.convo-menu-btn');
+		const waitingName = (label: string) =>
+			`${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
+
+		await vi.waitFor(() =>
+			expect(trigger?.getAttribute('aria-label')).toBe(
+				waitingName(COWRITER_CONVERSATION_MENU_LABEL)
+			)
 		);
+		expect(trigger?.querySelectorAll('.proposal-waiting')).toHaveLength(1);
 		const menu = await openConversationMenu(target);
 		const memoryItem = menu.querySelector<HTMLButtonElement>('.convo-memory');
-		expect(memoryItem?.querySelector('[role="img"]')).not.toBeNull();
+		expect(memoryItem?.getAttribute('aria-label')).toBe(waitingName(COWRITER_MEMORY_LABEL));
+		expect(memoryItem?.querySelector('.proposal-waiting')).not.toBeNull();
 
 		memoryItem?.click();
 		await tick();
@@ -538,8 +559,8 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		target.querySelector<HTMLButtonElement>('.proposal .reject')?.click();
 		await tick();
 
-		expect(waitingMarks()).toHaveLength(0);
-		expect(trigger?.hasAttribute('aria-describedby')).toBe(false);
+		expect(target.querySelectorAll('.proposal-waiting')).toHaveLength(0);
+		expect(trigger?.getAttribute('aria-label')).toBe(COWRITER_CONVERSATION_MENU_LABEL);
 	});
 });
 
