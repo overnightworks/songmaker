@@ -106,6 +106,7 @@
 		ensureCompactUiStyles
 	} from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
+	import { providerDisplayName } from '$lib/utils/cowriter-ui';
 
 	let users = $state<UserItem[]>([]);
 	let sessions = $state<SessionItem[]>([]);
@@ -334,10 +335,6 @@
 		}
 	}
 
-	function providerLabel(provider: string): string {
-		return provider.charAt(0).toUpperCase() + provider.slice(1);
-	}
-
 	function providerStatusFor(provider: string): ProviderStatus | undefined {
 		return providerStatuses.find((status) => status.provider === provider);
 	}
@@ -503,7 +500,7 @@
 	): ModelsTaskProvider[] {
 		return names.map((provider) => ({
 			provider,
-			label: providerLabel(provider),
+			label: providerDisplayName(provider),
 			routes: { cli: routeOf(provider, 'cli'), api: routeOf(provider, 'api') }
 		}));
 	}

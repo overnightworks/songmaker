@@ -13,10 +13,12 @@
 // is in the conversation from the moment the turn starts, the conversation
 // reports the turn running until it ends, and the reply joins it then.
 //
-// The message is sent with Enter from the composer, not a tap on Send: with
-// the composer focused, the tap's own focus change brings the mini-player
-// back (#999) and moves Send before the tap completes, so the tap never
-// sends. That is a defect of its own, not of the return path pinned here.
+// The message is sent with Enter from the composer; a tap on Send is pinned
+// by phone-typing.spec.ts (#1063).
+//
+// A reply that arrives while Edit or Takes is shown is in view on return,
+// unless the musician had scrolled up to read: then the chat is where they
+// left it (#1063).
 //
 // Coming back to a turn that ended unanswered shows the retained message with
 // Try again; the server answers that message when it is sent again instead of
@@ -100,6 +102,14 @@ async function answerConversation(page: Page, read: () => ConversationState): Pr
 	});
 }
 
+const EARLIER_EXCHANGES = 12;
+
+// Long enough that the chat scrolls at 390 px, so where it stands shows.
+const earlierHistory = Array.from({ length: EARLIER_EXCHANGES }, (_, exchange) => [
+	chatMessage(`e2e-earlier-${exchange}-ask`, 'user', `Frühere Frage ${exchange + 1}`),
+	chatMessage(`e2e-earlier-${exchange}-answer`, 'assistant', `Frühere Antwort ${exchange + 1}`)
+]).flat();
+
 function turnStream(event: object): string {
 	return `data: ${JSON.stringify(event)}\n\n`;
 }
@@ -123,6 +133,17 @@ async function lookAtEditAndTakes(page: Page): Promise<void> {
 	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
 	await page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) }).click();
 	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
+}
+
+/** Scrolls the chat the way a finger does: the panel hears it before the next step. */
+async function scrollChatToTop(page: Page): Promise<void> {
+	await page.locator('.cowriter .messages').evaluate(
+		(chat) =>
+			new Promise<void>((resolve) => {
+				chat.addEventListener('scroll', () => resolve(), { once: true });
+				chat.scrollTop = 0;
+			})
+	);
 }
 
 test.describe('co-writer return at phone width', () => {
@@ -299,4 +320,68 @@ test.describe('co-writer return at phone width', () => {
 		await expect(chat).toHaveText(shown);
 		await expect(tryAgain).toHaveCount(0);
 	});
+	for (const { musician, scrolledUp, inView, outOfView } of [
+		{
+			musician: 'following the newest message',
+			scrolledUp: false,
+			inView: REPLY,
+			outOfView: earlierHistory[0].content
+		},
+		{
+			musician: 'who scrolled up to read',
+			scrolledUp: true,
+			inView: earlierHistory[0].content,
+			outOfView: REPLY
+		}
+	]) {
+		test(`a reply that arrived while Edit was shown: a musician ${musician} finds the chat where they expect it`, async ({
+			page,
+			isMobile
+		}) => {
+			test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
+			let turnState: TurnState = 'idle';
+			let completeTurn = (): void => {};
+			const turnCompleted = new Promise<void>((resolve) => {
+				completeTurn = resolve;
+			});
+			await answerConversation(page, () => ({
+				messages: [...earlierHistory, ...historyFor(turnState)],
+				turnRunning: turnState === 'running'
+			}));
+			await page.route(`**${COWRITER_TURN_PATH}`, async (route: Route) => {
+				turnState = 'running';
+				await turnCompleted;
+				await route.fulfill({
+					contentType: 'text/event-stream',
+					body: turnStream({
+						type: 'final',
+						conversation_id: CONVERSATION_ID,
+						user_message: sentMessage,
+						assistant_message: replyMessage
+					})
+				});
+			});
+
+			await openCowriterOnPickedSong(page);
+			const composer = page.getByPlaceholder(/Ask the co-writer/);
+			await composer.fill(SENT);
+			await composer.press('Enter');
+			await expect.poll(() => turnState).toBe('running');
+			if (scrolledUp) await scrollChatToTop(page);
+
+			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+			const replyStored = page.waitForResponse(
+				(response) =>
+					response.url().endsWith(`/api/conversations/${CONVERSATION_ID}`) &&
+					turnState === 'answered'
+			);
+			turnState = 'answered';
+			completeTurn();
+			await replyStored;
+			await showCowriterTab(page);
+
+			await expect(page.getByText(inView, { exact: true })).toBeInViewport();
+			await expect(page.getByText(outOfView, { exact: true })).not.toBeInViewport();
+		});
+	}
 });
