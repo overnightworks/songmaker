@@ -155,6 +155,15 @@ export const NOW_PLAYING_LABEL = 'Now Playing';
 export function openNowPlayingLabel(songTitle: string): string {
 	return `${songTitle} — open ${NOW_PLAYING_LABEL}`;
 }
+// Swiping the mini player up opens Now Playing once the finger has risen
+// this far, and further up than sideways; anything less is a tap or a slip.
+export const NOW_PLAYING_SWIPE_RISE_PX = 40;
+// A cut mini-player title scrolls once, slowly: it rests, travels to its end
+// at this pace, rests again, and glides back to its start.
+export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
+export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
+export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
+export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
