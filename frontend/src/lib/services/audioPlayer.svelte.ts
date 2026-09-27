@@ -1,4 +1,6 @@
+import { get } from 'svelte/store';
 import type { QueueStreamManifest } from '$lib/api/types';
+import { offline } from '$lib/stores/connectivity';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -13,7 +15,8 @@ type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
 
 type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
 
-type Failure = { kind: FailureKind; message: string };
+// 'unreachable' carries no words: the one offline strip names the cause.
+type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
 
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
@@ -38,7 +41,7 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 };
 
 const AUDIO_URL_PREFIX = '/audio/';
-const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
+const ERROR_MSG_GENERIC = 'Playback failed. Press Retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
 const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const STALL_RECOVERY_MS = 5000;
@@ -63,7 +66,7 @@ class AudioPlayer {
 	private failure = $state<Failure | null>(null);
 
 	get error(): string | null {
-		return this.failure?.message ?? null;
+		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
 	}
 
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
@@ -850,7 +853,7 @@ class AudioPlayer {
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
-		this.fail('failed', ERROR_MSG_GENERIC);
+		this.failForAnUnknownReason();
 
 		const target = this.current;
 		const url = this.currentUrl;
@@ -865,8 +868,18 @@ class AudioPlayer {
 			return;
 		}
 		if (probe.status === 404) this.failure = { kind: 'failed', message: ERROR_MSG_NOT_FOUND };
-		else if (probe.ok && mediaError)
+		else if (probe.ok && mediaError && mediaError.code !== MediaError.MEDIA_ERR_NETWORK)
 			this.failure = { kind: 'failed', message: decodeMediaError(mediaError) };
+		else this.failForAnUnknownReason();
+	}
+
+	private failForAnUnknownReason(): void {
+		if (get(offline)) {
+			this.status = 'error';
+			this.failure = { kind: 'unreachable' };
+			return;
+		}
+		this.fail('failed', ERROR_MSG_GENERIC);
 	}
 
 	private setCurrent(current: PlaybackInfo | null): void {
@@ -880,8 +893,8 @@ function bufferedUntil(el: HTMLAudioElement): number {
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
-// A lost network is left to the generic message: the one offline strip names
-// it (#1039), so the player adds no network wording of its own.
+// A lost network is never decoded here: offline the one strip names it
+// (#1039), so the player adds no network wording of its own.
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:

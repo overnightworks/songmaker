@@ -1,6 +1,7 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
@@ -166,6 +167,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -1169,16 +1171,22 @@ describe('error handling', () => {
 				fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 			}
 		}
-	])(
-		'adds no network text of its own after $loss — the offline strip says it',
-		async ({ arrange }) => {
-			arrange();
-			fakeAudio.fire('error');
-			await new Promise((r) => setTimeout(r, 0));
-			expect(audioPlayer.status).toBe('error');
-			expect(audioPlayer.error).toBe('Playback failed. Click play to retry.');
-		}
-	);
+	])('offline, adds no text of its own after $loss — the strip says it', async ({ arrange }) => {
+		reportResourceStreamReachable(false);
+		arrange();
+		fakeAudio.fire('error');
+		await new Promise((r) => setTimeout(r, 0));
+		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.error).toBeNull();
+	});
+
+	it('online, names a failure no strip explains and offers the Retry', async () => {
+		fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+		fakeAudio.fire('error');
+		await new Promise((r) => setTimeout(r, 0));
+		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+	});
 
 	it('decodes MEDIA_ERR_DECODE', async () => {
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_DECODE } as MediaError;

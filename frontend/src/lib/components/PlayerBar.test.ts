@@ -37,7 +37,7 @@ import * as playerStore from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
-import { resetConnectivityForTests } from '$lib/stores/connectivity';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
@@ -966,6 +966,10 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 });
 
 describe('PlayerBar failure line', () => {
+	afterEach(() => {
+		resetConnectivityForTests();
+	});
+
 	async function mountPlayingFromNightdrive(): Promise<void> {
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
@@ -1006,6 +1010,27 @@ describe('PlayerBar failure line', () => {
 
 		expect(target.querySelector(failure)?.textContent?.trim()).toBe(why);
 		expect(target.querySelector('.track-detail')?.textContent).toBe(detailBeside(why));
+	});
+
+	it.each([
+		{ layout: 'phone', arrange: () => {} },
+		{ layout: 'desktop', arrange: useDesktopLayout }
+	])('offline, the $layout bar adds no failure text beside the strip', async ({ arrange }) => {
+		arrange();
+		await mountPlayingFromNightdrive();
+		reportResourceStreamReachable(false);
+		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+		await vi.waitFor(() => expect(audioPlayer.status).toBe('error'));
+		await tick();
+
+		expect(target.querySelector('.offline-strip')).not.toBeNull();
+		expect(target.querySelector('.phone-failure, .error-text')).toBeNull();
+		expect(target.querySelector('.play-btn')?.getAttribute('aria-label')).toBe('Retry');
 	});
 
 	// The target's own label replaces its words for a screen reader.
