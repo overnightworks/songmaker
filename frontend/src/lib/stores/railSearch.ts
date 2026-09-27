@@ -1,7 +1,7 @@
 import { get, writable } from 'svelte/store';
 
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
-import type { PlaylistItem } from '$lib/api/types';
+import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
@@ -31,15 +31,31 @@ interface RailSearchPage {
 	adminOnly?: boolean;
 }
 
+type RailSearchKind = RailSearchTarget['kind'];
+
+type RailSearchPicture =
+	| { kind: 'album'; cover: AlbumCoverUrls | null }
+	| { kind: 'song'; glyph: string }
+	| { kind: 'playlist'; covers: AlbumCoverUrls[]; cover: AlbumCoverUrls | null }
+	| { kind: 'page'; glyph: string };
+
+interface RailSearchLabelPart {
+	text: string;
+	matched: boolean;
+}
+
 interface RailSearchResult {
 	id: string;
 	label: string;
-	meta: string | null;
+	labelParts: RailSearchLabelPart[];
+	kindWord: string;
+	detail: string | null;
+	picture: RailSearchPicture;
 	target: RailSearchTarget;
 }
 
 interface RailSearchGroup {
-	label: 'Library' | 'Playlists' | 'Pages';
+	label: string;
 	results: RailSearchResult[];
 }
 
@@ -60,6 +76,19 @@ const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
 	{ label: 'Cleanup', href: '/settings/cleanup', keywords: ['settings'], adminOnly: true },
 	{ label: 'Legal', href: '/settings/legal', keywords: ['settings'] }
 ];
+
+const RAIL_SEARCH_KINDS: Readonly<Record<RailSearchKind, { group: string; word: string }>> = {
+	album: { group: 'Albums', word: 'Album' },
+	song: { group: 'Songs', word: 'Song' },
+	playlist: { group: 'Playlists', word: 'Playlist' },
+	page: { group: 'Pages', word: 'Page' }
+};
+
+const RAIL_SEARCH_GROUP_ORDER: readonly RailSearchKind[] = ['album', 'song', 'playlist', 'page'];
+
+const SONG_GLYPH = '♪';
+const LIBRARY_PAGE_GLYPH = '▦';
+const SETTINGS_PAGE_GLYPH = '⚙';
 
 const EMPTY_RAIL_SEARCH: RailSearchState = {
 	query: '',
@@ -112,41 +141,32 @@ export function groupRailSearchResults(
 ): RailSearchGroup[] {
 	if (!state.query) return [];
 	const query = state.query.toLocaleLowerCase();
-	const library = state.hits.map(libraryResult);
-	const playlistResults = playlists
-		.filter((playlist) => playlist.title.toLocaleLowerCase().includes(query))
-		.map((playlist) => ({
-			id: `playlist:${playlist.id}`,
-			label: playlist.title,
-			meta: pluralize(playlist.entry_count, 'entry'),
-			target: { kind: 'playlist' as const, id: playlist.id }
-		}));
-	const pageResults = pages
-		.filter((page) => pageMatches(page, query))
-		.map((page) => ({
-			id: `page:${page.href}`,
-			label: page.label,
-			meta: page.href === '/' ? null : 'Settings',
-			target: { kind: 'page' as const, href: page.href }
-		}));
-	const groups: RailSearchGroup[] = [
-		{ label: 'Library', results: library },
-		{ label: 'Playlists', results: playlistResults },
-		{ label: 'Pages', results: pageResults }
+	const results = [
+		...state.hits.map((hit) => libraryResult(hit, query)),
+		...playlists
+			.filter((playlist) => playlist.title.toLocaleLowerCase().includes(query))
+			.map((playlist) => playlistResult(playlist, query)),
+		...pages.filter((page) => pageMatches(page, query)).map((page) => pageResult(page, query))
 	];
-	return groups.filter((group) => group.results.length > 0);
+	return RAIL_SEARCH_GROUP_ORDER.map((kind) => ({
+		label: RAIL_SEARCH_KINDS[kind].group,
+		results: results.filter((result) => result.target.kind === kind)
+	})).filter((group) => group.results.length > 0);
+}
+
+function railSearchLabelParts(label: string, query: string): RailSearchLabelPart[] {
+	const start = label.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+	if (start < 0) return [{ text: label, matched: false }];
+	const end = start + query.length;
+	return [
+		{ text: label.slice(0, start), matched: false },
+		{ text: label.slice(start, end), matched: true },
+		{ text: label.slice(end), matched: false }
+	].filter((part) => part.text.length > 0);
 }
 
 export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[] {
 	return RAIL_SEARCH_PAGES.filter((page) => !page.adminOnly || admin);
-}
-
-export function firstRailSearchTarget(
-	state: RailSearchState,
-	playlists: PlaylistItem[],
-	pages: readonly RailSearchPage[] = RAIL_SEARCH_PAGES
-): RailSearchTarget | null {
-	return groupRailSearchResults(state, playlists, pages)[0]?.results[0]?.target ?? null;
 }
 
 export function resetRailSearchForTests(): void {
@@ -187,20 +207,53 @@ async function runRailSearch(query: string): Promise<void> {
 	}
 }
 
-function libraryResult(hit: LibrarySearchHit): RailSearchResult {
+type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord'>;
+
+function libraryResult(hit: LibrarySearchHit, query: string): RailSearchResult {
 	if (hit.type === 'album') {
-		return {
+		return searchResult(query, {
 			id: `album:${hit.album.id}`,
 			label: hit.album.title,
-			meta: pluralize(hit.album.song_count, 'song'),
+			detail: pluralize(hit.album.song_count, 'song'),
+			picture: { kind: 'album', cover: hit.album.cover ?? null },
 			target: { kind: 'album', id: hit.album.id }
-		};
+		});
 	}
-	return {
+	return searchResult(query, {
 		id: `song:${hit.song.id}`,
 		label: hit.song.title,
-		meta: hit.album_title,
+		detail: hit.album_title,
+		picture: { kind: 'song', glyph: SONG_GLYPH },
 		target: { kind: 'song', id: hit.song.id }
+	});
+}
+
+function playlistResult(playlist: PlaylistItem, query: string): RailSearchResult {
+	return searchResult(query, {
+		id: `playlist:${playlist.id}`,
+		label: playlist.title,
+		detail: pluralize(playlist.entry_count, 'song'),
+		picture: { kind: 'playlist', covers: playlist.album_covers, cover: playlist.cover ?? null },
+		target: { kind: 'playlist', id: playlist.id }
+	});
+}
+
+function pageResult(page: RailSearchPage, query: string): RailSearchResult {
+	const isLibrary = page.href === '/';
+	return searchResult(query, {
+		id: `page:${page.href}`,
+		label: page.label,
+		detail: isLibrary ? null : 'Settings',
+		picture: { kind: 'page', glyph: isLibrary ? LIBRARY_PAGE_GLYPH : SETTINGS_PAGE_GLYPH },
+		target: { kind: 'page', href: page.href }
+	});
+}
+
+function searchResult(query: string, source: RailSearchResultSource): RailSearchResult {
+	return {
+		...source,
+		labelParts: railSearchLabelParts(source.label, query),
+		kindWord: RAIL_SEARCH_KINDS[source.target.kind].word
 	};
 }
 
