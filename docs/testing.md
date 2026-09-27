@@ -269,9 +269,9 @@ request budget per shell.
   `frontend/e2e/helpers.ts`: it also stops the page's open loads
   (`window.stop()`, which ends the stream with an `error` the way a dropped
   network does) and refuses every reopen of the resource stream until the
-  network returns. The flow guard does not count a request failed with
-  `net::ERR_INTERNET_DISCONNECTED` — only a flow that took the network away
-  on purpose makes one.
+  network returns. Such a flow builds its `FlowGuard` with
+  `losesNetworkOnPurpose`, so that guard does not count a request failed with
+  `net::ERR_INTERNET_DISCONNECTED`; every other flow still fails on one.
 
 `frontend/e2e/README.md` has the exact commands, the audio fixture, and the
 budget rule.

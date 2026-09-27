@@ -113,7 +113,7 @@ test.describe('a take that finished while the phone was offline', () => {
 		isMobile
 	}) => {
 		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const guard = new FlowGuard(page);
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		const library = readSeededLibrary();
 		const songTitle = `${TAKE_ARRIVES_SONG_TITLE} Offline ${runMarker()}`;
 		const songId = await seedSongPhoneSong(
