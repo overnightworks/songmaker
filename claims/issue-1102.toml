@@ -1,8 +1,0 @@
-claim_id = "d6b8a936eb2b451ca38621dae982248a"
-agent = "claude-head"
-role = "builder"
-base = "e58784c00d995194c320e42cf2e0b9fcb8632a40"
-branch = "claude/issue-1102-wall-sort"
-scope = ["docs/architecture.md", "frontend/e2e/library-continue.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/api/library.test.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/components/LibraryContinue.svelte", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/lib/utils/cowriter-ui.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts", "frontend/src/lib/utils/recency.test.ts", "frontend/src/lib/utils/recency.ts", "src/songmaker_cli/library_api.py", "tests/test_library_api.py"]
-opened_commit = "0140f4dce2d08d6b5b634819040037f65caebdc9"
-whole_reason = "the albums wall sort switch and second line, its remembered order, the bounded continue limit, and #1094's small follow-ups"
