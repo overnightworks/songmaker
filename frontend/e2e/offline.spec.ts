@@ -342,15 +342,16 @@ test.describe('losing the network while a take generates on the phone', () => {
 				: null;
 			await completeGenerationJobWithoutEvent(jobId);
 			if (songRefreshFailed) {
-				await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
 				await songRefreshFailed;
 				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible();
 			}
 			await expect(lastSeenBar).toBeVisible();
+			await expect(page.getByText(JOB_COMPLETED_TOAST)).toHaveCount(0);
 
 			await regainNetwork(page, context);
 
 			await expect(playButtons).toHaveCount(seededTakes + 1, { timeout: BACK_ONLINE_MS });
+			await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
 			await expect(panel.getByRole('progressbar')).toHaveCount(0);
 			await expect(runningRing).toHaveCount(0);
 			await expect(offlineStrip(page)).toHaveCount(0);
