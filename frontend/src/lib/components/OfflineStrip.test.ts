@@ -44,6 +44,13 @@ describe('OfflineStrip', () => {
 		expect(target.querySelector('button')).toBeNull();
 	});
 
+	it('wears the cloud glyph beside its sentence', async () => {
+		browserReportsOnline(false);
+		await tick();
+
+		expect(liveRegion()?.querySelector('svg path')).not.toBeNull();
+	});
+
 	it('says the same when the browser is online but the live stream cannot reach the server', async () => {
 		reportResourceStreamReachable(false);
 		await tick();
