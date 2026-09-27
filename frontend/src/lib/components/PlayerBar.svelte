@@ -7,6 +7,7 @@
 		nowPlayingSurface,
 		openNowPlaying,
 		playIdleStart,
+		playbackSource,
 		playNextSong,
 		playPrevSong,
 		canPlayPrevSong,
@@ -20,14 +21,19 @@
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
-	import { selectedPlaylistDetail } from '$lib/stores/playlists';
+	import {
+		playlistDetailLoad,
+		selectedPlaylist,
+		selectedPlaylistDetail
+	} from '$lib/stores/playlists';
 	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
 		LIBRARY_QUEUE_PLAY_DETAIL,
-		LIBRARY_QUEUE_RETRY_DETAIL
+		LIBRARY_QUEUE_RETRY_DETAIL,
+		openNowPlayingLabel
 	} from '$lib/constants';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import {
@@ -36,7 +42,7 @@
 	} from '$lib/services/mediaSession';
 	import { formatTime } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
+	import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
@@ -61,9 +67,22 @@
 		idlePlayTarget({
 			collection: $openCollection,
 			playlist: $selectedPlaylistDetail,
+			listedPlaylist: $selectedPlaylist,
+			playlistLoading: $playlistDetailLoad.status === 'loading',
 			albums: $albumList
 		})
 	);
+	const detailId = $props.id();
+	// The phone names where the music comes from under the title; the
+	// desktop row, and a queue with no source, name the take.
+	const detailLine = $derived.by(() => {
+		if (!current) return '';
+		if (mobileTransport && $playbackSource) return nowPlayingFromLabel($playbackSource.title);
+		return nowPlayingTakeLabel(
+			current.generation.version_number,
+			current.generation.generation_number
+		);
+	});
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 
@@ -113,7 +132,7 @@
 	});
 </script>
 
-{#snippet trackInfo(titleGlowStyle: string)}
+{#snippet trackInfo(titleGlowStyle: string, inlineFailure: string | null)}
 	<span class="track-cover" aria-hidden="true">
 		{#if coverUrl}
 			<img src={coverUrl} alt="" />
@@ -124,13 +143,9 @@
 			<span class="track-title" class:glowing={isPlaying} style={titleGlowStyle}
 				>{current.songTitle}</span
 			>
-			<span class="track-detail"
-				>{nowPlayingTakeLabel(
-					current.generation.version_number,
-					current.generation.generation_number
-				)}{#if isLoading}<span class="loading-text">Loading...</span>{:else if isError}<span
-						class="error-text">{errorMsg ?? 'Error'}</span
-					>{/if}</span
+			<span class="track-detail" id={detailId}
+				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
+					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
 		{:else if startNotice === 'building'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
@@ -173,6 +188,8 @@
 		onOpenNowPlaying={onNowPlayingClick}
 		nowPlayingDocked={docked}
 		nowPlayingDisabled={!current}
+		nowPlayingTargetLabel={current ? openNowPlayingLabel(current.songTitle) : undefined}
+		nowPlayingTargetDescriptionId={current ? detailId : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>

@@ -530,13 +530,13 @@ describe('frozen-clock watchdog', () => {
 				name: `offers Retry on a third freeze of ${mode} when the recoveries fail back to back`,
 				loadMode,
 				playOnSeconds: 0,
-				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Press Retry.' }
 			},
 			{
 				name: `offers Retry on a third freeze of ${mode} that only plays briefly in between`,
 				loadMode,
 				playOnSeconds: 2,
-				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Press Retry.' }
 			}
 		])
 	)('$name', async ({ loadMode, playOnSeconds, afterThirdFreeze }) => {
@@ -644,7 +644,7 @@ describe('frozen-clock watchdog', () => {
 				paused: fakeAudio.paused
 			}).toEqual({
 				status: 'error',
-				error: 'Playback stalled. Click play to retry.',
+				error: 'Playback stalled. Press Retry.',
 				paused: true
 			});
 		}

@@ -14,6 +14,7 @@ import {
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
+	openNowPlayingLabel,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
@@ -30,6 +31,7 @@ import {
 	TRANSPORT_PAUSE_LABEL
 } from '../src/lib/constants';
 import {
+	nowPlayingFromLabel,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
@@ -52,8 +54,8 @@ import {
 } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
-// The compact transport drops prev/next and the seek timeline into Now Playing
-// and keeps a single row this tall (see TransportBarFrame.svelte).
+// The phone's mini player keeps previous · play · next in one row this tall;
+// the seek timeline and shuffle live in Now Playing (see TransportBarFrame.svelte).
 const MOBILE_TRANSPORT_HEIGHT_PX = 64;
 // The album header promises its title a readable floor at any width — it wraps
 // the action cluster onto its own row rather than shrinking the title past
@@ -211,14 +213,27 @@ async function expectSettingsRailRoundTrip(
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
 
-/** The compact transport: one short row, with a thumb-sized play control. */
+/**
+ * The phone's mini player (#1003, frame C2): one short row reading previous ·
+ * play · next, play on the bar's exact centre line, and no shuffle of its own.
+ */
 async function expectCompactTransport(transport: Locator): Promise<void> {
 	const play = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-	const [bar, playBox] = await boundingBoxes(transport, play);
+	const previous = transport.getByRole('button', { name: 'Previous', exact: true });
+	const next = transport.getByRole('button', { name: 'Next', exact: true });
+	const [bar, playBox, previousBox, nextBox] = await boundingBoxes(transport, play, previous, next);
 
 	expect(bar.height).toBe(MOBILE_TRANSPORT_HEIGHT_PX);
 	expect(playBox.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 	expect(playBox.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+	expect(Math.abs(playBox.x + playBox.width / 2 - (bar.x + bar.width / 2))).toBeLessThanOrEqual(1);
+	expect(previousBox.x + previousBox.width).toBeLessThanOrEqual(playBox.x);
+	expect(nextBox.x).toBeGreaterThanOrEqual(playBox.x + playBox.width);
+	await expect(
+		transport.getByRole('button', {
+			name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+		})
+	).toHaveCount(0);
 }
 
 test('plays the album pick, curates a playlist and serves the public album link', async ({
@@ -255,7 +270,12 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
-	await expect(transport.getByText(library.takeLabel)).toBeVisible();
+	// The phone names where the music comes from; the desktop row names the take.
+	await expect(
+		transport.getByText(
+			shell === 'mobile' ? nowPlayingFromLabel(library.albumTitle) : library.takeLabel
+		)
+	).toBeVisible();
 	// The pick is audible, not merely selected: the button offers to pause it.
 	await expect(
 		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
@@ -361,12 +381,22 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		).toHaveCount(0);
 	}
 
-	const shuffle = transport.getByRole('button', {
+	// On the phone shuffle lives in Now Playing, opened from the mini player's title.
+	if (shell === 'mobile') {
+		await transport
+			.getByRole('button', { name: openNowPlayingLabel(library.pickedSongTitle), exact: true })
+			.click();
+	}
+	const shuffle = shellTransport(page, shell, library.pickedSongTitle).getByRole('button', {
 		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
 	});
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
 	await shuffle.click();
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
+	if (shell === 'mobile') {
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog', { name: library.pickedSongTitle })).toBeHidden();
+	}
 
 	// The public link is part of the flow, so it is opened on the same screen
 	// the rest of the shell was driven on.
