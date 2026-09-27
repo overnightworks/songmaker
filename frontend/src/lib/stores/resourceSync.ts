@@ -487,8 +487,9 @@ export class ResourceSyncController {
 	}
 
 	private async probeForReturn(): Promise<void> {
+		const probeId = this.probeGeneration;
 		const result = await this.deps.probeAuth();
-		if (!this.started || this.serverReachable) return;
+		if (!this.started || this.serverReachable || probeId !== this.probeGeneration) return;
 		if (result === 'unreachable') {
 			this.scheduleReturnProbe();
 			return;

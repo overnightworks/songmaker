@@ -1440,6 +1440,42 @@ describe('resource sync owner', () => {
 		controller.stop();
 	});
 
+	it('ignores a return probe answered after a newer probe found the server unreachable again', async () => {
+		vi.useFakeTimers();
+		const heldProbeAnswers: Array<(result: ResourceAuthProbe) => void> = [];
+		let holdNextProbe = false;
+		const { controller, sources, reachability } = setup({
+			probeAuth: () => {
+				if (!holdNextProbe) return Promise.resolve('unreachable');
+				holdNextProbe = false;
+				return new Promise((resolve) => heldProbeAnswers.push(resolve));
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		holdNextProbe = true;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+		const sourcesWhileDown = sources.length;
+
+		expect(heldProbeAnswers).toHaveLength(1);
+		heldProbeAnswers[0]('ok');
+		await flush();
+
+		expect(reachability.at(-1)).toBe(false);
+		expect(sources).toHaveLength(sourcesWhileDown);
+		controller.stop();
+	});
+
 	it('probes for the server once per interval while it stays unreachable and not after the owner stops', async () => {
 		vi.useFakeTimers();
 		const probeAuth = vi.fn(async () => 'unreachable' as const);
