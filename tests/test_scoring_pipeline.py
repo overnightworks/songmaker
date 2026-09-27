@@ -351,9 +351,13 @@ def test_pipeline_rejects_wrong_return_type(
 DEADLOCK_GUARD_SECONDS = 10
 """Only reached when the pipeline serialises what it should overlap."""
 
-SECOND_GPU_SCORER_GRACE_SECONDS = 0.2
-"""How long the first GPU scorer gives a wrongly concurrent second one to
-start. A correct pipeline passes regardless of this value."""
+GPU_OVERLAP_WINDOW_SECONDS = 0.2
+"""How long the first GPU scorer stays on the GPU for a wrongly concurrent
+second one to arrive. A GPU scorer that never overlaps sends no event, so
+its absence can only be observed by a bounded wait — the one timed window
+in these tests. The bound is one-sided: a correct pipeline passes whatever
+the value; a window too short for a loaded runner can only let a broken
+pipeline slip through, never fail a correct one."""
 
 
 def _await_partner(event: threading.Event, partner: str) -> None:
@@ -361,36 +365,53 @@ def _await_partner(event: threading.Event, partner: str) -> None:
         raise AssertionError(f"{partner} never ran alongside this scorer")
 
 
-class _Timeline:
-    """Thread-safe record of scorer events in the order they happened."""
+class _GpuOccupancy:
+    """Counts how many GPU scorers are inside the GPU at once."""
 
     def __init__(self) -> None:
-        self._events: list[str] = []
+        self.first_entered = threading.Event()
+        self._second_entered = threading.Event()
+        self._inside = 0
+        self._entries = 0
+        self.most_inside_at_once = 0
         self._lock = threading.Lock()
 
-    def record(self, event: str) -> None:
+    def occupy(self, cpu_started: threading.Event) -> None:
+        is_first = self._enter()
+        _await_partner(cpu_started, "the CPU scorer")
+        if is_first:
+            self._second_entered.wait(GPU_OVERLAP_WINDOW_SECONDS)
         with self._lock:
-            self._events.append(event)
+            self._inside -= 1
 
-    def events(self) -> list[str]:
+    def _enter(self) -> bool:
         with self._lock:
-            return list(self._events)
+            self._inside += 1
+            self._entries += 1
+            self.most_inside_at_once = max(self.most_inside_at_once, self._inside)
+            is_first = self._entries == 1
+        if is_first:
+            self.first_entered.set()
+        else:
+            self._second_entered.set()
+        return is_first
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
 def test_cpu_scorers_run_concurrently(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
-    """Every CPU scorer waits for all the others to start — only a pipeline
-    that runs them at the same time lets any of them finish."""
-    all_started = threading.Barrier(3, timeout=DEADLOCK_GUARD_SECONDS)
+    """Each CPU scorer waits for the other to start — only a pipeline that
+    runs them at the same time lets either of them finish. Two scorers, so
+    the proof holds on a host whose CPU pool has just two workers."""
+    both_started = threading.Barrier(2, timeout=DEADLOCK_GUARD_SECONDS)
 
     @clean_registry.register("silence")
     def silence(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
     ) -> SilenceScore:
-        all_started.wait()
+        both_started.wait()
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
     @clean_registry.register("bpm_accuracy")
@@ -398,19 +419,9 @@ def test_cpu_scorers_run_concurrently(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
     ) -> BpmAccuracyScore:
-        all_started.wait()
+        both_started.wait()
         return BpmAccuracyScore(
             detected_bpm=120, requested_bpm=120, deviation_percent=0, octave_corrected=False,
-        )
-
-    @clean_registry.register("emotional_dynamics")
-    def dynamics(
-        mp3_path: Path, meta: object = None, audio_data: object = None,
-        config: object = None,
-    ) -> EmotionalDynamicsScore:
-        all_started.wait()
-        return EmotionalDynamicsScore(
-            pitch_cv=0.3, rms_contrast=2.0, onset_rate_cv=0.2, overall_expressiveness=0.5,
         )
 
     scores = run_scoring_pipeline(fake_mp3, registry=clean_registry)
@@ -418,7 +429,6 @@ def test_cpu_scorers_run_concurrently(
     assert _outcomes(scores) == {
         "silence": ScorerOutcome.OK,
         "bpm_accuracy": ScorerOutcome.OK,
-        "emotional_dynamics": ScorerOutcome.OK,
     }
 
 
@@ -426,12 +436,10 @@ def test_cpu_scorers_run_concurrently(
 def test_gpu_scorers_run_sequentially_with_cpu_overlap(
     mock_load: object, clean_registry: ScorerRegistry, fake_mp3: Path,
 ) -> None:
-    """A CPU scorer runs while a GPU scorer runs, but the GPU scorers run
-    strictly one after another."""
-    timeline = _Timeline()
+    """A CPU scorer runs while a GPU scorer runs, but no two GPU scorers are
+    ever on the GPU at once, in whichever order the pipeline runs them."""
+    gpu = _GpuOccupancy()
     cpu_started = threading.Event()
-    first_gpu_started = threading.Event()
-    second_gpu_started = threading.Event()
 
     @clean_registry.register("silence")
     def cpu_scorer(
@@ -439,38 +447,32 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
         config: object = None,
     ) -> SilenceScore:
         cpu_started.set()
-        _await_partner(first_gpu_started, "the GPU scorer")
+        _await_partner(gpu.first_entered, "the GPU scorer")
         return SilenceScore(total_silence_seconds=0, longest_gap_seconds=0, gap_count=0)
 
     @clean_registry.register("audiobox")
-    def first_gpu_scorer(
+    def audiobox_on_gpu(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
     ) -> AudioBoxScore:
-        timeline.record("audiobox start")
-        first_gpu_started.set()
-        _await_partner(cpu_started, "the CPU scorer")
-        second_gpu_started.wait(SECOND_GPU_SCORER_GRACE_SECONDS)
-        timeline.record("audiobox end")
+        gpu.occupy(cpu_started)
         return AudioBoxScore(
             content_enjoyment=7.0, content_understanding=8.0,
             production_complexity=6.0, production_quality=9.0,
         )
 
     @clean_registry.register("text_accuracy")
-    def second_gpu_scorer(
+    def text_accuracy_on_gpu(
         mp3_path: Path, meta: object = None, audio_data: object = None,
         config: object = None,
     ) -> TextAccuracyScore:
-        timeline.record("text_accuracy start")
-        second_gpu_started.set()
-        timeline.record("text_accuracy end")
+        gpu.occupy(cpu_started)
         return TextAccuracyScore(
             similarity_ratio=1.0, intended_line_texts=(), transcribed_line_texts=(),
         )
 
-    text_accuracy_on_gpu = replace(SCORERS["text_accuracy"], device=DEVICE_GPU)
-    with patch.dict(SCORERS, {"text_accuracy": text_accuracy_on_gpu}):
+    text_accuracy_spec_on_gpu = replace(SCORERS["text_accuracy"], device=DEVICE_GPU)
+    with patch.dict(SCORERS, {"text_accuracy": text_accuracy_spec_on_gpu}):
         scores = run_scoring_pipeline(
             fake_mp3,
             scorers=["audiobox", "text_accuracy", "silence"],
@@ -482,9 +484,7 @@ def test_gpu_scorers_run_sequentially_with_cpu_overlap(
         "text_accuracy": ScorerOutcome.OK,
         "silence": ScorerOutcome.OK,
     }
-    assert timeline.events() == [
-        "audiobox start", "audiobox end", "text_accuracy start", "text_accuracy end",
-    ]
+    assert gpu.most_inside_at_once == 1
 
 
 @patch("songmaker_cli.scoring.pipeline.load_audio", return_value=_FAKE_AUDIO)
