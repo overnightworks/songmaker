@@ -173,6 +173,9 @@ test.describe('song page at phone width', () => {
 			phase: LOADING_JOB_PHASE
 		});
 		await page.goto(songAddress);
+		// The song comes back on the Takes tab it was left on (#1047); the
+		// Generate status lives on Edit.
+		await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
 		const generateStatus = panel.getByRole('status');
 		await expect(generateStatus).toHaveText(
 			`${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL}`
