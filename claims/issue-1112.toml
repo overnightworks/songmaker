@@ -3,5 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "8db2e76dd0fc9015d790b4df3e45167966b0e3dd"
 branch = "claude/issue-1112-search-a11y"
-scope = ["frontend/e2e/nav-row.spec.ts", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/lib/components/shell/RailSearch.test.ts"]
+scope = ["frontend/e2e/nav-row.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/lib/components/shell/RailSearch.test.ts"]
 opened_commit = "03f42caea9c5d689ce201c4e2b3da56a62ef7418"
+whole_reason = "search combobox roles and the specs that select the field by role"
