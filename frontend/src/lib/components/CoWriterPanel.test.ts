@@ -6,6 +6,8 @@ import type { ChatMessageItem } from '$lib/api/types';
 import {
 	COWRITER_CLAUDE_UNVERIFIED_LABEL,
 	COWRITER_CONVERSATION_MENU_LABEL,
+	COWRITER_DELETE_CONVERSATION_TITLE,
+	COWRITER_DELETE_CONVERSATION_WARNING,
 	COWRITER_MEMORY_LABEL,
 	COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
@@ -51,7 +53,12 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { fetchMemory, saveUserMemory, startNewConversation } from '$lib/api/client';
+import {
+	deleteConversation,
+	fetchMemory,
+	saveUserMemory,
+	startNewConversation
+} from '$lib/api/client';
 import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -562,6 +569,116 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(target.querySelectorAll('.proposal-waiting')).toHaveLength(0);
 		expect(trigger?.getAttribute('aria-label')).toBe(COWRITER_CONVERSATION_MENU_LABEL);
 	});
+
+	it('shows the waiting proposal above the memory fields when Memory opens from its marked item', async () => {
+		const target = await renderWithOneWaitingProposal();
+		await vi.waitFor(() =>
+			expect(target.querySelector('.convo-menu-btn .proposal-waiting')).not.toBeNull()
+		);
+
+		await openMemoryFromMenu(target);
+		await vi.waitFor(() => expect(target.querySelector('.proposal')).not.toBeNull());
+
+		const proposal = target.querySelector('.proposal');
+		const firstField = target.querySelector('section[aria-label="Memory"] textarea');
+		expect(firstField).not.toBeNull();
+		expect(
+			proposal?.compareDocumentPosition(firstField as Node) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+	});
+});
+
+describe('CoWriterPanel deleting a conversation', () => {
+	async function openDeleteConfirm(target: HTMLElement): Promise<HTMLElement> {
+		const menu = await openConversationMenu(target);
+		menu.querySelector<HTMLButtonElement>('button[aria-label="Delete conversation"]')?.click();
+		await tick();
+		const dialog = target.ownerDocument.querySelector<HTMLElement>('[role="dialog"]');
+		if (!dialog) throw new Error('Expected the delete confirmation');
+		return dialog;
+	}
+
+	function dialogButton(dialog: HTMLElement, label: string): HTMLButtonElement | undefined {
+		return Array.from(dialog.querySelectorAll('button')).find(
+			(button) => button.textContent?.trim() === label
+		);
+	}
+
+	async function conversationRows(target: HTMLElement): Promise<number> {
+		const menu = await openConversationMenu(target);
+		return menu.querySelectorAll('.conv-row').length;
+	}
+
+	beforeEach(() => {
+		fetchConversations.mockResolvedValue([activeConversation('c1')]);
+		vi.mocked(deleteConversation).mockReset().mockResolvedValue(undefined);
+	});
+
+	it('asks “Delete conversation? This can’t be undone.” with Delete and Cancel before deleting', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+
+		const dialog = await openDeleteConfirm(target);
+
+		expect(dialog.querySelector('h3')?.textContent).toBe(COWRITER_DELETE_CONVERSATION_TITLE);
+		expect(dialog.querySelector('.warning')?.textContent).toBe(
+			COWRITER_DELETE_CONVERSATION_WARNING
+		);
+		expect(dialogButton(dialog, 'Delete')).toBeDefined();
+		expect(dialogButton(dialog, 'Cancel')).toBeDefined();
+		expect(deleteConversation).not.toHaveBeenCalled();
+	});
+
+	it('keeps the conversation when Cancel answers the confirmation', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+		const dialog = await openDeleteConfirm(target);
+
+		dialogButton(dialog, 'Cancel')?.click();
+		await tick();
+
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(deleteConversation).not.toHaveBeenCalled();
+		expect(await conversationRows(target)).toBe(1);
+	});
+
+	it('keeps the conversation when Escape answers the confirmation, without leaving the song', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+		const dialog = await openDeleteConfirm(target);
+		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+		dialog.dispatchEvent(escape);
+		await tick();
+
+		expect(escape.defaultPrevented).toBe(true);
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(deleteConversation).not.toHaveBeenCalled();
+		expect(await conversationRows(target)).toBe(1);
+	});
+
+	it('deletes the conversation only once Delete confirms it', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+		const dialog = await openDeleteConfirm(target);
+
+		dialogButton(dialog, 'Delete')?.click();
+		await vi.waitFor(() => expect(deleteConversation).toHaveBeenCalledWith('c1'));
+		await tick();
+
+		expect(document.querySelector('[role="dialog"]')).toBeNull();
+		expect(await conversationRows(target)).toBe(0);
+	});
+
+	it('gives the delete ✕ the frequent touch target, 44px on a phone', async () => {
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalled());
+		const menu = await openConversationMenu(target);
+
+		expect(
+			menu.querySelector('button[aria-label="Delete conversation"]')?.getAttribute('data-hitbox')
+		).toBe('frequent');
+	});
 });
 
 describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
@@ -761,6 +878,17 @@ describe('CoWriterPanel failed turns', () => {
 			'the provider’s reason after its name',
 			{ type: 'error', status: 503, reason: { message: 'CLI is unavailable.' } },
 			'Claude: CLI is unavailable.'
+		],
+		[
+			'the provider the server’s error frame names over the panel’s setting',
+			{
+				type: 'error',
+				status: 503,
+				provider: 'grok',
+				route: 'api',
+				reason: { message: 'Route is unavailable.' }
+			},
+			'Grok: Route is unavailable.'
 		],
 		[
 			'the endpoint’s own failure as it is',
