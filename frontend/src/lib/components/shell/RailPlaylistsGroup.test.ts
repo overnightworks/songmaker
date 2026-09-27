@@ -2,7 +2,9 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { NetworkError } from '$lib/api/fetch';
 import { PLAYING_MARK_LABEL } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
@@ -62,6 +64,7 @@ afterEach(async () => {
 	await cleanup();
 	resetPlaylists();
 	resetLibraryContextForTests();
+	resetConnectivityForTests();
 	railTreeQuery.set('');
 });
 
@@ -72,6 +75,31 @@ describe('RailPlaylistsGroup', () => {
 		expect(target.querySelector('.group-title')?.textContent?.trim()).toBe('Playlists');
 		expect(target.querySelector('.meta')?.textContent).toBe('1');
 		expect(toggle.getAttribute('aria-expanded')).toBe('false');
+	});
+
+	it('shows no playlist count while the playlists could not be loaded, and loads them once back online', async () => {
+		playlistList.set([]);
+		reportResourceStreamReachable(false);
+		fetchPlaylists.mockRejectedValueOnce(
+			new NetworkError('/api/playlists', new TypeError('Failed to fetch'))
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalledOnce());
+		await tick();
+
+		expect(target.querySelector('.meta')).toBeNull();
+
+		fetchPlaylists.mockResolvedValueOnce([playlist({ id: 'p1', title: 'Night Drive' })]);
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.querySelector('.meta')?.textContent).toBe('1'));
+	});
+
+	it('shows 0 for a library that really has no playlists', async () => {
+		playlistList.set([]);
+		const target = await render();
+
+		await vi.waitFor(() => expect(target.querySelector('.meta')?.textContent).toBe('0'));
 	});
 
 	it('toggles the PLAYLISTS group without navigating when its label is clicked', async () => {

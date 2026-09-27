@@ -4,7 +4,7 @@ import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
-import { offline } from '$lib/stores/connectivity';
+import { whenBackOnline } from '$lib/stores/connectivity';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
@@ -245,14 +245,7 @@ async function runRailSearch(query: string): Promise<void> {
 // offline strip says it (#1039), and the search runs again by itself once
 // the connection that dropped is back.
 function searchAgainOnReconnect(): void {
-	let droppedSinceFailure = false;
-	stopAwaitingReconnect = offline.subscribe((isOffline) => {
-		if (isOffline) {
-			droppedSinceFailure = true;
-			return;
-		}
-		if (droppedSinceFailure) retryRailSearch();
-	});
+	stopAwaitingReconnect = whenBackOnline(retryRailSearch);
 }
 
 type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord' | 'detailParts'> & {

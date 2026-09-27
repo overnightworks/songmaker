@@ -9,6 +9,7 @@
 		loadSongsForAlbum,
 		songList
 	} from '$lib/stores/libraryData';
+	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
@@ -58,6 +59,9 @@
 	const isAlbumDetail = $derived(surface === 'detail' && openAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadError = $derived($allAlbumsLoad.error);
+	const albumCount = $derived(
+		albums.length > 0 || loadStatus === 'ready' ? albums.length : undefined
+	);
 	const visibleAlbums = $derived.by(() =>
 		albums.filter((album) => {
 			if (!filtering || album.id === openAlbumId) return true;
@@ -78,6 +82,8 @@
 	function retryLibraryLoad(): void {
 		void ensureAllAlbumsLoaded();
 	}
+
+	$effect(() => whenBackOnline(retryLibraryLoad));
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
 	// letting every once-opened row accumulate would stop showing where the
@@ -202,7 +208,7 @@
 		label={RAIL_LIBRARY_LABEL}
 		groupId="rail-library-group"
 		storageKey={LIBRARY_OPEN_STORAGE_KEY}
-		count={albums.length}
+		count={albumCount}
 		expandTrigger={isAlbumDetail || loadStatus === 'error' || filtering}
 		{icon}
 	>
