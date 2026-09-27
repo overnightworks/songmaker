@@ -445,8 +445,8 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 };
 export const LIBRARY_WALL_HEADING = 'Albums & playlists';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums and playlists';
-// The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads that many places.
-export const LIBRARY_WALL_RECENT_LIMIT = 200;
+// The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
+export const LIBRARY_WALL_RECENT_PAGE_SIZE = 200;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';

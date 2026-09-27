@@ -53,13 +53,13 @@ router = APIRouter()
 
 @router.get("/library/continue")
 def api_library_continue(
+    offset: int = Query(0, ge=0),
     limit: int = Query(CONTINUE_MAX_PLACES, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> LibraryContinueResponse:
-    return LibraryContinueResponse.from_orm(
-        list_place_activity(session, user_id=user.id, limit=limit),
-    )
+    places = list_place_activity(session, user_id=user.id, limit=offset + limit)
+    return LibraryContinueResponse.from_orm(places[offset:])
 
 
 @router.get(

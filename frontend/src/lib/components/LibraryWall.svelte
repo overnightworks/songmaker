@@ -26,7 +26,7 @@
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
-		LIBRARY_WALL_RECENT_LIMIT,
+		LIBRARY_WALL_RECENT_PAGE_SIZE,
 		type LibraryWallOrder
 	} from '$lib/constants';
 	import LibraryContinue from './LibraryContinue.svelte';
@@ -146,8 +146,16 @@
 	}
 
 	async function readRecentWork(): Promise<LibraryContinueItem[] | null> {
+		const places: LibraryContinueItem[] = [];
 		try {
-			return (await fetchLibraryContinue({ limit: LIBRARY_WALL_RECENT_LIMIT })).items;
+			for (;;) {
+				const page = await fetchLibraryContinue({
+					offset: places.length,
+					limit: LIBRARY_WALL_RECENT_PAGE_SIZE
+				});
+				places.push(...page.items);
+				if (page.items.length < LIBRARY_WALL_RECENT_PAGE_SIZE) return places;
+			}
 		} catch {
 			return null;
 		}
