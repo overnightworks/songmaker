@@ -593,6 +593,63 @@ describe('frozen-clock watchdog', () => {
 		}
 	);
 
+	it.each(playbackModes)(
+		'tries again when a reload of $mode never answers, then offers Retry once the budget is spent',
+		async ({ loadMode }) => {
+			loadMode();
+			startPlayingAt(40);
+			advanceSeconds(5);
+			await vi.advanceTimersByTimeAsync(0);
+			const firstReloadUrl = fakeAudio.src;
+
+			advanceSeconds(5);
+			await vi.advanceTimersByTimeAsync(0);
+			expect({ status: audioPlayer.status, retried: fakeAudio.src !== firstReloadUrl }).toEqual({
+				status: 'loading',
+				retried: true
+			});
+
+			advanceSeconds(5);
+			await vi.advanceTimersByTimeAsync(0);
+			expect({
+				status: audioPlayer.status,
+				error: audioPlayer.error,
+				paused: fakeAudio.paused
+			}).toEqual({
+				status: 'error',
+				error: 'Playback stalled. Click play to retry.',
+				paused: true
+			});
+		}
+	);
+
+	it('keeps waiting on a reload whose data still arrives', () => {
+		startPlayingAt(40);
+		advanceSeconds(5);
+		const reloadUrl = fakeAudio.src;
+
+		for (let tick = 0; tick < 4; tick += 1) {
+			fakeAudio.bufferedUntil += 0.25;
+			advanceSeconds(5);
+		}
+
+		expect({ status: audioPlayer.status, src: fakeAudio.src }).toEqual({
+			status: 'loading',
+			src: reloadUrl
+		});
+	});
+
+	it('keeps the reached position when a second reload starts before the first seek landed', () => {
+		startPlayingAt(40);
+		advanceSeconds(5);
+		fakeAudio.restartClockAsLoadDoes();
+
+		advanceSeconds(5);
+		fakeAudio.fire('loadedmetadata');
+
+		expect(fakeAudio.currentTime).toBe(39.25);
+	});
+
 	it('asks for a new URL when the same take recovers again in a later load', () => {
 		startPlayingAt(40);
 		advanceSeconds(5);
@@ -1386,15 +1443,18 @@ describe('load() same gen with autoplay restarts play', () => {
 	});
 });
 
-describe('canplay during error state', () => {
-	it('does not transition out of error on stale canplay', async () => {
-		audioPlayer.load(makeInfo(), { autoplay: false });
-		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
-		fakeAudio.fire('error');
-		await new Promise((r) => setTimeout(r, 0));
-		fakeAudio.fire('canplay');
-		expect(audioPlayer.status).toBe('error');
-	});
+describe('stale events during a media error', () => {
+	it.each(['canplay', 'playing'])(
+		'does not transition out of the error on a stale %s',
+		async (event) => {
+			audioPlayer.load(makeInfo(), { autoplay: false });
+			fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+			fakeAudio.fire('error');
+			await new Promise((r) => setTimeout(r, 0));
+			fakeAudio.fire(event);
+			expect(audioPlayer.status).toBe('error');
+		}
+	);
 });
 
 describe('destroy()', () => {
