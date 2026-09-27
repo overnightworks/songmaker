@@ -576,11 +576,25 @@ export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = 'Library sync failed';
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
+// The edge's own answers for a server it cannot reach (down or restarting).
+// Only these, besides a request the network never carried, read as offline:
+// a 429 or a 500 comes from a server that is there (#1099).
+export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
+export const SERVER_ERROR_STATUS_FLOOR = 500;
+// A rate limit passes: a song refresh it refused is fetched again on the
+// song-refresh backoff, no sooner than its `Retry-After` (#1099).
+export const RATE_LIMITED_STATUS = 429;
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 // `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
 export const EVENT_SOURCE_CLOSED = 2;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
+// While the server cannot be reached, a cheap auth probe asks this often
+// whether it is back, so the offline strip goes within ~2s of its return
+// rather than after the stream's up-to-10s backoff (#1099). Only a request
+// the edge answers itself costs anything while the server is down, and the
+// first answer ends the probing.
+export const RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS = 1000;
 export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
@@ -608,7 +622,13 @@ export const RATE_LIMITED_TOAST_MESSAGE =
 // relative to the math below, never speed it up. A waiting stream also
 // reopens at once when the page becomes visible, regains focus or the
 // browser reports the network back (`watchReconnectOpportunities`); those
-// reopens follow the musician's own actions, one per waiting stream each.
+// reopens follow the musician's own actions, one per waiting stream each,
+// and at most one per `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS` per stream -- 20
+// app switches in 3s once opened 40 streams (#1099). Only the reopen is
+// spaced: inside the gap a waiting stream keeps its backoff, while the
+// library's revalidation (debounced on its own) and the restart of a first
+// sync that failed with a visible error (no backoff to wait on) still run.
+// The gap never adds opens to the math below.
 //
 // The ruling on #1032 (26.09.2026) caps the wait at 10s: a phone whose
 // network returned without an `online` event showed its new take 22-27s
@@ -637,6 +657,7 @@ export const SSE_RECONNECT_BASE_DELAY_MS = 2000;
 export const SSE_RECONNECT_BACKOFF_FACTOR = 2;
 export const SSE_RECONNECT_MAX_DELAY_MS = 8000;
 export const SSE_RECONNECT_JITTER_RATIO = 0.2;
+export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
 // A job stream gives up -- drops the job and says "Lost connection to
 // server" -- on this many consecutive connection errors. Twenty-four retries
 // at the delays above (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three
