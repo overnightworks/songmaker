@@ -460,11 +460,14 @@ def check_song_access(
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN:
-        album = song.album
-        if not album or album.created_by != user.id:
-            raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+    if user.role != ROLE_ADMIN and not is_song_owner(song, user):
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
+
+
+def is_song_owner(song: Song, user: AuthenticatedUser) -> bool:
+    """Whether the song lies in an album the user created (an admin's reach aside)."""
+    return song.album is not None and song.album.created_by == user.id
 
 
 def check_song_access_including_deleted(

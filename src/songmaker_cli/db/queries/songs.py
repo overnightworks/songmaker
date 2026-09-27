@@ -4,11 +4,10 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Sequence
-from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
-from sqlalchemy import case, func, update
+from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
 from songmaker_cli.db.models import (
@@ -29,84 +28,12 @@ from songmaker_cli.settings import get_settings
 log = logging.getLogger(__name__)
 
 INITIAL_TRACK_NUMBER: Final[int] = 1
-CONTINUE_MAX_ITEMS: Final[int] = 6
-
-
-@dataclass(frozen=True)
-class ContinueCandidate:
-    """An owned song or album together with its Continue-row activity time."""
-
-    item: Album | Song
-    activity_at: datetime
-
-
-def list_continue_candidates(
-    session: Session,
-    *,
-    user_id: str,
-    limit: int = CONTINUE_MAX_ITEMS,
-) -> list[ContinueCandidate]:
-    """Return the user's newest song and album candidates for Continue.
-
-    A song's activity is its newer edit or listen. Albums do not persist an
-    activity column, so theirs is the newest activity among their live songs,
-    falling back to ``created_at`` for an empty album. Fetching the leading
-    ``limit`` entries of each kind is sufficient before merging: an entry
-    behind that cutoff already has at least ``limit`` entries of its own kind
-    ahead of it.
-    """
-    song_activity = case(
-        (Song.last_played_at > Song.updated_at, Song.last_played_at),
-        else_=Song.updated_at,
-    )
-    songs = (
-        session.query(Song)
-        .options(joinedload(Song.album))
-        .join(Album)
-        .filter(
-            Album.created_by == user_id,
-            Album.is_archived.is_(False),
-        )
-        .order_by(song_activity.desc(), Song.id.asc())
-        .limit(limit)
-        .all()
-    )
-    song_candidates = [
-        ContinueCandidate(
-            item=song,
-            activity_at=max(song.updated_at, song.last_played_at or song.updated_at),
-        )
-        for song in songs
-    ]
-
-    album_activity = func.coalesce(func.max(song_activity), Album.created_at)
-    album_rows = (
-        session.query(Album, album_activity.label("activity_at"))
-        .outerjoin(Song)
-        .filter(
-            Album.created_by == user_id,
-            Album.is_archived.is_(False),
-        )
-        .group_by(Album.id)
-        .order_by(album_activity.desc(), Album.id.asc())
-        .limit(limit)
-        .all()
-    )
-    album_candidates = [
-        ContinueCandidate(item=album, activity_at=activity_at)
-        for album, activity_at in album_rows
-    ]
-
-    return sorted(
-        [*song_candidates, *album_candidates],
-        key=_continue_sort_key,
-    )[:limit]
 
 
 def record_song_listen(
     session: Session, song: Song, *, playlist: Playlist | None,
 ) -> None:
-    """Persist the server time at which an owner started listening to a song.
+    """Persist the server time at which the song's owner started listening to it.
 
     A listen started from a playlist also marks that playlist as played, with
     the song it was playing. Neither mark is an edit, so both keep their
@@ -119,21 +46,32 @@ def record_song_listen(
         .values(last_played_at=played_at, updated_at=Song.updated_at),
     )
     if playlist is not None:
-        session.execute(
-            update(Playlist)
-            .where(Playlist.id == playlist.id)
-            .values(
-                last_played_at=played_at,
-                last_played_song_id=song.id,
-                updated_at=Playlist.updated_at,
-            ),
-        )
+        _mark_playlist_played(session, playlist, song=song, played_at=played_at)
 
 
-def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
-    activity_at = aware_timestamp(candidate.activity_at)
-    item_type = "album" if isinstance(candidate.item, Album) else "song"
-    return (-activity_at.timestamp(), item_type, candidate.item.id)
+def record_playlist_listen(session: Session, playlist: Playlist, *, song: Song) -> None:
+    """Mark the playlist as played from ``song`` while leaving the song unmarked.
+
+    For a listener who owns the playlist but not the song: the song's listen
+    mark belongs to its owner's activity alone.
+    """
+    _mark_playlist_played(
+        session, playlist, song=song, played_at=datetime.now(timezone.utc),
+    )
+
+
+def _mark_playlist_played(
+    session: Session, playlist: Playlist, *, song: Song, played_at: datetime,
+) -> None:
+    session.execute(
+        update(Playlist)
+        .where(Playlist.id == playlist.id)
+        .values(
+            last_played_at=played_at,
+            last_played_song_id=song.id,
+            updated_at=Playlist.updated_at,
+        ),
+    )
 
 
 def list_songs(

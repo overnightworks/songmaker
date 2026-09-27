@@ -27,7 +27,7 @@ const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	mobile: 46
 };
 
-test('Continue shows up to six tagged entries, follows a listen made elsewhere on a return to the foreground, and moves a played song to the front after reload', async ({
+test('Continue shows up to six places, follows a listen made elsewhere on a return to the foreground, and moves the place of a played song to the front after reload', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -35,6 +35,9 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	if (testInfo.project.name === 'mobile') await page.setViewportSize({ width: 375, height: 844 });
 	const library = readSeededLibrary();
 	const listenedSong = library.continueReorderSongs[shell];
+	const otherShellSong = library.continueReorderSongs[shell === 'desktop' ? 'mobile' : 'desktop'];
+	const seededAlbumOn = (songTitle: string) =>
+		`Open song ${songTitle} in album ${library.albumTitle}`;
 	let continueRequests = 0;
 	let continueCoverRequests = 0;
 	page.on('request', (request) => {
@@ -43,7 +46,7 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 			continueRequests += 1;
 		if (
 			request.resourceType() === 'image' &&
-			/^\/api\/(?:albums|songs)\/[^/]+\/cover$/.test(url.pathname)
+			/^\/api\/(?:albums|playlists)\/[^/]+\/cover$/.test(url.pathname)
 		)
 			continueCoverRequests += 1;
 	});
@@ -68,25 +71,25 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	const before = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
-	const listenedSongLabel = `Open song ${listenedSong.title}`;
 	expect(before.length).toBeGreaterThan(0);
 	expect(before.length).toBeLessThanOrEqual(6);
-	expect(before.slice(0, 2)).not.toContain(listenedSongLabel);
-	expect(await continueRow.locator('.continue-tag').allTextContents()).toEqual(
-		expect.arrayContaining(['Album'])
-	);
+	expect(new Set(before).size).toBe(before.length);
+	for (const label of before) expect(label).toMatch(/^Open (song .+ in )?(album|playlist) /);
 
 	// Home stays open while the same musician listens somewhere else; the app
 	// coming back to the foreground must show that, not the list it opened with.
-	// The listen elsewhere is to the album pick, so the in-app play below still
-	// has its own song to move.
+	// The song is picked at run time so the seeded album's tile is sure to
+	// change: it may already lead, naming a song an earlier flow played.
+	const songListenedElsewhereTitle = [library.pickedSongTitle, otherShellSong.title].find(
+		(title) => before[0] !== seededAlbumOn(title)
+	);
 	const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
 	expect(songsResponse.status()).toBe(200);
 	const albumSongs: Array<{ id: string; title: string }> = (await songsResponse.json()).items;
-	const songListenedElsewhere = albumSongs.find((song) => song.title === library.pickedSongTitle);
-	if (!songListenedElsewhere) throw new Error(`Missing seeded song ${library.pickedSongTitle}`);
-	const songListenedElsewhereLabel = `Open song ${songListenedElsewhere.title}`;
-	expect(before.slice(0, 2)).not.toContain(songListenedElsewhereLabel);
+	const songListenedElsewhere = albumSongs.find(
+		(song) => song.title === songListenedElsewhereTitle
+	);
+	if (!songListenedElsewhere) throw new Error(`Missing seeded song ${songListenedElsewhereTitle}`);
 	const listenElsewhere = await page.request.post(`/api/songs/${songListenedElsewhere.id}/listen`, {
 		headers: await csrfHeaders(page)
 	});
@@ -103,16 +106,16 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 		document.dispatchEvent(new Event('visibilitychange'));
 	});
 	expect((await continueAfterForeground).status()).toBe(200);
-	await expect(
-		continueRow.getByRole('button', { name: songListenedElsewhereLabel, exact: true })
-	).toBeVisible();
+	await expect(entries.first()).toHaveAttribute(
+		'aria-label',
+		seededAlbumOn(songListenedElsewhere.title)
+	);
+	await expect(entries.first().locator('time')).toHaveText(/^today \d{2}:\d{2}$/);
 	expect(continueRequests).toBe(2);
 	const afterForeground = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
-	expect(afterForeground).not.toEqual(before);
-	expect(afterForeground.slice(0, 2)).toContain(songListenedElsewhereLabel);
-	expect(afterForeground.slice(0, 2)).not.toContain(listenedSongLabel);
+	expect(afterForeground.filter((label) => label?.endsWith(library.albumTitle))).toHaveLength(1);
 	await page.evaluate(() => Reflect.deleteProperty(document, 'visibilityState'));
 
 	const surface = workspace(page);
@@ -142,13 +145,12 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	expect((await listenReport).status()).toBe(200);
 
 	await openLibraryWall(page, shell);
-	await expect(entries.first()).toBeVisible();
+	await expect(entries.first()).toHaveAttribute('aria-label', seededAlbumOn(listenedSong.title));
 	expect(continueRequests).toBe(3);
 	const afterSpaReturn = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
 	expect(afterSpaReturn).not.toEqual(afterForeground);
-	expect(afterSpaReturn.slice(0, 2)).toContain(listenedSongLabel);
 	const continueRequestsBeforeReload = continueRequests;
 	const continueCoverRequestsBeforeReload = continueCoverRequests;
 	const continueAfterReload = page.waitForResponse(
@@ -162,17 +164,14 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	// no covers, so the refreshed row must not add image requests.
 	expect(continueRequests).toBe(continueRequestsBeforeReload + 1);
 	expect(continueCoverRequests).toBe(continueCoverRequestsBeforeReload);
-	const playedSong = continueRow.getByRole('button', {
-		name: listenedSongLabel,
-		exact: true
-	});
-	await expect(playedSong).toBeVisible();
+	const playedPlace = entries.first();
+	await expect(playedPlace).toHaveAttribute('aria-label', seededAlbumOn(listenedSong.title));
 	const afterReload = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
 	expect(afterReload).toEqual(afterSpaReturn);
 
-	await playedSong.click();
+	await playedPlace.click();
 	await expect(page.getByRole('heading', { name: listenedSong.title })).toBeVisible();
 
 	console.log(`Continue flow /api requests (${shell}): ${guard.apiRequestCount}`);

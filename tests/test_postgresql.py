@@ -32,8 +32,12 @@ from songmaker_cli.db.models import (
     Album,
     AuditLog,
     Base,
+    ChatMessage,
+    Conversation,
     Generation,
     Job,
+    Playlist,
+    PlaylistEntry,
     ResourceEventCursor,
     Song,
     User,
@@ -48,6 +52,7 @@ from songmaker_cli.db.queries import (
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,
     job_duration_stats,
+    list_place_activity,
     list_resource_events_after,
     prune_overflow_sessions,
     recover_stale_jobs_by_age_and_type,
@@ -124,6 +129,89 @@ def test_duration_stats_postgresql_values(pg_factory) -> None:
     assert stats.min == pytest.approx(10.0, abs=1.0)
     assert stats.max == pytest.approx(30.0, abs=1.0)
     assert stats.avg == pytest.approx(20.0, abs=1.0)
+
+
+@SKIP_NO_PG
+def test_place_activity_ranks_nullable_terms_the_same_on_postgresql(pg_factory) -> None:
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+
+    def at(offset: int) -> datetime:
+        return start + timedelta(minutes=offset)
+
+    with pg_factory() as session:
+        session.add(User(id="u1", username="musician", password_hash="x", role="user"))
+        session.flush()
+        conversation = Conversation(user_id="u1")
+        session.add(conversation)
+        for album_id, created_offset in [
+            ("take", 0), ("cowriter", 0), ("listened", 0), ("empty", 10),
+        ]:
+            session.add(Album(
+                id=album_id, title=album_id, artist="A", created_by="u1",
+                created_at=at(created_offset),
+            ))
+        for song_id, album_id, last_played_offset in [
+            ("take-song", "take", None),
+            ("cowriter-song", "cowriter", None),
+            ("listened-song", "listened", 30),
+        ]:
+            session.add(Song(
+                id=song_id, title=song_id, album_id=album_id, slug=song_id,
+                created_at=at(0), updated_at=at(0),
+                last_played_at=None if last_played_offset is None else at(last_played_offset),
+            ))
+        session.add_all([
+            Generation(
+                id="take-1", song_id="take-song", generation_number=1,
+                mp3_path="take-1.mp3", created_at=at(40),
+            ),
+            Generation(
+                id="listened-1", song_id="listened-song", generation_number=1,
+                mp3_path="listened-1.mp3", created_at=at(0),
+            ),
+        ])
+        session.flush()
+        session.add(ChatMessage(
+            conversation_id=conversation.id, song_id="cowriter-song", role="user",
+            content="Tighten the chorus", created_at=at(50),
+        ))
+        session.add_all([
+            Playlist(
+                id="played", title="Played", slug="played", created_by="u1",
+                created_at=at(0), updated_at=at(0),
+                last_played_at=at(60), last_played_song_id="listened-song",
+            ),
+            Playlist(
+                id="edited", title="Edited", slug="edited", created_by="u1",
+                created_at=at(0), updated_at=at(20),
+            ),
+        ])
+        session.flush()
+        session.add_all([
+            PlaylistEntry(
+                playlist_id="played", generation_id="listened-1", position=0, added_at=at(0),
+            ),
+            PlaylistEntry(
+                playlist_id="edited", generation_id="take-1", position=0, added_at=at(0),
+            ),
+        ])
+        session.commit()
+
+    with pg_factory() as session:
+        places = list_place_activity(session, user_id="u1", limit=None)
+        ranking = [
+            (place.place.id, place.activity_at, place.song.id if place.song else None)
+            for place in places
+        ]
+
+    assert ranking == [
+        ("played", at(60), "listened-song"),
+        ("cowriter", at(50), "cowriter-song"),
+        ("take", at(40), "take-song"),
+        ("listened", at(30), "listened-song"),
+        ("edited", at(20), "take-song"),
+        ("empty", at(10), None),
+    ]
 
 
 @SKIP_NO_PG
