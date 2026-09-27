@@ -5,6 +5,7 @@ import type { CoWriterStreamEvent } from '$lib/api/client';
 import type { ChatMessageItem } from '$lib/api/types';
 import {
 	COWRITER_CLAUDE_UNVERIFIED_LABEL,
+	COWRITER_CONVERSATION_MENU_LABEL,
 	COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 	COWRITER_RUNNING_TURN_POLL_MS
 } from '$lib/constants';
@@ -171,18 +172,29 @@ async function sendTurn(target: HTMLElement, message: string): Promise<void> {
 	target.querySelector<HTMLButtonElement>('.send-btn')?.click();
 }
 
+/** The one line above the chat, as the musician reads it. */
+function conversationLine(target: HTMLElement): string {
+	return (target.querySelector('.convo-line')?.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+async function openConversationMenu(target: HTMLElement): Promise<HTMLElement> {
+	target
+		.querySelector<HTMLButtonElement>(`button[aria-label="${COWRITER_CONVERSATION_MENU_LABEL}"]`)
+		?.click();
+	await tick();
+	const menu = target.querySelector<HTMLElement>('[role="menu"]');
+	if (!menu) throw new Error('Expected the conversation menu');
+	return menu;
+}
+
+function conversationStartedAt(createdAt: string) {
+	return { ...activeConversation('c1'), created_at: createdAt };
+}
+
 describe('CoWriterPanel', () => {
 	it('renders without a Close button (its lifecycle is owned by the Editor header toggle)', async () => {
 		const target = await render();
 		expect(target.querySelector('.close-btn')).toBeNull();
-		expect(target.querySelector('.new-btn')).not.toBeNull();
-	});
-
-	it('starts a new conversation from the header action', async () => {
-		const target = await render();
-		target.querySelector<HTMLButtonElement>('.new-btn')?.click();
-		await tick();
-		expect(startNewConversation).toHaveBeenCalledTimes(1);
 	});
 
 	it('has no left border now that it fills the Write column instead of a side panel', async () => {
@@ -192,11 +204,238 @@ describe('CoWriterPanel', () => {
 		expect(getComputedStyle(root as Element).borderLeftWidth).not.toBe('1px');
 	});
 
-	it('renders no back control of its own — the phone push screen uses the shell app bar', async () => {
+	it('renders no back control of its own — on the phone the song app bar stays above the Co-writer tab', async () => {
 		const target = await render();
 		expect(target.querySelector('.cowriter-back')).toBeNull();
-		expect(target.querySelector('.cowriter-header.app-bar')).toBeNull();
+		expect(target.querySelector('.app-bar')).toBeNull();
 	});
+
+	it('keeps focus in the composer when Send is pressed, so the bars coming back cannot move Send from under a phone tap', async () => {
+		const target = await render();
+		const pressSend = new MouseEvent('mousedown', { bubbles: true, cancelable: true });
+
+		target.querySelector<HTMLButtonElement>('.send-btn')?.dispatchEvent(pressSend);
+
+		expect(pressSend.defaultPrevented).toBe(true);
+	});
+});
+
+describe('CoWriterPanel conversation line (#1063)', () => {
+	beforeEach(() => {
+		vi.useFakeTimers({ toFake: ['Date'] });
+		vi.setSystemTime(new Date('2026-09-27T12:00:00'));
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+	});
+
+	it.each([
+		['no conversation yet', [], 'Claude · new conversation'],
+		[
+			'one started today',
+			[conversationStartedAt('2026-09-27T08:00:00')],
+			'Claude · conversation since today'
+		],
+		[
+			'one started this week',
+			[conversationStartedAt('2026-09-22T10:00:00')],
+			'Claude · conversation since Tue'
+		],
+		[
+			'one started earlier this year',
+			[conversationStartedAt('2026-09-12T10:00:00')],
+			'Claude · conversation since Sep 12'
+		],
+		[
+			'one started last year',
+			[conversationStartedAt('2025-09-12T10:00:00')],
+			'Claude · conversation since Sep 12, 2025'
+		]
+	])('names the provider and %s in one line', async (_case, conversations, line) => {
+		fetchConversations.mockResolvedValue(conversations);
+		const target = await render();
+
+		await vi.waitFor(() => expect(conversationLine(target)).toBe(line));
+	});
+
+	it('names the provider the co-writer is set to', async () => {
+		fetchCowriterSettings.mockResolvedValue({ provider: 'grok', model: 'grok-4' });
+		const target = await render();
+
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Grok · new conversation'));
+	});
+
+	it('is the only header: no Co-Writer title, and neither the model nor a conversation button on the line', async () => {
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
+		const target = await render();
+		const line = target.querySelector<HTMLElement>('.convo');
+
+		expect(target.textContent).not.toContain('Co-Writer');
+		expect(line?.textContent).not.toContain('sonnet');
+		expect(
+			Array.from(line?.querySelectorAll('button') ?? [], (button) =>
+				button.getAttribute('aria-label')
+			)
+		).toEqual([COWRITER_CONVERSATION_MENU_LABEL]);
+	});
+
+	it('keeps the model, a new conversation and switching conversations in its ⋯ menu', async () => {
+		const older = {
+			...activeConversation('c0'),
+			created_at: '2026-09-20T10:00:00',
+			archived_at: '2026-09-22T10:00:00'
+		};
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
+		const target = await render();
+
+		const menu = await openConversationMenu(target);
+		expect(menu.textContent).toContain('Claude · sonnet');
+		const conversationRows = menu.querySelectorAll<HTMLButtonElement>('.conv-pick');
+		expect(conversationRows).toHaveLength(2);
+
+		conversationRows[1].click();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenLastCalledWith('c0'));
+		await tick();
+		expect(target.querySelector('[role="menu"]')).toBeNull();
+		expect(conversationLine(target)).toBe('Claude · archived conversation from Sep 20');
+
+		const reopened = await openConversationMenu(target);
+		reopened.querySelector<HTMLButtonElement>('.convo-new')?.click();
+		await tick();
+		expect(startNewConversation).toHaveBeenCalledTimes(1);
+		expect(target.querySelector('[role="menu"]')).toBeNull();
+	});
+
+	it('closes its ⋯ menu on Escape without leaving the song', async () => {
+		const target = await render();
+		await openConversationMenu(target);
+		const escape = new KeyboardEvent('keydown', {
+			key: 'Escape',
+			bubbles: true,
+			cancelable: true
+		});
+
+		document.dispatchEvent(escape);
+		await tick();
+
+		expect(target.querySelector('[role="menu"]')).toBeNull();
+		expect(escape.defaultPrevented).toBe(true);
+	});
+});
+
+describe('CoWriterPanel chat scroll across tab switches (#1063)', () => {
+	const CHAT_HEIGHT = 300;
+	const SCROLLED_UP_TO = 100;
+	const earlier = chatMessage('m1', 'user', 'the chorus feels long');
+	const earlierReply = chatMessage('m2', 'assistant', 'Drop the third line.');
+	const sent = chatMessage('m3', 'user', 'now a bridge');
+	const reply = chatMessage('m4', 'assistant', 'Four lines, no chorus rhyme.');
+
+	let resize: () => void = () => {};
+
+	beforeEach(() => {
+		const callbacks: ResizeObserverCallback[] = [];
+		vi.stubGlobal(
+			'ResizeObserver',
+			class {
+				constructor(callback: ResizeObserverCallback) {
+					callbacks.push(callback);
+				}
+				observe(): void {}
+				unobserve(): void {}
+				disconnect(): void {}
+			}
+		);
+		resize = () => {
+			for (const callback of callbacks) callback([], {} as ResizeObserver);
+		};
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	/**
+	 * jsdom lays nothing out, so the chat's box is played the way a browser
+	 * shows it: nothing measured while the pane is hidden, a scroll offset
+	 * clamped to what the content allows, and lost once the box is gone.
+	 */
+	function chatBox(list: HTMLElement) {
+		const box = { clientHeight: 0, scrollHeight: 0, scrollTop: 0 };
+		Object.defineProperty(list, 'clientHeight', { get: () => box.clientHeight });
+		Object.defineProperty(list, 'scrollHeight', { get: () => box.scrollHeight });
+		Object.defineProperty(list, 'scrollTop', {
+			get: () => box.scrollTop,
+			set: (top: number) => {
+				box.scrollTop = Math.max(0, Math.min(top, box.scrollHeight - box.clientHeight));
+			}
+		});
+		return {
+			box,
+			show(contentHeight: number) {
+				box.clientHeight = CHAT_HEIGHT;
+				box.scrollHeight = contentHeight;
+				resize();
+			},
+			hide() {
+				box.clientHeight = 0;
+				box.scrollHeight = 0;
+				box.scrollTop = 0;
+				resize();
+			},
+			scrollTo(top: number) {
+				list.scrollTop = top;
+				list.dispatchEvent(new Event('scroll'));
+			}
+		};
+	}
+
+	it.each([
+		['following the newest message sees the reply', null, 1200 - CHAT_HEIGHT],
+		['who scrolled up to read stays where they were', SCROLLED_UP_TO, SCROLLED_UP_TO]
+	])(
+		'a musician %s when it arrived while Edit or Takes was shown',
+		async (_case, scrolledUpTo, scrollTopOnReturn) => {
+			fetchConversations.mockResolvedValue([activeConversation('c1')]);
+			conversationPages(
+				conversation(false, earlier, earlierReply),
+				conversation(false, earlier, earlierReply, sent, reply)
+			);
+			let deliverReply = (): void => {};
+			const replyDelivered = new Promise<void>((resolve) => {
+				deliverReply = resolve;
+			});
+			streamCoWriterTurn.mockReturnValue(
+				(async function* () {
+					await replyDelivered;
+					yield {
+						type: 'final',
+						conversation_id: 'c1',
+						user_message: sent,
+						assistant_message: reply
+					} as CoWriterStreamEvent;
+				})()
+			);
+			const target = await render();
+			await vi.waitFor(() => expect(chatView(target)).toHaveLength(2));
+			const list = target.querySelector<HTMLElement>('.messages');
+			if (!list) throw new Error('Expected the message list');
+			const chat = chatBox(list);
+			chat.show(600);
+
+			await sendTurn(target, sent.content);
+			await tick();
+			if (scrolledUpTo !== null) chat.scrollTo(scrolledUpTo);
+			chat.hide();
+			deliverReply();
+			await vi.waitFor(() => expect(chatView(target)).toHaveLength(4));
+
+			chat.show(1200);
+
+			expect(chat.box.scrollTop).toBe(scrollTopOnReturn);
+		}
+	);
 });
 
 describe('CoWriterPanel unavailable before any turn', () => {

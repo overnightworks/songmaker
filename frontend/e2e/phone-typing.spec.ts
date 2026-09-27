@@ -2,7 +2,8 @@
 // the on-screen keyboard is open, the keyboard owns the bottom of the screen,
 // so the mini-player and the Generate bar step aside and come back once the
 // field is left or the keyboard closes; on the Co-writer tab only the
-// player steps aside, the composer keeps its Send. Mobile project only — the
+// player steps aside, the composer keeps its Send, and a tap on Send sends
+// without handing the bottom back first (#1063). Mobile project only — the
 // rule follows the compact layout, and desktop keeps every bar (the unit
 // suite pins that side in routes/layout.test.ts).
 //
@@ -14,9 +15,10 @@
 // database (`seedSongPhoneSong`, `seedRunningGenerationJob`), into the album
 // song-phone.spec.ts already owns for phone-only songs.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
 	APP_NAME,
+	COWRITER_TURN_PATH,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
@@ -39,6 +41,8 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 	'\n'
 );
 const LYRICS_TYPED_ON = ' and on';
+const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
+const COWRITER_TURN_REFUSAL = 'CLI is unavailable.';
 const RUNNING_JOB = {
 	progress: 0.36,
 	takeIndex: 1,
@@ -235,6 +239,46 @@ test.describe('typing on the phone', () => {
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
 		await expect(miniPlayer).toBeVisible();
+
+		guard.assertClean();
+	});
+
+	// Before #1063 the tap's own focus change brought the mini-player back and
+	// moved Send up before the tap landed, so only Enter sent. CI's stack
+	// configures no co-writer provider: the turn is answered here, and a
+	// refusal keeps the chat from reading a conversation the server never
+	// stored.
+	test('a tap on Send with the keyboard open sends the message and keeps the keyboard for the next one', async ({
+		page
+	}) => {
+		const guard = new FlowGuard(page);
+		const sentMessages: string[] = [];
+		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
+			const { message } = route.request().postDataJSON() as { message: string };
+			sentMessages.push(message);
+			const refusal = { type: 'error', status: 503, message: COWRITER_TURN_REFUSAL };
+			return route.fulfill({
+				contentType: 'text/event-stream',
+				body: `data: ${JSON.stringify(refusal)}\n\n`
+			});
+		});
+		await openSeededSongFromItsAlbum(page);
+		const miniPlayer = page.getByRole('contentinfo');
+
+		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+		const composer = page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
+		await composer.click();
+		await showOnScreenKeyboard(page, true);
+		await composer.fill(COWRITER_MESSAGE);
+		await expect(miniPlayer).toBeHidden();
+
+		await page.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).tap();
+
+		await expect.poll(() => sentMessages).toEqual([COWRITER_MESSAGE]);
+		await expect(page.getByText(COWRITER_TURN_REFUSAL)).toBeVisible();
+		await expect(composer).toHaveValue('');
+		await expect(composer).toBeFocused();
+		await expect(miniPlayer).toBeHidden();
 
 		guard.assertClean();
 	});
