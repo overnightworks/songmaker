@@ -54,13 +54,11 @@
 	}
 
 	function itemLabel(item: LibraryContinueItem): string {
-		return item.song_title
+		return item.song_id
 			? `Open song ${item.song_title} in ${item.type} ${item.title}`
 			: `Open ${item.type} ${item.title}`;
 	}
 
-	// A tap continues where the musician was: the song, on the tab it was left
-	// on; a place with no song opens its own page.
 	function openItem(item: LibraryContinueItem): void {
 		if (item.song_id) void selectSong(item.song_id);
 		else if (item.type === 'album') void openAlbum(item.id);

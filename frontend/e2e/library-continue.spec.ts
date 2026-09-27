@@ -27,7 +27,7 @@ const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	mobile: 46
 };
 
-test('Continue shows up to six places, follows a listen made elsewhere on a return to the foreground, and moves a played song to the front after reload', async ({
+test('Continue shows up to six places, follows a listen made elsewhere on a return to the foreground, and moves the place of a played song to the front after reload', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
