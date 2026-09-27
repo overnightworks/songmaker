@@ -19,6 +19,7 @@
 	import { openCollection } from '$lib/stores/collection';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
+	import { offline } from '$lib/stores/connectivity';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 	import LibraryWall from './LibraryWall.svelte';
 	import CreateForm from './CreateForm.svelte';
@@ -39,9 +40,11 @@
 	// stays true while a later error is only a banner over a workspace that
 	// already works — so a mount that finds the stream already live (returning
 	// to the library after leaving it) shows the library at once, and no mount
-	// depends on being ordered after the layout that starts the stream.
+	// depends on being ordered after the layout that starts the stream. A
+	// stream that could not come up offline is not a failure of its own: the
+	// offline strip says it, and the stream restarts once the network is back.
 	const workspaceReady = $derived(sync.ready && modelsReady);
-	const bootstrapFailed = $derived(!sync.ready && sync.status === 'error');
+	const bootstrapFailed = $derived(!sync.ready && sync.status === 'error' && !$offline);
 
 	onMount(() => {
 		if (!activeModelsLoaded) void loadModels();
