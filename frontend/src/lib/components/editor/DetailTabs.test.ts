@@ -92,7 +92,11 @@ describe('DetailTabs', () => {
 	});
 
 	it.each([
-		['queued', { kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null, reconnecting: false }, true],
+		[
+			'queued',
+			{ kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null, reconnecting: false },
+			true
+		],
 		[
 			'generating',
 			{

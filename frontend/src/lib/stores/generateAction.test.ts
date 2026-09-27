@@ -428,24 +428,27 @@ describe('generate action presentation', () => {
 			},
 			{
 				case: 'it finished and the refresh has not brought its take in yet',
+				awaitingTakes: true,
 				takes: [takeBeforeJob],
 				jobs: [runningJob({ status: 'completed', progress: 1 })],
 				kind: 'generating'
 			},
 			{
 				case: 'it finished and the refresh brought its take in',
+				awaitingTakes: true,
 				takes: [takeOfJob('new'), takeBeforeJob],
 				jobs: [runningJob({ status: 'completed', progress: 1 })],
 				kind: 'idle'
 			},
 			{
 				case: 'it finished partially and its first take is in',
+				awaitingTakes: true,
 				takes: [takeOfJob('a'), takeBeforeJob],
 				jobs: [runningJob({ status: 'partial', take_count: 2 })],
 				kind: 'idle'
 			},
 			{
-				case: 'it failed without a take',
+				case: 'it failed and is on its way out of the job list',
 				takes: [takeBeforeJob],
 				jobs: [runningJob({ status: 'failed' })],
 				kind: 'idle'
@@ -456,9 +459,9 @@ describe('generate action presentation', () => {
 				jobs: [runningJob(), { ...queuedJob, id: 'job2', started_at: '2026-09-26T10:02:00+00:00' }],
 				kind: 'queued'
 			}
-		])('presents $kind when $case', ({ takes, jobs, kind }) => {
+		])('presents $kind when $case', ({ takes, jobs, kind, awaitingTakes = false }) => {
 			songList.set([makeSong({ lyrics: 'verse', prompt: 'folk', generations: takes })]);
-			activeJobs.set(jobs.map((job) => ({ songId: 's1', job })));
+			activeJobs.set(jobs.map((job) => ({ songId: 's1', job, awaitingTakes })));
 			expect(get(generateAction).kind).toBe(kind);
 		});
 	});

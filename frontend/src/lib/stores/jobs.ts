@@ -1,6 +1,10 @@
 import { writable, get } from 'svelte/store';
 import { fetchActiveGeneration, fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
-import { JOB_STREAM_MAX_CONNECTION_ERRORS, JOB_TYPE_GENERATE } from '$lib/constants';
+import {
+	GENERATE_TAKE_ARRIVAL_WAIT_MS,
+	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	JOB_TYPE_GENERATE
+} from '$lib/constants';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
 import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
 import { addToast } from '$lib/stores/toast';
@@ -14,6 +18,8 @@ export interface ActiveJob {
 	genId?: string;
 	workerId?: string;
 	mode?: string;
+	/** A generate job that ended with takes, held until they are in its song's list. */
+	awaitingTakes?: boolean;
 }
 
 export const activeJobs = writable<ActiveJob[]>([]);
@@ -90,12 +96,17 @@ interface PendingReconnect {
 
 const eventSources = new Map<string, EventSource>();
 const pendingReconnects = new Map<string, PendingReconnect>();
+const takeArrivalWaits = new Map<string, ReturnType<typeof setTimeout>>();
 let stopWatchingReconnectOpportunities: (() => void) | null = null;
 
 function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	return (
 		status === 'completed' || status === 'partial' || status === 'failed' || status === 'cancelled'
 	);
+}
+
+function endedWithTakes(job: JobStatus): boolean {
+	return job.status === 'completed' || job.status === 'partial';
 }
 
 // A generate job refreshes its song too, not only the `generation.created`
@@ -129,11 +140,29 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	addToast(message, 'error');
 }
 
+/**
+ * A generate job that made takes stays tracked, with its end status, while
+ * the song refresh its end asked for brings those takes in: the job's card is
+ * what the musician sees until the take replaces it, so letting the job go at
+ * once would leave a moment with neither (#1039 O3). The generate owner hides
+ * the card as soon as the take is in the list; the wait only bounds how long a
+ * take that never arrives can keep it.
+ */
 function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource): void {
 	source.close();
 	eventSources.delete(jobId);
 	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
 	notifyTerminalJob(job, songId);
+	if (songId && job.type === JOB_TYPE_GENERATE && endedWithTakes(job)) {
+		activeJobs.update((jobs) =>
+			jobs.map((active) => (active.job.id === jobId ? { ...active, awaitingTakes: true } : active))
+		);
+		takeArrivalWaits.set(
+			jobId,
+			setTimeout(() => removeJob(jobId), GENERATE_TAKE_ARRIVAL_WAIT_MS)
+		);
+		return;
+	}
 	activeJobs.update((jobs) => jobs.filter((active) => active.job.id !== jobId));
 }
 
@@ -165,6 +194,8 @@ export function removeJob(jobId: string): void {
 
 function stopTracking(jobId: string): void {
 	cancelPendingReconnect(jobId);
+	clearTimeout(takeArrivalWaits.get(jobId));
+	takeArrivalWaits.delete(jobId);
 	const source = eventSources.get(jobId);
 	if (source) {
 		source.close();

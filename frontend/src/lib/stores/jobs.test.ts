@@ -31,6 +31,7 @@ import {
 import { toasts } from './toast';
 import type { JobStatus } from '$lib/api/client';
 import {
+	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
@@ -334,7 +335,9 @@ describe('jobs store', () => {
 		expect(MockEventSource.instances).toHaveLength(3);
 		latestSource().simulateMessage(makeJob({ status: 'completed' }));
 
-		expect(get(activeJobs)).toEqual([]);
+		expect(get(activeJobs)).toEqual([
+			{ job: makeJob({ status: 'completed' }), songId: 'song-1', awaitingTakes: true }
+		]);
 		expect(mockRequestSongRefresh).toHaveBeenCalledWith('song-1');
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(MockEventSource.instances).toHaveLength(3);
@@ -387,6 +390,43 @@ describe('jobs store', () => {
 			expect(mockRequestSongRefresh).toHaveBeenCalledWith('s1');
 		}
 	);
+
+	it.each(['completed', 'partial'] as const)(
+		'keeps a generate job that ended %s tracked for its song until its take has had time to arrive',
+		async (status) => {
+			trackJob(makeJob({ status: 'running' }), { songId: 's1' });
+			const ended = makeJob({ status });
+			latestSource().simulateMessage(ended);
+
+			await vi.advanceTimersByTimeAsync(GENERATE_TAKE_ARRIVAL_WAIT_MS - 1);
+			expect(latestSource().closed).toBe(true);
+			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
+
+			await vi.advanceTimersByTimeAsync(1);
+			expect(get(activeJobs)).toEqual([]);
+		}
+	);
+
+	it.each([
+		['generate', 'failed'],
+		['generate', 'cancelled'],
+		['score', 'completed']
+	] as const)('lets a %s job that ended %s go at once', async (type, status) => {
+		trackJob(makeJob({ type, status: 'running' }), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ type, status }));
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(activeJobs)).toEqual([]);
+	});
+
+	it('removeJob lets a finished generate job go before its wait is over', async () => {
+		trackJob(makeJob({ status: 'running' }), { songId: 's1' });
+		latestSource().simulateMessage(makeJob({ status: 'completed' }));
+		removeJob('j1');
+		trackJob(makeJob({ status: 'running' }), { songId: 's1' });
+
+		await vi.advanceTimersByTimeAsync(GENERATE_TAKE_ARRIVAL_WAIT_MS);
+		expect(get(activeJobs)).toEqual([{ job: makeJob({ status: 'running' }), songId: 's1' }]);
+	});
 
 	it('skips refresh when no songId', async () => {
 		trackJob(makeJob({ type: 'score' }), {});
