@@ -58,7 +58,8 @@ import {
 import {
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
-	type NowPlayingSurfaceKind
+	type NowPlayingSurfaceKind,
+	type PlaybackSource
 } from '$lib/constants/now-playing';
 
 // --- Browsing state ---
@@ -177,6 +178,25 @@ export const shuffleLabel = derived([shuffleEnabled, queueContext], ([$enabled, 
 	$enabled
 		? `${NOW_PLAYING_SHUFFLE_DISABLE_PREFIX} (${shuffleScopeLabel($ctx)})`
 		: `${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${shuffleScopeLabel($ctx)}`
+);
+
+// Where the playing music comes from, named by the queue itself — never by
+// the collection the listener happens to have open, which they are free to
+// leave mid-track. The mini player and Now Playing both read it here. A
+// library queue has no source, and neither has an album queue whose album is
+// not in the list to name it.
+export const playbackSource = derived(
+	[queueContext, albumList],
+	([$ctx, $albums]): PlaybackSource | null => {
+		if ($ctx.type === 'album') {
+			const title = albumTitle($albums, $ctx.albumId);
+			return title ? { kind: 'album', id: $ctx.albumId, title } : null;
+		}
+		if ($ctx.type === 'playlist') {
+			return { kind: 'playlist', id: $ctx.playlist.id, title: $ctx.playlist.title };
+		}
+		return null;
+	}
 );
 
 type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
@@ -498,7 +518,7 @@ async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<v
 }
 
 type IdlePlayTarget =
-	| { type: 'playlist'; label: string }
+	| { type: 'playlist'; label: string; playlist: PlaylistDetailItem }
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
 
@@ -515,9 +535,12 @@ export function idlePlayTarget(input: {
 	if (input.collection?.kind === 'playlist') {
 		// A playlist whose detail failed to load (or hasn't loaded yet) has no
 		// title to show and nothing to natively play — fall back to the named
-		// library target instead of an empty label and a dead Play button.
-		if (!input.playlist) return { type: 'library', label: RAIL_LIBRARY_LABEL };
-		return { type: 'playlist', label: input.playlist.title };
+		// library target instead of an empty label and a dead Play button. A
+		// detail still holding the previously opened playlist is not loaded
+		// yet either: Play must never start the list the listener just left.
+		const playlist = input.playlist;
+		if (playlist?.id !== input.collection.id) return { type: 'library', label: RAIL_LIBRARY_LABEL };
+		return { type: 'playlist', label: playlist.title, playlist };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -536,9 +559,7 @@ export async function playIdleStart(): Promise<void> {
 		albums: get(albumList)
 	});
 	if (target.type === 'playlist') {
-		const playlist = get(selectedPlaylistDetail);
-		if (!playlist) return;
-		playPlaylist(playlist, 'top');
+		playPlaylist(target.playlist, 'top');
 		return;
 	}
 	if (target.type === 'album') {
