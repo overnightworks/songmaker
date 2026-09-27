@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from pydantic import BaseModel, Field
 
@@ -24,6 +24,8 @@ if TYPE_CHECKING:
     from songmaker_cli.db.models import Playlist, PlaylistEntry
 
 log = logging.getLogger(__name__)
+
+PLAYLIST_MOSAIC_CELLS: Final[int] = 4
 
 
 def playlist_cover_urls(playlist_id: str, cover_key: str) -> AlbumCoverUrls:
@@ -80,6 +82,33 @@ def _playlist_entries(playlist: Playlist) -> list[PlaylistEntry]:
     return entries
 
 
+def _live_entries(playlist: Playlist) -> list[PlaylistEntry]:
+    return [
+        e for e in _playlist_entries(playlist)
+        if e.generation is not None and e.generation.song is not None
+    ]
+
+
+def uploaded_playlist_cover(playlist: Playlist) -> AlbumCoverUrls | None:
+    """The cover the owner uploaded, which replaces the mosaic when present."""
+    return playlist_cover_urls(playlist.id, playlist.cover_key) if playlist.cover_key else None
+
+
+def playlist_mosaic_covers(playlist: Playlist) -> list[AlbumCoverUrls]:
+    """The first distinct album covers of the playlist's live songs, in playlist order."""
+    album_covers: list[AlbumCoverUrls] = []
+    covered_album_ids: set[str] = set()
+    for entry in _live_entries(playlist):
+        album = entry.generation.song.album
+        if album is None or album.cover_key is None or album.id in covered_album_ids:
+            continue
+        covered_album_ids.add(album.id)
+        album_covers.append(album_cover_urls(album.id, album.cover_key))
+        if len(album_covers) == PLAYLIST_MOSAIC_CELLS:
+            break
+    return album_covers
+
+
 class PlaylistEntryResponse(BaseModel):
     id: str
     position: int
@@ -134,30 +163,15 @@ class PlaylistResponse(BaseModel):
 
     @classmethod
     def from_orm(cls, playlist: Playlist) -> PlaylistResponse:
-        live_entries = [
-            e for e in _playlist_entries(playlist)
-            if e.generation is not None and e.generation.song is not None
-        ]
-        cover = playlist_cover_urls(playlist.id, playlist.cover_key) if playlist.cover_key else None
-        album_covers: list[AlbumCoverUrls] = []
-        covered_album_ids: set[str] = set()
-        for entry in live_entries:
-            album = entry.generation.song.album
-            if album is None or album.cover_key is None or album.id in covered_album_ids:
-                continue
-            covered_album_ids.add(album.id)
-            album_covers.append(album_cover_urls(album.id, album.cover_key))
-            if len(album_covers) == 4:
-                break
         return cls(
             id=playlist.id,
             title=playlist.title,
             slug=playlist.slug,
-            entry_count=len(live_entries),
+            entry_count=len(_live_entries(playlist)),
             is_shared=playlist.is_shared,
             share_slug=playlist.share_slug,
-            cover=cover,
-            album_covers=album_covers,
+            cover=uploaded_playlist_cover(playlist),
+            album_covers=playlist_mosaic_covers(playlist),
             created_at=playlist.created_at.isoformat(),
         )
 

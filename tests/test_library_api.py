@@ -23,7 +23,17 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_TITLE,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
-from songmaker_cli.db.models import Album, Generation, Song, User, Version
+from songmaker_cli.db.models import (
+    Album,
+    ChatMessage,
+    Conversation,
+    Generation,
+    Playlist,
+    PlaylistEntry,
+    Song,
+    User,
+    Version,
+)
 
 USER_A = "user-a"
 USER_B = "user-b"
@@ -199,108 +209,363 @@ def _hit_id(item: dict) -> str:
     return item["song"]["id"]
 
 
-def test_continue_mixes_owned_songs_and_albums_in_stable_activity_order(
+def _later(offset_seconds: int) -> datetime:
+    """A moment after everything ``_seed_library`` dates, so a place under test leads."""
+    return _ts(10_000 + offset_seconds)
+
+
+def _add_take(
+    session, *, generation_id: str, song_id: str, created_at: datetime,
+) -> Generation:
+    take = Generation(
+        id=generation_id, song_id=song_id, generation_number=1,
+        mp3_path=f"takes/{generation_id}.mp3", created_at=created_at,
+    )
+    session.add(take)
+    return take
+
+
+def _add_cowriter_message(
+    session, *, song_id: str, author: str, created_at: datetime,
+) -> None:
+    conversation = Conversation(user_id=author)
+    session.add(conversation)
+    session.flush()
+    session.add(ChatMessage(
+        conversation_id=conversation.id, song_id=song_id, role="user",
+        content="Tighten the chorus", created_at=created_at,
+    ))
+
+
+def _add_playlist(
+    session, *, playlist_id: str, owner: str, created_at: datetime,
+    updated_at: datetime | None = None, last_played_at: datetime | None = None,
+    last_played_song_id: str | None = None, cover_key: str | None = None,
+) -> Playlist:
+    playlist = Playlist(
+        id=playlist_id, title=playlist_id.title(), slug=playlist_id, created_by=owner,
+        created_at=created_at, updated_at=updated_at or created_at,
+        last_played_at=last_played_at, last_played_song_id=last_played_song_id,
+        cover_key=cover_key,
+    )
+    session.add(playlist)
+    return playlist
+
+
+def _add_entry(
+    session, *, playlist_id: str, generation_id: str, added_at: datetime, position: int,
+) -> None:
+    session.add(PlaylistEntry(
+        playlist_id=playlist_id, generation_id=generation_id,
+        position=position, added_at=added_at,
+    ))
+
+
+def _continue_items(client: TestClient) -> list[dict]:
+    resp = client.get("/api/library/continue")
+    assert resp.status_code == 200, resp.text
+    return resp.json()["items"]
+
+
+def _album_with_song(session, **song_times: datetime) -> None:
+    _add_album(
+        session, album_id="place-album", title="Place Album", owner=USER_A,
+        created_at=_later(0),
+    )
+    _add_song(
+        session, song_id="song-a", title="Song A", album_id="place-album",
+        created_at=_later(0), updated_at=song_times.get("updated_at", _later(10)),
+        last_played_at=song_times.get("last_played_at"),
+    )
+
+
+def _seed_album_edited_only(session) -> None:
+    _album_with_song(session, updated_at=_later(30))
+
+
+def _seed_album_new_take_only(session) -> None:
+    _album_with_song(session)
+    _add_take(session, generation_id="take-a", song_id="song-a", created_at=_later(40))
+
+
+def _seed_album_cowriter_message_only(session) -> None:
+    _album_with_song(session)
+    _add_cowriter_message(session, song_id="song-a", author=USER_A, created_at=_later(50))
+
+
+def _seed_album_listened(session) -> None:
+    _album_with_song(session, last_played_at=_later(60))
+
+
+def _seed_album_naming_its_newest_song(session) -> None:
+    _album_with_song(session, updated_at=_later(70))
+    _add_song(
+        session, song_id="song-b", title="Song B", album_id="place-album",
+        created_at=_later(0), updated_at=_later(10), track_number=2,
+    )
+    _add_take(session, generation_id="take-b", song_id="song-b", created_at=_later(80))
+
+
+def _seed_album_with_an_admin_cowriter_turn(session) -> None:
+    _album_with_song(session)
+    _add_cowriter_message(session, song_id="song-a", author=ADMIN_ID, created_at=_later(90))
+
+
+def _seed_empty_album(session) -> None:
+    _add_album(
+        session, album_id="place-album", title="Place Album", owner=USER_A,
+        created_at=_later(20),
+    )
+
+
+def _seed_album_whose_song_is_deleted(session) -> None:
+    _album_with_song(session, updated_at=_later(95))
+    session.flush()
+    session.get(Song, "song-a").deleted_at = _later(96)
+
+
+def _playlist_sources(session) -> None:
+    """Two owned songs with one take each, all dated before the playlist."""
+    _add_album(
+        session, album_id="source", title="Source", owner=USER_A, created_at=_later(0),
+    )
+    for song_id in ("song-a", "song-b"):
+        _add_song(
+            session, song_id=song_id, title=song_id.replace("-", " ").title(),
+            album_id="source", created_at=_later(0),
+        )
+        _add_take(
+            session, generation_id=f"take-{song_id}", song_id=song_id, created_at=_later(0),
+        )
+    session.flush()
+
+
+def _seed_playlist(
+    session, *, entries: list[tuple[str, int]], deleted_song: str | None = None,
+    **playlist_times,
+) -> None:
+    _playlist_sources(session)
+    _add_playlist(
+        session, playlist_id="place-playlist", owner=USER_A, created_at=_later(1),
+        **playlist_times,
+    )
+    for position, (song_id, added_offset) in enumerate(entries):
+        _add_entry(
+            session, playlist_id="place-playlist", generation_id=f"take-{song_id}",
+            added_at=_later(added_offset), position=position,
+        )
+    if deleted_song is not None:
+        session.get(Song, deleted_song).deleted_at = _later(2)
+
+
+def _seed_playlist_listened_with_its_song(session) -> None:
+    _seed_playlist(
+        session, entries=[("song-a", 2), ("song-b", 3)],
+        last_played_at=_later(40), last_played_song_id="song-a",
+    )
+
+
+def _seed_playlist_listened_after_its_song_left(session) -> None:
+    _seed_playlist(
+        session, entries=[("song-b", 3)],
+        last_played_at=_later(40), last_played_song_id="song-a",
+    )
+
+
+def _seed_playlist_listened_to_a_deleted_song(session) -> None:
+    _seed_playlist(
+        session, entries=[("song-b", 3), ("song-a", 5)], deleted_song="song-a",
+        last_played_at=_later(40), last_played_song_id="song-a",
+    )
+
+
+def _seed_playlist_whose_newest_entry_is_dead(session) -> None:
+    _seed_playlist(session, entries=[("song-b", 3), ("song-a", 50)], deleted_song="song-a")
+
+
+def _seed_playlist_whose_every_song_is_dead(session) -> None:
+    _seed_playlist(session, entries=[("song-a", 50)], deleted_song="song-a")
+
+
+def _seed_playlist_edited_only(session) -> None:
+    _seed_playlist(session, entries=[("song-a", 2), ("song-b", 3)], updated_at=_later(60))
+
+
+def _seed_empty_playlist(session) -> None:
+    _add_playlist(session, playlist_id="place-playlist", owner=USER_A, created_at=_later(7))
+
+
+@pytest.mark.parametrize(
+    ("seed", "place", "activity_offset", "song_id"),
+    [
+        (_seed_album_edited_only, ("album", "place-album"), 30, "song-a"),
+        (_seed_album_new_take_only, ("album", "place-album"), 40, "song-a"),
+        (_seed_album_cowriter_message_only, ("album", "place-album"), 50, "song-a"),
+        (_seed_album_listened, ("album", "place-album"), 60, "song-a"),
+        (_seed_album_naming_its_newest_song, ("album", "place-album"), 80, "song-b"),
+        (_seed_album_with_an_admin_cowriter_turn, ("album", "place-album"), 10, "song-a"),
+        (_seed_empty_album, ("album", "place-album"), 20, None),
+        (_seed_album_whose_song_is_deleted, ("album", "place-album"), 0, None),
+        (_seed_playlist_listened_with_its_song, ("playlist", "place-playlist"), 40, "song-a"),
+        (_seed_playlist_listened_after_its_song_left, ("playlist", "place-playlist"), 40, "song-b"),
+        (_seed_playlist_listened_to_a_deleted_song, ("playlist", "place-playlist"), 40, "song-b"),
+        (_seed_playlist_whose_newest_entry_is_dead, ("playlist", "place-playlist"), 3, "song-b"),
+        (_seed_playlist_whose_every_song_is_dead, ("playlist", "place-playlist"), 1, None),
+        (_seed_playlist_edited_only, ("playlist", "place-playlist"), 60, "song-b"),
+        (_seed_empty_playlist, ("playlist", "place-playlist"), 7, None),
+    ],
+    ids=[
+        "album-edited-only",
+        "album-new-take-only",
+        "album-cowriter-message-only",
+        "album-listened",
+        "album-names-its-newest-song",
+        "album-admin-cowriter-turn-counts-nothing",
+        "empty-album",
+        "album-whose-only-song-is-deleted",
+        "playlist-listened-with-its-song",
+        "playlist-listened-after-its-song-left",
+        "playlist-listened-to-a-deleted-song",
+        "playlist-whose-newest-entry-is-dead",
+        "playlist-whose-every-song-is-dead",
+        "playlist-edited-only",
+        "empty-playlist",
+    ],
+)
+def test_continue_dates_a_place_by_its_newest_activity_and_names_its_song(
+    tmp_path: Path, seed: Callable, place: tuple[str, str], activity_offset: int,
+    song_id: str | None,
+) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        seed(session)
+        session.commit()
+
+    items = _continue_items(client)
+
+    tile = next(item for item in items if (item["type"], item["id"]) == place)
+    assert items[0] is tile
+    assert tile["activity_at"] == _later(activity_offset).isoformat()
+    assert tile["song_id"] == song_id
+    assert (tile["song_title"] is None) == (song_id is None)
+
+
+def test_continue_shows_six_places_once_each_newest_first_ties_by_type_then_id(
     tmp_path: Path,
 ) -> None:
     client, factory = _make_client(tmp_path, USER_A)
     with factory() as session:
+        for album_id, offset in [
+            ("album-b", 100), ("album-a", 100), ("album-c", 90),
+            ("album-d", 80), ("album-e", 70), ("album-f", 60),
+        ]:
+            _add_album(
+                session, album_id=album_id, title=album_id, owner=USER_A,
+                created_at=_later(0),
+            )
+            for track in (1, 2):
+                _add_song(
+                    session, song_id=f"{album_id}-{track}", title=f"{album_id} {track}",
+                    album_id=album_id, created_at=_later(0), updated_at=_later(offset),
+                    track_number=track,
+                )
+        _add_playlist(session, playlist_id="playlist-a", owner=USER_A, created_at=_later(100))
         _add_album(
-            session, album_id="continue-first", title="First", owner=USER_A,
-            created_at=_ts(100),
+            session, album_id="archived", title="Archived", owner=USER_A,
+            created_at=_later(0), is_archived=True,
         )
         _add_song(
-            session, song_id="continue-first-song", title="First Song",
-            album_id="continue-first", created_at=_ts(100), updated_at=_ts(1000),
+            session, song_id="archived-song", title="Archived Song", album_id="archived",
+            created_at=_later(0), updated_at=_later(500),
         )
         _add_album(
-            session, album_id="continue-empty", title="Empty", owner=USER_A,
-            created_at=_ts(950),
+            session, album_id="foreign", title="Foreign", owner=USER_B, created_at=_later(300),
         )
-        _add_album(
-            session, album_id="continue-second", title="Second", owner=USER_A,
-            created_at=_ts(200),
-        )
-        _add_song(
-            session, song_id="continue-second-song", title="Second Song",
-            album_id="continue-second", created_at=_ts(200), updated_at=_ts(900),
-        )
-        _add_album(
-            session, album_id="continue-third", title="Third", owner=USER_A,
-            created_at=_ts(300),
-        )
-        _add_song(
-            session, song_id="continue-third-song", title="Third Song",
-            album_id="continue-third", created_at=_ts(300), updated_at=_ts(800),
-        )
-        _add_album(
-            session, album_id="foreign-continue", title="Foreign", owner=USER_B,
-            created_at=_ts(5000),
-        )
-        _add_song(
-            session, song_id="foreign-continue-song", title="Foreign Song",
-            album_id="foreign-continue", created_at=_ts(5000), updated_at=_ts(5000),
-        )
+        _add_playlist(session, playlist_id="foreign-playlist", owner=USER_B, created_at=_later(300))
         session.commit()
 
-    resp = client.get("/api/library/continue")
+    items = _continue_items(client)
 
-    assert resp.status_code == 200
-    items = resp.json()["items"]
     assert [(item["type"], item["id"]) for item in items] == [
-        ("album", "continue-first"),
-        ("song", "continue-first-song"),
-        ("album", "continue-empty"),
-        ("album", "continue-second"),
-        ("song", "continue-second-song"),
-        ("album", "continue-third"),
+        ("album", "album-a"),
+        ("album", "album-b"),
+        ("playlist", "playlist-a"),
+        ("album", "album-c"),
+        ("album", "album-d"),
+        ("album", "album-e"),
     ]
-    assert all(item["id"] not in {"foreign-continue", "foreign-continue-song"} for item in items)
-    assert items[1]["album_id"] == "continue-first"
-    assert items[1]["album_title"] == "First"
+    assert [item["song_id"] for item in items[:2]] == ["album-a-1", "album-b-1"]
 
 
-def test_continue_orders_by_a_newer_listen_than_an_edit(tmp_path: Path) -> None:
+def test_continue_tiles_carry_the_cover_the_place_page_shows(tmp_path: Path) -> None:
     client, factory = _make_client(tmp_path, USER_A)
     with factory() as session:
         _add_album(
-            session, album_id="listened", title="Listened", owner=USER_A,
-            created_at=_ts(100),
-        )
+            session, album_id="covered", title="Covered", owner=USER_A, created_at=_later(0),
+        ).cover_key = "album-key"
         _add_song(
-            session, song_id="listened-song", title="Listened Song",
-            album_id="listened", created_at=_ts(100), updated_at=_ts(100),
+            session, song_id="covered-song", title="Covered Song", album_id="covered",
+            created_at=_later(0), updated_at=_later(20),
         )
-        session.add(Generation(
-            id="listened-generation", song_id="listened-song", generation_number=1,
-            mp3_path="user-a/listened-generation.mp3",
-        ))
-        _add_album(
-            session, album_id="edited", title="Edited", owner=USER_A,
-            created_at=_ts(200),
+        _add_take(
+            session, generation_id="covered-take", song_id="covered-song", created_at=_later(0),
         )
-        _add_song(
-            session, song_id="edited-song", title="Edited Song",
-            album_id="edited", created_at=_ts(200), updated_at=_ts(900),
+        _add_playlist(session, playlist_id="mosaic", owner=USER_A, created_at=_later(30))
+        _add_playlist(
+            session, playlist_id="uploaded", owner=USER_A, created_at=_later(10),
+            cover_key="playlist-key",
+        )
+        session.flush()
+        _add_entry(
+            session, playlist_id="mosaic", generation_id="covered-take",
+            added_at=_later(1), position=0,
         )
         session.commit()
 
-    listen_response = client.post("/api/songs/listened-song/listen")
-    resp = client.get("/api/library/continue")
+    items = {item["id"]: item for item in _continue_items(client)}
 
-    assert listen_response.status_code == 200
-    assert resp.status_code == 200
-    assert [(item["type"], item["id"]) for item in resp.json()["items"]][:4] == [
-        ("album", "listened"),
-        ("song", "listened-song"),
-        ("album", "edited"),
-        ("song", "edited-song"),
-    ]
+    assert items["covered"]["cover"]["card"] == (
+        "/api/albums/covered/cover?variant=card&v=album-key"
+    )
+    assert items["covered"]["album_covers"] == []
+    assert items["covered"]["song_title"] == "Covered Song"
+    assert items["mosaic"]["cover"] is None
+    assert items["mosaic"]["album_covers"] == [items["covered"]["cover"]]
+    assert items["mosaic"]["song_title"] == "Covered Song"
+    assert items["uploaded"]["cover"]["card"] == (
+        "/api/playlists/uploaded/cover?variant=card&v=playlist-key"
+    )
 
 
-def test_continue_uses_one_song_query_and_one_album_query(tmp_path: Path) -> None:
+def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Path) -> None:
     client, factory = _make_client(tmp_path, USER_A)
-    with factory() as probe_session:
-        engine = probe_session.get_bind()
+    with factory() as session:
+        for index in range(8):
+            album_id = f"busy-{index}"
+            _add_album(
+                session, album_id=album_id, title=album_id, owner=USER_A, created_at=_later(0),
+            )
+            _add_song(
+                session, song_id=f"{album_id}-song", title=f"{album_id} song",
+                album_id=album_id, created_at=_later(0), updated_at=_later(index),
+            )
+            _add_take(
+                session, generation_id=f"{album_id}-take", song_id=f"{album_id}-song",
+                created_at=_later(index),
+            )
+            _add_cowriter_message(
+                session, song_id=f"{album_id}-song", author=USER_A, created_at=_later(index),
+            )
+            _add_playlist(
+                session, playlist_id=f"list-{index}", owner=USER_A, created_at=_later(index),
+            )
+            session.flush()
+            _add_entry(
+                session, playlist_id=f"list-{index}", generation_id=f"{album_id}-take",
+                added_at=_later(index), position=0,
+            )
+        session.commit()
+        engine = session.get_bind()
 
     queries, handle = _count_queries(engine)
     try:
@@ -309,7 +574,8 @@ def test_continue_uses_one_song_query_and_one_album_query(tmp_path: Path) -> Non
         event.remove(engine, "before_cursor_execute", handle)
 
     assert resp.status_code == 200
-    assert len(queries) == 2, f"expected two Continue queries, got {len(queries)}: {queries}"
+    assert len(resp.json()["items"]) == 6
+    assert len(queries) == 3, f"expected three Continue statements, got {len(queries)}: {queries}"
 
 
 def test_search_requires_query(alice: TestClient) -> None:
