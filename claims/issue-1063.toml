@@ -1,0 +1,8 @@
+claim_id = "a749e9a2d84247519454ed9e1e26052b"
+agent = "claude-head"
+role = "builder"
+base = "e3170c34b2c3c1fd0905d4a990bf2866b46d6760"
+branch = "claude/issue-1063-cowriter-frame7"
+scope = ["docs/architecture.md", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "b9f30ea7b1cd32c41e326113ed14e35f0af3aceb"
+whole_reason = "the co-writer panel's phone header, reply scroll and Send tap with specs and docs"
