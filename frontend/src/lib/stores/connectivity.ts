@@ -55,9 +55,9 @@ export function whenBackOnline(callback: () => void): () => void {
  *   offers its Retry. Should the connection drop and come back, the load
  *   still runs again by itself.
  */
-export type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
+type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
 
-export interface UnreachableReloads {
+interface UnreachableReloads {
 	afterNetworkFailure(): UnreachableReload;
 	/** The load answered, or the surface moved on: forget the reloads. */
 	stop(): void;
