@@ -441,6 +441,13 @@ describe('generate action presentation', () => {
 				kind: 'idle'
 			},
 			{
+				case: 'it finished with fewer takes than it announced and its first take is in',
+				awaitingTakes: true,
+				takes: [takeOfJob('a'), takeBeforeJob],
+				jobs: [runningJob({ status: 'completed', progress: 1, take_index: 1, take_count: 2 })],
+				kind: 'idle'
+			},
+			{
 				case: 'it finished partially and its first take is in',
 				awaitingTakes: true,
 				takes: [takeOfJob('a'), takeBeforeJob],
