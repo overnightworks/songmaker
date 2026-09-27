@@ -97,6 +97,15 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 	});
 }
 
+/** A live conversation nobody has written in yet; the line and its menu row both ask this. */
+export function isNewConversation(
+	conversation: ConversationItem | undefined,
+	chatHasMessages = false
+): boolean {
+	if (conversation?.archived_at) return false;
+	return !chatHasMessages && (conversation?.message_count ?? 0) === 0;
+}
+
 /**
  * The line above the chat never contradicts the chat: a message in it means
  * a conversation is running, even before the conversation list has caught up
@@ -113,8 +122,7 @@ export function conversationLineLabel(
 			conversationDayLabel(conversation.created_at, now)
 		);
 	}
-	const hasMessages = chatHasMessages || (conversation?.message_count ?? 0) > 0;
-	if (!hasMessages) return COWRITER_NEW_CONVERSATION_LINE;
+	if (isNewConversation(conversation, chatHasMessages)) return COWRITER_NEW_CONVERSATION_LINE;
 	const day = conversation
 		? conversationDayLabel(conversation.created_at, now)
 		: COWRITER_CONVERSATION_STARTED_TODAY;
@@ -123,9 +131,7 @@ export function conversationLineLabel(
 
 export function conversationRowLabel(conversation: ConversationItem, now: Date): string {
 	if (conversation.title) return conversation.title;
-	if (!conversation.archived_at && conversation.message_count === 0) {
-		return COWRITER_NEW_CONVERSATION_LABEL;
-	}
+	if (isNewConversation(conversation)) return COWRITER_NEW_CONVERSATION_LABEL;
 	const template = conversation.archived_at
 		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
 		: COWRITER_CONVERSATION_ROW_TEMPLATE;
