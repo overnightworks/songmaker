@@ -1,5 +1,8 @@
 """Database query functions — split by domain, re-exported here for compatibility."""
 
+from songmaker_cli.db.queries.activity import CONTINUE_MAX_PLACES as CONTINUE_MAX_PLACES
+from songmaker_cli.db.queries.activity import PlaceActivity as PlaceActivity
+from songmaker_cli.db.queries.activity import list_place_activity as list_place_activity
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
 from songmaker_cli.db.queries.albums import archive_album as archive_album
 from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
@@ -447,12 +450,14 @@ from songmaker_cli.db.queries.songs import disable_song_sharing as disable_song_
 from songmaker_cli.db.queries.songs import enable_song_sharing as enable_song_sharing
 from songmaker_cli.db.queries.songs import get_song as get_song
 from songmaker_cli.db.queries.songs import get_song_by_slug as get_song_by_slug
-from songmaker_cli.db.queries.songs import list_continue_candidates as list_continue_candidates
 from songmaker_cli.db.queries.songs import list_expired_songs as list_expired_songs
 from songmaker_cli.db.queries.songs import list_song_ids_for_albums as list_song_ids_for_albums
 from songmaker_cli.db.queries.songs import list_song_ids_for_owner as list_song_ids_for_owner
 from songmaker_cli.db.queries.songs import list_songs as list_songs
 from songmaker_cli.db.queries.songs import move_song as move_song
+from songmaker_cli.db.queries.songs import (
+    record_playlist_listen as record_playlist_listen,
+)
 from songmaker_cli.db.queries.songs import (
     record_song_listen as record_song_listen,
 )
