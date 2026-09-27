@@ -460,7 +460,9 @@ def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "body", [None, {"playlist_id": "p-own"}], ids=["no-playlist", "from-own-playlist"],
+    "body",
+    [None, {"playlist_id": "p-own"}, {"playlist_id": "p-unknown"}],
+    ids=["no-playlist", "from-own-playlist", "from-unknown-playlist"],
 )
 def test_listen_song_rejects_an_unplayable_song(client: TestClient, body: dict | None) -> None:
     _seed_listen_playlists(client)
@@ -578,7 +580,10 @@ def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> 
     _assert_no_listen_recorded(client)
 
 
-def test_listen_song_hides_a_foreign_song(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "body", [None, {"playlist_id": "p-unknown"}], ids=["no-playlist", "from-a-playlist"],
+)
+def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> None:
     client = _make_authed_client(tmp_path)
     with client.app.state.ctx.db() as session:
         session.add(User(
@@ -597,9 +602,10 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path) -> None:
         ))
         session.commit()
 
-    resp = client.post("/api/songs/s-other/listen")
+    resp = client.post("/api/songs/s-other/listen", json=body)
 
     assert resp.status_code == 404
+    assert resp.json()["detail"] == "Song not found"
     with client.app.state.ctx.db() as session:
         song = session.get(Song, "s-other")
         assert song is not None
