@@ -42,7 +42,16 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 );
 const LYRICS_TYPED_ON = ' and on';
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
-const COWRITER_TURN_REFUSAL = 'CLI is unavailable.';
+// The route error frame the server ends a turn with when the provider cannot
+// run; the panel names the provider in front of the library's reason.
+const COWRITER_TURN_REFUSAL_FRAME = {
+	type: 'error',
+	status: 503,
+	provider: 'claude',
+	route: null,
+	reason: { code: 'cli_binary_unavailable', message: 'CLI is unavailable.' }
+};
+const COWRITER_TURN_REFUSAL = 'Claude: CLI is unavailable.';
 const RUNNING_JOB = {
 	progress: 0.36,
 	takeIndex: 1,
@@ -256,10 +265,9 @@ test.describe('typing on the phone', () => {
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
 			const { message } = route.request().postDataJSON() as { message: string };
 			sentMessages.push(message);
-			const refusal = { type: 'error', status: 503, message: COWRITER_TURN_REFUSAL };
 			return route.fulfill({
 				contentType: 'text/event-stream',
-				body: `data: ${JSON.stringify(refusal)}\n\n`
+				body: `data: ${JSON.stringify(COWRITER_TURN_REFUSAL_FRAME)}\n\n`
 			});
 		});
 		await openSeededSongFromItsAlbum(page);

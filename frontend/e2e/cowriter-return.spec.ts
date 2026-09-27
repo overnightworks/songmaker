@@ -45,7 +45,16 @@ const SENT = 'Ja bitte, schreib den Refrain neu';
 const REPLY = 'Erledigt. Der neue Refrain steht als neue Version.';
 const THINKING = /is thinking/;
 
-const RETRY_FAILURE = 'CLI is unavailable.';
+// The route error frame the server ends a turn with when the provider cannot
+// run; the panel names the provider in front of the library's reason.
+const RETRY_FAILURE_FRAME = {
+	type: 'error',
+	status: 503,
+	provider: 'claude',
+	route: null,
+	reason: { code: 'cli_binary_unavailable', message: 'CLI is unavailable.' }
+};
+const RETRY_FAILURE = 'Claude: CLI is unavailable.';
 
 type TurnState = 'idle' | 'running' | 'answered';
 type ChatMessage = ReturnType<typeof chatMessage>;
@@ -224,10 +233,9 @@ test.describe('co-writer return at phone width', () => {
 		await answerConversation(page, () => ({ messages: [sentMessage], turnRunning: false }));
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
 			retried = true;
-			const failure = { type: 'error', status: 503, message: RETRY_FAILURE };
 			return route.fulfill({
 				contentType: 'text/event-stream',
-				body: `data: ${JSON.stringify(failure)}\n\n`
+				body: `data: ${JSON.stringify(RETRY_FAILURE_FRAME)}\n\n`
 			});
 		});
 
@@ -250,10 +258,9 @@ test.describe('co-writer return at phone width', () => {
 		const newer = 'Zweite Nachricht, die auch scheitert';
 		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
-			const failure = { type: 'error', status: 503, message: RETRY_FAILURE };
 			return route.fulfill({
 				contentType: 'text/event-stream',
-				body: `data: ${JSON.stringify(failure)}\n\n`
+				body: `data: ${JSON.stringify(RETRY_FAILURE_FRAME)}\n\n`
 			});
 		});
 
@@ -287,7 +294,7 @@ test.describe('co-writer return at phone width', () => {
 			if (message === failed) {
 				return route.fulfill({
 					contentType: 'text/event-stream',
-					body: turnStream({ type: 'error', status: 503, message: RETRY_FAILURE })
+					body: turnStream(RETRY_FAILURE_FRAME)
 				});
 			}
 			stored.push(replyMessage);
