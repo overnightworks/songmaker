@@ -1992,6 +1992,22 @@ describe('playAlbum start track', () => {
 		expect(get(playStartNotice)).toBe('empty');
 	});
 
+	it('leaves the running queue in place when the album has nothing playable', async () => {
+		const running: QueueContext = { type: 'album', albumId: 'a2' };
+		queueContext.set(running);
+		songList.set([
+			makeSong({
+				...queuedSongDefaults(),
+				generations: [makeGen({ ...genDefaults, is_archived: true })]
+			})
+		]);
+
+		await playAlbum('a1');
+
+		expect(get(playStartNotice)).toBe('empty');
+		expect(get(queueContext)).toEqual(running);
+	});
+
 	it('toasts and returns the notice to idle when a take load is rejected', async () => {
 		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 		vi.mocked(fetchSong).mockRejectedValueOnce(
