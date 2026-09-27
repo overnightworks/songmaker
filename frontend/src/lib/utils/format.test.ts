@@ -1,9 +1,13 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
 	activityTimeLabel,
+	addedDayLabel,
 	albumSummaryLabel,
 	formatTime,
+	localWeekday,
+	placeLine,
 	playlistSummaryLabel,
+	songCountLabel,
 	titleInitials
 } from './format.ts';
 
@@ -50,6 +54,26 @@ describe('playlistSummaryLabel', () => {
 	});
 });
 
+describe('songCountLabel', () => {
+	it.each([
+		[0, '0 songs'],
+		[1, '1 song'],
+		[6, '6 songs']
+	])('count=%i -> %j', (count, expected) => {
+		expect(songCountLabel(count)).toBe(expected);
+	});
+});
+
+describe('placeLine', () => {
+	it('says a playlist is one before its detail', () => {
+		expect(placeLine('playlist', '14 songs')).toBe('Playlist · 14 songs');
+	});
+
+	it('leaves an album line as its detail', () => {
+		expect(placeLine('album', '6 songs')).toBe('6 songs');
+	});
+});
+
 describe('titleInitials', () => {
 	it.each([
 		['Nachtstrom', 'NA'],
@@ -90,5 +114,29 @@ describe('activityTimeLabel', () => {
 		]
 	])('reads a moment %s', (_case, activityAt, now, label) => {
 		expect(activityTimeLabel(activityAt, new Date(now))).toBe(label);
+	});
+});
+
+describe('localWeekday', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	it('names the local weekday, not the UTC one', () => {
+		expect(localWeekday(new Date('2026-09-26T22:30:00Z'))).toBe('Sun');
+	});
+});
+
+describe('addedDayLabel', () => {
+	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
+	afterAll(() => vi.unstubAllEnvs());
+
+	const sundayNoonInBerlin = new Date('2026-09-27T10:00:00Z');
+
+	it.each([
+		['this year by day and month', '2026-08-03T10:00:00Z', 'added 3 Aug'],
+		['on the local day, not the UTC one', '2026-08-02T22:30:00Z', 'added 3 Aug'],
+		['in another year with the year', '2025-08-03T10:00:00Z', 'added 3 Aug 2025']
+	])('reads a creation %s', (_case, createdAt, label) => {
+		expect(addedDayLabel(createdAt, sundayNoonInBerlin)).toBe(label);
 	});
 });
