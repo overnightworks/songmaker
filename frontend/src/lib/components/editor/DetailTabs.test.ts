@@ -92,7 +92,7 @@ describe('DetailTabs', () => {
 	});
 
 	it.each([
-		['queued', { kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null }, true],
+		['queued', { kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null, reconnecting: false }, true],
 		[
 			'generating',
 			{
@@ -101,7 +101,8 @@ describe('DetailTabs', () => {
 				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
-				readout: '36%'
+				readout: '36%',
+				reconnecting: false
 			},
 			true
 		],
@@ -113,7 +114,8 @@ describe('DetailTabs', () => {
 				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				readout: '0%'
+				readout: '0%',
+				reconnecting: false
 			},
 			true
 		],

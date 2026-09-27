@@ -185,7 +185,8 @@ describe('generate action presentation', () => {
 				kind: 'queued',
 				jobId: 'job1',
 				label: 'Queued #2',
-				reason: queuedJob.queue_reason
+				reason: queuedJob.queue_reason,
+				reconnecting: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }])
 		},
@@ -195,7 +196,8 @@ describe('generate action presentation', () => {
 				kind: 'queued',
 				jobId: 'job1',
 				label: 'Queued',
-				reason: queuedJob.queue_reason
+				reason: queuedJob.queue_reason,
+				reconnecting: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }])
 		},
@@ -207,7 +209,8 @@ describe('generate action presentation', () => {
 				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				readout: '0%'
+				readout: '0%',
+				reconnecting: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
 		},
@@ -219,7 +222,8 @@ describe('generate action presentation', () => {
 				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				readout: '0%'
+				readout: '0%',
+				reconnecting: false
 			},
 			setup: () =>
 				activeJobs.set([
@@ -262,7 +266,8 @@ describe('generate action presentation', () => {
 				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
-				readout
+				readout,
+				reconnecting: false
 			});
 		}
 	);
@@ -307,6 +312,68 @@ describe('generate action presentation', () => {
 			expect(get(generateAction).kind).toBe('queued');
 		}
 	);
+
+	describe('while the page is offline', () => {
+		const runningAt40: JobItem = {
+			...queuedJob,
+			status: 'running',
+			phase: 'rendering',
+			take_index: 1,
+			take_count: 2,
+			progress: 0.4,
+			remaining_time_estimate: 32
+		};
+
+		it.each([
+			{ cause: 'the browser is offline', loseConnection: () => browserReportsOnline(false) },
+			{
+				cause: 'the server is unreachable',
+				loseConnection: () => reportResourceStreamReachable(false)
+			}
+		])(
+			'a running take reads "Reconnecting…" with its last seen progress when $cause',
+			({ loseConnection }) => {
+				activeJobs.set([{ songId: 's1', job: runningAt40 }]);
+				loseConnection();
+				expect(get(generateAction)).toEqual({
+					kind: 'generating',
+					jobId: 'job1',
+					phase: 'Reconnecting…',
+					takeCounter: 'Take 1 of 2',
+					progress: 40,
+					readout: 'last seen at 40%',
+					reconnecting: true
+				});
+			}
+		);
+
+		it('a running take is live again by itself once the connection is back', () => {
+			activeJobs.set([{ songId: 's1', job: runningAt40 }]);
+			reportResourceStreamReachable(false);
+			reportResourceStreamReachable(true);
+			expect(get(generateAction)).toEqual({
+				kind: 'generating',
+				jobId: 'job1',
+				phase: 'Rendering',
+				takeCounter: 'Take 1 of 2',
+				progress: 40,
+				readout: '40% · ~0:32',
+				reconnecting: false
+			});
+		});
+
+		it('a queued take keeps its place in the queue and is marked reconnecting', () => {
+			activeJobs.set([{ songId: 's1', job: queuedJob }]);
+			reportResourceStreamReachable(false);
+			expect(get(generateAction)).toEqual({
+				kind: 'queued',
+				jobId: 'job1',
+				label: 'Queued #2',
+				reason: queuedJob.queue_reason,
+				reconnecting: true
+			});
+		});
+	});
 
 	it('keeps unavailable and pending states ahead of a previous failure', () => {
 		generationFailures.set({ s1: 'Previous failure' });
@@ -358,6 +425,30 @@ describe('generate action presentation', () => {
 				takes: [takeBeforeJob],
 				jobs: [runningJob()],
 				kind: 'generating'
+			},
+			{
+				case: 'it finished and the refresh has not brought its take in yet',
+				takes: [takeBeforeJob],
+				jobs: [runningJob({ status: 'completed', progress: 1 })],
+				kind: 'generating'
+			},
+			{
+				case: 'it finished and the refresh brought its take in',
+				takes: [takeOfJob('new'), takeBeforeJob],
+				jobs: [runningJob({ status: 'completed', progress: 1 })],
+				kind: 'idle'
+			},
+			{
+				case: 'it finished partially and its first take is in',
+				takes: [takeOfJob('a'), takeBeforeJob],
+				jobs: [runningJob({ status: 'partial', take_count: 2 })],
+				kind: 'idle'
+			},
+			{
+				case: 'it failed without a take',
+				takes: [takeBeforeJob],
+				jobs: [runningJob({ status: 'failed' })],
+				kind: 'idle'
 			},
 			{
 				case: 'a newer job for the song is queued behind the landed one',
