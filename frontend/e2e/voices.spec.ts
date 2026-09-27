@@ -275,7 +275,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		await expect(page.getByRole('heading', { name: /E2E With Voice/ })).toBeVisible();
 		if (isMobile) {
-			await page.getByRole('tab', { name: 'Write', exact: true }).click();
+			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
 			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
 			await test.info().attach('phone-recipe-collapsed', {
 				body: await recipe.screenshot(),
@@ -323,7 +323,7 @@ test('the Voices override proves create, mode binding, adapter effect, deletion,
 
 		await page.goto(`/album/${adapterSong.albumId}/${adapterSong.songSlug}`);
 		if (isMobile) {
-			await page.getByRole('tab', { name: 'Write', exact: true }).click();
+			await page.getByRole('tab', { name: 'Edit', exact: true }).click();
 			const recipe = page.getByRole('region', { name: 'Recipe', exact: true });
 			await recipe.getByRole('button', { name: 'Recipe', exact: true }).click();
 			await recipe.getByRole('button', { name: 'Voice', exact: true }).click();

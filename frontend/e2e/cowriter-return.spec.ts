@@ -32,7 +32,7 @@ import { expect, test, type Page, type Route } from '@playwright/test';
 import {
 	COWRITER_TURN_PATH,
 	EDITOR_COWRITER_BACK_LABEL,
-	EDITOR_TAB_WRITE_LABEL,
+	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL
 } from '../src/lib/constants';
 import { nameStartingWith, workspace } from './helpers';
@@ -153,7 +153,7 @@ test.describe('co-writer return at phone width', () => {
 		await expect.poll(() => turnState).toBe('running');
 
 		await page.getByRole('button', { name: EDITOR_COWRITER_BACK_LABEL }).click();
-		await expect(page.getByRole('tab', { name: EDITOR_TAB_WRITE_LABEL })).toBeVisible();
+		await expect(page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL })).toBeVisible();
 
 		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 		await expect(page.getByText(SENT)).toBeVisible();

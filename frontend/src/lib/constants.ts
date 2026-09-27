@@ -181,7 +181,7 @@ export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
 export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
-export const EDITOR_TAB_WRITE_LABEL = 'Write';
+export const EDITOR_TAB_EDIT_LABEL = 'Edit';
 export const EDITOR_TABS_LABEL = 'Editor tabs';
 
 export const COWRITER_TURN_TIMEOUT_MS = 600_000;
@@ -192,7 +192,7 @@ export const COWRITER_CLAUDE_UNVERIFIED_LABEL =
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-Writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
-export const EDITOR_COWRITER_BACK_LABEL = 'Back to Write';
+export const EDITOR_COWRITER_BACK_LABEL = 'Back to Edit';
 
 export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
 	claude_cli: 'Claude Code CLI login',

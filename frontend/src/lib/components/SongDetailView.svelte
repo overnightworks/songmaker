@@ -37,7 +37,7 @@
 		navigateToSongTab,
 		openCollectionEntry,
 		openLibraryWall,
-		openWriteTab,
+		openEditTab,
 		clearGenerationSelection,
 		persistLibraryHistory,
 		selectNeighborSong,
@@ -413,13 +413,13 @@
 
 	function useSource(gen: GenerationItem, mode: SourceMode): void {
 		setSourceFromGeneration(gen, mode);
-		if (compact) openWriteTab();
+		if (compact) openEditTab();
 	}
 
 	function onVersionClick(versionId: string): void {
 		const idx = $versions.findIndex((v) => v.id === versionId);
 		if (idx !== -1) loadVersion(idx);
-		navigateToSongTab('write');
+		navigateToSongTab('edit');
 	}
 
 	async function onRenameSong(newTitle: string): Promise<void> {
@@ -718,7 +718,7 @@
 		{/if}
 	{/snippet}
 
-	{#snippet phoneWrite()}
+	{#snippet phoneEdit()}
 		{@render writeSurface(song, false, true)}
 	{/snippet}
 
@@ -737,7 +737,7 @@
 		{#if compact}
 			<SongPhoneView
 				{sharedLink}
-				write={phoneWrite}
+				edit={phoneEdit}
 				cowriter={cowriterPanel}
 				{expiryDigest}
 				{takeListProps}
@@ -834,7 +834,7 @@
 		min-height: 0;
 	}
 
-	/* The phone's sticky Write/Takes tabs can only stick inside this box, so
+	/* The phone's sticky Edit/Takes tabs can only stick inside this box, so
 	   it must be as tall as the page it scrolls — shrunk to `main`'s height
 	   they let go after one screen (#1017). The co-writer keeps the bounded
 	   box: its message list scrolls inside it with the composer pinned. */

@@ -124,6 +124,8 @@ import {
 	pendingDirtyNavigation,
 	persistLibraryHistory,
 	resetNavigationForTests,
+	navigateToSongTab,
+	openEditTab,
 	revealPlayingSong,
 	selectNeighborSong,
 	selectSong
@@ -654,14 +656,6 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		expect(get(openCollection)).toBe(stateBefore);
 	});
 
-	it('opens the editor on Write, the only tab a compact layout starts on', async () => {
-		// #141/13: Takes was the landing tab, which hid the editor behind a tab
-		// switch on every phone-width open.
-		detailTab.set('takes');
-		await selectSong('s1');
-		expect(get(detailTab)).toBe('write');
-	});
-
 	it('pushes a new history entry per selectSong call', async () => {
 		const before = history.state?.index ?? 0;
 		await selectSong('s1');
@@ -877,6 +871,57 @@ describe('song selection (dead song link, issue #237)', () => {
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(get(toasts)).toHaveLength(0);
+	});
+});
+
+describe('the tab a song opens on (issue #1047)', () => {
+	const secondSong = () => song({ ...navigableSongDefaults(), slug: 's2', id: 's2' });
+
+	it('opens a song never opened this session on Edit', async () => {
+		detailTab.set('takes');
+		await selectSong('s1');
+		expect(get(detailTab)).toBe('edit');
+	});
+
+	it('reopens a song on the tab last chosen for it', async () => {
+		await selectSong('s1');
+		navigateToSongTab('takes');
+		await selectSong('s2', secondSong());
+		expect(get(detailTab)).toBe('edit');
+		await selectSong('s1');
+		expect(get(detailTab)).toBe('takes');
+	});
+
+	it('records the chosen tab in the open history entry so a reload restores it', async () => {
+		await selectSong('s1');
+		const address = window.location.pathname;
+		navigateToSongTab('takes');
+		expect(history.state.detailTab).toBe('takes');
+		expect(window.location.pathname).toBe(address);
+	});
+
+	it('keeps the current tab when stepping to the previous or next song', async () => {
+		await selectSong('s1');
+		navigateToSongTab('takes');
+		await selectNeighborSong(secondSong());
+		expect(get(detailTab)).toBe('takes');
+	});
+
+	it('opens the playing song from Now Playing on its remembered tab', async () => {
+		await selectSong('s1');
+		navigateToSongTab('takes');
+		await selectSong('s2', secondSong());
+		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
+		expect(get(detailTab)).toBe('takes');
+	});
+
+	it('remembers Edit when an action moves the open song back onto it', async () => {
+		await selectSong('s1');
+		navigateToSongTab('takes');
+		openEditTab();
+		await selectSong('s2', secondSong());
+		await selectSong('s1');
+		expect(get(detailTab)).toBe('edit');
 	});
 });
 
