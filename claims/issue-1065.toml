@@ -1,8 +1,0 @@
-claim_id = "fb9d416dd34a45ee855a7c2bd6eeac5e"
-agent = "claude-head"
-role = "builder"
-base = "cb538cc51ba50004b8999aaa25df1ab927246203"
-branch = "claude/issue-1065-cowriter-frame7-fidelity"
-scope = ["docs/architecture.md", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/ChatInput.svelte", "frontend/src/lib/components/ChatInput.test.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/MemoryEditor.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/WriteColumn.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts"]
-opened_commit = "a4000853364946b29d504fd51c9d5d3d847f1288"
-whole_reason = "the co-writer tab's composer, menu, labels and day format with their tests, specs and docs"
