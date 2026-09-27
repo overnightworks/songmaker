@@ -60,13 +60,13 @@ async function mountMenu(overrides: Partial<ReturnType<typeof defaultProps>> = {
 	return { target, props };
 }
 
-function openMenu(target: HTMLElement): void {
+function clickOverflowButton(target: HTMLElement): void {
 	target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
 }
 
 async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
 	const rendered = await mountMenu(overrides);
-	openMenu(rendered.target);
+	clickOverflowButton(rendered.target);
 	await tick();
 	return rendered;
 }
@@ -207,7 +207,7 @@ describeBackClosesOverlay({
 				})
 			})
 		).target,
-	open: openMenu,
+	open: clickOverflowButton,
 	isShown: (target) => target.querySelector('.overflow-menu') !== null,
 	closeWays: [
 		{ way: 'a tap outside', close: () => document.body.click() },
