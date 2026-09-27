@@ -26,8 +26,8 @@ export function nextReconnectDelayMs(attempt: number): number {
  * Spaces one stream's immediate reopens: after one, a further chance inside
  * `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS` is dropped and the stream keeps its
  * backoff, so switching apps back and forth cannot open dozens of streams
- * (#1099). A stream that also reopens at once on its own shares its gap with
- * its watcher.
+ * (#1099). Each stream owns one gap for its whole life, across every reopen,
+ * and runs each chance `watchReconnectOpportunities` reports through it.
  */
 export class ImmediateReopenGap {
 	private lastReopenAt = Number.NEGATIVE_INFINITY;
@@ -45,24 +45,21 @@ export class ImmediateReopenGap {
  * server: the tab or phone screen becomes visible again, the window regains
  * focus, or the browser reports the network back. A stream that dropped
  * while the phone was away then reopens at once instead of sitting out the
- * rest of its backoff (#1032), at most once per `gap`. Returns the function
- * that stops watching.
+ * rest of its backoff (#1032); its `ImmediateReopenGap` decides whether this
+ * chance comes too soon after its last reopen. Returns the function that
+ * stops watching.
  */
-export function watchReconnectOpportunities(
-	reconnectNow: () => void,
-	gap: ImmediateReopenGap = new ImmediateReopenGap()
-): () => void {
+export function watchReconnectOpportunities(reconnectNow: () => void): () => void {
 	if (typeof window === 'undefined') return () => {};
-	const reconnectSpaced = (): void => gap.run(reconnectNow);
 	const reconnectWhenVisible = (): void => {
-		if (document.visibilityState === 'visible') reconnectSpaced();
+		if (document.visibilityState === 'visible') reconnectNow();
 	};
-	window.addEventListener('focus', reconnectSpaced);
-	window.addEventListener('online', reconnectSpaced);
+	window.addEventListener('focus', reconnectNow);
+	window.addEventListener('online', reconnectNow);
 	document.addEventListener('visibilitychange', reconnectWhenVisible);
 	return () => {
-		window.removeEventListener('focus', reconnectSpaced);
-		window.removeEventListener('online', reconnectSpaced);
+		window.removeEventListener('focus', reconnectNow);
+		window.removeEventListener('online', reconnectNow);
 		document.removeEventListener('visibilitychange', reconnectWhenVisible);
 	};
 }
