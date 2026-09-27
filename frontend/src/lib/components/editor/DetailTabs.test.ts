@@ -92,7 +92,11 @@ describe('DetailTabs', () => {
 	});
 
 	it.each([
-		['queued', { kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null }, true],
+		[
+			'queued',
+			{ kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null, reconnecting: false },
+			true
+		],
 		[
 			'generating',
 			{
@@ -101,7 +105,9 @@ describe('DetailTabs', () => {
 				phase: 'Rendering',
 				takeCounter: 'Take 1 of 2',
 				progress: 36,
-				readout: '36%'
+				readout: '36%',
+				ended: false,
+				reconnecting: false
 			},
 			true
 		],
@@ -113,7 +119,9 @@ describe('DetailTabs', () => {
 				phase: 'Generating...',
 				takeCounter: null,
 				progress: 0,
-				readout: '0%'
+				readout: '0%',
+				ended: false,
+				reconnecting: false
 			},
 			true
 		],
@@ -125,6 +133,30 @@ describe('DetailTabs', () => {
 		const tabs = await render();
 		expect(tabNamed(tabs, 'takes').querySelector('.ring') !== null).toBe(expectRing);
 	});
+
+	it.each([
+		{ connection: 'live', reconnecting: false, color: 'var(--score-ok)' },
+		{ connection: 'reconnecting', reconnecting: true, color: 'var(--text-disabled)' }
+	])(
+		'draws the running ring $color while the take is $connection',
+		async ({ reconnecting, color }) => {
+			action.set({
+				kind: 'generating',
+				jobId: 'job1',
+				phase: 'Rendering',
+				takeCounter: null,
+				progress: 40,
+				readout: '40%',
+				reconnecting,
+				ended: false
+			});
+			const tabs = await render();
+			const ring = tabNamed(tabs, 'takes').querySelector('.ring');
+			if (!ring) throw new Error('Expected the running ring');
+			injectComponentStyles(detailTabsSource, 'DetailTabs.svelte', ring);
+			expect(getComputedStyle(ring).color).toBe(color);
+		}
+	);
 
 	it('sticks to the top, but scrolls away with the text while typing on the phone keyboard', async () => {
 		const closeKeyboard = openOnScreenKeyboard();

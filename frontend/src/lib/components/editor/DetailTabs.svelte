@@ -15,7 +15,9 @@
 	}
 
 	let { takeCount }: Props = $props();
-	const jobRunning = $derived(isGenerateBusy($generateAction));
+	const presentation = $derived($generateAction);
+	const jobRunning = $derived(isGenerateBusy(presentation));
+	const jobReconnecting = $derived(isGenerateBusy(presentation) && presentation.reconnecting);
 
 	function tabAfter(current: DetailTab, step: number): DetailTab {
 		const count = DETAIL_TABS.length;
@@ -73,7 +75,8 @@
 				{EDITOR_VIEW_COWRITER_LABEL}
 			{:else}
 				{EDITOR_TAB_TAKES_LABEL} <span class="count">({takeCount})</span>
-				{#if jobRunning}<span class="ring" aria-hidden="true"></span>{/if}
+				{#if jobRunning}<span class="ring" class:stale={jobReconnecting} aria-hidden="true"
+					></span>{/if}
 			{/if}
 		</button>
 	{/each}
@@ -118,8 +121,14 @@
 		width: 9px;
 		height: 9px;
 		flex: none;
-		border: 2px solid var(--score-ok);
+		border: 2px solid currentColor;
+		color: var(--score-ok);
 		border-radius: 50%;
+	}
+
+	/* Offline the job's result cannot arrive yet, so the ring loses its colour. */
+	.ring.stale {
+		color: var(--text-disabled);
 	}
 
 	button.active,

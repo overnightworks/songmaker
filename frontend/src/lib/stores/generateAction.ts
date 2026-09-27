@@ -3,7 +3,9 @@ import { cancelJob, generateSong } from '$lib/api/client';
 import type { JobItem, SongItem } from '$lib/api/types';
 import {
 	EDITOR_GENERATE_CANCEL_FAILED,
+	EDITOR_GENERATE_LAST_SEEN_TEMPLATE,
 	EDITOR_GENERATE_QUEUED_TEMPLATE,
+	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GENERATING_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
@@ -73,6 +75,12 @@ function progressReadout(job: JobItem | null): string | null {
 	return parts.join(' · ');
 }
 
+/** The progress the job last reported, offline; loading a model reports none (see `progressReadout`). */
+function lastSeenReadout(job: JobItem | null): string | null {
+	if (job?.phase === 'loading_model') return null;
+	return EDITOR_GENERATE_LAST_SEEN_TEMPLATE.replace('{percent}', String(progressPercent(job)));
+}
+
 function queuedLabel(position: number | null): string {
 	return position === null
 		? EDITOR_QUEUED_LABEL
@@ -87,31 +95,60 @@ function takeCounterLabel(job: JobItem | null): string | null {
 	);
 }
 
+// A completed job made every take it announced; a partial one made fewer and
+// does not say how many, so its first take in the list is the one it is known
+// to have made.
+function takesTheJobWillLand(job: JobItem): number {
+	return job.status === 'partial' ? 1 : (job.take_count ?? 1);
+}
+
 /**
- * Whether every take the job was asked for is already in the song's list.
+ * Whether every take the job will land is already in the song's list.
  * The job stream reports the job's end on its own schedule and can lag a
  * dropped connection's retry behind the take a song refresh already
- * brought in (#1032); the take list is what the musician sees, so the job
+ * brought in (#1032), and a job that ended while the page was offline
+ * reports its end before the refresh it asks for has brought the take in
+ * (#1039 O3); the take list is what the musician sees, so the job
  * presentation follows it. Takes created since the job started are its own.
  */
 function jobTakesHaveLanded(job: JobItem, song: SongItem): boolean {
 	if (job.started_at == null) return false;
 	const startedAt = Date.parse(job.started_at);
 	const landed = song.generations.filter((take) => Date.parse(take.created_at) >= startedAt);
-	return landed.length >= (job.take_count ?? 1);
+	return landed.length >= takesTheJobWillLand(job);
+}
+
+function isStillWorking(job: JobItem): boolean {
+	return job.status === 'queued' || job.status === 'running';
 }
 
 function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem | null {
 	const active = jobs.find(
-		({ songId, job }) =>
-			songId === song.id && job.type === JOB_TYPE_GENERATE && !jobTakesHaveLanded(job, song)
+		({ songId, job, awaitingTakes }) =>
+			songId === song.id &&
+			job.type === JOB_TYPE_GENERATE &&
+			(isStillWorking(job) || awaitingTakes === true) &&
+			!jobTakesHaveLanded(job, song)
 	);
 	return active?.job ?? null;
 }
 
+/**
+ * A busy state is `reconnecting` while the page is offline: nothing the
+ * server says about the job can arrive, and a cancel cannot reach it, so the
+ * surfaces grey out instead of looking live (#1039 O2). A generating state is
+ * `ended` while a finished job waits for its take to reach the list: its
+ * card stays, but there is nothing left to cancel (#1039 O3).
+ */
 export type GenerateState =
 	| { kind: 'idle'; mode: GenerateMode }
-	| { kind: 'queued'; jobId: string; label: string; reason: string | null }
+	| {
+			kind: 'queued';
+			jobId: string;
+			label: string;
+			reason: string | null;
+			reconnecting: boolean;
+	  }
 	| {
 			kind: 'generating';
 			jobId: string | null;
@@ -119,12 +156,15 @@ export type GenerateState =
 			takeCounter: string | null;
 			progress: number;
 			readout: string | null;
+			reconnecting: boolean;
+			ended: boolean;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
 	| { kind: 'disabled'; mode: GenerateMode; reason: string | null };
 
 type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
 type GenerateJobState = GenerateBusyState & { jobId: string };
+type CancellableJobState = GenerateJobState & ({ kind: 'queued' } | { ended: false });
 
 export function isGenerateBusy(state: GenerateState): state is GenerateBusyState {
 	return state.kind === 'queued' || state.kind === 'generating';
@@ -132,6 +172,10 @@ export function isGenerateBusy(state: GenerateState): state is GenerateBusyState
 
 export function isGenerateJobActive(state: GenerateState): state is GenerateJobState {
 	return isGenerateBusy(state) && state.jobId !== null;
+}
+
+export function offersCancel(state: GenerateState): state is CancellableJobState {
+	return isGenerateJobActive(state) && !(state.kind === 'generating' && state.ended);
 }
 
 export const generateAction = derived(
@@ -164,7 +208,7 @@ export const generateAction = derived(
 		isOffline
 	]): GenerateState => {
 		const job = song ? pendingGenerateJob(song, jobs) : null;
-		const pending = inFlight || job?.status === 'queued' || job?.status === 'running';
+		const pending = inFlight || job !== null;
 		const gpuOffline = health?.acestep_workers_online === 0;
 		let disabledReason = '';
 		if (!lyrics || !prompt) disabledReason = EDITOR_MISSING_CONTENT_TITLE;
@@ -180,17 +224,20 @@ export const generateAction = derived(
 				kind: 'queued',
 				jobId: job.id,
 				label: queuedLabel(job.queue_position ?? null),
-				reason: job.queue_reason ?? null
+				reason: job.queue_reason ?? null,
+				reconnecting: isOffline
 			};
 		}
 		if (pending) {
 			return {
 				kind: 'generating',
 				jobId: job?.id ?? null,
-				phase: phaseLabel(job),
+				phase: isOffline ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
 				takeCounter: takeCounterLabel(job),
 				progress: progressPercent(job),
-				readout: progressReadout(job)
+				readout: isOffline ? lastSeenReadout(job) : progressReadout(job),
+				reconnecting: isOffline,
+				ended: job !== null && !isStillWorking(job)
 			};
 		}
 		// Offline, Generate has no words of its own: the one offline strip says it.

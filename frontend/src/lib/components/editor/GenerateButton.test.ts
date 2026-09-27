@@ -2,6 +2,7 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	EDITOR_GENERATE_CANCEL_LABEL,
+	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GPU_OFFLINE_TITLE,
@@ -11,6 +12,7 @@ import {
 	HITBOX_FREQUENT_PX
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -32,6 +34,7 @@ vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 
 import { cancelGeneration, generate, type GenerateState } from '$lib/stores/generateAction';
 import GenerateButton from './GenerateButton.svelte';
+import generateButtonSource from './GenerateButton.svelte?raw';
 
 const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
@@ -39,13 +42,16 @@ const running: Extract<GenerateState, { kind: 'generating' }> = {
 	phase: 'Rendering',
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
-	readout: '36% · ~1:40'
+	readout: '36% · ~1:40',
+	ended: false,
+	reconnecting: false
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'job1',
 	label: 'Queued #3',
-	reason: 'Waiting for LoRA training on this GPU.'
+	reason: 'Waiting for LoRA training on this GPU.',
+	reconnecting: false
 };
 let component: ReturnType<typeof mount>;
 
@@ -59,6 +65,7 @@ afterEach(async () => {
 	await unmount(component);
 	document.body.replaceChildren();
 	clearHitboxStyles();
+	clearComponentStyles();
 	clearPointer();
 });
 
@@ -211,4 +218,31 @@ describe('GenerateButton', () => {
 		getByRoleButton(document.body, 'Generate').click();
 		expect(generate).toHaveBeenCalledOnce();
 	});
+
+	it.each([
+		{ state: 'running', presentation: { ...running, reconnecting: true }, fills: 1 },
+		{ state: 'queued', presentation: { ...queued, reconnecting: true }, fills: 0 }
+	])(
+		'greys the readout and the cancel of a $state take while the page is offline',
+		async ({ presentation, fills }) => {
+			await render(presentation);
+			const readout = document.body.querySelector<HTMLElement>('[role="status"]');
+			if (!readout) throw new Error('Expected the progress readout');
+			injectComponentStyles(generateButtonSource, 'GenerateButton.svelte', readout);
+			expect(getComputedStyle(readout).color).toBe('var(--text-subtle)');
+			const fillBackgrounds = Array.from(
+				readout.querySelectorAll<HTMLElement>('.progress-fill'),
+				(fill) => getComputedStyle(fill).background
+			);
+			expect(fillBackgrounds).toEqual(
+				Array(fills).fill('color-mix(in srgb, var(--text-disabled) 20%, transparent)')
+			);
+			const cancel = getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_OFFLINE_LABEL);
+			expect(cancel.getAttribute('aria-disabled')).toBe('true');
+			expect(getComputedStyle(cancel).color).toBe('var(--text-disabled)');
+			cancel.click();
+			await tick();
+			expect(cancelGeneration).not.toHaveBeenCalled();
+		}
+	);
 });

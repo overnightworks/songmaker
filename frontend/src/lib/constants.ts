@@ -330,6 +330,12 @@ export const EDITOR_GENERATE_MODE_LABELS = {
 export const EDITOR_GENERATE_QUEUED_TEMPLATE = `${EDITOR_QUEUED_LABEL} #{position}`;
 export const EDITOR_GENERATE_TAKE_TEMPLATE = 'Take {index} of {count}';
 export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
+// Offline a running take cannot report anything (#1039 O2): it says so and
+// keeps the last progress it saw, instead of a percent and time that stand still.
+export const EDITOR_GENERATE_RECONNECTING_LABEL = 'Reconnecting…';
+export const EDITOR_GENERATE_LAST_SEEN_TEMPLATE = 'last seen at {percent}%';
+export const EDITOR_GENERATE_CANCEL_OFFLINE_LABEL = 'Cancel generation (waits for the connection)';
+export const EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL = 'Last known progress';
 export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
 export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
 export const EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL = 'Collapse generation error';
@@ -682,3 +688,8 @@ export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
 // retries count: a reopen on returning to the app re-records the attempt it
 // interrupted, so frequent returns never shorten the three minutes (#1032).
 export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
+// How long a finished generate job keeps its card at most while the song
+// refresh its end asked for has not run (#1039 O3): long enough for a page
+// that just came back online to resync, short enough that a refresh that never
+// runs does not leave a card behind.
+export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;
