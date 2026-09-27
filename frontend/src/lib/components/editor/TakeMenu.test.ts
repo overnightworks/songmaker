@@ -2,7 +2,8 @@ import { makeGeneration as gen } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX, TAKE_REPAINT_LABEL } from '$lib/constants';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 import TakeMenu from './TakeMenu.svelte';
 
@@ -50,15 +51,24 @@ function defaultProps() {
 	};
 }
 
-async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
+async function mountMenu(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
 	const props = { ...defaultProps(), ...overrides };
 	mounted.push(mount(TakeMenu, { target, props }));
 	await tick();
-	target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
-	await tick();
 	return { target, props };
+}
+
+function openMenu(target: HTMLElement): void {
+	target.querySelector<HTMLButtonElement>('.overflow-btn')?.click();
+}
+
+async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
+	const rendered = await mountMenu(overrides);
+	openMenu(rendered.target);
+	await tick();
+	return rendered;
 }
 
 describe('TakeMenu', () => {
@@ -183,4 +193,36 @@ describe('TakeMenu', () => {
 		expect(target.querySelector('.overflow-menu')?.classList.contains('flip-up')).toBe(true);
 		vi.unstubAllGlobals();
 	});
+});
+
+let repaintSawHistoryAt: number | undefined;
+
+describeBackClosesOverlay({
+	name: 'the take menu',
+	render: async () =>
+		(
+			await mountMenu({
+				onrepaint: vi.fn(() => {
+					repaintSawHistoryAt = plannedHistoryIndex();
+				})
+			})
+		).target,
+	open: openMenu,
+	isShown: (target) => target.querySelector('.overflow-menu') !== null,
+	closeWays: [
+		{ way: 'a tap outside', close: () => document.body.click() },
+		{
+			way: 'Escape',
+			close: () =>
+				document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		},
+		{
+			way: 'choosing Repaint',
+			close: (target) =>
+				Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+					.find((item) => item.textContent?.trim() === TAKE_REPAINT_LABEL)
+					?.click(),
+			actionSawHistoryAt: () => repaintSawHistoryAt
+		}
+	]
 });
