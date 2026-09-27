@@ -57,7 +57,7 @@ export function boxShadowStyle(energy: number, c: VizColors): string {
 	const r = Math.round(c.pr - energy * (c.pr - c.ar) * 0.4);
 	const g = Math.round(c.pg + energy * (c.ag - c.pg) * 0.3);
 	const b = Math.round(c.pb + energy * (c.ab - c.pb) * 0.8);
-	return `height: calc(var(--player-height) + ${energy * 14}px); box-shadow: 0 ${-2 - energy * 8}px ${6 + energy * 18}px rgba(${r}, ${g}, ${b}, ${0.1 + energy * 0.3})`;
+	return `height: calc(var(--transport-bar-height) + ${energy * 14}px); box-shadow: 0 ${-2 - energy * 8}px ${6 + energy * 18}px rgba(${r}, ${g}, ${b}, ${0.1 + energy * 0.3})`;
 }
 
 export function titleGlowStyle(bass: number, c: VizColors): string {

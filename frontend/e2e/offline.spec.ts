@@ -18,7 +18,9 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
 	SSE_RECONNECT_JITTER_RATIO,
-	SSE_RECONNECT_MAX_DELAY_MS
+	SSE_RECONNECT_MAX_DELAY_MS,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -124,4 +126,50 @@ test.describe('a server the online browser cannot reach', () => {
 			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
 		});
 	}
+});
+
+test.describe('losing the network while a take plays on the phone', () => {
+	test('rests the strip above the mini player without moving or covering its transport', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only mini player; see the file header.');
+		const library = readSeededLibrary();
+		const songTitle = `${OFFLINE_SONG_TITLE} Playing ${runMarker()}`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
+		const miniPlayer = page.getByRole('contentinfo');
+		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.click();
+		await page.getByRole('tab', { name: /Takes/ }).click();
+		await page
+			.getByRole('tabpanel')
+			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
+			.click();
+		await expect(pause).toBeVisible();
+		const [miniPlayerOnline, pauseOnline] = await boundingBoxes(miniPlayer, pause);
+
+		// The browser's own offline event is what raises the strip here: stopping
+		// the page's loads as `loseNetwork` does would end the take's audio too.
+		await page.route(RESOURCE_STREAM, (route) => route.abort('internetdisconnected'));
+		await context.setOffline(true);
+		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+
+		const [stripBox, miniPlayerOffline, pauseOffline] = await boundingBoxes(
+			offlineStrip(page),
+			miniPlayer,
+			pause
+		);
+		expect(miniPlayerOffline).toEqual(miniPlayerOnline);
+		expect(pauseOffline).toEqual(pauseOnline);
+		expect(stripBox.y + stripBox.height).toBeLessThanOrEqual(miniPlayerOffline.y);
+
+		await page.unroute(RESOURCE_STREAM);
+		await context.setOffline(false);
+		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
+	});
 });
