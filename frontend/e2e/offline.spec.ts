@@ -10,12 +10,15 @@
 // the way a dropped network ends them, and every reopen of the library's live
 // stream is refused until the network returns.
 
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GPU_OFFLINE_TITLE,
 	OFFLINE_STRIP_MESSAGE,
-	RESOURCE_SYNC_ERROR
+	RESOURCE_EVENT_STREAM_PATH,
+	RESOURCE_SYNC_ERROR,
+	SSE_RECONNECT_JITTER_RATIO,
+	SSE_RECONNECT_MAX_DELAY_MS
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -33,6 +36,11 @@ const OFFLINE_SONG_TITLE = 'Offline Strip';
 const OFFLINE_NOTICE_MS = 1_500;
 // The ruling on #1032: back online, the page has caught up within 10 seconds.
 const BACK_ONLINE_MS = 10_000;
+// A server that comes back while the browser stayed online is found by the
+// stream's own backoff, so the page catches up within its longest wait more.
+const SERVER_BACK_MS =
+	BACK_ONLINE_MS + SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
+const RESOURCE_STREAM = `**${RESOURCE_EVENT_STREAM_PATH}**`;
 const GENERATE_LABEL = EDITOR_GENERATE_MODE_LABELS.generate;
 // CI's stack runs no ACE-Step worker, so online the Generate bar names that
 // reason inside its own box (#1011).
@@ -94,4 +102,26 @@ test.describe('losing the network on the phone', () => {
 		guard.assertClean();
 		guard.assertWithinBudget(OFFLINE_FLOW_API_REQUEST_BUDGET);
 	});
+});
+
+test.describe('a server the online browser cannot reach', () => {
+	for (const [failure, answer] of [
+		['refuses the connection', (route: Route) => route.abort('connectionrefused')],
+		['answers 502', (route: Route) => route.fulfill({ status: 502, body: 'bad gateway' })]
+	] as const) {
+		test(`shows the same calm strip while the live stream ${failure} as the page loads, and recovers by itself`, async ({
+			page
+		}) => {
+			await page.route(RESOURCE_STREAM, answer);
+			await page.goto('/');
+
+			await expect(offlineStrip(page)).toBeVisible();
+			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+
+			await page.unroute(RESOURCE_STREAM);
+
+			await expect(offlineStrip(page)).toHaveCount(0, { timeout: SERVER_BACK_MS });
+			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+		});
+	}
 });

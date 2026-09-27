@@ -120,6 +120,7 @@ export class ResourceSyncController {
 	private bootstrapErrors = 0;
 	private probeGeneration = 0;
 	private reconnectAttempt = 0;
+	private streamGreeted = false;
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryAttempt = 0;
@@ -229,6 +230,7 @@ export class ResourceSyncController {
 	}
 
 	private openSource(): void {
+		this.streamGreeted = false;
 		const source = this.deps.createEventSource(this.streamUrl());
 		this.source = source;
 		source.addEventListener(RESOURCE_EVENT_HELLO, this.onHello);
@@ -344,6 +346,7 @@ export class ResourceSyncController {
 			return;
 		}
 		this.reconnectAttempt = 0;
+		this.streamGreeted = true;
 		this.deps.reportStreamReachable(true);
 		this.rememberEventId(event);
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
@@ -391,13 +394,20 @@ export class ResourceSyncController {
 		await this.flushPending(this.epoch);
 	}
 
+	/**
+	 * A stream that fails before it says hello did not open: the server cannot
+	 * be reached, whatever the auth probe answers, and the offline strip says so
+	 * while the stream keeps retrying. A stream that drops after its hello is
+	 * only unreachable once the probe gets no answer or its reopen fails too.
+	 */
 	private async handleStreamError(): Promise<void> {
 		if (!this.started) return;
+		const failedToOpen = !this.streamGreeted;
+		this.streamGreeted = false;
 		const probeId = ++this.probeGeneration;
 		const source = this.source;
 		const result = await this.deps.probeAuth();
 		if (!this.started || probeId !== this.probeGeneration || this.source !== source) return;
-		this.deps.reportStreamReachable(result !== 'retryable');
 		// Not a session loss (issue #385 finding 2): the account exists and is still logged in,
 		// an admin disabled it, so this must not read as "sign in again" -- that would only fail
 		// the same way.
@@ -414,14 +424,20 @@ export class ResourceSyncController {
 			await this.deps.onUnauthorized();
 			return;
 		}
+		const serverUnreachable = failedToOpen || result === 'retryable';
+		this.deps.reportStreamReachable(!serverUnreachable);
 		if (!this.syncedOnce) {
 			this.bootstrapErrors += 1;
 			// A non-200 answer (the edge's 5xx while the server restarts) closes the
 			// source for good: the browser will not retry it, so this attempt is over.
 			const browserGaveUp = source?.readyState === EVENT_SOURCE_CLOSED;
 			if (browserGaveUp || this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
-				this.failBootstrap(RESOURCE_SYNC_ERROR);
-				if (result === 'retryable') this.scheduleReconnect(() => this.restartBootstrap());
+				if (!serverUnreachable) {
+					this.failBootstrap(RESOURCE_SYNC_ERROR);
+					return;
+				}
+				this.failBootstrap(null);
+				this.scheduleReconnect(() => this.restartBootstrap());
 				return;
 			}
 			this.abandonEpoch();
