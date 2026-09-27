@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	nowPlayingFromLabel,
 	nowPlayingOpenSourceLabel,
+	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel,
 	nowPlayingTakeMeta,
 	takeBatchReductionLabel
@@ -77,7 +78,11 @@ describe('takeBatchReductionLabel', () => {
 	});
 });
 
-describe('the source Now Playing names (#1052)', () => {
+describe('the names Now Playing gives its ways out (#1052)', () => {
+	it('closes the sheet by its own name, never as ×', () => {
+		expect(nowPlayingSheetCloseLabel('Now Playing panel')).toBe('Close Now Playing panel');
+	});
+
 	it('says where the music comes from', () => {
 		expect(nowPlayingFromLabel('Nightdrive')).toBe('from Nightdrive');
 	});

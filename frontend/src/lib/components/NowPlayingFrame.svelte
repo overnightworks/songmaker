@@ -21,6 +21,7 @@
 		NOW_PLAYING_Z_INDEX,
 		nowPlayingFromLabel,
 		nowPlayingOpenSourceLabel,
+		nowPlayingSheetCloseLabel,
 		nowPlayingTakeLabel,
 		type NowPlayingSource,
 		type NowPlayingSurfaceKind
@@ -389,7 +390,7 @@
 					type="button"
 					class="mobile-sheet-backdrop"
 					tabindex="-1"
-					aria-label={NOW_PLAYING_CLOSE}
+					aria-label={nowPlayingSheetCloseLabel(sheetLabel)}
 					onclick={() => (mobilePanelOpen = false)}
 				></button>
 				<div
@@ -418,7 +419,11 @@
 		background: var(--bg);
 		overflow: hidden;
 	}
+	/* The take sheet's backdrop dims the surface, yet × and "Go to song" stay
+	   above it: a tap meant for them must not only close the sheet. */
 	.np-header {
+		position: relative;
+		z-index: 2;
 		flex-shrink: 0;
 		display: flex;
 		align-items: flex-start;
@@ -653,6 +658,8 @@
 		justify-content: center;
 	}
 	.go-song {
+		position: relative;
+		z-index: 2;
 		align-self: flex-start;
 		padding: 0.5rem 0.9rem;
 		border-radius: var(--btn-radius-sm);
@@ -705,6 +712,7 @@
 	}
 	.mobile-sheet-backdrop {
 		position: fixed;
+		z-index: 1;
 		inset: 0 0 var(--player-height);
 		width: 100%;
 		border: 0;
@@ -713,6 +721,7 @@
 	}
 	.mobile-sheet {
 		position: fixed;
+		z-index: 3;
 		left: 0;
 		right: 0;
 		bottom: var(--player-height);
