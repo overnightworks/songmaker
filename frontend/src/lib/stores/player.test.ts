@@ -98,6 +98,7 @@ import {
 	retryLastPlayIntent,
 	playNextSong,
 	playPrevSong,
+	playbackSource,
 	queueContext,
 	selectSong,
 	selectedAlbumId,
@@ -2423,7 +2424,13 @@ describe('idlePlayTarget', () => {
 			'playlist: names the open playlist',
 			{ kind: 'playlist' as const, id: 'p1' },
 			playlist,
-			{ type: 'playlist', label: 'Night Drive' }
+			{ type: 'playlist', label: 'Night Drive', playlist }
+		],
+		[
+			'playlist: never names the previous playlist while the opened one loads',
+			{ kind: 'playlist' as const, id: 'p2' },
+			playlist,
+			{ type: 'library', label: RAIL_LIBRARY_LABEL }
 		],
 		[
 			// A playlist whose detail failed to load (or hasn't loaded yet)
@@ -2437,6 +2444,40 @@ describe('idlePlayTarget', () => {
 	])('%s', (_name, collection, playlistDetail, expected) => {
 		const target = idlePlayTarget({ collection, albums, playlist: playlistDetail });
 		expect(target).toEqual(expected);
+	});
+});
+
+describe('playbackSource', () => {
+	beforeEach(() => {
+		albumList.set([makeAlbum({ created_at: '', title: 'Nightdrive' })]);
+		openCollection.set({ kind: 'playlist', id: 'p9' });
+	});
+
+	it.each([
+		[
+			'an album queue names its album',
+			{ type: 'album' as const, albumId: 'a1' },
+			{ kind: 'album', id: 'a1', title: 'Nightdrive' }
+		],
+		[
+			'a playlist queue names its playlist',
+			{
+				type: 'playlist' as const,
+				playlist: { id: 'p1', title: 'Late Drives' },
+				entries: [],
+				index: 0
+			},
+			{ kind: 'playlist', id: 'p1', title: 'Late Drives' }
+		],
+		['a library queue names no source', { type: 'library' as const }, null],
+		[
+			'an album queue whose album is not loaded names no source',
+			{ type: 'album' as const, albumId: 'a-missing' },
+			null
+		]
+	])('%s, whatever collection is open', (_name, ctx, expected) => {
+		queueContext.set(ctx);
+		expect(get(playbackSource)).toEqual(expected);
 	});
 });
 
@@ -2529,6 +2570,19 @@ describe('playIdleStart', () => {
 		const ctx = get(queueContext);
 		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
 		expect(ctx.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
+	});
+
+	it('never plays the previous playlist while the newly opened one is still loading', async () => {
+		openCollection.set({ kind: 'playlist', id: 'p2' });
+		selectedPlaylistDetail.set(
+			makeDetail({
+				...playlistDefaults,
+				entries: [makePlaylistEntry({ ...playlistEntryDefaults, song_title: 'Previous list' })]
+			})
+		);
+		await playIdleStart();
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+		expect(get(queueContext).type).not.toBe('playlist');
 	});
 
 	it('falls back to the library pool when the open playlist detail failed to load', async () => {
