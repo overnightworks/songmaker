@@ -8,7 +8,12 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import {
+	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
+	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
+	HITBOX_FREQUENT_PX
+} from '$lib/constants';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const action = await vi.hoisted(async () => {
 	const { writable } = await import('svelte/store');
@@ -22,6 +27,7 @@ vi.mock('$lib/stores/generateAction', async (importOriginal) => ({
 
 import { cancelGeneration, type GenerateState } from '$lib/stores/generateAction';
 import GenerationStatusSlot from './GenerationStatusSlot.svelte';
+import generationStatusSlotSource from './GenerationStatusSlot.svelte?raw';
 
 const running: Extract<GenerateState, { kind: 'generating' }> = {
 	kind: 'generating',
@@ -41,6 +47,14 @@ const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	reconnecting: false
 };
 
+const reconnecting: Extract<GenerateState, { kind: 'generating' }> = {
+	...running,
+	phase: 'Reconnecting…',
+	progress: 40,
+	readout: 'last seen at 40%',
+	reconnecting: true
+};
+
 let component: ReturnType<typeof mount>;
 
 beforeEach(() => {
@@ -53,6 +67,7 @@ afterEach(async () => {
 	await unmount(component);
 	document.body.replaceChildren();
 	clearHitboxStyles();
+	clearComponentStyles();
 	clearPointer();
 });
 
@@ -157,5 +172,52 @@ describe('GenerationStatusSlot', () => {
 		cancel.click();
 		await tick();
 		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
+	});
+
+	describe('while the page is offline', () => {
+		function styledSlot(): HTMLElement {
+			const slot = document.body.querySelector<HTMLElement>('.status-slot');
+			if (!slot) throw new Error('Expected the status slot');
+			injectComponentStyles(generationStatusSlotSource, 'GenerationStatusSlot.svelte', slot);
+			return slot;
+		}
+
+		it('reads "Reconnecting…" with the last seen progress instead of a ticking readout', async () => {
+			await render(reconnecting);
+			const slot = styledSlot();
+			expect(slot.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+				'v8 · Reconnecting… Take 1 of 2 · last seen at 40%'
+			);
+			expect(slot.textContent).not.toContain('~');
+		});
+
+		it('holds the bar at its last width in grey', async () => {
+			await render(reconnecting);
+			const slot = styledSlot();
+			const bar = slot.querySelector('[role="progressbar"]');
+			expect(bar?.getAttribute('aria-label')).toBe(EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL);
+			expect(bar?.getAttribute('aria-valuenow')).toBe('40');
+			const fill = bar?.querySelector('span');
+			if (!fill) throw new Error('Expected the bar fill');
+			expect(fill.style.width).toBe('40%');
+			expect(getComputedStyle(fill).getPropertyValue('background')).toBe('var(--text-disabled)');
+		});
+
+		it.each([
+			{ state: 'running', presentation: reconnecting },
+			{ state: 'queued', presentation: { ...queued, reconnecting: true } }
+		])(
+			'greys the cancel of a $state take, which cannot reach the server',
+			async ({ presentation }) => {
+				await render(presentation);
+				const slot = styledSlot();
+				const cancel = getByRoleButton(slot, EDITOR_GENERATE_CANCEL_OFFLINE_LABEL);
+				expect(cancel.getAttribute('aria-disabled')).toBe('true');
+				expect(getComputedStyle(cancel).color).toBe('var(--text-disabled)');
+				cancel.click();
+				await tick();
+				expect(cancelGeneration).not.toHaveBeenCalled();
+			}
+		);
 	});
 });
