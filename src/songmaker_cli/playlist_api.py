@@ -11,7 +11,9 @@ from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
+    PLAYLIST_NOT_FOUND_DETAIL,
     check_generation_access,
+    check_playlist_access,
     check_song_access,
     resolve_public_base_url,
     unique_playlist_slug,
@@ -50,7 +52,7 @@ from songmaker_cli.covers import (
     resolve_playlist_cover_file,
     write_playlist_cover,
 )
-from songmaker_cli.db.models import Generation, Playlist
+from songmaker_cli.db.models import Generation
 from songmaker_cli.db.queries import (
     add_album_to_playlist,
     add_generation_to_playlist,
@@ -75,19 +77,7 @@ log = logging.getLogger(__name__)
 
 router = APIRouter()
 
-PLAYLIST_NOT_FOUND_DETAIL: Final = "Playlist not found"
 ALBUM_NOT_FOUND_DETAIL: Final = "Album not found"
-
-
-def _check_playlist_access(
-    session: Session, playlist_id: str, user: AuthenticatedUser,
-) -> Playlist:
-    playlist = get_playlist(session, playlist_id)
-    if not playlist:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN and playlist.created_by != user.id:
-        raise HTTPException(404, PLAYLIST_NOT_FOUND_DETAIL)
-    return playlist
 
 
 @router.get("/playlists")
@@ -121,7 +111,7 @@ def api_get_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PlaylistDetailResponse:
-    playlist = _check_playlist_access(session, playlist_id, user)
+    playlist = check_playlist_access(session, playlist_id, user)
     return PlaylistDetailResponse.from_orm(playlist)
 
 
@@ -135,7 +125,7 @@ def api_update_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PlaylistResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     slug = unique_playlist_slug(session, req.title, exclude_playlist_id=playlist_id)
     try:
         playlist = update_playlist(session, playlist_id, req.title, slug=slug)
@@ -155,7 +145,7 @@ def api_delete_playlist(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     try:
         delete_playlist(session, playlist_id)
     except ValueError:
@@ -181,7 +171,7 @@ def api_get_playlist_cover(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> FileResponse:
-    playlist = _check_playlist_access(session, playlist_id, user)
+    playlist = check_playlist_access(session, playlist_id, user)
     if v is not None and v != playlist.cover_key:
         raise HTTPException(404, COVER_NOT_FOUND)
     try:
@@ -210,7 +200,7 @@ async def api_upload_playlist_cover(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> PlaylistResponse:
-    playlist = _check_playlist_access(session, playlist_id, user)
+    playlist = check_playlist_access(session, playlist_id, user)
     payload = await file.read(COVER_MAX_BYTES + 1)
     try:
         cover_key = write_playlist_cover(ctx.audio_dir, playlist.id, payload)
@@ -232,7 +222,7 @@ def api_delete_playlist_cover(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> PlaylistResponse:
-    playlist = _check_playlist_access(session, playlist_id, user)
+    playlist = check_playlist_access(session, playlist_id, user)
     playlist = set_playlist_cover_key(session, playlist.id, None)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.PLAYLIST, playlist.id)
     session.commit()
@@ -253,7 +243,7 @@ def api_add_generation_to_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> PlaylistEntryResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     check_generation_access(session, req.generation_id, user)
     try:
         entry = add_generation_to_playlist(session, playlist_id, req.generation_id)
@@ -280,7 +270,7 @@ def api_add_song_to_playlist(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> StatusResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     song = check_song_access(session, req.song_id, user)
     playable = best_playable_generation(song)
     if playable is None:
@@ -308,7 +298,7 @@ def api_add_album_to_playlist(
     session: Session = Depends(get_db_session),
     ctx: AppContext = Depends(get_app_context),
 ) -> AddAlbumToPlaylistResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     album = get_album(session, req.album_id)
     if not album:
         raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
@@ -350,7 +340,7 @@ def api_remove_from_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     try:
         remove_from_playlist(session, playlist_id, entry_id)
     except ValueError:
@@ -370,7 +360,7 @@ def api_reorder_playlist_entry(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     try:
         reorder_playlist_entry(session, playlist_id, entry_id, req.new_position)
     except ValueError:
@@ -391,7 +381,7 @@ def api_share_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> ShareResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     base_url = resolve_public_base_url()
     try:
         playlist = enable_playlist_sharing(session, playlist_id)
@@ -414,7 +404,7 @@ def api_unshare_playlist(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
-    _check_playlist_access(session, playlist_id, user)
+    check_playlist_access(session, playlist_id, user)
     try:
         disable_playlist_sharing(session, playlist_id)
     except ValueError:

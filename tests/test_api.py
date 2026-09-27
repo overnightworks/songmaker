@@ -22,6 +22,8 @@ from songmaker_cli.db.models import (
     AvailableModel,
     Generation,
     Job,
+    Playlist,
+    PlaylistEntry,
     Score,
     Song,
     User,
@@ -457,20 +459,123 @@ def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
         assert song.updated_at == updated_at_before_listen
 
 
-def test_listen_song_rejects_an_unplayable_song(client: TestClient) -> None:
+@pytest.mark.parametrize(
+    "body", [None, {"playlist_id": "p-own"}], ids=["no-playlist", "from-own-playlist"],
+)
+def test_listen_song_rejects_an_unplayable_song(client: TestClient, body: dict | None) -> None:
+    _seed_listen_playlists(client)
     with client.app.state.ctx.db() as session:
         for generation in session.query(Generation).filter_by(song_id="s1"):
             generation.mp3_path = ""
         session.commit()
 
-    resp = client.post("/api/songs/s1/listen")
+    resp = client.post("/api/songs/s1/listen", json=body)
 
     assert resp.status_code == 422
     assert resp.json()["detail"] == "Song is not playable"
+    _assert_no_listen_recorded(client)
+
+
+def _seed_listen_playlists(client: TestClient) -> None:
+    """Own playlists with and without a take of s1, and another musician's."""
     with client.app.state.ctx.db() as session:
+        session.add(User(
+            id="u-other", username="other_user", password_hash="unused", role="user",
+        ))
+        session.add(Song(id="s2", title="Lightning", album_id="rock", track_number=2))
+        session.add(Generation(
+            id="g-s2", song_id="s2", generation_number=1, mp3_path="u-test/g-s2.mp3",
+        ))
+        session.flush()
+        owner_id = session.get(Album, "rock").created_by
+        for playlist_id, created_by, generation_id in [
+            ("p-own", owner_id, "g2"),
+            ("p-without-song", owner_id, "g-s2"),
+            ("p-foreign", "u-other", "g1"),
+        ]:
+            session.add(Playlist(
+                id=playlist_id, title=playlist_id, slug=playlist_id, created_by=created_by,
+            ))
+            session.add(PlaylistEntry(
+                playlist_id=playlist_id, generation_id=generation_id, position=0,
+            ))
+        session.commit()
+
+
+def _assert_no_listen_recorded(client: TestClient) -> None:
+    with client.app.state.ctx.db() as session:
+        assert session.get(Song, "s1").last_played_at is None
+        assert session.query(Playlist).filter(
+            Playlist.last_played_at.is_not(None)
+            | Playlist.last_played_song_id.is_not(None),
+        ).count() == 0
+
+
+def test_listen_song_from_an_own_playlist_moves_the_playlist_without_editing_it(
+    client: TestClient,
+) -> None:
+    _seed_listen_playlists(client)
+    with client.app.state.ctx.db() as session:
+        updated_at_before_listen = session.get(Playlist, "p-own").updated_at
+    before = datetime.now(timezone.utc)
+
+    resp = client.post("/api/songs/s1/listen", json={"playlist_id": "p-own"})
+
+    after = datetime.now(timezone.utc)
+    assert resp.status_code == 200
+    with client.app.state.ctx.db() as session:
+        playlist = session.get(Playlist, "p-own")
         song = session.get(Song, "s1")
-        assert song is not None
-        assert song.last_played_at is None
+        assert playlist.last_played_song_id == "s1"
+        assert before <= playlist.last_played_at.replace(tzinfo=timezone.utc) <= after
+        assert playlist.last_played_at == song.last_played_at
+        assert playlist.updated_at == updated_at_before_listen
+
+
+def test_listen_song_without_a_playlist_leaves_every_playlist_untouched(
+    client: TestClient,
+) -> None:
+    _seed_listen_playlists(client)
+
+    resp = client.post("/api/songs/s1/listen")
+
+    assert resp.status_code == 200
+    with client.app.state.ctx.db() as session:
+        assert session.get(Song, "s1").last_played_at is not None
+        assert session.query(Playlist).filter(
+            Playlist.last_played_at.is_not(None),
+        ).count() == 0
+
+
+@pytest.mark.parametrize(
+    ("playlist_id", "status", "detail"),
+    [
+        ("p-unknown", 404, "Playlist not found"),
+        ("p-foreign", 404, "Playlist not found"),
+        ("p-without-song", 422, "Playlist does not hold this song"),
+    ],
+)
+def test_listen_song_from_a_playlist_records_nothing_when_rejected(
+    client: TestClient, playlist_id: str, status: int, detail: str,
+) -> None:
+    _seed_listen_playlists(client)
+
+    resp = client.post("/api/songs/s1/listen", json={"playlist_id": playlist_id})
+
+    assert resp.status_code == status
+    assert resp.json()["detail"] == detail
+    _assert_no_listen_recorded(client)
+
+
+def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> None:
+    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    _seed_listen_playlists(client)
+
+    resp = client.post("/api/songs/s1/listen", json={"playlist_id": "p-foreign"})
+
+    assert resp.status_code == 404
+    assert resp.json()["detail"] == "Playlist not found"
+    _assert_no_listen_recorded(client)
 
 
 def test_listen_song_hides_a_foreign_song(tmp_path: Path) -> None:

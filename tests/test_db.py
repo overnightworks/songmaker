@@ -36,6 +36,8 @@ from songmaker_cli.db.models import (
     Album,
     Generation,
     LoginAttempt,
+    Playlist,
+    PlaylistEntry,
     Rating,
     Score,
     Song,
@@ -62,6 +64,7 @@ from songmaker_cli.db.queries import (
     delete_generation,
     delete_generation_files,
     delete_session,
+    delete_song,
     delete_version,
     enable_generation_sharing,
     enable_song_sharing,
@@ -85,11 +88,13 @@ from songmaker_cli.db.queries import (
     pick_generation,
     prune_overflow_sessions,
     record_login_attempt,
+    record_song_listen,
     recover_stale_jobs_by_age_and_type,
     recover_stale_jobs_by_type,
     save_rating,
     save_scores,
     set_generation_transcript,
+    soft_delete_song,
     unarchive_generation,
     unkeep_generation,
     unpick_generation,
@@ -3038,6 +3043,87 @@ def test_playlist_cover_key_migration_adds_and_removes_nullable_column(tmp_path:
     columns = {column["name"] for column in inspect(engine).get_columns("playlists")}
     engine.dispose()
     assert "cover_key" not in columns
+
+
+
+def test_playlist_last_played_migration_keeps_existing_playlists_both_ways(
+    tmp_path: Path,
+) -> None:
+    import importlib
+
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.c3e7a91f5d20_add_playlist_last_played",
+    )
+    url = f"sqlite:///{tmp_path / 'playlist-last-played.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO playlists (id, title, slug, created_at, updated_at) "
+            "VALUES ('existing', 'Night Drive', 'night-drive', "
+            "CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+
+    command.upgrade(config, migration.revision)
+
+    inspector = inspect(engine)
+    columns = {column["name"]: column for column in inspector.get_columns("playlists")}
+    assert columns["last_played_at"]["nullable"] is True
+    assert columns["last_played_song_id"]["nullable"] is True
+    foreign_keys = {fk["name"]: fk for fk in inspector.get_foreign_keys("playlists")}
+    song_key = foreign_keys["fk_playlists_last_played_song_id_songs"]
+    assert song_key["referred_table"] == "songs"
+    assert song_key["options"]["ondelete"] == "SET NULL"
+    assert "ix_playlists_last_played_song_id" in {
+        index["name"] for index in inspector.get_indexes("playlists")
+    }
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT title, last_played_at, last_played_song_id FROM playlists"
+        )).one() == ("Night Drive", None, None)
+
+    command.downgrade(config, migration.down_revision)
+
+    inspector = inspect(engine)
+    columns = {column["name"] for column in inspector.get_columns("playlists")}
+    assert not {"last_played_at", "last_played_song_id"} & columns
+    assert [fk["referred_table"] for fk in inspector.get_foreign_keys("playlists")] == ["users"]
+    assert "ix_playlists_last_played_song_id" not in {
+        index["name"] for index in inspector.get_indexes("playlists")
+    }
+    with engine.begin() as connection:
+        assert connection.execute(text("SELECT title FROM playlists")).scalar_one() == (
+            "Night Drive"
+        )
+    engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("remove_song", "referenced_song_id"),
+    [(soft_delete_song, "s1"), (delete_song, None)],
+    ids=["soft-deleted-stays-referenced", "hard-deleted-clears-the-reference"],
+)
+def test_playlist_listen_reference_after_its_song_is_removed(
+    seeded_session: Session, remove_song, referenced_song_id: str | None,
+) -> None:
+    playlist = Playlist(id="p1", title="Night Drive", slug="night-drive")
+    seeded_session.add(playlist)
+    seeded_session.add(PlaylistEntry(playlist_id="p1", generation_id="g1", position=0))
+    seeded_session.flush()
+    record_song_listen(seeded_session, seeded_session.get(Song, "s1"), playlist=playlist)
+    seeded_session.commit()
+
+    remove_song(seeded_session, "s1")
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    listened = seeded_session.get(Playlist, "p1")
+    assert listened.last_played_at is not None
+    assert listened.last_played_song_id == referenced_song_id
 
 
 # ── Claude model settings ───────────────────────────────────────────
