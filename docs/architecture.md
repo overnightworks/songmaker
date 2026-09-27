@@ -1005,8 +1005,10 @@ answer at all is not an error of this owner: it sets no visible error and no Ret
 and the library shows no failure of its own. Whether the page can reach the server
 has one owner, `stores/connectivity.ts`: it combines `navigator.onLine`, the
 `online`/`offline` events and the resource stream's health, which the resource
-sync owner reports (a `hello` or an answering auth probe means reachable, a stream
-that fails to reopen while the browser is online means not). Surfaces read its
+sync owner reports (a `hello` means reachable; a stream that fails before its
+`hello`, to open or to reopen, means not, whatever the auth probe answers, and so
+does a probe that gets no answer; a live stream that drops after its `hello`
+stays reachable until its reopen fails). Surfaces read its
 `offline` store and never decide on their own: the one `OfflineStrip` — a calm
 neutral "You're offline — retrying" with no button — rests on the top edge of the
 private transport bar, steps aside with it for the phone keyboard and full Now
