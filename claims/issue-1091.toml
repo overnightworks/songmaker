@@ -1,0 +1,8 @@
+claim_id = "b8c4795f10ce4f1ea9bb0816051ee6b0"
+agent = "claude-head"
+role = "builder"
+base = "8a3481dfac84d3a61d3505e554755867a6add32c"
+branch = "claude/issue-1091-search-trim-rank"
+scope = ["frontend/e2e/nav-row.spec.ts", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/lib/components/shell/RailSearch.test.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts"]
+opened_commit = "1035ff25cdbe4c0d47a076ec006c8826000f975c"
+whole_reason = "search owner query trimming, ranking and highlights with their tests"
