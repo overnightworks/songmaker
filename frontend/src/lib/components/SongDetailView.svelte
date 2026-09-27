@@ -41,7 +41,8 @@
 		clearGenerationSelection,
 		persistLibraryHistory,
 		selectNeighborSong,
-		pendingDirtyNavigation
+		pendingDirtyNavigation,
+		detailTab
 	} from '$lib/stores/navigation';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -96,7 +97,6 @@
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
-		EDITOR_VIEW_COWRITER_LABEL,
 		TAKES_ERROR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
@@ -560,31 +560,23 @@
 			phoneAppBar.set(null);
 			return;
 		}
-		phoneAppBar.set(
-			$coWriterOpen && compact
-				? {
-						kind: 'screen',
-						title: EDITOR_VIEW_COWRITER_LABEL,
-						onback: () => coWriterOpen.set(false)
-					}
-				: {
-						kind: 'song',
-						title: song.title,
-						onrename: onRenameSong,
-						share: {
-							isShared: song.is_shared,
-							shareSlug: song.share_slug,
-							onshare: onSongShareEnable,
-							onunshare: onSongShareDisable
-						},
-						menu: {
-							saveDisabled: !dirty,
-							onsave: () => void onSaveVersion(),
-							onaddtoplaylist: () => (songPlaylistPickerOpen = true),
-							ondelete: () => (showDeleteConfirm = true)
-						}
-					}
-		);
+		phoneAppBar.set({
+			kind: 'song',
+			title: song.title,
+			onrename: onRenameSong,
+			share: {
+				isShared: song.is_shared,
+				shareSlug: song.share_slug,
+				onshare: onSongShareEnable,
+				onunshare: onSongShareDisable
+			},
+			menu: {
+				saveDisabled: !dirty,
+				onsave: () => void onSaveVersion(),
+				onaddtoplaylist: () => (songPlaylistPickerOpen = true),
+				ondelete: () => (showDeleteConfirm = true)
+			}
+		});
 		return () => phoneAppBar.set(null);
 	});
 
@@ -645,13 +637,7 @@
 			{#if !compact}
 				{@render saveAction()}
 			{/if}
-			<WriteColumn
-				song={current}
-				coWriterOpen={withCowriter}
-				compact={isCompact}
-				{cowriterPanel}
-				onopencowriter={() => coWriterOpen.set(true)}
-			/>
+			<WriteColumn song={current} coWriterOpen={withCowriter} compact={isCompact} {cowriterPanel} />
 		</div>
 	{/snippet}
 
@@ -733,7 +719,11 @@
 		/>
 	{/snippet}
 
-	<div class="detail-panel" class:compact class:grows-with-content={compact && !$coWriterOpen}>
+	<div
+		class="detail-panel"
+		class:compact
+		class:grows-with-content={compact && $detailTab !== 'cowriter'}
+	>
 		{#if compact}
 			<SongPhoneView
 				{sharedLink}
