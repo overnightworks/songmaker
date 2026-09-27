@@ -72,7 +72,7 @@
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
 		ADMIN_VOICES_HEADING,
-		ADMIN_VOICES_LOAD_FAILED,
+		VOICES_LOAD_FAILED,
 		ADMIN_VOICES_LOADING,
 		ADMIN_VOICES_NAME_LABEL,
 		ADMIN_VOICES_OWNER_LABEL,
@@ -233,7 +233,7 @@
 
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
 		users: 'Failed to load users',
-		voices: ADMIN_VOICES_LOAD_FAILED,
+		voices: VOICES_LOAD_FAILED,
 		rateLimits: 'Failed to load rate limits',
 		userLimits: 'Failed to load user limits',
 		providerStatus: PROVIDER_STATUS_UNAVAILABLE_DETAIL,
