@@ -42,7 +42,8 @@ import {
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { HITBOX_FREQUENT_PX } from '$lib/constants';
+import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { toasts } from '$lib/stores/toast';
 import {
 	clearHitboxStyles,
@@ -575,9 +576,12 @@ describe('NowPlaying', () => {
 describe('NowPlaying when the take details cannot load', () => {
 	afterEach(() => {
 		toasts.set([]);
+		resetConnectivityForTests();
+		vi.useRealTimers();
 	});
 
 	it('adds no text of its own when the network is gone — the offline strip says it', async () => {
+		reportResourceStreamReachable(false);
 		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
 		await renderSurface(info());
 
@@ -587,6 +591,21 @@ describe('NowPlaying when the take details cannot load', () => {
 		expect(fetch).toHaveBeenCalledWith('/api/songs/s1', expect.anything());
 		const shown = [...get(toasts).map((toast) => toast.message), target.textContent];
 		expect(shown.join(' ')).not.toMatch(/Failed to (fetch|load take details)/);
+	});
+
+	it('while no strip shows, loads again on a bounded backoff and then names the failure', async () => {
+		vi.useFakeTimers();
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+		await renderSurface(info());
+		await vi.advanceTimersByTimeAsync(0);
+		expect(get(toasts)).toEqual([]);
+
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		expect(fetch).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({ type: 'error', message: 'Failed to load take details' })
+		]);
 	});
 
 	it("names a refusal in the server's own words", async () => {

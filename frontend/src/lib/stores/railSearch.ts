@@ -4,7 +4,7 @@ import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
-import { whenBackOnline } from '$lib/stores/connectivity';
+import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
@@ -108,7 +108,7 @@ export const railSearch = writable<RailSearchState>({ ...EMPTY_RAIL_SEARCH });
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchGeneration = 0;
-let stopAwaitingReconnect: (() => void) | null = null;
+const railSearchReloads = reloadWhileUnreachable(searchCurrentQueryAgain);
 
 export function syncRailSearch(rawQuery: string): void {
 	const query = rawQuery.trim();
@@ -127,9 +127,13 @@ export function syncRailSearch(rawQuery: string): void {
 }
 
 export function retryRailSearch(): void {
+	cancelPendingRailSearch();
+	searchCurrentQueryAgain();
+}
+
+function searchCurrentQueryAgain(): void {
 	const { query } = get(railSearch);
 	if (!query) return;
-	cancelPendingRailSearch();
 	setRailSearchLoading(query);
 	void runRailSearch(query);
 }
@@ -200,8 +204,7 @@ function isRailSearchUnderwayFor(query: string): boolean {
 }
 
 function cancelPendingRailSearch(): void {
-	stopAwaitingReconnect?.();
-	stopAwaitingReconnect = null;
+	railSearchReloads.stop();
 	if (searchTimer === null) return;
 	clearTimeout(searchTimer);
 	searchTimer = null;
@@ -224,13 +227,17 @@ async function runRailSearch(query: string): Promise<void> {
 			limit: RAIL_SEARCH_RESULT_LIMIT
 		});
 		if (generation !== searchGeneration) return;
+		railSearchReloads.stop();
 		railSearch.set({ query, status: 'ready', error: null, hits: response.items });
 	} catch (error) {
 		if (generation !== searchGeneration) return;
 		if (error instanceof NetworkError) {
-			railSearch.set({ query, status: 'unreachable', error: null, hits: [] });
-			searchAgainOnReconnect();
-			return;
+			const reload = railSearchReloads.afterNetworkFailure();
+			if (reload === 'on-reconnect') {
+				railSearch.set({ query, status: 'unreachable', error: null, hits: [] });
+				return;
+			}
+			if (reload === 'scheduled') return;
 		}
 		railSearch.set({
 			query,
@@ -239,13 +246,6 @@ async function runRailSearch(query: string): Promise<void> {
 			hits: []
 		});
 	}
-}
-
-// A search the network swallowed is not this panel's to word: the one
-// offline strip says it (#1039), and the search runs again by itself once
-// the connection that dropped is back.
-function searchAgainOnReconnect(): void {
-	stopAwaitingReconnect = whenBackOnline(retryRailSearch);
 }
 
 type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord' | 'detailParts'> & {

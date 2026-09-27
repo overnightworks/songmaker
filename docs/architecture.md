@@ -1055,9 +1055,13 @@ and the page (the phone's Generate bar included) stays above it; and Generate is
 disabled with no reason text of its own. A failure becomes text in one place,
 `describeFailure` in `api/fetch.ts`: the server's own reason, a module's
 `UserFacingError` (the service worker's "not active" message), otherwise the
-caller's named fallback — never a browser error's text. A list the network
-swallowed (the rail's albums and playlists, rail search) shows nothing of its
-own, keeps what it listed and loads again through the owner's `whenBackOnline`;
+caller's named fallback — never a browser error's text. While the strip shows,
+a list the network swallowed (the rail's albums and playlists, rail search, Now
+Playing's take details) shows nothing of its own, keeps what it listed and loads
+again through the owner's `whenBackOnline`. Without the strip (a timeout, a
+refused connection) the rail's albums, rail search and the take details load
+again through `reloadWhileUnreachable` (`stores/connectivity.ts`) on a bounded
+backoff, and only then name the failure (the rail and search with a Retry);
 the audio player words a lost network as its generic "Playback failed". Such a self-healing failed refresh retries on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries

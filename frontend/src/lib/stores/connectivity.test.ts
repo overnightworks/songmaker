@@ -1,9 +1,11 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import {
 	offline,
+	reloadWhileUnreachable,
 	reportResourceStreamReachable,
 	resetConnectivityForTests,
 	whenBackOnline
@@ -12,6 +14,7 @@ import {
 afterEach(() => {
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 });
 
 describe('connectivity', () => {
@@ -87,5 +90,37 @@ describe('connectivity', () => {
 		stop();
 
 		expect(comeBack).toHaveBeenCalledOnce();
+	});
+});
+
+describe('reloadWhileUnreachable', () => {
+	it('while offline, reloads once when the connection is back', () => {
+		reportResourceStreamReachable(false);
+		const reload = vi.fn();
+		const reloads = reloadWhileUnreachable(reload);
+
+		expect(reloads.afterNetworkFailure()).toBe('on-reconnect');
+		reportResourceStreamReachable(true);
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+
+		expect(reload).toHaveBeenCalledOnce();
+	});
+
+	it('once its backoff is spent, still reloads when a dropped connection comes back', () => {
+		vi.useFakeTimers();
+		const reload = vi.fn();
+		const reloads = reloadWhileUnreachable(reload);
+
+		const outcomes = UNREACHABLE_RELOAD_DELAYS_MS.map(() => reloads.afterNetworkFailure());
+		expect(outcomes).toEqual(UNREACHABLE_RELOAD_DELAYS_MS.map(() => 'scheduled'));
+		expect(reloads.afterNetworkFailure()).toBe('exhausted');
+		expect(reload).not.toHaveBeenCalled();
+
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+		reloads.stop();
+
+		expect(reload).toHaveBeenCalledOnce();
 	});
 });

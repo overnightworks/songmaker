@@ -1,5 +1,7 @@
 import { derived, get, readable, writable, type Readable } from 'svelte/store';
 
+import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+
 /**
  * The one answer to "can this page reach the server right now" (#1039).
  * The browser's own network state says it first; the library's live stream
@@ -41,6 +43,64 @@ export function whenBackOnline(callback: () => void): () => void {
 		if (wasOffline && !isOffline) callback();
 		wasOffline = isOffline;
 	});
+}
+
+/**
+ * What happens to a load the network swallowed (#1107):
+ * - `on-reconnect`: the offline strip says it; the load runs again once the
+ *   connection is back.
+ * - `scheduled`: no strip says it (a timeout, a refused connection), so the
+ *   load runs again on a bounded backoff.
+ * - `exhausted`: that backoff is spent; the surface names the failure and
+ *   offers its Retry. Should the connection drop and come back, the load
+ *   still runs again by itself.
+ */
+export type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
+
+export interface UnreachableReloads {
+	afterNetworkFailure(): UnreachableReload;
+	/** The load answered, or the surface moved on: forget the reloads. */
+	stop(): void;
+}
+
+export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
+	let reloadsSpent = 0;
+	let cancelPending: (() => void) | null = null;
+
+	function stopPending(): void {
+		cancelPending?.();
+		cancelPending = null;
+	}
+
+	function runPending(): void {
+		stopPending();
+		reload();
+	}
+
+	return {
+		afterNetworkFailure() {
+			stopPending();
+			if (get(offline)) {
+				reloadsSpent = 0;
+				cancelPending = whenBackOnline(runPending);
+				return 'on-reconnect';
+			}
+			const delay = UNREACHABLE_RELOAD_DELAYS_MS[reloadsSpent];
+			if (delay === undefined) {
+				reloadsSpent = 0;
+				cancelPending = whenBackOnline(runPending);
+				return 'exhausted';
+			}
+			reloadsSpent += 1;
+			const timer = setTimeout(runPending, delay);
+			cancelPending = () => clearTimeout(timer);
+			return 'scheduled';
+		},
+		stop() {
+			stopPending();
+			reloadsSpent = 0;
+		}
+	};
 }
 
 export function resetConnectivityForTests(): void {

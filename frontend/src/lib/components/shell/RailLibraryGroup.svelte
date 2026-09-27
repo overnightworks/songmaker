@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
+	import { get } from 'svelte/store';
 	import { openCollection } from '$lib/stores/collection';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import {
@@ -9,7 +10,7 @@
 		loadSongsForAlbum,
 		songList
 	} from '$lib/stores/libraryData';
-	import { whenBackOnline } from '$lib/stores/connectivity';
+	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
@@ -59,6 +60,12 @@
 	const isAlbumDetail = $derived(surface === 'detail' && openAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadError = $derived($allAlbumsLoad.error);
+	let libraryReloadsExhausted = $state(false);
+	// A load the network swallowed shows no failure while it reloads, nor while
+	// the offline strip says it; only a spent backoff names it with a Retry.
+	const showLoadFailure = $derived(
+		loadStatus === 'error' || (loadStatus === 'unreachable' && libraryReloadsExhausted && !$offline)
+	);
 	const albumCount = $derived(
 		albums.length > 0 || loadStatus === 'ready' ? albums.length : undefined
 	);
@@ -76,14 +83,24 @@
 	// complete album list regardless of which library page, or which non-library
 	// route (e.g. Settings), is currently open.
 	$effect(() => {
-		void ensureAllAlbumsLoaded();
+		void loadLibrary();
 	});
 
+	const libraryReloads = reloadWhileUnreachable(retryLibraryLoad);
+	$effect(() => () => libraryReloads.stop());
+
 	function retryLibraryLoad(): void {
-		void ensureAllAlbumsLoaded();
+		void loadLibrary();
 	}
 
-	$effect(() => whenBackOnline(retryLibraryLoad));
+	async function loadLibrary(): Promise<void> {
+		if (await ensureAllAlbumsLoaded()) {
+			libraryReloads.stop();
+			return;
+		}
+		if (get(allAlbumsLoad).status !== 'unreachable') return;
+		libraryReloadsExhausted = libraryReloads.afterNetworkFailure() === 'exhausted';
+	}
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
 	// letting every once-opened row accumulate would stop showing where the
@@ -209,11 +226,11 @@
 		groupId="rail-library-group"
 		storageKey={LIBRARY_OPEN_STORAGE_KEY}
 		count={albumCount}
-		expandTrigger={isAlbumDetail || loadStatus === 'error' || filtering}
+		expandTrigger={isAlbumDetail || showLoadFailure || filtering}
 		{icon}
 	>
 		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
-			{#if loadStatus === 'error'}
+			{#if showLoadFailure}
 				<div class="rail-load-error">
 					<p class="rail-status" role="alert">{loadError ?? RAIL_LIBRARY_LOAD_ERROR}</p>
 					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
