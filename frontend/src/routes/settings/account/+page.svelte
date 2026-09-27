@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { changePassword } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import { currentUser } from '$lib/stores/auth';
 
 	let current = $state('');
@@ -30,11 +31,7 @@
 			newPass = '';
 			confirm = '';
 		} catch (err) {
-			if (err instanceof Error && err.message.includes('401')) {
-				error = 'Current password is incorrect.';
-			} else {
-				error = err instanceof Error ? err.message : 'Failed';
-			}
+			error = describeFailure(err, 'Password change failed');
 		} finally {
 			submitting = false;
 		}

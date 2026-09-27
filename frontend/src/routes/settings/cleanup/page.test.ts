@@ -1,6 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationRetentionReport } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { addToast } from '$lib/stores/toast';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
@@ -9,7 +12,7 @@ vi.mock('$lib/api/client', () => ({
 	runGenerationRetention: vi.fn()
 }));
 
-import { previewGenerationRetention } from '$lib/api/client';
+import { previewGenerationRetention, runGenerationRetention } from '$lib/api/client';
 import { currentUser } from '$lib/stores/auth';
 import Page from './+page.svelte';
 
@@ -48,7 +51,56 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	currentUser.set(null);
 	vi.mocked(previewGenerationRetention).mockReset();
+	vi.mocked(runGenerationRetention).mockReset();
+	vi.mocked(addToast).mockReset();
+	resetConnectivityForTests();
 });
+
+function lostNetwork(): NetworkError {
+	return new NetworkError('/api/admin/retention', new TypeError('Failed to fetch'));
+}
+
+describe('generation retention failures', () => {
+	it('offline, shows no failure of its own and the preview comes back once online', async () => {
+		reportResourceStreamReachable(false);
+		vi.mocked(previewGenerationRetention).mockRejectedValueOnce(lostNetwork());
+		const target = await render();
+		expect(addToast).not.toHaveBeenCalled();
+		expect(target.querySelector('.counts')).toBeNull();
+
+		vi.mocked(previewGenerationRetention).mockResolvedValue(report());
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.querySelector('.counts')).not.toBeNull());
+		expect(addToast).not.toHaveBeenCalled();
+	});
+
+	it('names a preview the server refused in its own words', async () => {
+		vi.mocked(previewGenerationRetention).mockRejectedValueOnce(
+			new ApiError(503, 'Retention is paused', '/api/admin/retention')
+		);
+		await render();
+
+		expect(addToast).toHaveBeenCalledWith('Retention is paused', 'error');
+	});
+
+	it('names a cleanup run the network swallowed without browser text', async () => {
+		vi.mocked(previewGenerationRetention).mockResolvedValue(report());
+		vi.mocked(runGenerationRetention).mockRejectedValueOnce(lostNetwork());
+		const target = await render();
+		clickButton(target, 'Run cleanup now');
+		await tick();
+		clickButton(target, 'Confirm cleanup');
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith('Cleanup failed', 'error'));
+	});
+});
+
+function clickButton(target: HTMLElement, label: string): void {
+	Array.from(target.querySelectorAll<HTMLButtonElement>('button'))
+		.find((el) => el.textContent?.trim() === label)
+		?.click();
+}
 
 describe('generation retention settings', () => {
 	it('names what it archives and deletes as takes, the word the rest of the app uses', async () => {
