@@ -288,6 +288,7 @@
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
 		suggestionsRequest += 1;
+		coverSuggestionsReloads.stop();
 		updateCoverSuggestionsState(albumId, (state) => ({
 			...state,
 			...COVER_SUGGESTIONS_SETTLED,
