@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { sharePlaylist, unsharePlaylist, createQueueStreamSnapshot } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylist,
@@ -183,7 +184,7 @@
 			await uploadPlaylistCover(playlistMeta.id, file);
 			addToast('Cover saved', 'success');
 		} catch (error) {
-			addToast(error instanceof Error ? error.message : 'Cover upload failed', 'error');
+			addToast(describeFailure(error, 'Cover upload failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -200,7 +201,7 @@
 			await deletePlaylistCover(playlistMeta.id);
 			addToast('Cover removed', 'success');
 		} catch (error) {
-			addToast(error instanceof Error ? error.message : 'Cover remove failed', 'error');
+			addToast(describeFailure(error, 'Cover remove failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -300,8 +301,7 @@
 			await rememberPlaylistOfflineStream(playlistDetail.id, manifest.snapshot_id);
 			addToast('Saved for offline', 'success');
 		} catch (err) {
-			const msg = err instanceof Error ? err.message : 'Save failed';
-			addToast(`Offline save failed: ${msg}`, 'error');
+			addToast(describeFailure(err, 'Offline save failed'), 'error');
 		} finally {
 			offlineSaving = false;
 			offlineProgress = null;
