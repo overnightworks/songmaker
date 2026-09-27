@@ -157,7 +157,7 @@ describe('RailPlaylistsGroup', () => {
 	it.each([
 		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 0, status: 'playing', marks: [true, false] },
 		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 1, status: 'playing', marks: [false, true] },
-		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 1, status: 'paused', marks: [false, false] },
+		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 1, status: 'paused', marks: [false, true] },
 		{ held: 'Tide twice', entries: tideTwice, played: 1, status: 'playing', marks: [false, true] }
 	] as const)(
 		'marks only the entry played from its row ($held, row $played, $status)',

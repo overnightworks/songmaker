@@ -1,8 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PLAYING_MARK_LABEL } from '$lib/constants';
+import { PLAYING_MARK_LABEL, collectionPauseLabel, collectionPlayLabel } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { SharedTrack } from '$lib/share/sharedCollection';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { findElementByRoleAndName } from '../shell/rail-test-fixtures';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
@@ -156,5 +157,32 @@ describe('SharedCollection track rows', () => {
 		expect(
 			rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null)
 		).toEqual([false, true]);
+	});
+
+	it('shows the header the glyph it acts on: pause while the share plays, play once paused', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		const target = await renderShare(null, [], 'playlist', [sharedTrack('e1', 'Tide')]);
+		target.querySelector<HTMLButtonElement>('.track-row')?.click();
+		await tick();
+		const header = target.querySelector('.collection-header');
+		if (!header) throw new Error('Expected the collection header');
+
+		audioPlayer.status = 'playing';
+		await tick();
+		expect(getByRoleButton(header, collectionPauseLabel('playlist'))).not.toBeNull();
+
+		audioPlayer.status = 'paused';
+		await tick();
+		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
+	});
+
+	it('dims the header play circle of a share without audio', async () => {
+		const target = await renderShare(null);
+
+		expect(getByRoleButton(target, collectionPlayLabel('song')).disabled).toBe(true);
 	});
 });

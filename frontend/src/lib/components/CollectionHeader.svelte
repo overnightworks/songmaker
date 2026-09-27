@@ -13,10 +13,12 @@
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
-	import { setShuffle, type CollectionStart } from '$lib/stores/player';
+	import { playbackSource, setShuffle, type CollectionStart } from '$lib/stores/player';
+	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
 	interface Props {
 		kind: 'album' | 'playlist';
+		collectionId: string;
 		title: string;
 		coverUrl: string | null;
 		coverAlt: string;
@@ -52,6 +54,7 @@
 
 	let {
 		kind,
+		collectionId,
 		title,
 		coverUrl,
 		coverAlt,
@@ -101,22 +104,35 @@
 		editableTitle?.startEdit();
 	}
 
+	// The queue names where the music comes from; while that is this very
+	// collection, the circle is its pause and resume rather than a fresh start.
+	const queueIsThisCollection = $derived(
+		audioPlayer.current !== null &&
+			$playbackSource?.kind === kind &&
+			$playbackSource.id === collectionId
+	);
+	const sounding = $derived(queueIsThisCollection && audioPlayer.status === 'playing');
+
 	// The header is where a collection's play order is chosen: the circle plays
 	// it in order from the top, the shuffle square beside it plays it shuffled
 	// from a drawn song. Both set the player's own shuffle setting, so the
 	// transport's shuffle control shows the order the header just chose; which
-	// collection starts is the view's answer, through onplay. A tap that starts
-	// nothing leaves the listener's shuffle setting alone.
-	function playInOrder(): void {
-		if (!onplay) return;
-		setShuffle(false);
-		onplay('top');
+	// collection starts is the view's answer, through onplay. While this
+	// collection already plays, the circle pauses and resumes it instead and the
+	// order stays as it is — even once the collection has emptied under it. A
+	// view with nothing to start passes no onplay, which dims the shuffle square
+	// and, unless this collection is the queue, the circle, so no tap there
+	// reaches the listener's shuffle setting.
+	function onCircle(): void {
+		if (sounding) audioPlayer.pause();
+		else if (queueIsThisCollection) audioPlayer.play();
+		else start('top');
 	}
 
-	function playShuffled(): void {
+	function start(from: CollectionStart): void {
 		if (!onplay) return;
-		setShuffle(true);
-		onplay('random');
+		setShuffle(from === 'random');
+		onplay(from);
 	}
 </script>
 
@@ -184,8 +200,9 @@
 	{initials}
 	{artFill}
 	{kind}
-	onplay={playInOrder}
-	onshuffle={playShuffled}
+	playing={sounding}
+	onplay={onplay || queueIsThisCollection ? onCircle : null}
+	onshuffle={onplay ? () => start('random') : null}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
