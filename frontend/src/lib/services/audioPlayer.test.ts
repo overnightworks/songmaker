@@ -99,6 +99,7 @@ class FakeAudio {
 	error: MediaError | null = null;
 	crossOrigin: string | null = null;
 	preload = '';
+	bufferedUntil = 0;
 	private listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
 		this.paused = false;
@@ -115,6 +116,14 @@ class FakeAudio {
 		this.listeners.get(name)?.delete(listener);
 	}
 	removeAttribute(_name: string): void {}
+	get buffered(): Pick<TimeRanges, 'length' | 'end'> {
+		const end = this.bufferedUntil;
+		return { length: end > 0 ? 1 : 0, end: () => end };
+	}
+	restartClockAsLoadDoes(): void {
+		this.currentTime = 0;
+		this.fire('timeupdate');
+	}
 	pause(): void {
 		this.paused = true;
 		this.fire('pause');
@@ -399,6 +408,42 @@ describe('event handling', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
+	it('shows the reached position while the reload restarts the element clock, then seeks there', () => {
+		vi.useFakeTimers();
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 40;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('stalled');
+		vi.advanceTimersByTime(5000);
+
+		fakeAudio.restartClockAsLoadDoes();
+		expect(audioPlayer.currentTime).toBe(39.25);
+
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(39.25);
+	});
+
+	it('keeps the buffer of a slow download that still grows instead of reloading it from the start', () => {
+		vi.useFakeTimers();
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 1.9;
+		fakeAudio.bufferedUntil = 2;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('waiting');
+
+		for (let tick = 0; tick < 3; tick += 1) {
+			fakeAudio.bufferedUntil += 0.25;
+			vi.advanceTimersByTime(5000);
+		}
+		expect({ src: fakeAudio.src, status: audioPlayer.status }).toEqual({
+			src: '/audio/a1/song_v1.mp3',
+			status: 'buffering'
+		});
+
+		vi.advanceTimersByTime(5000);
+		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+	});
+
 	it('cancels stalled recovery when playback progresses again', () => {
 		vi.useFakeTimers();
 		audioPlayer.load(makeInfo(), { autoplay: false });
@@ -486,6 +531,12 @@ describe('frozen-clock watchdog', () => {
 				loadMode,
 				playOnSeconds: 0,
 				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
+			},
+			{
+				name: `offers Retry on a third freeze of ${mode} that only plays briefly in between`,
+				loadMode,
+				playOnSeconds: 2,
+				afterThirdFreeze: { status: 'error', error: 'Playback stalled. Click play to retry.' }
 			}
 		])
 	)('$name', async ({ loadMode, playOnSeconds, afterThirdFreeze }) => {
@@ -503,6 +554,44 @@ describe('frozen-clock watchdog', () => {
 
 		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(afterThirdFreeze);
 	});
+
+	async function freezeUntilTheRecoveryBudgetIsSpent(): Promise<void> {
+		startPlayingAt(40);
+		for (let recovery = 1; recovery <= 2; recovery += 1) {
+			advanceSeconds(5);
+			await vi.advanceTimersByTimeAsync(0);
+			startPlayingAt(fakeAudio.currentTime);
+		}
+		advanceSeconds(5);
+	}
+
+	it.each(playbackModes)(
+		'pauses $mode when it gives up, so the sound agrees with the stalled message',
+		async ({ loadMode }) => {
+			loadMode();
+			await freezeUntilTheRecoveryBudgetIsSpent();
+
+			expect({ status: audioPlayer.status, paused: fakeAudio.paused }).toEqual({
+				status: 'error',
+				paused: true
+			});
+		}
+	);
+
+	it.each(playbackModes)(
+		'clears the stalled state when $mode plays on by itself after giving up',
+		async ({ loadMode }) => {
+			loadMode();
+			await freezeUntilTheRecoveryBudgetIsSpent();
+
+			startPlayingAt(fakeAudio.currentTime);
+
+			expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual({
+				status: 'playing',
+				error: null
+			});
+		}
+	);
 
 	it('asks for a new URL when the same take recovers again in a later load', () => {
 		startPlayingAt(40);
