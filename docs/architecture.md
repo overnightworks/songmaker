@@ -167,8 +167,12 @@ which history navigation (Back and Forward, an address, returning to the
 wall) and a live stream reconnect run, reads only the first album page; once
 a surface asked for every album, that page refreshes the albums it holds and
 the rest stay (`resetAlbumList`), so neither surface shrinks to one page and
-no navigation reads every album again. Albums changed on another device past
-that first page show their change on the next page load. Share inventory is the
+no navigation reads every album again. Navigation therefore never removes an
+album, and albums changed on another device past that first page show their
+change only later: a stream snapshot that follows a gap (a resync, or a
+bootstrap after a failed one) reads every album again and replaces the list
+(`rereadAllAlbums`), so one deleted or archived elsewhere leaves then or on
+the next page load. Share inventory is the
 complete server list of the current user's public slugs
 (`GET /api/library/shares`); membership, `N`, and the DELETE endpoints are
 unchanged.

@@ -20,7 +20,7 @@ import {
 	loadLibraryBrowse,
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
-import { albumList, songList } from '$lib/stores/libraryData';
+import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import {
 	playlistList,
@@ -69,6 +69,7 @@ vi.mock('$lib/api/songs', () => ({
 // module's fetchSong rather than $lib/api/songs's -- both share the fetchSong
 // spy below so a test only has to program one mocked response either way.
 vi.mock('$lib/api/client', () => ({
+	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
@@ -147,6 +148,7 @@ beforeEach(() => {
 	resetPlaylists();
 	searchQuery.set('');
 	albumList.set([]);
+	allAlbumsLoad.set({ status: 'idle', error: null });
 	songList.set([]);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
@@ -501,6 +503,30 @@ describe('hydrateLibraryFromHistory', () => {
 
 		await expect(hydrate).resolves.toBe(true);
 		expect(get(libraryBrowse).status).toBe('ready');
+	});
+
+	describe('once a surface read every album', () => {
+		beforeEach(async () => {
+			fetchAlbums.mockResolvedValue(
+				emptyPage([album({ id: 'a-kept', title: 'Kept' }), album({ id: 'a-gone', title: 'Gone' })])
+			);
+			await hydrateLibraryFromHistory();
+			await ensureAllAlbumsLoaded();
+			fetchAlbums.mockClear();
+			fetchAlbums.mockResolvedValue(emptyPage([album({ id: 'a-kept', title: 'Kept' })]));
+		});
+
+		it('drops an album deleted elsewhere when a snapshot follows a gap in the stream', async () => {
+			await expect(hydrateLibraryFromHistory()).resolves.toBe(true);
+
+			expect(get(albumList).map((item) => item.id)).toEqual(['a-kept']);
+		});
+
+		it('reads only the first album page on history navigation', async () => {
+			await applyLibraryHistory(libraryRootState());
+
+			expect(fetchAlbums).toHaveBeenCalledTimes(1);
+		});
 	});
 });
 
