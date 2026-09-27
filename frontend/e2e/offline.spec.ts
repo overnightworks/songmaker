@@ -19,6 +19,7 @@ import {
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
+	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -263,10 +264,11 @@ test.describe('losing the network while a take generates on the phone', () => {
 		const jobId = await seedRunningGenerationJob(songId, {
 			progress: 0.4,
 			takeIndex: 1,
-			takeCount: 1,
+			takeCount: 2,
 			phase: 'rendering',
 			generationStartedOffsetSeconds: 30
 		});
+		const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
 		const panel = page.getByRole('tabpanel');
 		const takesTab = page.getByRole('tab', { name: /Takes/ });
 		const runningRing = takesTab.locator('.ring');
@@ -282,7 +284,7 @@ test.describe('losing the network while a take generates on the phone', () => {
 			.click();
 		await takesTab.click();
 		await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
-		await expect(panel.getByText(/^40%/)).toBeVisible();
+		await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
 		await expect(playButtons).toHaveCount(seededTakes);
 
 		await loseNetwork(page, context);
@@ -290,7 +292,7 @@ test.describe('losing the network while a take generates on the phone', () => {
 		await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
 			timeout: OFFLINE_NOTICE_MS
 		});
-		await expect(panel.getByText('last seen at 40%', { exact: true })).toBeVisible();
+		await expect(panel.getByText(`${takeCounter}last seen at 40%`, { exact: true })).toBeVisible();
 		await expect(panel.getByText(/~\d/)).toHaveCount(0);
 		await expect(lastSeenBar).toHaveAttribute('aria-valuenow', '40');
 		const cancel = panel.getByRole('button', { name: EDITOR_GENERATE_CANCEL_OFFLINE_LABEL });
