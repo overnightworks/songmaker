@@ -1,7 +1,7 @@
 // Typing on the phone (issues #999, #1017): while a text field has focus and
 // the on-screen keyboard is open, the keyboard owns the bottom of the screen,
 // so the mini-player and the Generate bar step aside and come back once the
-// field is left or the keyboard closes; on the co-writer screen only the
+// field is left or the keyboard closes; on the Co-writer tab only the
 // player steps aside, the composer keeps its Send. Mobile project only — the
 // rule follows the compact layout, and desktop keeps every bar (the unit
 // suite pins that side in routes/layout.test.ts).
@@ -17,7 +17,6 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	APP_NAME,
-	EDITOR_COWRITER_BACK_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
@@ -150,7 +149,7 @@ test.describe('typing on the phone', () => {
 		await expect(generate).toBeVisible();
 		expect(await reservedTransportBarRoom(page)).not.toBe(NO_RESERVED_ROOM);
 
-		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL }).click();
+		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 		const composer = page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 		await composer.click();
 		await expect(miniPlayer).toBeHidden();
@@ -246,15 +245,12 @@ test.describe('typing on the phone', () => {
 		const guard = new FlowGuard(page);
 		await openSeededSongFromItsAlbum(page);
 
-		await page.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL }).click();
+		await page.getByRole('tab', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 		await page.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER).click();
 		await page.goBack();
 
 		await expect(appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL })).toBeVisible();
 		await expect(appBar(page).getByRole('button', { name: APP_NAME })).toBeVisible();
-		await expect(
-			appBar(page).getByRole('button', { name: EDITOR_COWRITER_BACK_LABEL })
-		).toHaveCount(0);
 		await expect(page.getByRole('contentinfo')).toBeVisible();
 
 		guard.assertClean();
