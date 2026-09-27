@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { ApiError } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import {
 		anyLoraActive,
 		createLora,
 		isLoraActive,
 		loadLoras,
 		loras,
-		lorasError,
 		lorasLoading,
 		softDeleteLora
 	} from '$lib/stores/loras';
@@ -15,7 +15,12 @@
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import LoraDetail from '$lib/components/LoraDetail.svelte';
 	import ConfirmDeleteDialog from '$lib/components/ConfirmDeleteDialog.svelte';
-	import { APP_NAME, LORA_CREATE_FAILED, LORA_POLL_INTERVAL_MS } from '$lib/constants';
+	import {
+		APP_NAME,
+		LORA_CREATE_FAILED,
+		LORA_POLL_INTERVAL_MS,
+		VOICES_LOAD_FAILED
+	} from '$lib/constants';
 	import type { UserLoraItem } from '$lib/api/types';
 
 	let showCreate = $state(false);
@@ -26,6 +31,9 @@
 	let expandedId = $state<string | null>(null);
 	let loraPendingDelete = $state<UserLoraItem | null>(null);
 	let pollHandle: ReturnType<typeof setInterval> | null = null;
+	let voicesLoaded = $state(false);
+	let loadFailure = $state<string | null>(null);
+	const voicesReloads = reloadWhileUnreachable(() => void refresh());
 
 	const list = $derived($loras);
 	const visible = $derived(showDeleted ? list : list.filter((l) => l.deleted_at === null));
@@ -34,8 +42,11 @@
 	async function refresh() {
 		try {
 			await loadLoras(showDeleted);
-		} catch {
-			// store already captured error message
+			voicesLoaded = true;
+			loadFailure = null;
+			voicesReloads.stop();
+		} catch (e) {
+			loadFailure = voicesReloads.nameLoadFailure(e, VOICES_LOAD_FAILED);
 		}
 	}
 
@@ -60,6 +71,7 @@
 
 	onDestroy(() => {
 		stopPolling();
+		voicesReloads.stop();
 	});
 
 	$effect(() => {
@@ -79,7 +91,7 @@
 			expandedId = created.id;
 			addToast('Voice created', 'success');
 		} catch (e) {
-			const message = e instanceof ApiError ? e.detail || LORA_CREATE_FAILED : LORA_CREATE_FAILED;
+			const message = describeFailure(e, LORA_CREATE_FAILED);
 			createError = message;
 			addToast(message, 'error');
 		} finally {
@@ -104,7 +116,7 @@
 			if (expandedId === lora.id) expandedId = null;
 			addToast(`Deleted ${lora.name}`, 'info');
 		} catch (e) {
-			addToast(e instanceof ApiError ? e.detail || 'Delete failed' : 'Delete failed', 'error');
+			addToast(describeFailure(e, 'Delete failed'), 'error');
 		}
 	}
 
@@ -154,15 +166,15 @@
 		{/if}
 	{/if}
 
-	{#if $lorasError}
-		<p class="error">{$lorasError}</p>
+	{#if loadFailure}
+		<p class="error">{loadFailure}</p>
 	{/if}
 
 	{#if $lorasLoading && list.length === 0}
 		<p class="loading">Loading voices...</p>
-	{:else if visible.length === 0}
+	{:else if visible.length === 0 && voicesLoaded}
 		<p class="empty">No voices yet. Create one to upload samples and train your own vocal style.</p>
-	{:else}
+	{:else if visible.length > 0}
 		<ul class="lora-list">
 			{#each visible as lora (lora.id)}
 				{@const tone = statusTone(lora.status)}
