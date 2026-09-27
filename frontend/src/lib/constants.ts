@@ -671,8 +671,8 @@ export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
 // retries count: a reopen on returning to the app re-records the attempt it
 // interrupted, so frequent returns never shorten the three minutes (#1032).
 export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
-// How long a finished generate job keeps its card while the song refresh
-// its end asked for brings the take in (#1039 O3): long enough for a page
-// that just came back online to resync, short enough that a take that never
-// arrives does not leave a card behind.
+// How long a finished generate job keeps its card at most while the song
+// refresh its end asked for has not run (#1039 O3): long enough for a page
+// that just came back online to resync, short enough that a refresh that never
+// runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;

@@ -114,23 +114,12 @@ function endedWithTakes(job: JobStatus): boolean {
 	return job.status === 'completed' || job.status === 'partial';
 }
 
-// A generate job refreshes its song too, not only the `generation.created`
-// resource event: that event can fall into a gap while the resource stream
-// reconnects (a phone's screen going off), and the take would then stay
-// missing until the next navigation (#1020). Both triggers are idempotent:
-// the resource-sync owner refetches the song and skips a take it already has.
-function refreshSongAfterTerminalJob(songId: string | undefined): void {
-	if (songId) void requestSongRefresh(songId);
-}
-
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.status === 'completed') {
-		refreshSongAfterTerminalJob(songId);
 		addToast(`${job.type} completed`, 'success');
 		return;
 	}
 	if (job.status === 'partial') {
-		refreshSongAfterTerminalJob(songId);
 		addToast(job.error || `${job.type} partially completed`, 'info');
 		return;
 	}
@@ -146,26 +135,38 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 }
 
 /**
- * A generate job that made takes stays tracked, with its end status, while
- * the song refresh its end asked for brings those takes in: the job's card is
- * what the musician sees until the take replaces it, so letting the job go at
- * once would leave a moment with neither (#1039 O3). The generate owner hides
- * the card as soon as the take is in the list; the wait only bounds how long a
- * take that never arrives can keep it.
+ * A generate job that made takes stays tracked, with its end status, until
+ * the song refresh its end asked for has run: the job's card is what the
+ * musician sees until the take replaces it, so letting the job go at once
+ * would leave a moment with neither (#1039 O3). The generate owner hides the
+ * card as soon as the take is in the list; the wait only bounds how long a
+ * refresh that never runs can keep it.
  */
+function keepUntilSongRefreshed(jobId: string, songRefresh: Promise<void>): void {
+	activeJobs.update((jobs) =>
+		jobs.map((active) => (active.job.id === jobId ? { ...active, awaitingTakes: true } : active))
+	);
+	const wait = setTimeout(() => removeJob(jobId), GENERATE_TAKE_ARRIVAL_WAIT_MS);
+	takeArrivalWaits.set(jobId, wait);
+	void songRefresh.finally(() => {
+		if (takeArrivalWaits.get(jobId) === wait) removeJob(jobId);
+	});
+}
+
+// A job that made takes refreshes its song too, not only the
+// `generation.created` resource event: that event can fall into a gap while
+// the resource stream reconnects (a phone's screen going off), and the take
+// would then stay missing until the next navigation (#1020). Both triggers are
+// idempotent: the resource-sync owner refetches the song and skips a take it
+// already has.
 function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource): void {
 	source.close();
 	eventSources.delete(jobId);
 	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
 	notifyTerminalJob(job, songId);
-	if (songId && job.type === JOB_TYPE_GENERATE && endedWithTakes(job)) {
-		activeJobs.update((jobs) =>
-			jobs.map((active) => (active.job.id === jobId ? { ...active, awaitingTakes: true } : active))
-		);
-		takeArrivalWaits.set(
-			jobId,
-			setTimeout(() => removeJob(jobId), GENERATE_TAKE_ARRIVAL_WAIT_MS)
-		);
+	const songRefresh = songId && endedWithTakes(job) ? requestSongRefresh(songId) : null;
+	if (songRefresh && job.type === JOB_TYPE_GENERATE) {
+		keepUntilSongRefreshed(jobId, songRefresh);
 		return;
 	}
 	activeJobs.update((jobs) => jobs.filter((active) => active.job.id !== jobId));

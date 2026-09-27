@@ -419,21 +419,40 @@ describe('jobs store', () => {
 		}
 	);
 
-	it.each(['completed', 'partial'] as const)(
-		'keeps a generate job that ended %s tracked for its song until its take has had time to arrive',
-		async (status) => {
+	describe.each(['completed', 'partial'] as const)('a generate job that ended %s', (status) => {
+		function endWhileTheSongRefreshes(): { ended: JobStatus; refreshRuns: () => void } {
+			let refreshRuns = (): void => {};
+			mockRequestSongRefresh.mockReturnValue(
+				new Promise<void>((resolve) => {
+					refreshRuns = resolve;
+				})
+			);
 			trackJob(makeJob({ status: 'running' }), { songId: 's1' });
 			const ended = makeJob({ status });
 			latestSource().simulateMessage(ended);
+			return { ended, refreshRuns: () => refreshRuns() };
+		}
 
-			await vi.advanceTimersByTimeAsync(GENERATE_TAKE_ARRIVAL_WAIT_MS - 1);
+		it('stays tracked for its song until the song refresh its end asked for has run', async () => {
+			const { ended, refreshRuns } = endWhileTheSongRefreshes();
+			await vi.advanceTimersByTimeAsync(0);
 			expect(latestSource().closed).toBe(true);
+			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
+
+			refreshRuns();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(activeJobs)).toEqual([]);
+		});
+
+		it('goes after the take-arrival wait when the song refresh never runs', async () => {
+			const { ended } = endWhileTheSongRefreshes();
+			await vi.advanceTimersByTimeAsync(GENERATE_TAKE_ARRIVAL_WAIT_MS - 1);
 			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
 
 			await vi.advanceTimersByTimeAsync(1);
 			expect(get(activeJobs)).toEqual([]);
-		}
-	);
+		});
+	});
 
 	it.each([
 		['generate', 'failed'],
