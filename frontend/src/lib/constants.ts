@@ -202,6 +202,7 @@ export const COWRITER_COMPOSER_PLACEHOLDER = 'Ask for a rewrite…';
 export const COWRITER_SEND_LABEL = 'Send';
 export const COWRITER_NEW_CONVERSATION_LABEL = 'New conversation';
 export const COWRITER_MEMORY_LABEL = 'Memory';
+export const COWRITER_MEMORY_PROPOSAL_WAITING_LABEL = 'Memory proposal waiting';
 export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';
 export const COWRITER_CONVERSATION_SINCE_TEMPLATE = 'conversation since {day}';
 export const COWRITER_ARCHIVED_CONVERSATION_TEMPLATE = 'archived conversation from {day}';

@@ -34,6 +34,27 @@
 		onReject
 	}: Props = $props();
 
+	let editor: HTMLElement | undefined = $state();
+	let closeButton: HTMLButtonElement | undefined = $state();
+
+	$effect(() => {
+		closeButton?.focus();
+	});
+
+	// Escape closes the editor itself and claims the key, so the page's
+	// global Escape does not also leave the song (see escape-level-up.ts).
+	$effect(() => {
+		const openEditor = editor;
+		if (!openEditor) return;
+		function closeOnEscape(event: KeyboardEvent): void {
+			if (event.key !== 'Escape') return;
+			event.preventDefault();
+			onClose();
+		}
+		openEditor.addEventListener('keydown', closeOnEscape);
+		return () => openEditor.removeEventListener('keydown', closeOnEscape);
+	});
+
 	let userDraft = $state('');
 	let songDraft = $state('');
 	let albumDraft = $state('');
@@ -102,10 +123,11 @@
 </script>
 
 {#if open}
-	<section class="memory" aria-label={COWRITER_MEMORY_LABEL}>
+	<section bind:this={editor} class="memory" aria-label={COWRITER_MEMORY_LABEL}>
 		<header class="memory-head">
 			<span class="memory-title">{COWRITER_MEMORY_LABEL}</span>
 			<button
+				bind:this={closeButton}
 				type="button"
 				class="memory-close"
 				aria-label="Close memory"
