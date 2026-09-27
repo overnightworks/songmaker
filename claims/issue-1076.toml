@@ -1,0 +1,8 @@
+claim_id = "cca5caac703b4c60a9dc80fbb25d45b7"
+agent = "claude-head"
+role = "builder"
+base = "faa8e23eefc103882610ea8b0a2c2d43a1fc37ca"
+branch = "claude/issue-1076-fetch-failure-boundary"
+scope = ["frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/stores/playlists.test.ts", "frontend/src/lib/stores/playlists.ts", "frontend/src/lib/stores/shares.test.ts", "frontend/src/lib/stores/shares.ts"]
+opened_commit = "1eb3089dd2d61f9bd4d2f0e37ee3f152d7c28906"
+whole_reason = "the fetch failure boundary and the four store helpers that duplicate it, with their tests"
