@@ -703,6 +703,7 @@ function followAsHistoryLayer(
 
 const NOW_PLAYING_LAYER = 'now-playing';
 const RAIL_DRAWER_LAYER = 'rail-drawer';
+const LIBRARY_ROUTE_GROUP = '/(library)';
 
 const railDrawerLayered = writable(false);
 export const railDrawerIsLayer = readonly(railDrawerLayered);
@@ -782,6 +783,12 @@ export function forgetHistoryLayers(): void {
 	libraryHistoryRunning = false;
 	historyLayers.length = 0;
 	ownLayerStepBacks = 0;
+}
+
+export function isLibraryRouteId(routeId: string | null): boolean {
+	return (
+		routeId === LIBRARY_ROUTE_GROUP || (routeId?.startsWith(`${LIBRARY_ROUTE_GROUP}/`) ?? false)
+	);
 }
 
 export function followBackIntoLibrary(): () => void {

@@ -17,7 +17,7 @@ import {
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
-import { resetNavigationForTests } from '$lib/stores/navigation';
+import { isLibraryWorkspacePath, resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
@@ -38,7 +38,10 @@ import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
 const { pageState, liveStream } = vi.hoisted(() => ({
-	pageState: { url: new URL('https://songmaker.test/') },
+	pageState: {
+		url: new URL('https://songmaker.test/'),
+		route: { id: '/(library)' as string | null }
+	},
 	liveStream: {
 		start: vi.fn(),
 		stop: vi.fn(),
@@ -163,8 +166,13 @@ function minUsedWidth(el: Element): number {
 	return px(style.minWidth) || px(style.width);
 }
 
-async function renderLayout(path: string): Promise<HTMLElement> {
+function mountRouteAt(path: string): void {
 	pageState.url = new URL(`https://songmaker.test${path}`);
+	pageState.route = { id: isLibraryWorkspacePath(path) ? '/(library)' : path };
+}
+
+async function renderLayout(path: string): Promise<HTMLElement> {
+	mountRouteAt(path);
 	currentUser.set(USER);
 	authLoading.set(false);
 	const target = document.createElement('div');
@@ -177,7 +185,7 @@ async function renderLayout(path: string): Promise<HTMLElement> {
 }
 
 function mountLayout(path: string): HTMLElement {
-	pageState.url = new URL(`https://songmaker.test${path}`);
+	mountRouteAt(path);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(Layout, { target, props: { children } });

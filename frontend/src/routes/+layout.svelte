@@ -18,6 +18,7 @@
 		followBackIntoLibrary,
 		forgetHistoryLayers,
 		initNavigation,
+		isLibraryRouteId,
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
@@ -140,6 +141,12 @@
 		if (type !== 'enter') leaveRestoredLibraryHistory();
 	});
 
+	const libraryRouteMounted = $derived(isLibraryRouteId(page.route.id));
+
+	$effect(() => {
+		if (hasPrivatePlayer && !libraryRouteMounted) return followBackIntoLibrary();
+	});
+
 	// The live-sync stream and the history listener outlive a route swap
 	// between the library's three addresses, so this layout owns them rather
 	// than the `(library)` route group below it: the workspace page used to
@@ -147,10 +154,6 @@
 	// `initNavigation` still waits for the first snapshot — it
 	// normalises the history entry from the live stores, so running it before
 	// they are hydrated would overwrite a restorable entry with an empty one.
-	$effect(() => {
-		if (hasPrivatePlayer && !libraryRouteActive) return followBackIntoLibrary();
-	});
-
 	$effect(() => {
 		if (!libraryRouteActive) return;
 		startLibraryResourceSync();
