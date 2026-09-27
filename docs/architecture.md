@@ -158,13 +158,17 @@ remembered on this device (`libraryWallOrder` in `stores/ui.ts`), never
 re-sorting Continue. A–Z compares titles ignoring case and accents (one
 `Intl.Collator` in `utils/recency.ts`); Recent is the rank the continue
 endpoint gives each place, read in pages of 200 until a short page, so every
-place is ranked and there is no second activity rule; Added is newest `created_at` first. Each tile's second line
-follows the order: the size, the last work, or "added 3 Aug", a playlist's
-line starting "Playlist ·". The wall sorts the complete set from the same
-route-independent loader the rail uses (`ensureAllAlbumsLoaded` in
-`stores/libraryData.ts`); a browse reset, which a live stream reconnect runs,
-puts only its first page back, so it has that loader read every album again
-and neither surface shrinks to one page. Share inventory is the
+place is ranked and there is no second activity rule; Added is newest
+`created_at` first. Each tile's second line follows the order: the size, the
+last work, or "added 3 Aug", a playlist's line starting "Playlist ·". The
+wall sorts the complete set from the same route-independent loader the rail
+uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
+which history navigation (Back and Forward, an address, returning to the
+wall) and a live stream reconnect run, reads only the first album page; once
+a surface asked for every album, that page refreshes the albums it holds and
+the rest stay (`resetAlbumList`), so neither surface shrinks to one page and
+no navigation reads every album again. Albums changed on another device past
+that first page show their change on the next page load. Share inventory is the
 complete server list of the current user's public slugs
 (`GET /api/library/shares`); membership, `N`, and the DELETE endpoints are
 unchanged.

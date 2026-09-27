@@ -292,14 +292,14 @@ describe('loadLibraryBrowse', () => {
 		expect(get(libraryBrowse).songOffset).toBe(2);
 	});
 
-	it('gives every album back after a reset once a surface asked for the complete set', async () => {
-		const pages: Record<number, { ids: string[]; hasMore: boolean }> = {
-			0: { ids: ['a-1'], hasMore: true },
-			1: { ids: ['a-2'], hasMore: false }
+	it('keeps every album after a reset once a surface asked for the complete set, refreshing only the first page', async () => {
+		const pages: Record<number, { items: AlbumItem[]; hasMore: boolean }> = {
+			0: { items: [album({ id: 'a-1', title: 'First' })], hasMore: true },
+			1: { items: [album({ id: 'a-2', title: 'Second' })], hasMore: false }
 		};
 		fetchAlbums.mockImplementation((offset: number) =>
 			Promise.resolve({
-				items: pages[offset].ids.map((id) => album({ id })),
+				items: pages[offset].items,
 				total: 2,
 				offset,
 				limit: 50,
@@ -307,12 +307,25 @@ describe('loadLibraryBrowse', () => {
 			})
 		);
 		fetchSongs.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
+		albumList.set([]);
 		await ensureAllAlbumsLoaded();
+		pages[0] = {
+			items: [
+				album({ id: 'a-new', title: 'Made elsewhere' }),
+				album({ id: 'a-1', title: 'Renamed' })
+			],
+			hasMore: true
+		};
 
 		await loadLibraryBrowse({ reset: true });
 		await ensureAllAlbumsLoaded();
 
-		expect(get(albumList).map((item) => item.id)).toEqual(['a-1', 'a-2']);
+		expect(get(albumList).map((item) => [item.id, item.title])).toEqual([
+			['a-new', 'Made elsewhere'],
+			['a-1', 'Renamed'],
+			['a-2', 'Second']
+		]);
+		expect(fetchAlbums).toHaveBeenCalledTimes(3);
 	});
 
 	it('keeps loaded generations when browse resets over a summary page', async () => {

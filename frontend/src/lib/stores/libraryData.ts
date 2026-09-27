@@ -179,12 +179,25 @@ export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	return loadAllAlbums();
 }
 
-// A browse reset puts only its first page back into albumList (a reconnect
-// runs one), so a surface that asked for every album gets the complete set
-// again instead of silently shrinking to that page.
-export function reloadAllAlbumsIfRequested(): void {
-	if (get(allAlbumsLoad).status === 'idle') return;
-	void loadAllAlbums();
+// A browse reset reads only the first album page (history navigation and a
+// stream reconnect run one). Once a surface asked for every album, that page
+// refreshes the albums it holds and the rest stay, so neither the rail nor
+// the wall shrinks to one page and no navigation reads every album again.
+export function resetAlbumList(firstPage: AlbumItem[]): void {
+	if (get(allAlbumsLoad).status === 'idle') {
+		albumList.set(firstPage);
+		return;
+	}
+	albumList.update((current) => refreshAlbums(current, firstPage));
+}
+
+function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
+	const freshById = new Map(fresh.map((album) => [album.id, album]));
+	const currentIds = new Set(current.map((album) => album.id));
+	return [
+		...fresh.filter((album) => !currentIds.has(album.id)),
+		...current.map((album) => freshById.get(album.id) ?? album)
+	];
 }
 
 function loadAllAlbums(): Promise<boolean> {

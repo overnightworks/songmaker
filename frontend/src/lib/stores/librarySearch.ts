@@ -13,7 +13,7 @@ import {
 import {
 	albumList,
 	overlaySongList,
-	reloadAllAlbumsIfRequested,
+	resetAlbumList,
 	removeSongFromList,
 	songList,
 	upsertSongInList
@@ -138,8 +138,7 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		]);
 		if (generation !== browseGeneration) return false;
 		if (reset) {
-			albumList.set(albumPage.items);
-			reloadAllAlbumsIfRequested();
+			resetAlbumList(albumPage.items);
 			songList.set(overlaySongList(get(songList), songPage.items));
 		} else {
 			albumList.set(dedupeById([...get(albumList), ...albumPage.items]));
