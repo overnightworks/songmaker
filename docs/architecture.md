@@ -392,7 +392,9 @@ its own. `idlePlayTarget` (in `stores/player.ts`)
 now takes the single `openCollection` instead of the old
 `albumId`/`songId`/`playlist` tuple, so a song open inside an album keeps
 that album as the idle Play target instead of falling back to the library
-pool. Per-track queue-skip feedback (`QueueStreamFeedback`) and the take-pool picker
+pool. A playlist opened while its detail is still loading stays the idle
+target too: Play joins that load (`loadPlaylistDetail`) and starts the
+playlist once it arrives — never the library, never the list just left. Per-track queue-skip feedback (`QueueStreamFeedback`) and the take-pool picker
 live inside the `NowPlaying` surface, not the bar; shuffle is transport and
 sits in the desktop bar and in Now Playing (issue #141), labelled from the
 single `shuffleLabel` derived so the two can never disagree about the scope
