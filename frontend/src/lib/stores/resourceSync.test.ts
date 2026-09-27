@@ -37,6 +37,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SERVER_UNREACHABLE_STATUSES,
@@ -1310,8 +1311,9 @@ describe('resource sync owner', () => {
 
 			latestSource(sources).error();
 			await flush();
+			controller.stop();
 
-			expect(reachability).toEqual([reachable]);
+			expect(reachability.slice(0, 1)).toEqual([reachable]);
 		}
 	);
 
@@ -1408,6 +1410,78 @@ describe('resource sync owner', () => {
 			await flush();
 			expect(reachability.at(-1)).toBe(true);
 		}
+		controller.stop();
+	});
+
+	it('clears the offline strip within 2 s of the server answering again and reopens the stream at once', async () => {
+		vi.useFakeTimers();
+		let serverDown = true;
+		const { controller, sources, reachability } = setup({
+			probeAuth: async () => (serverDown ? 'unreachable' : 'ok')
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).failWithoutNativeRetry();
+		await flush();
+		const sourcesWhileDown = sources.length;
+
+		serverDown = false;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+
+		expect(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS).toBeLessThanOrEqual(2000);
+		expect(reachability.at(-1)).toBe(true);
+		expect(sources).toHaveLength(sourcesWhileDown + 1);
+		controller.stop();
+	});
+
+	it('probes for the server once per interval while it stays unreachable and not after the owner stops', async () => {
+		vi.useFakeTimers();
+		const probeAuth = vi.fn(async () => 'unreachable' as const);
+		const { controller, sources } = setup({ probeAuth });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		const intervals = 5;
+
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS * intervals);
+		expect(probeAuth).toHaveBeenCalledTimes(1 + intervals);
+		controller.stop();
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS * intervals);
+
+		expect(probeAuth).toHaveBeenCalledTimes(1 + intervals);
+	});
+
+	it('does not reopen the stream for a returning server inside the gap after a reopen on focus', async () => {
+		vi.useFakeTimers();
+		let serverDown = true;
+		const { controller, sources, reachability } = setup({
+			probeAuth: async () => (serverDown ? 'unreachable' : 'ok')
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).failWithoutNativeRetry();
+		await flush();
+		const sourcesAfterFocus = sources.length;
+
+		serverDown = false;
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+
+		expect(reachability.at(-1)).toBe(true);
+		expect(sources).toHaveLength(sourcesAfterFocus);
 		controller.stop();
 	});
 
