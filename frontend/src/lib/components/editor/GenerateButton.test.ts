@@ -39,13 +39,15 @@ const running: Extract<GenerateState, { kind: 'generating' }> = {
 	phase: 'Rendering',
 	takeCounter: 'Take 1 of 2',
 	progress: 36,
-	readout: '36% · ~1:40'
+	readout: '36% · ~1:40',
+	reconnecting: false
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'job1',
 	label: 'Queued #3',
-	reason: 'Waiting for LoRA training on this GPU.'
+	reason: 'Waiting for LoRA training on this GPU.',
+	reconnecting: false
 };
 let component: ReturnType<typeof mount>;
 
