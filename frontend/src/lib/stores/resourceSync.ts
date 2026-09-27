@@ -18,6 +18,7 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SERVER_ERROR_STATUS_FLOOR
@@ -35,7 +36,11 @@ import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 import { classifyAuthFailure, type AuthFailureKind } from '$lib/stores/auth';
 import { reportResourceStreamReachable } from '$lib/stores/connectivity';
-import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
+import {
+	ImmediateReopenGap,
+	nextReconnectDelayMs,
+	watchReconnectOpportunities
+} from '$lib/stores/sseReconnect';
 
 // The browser only sends `Last-Event-ID` on its own native retry; the owner
 // reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
@@ -126,6 +131,9 @@ export class ResourceSyncController {
 	private probeGeneration = 0;
 	private reconnectAttempt = 0;
 	private streamGreeted = false;
+	private serverReachable = true;
+	private returnProbeTimer: ReturnType<typeof setTimeout> | null = null;
+	private readonly reopenGap = new ImmediateReopenGap();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryAttempt = 0;
@@ -150,7 +158,10 @@ export class ResourceSyncController {
 		if (this.started) return;
 		this.started = true;
 		this.bootstrapErrors = 0;
-		this.stopWatchingOpportunities ??= watchReconnectOpportunities(this.onReconnectOpportunity);
+		this.stopWatchingOpportunities ??= watchReconnectOpportunities(
+			this.onReconnectOpportunity,
+			this.reopenGap
+		);
 		this.bindLoadedWatch();
 		this.setStatus('connecting');
 		this.openSource();
@@ -307,7 +318,7 @@ export class ResourceSyncController {
 		this.songRevisions.clear();
 		this.refreshesAwaitingBootstrap.clear();
 		this.flushing = null;
-		this.deps.reportStreamReachable(true);
+		this.reportReachable(true);
 		if (options.resetStore) this.store.set({ ...INITIAL });
 		this.resolveReady(false);
 	}
@@ -352,7 +363,7 @@ export class ResourceSyncController {
 		}
 		this.reconnectAttempt = 0;
 		this.streamGreeted = true;
-		this.deps.reportStreamReachable(true);
+		this.reportReachable(true);
 		this.rememberEventId(event);
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
 		this.invalidateInflightProbes();
@@ -429,7 +440,7 @@ export class ResourceSyncController {
 			await this.deps.onUnauthorized();
 			return;
 		}
-		this.deps.reportStreamReachable(result !== 'unreachable');
+		this.reportReachable(result !== 'unreachable');
 		if (!this.syncedOnce) {
 			this.bootstrapErrors += 1;
 			// A non-200 answer (the edge's 5xx while the server restarts) closes the
@@ -451,6 +462,45 @@ export class ResourceSyncController {
 		this.closeSource();
 		if (this.state.status !== 'error') this.setStatus('reconnecting');
 		this.scheduleReconnect(() => this.openSource());
+	}
+
+	/**
+	 * While the server cannot be reached, the stream's own backoff would keep
+	 * the offline strip up for up to ten seconds after the server is back, so
+	 * the auth probe asks once per interval instead: its first answer clears
+	 * the strip and reopens the stream at once, within the stream's reopen gap
+	 * (#1099).
+	 */
+	private reportReachable(reachable: boolean): void {
+		this.serverReachable = reachable;
+		this.deps.reportStreamReachable(reachable);
+		if (reachable) this.stopReturnProbe();
+		else this.scheduleReturnProbe();
+	}
+
+	private scheduleReturnProbe(): void {
+		if (!this.started || this.returnProbeTimer !== null) return;
+		this.returnProbeTimer = setTimeout(() => {
+			this.returnProbeTimer = null;
+			void this.probeForReturn();
+		}, RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+	}
+
+	private async probeForReturn(): Promise<void> {
+		const result = await this.deps.probeAuth();
+		if (!this.started || this.serverReachable) return;
+		if (result === 'unreachable') {
+			this.scheduleReturnProbe();
+			return;
+		}
+		this.reportReachable(true);
+		this.reopenGap.run(this.onReconnectOpportunity);
+	}
+
+	private stopReturnProbe(): void {
+		if (this.returnProbeTimer === null) return;
+		clearTimeout(this.returnProbeTimer);
+		this.returnProbeTimer = null;
 	}
 
 	private async recoverLiveConnection(): Promise<void> {
