@@ -681,16 +681,20 @@
 	/* The phone's mini player (#1003, frames C2/C3): cover and title, then
 	   previous · play · next, then an empty side. Both sides take the same
 	   share of the row, so play sits on its exact centre line, and both open
-	   Now Playing. The seek timeline and shuffle live in Now Playing; the
+	   Now Playing. The sides run to the bar's edges and meet the transport
+	   with no gap, so every pixel beside it is a target and the title gets all
+	   the room play's centre line leaves it (#1067). The seek timeline and
+	   shuffle live in Now Playing; the
 	   decorative .mobile-progress line stands in for the timeline here.
 	   `.mobile-transport` is set from `subscribeCompactLayout` (JS mirrors
 	   the same media query so jsdom tests can drive it via data-pointer). */
 	/* The browser must not take a swipe on the bar for a page scroll, or it
 	   cancels the pointer before the swipe can open Now Playing. */
 	.player-bar.mobile-transport {
+		--phone-bar-edge: 14px;
 		touch-action: none;
 		overflow: visible;
-		padding: 0 14px env(safe-area-inset-bottom, 0px);
+		padding: 0 0 env(safe-area-inset-bottom, 0px);
 	}
 	.mobile-transport .mobile-progress {
 		display: block;
@@ -705,12 +709,18 @@
 	.mobile-transport .player-content {
 		display: flex;
 		align-items: stretch;
-		gap: 6px;
+		gap: 0;
 		height: 100%;
 	}
 	.phone-side {
 		flex: 1 1 0;
 		min-width: 0;
+	}
+	.phone-side:first-child {
+		padding-left: var(--phone-bar-edge);
+	}
+	.phone-side:last-child {
+		padding-right: var(--phone-bar-edge);
 	}
 	.phone-failure {
 		display: block;

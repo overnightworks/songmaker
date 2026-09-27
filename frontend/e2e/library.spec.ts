@@ -14,6 +14,7 @@ import {
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
+	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
@@ -216,12 +217,31 @@ async function expectSettingsRailRoundTrip(
 /**
  * The phone's mini player (#1003, frame C2): one short row reading previous ·
  * play · next, play on the bar's exact centre line, and no shuffle of its own.
+ * Beside the transport the bar is Now Playing's target up to its very edges
+ * (#1067): the title's target runs from the left edge to previous, the empty
+ * right side from next to the right edge.
  */
-async function expectCompactTransport(transport: Locator): Promise<void> {
+async function expectCompactTransport(transport: Locator, playingSongTitle: string): Promise<void> {
 	const play = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 	const previous = transport.getByRole('button', { name: 'Previous', exact: true });
 	const next = transport.getByRole('button', { name: 'Next', exact: true });
-	const [bar, playBox, previousBox, nextBox] = await boundingBoxes(transport, play, previous, next);
+	const titleTarget = transport.getByRole('button', {
+		name: openNowPlayingLabel(playingSongTitle),
+		exact: true
+	});
+	const rightSide = transport.locator('.phone-side').last();
+	const [bar, playBox, previousBox, nextBox, titleBox, rightBox] = await boundingBoxes(
+		transport,
+		play,
+		previous,
+		next,
+		titleTarget,
+		rightSide
+	);
+	const edges = (box: { x: number; width: number }) => [
+		Math.round(box.x),
+		Math.round(box.x + box.width)
+	];
 
 	expect(bar.height).toBe(MOBILE_TRANSPORT_HEIGHT_PX);
 	expect(playBox.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
@@ -229,11 +249,64 @@ async function expectCompactTransport(transport: Locator): Promise<void> {
 	expect(Math.abs(playBox.x + playBox.width / 2 - (bar.x + bar.width / 2))).toBeLessThanOrEqual(1);
 	expect(previousBox.x + previousBox.width).toBeLessThanOrEqual(playBox.x);
 	expect(nextBox.x).toBeGreaterThanOrEqual(playBox.x + playBox.width);
+	expect(edges(titleBox)).toEqual([edges(bar)[0], edges(previousBox)[0]]);
+	expect(edges(rightBox)).toEqual([edges(nextBox)[1], edges(bar)[1]]);
 	await expect(
 		transport.getByRole('button', {
 			name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
 		})
 	).toHaveCount(0);
+}
+
+/** A real finger, not a mouse: the bar must keep the browser from scrolling. */
+async function swipeUp(page: Page, from: { x: number; y: number }, rise: number): Promise<void> {
+	const finger = await page.context().newCDPSession(page);
+	const touch = (type: 'touchStart' | 'touchMove', y: number) =>
+		finger.send('Input.dispatchTouchEvent', { type, touchPoints: [{ x: from.x, y }] });
+	await touch('touchStart', from.y);
+	for (const step of [0.25, 0.5, 0.75, 1]) await touch('touchMove', from.y - rise * step);
+	await finger.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+	await finger.detach();
+}
+
+// A tap this close to the bar's edge lands in the strip that used to be
+// padding and hit the footer (#1067).
+const MINI_PLAYER_EDGE_TAP_PX = 3;
+
+/**
+ * Swiping the mini player up and tapping its outer edge both open Now
+ * Playing (#1067); at 320 px play still sits on the centre line and the
+ * targets still reach the edges.
+ */
+async function expectMiniPlayerOpensNowPlaying(
+	page: Page,
+	transport: Locator,
+	playingSongTitle: string
+): Promise<void> {
+	const nowPlaying = page.getByRole('dialog', { name: playingSongTitle });
+	const closeNowPlaying = async () => {
+		await page.keyboard.press('Escape');
+		await expect(nowPlaying).toBeHidden();
+	};
+	const [bar] = await boundingBoxes(transport);
+
+	await swipeUp(
+		page,
+		{ x: bar.x + bar.width / 6, y: bar.y + bar.height / 2 },
+		NOW_PLAYING_SWIPE_RISE_PX * 2
+	);
+	await expect(nowPlaying).toBeVisible();
+	await closeNowPlaying();
+
+	for (const x of [MINI_PLAYER_EDGE_TAP_PX, bar.width - MINI_PLAYER_EDGE_TAP_PX]) {
+		await transport.tap({ position: { x, y: bar.height / 2 } });
+		await expect(nowPlaying).toBeVisible();
+		await closeNowPlaying();
+	}
+
+	await page.setViewportSize(NARROW_VIEWPORT);
+	await expectCompactTransport(transport, playingSongTitle);
+	await page.setViewportSize(MOBILE_VIEWPORT);
 }
 
 test('plays the album pick, curates a playlist and serves the public album link', async ({
@@ -280,7 +353,10 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await expect(
 		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 	).toBeVisible();
-	if (shell === 'mobile') await expectCompactTransport(transport);
+	if (shell === 'mobile') {
+		await expectCompactTransport(transport, library.pickedSongTitle);
+		await expectMiniPlayerOpensNowPlaying(page, transport, library.pickedSongTitle);
+	}
 	await expect(
 		pickedSongRow.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 	).toBeVisible();
