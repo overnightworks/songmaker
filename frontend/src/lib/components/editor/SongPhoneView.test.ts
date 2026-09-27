@@ -1,7 +1,7 @@
 import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { detailTab } from '$lib/stores/navigation';
-import { coWriterOpen, type RecipeChip } from '$lib/stores/recipe';
+import { detailTab, type DetailTab } from '$lib/stores/navigation';
+import type { RecipeChip } from '$lib/stores/recipe';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { generationFailures } from '$lib/stores/jobs';
 import { clearSelection } from '$lib/stores/selection';
@@ -36,14 +36,15 @@ const snippets = {
 	edit: createRawSnippet(() => ({
 		render: () => '<textarea aria-label="Lyrics">Draft</textarea>'
 	})),
-	cowriter: createRawSnippet(() => ({ render: () => '<div class="cowriter-screen">Chat</div>' })),
+	cowriter: createRawSnippet(() => ({
+		render: () => '<div class="cowriter-screen"><textarea aria-label="Message"></textarea></div>'
+	})),
 	expiryDigest: createRawSnippet(() => ({ render: () => '<div>Expiry digest</div>' }))
 };
 
 beforeEach(() => {
 	generateAction.set(IDLE_GENERATE);
 	detailTab.set('edit');
-	coWriterOpen.set(false);
 	generationFailures.set({});
 	clearSelection();
 });
@@ -52,7 +53,6 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	detailTab.set('edit');
-	coWriterOpen.set(false);
 	clearComponentStyles();
 });
 
@@ -84,6 +84,16 @@ async function render(
 	return target;
 }
 
+function showTab(target: HTMLElement, tab: DetailTab): void {
+	const button = target.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`);
+	if (!button) throw new Error(`Expected the ${tab} tab`);
+	button.click();
+}
+
+function cowriterMessage(target: HTMLElement): HTMLTextAreaElement | null {
+	return target.querySelector<HTMLTextAreaElement>('.cowriter-screen textarea');
+}
+
 function expectGenerateAsPrimaryAction(target: HTMLElement): void {
 	const primaryAction = target
 		.querySelector('[role="tabpanel"] > :last-child')
@@ -98,8 +108,7 @@ describe('SongPhoneView', () => {
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
 		expect(target.querySelector('section[aria-label="Recipe"]')).not.toBeNull();
 		expectGenerateAsPrimaryAction(target);
-		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-		tabs[1].click();
+		showTab(target, 'takes');
 		await tick();
 		expect(target.querySelector('[role="tabpanel"]')?.getAttribute('aria-labelledby')).toBe(
 			'song-tab-takes'
@@ -111,7 +120,7 @@ describe('SongPhoneView', () => {
 		expect(target.textContent).toContain('Expiry digest');
 		expect(target.querySelectorAll('.take-row')).toHaveLength(2);
 		expect(target.querySelectorAll('.take-row .play-btn')).toHaveLength(2);
-		tabs[0].click();
+		showTab(target, 'edit');
 		await tick();
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
 		expectGenerateAsPrimaryAction(target);
@@ -240,22 +249,41 @@ describe('SongPhoneView', () => {
 		closeKeyboard();
 	});
 
-	it('replaces the whole page with the Co-Writer screen instead of showing it beside the tabs', async () => {
+	it('shows the co-writer as the middle tab, under the tabs and without the Generate bar', async () => {
 		const target = await render();
-		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+		expect(cowriterMessage(target)).toBeNull();
 
-		coWriterOpen.set(true);
+		showTab(target, 'cowriter');
 		await tick();
 
-		expect(target.querySelector('.cowriter-screen')).not.toBeNull();
-		expect(target.querySelector('[role="tab"]')).toBeNull();
-		expect(target.querySelector('#song-phone-panel')).toBeNull();
+		const panel = target.querySelector('#song-phone-panel');
+		expect(panel?.getAttribute('aria-labelledby')).toBe('song-tab-cowriter');
+		expect(cowriterMessage(target)?.closest('#song-phone-panel')).toBe(panel);
+		expect(target.querySelectorAll('[role="tab"]')).toHaveLength(3);
+		expect(target.querySelector('textarea[aria-label="Lyrics"]')).toBeNull();
 		expect(target.querySelector('.generate-action')).toBeNull();
+		expect(target.querySelector('.takes-list')).toBeNull();
+	});
 
-		coWriterOpen.set(false);
+	it('keeps the co-writer and its unsent draft while Edit and Takes are shown', async () => {
+		const target = await render();
+		showTab(target, 'cowriter');
+		await tick();
+		const message = cowriterMessage(target);
+		if (!message) throw new Error('Expected the co-writer composer');
+		message.value = 'tighten the chorus';
+
+		for (const tab of ['edit', 'takes'] as const) {
+			showTab(target, tab);
+			await tick();
+			expect(cowriterMessage(target)?.closest('[hidden]')).not.toBeNull();
+		}
+		showTab(target, 'cowriter');
 		await tick();
 
-		expect(target.querySelector('.cowriter-screen')).toBeNull();
-		expect(target.querySelector('[role="tab"]')).not.toBeNull();
+		expect(target.querySelectorAll('.cowriter-screen')).toHaveLength(1);
+		expect(cowriterMessage(target)).toBe(message);
+		expect(message.value).toBe('tighten the chorus');
+		expect(message.closest('[hidden]')).toBeNull();
 	});
 });
