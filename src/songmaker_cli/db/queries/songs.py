@@ -106,7 +106,7 @@ def list_continue_candidates(
 def record_song_listen(
     session: Session, song: Song, *, playlist: Playlist | None,
 ) -> None:
-    """Persist the server time at which an owner started listening to a song.
+    """Persist the server time at which the song's owner started listening to it.
 
     A listen started from a playlist also marks that playlist as played, with
     the song it was playing. Neither mark is an edit, so both keep their
@@ -119,15 +119,32 @@ def record_song_listen(
         .values(last_played_at=played_at, updated_at=Song.updated_at),
     )
     if playlist is not None:
-        session.execute(
-            update(Playlist)
-            .where(Playlist.id == playlist.id)
-            .values(
-                last_played_at=played_at,
-                last_played_song_id=song.id,
-                updated_at=Playlist.updated_at,
-            ),
-        )
+        _mark_playlist_played(session, playlist, song=song, played_at=played_at)
+
+
+def record_playlist_listen(session: Session, playlist: Playlist, *, song: Song) -> None:
+    """Mark the playlist as played from ``song`` while leaving the song unmarked.
+
+    For a listener who owns the playlist but not the song: the song's listen
+    mark belongs to its owner's activity alone.
+    """
+    _mark_playlist_played(
+        session, playlist, song=song, played_at=datetime.now(timezone.utc),
+    )
+
+
+def _mark_playlist_played(
+    session: Session, playlist: Playlist, *, song: Song, played_at: datetime,
+) -> None:
+    session.execute(
+        update(Playlist)
+        .where(Playlist.id == playlist.id)
+        .values(
+            last_played_at=played_at,
+            last_played_song_id=song.id,
+            updated_at=Playlist.updated_at,
+        ),
+    )
 
 
 def _continue_sort_key(candidate: ContinueCandidate) -> tuple[float, str, str]:
