@@ -457,6 +457,9 @@ export const ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE =
 	'Creating 3 suggestions · {used} of {limit} today';
 export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace…';
 export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
+// While the offline strip is not showing, a card that could not reach the
+// server retries on this bounded backoff before offering a quiet Try again.
+export const ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS: readonly number[] = [2_000, 5_000, 15_000];
 
 export function albumCoverSuggestionAlt(title: string): string {
 	return `Cover suggestion for ${title}`;
