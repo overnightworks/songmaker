@@ -140,6 +140,26 @@ describe('LibraryContinue', () => {
 		expect(target.querySelectorAll('.continue-item')).toHaveLength(1);
 	});
 
+	it('keeps the list it showed when a refresh on return to the foreground fails', async () => {
+		fetchLibraryContinue
+			.mockResolvedValueOnce(continueResponse([item({ id: 'yesterday', title: 'Yesterday' })]))
+			.mockRejectedValueOnce(new Error('offline'))
+			.mockResolvedValueOnce(continueResponse([item({ id: 'vernissage', title: 'Vernissage' })]));
+		const target = await render();
+		await settle();
+
+		dispatchVisibility('visible');
+		await settle();
+		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
+		expect(entryLabels(target)).toEqual(['Open album Yesterday']);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+		expect(target.querySelector('.continue-retry')).toBeNull();
+
+		dispatchVisibility('visible');
+		await settle();
+		expect(entryLabels(target)).toEqual(['Open album Vernissage']);
+	});
+
 	it('fetches Continue fresh every time Home is shown', async () => {
 		fetchLibraryContinue
 			.mockResolvedValueOnce(continueResponse([item({ id: 'yesterday', title: 'Yesterday' })]))
