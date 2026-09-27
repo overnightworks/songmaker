@@ -8,6 +8,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+	collectionPauseLabel,
 	collectionPlayLabel,
 	collectionShuffleLabel,
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -29,7 +30,8 @@ import {
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
-	TRANSPORT_PAUSE_LABEL
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	nowPlayingFromLabel,
@@ -58,6 +60,8 @@ import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 // The phone's mini player keeps previous · play · next in one row this tall;
 // the seek timeline and shuffle live in Now Playing (see TransportBarFrame.svelte).
 const MOBILE_TRANSPORT_HEIGHT_PX = 64;
+// Frame A2 of docs/design/album-browsing.html: a phone's album and playlist row.
+const PHONE_ROW_HEIGHT_PX = 62;
 // The album header promises its title a readable floor at any width — it wraps
 // the action cluster onto its own row rather than shrinking the title past
 // this (see .header-titles in CollectionHeaderFrame.svelte).
@@ -366,9 +370,22 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await expectCompactTransport(transport, library.pickedSongTitle);
 		await expectMiniPlayerOpensNowPlaying(page, transport, library.pickedSongTitle);
 	}
+	const playingMark = pickedSongRow.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true });
+	await expect(playingMark).toBeVisible();
+
+	// While the album plays, its circle pauses it and the next tap resumes it
+	// (#1082); the paused row keeps its mark, standing still.
+	await surface.getByRole('button', { name: collectionPauseLabel('album'), exact: true }).click();
 	await expect(
-		pickedSongRow.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
 	).toBeVisible();
+	await expect(playingMark).toBeVisible();
+	await expect(playingMark.locator('span').first()).toHaveCSS('animation-name', 'none');
+	await surface.getByRole('button', { name: collectionPlayLabel('album'), exact: true }).click();
+	await expect(
+		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+	).toBeVisible();
+	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
 	await pickedSongRow.getByRole('button').click();
 	if (shell === 'mobile') {
@@ -514,10 +531,12 @@ type RowEdge = 'top' | 'bottom' | 'left' | 'right';
 /**
  * A phone row is one target (#1053): its target is the whole card inside the
  * border, at least a thumb high, and a tap on any of the card's edges --
- * away from its label and the rounded corners -- lands on it.
+ * away from its label and the rounded corners -- lands on it. The card is as
+ * high as frame A2 draws it (#1082).
  */
 async function tapRowEdge(row: Locator, target: Locator, edge: RowEdge): Promise<void> {
 	const [rowBox, targetBox] = await boundingBoxes(row, target);
+	expect(Math.round(rowBox.height)).toBe(PHONE_ROW_HEIGHT_PX);
 	const insets = [
 		targetBox.y - rowBox.y,
 		rowBox.x + rowBox.width - (targetBox.x + targetBox.width),
