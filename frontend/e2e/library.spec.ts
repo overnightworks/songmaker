@@ -395,11 +395,11 @@ test('plays the album pick, curates a playlist and serves the public album link'
 // A card's border is the only part of it that is not its target (#1053).
 const ROW_BORDER_PX = 1;
 
-type RowEdge = 'top' | 'bottom';
+type RowEdge = 'top' | 'bottom' | 'left' | 'right';
 
 /**
  * A phone row is one target (#1053): its target is the whole card inside the
- * border, at least a thumb high, and a tap on the card's top or bottom edge --
+ * border, at least a thumb high, and a tap on any of the card's edges --
  * away from its label and the rounded corners -- lands on it.
  */
 async function tapRowEdge(row: Locator, target: Locator, edge: RowEdge): Promise<void> {
@@ -413,9 +413,13 @@ async function tapRowEdge(row: Locator, target: Locator, edge: RowEdge): Promise
 	expect(insets.map((inset) => Math.round(inset))).toEqual(Array(4).fill(ROW_BORDER_PX));
 	expect(targetBox.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 	const inset = ROW_BORDER_PX + 1;
-	await row.tap({
-		position: { x: rowBox.width / 4, y: edge === 'top' ? inset : rowBox.height - inset }
-	});
+	const edgePositions: Record<RowEdge, { x: number; y: number }> = {
+		top: { x: rowBox.width / 4, y: inset },
+		bottom: { x: rowBox.width / 4, y: rowBox.height - inset },
+		left: { x: inset, y: rowBox.height / 2 },
+		right: { x: rowBox.width - inset, y: rowBox.height / 2 }
+	};
+	await row.tap({ position: edgePositions[edge] });
 }
 
 test('a phone row answers a tap on its edge, and a take held twice marks one row', async ({
@@ -435,9 +439,9 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 		.click();
 	await expect(albumHeading).toBeVisible();
 
-	// An album row opens its song from either edge.
+	// An album row opens its song from each edge.
 	const songRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
-	for (const edge of ['top', 'bottom'] as const) {
+	for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
 		await tapRowEdge(songRow, songRow.getByRole('button'), edge);
 		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
 		await page.goBack();
