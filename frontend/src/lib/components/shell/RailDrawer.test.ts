@@ -1,6 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, type Writable } from 'svelte/store';
 
 let afterNavigateCb: (() => void) | undefined;
 
@@ -10,10 +10,18 @@ vi.mock('$app/navigation', () => ({
 	}
 }));
 
+vi.mock('$lib/stores/navigation', async () => {
+	const { writable } = await import('svelte/store');
+	return { railDrawerIsLayer: writable(false) };
+});
+
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
+import { railDrawerIsLayer as railDrawerIsLayerStore } from '$lib/stores/navigation';
 import { closeSidebar, railWidth, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import RailDrawer from './RailDrawer.svelte';
 import railDrawerSource from './RailDrawer.svelte?raw';
+
+const railDrawerIsLayer = railDrawerIsLayerStore as Writable<boolean>;
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -33,6 +41,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	closeSidebar();
+	railDrawerIsLayer.set(false);
 	railWidth.set(264);
 	localStorage.removeItem('songmaker.rail-width');
 	afterNavigateCb = undefined;
@@ -121,6 +130,37 @@ describe('RailDrawer', () => {
 		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', cancelable: true }));
 
 		expect(document.activeElement).toBe(search);
+	});
+
+	it.each([
+		{ layered: true, replaces: '' },
+		{ layered: false, replaces: null }
+	])(
+		'a link inside the drawer replaces the current entry only while the drawer owns one: $layered',
+		async ({ layered, replaces }) => {
+			const target = document.createElement('div');
+			document.body.append(target);
+			mounted = mount(RailDrawer, { target, props: { children } });
+			railDrawerIsLayer.set(layered);
+			toggleSidebar();
+			await tick();
+
+			const panel = requireElement(document.body, '.drawer-panel');
+			expect(panel.getAttribute('data-sveltekit-replacestate')).toBe(replaces);
+		}
+	);
+
+	it('closes when the compact shell that holds it goes away', async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(RailDrawer, { target, props: { children } });
+		toggleSidebar();
+		await tick();
+
+		await unmount(mounted);
+		mounted = undefined;
+
+		expect(get(sidebarOpen)).toBe(false);
 	});
 
 	it('closes after navigation', async () => {

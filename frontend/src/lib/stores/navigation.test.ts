@@ -29,6 +29,7 @@ import {
 	expandNowPlaying,
 	nowPlayingDockable,
 	nowPlayingOpen,
+	nowPlayingSurface,
 	openNowPlaying,
 	selectedGenerationId,
 	selectedSongId
@@ -40,7 +41,8 @@ import {
 	removeJob,
 	resetGenerationFailures
 } from '$lib/stores/jobs';
-import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	API_ERROR_GENERIC_MESSAGE,
@@ -129,6 +131,8 @@ import {
 	openRailSearchTarget,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
+	railDrawerIsLayer,
+	registerHistoryLayer,
 	resetNavigationForTests,
 	navigateToSongTab,
 	openEditTab,
@@ -1323,7 +1327,7 @@ describe('initNavigation', () => {
 // On a phone the full Now Playing surface is a pushed screen, so the phone's
 // own Back must leave it for the library it covers rather than for whatever
 // entry sits below that library (issue #1002).
-describe('compact Now Playing owns one history entry', () => {
+describe('full Now Playing owns one history entry', () => {
 	const origins = [
 		{
 			origin: 'a playlist',
@@ -1358,6 +1362,7 @@ describe('compact Now Playing owns one history entry', () => {
 		stopNavigation();
 		closeNowPlaying();
 		nowPlayingDockable.set(false);
+		setDesktopNowPlayingSurface('docked');
 	});
 
 	function libraryShown(): Record<string, unknown> {
@@ -1529,37 +1534,215 @@ describe('compact Now Playing owns one history entry', () => {
 		);
 	});
 
-	it.each([
-		['docked', () => undefined],
-		[
-			'switched to full and back',
-			() => {
-				expandNowPlaying();
-				dockNowPlaying();
-			}
-		]
-	])('the desktop panel %s leaves no history entry behind', async (_case, switchSurface) => {
+	it('the docked desktop panel leaves no history entry behind', async () => {
 		nowPlayingDockable.set(true);
 		await openPlaylist('p1');
 		const before = { length: history.length, index: history.state.index };
 
 		openNowPlaying('queue');
-		switchSurface();
 		closeNowPlaying();
 
 		expect({ length: history.length, index: history.state.index }).toEqual(before);
 	});
 
-	it('steps back off its entry when the viewport grows room for the docked panel', async () => {
+	it.each([
+		{
+			way: 'expanded from the docked panel',
+			open: () => {
+				openNowPlaying('queue');
+				expandNowPlaying();
+			}
+		},
+		{
+			way: 'opened straight onto the remembered full surface',
+			open: () => {
+				setDesktopNowPlayingSurface('full');
+				openNowPlaying('queue');
+			}
+		}
+	])(
+		'Back from the full surface $way on the desktop docks it over the same playlist and remembers the panel',
+		async ({ open }) => {
+			nowPlayingDockable.set(true);
+			await openPlaylist('p1');
+			const below = history.state.index;
+			open();
+			await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+			history.back();
+
+			await vi.waitFor(() => expect(get(nowPlayingSurface)).toBe('docked'));
+			expect(localStorage.getItem('nowPlayingDesktopSurface')).toBe('docked');
+			expect(history.state).toMatchObject({
+				index: below,
+				collection: { kind: 'playlist', id: 'p1' }
+			});
+			expect(libraryShown()).toEqual({
+				collection: { kind: 'playlist', id: 'p1' },
+				songId: null,
+				surface: 'detail'
+			});
+		}
+	);
+
+	it('docking the expanded panel steps back off its entry, so the next Back reaches the page before', async () => {
+		nowPlayingDockable.set(true);
+		await openAlbum('a1');
+		await openPlaylist('p1');
+		const below = history.state.index;
+		openNowPlaying('queue');
+		expandNowPlaying();
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+		dockNowPlaying();
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		history.back();
+
+		await vi.waitFor(() =>
+			expect(history.state).toMatchObject({
+				index: below - 1,
+				collection: { kind: 'album', id: 'a1' }
+			})
+		);
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('the next Back after Back closed Now Playing reaches the page before', async () => {
+		await openAlbum('a1');
+		await openPlaylist('p1');
+		const below = history.state.index;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		history.back();
+		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+
+		history.back();
+
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' }));
+		expect(history.state).toMatchObject({ index: below - 1 });
+	});
+
+	it('a docked panel the window narrows into the full surface writes no history', async () => {
+		nowPlayingDockable.set(true);
+		await openPlaylist('p1');
+		openNowPlaying('queue');
+		const before = { length: history.length, index: history.state.index };
+
+		nowPlayingDockable.set(false);
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
+		expect({ length: history.length, index: history.state.index }).toEqual(before);
+	});
+
+	it('keeps its entry when the window grows room for the docked panel, and Back then docks it', async () => {
 		await openPlaylist('p1');
 		const below = history.state.index;
 		openNowPlaying('queue');
 		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		const opened = { length: history.length, index: history.state.index };
 
 		nowPlayingDockable.set(true);
+		await tick();
+		expect({ length: history.length, index: history.state.index }).toEqual(opened);
+		history.back();
+
+		await vi.waitFor(() => expect(get(nowPlayingSurface)).toBe('docked'));
+		expect(history.state.index).toBe(below);
+	});
+});
+
+describe('the phone rail drawer owns one history entry', () => {
+	let stopNavigation: () => void = () => undefined;
+
+	beforeEach(async () => {
+		stopNavigation = initNavigation();
+		await openPlaylist('p1');
+	});
+
+	afterEach(() => {
+		stopNavigation();
+		closeSidebar();
+	});
+
+	async function openDrawer(): Promise<{ below: number; path: string }> {
+		const below = history.state.index;
+		const path = location.pathname;
+		toggleSidebar();
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		return { below, path };
+	}
+
+	it('Back closes the drawer and keeps the address and the playlist', async () => {
+		const { below, path } = await openDrawer();
+
+		history.back();
+
+		await vi.waitFor(() => expect(get(sidebarOpen)).toBe(false));
+		expect(location.pathname).toBe(path);
+		expect(history.state).toMatchObject({
+			index: below,
+			collection: { kind: 'playlist', id: 'p1' }
+		});
+		expect(get(railDrawerIsLayer)).toBe(false);
+	});
+
+	it('closing the drawer by its own control steps back off its entry', async () => {
+		const { below, path } = await openDrawer();
+
+		closeSidebar();
 
 		await vi.waitFor(() => expect(history.state.index).toBe(below));
-		expect(get(nowPlayingOpen)).toBe(true);
+		expect(location.pathname).toBe(path);
+	});
+
+	it.each([
+		{ way: 'a row that opens an album', go: () => openAlbum('a1') },
+		{
+			way: 'a rail search page target',
+			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })
+		},
+		{
+			way: 'a Settings link, which replaces the drawer entry before the drawer closes',
+			go: async () => {
+				history.replaceState(null, '', '/settings/voices');
+				closeSidebar();
+			}
+		}
+	])('one Back after leaving the drawer by $way returns to the playlist', async ({ go }) => {
+		const { below, path } = await openDrawer();
+
+		await go();
+		await vi.waitFor(() => expect(location.pathname).not.toBe(path));
+		expect(get(sidebarOpen)).toBe(false);
+		history.back();
+
+		await vi.waitFor(() => expect(location.pathname).toBe(path));
+		expect(history.state).toMatchObject({
+			index: below,
+			collection: { kind: 'playlist', id: 'p1' }
+		});
+	});
+
+	it('marks the drawer as a layer so a link inside it replaces the entry', async () => {
+		await openDrawer();
+
+		expect(get(railDrawerIsLayer)).toBe(true);
+	});
+});
+
+describe('overlays outside the library', () => {
+	it('are not layered on /settings, and opening the drawer there writes no history', () => {
+		history.replaceState(null, '', '/settings/playback');
+		const before = { length: history.length, state: history.state };
+
+		const registration = registerHistoryLayer('an-overlay', () => undefined);
+		toggleSidebar();
+
+		expect(registration).toEqual({ layered: false });
+		expect(get(railDrawerIsLayer)).toBe(false);
+		expect({ length: history.length, state: history.state }).toEqual(before);
+		closeSidebar();
 	});
 });
 
@@ -1586,7 +1769,7 @@ describe('openRailSearchTarget', () => {
 
 		expect(get(sidebarOpen)).toBe(false);
 		expect(window.location.pathname).toBe('/settings/playback');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback', { replaceState: false });
 	});
 });
 

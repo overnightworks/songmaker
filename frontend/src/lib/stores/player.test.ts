@@ -76,6 +76,7 @@ import {
 	expandNowPlaying,
 	navigateToPlaying,
 	nowPlayingDockable,
+	nowPlayingFullChosen,
 	nowPlayingOpen,
 	nowPlayingPanel,
 	nowPlayingSurface,
@@ -3276,6 +3277,76 @@ describe('Now Playing surface', () => {
 
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
+
+	it.each([
+		{
+			way: 'opened where no docked panel fits',
+			reach: () => openNowPlaying('queue'),
+			chosen: true
+		},
+		{
+			way: 'expanded from the docked panel',
+			reach: () => {
+				nowPlayingDockable.set(true);
+				openNowPlaying('queue');
+				expandNowPlaying();
+			},
+			chosen: true
+		},
+		{
+			way: 'opened straight onto the remembered full surface',
+			reach: () => {
+				nowPlayingDockable.set(true);
+				openNowPlaying('queue');
+				expandNowPlaying();
+				closeNowPlaying();
+				openNowPlaying('queue');
+			},
+			chosen: true
+		},
+		{
+			way: 'kept full while the window grows room for the panel',
+			reach: () => {
+				openNowPlaying('queue');
+				nowPlayingDockable.set(true);
+			},
+			chosen: true
+		},
+		{
+			way: 'forced full by a window losing room for the docked panel',
+			reach: () => {
+				nowPlayingDockable.set(true);
+				openNowPlaying('queue');
+				nowPlayingDockable.set(false);
+			},
+			chosen: false
+		},
+		{
+			way: 'docked again',
+			reach: () => {
+				nowPlayingDockable.set(true);
+				openNowPlaying('queue');
+				expandNowPlaying();
+				dockNowPlaying();
+			},
+			chosen: false
+		},
+		{
+			way: 'closed',
+			reach: () => {
+				openNowPlaying('queue');
+				closeNowPlaying();
+			},
+			chosen: false
+		}
+	])(
+		'counts the full surface as the listener’s own step when $way: $chosen',
+		({ reach, chosen }) => {
+			reach();
+
+			expect(get(nowPlayingFullChosen)).toBe(chosen);
+		}
+	);
 
 	it('dockNowPlaying returns to the panel and remembers it', () => {
 		nowPlayingDockable.set(true);

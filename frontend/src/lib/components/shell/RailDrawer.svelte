@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { tick, type Snippet } from 'svelte';
+	import { onDestroy, tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { RAIL_DRAWER_CLOSE_LABEL, RAIL_DRAWER_LABEL } from '$lib/constants';
+	import { railDrawerIsLayer } from '$lib/stores/navigation';
 	import { closeSidebar, railWidth, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
@@ -11,6 +12,9 @@
 	const open = $derived($sidebarOpen);
 
 	afterNavigate(() => closeSidebar());
+	// The drawer exists only in the compact shell; a window growing out of it
+	// must not leave an invisible drawer open for Back to close.
+	onDestroy(closeSidebar);
 
 	$effect(() => {
 		if (!open) return;
@@ -43,6 +47,7 @@
 			aria-modal="true"
 			aria-label={RAIL_DRAWER_LABEL}
 			tabindex="-1"
+			data-sveltekit-replacestate={$railDrawerIsLayer ? '' : undefined}
 		>
 			{@render children()}
 		</div>
