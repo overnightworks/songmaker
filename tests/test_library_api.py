@@ -21,6 +21,7 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_NEWEST,
     LIBRARY_SORT_OLDEST,
     LIBRARY_SORT_TITLE,
+    PAGE_MAX_LIMIT,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -261,8 +262,8 @@ def _add_entry(
     ))
 
 
-def _continue_items(client: TestClient) -> list[dict]:
-    resp = client.get("/api/library/continue")
+def _continue_items(client: TestClient, **params: int) -> list[dict]:
+    resp = client.get("/api/library/continue", params=params)
     assert resp.status_code == 200, resp.text
     return resp.json()["items"]
 
@@ -576,6 +577,26 @@ def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Pa
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 6
     assert len(queries) == 3, f"expected three Continue statements, got {len(queries)}: {queries}"
+
+
+def test_continue_returns_as_many_places_as_the_caller_asks_for(tmp_path: Path) -> None:
+    client, factory = _make_client(tmp_path, USER_A)
+    with factory() as session:
+        for index in range(8):
+            _add_album(
+                session, album_id=f"album-{index}", title=f"Album {index}", owner=USER_A,
+                created_at=_later(index),
+            )
+        session.commit()
+
+    items = _continue_items(client, limit=8)
+
+    assert [item["id"] for item in items] == [f"album-{index}" for index in reversed(range(8))]
+
+
+@pytest.mark.parametrize("limit", [0, PAGE_MAX_LIMIT + 1])
+def test_continue_refuses_a_limit_outside_its_bound(alice: TestClient, limit: int) -> None:
+    assert alice.get("/api/library/continue", params={"limit": limit}).status_code == 422
 
 
 def test_search_requires_query(alice: TestClient) -> None:

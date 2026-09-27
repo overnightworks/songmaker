@@ -44,8 +44,12 @@ export async function searchLibrary(options: {
 	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
 }
 
-export async function fetchLibraryContinue(): Promise<LibraryContinueResponse> {
-	return apiFetch<LibraryContinueResponse>('/api/library/continue');
+export async function fetchLibraryContinue(options?: {
+	limit?: number;
+}): Promise<LibraryContinueResponse> {
+	const query =
+		options?.limit === undefined ? '' : `?${new URLSearchParams({ limit: String(options.limit) })}`;
+	return apiFetch<LibraryContinueResponse>(`/api/library/continue${query}`);
 }
 
 export async function fetchLibraryPoolQueue(options?: {

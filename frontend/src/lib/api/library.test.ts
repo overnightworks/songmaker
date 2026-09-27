@@ -69,6 +69,17 @@ describe('fetchLibraryContinue', () => {
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
+
+	it('asks for as many places as the caller names', async () => {
+		mockOk({ items: [] });
+
+		await fetchLibraryContinue({ limit: 200 });
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/library/continue?limit=200',
+			expect.objectContaining({ credentials: 'include' })
+		);
+	});
 });
 
 describe('fetchLibraryPoolQueue', () => {
