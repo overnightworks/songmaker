@@ -11,6 +11,7 @@ import {
 	NOW_PLAYING_LABEL,
 	MINI_PLAYER_WITHOUT_COVER_MEDIA,
 	NOW_PLAYING_SWIPE_RISE_PX,
+	OFFLINE_STRIP_MESSAGE,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
 	REDUCED_MOTION_MEDIA,
@@ -36,6 +37,7 @@ import * as playerStore from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { sidebarOpen, toggleSidebar, watchTypingOnPhone } from '$lib/stores/ui';
+import { resetConnectivityForTests } from '$lib/stores/connectivity';
 import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
@@ -1019,6 +1021,63 @@ describe('PlayerBar failure line', () => {
 		const why = await failPlayback();
 
 		expect(description()).toBe(`${nowPlayingFromLabel('Nightdrive')} ${why}`);
+	});
+});
+
+describe('PlayerBar offline strip (#1080)', () => {
+	function goOffline(): void {
+		vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+		window.dispatchEvent(new Event('offline'));
+	}
+
+	function offlineStrip(): HTMLElement | null {
+		return target.querySelector('.offline-strip');
+	}
+
+	beforeEach(() => {
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+	});
+
+	afterEach(() => {
+		resetConnectivityForTests();
+	});
+
+	it('sits on the top edge of the bar while the page is offline', async () => {
+		goOffline();
+		await tick();
+
+		expect(offlineStrip()?.textContent?.trim()).toBe(OFFLINE_STRIP_MESSAGE);
+		expect(offlineStrip()?.closest('.offline-edge')?.nextElementSibling).toHaveClass('player-bar');
+	});
+
+	it('hides with the bar in full Now Playing and comes back with it', async () => {
+		goOffline();
+		nowPlayingSurface.set('full');
+		await tick();
+		expect(offlineStrip()).toBeNull();
+
+		closeNowPlaying();
+		await tick();
+		expect(offlineStrip()).not.toBeNull();
+	});
+
+	it('steps aside with the bar while typing on the phone', async () => {
+		goOffline();
+		const closeKeyboard = openOnScreenKeyboard();
+		const stopWatching = watchTypingOnPhone(document, true);
+		const lyrics = document.createElement('textarea');
+		document.body.append(lyrics);
+
+		lyrics.focus();
+		await tick();
+		expect(offlineStrip()).toBeNull();
+
+		lyrics.blur();
+		await tick();
+		expect(offlineStrip()).not.toBeNull();
+		stopWatching();
+		closeKeyboard();
 	});
 });
 
