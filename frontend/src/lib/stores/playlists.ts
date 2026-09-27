@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { ApiError, isNotFound } from '$lib/api/fetch';
+import { describeFailure, isNotFound } from '$lib/api/fetch';
 import {
 	fetchPlaylists,
 	fetchPlaylist,
@@ -112,7 +112,7 @@ export async function loadPlaylists(): Promise<boolean> {
 			playlistLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			playlistLoad.set({ status: 'error', error: playlistErrorMessage(err) });
+			playlistLoad.set({ status: 'error', error: describeFailure(err, LIBRARY_PLAYLISTS_ERROR) });
 			return false;
 		} finally {
 			playlistsInflight = null;
@@ -145,12 +145,6 @@ function mergeFetchedPlaylists(server: PlaylistItem[], local: PlaylistItem[]): P
 	const serverIds = new Set(server.map((playlist) => playlist.id));
 	const createdWhileLoading = local.filter((playlist) => !serverIds.has(playlist.id));
 	return [...server, ...createdWhileLoading];
-}
-
-function playlistErrorMessage(err: unknown): string {
-	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof Error) return err.message;
-	return LIBRARY_PLAYLISTS_ERROR;
 }
 
 export async function loadPlaylistDetail(
@@ -187,7 +181,7 @@ export async function loadPlaylistDetail(
 			setOpenCollection(null);
 			return;
 		}
-		const message = playlistErrorMessage(err);
+		const message = describeFailure(err, LIBRARY_PLAYLISTS_ERROR);
 		selectedPlaylistDetail.set(null);
 		playlistDetailLoad.set({ status: 'error', error: message });
 		addToast(message, 'error');
