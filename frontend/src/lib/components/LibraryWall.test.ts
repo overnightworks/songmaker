@@ -6,8 +6,7 @@ import { get } from 'svelte/store';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { openCollection } from '$lib/stores/collection';
-import { albumList } from '$lib/stores/libraryData';
-import { libraryBrowse } from '$lib/stores/librarySearch';
+import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 
@@ -21,14 +20,12 @@ vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
 	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
 }));
-vi.mock('$lib/api/albums', () => ({
-	fetchAlbum: vi.fn(),
-	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args)
-}));
+vi.mock('$lib/api/albums', () => ({ fetchAlbum: vi.fn(), fetchAlbums: vi.fn() }));
 vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
 vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
+	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn(),
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null })
@@ -46,7 +43,7 @@ beforeEach(() => {
 		entries: []
 	});
 	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
-	fetchAlbums.mockReset();
+	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
 	localStorage.clear();
 	libraryWallOrder.set('title');
 	resetLibraryContextForTests();
@@ -68,7 +65,12 @@ afterEach(async () => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
+	allAlbumsLoad.set({ status: 'idle', error: null });
 });
+
+function albumPage(items: ReturnType<typeof album>[], hasMore: boolean) {
+	return { items, total: items.length, offset: 0, limit: 50, has_more: hasMore };
+}
 
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
@@ -288,26 +290,13 @@ describe('LibraryWall', () => {
 
 	it('sorts the complete set, reading every album page before ordering the wall', async () => {
 		seedWall();
-		libraryBrowse.set({
-			status: 'ready',
-			error: null,
-			albumHasMore: true,
-			songHasMore: false,
-			albumOffset: 3,
-			songOffset: 0
-		});
-		fetchAlbums.mockResolvedValueOnce({
-			items: [album({ id: 'a-arger', title: 'Ärger' })],
-			total: 4,
-			offset: 3,
-			limit: 50,
-			has_more: false
-		});
+		fetchAlbums
+			.mockResolvedValueOnce(albumPage(get(albumList), true))
+			.mockResolvedValueOnce(albumPage([album({ id: 'a-arger', title: 'Ärger' })], false));
 
 		const root = await render();
 
 		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Ärger'));
-		expect(fetchAlbums).toHaveBeenCalledWith(3, expect.any(Number), { sort: 'newest' });
 		expect(root.querySelector('.load-more')).toBeNull();
 	});
 

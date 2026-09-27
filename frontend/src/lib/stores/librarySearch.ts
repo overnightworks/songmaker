@@ -13,6 +13,7 @@ import {
 import {
 	albumList,
 	overlaySongList,
+	reloadAllAlbumsIfRequested,
 	removeSongFromList,
 	songList,
 	upsertSongInList
@@ -138,6 +139,7 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		if (generation !== browseGeneration) return false;
 		if (reset) {
 			albumList.set(albumPage.items);
+			reloadAllAlbumsIfRequested();
 			songList.set(overlaySongList(get(songList), songPage.items));
 		} else {
 			albumList.set(dedupeById([...get(albumList), ...albumPage.items]));
@@ -156,41 +158,13 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		return true;
 	} catch (err) {
 		if (generation !== browseGeneration) return false;
-		failLibraryBrowse(err);
-		return false;
-	}
-}
-
-export async function loadMoreLibraryAlbums(): Promise<boolean> {
-	const generation = ++browseGeneration;
-	const albumOffset = get(libraryBrowse).albumOffset;
-	libraryBrowse.update((state) => ({ ...state, status: 'loading', error: null }));
-	try {
-		const albumPage = await fetchAlbums(albumOffset, LIBRARY_ALBUM_PAGE_SIZE, {
-			sort: get(librarySort)
-		});
-		if (generation !== browseGeneration) return false;
-		albumList.set(dedupeById([...get(albumList), ...albumPage.items]));
 		libraryBrowse.update((state) => ({
 			...state,
-			status: 'ready',
-			albumHasMore: albumPage.has_more,
-			albumOffset: albumOffset + albumPage.items.length
+			status: 'error',
+			error: describeFailure(err, SEARCH_FAILED_MESSAGE)
 		}));
-		return true;
-	} catch (err) {
-		if (generation !== browseGeneration) return false;
-		failLibraryBrowse(err);
 		return false;
 	}
-}
-
-function failLibraryBrowse(err: unknown): void {
-	libraryBrowse.update((state) => ({
-		...state,
-		status: 'error',
-		error: describeFailure(err, SEARCH_FAILED_MESSAGE)
-	}));
 }
 
 export function forgetSyncedSong(songId: string): void {
