@@ -1,5 +1,6 @@
 import { derived, get, readable, writable, type Readable } from 'svelte/store';
 
+import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 
 /**
@@ -59,6 +60,13 @@ type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
 
 interface UnreachableReloads {
 	afterNetworkFailure(): UnreachableReload;
+	/**
+	 * The words a failed load shows, or null while it needs none: a lost
+	 * network stays unnamed while the strip says it or a reload is coming,
+	 * and is named `fallback` once the backoff is spent; any other failure
+	 * stops the reloads and shows the server's reason, else `fallback`.
+	 */
+	nameLoadFailure(err: unknown, fallback: string): string | null;
 	/** The load answered, or the surface moved on: forget the reloads. */
 	stop(): void;
 }
@@ -77,29 +85,40 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		reload();
 	}
 
-	return {
-		afterNetworkFailure() {
-			stopPending();
-			if (get(offline)) {
-				reloadsSpent = 0;
-				cancelPending = whenBackOnline(runPending);
-				return 'on-reconnect';
-			}
-			const delay = UNREACHABLE_RELOAD_DELAYS_MS[reloadsSpent];
-			if (delay === undefined) {
-				reloadsSpent = 0;
-				cancelPending = whenBackOnline(runPending);
-				return 'exhausted';
-			}
-			reloadsSpent += 1;
-			const timer = setTimeout(runPending, delay);
-			cancelPending = () => clearTimeout(timer);
-			return 'scheduled';
-		},
-		stop() {
-			stopPending();
+	function afterNetworkFailure(): UnreachableReload {
+		stopPending();
+		if (get(offline)) {
 			reloadsSpent = 0;
+			cancelPending = whenBackOnline(runPending);
+			return 'on-reconnect';
 		}
+		const delay = UNREACHABLE_RELOAD_DELAYS_MS[reloadsSpent];
+		if (delay === undefined) {
+			reloadsSpent = 0;
+			cancelPending = whenBackOnline(runPending);
+			return 'exhausted';
+		}
+		reloadsSpent += 1;
+		const timer = setTimeout(runPending, delay);
+		cancelPending = () => clearTimeout(timer);
+		return 'scheduled';
+	}
+
+	function stop(): void {
+		stopPending();
+		reloadsSpent = 0;
+	}
+
+	return {
+		afterNetworkFailure,
+		nameLoadFailure(err, fallback) {
+			if (err instanceof NetworkError) {
+				return afterNetworkFailure() === 'exhausted' ? fallback : null;
+			}
+			stop();
+			return describeFailure(err, fallback);
+		},
+		stop
 	};
 }
 

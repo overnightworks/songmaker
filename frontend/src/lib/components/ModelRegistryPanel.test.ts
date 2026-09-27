@@ -1,7 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { COMPACT_LAYOUT_MEDIA } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { COMPACT_LAYOUT_MEDIA, MODEL_REGISTRY_LOAD_FAILED } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { COMPACT_STACK_CLASS } from '$lib/styles/compact-ui';
 
 const api = vi.hoisted(() => ({
@@ -71,6 +73,7 @@ afterEach(async () => {
 	document.head.querySelectorAll('[data-compact-ui]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	vi.unstubAllGlobals();
+	resetConnectivityForTests();
 });
 
 describe('ModelRegistryPanel compact layout', () => {
@@ -140,5 +143,43 @@ describe('ModelRegistryPanel with no worker online', () => {
 		expect(target.textContent).toContain('no worker running');
 		expect(target.textContent).not.toContain('not downloaded');
 		expect(target.querySelector('button.action-btn')).toBeNull();
+	});
+});
+
+describe('ModelRegistryPanel failures', () => {
+	const lostNetwork = (): NetworkError =>
+		new NetworkError('/api/admin/registry', new TypeError('Failed to fetch'));
+
+	it.each([
+		{
+			failure: 'a server reason',
+			err: new ApiError(503, 'Registry is rebuilding', '/api/admin/registry'),
+			shown: 'Registry is rebuilding'
+		},
+		{
+			failure: 'a lost network with no strip',
+			err: lostNetwork(),
+			shown: MODEL_REGISTRY_LOAD_FAILED
+		}
+	])('names $failure without browser text', async ({ err, shown }) => {
+		api.getRegistry.mockRejectedValue(err);
+		const target = await renderPanel(false);
+
+		expect(requireElement(target, '.panel-error').textContent).toBe(shown);
+		expect(target.textContent).not.toContain('Failed to fetch');
+	});
+
+	it('under the offline strip shows no failure of its own and loads again once back online', async () => {
+		reportResourceStreamReachable(false);
+		api.getRegistry.mockRejectedValue(lostNetwork());
+		const target = await renderPanel(false);
+		expect(target.querySelector('.panel-error')).toBeNull();
+
+		api.getRegistry.mockResolvedValue({
+			models: [{ mode: 'turbo', availability: 'downloaded', loaded_on: [], loading_on: [] }]
+		});
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.querySelector('.registry-table')).not.toBeNull());
 	});
 });

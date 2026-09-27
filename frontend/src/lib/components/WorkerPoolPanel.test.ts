@@ -2,6 +2,9 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { WorkerPoolResponse } from '$lib/api/types';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { WORKER_POOL_LOAD_FAILED, WORKER_POOL_REFRESH_FAILED } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
 const api = vi.hoisted(() => ({
 	listWorkers: vi.fn()
@@ -82,6 +85,8 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	resetConnectivityForTests();
+	vi.useRealTimers();
 });
 
 function offlineWorkerPool(lastRegisterAt: string): WorkerPoolResponse {
@@ -359,5 +364,55 @@ describe('WorkerPoolPanel VRAM measurement', () => {
 
 		expect(value).toHaveTextContent('12.4 / 24.0 GB');
 		expect(value).not.toHaveAttribute('title');
+	});
+});
+
+describe('WorkerPoolPanel failures', () => {
+	const lostNetwork = (): NetworkError =>
+		new NetworkError('/api/admin/workers', new TypeError('Failed to fetch'));
+
+	async function renderPanel(): Promise<HTMLElement> {
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(WorkerPoolPanel, { target, props: { availableModes: [] } });
+		await tick();
+		await Promise.resolve();
+		await tick();
+		return target;
+	}
+
+	it.each([
+		{
+			failure: 'a server reason',
+			err: new ApiError(503, 'Worker registry is locked', '/api/admin/workers'),
+			shown: 'Worker registry is locked'
+		},
+		{ failure: 'a lost network with no strip', err: lostNetwork(), shown: WORKER_POOL_LOAD_FAILED }
+	])('names $failure without browser text', async ({ err, shown }) => {
+		api.listWorkers.mockRejectedValue(err);
+		const target = await renderPanel();
+
+		expect(target.querySelector('.panel-error')?.textContent).toBe(shown);
+		expect(target.textContent).not.toContain('Failed to fetch');
+	});
+
+	it('under the offline strip keeps its workers with no wording of its own and polls again once back online', async () => {
+		vi.useFakeTimers();
+		api.listWorkers.mockResolvedValue(offlineWorkerPool('2026-09-01T10:00:00Z'));
+		const target = await renderPanel();
+		await vi.advanceTimersByTimeAsync(0);
+
+		reportResourceStreamReachable(false);
+		api.listWorkers.mockRejectedValue(lostNetwork());
+		await vi.advanceTimersByTimeAsync(60_000);
+		expect(target.querySelector('.card')).not.toBeNull();
+		expect(target.querySelector('.banner-error')).toBeNull();
+		expect(target.textContent).not.toContain(WORKER_POOL_REFRESH_FAILED);
+
+		api.listWorkers.mockResolvedValue(workerPool(true));
+		reportResourceStreamReachable(true);
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect(target.textContent).toContain('12.4');
 	});
 });
