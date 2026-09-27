@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "c901ae0c0d87a79cf1fb01489cd0002befddd4e2"
 branch = "claude/issue-1067-mini-player-gestures"
-scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/constants.ts"]
+scope = ["frontend/e2e/library.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/share/[slug]/page.test.ts", "frontend/src/routes/share/gen/[slug]/page.test.ts"]
 opened_commit = "597352cb6d7b890ce7c357937ee02d02c01a56cd"
 whole_reason = "mini-player gestures and layout with the tests and specs that mount the shared bar"
