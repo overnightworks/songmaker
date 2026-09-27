@@ -286,7 +286,8 @@ test.describe('song page at phone width', () => {
 // screen it was opened from again, never the entry below that screen, and
 // leaves no copy of it behind for the next Back to land on. A take row opens
 // Now Playing on This take with its sheet up, whose backdrop never covers ×
-// (#1052), so one tap on × closes Now Playing there too. A playlist row only
+// (#1052), so one tap on × closes Now Playing there too; Back closes that sheet
+// first and Now Playing with the next one (#1119). A playlist row only
 // plays in place (#1010), so that origin opens Now Playing through the
 // mini-player's own entry, which brings no sheet up.
 // The base library's songs each carry one reimported take, their first.
@@ -368,22 +369,30 @@ const NOW_PLAYING_LEAVES: {
 }[] = [
 	{
 		name: 'Back',
-		leave: async (page) => {
+		leave: async (page, { playing, opensOnTakeSheet }) => {
+			if (opensOnTakeSheet) {
+				await page.goBack();
+				await expect(
+					page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })
+				).toBeHidden();
+				await expect(page.getByRole('dialog', { name: playing })).toBeVisible();
+			}
 			await page.goBack();
 		}
 	},
 	{
 		// A reload -- or a phone restoring a tab it discarded -- drops the open
-		// Now Playing but not its history entry; once its library has loaded
-		// the app steps back off that entry, and Back is meant from then on.
+		// Now Playing, and the sheet over it, but not their history entries;
+		// once its library has loaded the app steps back off each of them onto
+		// an entry no layer marks, and Back is meant from then on.
 		name: 'a reload',
 		leave: async (page) => {
 			await page.addInitScript(() => {
-				window.addEventListener(
-					'popstate',
-					() => document.documentElement.setAttribute('data-e2e-stepped-back', ''),
-					{ once: true }
-				);
+				window.addEventListener('popstate', () => {
+					if (history.state?.layer === undefined) {
+						document.documentElement.setAttribute('data-e2e-stepped-back', '');
+					}
+				});
 			});
 			await page.reload();
 			await expect(page.locator('html[data-e2e-stepped-back]')).toBeAttached();
