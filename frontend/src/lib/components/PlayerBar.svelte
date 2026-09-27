@@ -66,6 +66,7 @@
 			albums: $albumList
 		})
 	);
+	const detailId = $props.id();
 	// The phone names where the music comes from under the title; the
 	// desktop row, and a queue with no source, name the take.
 	const detailLine = $derived.by(() => {
@@ -138,7 +139,7 @@
 			>
 			<!-- The phone's line under the title has no room left for why playback
 				stopped; its bar says that in its own empty right side. -->
-			<span class="track-detail"
+			<span class="track-detail" id={detailId}
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if isError && !mobileTransport}<span class="error-text"
 						>{errorMsg ?? 'Error'}</span
@@ -186,6 +187,7 @@
 		nowPlayingDocked={docked}
 		nowPlayingDisabled={!current}
 		nowPlayingTargetLabel={current ? openNowPlayingLabel(current.songTitle) : undefined}
+		nowPlayingTargetDescriptionId={current ? detailId : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>

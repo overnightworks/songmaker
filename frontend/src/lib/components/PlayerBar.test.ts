@@ -671,7 +671,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		expect(targets).toEqual([
 			openNowPlayingLabel('Opening Move'),
 			'transport-controls',
-			NOW_PLAYING_LABEL
+			'phone-side'
 		]);
 		const transport = Array.from(
 			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
@@ -734,6 +734,25 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 });
 
 describe('PlayerBar failure line', () => {
+	async function mountPlayingFromNightdrive(): Promise<void> {
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		component = mount(PlayerBar, { target });
+		await tick();
+	}
+
+	async function failPlayback(): Promise<string> {
+		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+		await vi.waitFor(() => expect(audioPlayer.error).toBeTruthy());
+		await tick();
+		return audioPlayer.error ?? '';
+	}
+
 	it.each([
 		{
 			layout: "phone, in the bar's empty right side beside the source line",
@@ -749,23 +768,28 @@ describe('PlayerBar failure line', () => {
 		}
 	])('shows why playback stopped on the $layout', async ({ arrange, failure, detailBeside }) => {
 		arrange();
-		queueContext.set({ type: 'album', albumId: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
-		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
-		component = mount(PlayerBar, { target });
-		await tick();
-		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+		await mountPlayingFromNightdrive();
 
-		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
-		await tick();
-		audio.fire('canplay');
+		const why = await failPlayback();
 
-		await vi.waitFor(() => expect(audioPlayer.error).toBeTruthy());
-		await tick();
-		const why = audioPlayer.error ?? '';
 		expect(target.querySelector(failure)?.textContent?.trim()).toBe(why);
 		expect(target.querySelector('.track-detail')?.textContent).toBe(detailBeside(why));
+	});
+
+	// The target's own label replaces its words for a screen reader.
+	it("describes the phone's cover-and-title target by its source line, then by why playback stopped", async () => {
+		await mountPlayingFromNightdrive();
+		const titleTarget = target.querySelector<HTMLButtonElement>('.track-info.open-now-playing');
+		const description = (): string =>
+			(titleTarget?.getAttribute('aria-describedby') ?? '')
+				.split(' ')
+				.map((id) => document.getElementById(id)?.textContent?.trim())
+				.join(' ');
+		expect(description()).toContain(nowPlayingFromLabel('Nightdrive'));
+
+		const why = await failPlayback();
+
+		expect(description()).toBe(`${nowPlayingFromLabel('Nightdrive')} ${why}`);
 	});
 });
 

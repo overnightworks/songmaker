@@ -44,6 +44,9 @@
 		nowPlayingDisabled: boolean;
 		// The phone's cover-and-title target is named after the playing song.
 		nowPlayingTargetLabel?: string;
+		// That label replaces the target's own words for a screen reader, so
+		// the line under the title is read as its description.
+		nowPlayingTargetDescriptionId?: string;
 		onNowPlayingTriggerBind?: (el: HTMLButtonElement | undefined) => void;
 		mobileTransport: boolean;
 	}
@@ -71,6 +74,7 @@
 		nowPlayingDocked = false,
 		nowPlayingDisabled,
 		nowPlayingTargetLabel = NOW_PLAYING_LABEL,
+		nowPlayingTargetDescriptionId,
 		onNowPlayingTriggerBind,
 		mobileTransport
 	}: Props = $props();
@@ -88,7 +92,12 @@
 	// its own press feedback.
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
+	const phoneFailureId = $props.id();
 	const phoneFailure = $derived(isError ? errorMsg : null);
+	const nowPlayingTargetDescribedBy = $derived(
+		[nowPlayingTargetDescriptionId, phoneFailure && phoneFailureId].filter(Boolean).join(' ') ||
+			undefined
+	);
 
 	const viz = new AudioVisualizer();
 	const progressPercent = $derived(
@@ -245,6 +254,7 @@
 					class="phone-side track-info open-now-playing"
 					onclick={onOpenNowPlaying}
 					aria-label={nowPlayingTargetLabel}
+					aria-describedby={nowPlayingTargetDescribedBy}
 					aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
 					aria-expanded={nowPlayingOpen}
 					aria-live="polite"
@@ -266,9 +276,9 @@
 					onclick={onOpenNowPlaying}
 					tabindex="-1"
 					aria-hidden="true"
-					aria-label={NOW_PLAYING_LABEL}
 				>
-					{#if phoneFailure}<span class="phone-failure">{phoneFailure}</span>{/if}
+					{#if phoneFailure}<span class="phone-failure" id={phoneFailureId}>{phoneFailure}</span
+						>{/if}
 				</button>
 			{/if}
 		{:else}
