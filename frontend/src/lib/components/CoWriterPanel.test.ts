@@ -53,6 +53,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import {
 	deleteConversation,
 	fetchMemory,
@@ -1671,4 +1672,51 @@ describe('CoWriterPanel proposal target (#238)', () => {
 		expect(badge?.textContent?.trim()).toBe('for: Other Song');
 		expect(badge?.classList.contains('foreign')).toBe(true);
 	});
+});
+
+function typeIntoChat(target: HTMLElement, text: string): void {
+	const input = target.querySelector<HTMLTextAreaElement>('.chat-input');
+	if (!input) throw new Error('Expected the chat textarea');
+	input.value = text;
+	input.dispatchEvent(new Event('input', { bubbles: true }));
+}
+
+function pressEscapeIn(element: Element | null): void {
+	element?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+}
+
+describeBackClosesOverlay({
+	name: 'the co-writer conversations menu',
+	render: () => render(),
+	open: (target) => target.querySelector<HTMLButtonElement>('button.convo-menu-btn')?.click(),
+	isShown: (target) => target.querySelector('[role="menu"]') !== null,
+	closeWays: [
+		{ way: 'a tap outside', close: () => document.body.click() },
+		{ way: 'Escape', close: () => pressEscapeIn(document.body) },
+		{
+			way: 'choosing Memory',
+			close: (target) =>
+				Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+					.find((item) => item.textContent?.trim() === 'Memory')
+					?.click()
+		}
+	]
+});
+
+describeBackClosesOverlay({
+	name: 'the @-mention list',
+	render: () => render({ allSongs: [song({ id: 's2', slug: 'open-song', title: 'Open Song' })] }),
+	open: (target) => typeIntoChat(target, '@Op'),
+	isShown: (target) => target.querySelector('.mention-dropdown') !== null,
+	closeWays: [
+		{
+			way: 'Escape',
+			close: (target) => pressEscapeIn(target.querySelector('.chat-input'))
+		},
+		{
+			way: 'choosing a song',
+			close: (target) => target.querySelector<HTMLButtonElement>('.mention-option')?.click()
+		},
+		{ way: 'typing past the mention', close: (target) => typeIntoChat(target, 'plain words') }
+	]
 });
