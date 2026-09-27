@@ -22,14 +22,14 @@ import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
-	detailTab.set('write');
+	detailTab.set('edit');
 	action.set({ kind: 'idle', mode: 'generate' });
 });
 
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	detailTab.set('write');
+	detailTab.set('edit');
 	clearComponentStyles();
 });
 
@@ -46,29 +46,29 @@ describe('DetailTabs', () => {
 		'shows two tabs with %i takes and follows navigation state',
 		async (count) => {
 			const tabs = await render(count);
-			expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Write', `Takes (${count})`]);
+			expect(tabs.map((tab) => tab.textContent?.trim())).toEqual(['Edit', `Takes (${count})`]);
 			expect(tabs[0].getAttribute('aria-selected')).toBe('true');
 			tabs[1].click();
 			await tick();
 			expect(get(detailTab)).toBe('takes');
 			expect(tabs[1].getAttribute('aria-selected')).toBe('true');
-			detailTab.set('write');
+			detailTab.set('edit');
 			await tick();
 			expect(tabs[0].getAttribute('aria-selected')).toBe('true');
 		}
 	);
 
 	it.each([
-		['ArrowRight', 'write', 'takes'],
-		['ArrowLeft', 'write', 'takes'],
-		['ArrowRight', 'takes', 'write'],
-		['Home', 'takes', 'write'],
-		['End', 'write', 'takes']
+		['ArrowRight', 'edit', 'takes'],
+		['ArrowLeft', 'edit', 'takes'],
+		['ArrowRight', 'takes', 'edit'],
+		['Home', 'takes', 'edit'],
+		['End', 'edit', 'takes']
 	] as const)('selects and focuses the tab for %s from %s', async (key, from, to) => {
 		detailTab.set(from);
 		const tabs = await render();
-		const current = tabs[from === 'write' ? 0 : 1];
-		const next = tabs[to === 'write' ? 0 : 1];
+		const current = tabs[from === 'edit' ? 0 : 1];
+		const next = tabs[to === 'edit' ? 0 : 1];
 		current.focus();
 		current.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true, cancelable: true }));
 		await tick();

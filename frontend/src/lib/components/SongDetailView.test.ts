@@ -46,10 +46,11 @@ import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import {
 	detailTab,
 	initNavigation,
+	navigateToSongTab,
 	persistLibraryHistory,
 	resetNavigationForTests,
 	selectSong,
-	openWriteTab
+	openEditTab
 } from '$lib/stores/navigation';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -425,8 +426,8 @@ describe('SongDetailView desktop vs compact layout', () => {
 		expect(bar.querySelector('.brand')?.textContent).toBe('Hallucinai');
 	});
 
-	it('switches between Write and the real Takes list at phone width without losing the draft', async () => {
-		openWriteTab();
+	it('switches between Edit and the real Takes list at phone width without losing the draft', async () => {
+		openEditTab();
 		stubLibraryMedia({ narrow: true, compact: true });
 		const target = await renderView({ widthPx: 390 });
 		expect(target.querySelector('.editor-columns')).toBeNull();
@@ -436,7 +437,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		lyrics.dispatchEvent(new Event('input', { bubbles: true }));
 		await tick();
 		const tabs = target.querySelectorAll<HTMLButtonElement>('[role="tab"]');
-		expect(Array.from(tabs, (tab) => tab.textContent?.trim())).toEqual(['Write', 'Takes (1)']);
+		expect(Array.from(tabs, (tab) => tab.textContent?.trim())).toEqual(['Edit', 'Takes (1)']);
 		tabs[1].click();
 		await tick();
 		expect(target.querySelector('.lyrics-area')).toBeNull();
@@ -504,7 +505,7 @@ describe('SongDetailView recipe and takes', () => {
 	it('edits the phone recipe inline without opening a sheet', async () => {
 		stubLibraryMedia({ narrow: true, compact: true });
 		const target = await renderView({ widthPx: 390 });
-		detailTab.set('write');
+		detailTab.set('edit');
 		await tick();
 		const recipe = target.querySelector<HTMLElement>('.phone-recipe') as HTMLElement;
 		getByRoleButton(recipe, 'Recipe').click();
@@ -697,7 +698,7 @@ describe.each([false, true])('SongDetailView Generate with phone layout %s', (ph
 	beforeEach(() => {
 		recipeModel.set('turbo');
 		stubLibraryMedia({ narrow: phone });
-		openWriteTab();
+		openEditTab();
 	});
 
 	function generateBtn(target: HTMLElement): HTMLButtonElement | null {
@@ -1132,8 +1133,8 @@ describe('SongDetailView Co-Writer and Recipe stacked (both open)', () => {
 });
 
 describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
-	it('replaces the Write surface instead of opening a sheet beside it', async () => {
-		openWriteTab();
+	it('replaces the Edit surface instead of opening a sheet beside it', async () => {
+		openEditTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
 		expect(target.querySelector('.write-surface .cowriter-row')).not.toBeNull();
@@ -1153,7 +1154,7 @@ describe('SongDetailView mobile Co-Writer is a pushed screen', () => {
 	});
 
 	it('opens from the Write column\'s "Co-writer" row', async () => {
-		openWriteTab();
+		openEditTab();
 		stubLibraryMedia({ narrow: false, compact: true });
 		const target = await renderView();
 		const row = target.querySelector<HTMLButtonElement>('.cowriter-row');
@@ -1261,7 +1262,7 @@ describe('song header album rail', () => {
 		expect(next.disabled).toBe(true);
 	});
 
-	it('replaces the song and keeps the Write tab when next is clicked', async () => {
+	it('replaces the song and keeps the Takes tab when next is clicked', async () => {
 		stubLibraryMedia({ narrow: true, compact: false });
 		const songs = albumSongs();
 		albumList.set([album({ id: 'a-local', title: 'Local Album', song_count: 3 })]);
@@ -1269,7 +1270,7 @@ describe('song header album rail', () => {
 		selectedSongId.set('s1');
 		const cleanup = initNavigation();
 		selectSong('s1');
-		openWriteTab();
+		navigateToSongTab('takes');
 		const index = history.state.index;
 		const push = vi.spyOn(history, 'pushState');
 		const target = await renderView();
@@ -1280,7 +1281,7 @@ describe('song header album rail', () => {
 		expect(push).not.toHaveBeenCalled();
 		expect(history.state.index).toBe(index);
 		expect(get(selectedSongId)).toBe('s-last');
-		expect(get(detailTab)).toBe('write');
+		expect(get(detailTab)).toBe('takes');
 		push.mockRestore();
 		cleanup();
 	});
