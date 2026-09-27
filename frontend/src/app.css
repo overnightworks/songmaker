@@ -43,7 +43,10 @@
 	--viz-accent-b: 240;
 	--font-display: 'Oswald', Impact, sans-serif;
 	--font-body: 'Open Sans', Arial, sans-serif;
-	--player-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--transport-bar-height: calc(88px + env(safe-area-inset-bottom, 0px));
+	--offline-strip-height: 36px;
+	--offline-strip-room: 0px;
+	--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room));
 	--editor-generate-bar-height: 56px;
 	--header-height: 46px;
 	--rail-width: 264px;
@@ -89,29 +92,33 @@
 
 @media (max-width: 640px) {
 	:root {
-		--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
 @media (any-pointer: coarse) {
 	:root {
-		--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
+		--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
 	}
 }
 
 html[data-pointer='coarse'] {
-	--player-height: calc(64px + env(safe-area-inset-bottom, 0px));
+	--transport-bar-height: calc(64px + env(safe-area-inset-bottom, 0px));
 }
 
-/* --player-height is the room the transport bar takes right now. The app's
-   full-screen Now Playing surface hides that bar, and so does a focused field
-   on the phone, where the keyboard takes the bottom; then it takes no room at
-   all and everything that reserves space for it — the shell rows, the toast
-   stack, the queue-stream chip, the editor's bottom padding, the collection
-   views, Now Playing's own sheet — collapses from here. routes/+layout.svelte
-   sets the attribute; a share page keeps its bar and never carries it. Stays
-   below the coarse-pointer rule above: same specificity, so source order is
-   what decides. */
+/* --player-height is the room the transport bar takes right now: the bar
+   itself (--transport-bar-height) plus, while offline, the offline strip on
+   its top edge, so everything that reserves space for the bar — the shell
+   rows, the toast stack, the queue-stream chip, the editor's bottom padding
+   and Generate bar, the collection views, Now Playing's own sheet — also
+   stays clear of the strip. The app's full-screen Now Playing surface hides
+   the bar and its strip, and so does a focused field on the phone, where the
+   keyboard takes the bottom; then they take no room at all. routes/+layout.svelte
+   sets both attributes; a share page keeps its bar and never carries them. */
+html[data-offline] {
+	--offline-strip-room: var(--offline-strip-height);
+}
+
 html[data-transport-bar='hidden'] {
 	--player-height: 0px;
 }
