@@ -32,6 +32,7 @@ import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
+	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
@@ -74,12 +75,14 @@ const DISCONNECTED_SYNC: ResourceSyncState = {
 // safe amount to advance fake timers by when a test just needs "long enough
 // for any pending reconnect, at any attempt count, to have fired".
 const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
+const EVENT_SOURCE_CONNECTING = 0;
 
 class MockEventSource implements ResourceEventSource {
 	static instances: MockEventSource[] = [];
 	url: string;
 	withCredentials: boolean;
 	closed = false;
+	readyState = EVENT_SOURCE_CONNECTING;
 	onerror: ((event: Event) => void) | null = null;
 	private readonly listeners = new Map<string, Set<(event: Event) => void>>();
 
@@ -110,6 +113,11 @@ class MockEventSource implements ResourceEventSource {
 
 	error(): void {
 		this.onerror?.(new Event('error'));
+	}
+
+	failWithoutNativeRetry(): void {
+		this.readyState = EVENT_SOURCE_CLOSED;
+		this.error();
 	}
 }
 
@@ -1322,6 +1330,27 @@ describe('resource sync owner', () => {
 
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(sources).toHaveLength(sourcesWhenFailed + 1);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+
+		expect(reachability.at(-1)).toBe(true);
+		expect(get(store).status).toBe('live');
+		controller.stop();
+	});
+
+	it('restarts a first sync whose stream the browser closed for good while the server could not be reached', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, store, reachability } = setup({
+			probeAuth: async () => 'retryable'
+		});
+		controller.start();
+		latestSource(sources).failWithoutNativeRetry();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+		const sourcesWhenClosed = sources.length;
+
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources).toHaveLength(sourcesWhenClosed + 1);
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
 

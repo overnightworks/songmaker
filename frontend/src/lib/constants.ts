@@ -565,6 +565,8 @@ export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';
 export const RESOURCE_SYNC_ERROR = 'Library sync failed';
 export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
+// `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
+export const EVENT_SOURCE_CLOSED = 2;
 export const RESOURCE_SYNC_FETCH_CONCURRENCY = 4;
 export const RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS = 250;
 export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;

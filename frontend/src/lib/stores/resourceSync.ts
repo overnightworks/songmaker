@@ -11,6 +11,7 @@ import { fetchSong } from '$lib/api/songs';
 import type { GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
 	RESOURCE_EVENT_GENERATION_CREATED,
+	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_HELLO,
 	RESOURCE_EVENT_RESYNC,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -67,6 +68,7 @@ interface ResourceEventSource {
 	removeEventListener(type: string, listener: (event: Event) => void): void;
 	close(): void;
 	onerror: ((event: Event) => void) | null;
+	readonly readyState: number;
 }
 
 interface ResourceSyncDeps {
@@ -414,7 +416,10 @@ export class ResourceSyncController {
 		}
 		if (!this.syncedOnce) {
 			this.bootstrapErrors += 1;
-			if (this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
+			// A non-200 answer (the edge's 5xx while the server restarts) closes the
+			// source for good: the browser will not retry it, so this attempt is over.
+			const browserGaveUp = source?.readyState === EVENT_SOURCE_CLOSED;
+			if (browserGaveUp || this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
 				this.failBootstrap(RESOURCE_SYNC_ERROR);
 				if (result === 'retryable') this.scheduleReconnect(() => this.restartBootstrap());
 				return;
