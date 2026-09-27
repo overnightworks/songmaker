@@ -142,18 +142,27 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
  * it, so letting the job go at once -- or when a refresh failed offline --
  * would leave a moment with neither (#1039 O3). The generate owner hides the
  * card as soon as the take is in the list; the wait, counted only while
- * online, bounds how long a refresh that never runs can keep it.
+ * online, bounds how long a refresh that never runs can keep it. The job says
+ * it ended only when it goes, so a card still waiting for its take is the one
+ * signal until then (#1106 N3).
  */
-function keepUntilSongRefreshed(jobId: string, songId: string, songRefresh: Promise<void>): void {
+function keepUntilSongRefreshed(
+	jobId: string,
+	job: JobStatus,
+	songId: string,
+	songRefresh: Promise<void>
+): void {
 	activeJobs.update((jobs) =>
 		jobs.map((active) => (active.job.id === jobId ? { ...active, awaitingTakes: true } : active))
 	);
+	const letGo = (): void => {
+		removeJob(jobId);
+		notifyTerminalJob(job, songId);
+	};
 	let bound: ReturnType<typeof setTimeout> | undefined;
 	const stopWatchingConnectivity = offline.subscribe((isOffline) => {
 		clearTimeout(bound);
-		bound = isOffline
-			? undefined
-			: setTimeout(() => removeJob(jobId), GENERATE_TAKE_ARRIVAL_WAIT_MS);
+		bound = isOffline ? undefined : setTimeout(letGo, GENERATE_TAKE_ARRIVAL_WAIT_MS);
 	});
 	const stopWaiting = (): void => {
 		clearTimeout(bound);
@@ -162,7 +171,7 @@ function keepUntilSongRefreshed(jobId: string, songId: string, songRefresh: Prom
 	takeArrivalWaits.set(jobId, stopWaiting);
 	const stillWaiting = (): boolean => takeArrivalWaits.get(jobId) === stopWaiting;
 	void refreshedWhileOnline(songId, songRefresh, stillWaiting).then(() => {
-		if (stillWaiting()) removeJob(jobId);
+		if (stillWaiting()) letGo();
 	});
 }
 
@@ -199,14 +208,14 @@ function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource):
 	source.close();
 	eventSources.delete(jobId);
 	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
-	notifyTerminalJob(job, songId);
 	if (songId && endedWithTakes(job)) {
 		const songRefresh = requestSongRefresh(songId);
 		if (job.type === JOB_TYPE_GENERATE) {
-			keepUntilSongRefreshed(jobId, songId, songRefresh);
+			keepUntilSongRefreshed(jobId, job, songId, songRefresh);
 			return;
 		}
 	}
+	notifyTerminalJob(job, songId);
 	activeJobs.update((jobs) => jobs.filter((active) => active.job.id !== jobId));
 }
 

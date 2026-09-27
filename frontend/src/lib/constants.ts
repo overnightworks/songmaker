@@ -334,7 +334,7 @@ export const EDITOR_GENERATE_CANCEL_LABEL = 'Cancel generation';
 // keeps the last progress it saw, instead of a percent and time that stand still.
 export const EDITOR_GENERATE_RECONNECTING_LABEL = 'Reconnecting…';
 export const EDITOR_GENERATE_LAST_SEEN_TEMPLATE = 'last seen at {percent}%';
-export const EDITOR_GENERATE_CANCEL_OFFLINE_LABEL = 'Cancel generation (waits for the connection)';
+export const EDITOR_GENERATE_CANCEL_OFFLINE_LABEL = 'Cancel generation (unavailable while offline)';
 export const EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL = 'Last known progress';
 export const EDITOR_GENERATE_CANCEL_FAILED = 'Could not cancel generation';
 export const EDITOR_GENERATE_FAILURE_EXPAND_LABEL = 'Show generation error';
@@ -360,7 +360,7 @@ export const EDITOR_UNSAVED_MESSAGE =
 	'Save this draft as a new version before leaving, or discard it?';
 export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
-export const EDITOR_NETWORK_ERROR = 'Network error. Check connection and retry.';
+export const EDITOR_SAVE_FAILED = 'Save failed';
 
 export const SONG_SHARE_LABEL = 'Share song';
 export const SONG_TITLE_LABEL = 'Song title';
@@ -689,8 +689,9 @@ export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
 // retries count: a reopen on returning to the app re-records the attempt it
 // interrupted, so frequent returns never shorten the three minutes (#1032).
 export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
-// How long a finished generate job keeps its card at most while the song
-// refresh its end asked for has not run (#1039 O3): long enough for a page
-// that just came back online to resync, short enough that a refresh that never
+// How long a finished generate job keeps its card, counted only while the page
+// is online, when the song refresh its end asked for has not run (#1039 O3):
+// offline the card stays however long the network is away; back online this is
+// long enough for the page to resync, short enough that a refresh that never
 // runs does not leave a card behind.
 export const GENERATE_TAKE_ARRIVAL_WAIT_MS = 30_000;

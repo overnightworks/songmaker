@@ -269,7 +269,10 @@ request budget per shell.
   `frontend/e2e/helpers.ts`: it also stops the page's open loads
   (`window.stop()`, which ends the stream with an `error` the way a dropped
   network does) and refuses every reopen of the resource stream until the
-  network returns. Such a flow builds its `FlowGuard` with
+  network returns. `loseNetwork(page, context, { keepOpenStreams: true })`
+  skips the `window.stop()`: the streams already open keep delivering and only
+  new requests are refused, the moment a stream's last event (a job's end) is
+  already on its way when the network goes. Such a flow builds its `FlowGuard` with
   `losesNetworkOnPurpose`, so that guard does not count a request failed with
   `net::ERR_INTERNET_DISCONNECTED`, nor a load `window.stop()` ended in flight
   (`net::ERR_ABORTED` while the network is away); every other flow still fails

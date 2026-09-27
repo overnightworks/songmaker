@@ -39,6 +39,7 @@
 		userPresets
 	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
+	import { describeFailure } from '$lib/api/fetch';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import { addToast } from '$lib/stores/toast';
 	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
@@ -129,7 +130,7 @@
 			showSavePresetInput = false;
 			savingPresetName = '';
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Failed to save preset', 'error');
+			addToast(describeFailure(e, 'Failed to save preset'), 'error');
 		}
 	}
 
@@ -143,7 +144,7 @@
 			setDraftGenParams({ ...($editGenParams ?? {}), reference_audio_path: result.path });
 			referenceFilename = result.filename;
 		} catch (err) {
-			addToast(err instanceof Error ? err.message : 'Upload failed', 'error');
+			addToast(describeFailure(err, 'Upload failed'), 'error');
 		} finally {
 			referenceUploading = false;
 			input.value = '';

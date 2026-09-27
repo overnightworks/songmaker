@@ -16,6 +16,7 @@ import {
 	GENERATION_PHASE_LABELS,
 	JOB_TYPE_GENERATE
 } from '$lib/constants';
+import { describeFailure } from '$lib/api/fetch';
 import { formatTime } from '$lib/utils/format';
 import { offline } from './connectivity';
 import {
@@ -288,7 +289,7 @@ export async function generate(): Promise<void> {
 		pinnedSeed.set(null);
 		trackJob(job, { songId: song.id });
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Generation failed', 'error');
+		addToast(describeFailure(e, 'Generation failed'), 'error');
 	} finally {
 		requestInFlight.set(false);
 	}
@@ -298,6 +299,6 @@ export async function cancelGeneration(jobId: string): Promise<void> {
 	try {
 		await cancelJob(jobId);
 	} catch (error) {
-		addToast(error instanceof Error ? error.message : EDITOR_GENERATE_CANCEL_FAILED, 'error');
+		addToast(describeFailure(error, EDITOR_GENERATE_CANCEL_FAILED), 'error');
 	}
 }
