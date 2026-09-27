@@ -1,10 +1,13 @@
-import { ALBUM_ART_EMPTY_INITIALS, ALBUM_ART_INITIAL_COUNT } from '$lib/constants';
+import {
+	ALBUM_ART_EMPTY_INITIALS,
+	ALBUM_ART_INITIAL_COUNT,
+	DAY_LABEL_TODAY,
+	DAY_LABEL_YESTERDAY
+} from '$lib/constants';
 
 const DAY_MS = 86_400_000;
-const ACTIVITY_DAYS_NAMED_BY_WEEKDAY = 7;
-const ACTIVITY_LOCALE = 'en-US';
-const ACTIVITY_TODAY = 'today';
-const ACTIVITY_YESTERDAY = 'yesterday';
+export const DAYS_NAMED_BY_WEEKDAY = 7;
+export const DAY_LABEL_LOCALE = 'en-US';
 
 export function formatTime(seconds: number): string {
 	const m = Math.floor(seconds / 60);
@@ -54,23 +57,28 @@ export function localDaysBetween(earlier: Date, later: Date): number {
 	return Math.round((startOfLocalDay(later) - startOfLocalDay(earlier)) / DAY_MS);
 }
 
-/** When a place was last worked in: "today 05:47", "yesterday 23:40", "Thu 20:31", "21 Sep". */
-export function activityTimeLabel(activityAt: string, now: Date): string {
-	const moment = new Date(activityAt);
-	const daysAgo = localDaysBetween(moment, now);
-	const clock = moment.toLocaleTimeString(ACTIVITY_LOCALE, {
+/** The 24-hour local clock every day label adds: "09:12". */
+export function localClockTime(moment: Date): string {
+	return moment.toLocaleTimeString(DAY_LABEL_LOCALE, {
 		hour: '2-digit',
 		minute: '2-digit',
 		hourCycle: 'h23'
 	});
-	if (daysAgo <= 0) return `${ACTIVITY_TODAY} ${clock}`;
-	if (daysAgo === 1) return `${ACTIVITY_YESTERDAY} ${clock}`;
-	if (daysAgo < ACTIVITY_DAYS_NAMED_BY_WEEKDAY) {
-		return `${moment.toLocaleDateString(ACTIVITY_LOCALE, { weekday: 'short' })} ${clock}`;
+}
+
+/** When a place was last worked in: "today 05:47", "yesterday 23:40", "Thu 20:31", "21 Sep". */
+export function activityTimeLabel(activityAt: string, now: Date): string {
+	const moment = new Date(activityAt);
+	const daysAgo = localDaysBetween(moment, now);
+	const clock = localClockTime(moment);
+	if (daysAgo <= 0) return `${DAY_LABEL_TODAY} ${clock}`;
+	if (daysAgo === 1) return `${DAY_LABEL_YESTERDAY} ${clock}`;
+	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
+		return `${moment.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' })} ${clock}`;
 	}
 	// Day before month ("21 Sep") is composed by hand: the one locale that orders
 	// it so, en-GB, abbreviates September as "Sept".
-	const dayAndMonth = `${moment.getDate()} ${moment.toLocaleDateString(ACTIVITY_LOCALE, { month: 'short' })}`;
+	const dayAndMonth = `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
 	return moment.getFullYear() === now.getFullYear()
 		? dayAndMonth
 		: `${dayAndMonth} ${moment.getFullYear()}`;
