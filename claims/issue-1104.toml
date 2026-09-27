@@ -1,0 +1,8 @@
+claim_id = "623045a03c1e4c358c395a8ba1559f73"
+agent = "claude-head"
+role = "builder"
+base = "c40b74fcf68c9b4aa316a1e1d3e4f27614eeefa5"
+branch = "claude/issue-1104-offline-album-page"
+scope = ["docs/design/album-browsing.html", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "8c0fb79d918a07b61659c3cd5055f953621a390c"
+whole_reason = "the album page's offline card, its frozen frame and the collection toasts"
