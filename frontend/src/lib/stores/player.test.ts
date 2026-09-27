@@ -3299,3 +3299,14 @@ describe('audioPlayer onAuthLost wiring', () => {
 		expect(handleSessionLost).toHaveBeenCalledOnce();
 	});
 });
+
+describe('audioPlayer offline announcement wiring', () => {
+	it.each([
+		{ connection: 'offline', reachable: false, announced: true },
+		{ connection: 'online', reachable: true, announced: false }
+	])('leaves a lost network to the strip only while $connection', ({ reachable, announced }) => {
+		reportResourceStreamReachable(reachable);
+
+		expect(audioPlayer.currentCallbacks.networkFailureIsAnnounced()).toBe(announced);
+	});
+});

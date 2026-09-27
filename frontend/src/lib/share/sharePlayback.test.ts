@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { fromSharedAlbum, type SharedCollectionView } from './sharedCollection';
@@ -153,12 +154,14 @@ beforeEach(() => {
 		onPlaybackStarted: null,
 		onAuthLost: null,
 		onStreamRebuild: null,
-		onCurrentChange: null
+		onCurrentChange: null,
+		networkFailureIsAnnounced: () => false
 	});
 	setQueuePlaybackMode('classic');
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
 });
@@ -252,6 +255,24 @@ describe('toggle() and classic playback', () => {
 		playback.next();
 
 		expect(playback.currentTrack?.key).toBe('s1');
+		playback.stop();
+	});
+});
+
+describe('a failed take offline', () => {
+	it('still names the failure, because a share shows no offline strip to say it', async () => {
+		vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new TypeError('Failed to fetch')));
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, null);
+		playback.toggle(view.tracks[0]);
+		reportResourceStreamReachable(false);
+
+		fakeAudio.fire('error');
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
 		playback.stop();
 	});
 });
@@ -395,7 +416,8 @@ describe('stop()', () => {
 			onPlaybackStarted: null,
 			onAuthLost: null,
 			onStreamRebuild: null,
-			onCurrentChange: null
+			onCurrentChange: null,
+			networkFailureIsAnnounced: () => false
 		});
 		const playback = new SharePlayback();
 		const view = albumView();

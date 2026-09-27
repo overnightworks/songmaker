@@ -1517,5 +1517,6 @@ audioPlayer.swapCallbacks({
 	onPlaybackStarted: recordFirstTakeListen,
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
-	onCurrentChange: handleCurrentChange
+	onCurrentChange: handleCurrentChange,
+	networkFailureIsAnnounced: () => get(offline)
 });
