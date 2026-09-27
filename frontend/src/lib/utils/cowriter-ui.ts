@@ -72,7 +72,7 @@ function startOfDay(moment: Date): number {
 }
 
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
-export function conversationDayLabel(createdAt: string, now: Date): string {
+function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);
 	const daysAgo = Math.round((startOfDay(now) - startOfDay(started)) / DAY_MS);
 	if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;

@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 import type { ConversationItem } from '$lib/api/types';
 import {
-	conversationDayLabel,
 	conversationLineLabel,
 	conversationRowLabel,
 	cowriterHeaderLabel,
@@ -80,18 +79,11 @@ describe('conversation day and line copy', () => {
 			message_count: 2,
 			archived_at: null,
 			created_at: createdAt,
+			updated_at: createdAt,
+			last_message_at: null,
 			...overrides
 		};
 	}
-
-	it.each([
-		['today', '2026-09-27T08:00:00', 'today'],
-		['within the last week by weekday', '2026-09-22T10:00:00', 'Tue'],
-		['earlier this year by month and day', '2026-09-12T10:00:00', 'Sep 12'],
-		['an earlier year with the year', '2025-09-12T10:00:00', 'Sep 12, 2025']
-	])('names a conversation started %s', (_case, createdAt, day) => {
-		expect(conversationDayLabel(createdAt, now)).toBe(day);
-	});
 
 	it.each([
 		['no conversation and an empty chat', undefined, false, 'new conversation'],
@@ -130,9 +122,19 @@ describe('conversation day and line copy', () => {
 	});
 
 	it.each([
-		['an untitled conversation', conversationFrom('2026-09-22T10:00:00'), 'Conversation since Tue'],
+		['one started today', conversationFrom('2026-09-27T08:00:00'), 'Conversation since today'],
 		[
-			'an untitled archived one',
+			'one started this week by weekday',
+			conversationFrom('2026-09-22T10:00:00'),
+			'Conversation since Tue'
+		],
+		[
+			'one started earlier this year by month and day',
+			conversationFrom('2026-09-12T10:00:00'),
+			'Conversation since Sep 12'
+		],
+		[
+			'an archived one from an earlier year with the year',
 			conversationFrom('2025-09-17T10:00:00', { archived_at: '2025-09-20T10:00:00' }),
 			'Conversation from Sep 17, 2025'
 		],
