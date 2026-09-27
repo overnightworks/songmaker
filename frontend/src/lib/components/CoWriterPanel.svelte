@@ -233,14 +233,21 @@
 			markTurnFailed(assistantIndex, INCOMPLETE_TURN_MESSAGE);
 			return;
 		}
-		if (activeConversationId !== conversation.conversation_id) {
+		const conversationChanged = activeConversationId !== conversation.conversation_id;
+		if (conversationChanged) {
 			activeConversationId = conversation.conversation_id;
 			viewingConversationId = conversation.conversation_id;
-			void loadConversations();
 		}
 		messages = toMessages(conversation.messages);
 		followOrSettleTurn(conversation);
-		if (!conversation.turn_running && onturncompleted) onturncompleted();
+		if (!conversation.turn_running) announceEndedTurn();
+		else if (conversationChanged) void loadConversations();
+	}
+
+	/** A turn ended: the conversation list re-reads its counts and the host hears of it. */
+	function announceEndedTurn(): void {
+		void loadConversations();
+		if (onturncompleted) onturncompleted();
 	}
 
 	/**
@@ -306,7 +313,7 @@
 				if (conversation.turn_running) continue;
 				messages = toMessages(conversation.messages);
 				markUnansweredLastMessage();
-				if (onturncompleted) onturncompleted();
+				announceEndedTurn();
 				return;
 			}
 			messages = messages.slice(0, placeholderIndex);
@@ -430,8 +437,7 @@
 						activeConversationId = event.conversation_id;
 						viewingConversationId = event.conversation_id;
 					}
-					void loadConversations();
-					if (onturncompleted) onturncompleted();
+					announceEndedTurn();
 				}
 				void keepLatestInView();
 			}
