@@ -24,7 +24,14 @@ vi.mock('$lib/stores/auth', () => {
 });
 vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
 
-import { apiFetch, sseFetch, ApiError, NetworkError, handleSessionLost } from './fetch';
+import {
+	apiFetch,
+	sseFetch,
+	ApiError,
+	NetworkError,
+	describeFailure,
+	handleSessionLost
+} from './fetch';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { clearAuth, currentUser } from '$lib/stores/auth';
@@ -352,6 +359,32 @@ describe('a request that gets no answer', () => {
 	});
 });
 
+describe('describeFailure', () => {
+	const fallback = 'Failed to load songs';
+
+	it.each([
+		{
+			failure: 'a network failure',
+			err: new NetworkError('/api/x', new TypeError('Failed to fetch'))
+		},
+		{ failure: 'a server answer without a reason', err: new ApiError(500, '', '/api/x') },
+		{
+			failure: 'an abort',
+			err: new DOMException('signal is aborted without reason', 'AbortError')
+		},
+		{ failure: 'a plain error', err: new Error('undefined is not a function') },
+		{ failure: 'a non-error value', err: 'boom' }
+	])('gives the fallback for $failure', ({ err }) => {
+		expect(describeFailure(err, fallback)).toBe(fallback);
+	});
+
+	it("gives the server's own words when it answered with a reason", () => {
+		expect(describeFailure(new ApiError(409, 'Album is locked', '/api/x'), fallback)).toBe(
+			'Album is locked'
+		);
+	});
+});
+
 describe('apiFetch abort signal', () => {
 	afterEach(() => {
 		vi.useRealTimers();
@@ -373,6 +406,40 @@ describe('apiFetch abort signal', () => {
 		expect(signalPassedToFetch().aborted).toBe(false);
 		caller.abort();
 		expect(signalPassedToFetch().aborted).toBe(true);
+	});
+
+	function fetchRejectingOnAbort(): void {
+		mockFetch.mockImplementationOnce(
+			(_path: string, init: RequestInit) =>
+				new Promise((_resolve, reject) => {
+					init.signal?.addEventListener('abort', () =>
+						reject(new DOMException('signal is aborted without reason', 'AbortError'))
+					);
+				})
+		);
+	}
+
+	it('rejects a request that hits the timeout as a NetworkError with a timeout reason', async () => {
+		vi.useFakeTimers();
+		fetchRejectingOnAbort();
+		const failure = apiFetch('/api/songs/s1').catch((err: unknown) => err);
+		await vi.advanceTimersByTimeAsync(30_000);
+		const rejected = await failure;
+		expect(rejected).toBeInstanceOf(NetworkError);
+		expect(rejected).toMatchObject({ path: '/api/songs/s1', reason: 'timeout' });
+		expect((rejected as Error).message).not.toContain('signal is aborted');
+	});
+
+	it("leaves the caller's own abort an AbortError", async () => {
+		fetchRejectingOnAbort();
+		const caller = new AbortController();
+		const failure = apiFetch('/api/songs/s1', { signal: caller.signal }).catch(
+			(err: unknown) => err
+		);
+		caller.abort();
+		const rejected = await failure;
+		expect(rejected).not.toBeInstanceOf(NetworkError);
+		expect(rejected).toMatchObject({ name: 'AbortError' });
 	});
 
 	it('times out after 30 seconds when the caller never aborts', () => {
