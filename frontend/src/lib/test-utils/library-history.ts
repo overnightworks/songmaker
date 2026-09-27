@@ -35,7 +35,7 @@ export function plannedHistoryIndex(): number {
 
 export interface CloseWay {
 	way: string;
-	close: (target: HTMLElement) => void | Promise<void>;
+	close: (target: HTMLElement) => unknown;
 	/** For an item that opens a dialog: the planned entry its action saw, read with plannedHistoryIndex. */
 	actionSawHistoryAt?: () => number | undefined;
 }
