@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { get } from 'svelte/store';
 	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
@@ -12,6 +13,7 @@
 	} from '$lib/stores/playlists';
 	import { openCollection } from '$lib/stores/collection';
 	import { captureLibraryScroll, libraryScrollAnchor } from '$lib/stores/libraryContext';
+	import { offline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import { compareByCreatedAt } from '$lib/utils/recency';
@@ -31,7 +33,6 @@
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
-	type RecentWorkState = 'idle' | 'loading' | 'ready' | 'error';
 	type LastWork = { rank: number; at: string };
 
 	const albums = $derived($albumList);
@@ -43,7 +44,6 @@
 	const restoredScroll = $derived($libraryScrollAnchor);
 
 	let recentWork = $state<LibraryContinueItem[]>([]);
-	let recentWorkState = $state<RecentWorkState>('idle');
 	let labelledAt = $state(new Date());
 	let recentWorkRequest = 0;
 
@@ -74,9 +74,8 @@
 
 	onMount(() => {
 		initLibraryWallOrder();
-		void ensureAllAlbumsLoaded();
-		void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'recent') void loadRecentWork();
+		catchUpWall();
+		return whenBackOnline(catchUpWall);
 	});
 
 	$effect(() => {
@@ -121,17 +120,36 @@
 		return placeLine(wallItem.type, tileDetail(wallItem));
 	}
 
+	// A failed read keeps what is on screen, and only an empty wall names it
+	// (#1039 O4): the offline strip owns a lost network, and the wall reads
+	// again when the page returns to the foreground or the network comes back.
+	function catchUpWall(): void {
+		void ensureAllAlbumsLoaded();
+		void ensurePlaylistsLoaded();
+		if ($libraryWallOrder === 'recent') void loadRecentWork();
+	}
+
+	function whenBackOnline(callback: () => void): () => void {
+		let wasOffline = get(offline);
+		return offline.subscribe((isOffline) => {
+			if (wasOffline && !isOffline) callback();
+			wasOffline = isOffline;
+		});
+	}
+
 	async function loadRecentWork(): Promise<void> {
 		const request = ++recentWorkRequest;
-		recentWorkState = 'loading';
+		const ranking = await readRecentWork();
+		if (ranking === null || request !== recentWorkRequest) return;
+		recentWork = ranking;
+		labelledAt = new Date();
+	}
+
+	async function readRecentWork(): Promise<LibraryContinueItem[] | null> {
 		try {
-			const response = await fetchLibraryContinue({ limit: LIBRARY_WALL_RECENT_LIMIT });
-			if (request !== recentWorkRequest) return;
-			recentWork = response.items;
-			labelledAt = new Date();
-			recentWorkState = 'ready';
+			return (await fetchLibraryContinue({ limit: LIBRARY_WALL_RECENT_LIMIT })).items;
 		} catch {
-			if (request === recentWorkRequest) recentWorkState = 'error';
+			return null;
 		}
 	}
 
@@ -141,8 +159,8 @@
 		if (next === 'recent') void loadRecentWork();
 	}
 
-	function refreshRecentOnReturnToForeground(): void {
-		if (document.visibilityState === 'visible' && order === 'recent') void loadRecentWork();
+	function catchUpOnReturnToForeground(): void {
+		if (document.visibilityState === 'visible') catchUpWall();
 	}
 
 	function onBrowseScroll(event: Event): void {
@@ -157,7 +175,7 @@
 	}
 </script>
 
-<svelte:document onvisibilitychange={refreshRecentOnReturnToForeground} />
+<svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
 
 <div class="library-wall">
 	<h1 class="wall-title">Library</h1>
@@ -182,13 +200,6 @@
 	</div>
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
-		{#if order === 'recent' && recentWorkState === 'error'}
-			<div class="wall-notice" role="alert">
-				<p>Could not load recent work.</p>
-				<button class="retry-btn" onclick={() => void loadRecentWork()}>Retry</button>
-			</div>
-		{/if}
-
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each wallItems as wallItem (wallItem.type + wallItem.item.id)}
@@ -227,14 +238,12 @@
 					</div>
 				{/each}
 			</div>
-		{/if}
-
-		{#if browseState.status === 'error' || playlistStatus.status === 'error'}
+		{:else if browseState.status === 'loading' || playlistStatus.status === 'loading'}
+			<p class="empty" role="status">Loading library…</p>
+		{:else if browseState.status === 'error' || playlistStatus.status === 'error'}
 			<p class="empty" role="alert">Could not load library.</p>
 			<button class="retry-btn" onclick={retryLoad}>Retry</button>
-		{:else if wallItems.length === 0 && (browseState.status === 'loading' || playlistStatus.status === 'loading')}
-			<p class="empty" role="status">Loading library…</p>
-		{:else if wallItems.length === 0}
+		{:else}
 			<p class="empty">No albums or playlists yet.</p>
 		{/if}
 	</div>
@@ -339,20 +348,6 @@
 	.wall-order-choice:focus-visible .wall-order-face {
 		outline: 2px solid var(--accent);
 		outline-offset: -2px;
-	}
-
-	.wall-notice {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 12px;
-		margin-bottom: 12px;
-		color: var(--text-subtle);
-		font-size: var(--label-font-size);
-	}
-
-	.wall-notice .retry-btn {
-		margin: 0;
 	}
 
 	.wall-body {
