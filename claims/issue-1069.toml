@@ -1,0 +1,8 @@
+claim_id = "be8538c56a9647929320fad952ecd680"
+agent = "claude-head"
+role = "builder"
+base = "2df914377546603acb8f105b10a8c3b9812d23b2"
+branch = "claude/issue-1069-cowriter-polish"
+scope = ["frontend/e2e/admin-models.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/MemoryEditor.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts"]
+opened_commit = "c6eceb42013852ef0b3d16aee4e87ecaef546c55"
+whole_reason = "co-writer tab polish across the panel, memory editor, label util and the specs that assert its texts"
