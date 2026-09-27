@@ -339,11 +339,13 @@ test('a route that is not set up ends the next co-writer turn with its reason', 
 	await ask.fill('Write me a second verse.');
 	await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
 
-	// The turn ends with the reason the chosen route failed for -- never with a
-	// quiet switch to a provider that would have worked (#820, line 8).
+	// The turn ends with the reason the chosen route failed for, after the
+	// chosen provider's name -- never with a quiet switch to a provider that
+	// would have worked (#820, line 8; #1069).
 	const failure = surface.getByRole('alert');
 	await expect(failure).toBeVisible();
 	await expect(failure).toContainText(NAMED_TURN_FAILURES);
+	await expect(failure).toContainText(new RegExp(`${chosenProvider}: `, 'i'));
 
 	await openModelsTab(page);
 	await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toHaveValue(chosenProvider);
