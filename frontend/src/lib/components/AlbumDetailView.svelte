@@ -10,6 +10,8 @@
 		updateAlbum,
 		uploadAlbumCover
 	} from '$lib/api/client';
+	import { describeFailure, NetworkError } from '$lib/api/fetch';
+	import { untrack } from 'svelte';
 	import {
 		createAlbumCoverSuggestions,
 		discardAlbumCoverSuggestions,
@@ -58,6 +60,7 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
+	import { offline } from '$lib/stores/connectivity';
 	import type { CoverSuggestionsResponse } from '$lib/api/types';
 	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
@@ -73,8 +76,13 @@
 		albumId: string;
 		data: CoverSuggestionsResponse | null;
 		failure: string | null;
+		unreachable: boolean;
 		isLoading: boolean;
 	}
+
+	type CoverSuggestionsOutcome = Pick<CoverSuggestionsState, 'failure' | 'unreachable'>;
+
+	const COVER_SUGGESTIONS_SETTLED: CoverSuggestionsOutcome = { failure: null, unreachable: false };
 
 	let { albumId }: Props = $props();
 
@@ -126,6 +134,9 @@
 	const coverSuggestionsFailure = $derived(
 		coverSuggestionsState?.albumId === currentAlbumId ? coverSuggestionsState.failure : null
 	);
+	const coverSuggestionsUnreachable = $derived(
+		coverSuggestionsState?.albumId === currentAlbumId && coverSuggestionsState.unreachable
+	);
 	const coverSuggestionsLoading = $derived(
 		coverSuggestionsState?.albumId === currentAlbumId && coverSuggestionsState.isLoading
 	);
@@ -146,14 +157,17 @@
 		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
 	);
 	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
+	// A card that cannot reach the server is absent rather than an error of its
+	// own: the one offline strip already says it, and it reloads once online.
 	const showCoverSuggestionsPanel = $derived(
-		Boolean(
-			coverSuggestionsLoading ||
-			isCoverSuggestionGenerating ||
-			hasSuggestions ||
-			coverSuggestionFailure ||
-			!selectedAlbum?.cover
-		)
+		!coverSuggestionsUnreachable &&
+			Boolean(
+				coverSuggestionsLoading ||
+				isCoverSuggestionGenerating ||
+				hasSuggestions ||
+				coverSuggestionFailure ||
+				!selectedAlbum?.cover
+			)
 	);
 	const coverSuggestionsProgressMessage = $derived(
 		coverSuggestions
@@ -170,10 +184,17 @@
 		coverSuggestionsState = {
 			albumId,
 			data: null,
-			failure: null,
+			...COVER_SUGGESTIONS_SETTLED,
 			isLoading: true
 		};
 		queueMicrotask(() => void loadCoverSuggestions(albumId));
+	});
+
+	$effect(() => {
+		if ($offline) return;
+		untrack(() => {
+			if (coverSuggestionsUnreachable && currentAlbumId) void loadCoverSuggestions(currentAlbumId);
+		});
 	});
 
 	$effect(() => {
@@ -197,7 +218,7 @@
 			coverSuggestionsState = {
 				albumId,
 				data: response,
-				failure: null,
+				...COVER_SUGGESTIONS_SETTLED,
 				isLoading: false
 			};
 			if (response.job?.status === 'queued' || response.job?.status === 'running') {
@@ -208,7 +229,7 @@
 			coverSuggestionsState = {
 				albumId,
 				data: null,
-				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+				...coverSuggestionsOutcomeOf(error),
 				isLoading: false
 			};
 		}
@@ -222,12 +243,16 @@
 		const state =
 			coverSuggestionsState?.albumId === albumId
 				? coverSuggestionsState
-				: { albumId, data: null, failure: null, isLoading: false };
+				: { albumId, data: null, ...COVER_SUGGESTIONS_SETTLED, isLoading: false };
 		coverSuggestionsState = update(state);
 	}
 
-	function errorMessage(error: unknown, fallback: string): string {
-		return error instanceof Error && error.message ? error.message : fallback;
+	function coverSuggestionsOutcomeOf(error: unknown): CoverSuggestionsOutcome {
+		if (error instanceof NetworkError) return { failure: null, unreachable: true };
+		return {
+			failure: describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+			unreachable: false
+		};
 	}
 
 	function formatCoverSuggestionProgress(used: number, limit: number): string {
@@ -243,7 +268,11 @@
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
 		suggestionsRequest += 1;
-		updateCoverSuggestionsState(albumId, (state) => ({ ...state, failure: null, isLoading: true }));
+		updateCoverSuggestionsState(albumId, (state) => ({
+			...state,
+			...COVER_SUGGESTIONS_SETTLED,
+			isLoading: true
+		}));
 		try {
 			if (hasSuggestions) {
 				await discardAlbumCoverSuggestions(albumId);
@@ -256,7 +285,7 @@
 		} catch (error) {
 			updateCoverSuggestionsState(albumId, (state) => ({
 				...state,
-				failure: errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+				...coverSuggestionsOutcomeOf(error),
 				isLoading: false
 			}));
 		}
@@ -271,10 +300,10 @@
 			updateCoverSuggestionsState(albumId, (state) => ({
 				...state,
 				data: null,
-				failure: null
+				...COVER_SUGGESTIONS_SETTLED
 			}));
 		} catch (error) {
-			addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+			addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -291,17 +320,17 @@
 			try {
 				await discardAlbumCoverSuggestions(albumId);
 			} catch (error) {
-				addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+				addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
 			}
 			updateAlbumInList(albumId, () => updated);
 			updateCoverSuggestionsState(albumId, (state) => ({
 				...state,
 				data: null,
-				failure: null
+				...COVER_SUGGESTIONS_SETTLED
 			}));
 			addToast('Cover saved', 'success');
 		} catch (error) {
-			addToast(errorMessage(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+			addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -318,7 +347,7 @@
 			updateAlbumInList(selectedAlbum.id, () => updated);
 			addToast('Cover saved', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cover upload failed', 'error');
+			addToast(describeFailure(e, 'Cover upload failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -336,7 +365,7 @@
 			updateAlbumInList(selectedAlbum.id, () => updated);
 			addToast('Cover removed', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
+			addToast(describeFailure(e, 'Cover remove failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -350,7 +379,7 @@
 			updateAlbumInList(albumId, () => updated);
 			addToast('Album renamed', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			addToast(describeFailure(e, 'Rename failed'), 'error');
 			throw e;
 		}
 	}
@@ -362,7 +391,7 @@
 			const updated = await updateAlbum(albumId, { subtitle: newSubtitle });
 			updateAlbumInList(albumId, () => updated);
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
+			addToast(describeFailure(e, 'Update failed'), 'error');
 			throw e;
 		}
 	}
@@ -383,7 +412,7 @@
 			const updated = await updateAlbum(albumId, { year });
 			updateAlbumInList(albumId, () => updated);
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Update failed', 'error');
+			addToast(describeFailure(e, 'Update failed'), 'error');
 			throw e;
 		}
 	}
@@ -471,7 +500,7 @@
 				addToast('Added to playlist', 'success');
 			}
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
+			addToast(describeFailure(e, 'Failed to add'), 'error');
 		} finally {
 			playlistPickerOpen = false;
 		}
