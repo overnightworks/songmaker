@@ -27,7 +27,7 @@ export type RailSearchTarget =
 interface RailSearchPage {
 	label: string;
 	href: RailSearchPageHref;
-	keywords: readonly string[];
+	section: string | null;
 	adminOnly?: boolean;
 }
 
@@ -39,7 +39,7 @@ type RailSearchPicture =
 	| { kind: 'playlist'; covers: AlbumCoverUrls[]; cover: AlbumCoverUrls | null }
 	| { kind: 'page'; glyph: string };
 
-interface RailSearchLabelPart {
+export interface RailSearchTextPart {
 	text: string;
 	matched: boolean;
 }
@@ -47,9 +47,9 @@ interface RailSearchLabelPart {
 interface RailSearchResult {
 	id: string;
 	label: string;
-	labelParts: RailSearchLabelPart[];
+	labelParts: RailSearchTextPart[];
 	kindWord: string;
-	detail: string | null;
+	detailParts: RailSearchTextPart[];
 	picture: RailSearchPicture;
 	target: RailSearchTarget;
 }
@@ -66,15 +66,17 @@ interface RailSearchState {
 	hits: LibrarySearchHit[];
 }
 
+const SETTINGS_SECTION = 'Settings';
+
 const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
-	{ label: 'Library', href: '/', keywords: ['albums', 'songs'] },
-	{ label: 'Generation', href: '/settings/generation', keywords: ['settings'] },
-	{ label: 'Playback', href: '/settings/playback', keywords: ['settings'] },
-	{ label: 'Voices', href: '/settings/voices', keywords: ['settings'] },
-	{ label: 'Account', href: '/settings/account', keywords: ['settings'] },
-	{ label: 'Admin', href: '/settings/users', keywords: ['settings'], adminOnly: true },
-	{ label: 'Cleanup', href: '/settings/cleanup', keywords: ['settings'], adminOnly: true },
-	{ label: 'Legal', href: '/settings/legal', keywords: ['settings'] }
+	{ label: 'Library', href: '/', section: null },
+	{ label: 'Generation', href: '/settings/generation', section: SETTINGS_SECTION },
+	{ label: 'Playback', href: '/settings/playback', section: SETTINGS_SECTION },
+	{ label: 'Voices', href: '/settings/voices', section: SETTINGS_SECTION },
+	{ label: 'Account', href: '/settings/account', section: SETTINGS_SECTION },
+	{ label: 'Admin', href: '/settings/users', section: SETTINGS_SECTION, adminOnly: true },
+	{ label: 'Cleanup', href: '/settings/cleanup', section: SETTINGS_SECTION, adminOnly: true },
+	{ label: 'Legal', href: '/settings/legal', section: SETTINGS_SECTION }
 ];
 
 const RAIL_SEARCH_KINDS: Readonly<Record<RailSearchKind, { group: string; word: string }>> = {
@@ -167,14 +169,14 @@ function titleMatchRank(label: string, query: string): number {
 	return title.includes(query) ? 1 : 2;
 }
 
-function railSearchLabelParts(label: string, query: string): RailSearchLabelPart[] {
-	const start = label.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
-	if (start < 0) return [{ text: label, matched: false }];
+function railSearchTextParts(text: string, query: string): RailSearchTextPart[] {
+	const start = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+	if (start < 0) return [{ text, matched: false }];
 	const end = start + query.length;
 	return [
-		{ text: label.slice(0, start), matched: false },
-		{ text: label.slice(start, end), matched: true },
-		{ text: label.slice(end), matched: false }
+		{ text: text.slice(0, start), matched: false },
+		{ text: text.slice(start, end), matched: true },
+		{ text: text.slice(end), matched: false }
 	].filter((part) => part.text.length > 0);
 }
 
@@ -228,7 +230,9 @@ async function runRailSearch(query: string): Promise<void> {
 	}
 }
 
-type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord'>;
+type RailSearchResultSource = Omit<RailSearchResult, 'labelParts' | 'kindWord' | 'detailParts'> & {
+	detail: string | null;
+};
 
 function libraryResult(hit: LibrarySearchHit, query: string): RailSearchResult {
 	if (hit.type === 'album') {
@@ -260,26 +264,36 @@ function playlistResult(playlist: PlaylistItem, query: string): RailSearchResult
 }
 
 function pageResult(page: RailSearchPage, query: string): RailSearchResult {
-	const isLibrary = page.href === '/';
 	return searchResult(query, {
 		id: `page:${page.href}`,
 		label: page.label,
-		detail: isLibrary ? null : 'Settings',
-		picture: { kind: 'page', glyph: isLibrary ? LIBRARY_PAGE_GLYPH : SETTINGS_PAGE_GLYPH },
+		detail: page.section,
+		picture: { kind: 'page', glyph: page.section ? SETTINGS_PAGE_GLYPH : LIBRARY_PAGE_GLYPH },
 		target: { kind: 'page', href: page.href }
 	});
 }
 
 function searchResult(query: string, source: RailSearchResultSource): RailSearchResult {
+	const { detail, ...shown } = source;
+	const labelParts = railSearchTextParts(source.label, query);
+	const titleMatched = labelParts.some((part) => part.matched);
 	return {
-		...source,
-		labelParts: railSearchLabelParts(source.label, query),
-		kindWord: RAIL_SEARCH_KINDS[source.target.kind].word
+		...shown,
+		labelParts,
+		kindWord: RAIL_SEARCH_KINDS[source.target.kind].word,
+		detailParts: detailTextParts(detail, titleMatched ? null : query)
 	};
 }
 
+function detailTextParts(detail: string | null, query: string | null): RailSearchTextPart[] {
+	if (detail === null) return [];
+	return query === null ? [{ text: detail, matched: false }] : railSearchTextParts(detail, query);
+}
+
 function pageMatches(page: RailSearchPage, query: string): boolean {
-	return [page.label, ...page.keywords].some((value) => value.toLocaleLowerCase().includes(query));
+	return [page.label, page.section]
+		.filter((value) => value !== null)
+		.some((value) => value.toLocaleLowerCase().includes(query));
 }
 
 function pluralize(count: number, noun: string): string {

@@ -132,7 +132,7 @@ describe('groupRailSearchResults', () => {
 
 	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
 		const pages = [
-			{ label: 'Vernissage guide', href: '/settings/playback', keywords: [] }
+			{ label: 'Vernissage guide', href: '/settings/playback', section: null }
 		] as const;
 
 		const groups = groupRailSearchResults(vernissageState, [picks], pages);
@@ -194,7 +194,7 @@ describe('groupRailSearchResults', () => {
 
 		expect(
 			results.find((result) => result.target.kind !== 'page' && result.target.id === id)
-		).toMatchObject({ kindWord, detail });
+		).toMatchObject({ kindWord, detailParts: [{ text: detail, matched: false }] });
 	});
 
 	it('names a settings page as a Settings page and the library as a plain page', () => {
@@ -204,12 +204,12 @@ describe('groupRailSearchResults', () => {
 		expect(settings[0]?.results[0]).toMatchObject({
 			label: 'Generation',
 			kindWord: 'Page',
-			detail: 'Settings'
+			detailParts: [{ text: 'Settings', matched: false }]
 		});
 		expect(library[0]?.results[0]).toMatchObject({
 			label: 'Library',
 			kindWord: 'Page',
-			detail: null
+			detailParts: []
 		});
 	});
 
@@ -246,9 +246,39 @@ describe('groupRailSearchResults', () => {
 		],
 		['Playback', 'settings', [{ text: 'Playback', matched: false }]]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
-		const page = { label, href: '/settings/playback', keywords: ['settings'] } as const;
+		const page = { label, href: '/settings/playback', section: 'Settings' } as const;
 		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
 		expect(group?.results[0]?.labelParts).toEqual(parts);
+	});
+
+	it('marks the matched part of the second line when only the section matches', () => {
+		const [pages] = groupRailSearchResults({ ...vernissageState, query: 'set', hits: [] }, []);
+
+		expect(pages?.results[0]).toMatchObject({
+			label: 'Generation',
+			labelParts: [{ text: 'Generation', matched: false }],
+			detailParts: [
+				{ text: 'Set', matched: true },
+				{ text: 'tings', matched: false }
+			]
+		});
+	});
+
+	it('leaves the second line unmarked when the title already matches', () => {
+		const songs = groupRailSearchResults(vernissageState, []).find(
+			(group) => group.label === 'Songs'
+		);
+
+		expect(songs?.results[0]).toMatchObject({
+			label: 'Vernissage',
+			detailParts: [{ text: 'Vernissage', matched: false }]
+		});
+	});
+
+	it('lists a page only for words its row shows', () => {
+		const groups = groupRailSearchResults({ ...vernissageState, query: 'album', hits: [] }, []);
+
+		expect(groups).toEqual([]);
 	});
 });
