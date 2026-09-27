@@ -5,7 +5,9 @@ import {
 	COWRITER_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_CONVERSATION_SINCE_TEMPLATE,
 	COWRITER_CONVERSATION_STARTED_TODAY,
-	COWRITER_NEW_CONVERSATION_LINE
+	COWRITER_NEW_CONVERSATION_LABEL,
+	COWRITER_NEW_CONVERSATION_LINE,
+	COWRITER_TURN_FAILURE_TEMPLATE
 } from '$lib/constants';
 
 const DAYS_NAMED_BY_WEEKDAY = 7;
@@ -58,6 +60,14 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${providerDisplayName(provider)} is currently unavailable`;
 }
 
+/** The reason text comes from the provider library; the panel only says whose it is. */
+export function cowriterTurnFailureLabel(provider: string, reason: string): string {
+	return COWRITER_TURN_FAILURE_TEMPLATE.replace(
+		'{provider}',
+		providerDisplayName(provider)
+	).replace('{reason}', reason);
+}
+
 export function providerDisplayName(provider: string): string {
 	return provider.charAt(0).toUpperCase() + provider.slice(1);
 }
@@ -87,6 +97,15 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 	});
 }
 
+/** A live conversation nobody has written in yet; the line and its menu row both ask this. */
+function isNewConversation(
+	conversation: ConversationItem | undefined,
+	chatHasMessages = false
+): boolean {
+	if (conversation?.archived_at) return false;
+	return !chatHasMessages && (conversation?.message_count ?? 0) === 0;
+}
+
 /**
  * The line above the chat never contradicts the chat: a message in it means
  * a conversation is running, even before the conversation list has caught up
@@ -103,8 +122,7 @@ export function conversationLineLabel(
 			conversationDayLabel(conversation.created_at, now)
 		);
 	}
-	const hasMessages = chatHasMessages || (conversation?.message_count ?? 0) > 0;
-	if (!hasMessages) return COWRITER_NEW_CONVERSATION_LINE;
+	if (isNewConversation(conversation, chatHasMessages)) return COWRITER_NEW_CONVERSATION_LINE;
 	const day = conversation
 		? conversationDayLabel(conversation.created_at, now)
 		: COWRITER_CONVERSATION_STARTED_TODAY;
@@ -113,6 +131,7 @@ export function conversationLineLabel(
 
 export function conversationRowLabel(conversation: ConversationItem, now: Date): string {
 	if (conversation.title) return conversation.title;
+	if (isNewConversation(conversation)) return COWRITER_NEW_CONVERSATION_LABEL;
 	const template = conversation.archived_at
 		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
 		: COWRITER_CONVERSATION_ROW_TEMPLATE;

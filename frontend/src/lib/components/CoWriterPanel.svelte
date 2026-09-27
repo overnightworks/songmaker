@@ -28,6 +28,7 @@
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_CONVERSATION_MENU_LABEL,
 		COWRITER_MEMORY_LABEL,
+		COWRITER_MEMORY_PROPOSAL_WAITING_LABEL,
 		COWRITER_NEW_CONVERSATION_LABEL,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
@@ -54,6 +55,7 @@
 	import {
 		conversationLineLabel,
 		conversationRowLabel,
+		cowriterTurnFailureLabel,
 		cowriterHeaderLabel,
 		cowriterThinkingLabel,
 		cowriterToolCallTarget,
@@ -428,7 +430,7 @@
 			})) {
 				applyStreamEvent(assistantIndex, event);
 				if (event.type === 'error') {
-					streamError = event.message ?? event.reason?.message ?? INCOMPLETE_TURN_MESSAGE;
+					streamError = streamFailureMessage(event);
 					break;
 				}
 				if (event.type === 'final') {
@@ -500,6 +502,11 @@
 	const retryableMessageIndex = $derived(
 		messages.findLastIndex((message) => message.role === 'user')
 	);
+
+	function streamFailureMessage(frame: Extract<CoWriterStreamEvent, { type: 'error' }>): string {
+		if (frame.reason?.message) return cowriterTurnFailureLabel(providerName, frame.reason.message);
+		return frame.message ?? INCOMPLETE_TURN_MESSAGE;
+	}
 
 	function refusalMessage(refusal: ApiError): string {
 		if (refusal.status === 503) return refusal.detail || cowriterUnavailableLabel(providerName);
@@ -631,6 +638,14 @@
 			rejectedProposalKeys
 		).filter((proposal) => proposalTargetForMemory(proposal, memoryBundle) !== null)
 	);
+
+	const memoryProposalWaiting = $derived(pendingProposals.length > 0);
+
+	// The waiting dot is only drawn, so the controls that carry it say it in their names.
+	function announcingProposalWaiting(label: string): string {
+		if (!memoryProposalWaiting) return label;
+		return `${label}, ${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL.toLowerCase()}`;
+	}
 
 	async function saveMemoryScope(
 		scope: MemoryScope,
@@ -836,6 +851,10 @@
 	);
 </script>
 
+{#snippet proposalWaitingMark()}
+	<span class="proposal-waiting" aria-hidden="true"></span>
+{/snippet}
+
 <div class="cowriter">
 	<div class="convo">
 		<span class="convo-line">
@@ -850,11 +869,12 @@
 				data-hitbox="frequent"
 				aria-haspopup="menu"
 				aria-expanded={conversationMenuOpen}
-				aria-label={COWRITER_CONVERSATION_MENU_LABEL}
+				aria-label={announcingProposalWaiting(COWRITER_CONVERSATION_MENU_LABEL)}
 				title={COWRITER_CONVERSATION_MENU_LABEL}
 				onclick={toggleConversationMenu}
 			>
 				<Icon name="more-horizontal" size={18} />
+				{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
 			</button>
 			{#if conversationMenuOpen}
 				<div
@@ -881,7 +901,9 @@
 						type="button"
 						role="menuitem"
 						class="convo-memory"
-						onclick={() => chooseFromConversationMenu(openMemory)}>{COWRITER_MEMORY_LABEL}</button
+						aria-label={announcingProposalWaiting(COWRITER_MEMORY_LABEL)}
+						onclick={() => chooseFromConversationMenu(openMemory)}
+						>{COWRITER_MEMORY_LABEL}{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}</button
 					>
 					{#each conversations as conv (conv.id)}
 						<div class="conv-row" role="none" class:active={conv.id === viewingConversationId}>
@@ -1085,6 +1107,7 @@
 	}
 
 	.convo-menu-btn {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -1154,6 +1177,26 @@
 		text-align: left;
 		font-size: 0.85rem;
 		cursor: pointer;
+	}
+
+	.proposal-waiting {
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--primary);
+		flex-shrink: 0;
+	}
+
+	.convo-menu-btn .proposal-waiting {
+		position: absolute;
+		top: 6px;
+		right: 6px;
+	}
+
+	.convo-memory .proposal-waiting {
+		margin-left: 6px;
+		vertical-align: middle;
 	}
 
 	.convo-memory:hover {
