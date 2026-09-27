@@ -1,0 +1,8 @@
+claim_id = "d1c86ce639744008804ba56afe9d51f7"
+agent = "claude-head"
+role = "builder"
+base = "2554145197cb58ee883d0ec366296f91e6586243"
+branch = "claude/issue-1107-offline-everywhere"
+scope = ["frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/CreateForm.svelte", "frontend/src/lib/components/ModelRegistryPanel.svelte", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/WorkerPoolPanel.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/offline.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/loras.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts", "frontend/src/routes/(library)", "frontend/src/routes/settings", "frontend/src/routes/setup"]
+opened_commit = "ce69870b579e1234fdeed495e980d328992e2f8c"
+whole_reason = "the remaining raw failure wording across library routes, rail, search, player, settings and admin panels"
