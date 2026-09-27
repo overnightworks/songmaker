@@ -907,11 +907,6 @@ const nowPlayingIsPushedScreen = derived(
 	([surface, dockable]) => surface === 'full' && !dockable
 );
 
-// Whether the full surface stands because the listener opened or expanded it.
-// A window narrowing under a docked panel forces it full (above) without the
-// listener taking a step, so Back has nothing of theirs to undo there; only
-// this one becomes a history layer (navigation.ts), and a later resize leaves
-// it as it is.
 const fullSurfaceChosen = writable(false);
 export const nowPlayingFullChosen = readonly(fullSurfaceChosen);
 

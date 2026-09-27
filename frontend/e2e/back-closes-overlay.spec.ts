@@ -1,13 +1,3 @@
-// Back closes whatever is open (#1006, slice #1114): an overlay owns one
-// history entry on top of the page it covers, so Back closes it and leaves
-// that page as it was, and only the next Back moves the library. Leaving the
-// overlay by navigating from it takes its entry along: one Back afterwards
-// returns to the page it was opened over.
-//
-// One table, one row per overlay and way of leaving it: the phone's rail
-// drawer and, on the desktop, the full Now Playing surface, which Back docks
-// to the side panel as Escape does.
-
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	collectionPlayLabel,
