@@ -83,7 +83,9 @@
 		{:else if loadState === 'error'}
 			<div class="continue-state" role="alert">
 				<p>Could not load continue items.</p>
-				<button type="button" class="continue-retry" onclick={() => void refreshItems()}>Retry</button>
+				<button type="button" class="continue-retry" onclick={() => void refreshItems()}
+					>Retry</button
+				>
 			</div>
 		{:else if visibleItems.length === 0}
 			<p class="continue-state">Nothing to continue yet.</p>

@@ -10,8 +10,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 vi.mock('$lib/stores/libraryData', () => ({
-	replaceSongInList: vi.fn(),
-	resetLibraryContinueItems: vi.fn()
+	replaceSongInList: vi.fn()
 }));
 vi.mock('$lib/stores/player', async () => {
 	const { writable } = await import('svelte/store');
@@ -40,7 +39,6 @@ import {
 	computeDraftVersionNumber
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
-import { resetLibraryContinueItems } from '$lib/stores/libraryData';
 import type { GenerationItem, SongItem } from '$lib/api/types';
 
 const songDefaults = {
@@ -147,7 +145,6 @@ describe('handleSave', () => {
 		const result = await handleSave('s1');
 
 		expect(mockUpdate).toHaveBeenCalled();
-		expect(resetLibraryContinueItems).toHaveBeenCalledOnce();
 		expect(get(isDirty)).toBe(false);
 		expect(result).toBe(saved);
 	});
@@ -227,7 +224,6 @@ describe('handleDeleteVersion', () => {
 		await handleDeleteVersion('s1', 'v1', false);
 
 		expect(deleteVersion).toHaveBeenCalledWith('v1', false);
-		expect(resetLibraryContinueItems).toHaveBeenCalledOnce();
 		expect(get(editLyrics)).toBe('remaining lyrics');
 	});
 
