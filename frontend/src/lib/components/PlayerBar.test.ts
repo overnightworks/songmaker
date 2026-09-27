@@ -787,20 +787,59 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
+	// A finger's click counts its taps; a keyboard or screen reader press
+	// arrives as a click that counts none.
+	function click(control: Element, { by }: { by: 'finger' | 'keyboard' }): void {
+		control.dispatchEvent(
+			new MouseEvent('click', { bubbles: true, detail: by === 'finger' ? 1 : 0 })
+		);
+	}
+
 	it('keeps a docked panel open when the swipe that opened it ends in a click on the title', async () => {
 		nowPlayingDockable.set(true);
 		loadTake();
 		await mountBar();
 
 		swipe(openTargets()[0], { rise: NOW_PLAYING_SWIPE_RISE_PX });
-		openTargets()[0].click();
+		click(openTargets()[0], { by: 'finger' });
 		await tick();
 		expect(get(nowPlayingSurface)).toBe('docked');
 
-		openTargets()[0].click();
+		click(openTargets()[0], { by: 'finger' });
 		await tick();
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
+
+	// A docked panel leaves the bar in place, so a swipe that ended with no
+	// click on it must not eat the next keyboard press.
+	it.each([
+		{
+			control: 'the title',
+			press: () => openTargets()[0],
+			expectActed: () => expect(get(nowPlayingSurface)).toBe('closed')
+		},
+		{
+			control: 'Next',
+			press: swipeStarts.control('Next'),
+			expectActed: () => expect(playerStore.playNextSong).toHaveBeenCalledOnce()
+		}
+	])(
+		'acts on a keyboard press on $control after a swipe that ended without a click',
+		async ({ press, expectActed }) => {
+			vi.spyOn(playerStore, 'playNextSong').mockResolvedValue();
+			nowPlayingDockable.set(true);
+			audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
+			await mountBar();
+			swipe(openTargets()[0], { rise: NOW_PLAYING_SWIPE_RISE_PX });
+			await tick();
+			expect(get(nowPlayingSurface)).toBe('docked');
+
+			click(press(), { by: 'keyboard' });
+			await tick();
+
+			expectActed();
+		}
+	);
 
 	it.each([
 		{ step: 'Previous', action: 'playPrevSong' as const },

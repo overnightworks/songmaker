@@ -200,11 +200,13 @@
 	}
 
 	// A swipe that starts and ends on the title also clicks it, and that click
-	// would put a docked panel the swipe just opened away again.
+	// would put a docked panel the swipe just opened away again. A swipe can
+	// also end with no click at all, so only a pointer's click (one that
+	// counts taps) is taken for its end; a keyboard press always acts.
 	function swallowClickEndingSwipe(e: MouseEvent): void {
-		if (!swipeOpenedNowPlaying) return;
+		const endsSwipe = swipeOpenedNowPlaying && e.detail > 0;
 		swipeOpenedNowPlaying = false;
-		e.stopPropagation();
+		if (endsSwipe) e.stopPropagation();
 	}
 
 	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
