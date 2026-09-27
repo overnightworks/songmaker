@@ -119,8 +119,10 @@
 	// transport's shuffle control shows the order the header just chose; which
 	// collection starts is the view's answer, through onplay. While this
 	// collection already plays, the circle pauses and resumes it instead and the
-	// order stays as it is. A view with nothing to start passes no onplay, which
-	// dims both, so no tap there reaches the listener's shuffle setting.
+	// order stays as it is — even once the collection has emptied under it. A
+	// view with nothing to start passes no onplay, which dims the shuffle square
+	// and, unless this collection is the queue, the circle, so no tap there
+	// reaches the listener's shuffle setting.
 	function onCircle(): void {
 		if (sounding) audioPlayer.pause();
 		else if (queueIsThisCollection) audioPlayer.play();
@@ -199,8 +201,8 @@
 	{artFill}
 	{kind}
 	playing={sounding}
-	onplay={onplay ? onCircle : null}
-	onshuffle={() => start('random')}
+	onplay={onplay || queueIsThisCollection ? onCircle : null}
+	onshuffle={onplay ? () => start('random') : null}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}

@@ -18,12 +18,13 @@
 		kind: CollectionPlayKind;
 		/** Whether this collection is sounding, so the circle offers to pause it. */
 		playing: boolean;
-		/**
-		 * The circle's action; null while the collection has nothing to start,
-		 * which dims the circle and the shuffle square alike.
-		 */
+		/** The circle's action; null while the circle has nothing to act on, which dims it. */
 		onplay: (() => void) | null;
-		onshuffle?: () => void;
+		/**
+		 * The shuffle square's action; absent where the surface offers no
+		 * shuffle, null while the collection has nothing to start, which dims it.
+		 */
+		onshuffle?: (() => void) | null;
 		titleArea: Snippet;
 		actions?: Snippet;
 		coverFallback?: Snippet;
@@ -75,13 +76,13 @@
 		>
 			<Icon name={playing ? 'pause' : 'play'} size={22} />
 		</button>
-		{#if onshuffle}
+		{#if onshuffle !== undefined}
 			<button
 				type="button"
 				class="shuffle-btn"
 				data-hitbox="frequent"
-				disabled={!onplay}
-				onclick={onshuffle}
+				disabled={!onshuffle}
+				onclick={() => onshuffle?.()}
 				aria-label={collectionShuffleLabel(kind)}
 				title={collectionShuffleLabel(kind)}
 			>

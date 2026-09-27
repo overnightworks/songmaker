@@ -195,6 +195,22 @@ describe('CollectionHeader', () => {
 	);
 
 	it.each(['album', 'playlist'] as const)(
+		'still pauses the %s from its circle once it empties while playing, with shuffle dimmed',
+		async (kind) => {
+			const props = { ...baseProps(), kind, onplay: null };
+			queuePlays(kind, props.collectionId, 'playing');
+			const target = await render(props);
+			const shuffle = getByRoleButton(target, collectionShuffleLabel(kind));
+
+			getByRoleButton(target, collectionPauseLabel(kind)).click();
+			await tick();
+
+			expect(audioPlayer.status).toBe('paused');
+			expect(shuffle.disabled).toBe(true);
+		}
+	);
+
+	it.each(['album', 'playlist'] as const)(
 		'dims the circle and shuffle while the %s has nothing to start, and a tap changes nothing',
 		async (kind) => {
 			setShuffle(true);
