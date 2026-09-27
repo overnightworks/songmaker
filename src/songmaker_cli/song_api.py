@@ -18,6 +18,7 @@ from songmaker_cli.api_helpers import (
     check_song_access_including_deleted,
     cleanup_generation_files,
     gen_params_to_json,
+    is_song_owner,
     owner_filter,
     page_has_more,
     parse_optional_search_query,
@@ -71,6 +72,7 @@ from songmaker_cli.db.queries import (
     list_songs,
     move_song,
     record_audit,
+    record_playlist_listen,
     record_song_listen,
     rename_song,
     restore_song,
@@ -328,7 +330,10 @@ def api_record_song_listen(
         playlist = check_own_playlist_access(session, req.playlist_id, user)
         if not playlist_holds_song(session, playlist, song):
             raise HTTPException(422, "Playlist does not hold this song")
-    record_song_listen(session, song, playlist=playlist)
+    if is_song_owner(song, user):
+        record_song_listen(session, song, playlist=playlist)
+    elif playlist is not None:
+        record_playlist_listen(session, playlist, song=song)
     session.commit()
     return StatusResponse()
 

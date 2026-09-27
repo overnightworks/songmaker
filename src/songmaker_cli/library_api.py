@@ -29,9 +29,10 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
+    CONTINUE_MAX_PLACES,
     count_picked_songs_by_album,
     count_songs_by_album,
-    list_continue_candidates,
+    list_place_activity,
     list_shared_inventory,
     search_library,
 )
@@ -56,7 +57,7 @@ def api_library_continue(
     session: Session = Depends(get_db_session),
 ) -> LibraryContinueResponse:
     return LibraryContinueResponse.from_orm(
-        list_continue_candidates(session, user_id=user.id),
+        list_place_activity(session, user_id=user.id, limit=CONTINUE_MAX_PLACES),
     )
 
 

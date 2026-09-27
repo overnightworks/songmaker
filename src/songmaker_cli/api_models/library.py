@@ -6,7 +6,13 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, Field
 
-from songmaker_cli.api_models.songs import AlbumCoverUrls, AlbumResponse, SongSummaryResponse
+from songmaker_cli.api_models.playlists import playlist_mosaic_covers, uploaded_playlist_cover
+from songmaker_cli.api_models.songs import (
+    AlbumCoverUrls,
+    AlbumResponse,
+    SongSummaryResponse,
+    album_cover_urls,
+)
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
     LIBRARY_ITEM_GENERATION,
@@ -23,7 +29,7 @@ from songmaker_cli.constants import (
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Generation, Playlist, Song
-    from songmaker_cli.db.queries.songs import ContinueCandidate
+    from songmaker_cli.db.queries.activity import PlaceActivity
 
 LibrarySort = Literal[
     "newest",
@@ -113,36 +119,38 @@ class LibrarySearchResponse(BaseModel):
 
 
 class LibraryContinueItem(BaseModel):
-    """A compact, tagged candidate for the Library Continue row."""
+    """One place in the Library Continue row, with the song the musician was on."""
 
-    type: Literal["album", "song"]
+    type: Literal["album", "playlist"]
     id: str
     title: str
     cover: AlbumCoverUrls | None = None
-    album_id: str | None = None
-    album_title: str | None = None
+    album_covers: list[AlbumCoverUrls] = Field(default_factory=list)
+    song_id: str | None = None
+    song_title: str | None = None
+    activity_at: str
 
     @classmethod
-    def from_orm(cls, item: Album | Song) -> LibraryContinueItem:
-        from songmaker_cli.api_models.songs import album_cover_urls, song_cover_urls
+    def from_orm(cls, activity: PlaceActivity) -> LibraryContinueItem:
         from songmaker_cli.db.models import Album as AlbumModel
 
-        if isinstance(item, AlbumModel):
-            return cls(
-                type=LIBRARY_ITEM_ALBUM,
-                id=item.id,
-                title=item.title,
-                cover=album_cover_urls(item.id, item.cover_key) if item.cover_key else None,
-            )
-        if item.album is None:
-            raise ValueError(f"Song {item.id} has no album")
+        place = activity.place
+        if isinstance(place, AlbumModel):
+            cover = album_cover_urls(place.id, place.cover_key) if place.cover_key else None
+            album_covers: list[AlbumCoverUrls] = []
+        else:
+            cover = uploaded_playlist_cover(place)
+            album_covers = playlist_mosaic_covers(place)
+        song = activity.song
         return cls(
-            type=LIBRARY_ITEM_SONG,
-            id=item.id,
-            title=item.title,
-            cover=song_cover_urls(item.id, item.cover_key) if item.cover_key else None,
-            album_id=item.album_id,
-            album_title=item.album.title,
+            type=activity.place_type,
+            id=place.id,
+            title=place.title,
+            cover=cover,
+            album_covers=album_covers,
+            song_id=song.id if song else None,
+            song_title=song.title if song else None,
+            activity_at=activity.activity_at.isoformat(),
         )
 
 
@@ -150,10 +158,8 @@ class LibraryContinueResponse(BaseModel):
     items: list[LibraryContinueItem]
 
     @classmethod
-    def from_orm(cls, candidates: list[ContinueCandidate]) -> LibraryContinueResponse:
-        return cls(
-            items=[LibraryContinueItem.from_orm(candidate.item) for candidate in candidates],
-        )
+    def from_orm(cls, places: list[PlaceActivity]) -> LibraryContinueResponse:
+        return cls(items=[LibraryContinueItem.from_orm(place) for place in places])
 
 
 ShareInventoryType = Literal[
