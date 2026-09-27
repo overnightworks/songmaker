@@ -29,7 +29,6 @@ import {
 	albumList,
 	albumSongsErrorMessage,
 	loadSongsForAlbum,
-	resetLibraryContinueItems,
 	songList,
 	upsertSongInList
 } from '$lib/stores/libraryData';
@@ -1476,11 +1475,9 @@ function recordFirstTakeListen(): void {
 	const current = audioPlayer.current;
 	if (!current || listenedTakeIds.has(current.generation.id)) return;
 	listenedTakeIds.add(current.generation.id);
-	void recordSongListen(current.songId)
-		.then(resetLibraryContinueItems)
-		.catch((error: unknown) => {
-			console.error('Could not record song listen:', error);
-		});
+	void recordSongListen(current.songId).catch((error: unknown) => {
+		console.error('Could not record song listen:', error);
+	});
 }
 
 function handleCurrentChange(current: PlaybackInfo | null): void {

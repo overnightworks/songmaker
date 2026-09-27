@@ -7,7 +7,6 @@ import {
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
 import { resetGenerationFailures } from '$lib/stores/jobs';
-import { resetLibraryContinueItems } from '$lib/stores/libraryData';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
 
@@ -93,7 +92,6 @@ export async function login(username: string, password: string): Promise<AuthUse
 export function clearAuth(): void {
 	currentUser.set(null);
 	resetGenerationFailures();
-	resetLibraryContinueItems();
 	resetPlaylists();
 	resetShares();
 }
