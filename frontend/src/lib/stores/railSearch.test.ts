@@ -75,6 +75,18 @@ describe('syncRailSearch', () => {
 		expect(get(railSearch)).toMatchObject({ query: '', status: 'idle' });
 	});
 
+	it('still searches when a trailing space follows the word before the debounce fires', async () => {
+		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+
+		syncRailSearch('Vernissage');
+		syncRailSearch('Vernissage ');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(searchLibrary).toHaveBeenCalledWith({ q: 'Vernissage', sort: 'newest', limit: 100 });
+		expect(get(railSearch)).toMatchObject({ query: 'Vernissage', status: 'ready' });
+	});
+
 	it('records a server error and retries the same query', async () => {
 		searchLibrary.mockRejectedValueOnce(new Error('Offline'));
 		syncRailSearch('stadion');
@@ -120,7 +132,7 @@ describe('groupRailSearchResults', () => {
 
 	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
 		const pages = [
-			{ label: 'Vernissage guide', href: '/settings/playback', keywords: [] }
+			{ label: 'Vernissage guide', href: '/settings/playback', section: null }
 		] as const;
 
 		const groups = groupRailSearchResults(vernissageState, [picks], pages);
@@ -129,11 +141,45 @@ describe('groupRailSearchResults', () => {
 		expect(groups.map((group) => group.results.map((result) => result.target))).toEqual([
 			[{ kind: 'album', id: 'a1' }],
 			[
-				{ kind: 'song', id: 's1' },
-				{ kind: 'song', id: 's2' }
+				{ kind: 'song', id: 's2' },
+				{ kind: 'song', id: 's1' }
 			],
 			[{ kind: 'playlist', id: 'p1' }],
 			[{ kind: 'page', href: '/settings/playback' }]
+		]);
+	});
+
+	it('lists titles that start with the query before titles that only contain it, newest first within each', () => {
+		const state = {
+			...vernissageState,
+			hits: [
+				buildSongSearchHit({ id: 'newest-contains', title: 'After the Vernissage' }),
+				buildSongSearchHit({ id: 'newest-prefix', title: 'Vernissage II' }),
+				buildSongSearchHit({ id: 'older-contains', title: 'Before the Vernissage' }),
+				buildSongSearchHit({ id: 'older-prefix', title: 'Vernissage' })
+			]
+		};
+		const playlists = [
+			buildPlaylist({ id: 'old-prefix', title: 'Vernissage', created_at: '2026-01-01T00:00:00Z' }),
+			buildPlaylist({
+				id: 'new-contains',
+				title: 'My Vernissage',
+				created_at: '2026-03-01T00:00:00Z'
+			}),
+			buildPlaylist({
+				id: 'new-prefix',
+				title: 'Vernissage picks',
+				created_at: '2026-02-01T00:00:00Z'
+			})
+		];
+
+		const ids = groupRailSearchResults(state, playlists).map((group) =>
+			group.results.map((result) => result.id)
+		);
+
+		expect(ids).toEqual([
+			['song:newest-prefix', 'song:older-prefix', 'song:newest-contains', 'song:older-contains'],
+			['playlist:new-prefix', 'playlist:old-prefix', 'playlist:new-contains']
 		]);
 	});
 
@@ -148,7 +194,7 @@ describe('groupRailSearchResults', () => {
 
 		expect(
 			results.find((result) => result.target.kind !== 'page' && result.target.id === id)
-		).toMatchObject({ kindWord, detail });
+		).toMatchObject({ kindWord, detailParts: [{ text: detail, matched: false }] });
 	});
 
 	it('names a settings page as a Settings page and the library as a plain page', () => {
@@ -158,12 +204,12 @@ describe('groupRailSearchResults', () => {
 		expect(settings[0]?.results[0]).toMatchObject({
 			label: 'Generation',
 			kindWord: 'Page',
-			detail: 'Settings'
+			detailParts: [{ text: 'Settings', matched: false }]
 		});
 		expect(library[0]?.results[0]).toMatchObject({
 			label: 'Library',
 			kindWord: 'Page',
-			detail: null
+			detailParts: []
 		});
 	});
 
@@ -200,9 +246,39 @@ describe('groupRailSearchResults', () => {
 		],
 		['Playback', 'settings', [{ text: 'Playback', matched: false }]]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
-		const page = { label, href: '/settings/playback', keywords: ['settings'] } as const;
+		const page = { label, href: '/settings/playback', section: 'Settings' } as const;
 		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
 		expect(group?.results[0]?.labelParts).toEqual(parts);
+	});
+
+	it('marks the matched part of the second line when only the section matches', () => {
+		const [pages] = groupRailSearchResults({ ...vernissageState, query: 'set', hits: [] }, []);
+
+		expect(pages?.results[0]).toMatchObject({
+			label: 'Generation',
+			labelParts: [{ text: 'Generation', matched: false }],
+			detailParts: [
+				{ text: 'Set', matched: true },
+				{ text: 'tings', matched: false }
+			]
+		});
+	});
+
+	it('leaves the second line unmarked when the title already matches', () => {
+		const songs = groupRailSearchResults(vernissageState, []).find(
+			(group) => group.label === 'Songs'
+		);
+
+		expect(songs?.results[0]).toMatchObject({
+			label: 'Vernissage',
+			detailParts: [{ text: 'Vernissage', matched: false }]
+		});
+	});
+
+	it('lists a page only for words its row shows', () => {
+		const groups = groupRailSearchResults({ ...vernissageState, query: 'album', hits: [] }, []);
+
+		expect(groups).toEqual([]);
 	});
 });
