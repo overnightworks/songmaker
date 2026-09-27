@@ -113,9 +113,6 @@ export const QUEUE_STREAM_UNPLAYABLE_START_DETAIL = 'Requested take is not playa
 
 export const QUEUE_TAKE_MISSING_TOAST = 'This take is not in the queue';
 
-export const ALBUM_ROW_NO_TAKE_TOAST = 'No take to play for this song yet';
-export const ALBUM_ROW_ARCHIVED_ONLY_TOAST = 'No playable take — all takes are archived';
-
 export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been deleted';
 
 // A legacy `/?song=<id>&gen=<id>` link whose take is gone still opens the
@@ -126,18 +123,20 @@ export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been de
 export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
 	'This take no longer exists — opened the song instead';
 
-// A collection row announces the action its click performs, then the title:
-// "Play Tide", "Pause Tide". Every surface that renders such a row, and every
-// flow that finds one by name, builds the label here.
-const COLLECTION_ROW_PLAY_ACTION = 'Play';
-const COLLECTION_ROW_PAUSE_ACTION = 'Pause';
+// A collection header's play circle and the shuffle square beside it name
+// what they start by its kind: "Play album", "Shuffle playlist". Every
+// surface that renders the header, and every flow that finds it by name,
+// builds the label here.
+export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
+const COLLECTION_PLAY_ACTION = 'Play';
+const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
 
-export function collectionRowPlayLabel(title: string): string {
-	return `${COLLECTION_ROW_PLAY_ACTION} ${title}`;
+export function collectionPlayLabel(kind: CollectionPlayKind): string {
+	return `${COLLECTION_PLAY_ACTION} ${kind}`;
 }
 
-export function collectionRowPauseLabel(title: string): string {
-	return `${COLLECTION_ROW_PAUSE_ACTION} ${title}`;
+export function collectionShuffleLabel(kind: CollectionPlayKind): string {
+	return `${COLLECTION_SHUFFLE_ACTION} ${kind}`;
 }
 
 // The transport's play button is named after the state its click leaves:

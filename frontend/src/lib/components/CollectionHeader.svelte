@@ -13,6 +13,7 @@
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
+	import { setShuffle, type CollectionStart } from '$lib/stores/player';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -21,7 +22,11 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
-		onplay: () => void;
+		/**
+		 * Starts this collection at `start`, in the order the header has just set;
+		 * null while the view has nothing to start.
+		 */
+		onplay: ((start: CollectionStart) => void) | null;
 		onrename: (title: string) => Promise<void>;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
@@ -95,6 +100,24 @@
 	function triggerRename(): void {
 		editableTitle?.startEdit();
 	}
+
+	// The header is where a collection's play order is chosen: the circle plays
+	// it in order from the top, the shuffle square beside it plays it shuffled
+	// from a drawn song. Both set the player's own shuffle setting, so the
+	// transport's shuffle control shows the order the header just chose; which
+	// collection starts is the view's answer, through onplay. A tap that starts
+	// nothing leaves the listener's shuffle setting alone.
+	function playInOrder(): void {
+		if (!onplay) return;
+		setShuffle(false);
+		onplay('top');
+	}
+
+	function playShuffled(): void {
+		if (!onplay) return;
+		setShuffle(true);
+		onplay('random');
+	}
 </script>
 
 {#snippet titleArea()}
@@ -160,7 +183,9 @@
 	{coverAlt}
 	{initials}
 	{artFill}
-	{onplay}
+	{kind}
+	onplay={playInOrder}
+	onshuffle={playShuffled}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}

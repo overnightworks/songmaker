@@ -28,7 +28,7 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
-	import { curateAlbum, selectedAlbumId, playAlbum, playAlbumSong } from '$lib/stores/player';
+	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
 	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
@@ -51,7 +51,6 @@
 		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN,
-		collectionRowPlayLabel,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL
 	} from '$lib/constants';
@@ -59,10 +58,10 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
-	import type { CoverSuggestionsResponse, SongItem } from '$lib/api/types';
+	import type { CoverSuggestionsResponse } from '$lib/api/types';
 	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
-	import Icon from './Icon.svelte';
+	import PlayingMark from './PlayingMark.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
@@ -474,11 +473,6 @@
 		}
 	}
 
-	function onRowPlay(song: SongItem): void {
-		if (!currentAlbumId) return;
-		void playAlbumSong(currentAlbumId, song);
-	}
-
 	function onCurate(): void {
 		if (!currentAlbumId) return;
 		void curateAlbum(currentAlbumId);
@@ -494,7 +488,7 @@
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={() => currentAlbumId && playAlbum(currentAlbumId)}
+			onplay={currentAlbumId ? (start) => playAlbum(currentAlbumId, start) : null}
 			onrename={onRenameAlbum}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
@@ -605,17 +599,10 @@
 				<p class="empty-tab">No songs in this album yet.</p>
 			{:else}
 				{#each albumSongs as s (s.id)}
-					<div class="item-row">
-						<button
-							class="item-play"
-							data-hitbox="frequent"
-							disabled={s.generation_count === 0}
-							onclick={() => onRowPlay(s)}
-							aria-label={collectionRowPlayLabel(s.title)}
-						>
-							<Icon name="play" size={14} />
-						</button>
+					{@const current = isSongCurrent(s.id)}
+					<div class="item-row" class:current>
 						<button class="item-body" onclick={() => selectSong(s.id)}>
+							<PlayingMark {current} />
 							<span class="item-title">{s.title}</span>
 							<span class="item-meta">
 								{s.generation_count} take{s.generation_count !== 1 ? 's' : ''}
@@ -835,28 +822,12 @@
 		background: var(--surface-hover);
 	}
 
-	.item-play {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.9rem;
-		height: 1.9rem;
-		flex-shrink: 0;
-		border-radius: 50%;
-		border: 1px solid var(--border);
-		background: none;
-		color: var(--text-muted);
-		cursor: pointer;
-	}
-
-	.item-play:hover:not(:disabled) {
+	.item-row.current {
 		border-color: var(--primary);
-		color: var(--primary);
 	}
 
-	.item-play:disabled {
-		opacity: 0.35;
-		cursor: default;
+	.item-row.current .item-title {
+		color: var(--primary);
 	}
 
 	.item-body {
