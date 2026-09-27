@@ -67,6 +67,35 @@ describe('libraryContinueCollapsed', () => {
 	});
 });
 
+describe('libraryWallOrder', () => {
+	it('opens in A–Z when this browser has no wall order', async () => {
+		const { libraryWallOrder } = await import('./ui');
+
+		expect(get(libraryWallOrder)).toBe('title');
+	});
+
+	it('restores and persists the order chosen on this device', async () => {
+		localStorage.setItem('songmaker.library-wall-order', 'recent');
+		const { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } = await import('./ui');
+
+		expect(get(libraryWallOrder)).toBe('recent');
+		chooseLibraryWallOrder('added');
+		expect(get(libraryWallOrder)).toBe('added');
+		expect(localStorage.getItem('songmaker.library-wall-order')).toBe('added');
+
+		libraryWallOrder.set('title');
+		initLibraryWallOrder();
+		expect(get(libraryWallOrder)).toBe('added');
+	});
+
+	it('opens in A–Z when the stored order is not one it knows', async () => {
+		localStorage.setItem('songmaker.library-wall-order', 'newest');
+		const { libraryWallOrder } = await import('./ui');
+
+		expect(get(libraryWallOrder)).toBe('title');
+	});
+});
+
 describe('railWidth', () => {
 	it('starts at the default width when this browser has no rail preference', async () => {
 		const { railWidth } = await import('./ui');

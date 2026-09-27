@@ -165,21 +165,56 @@ interface AllAlbumsLoadState {
 }
 
 // Tracks a route-independent full load of every album, for surfaces (the
-// rail) that need the complete list regardless of which library page is
-// open. loadLibraryBrowse() keeps paginating and resetting albumList for
-// the active browse view -- this loader must only ever merge into it, never
-// .set() its own page alone, or the two would repeatedly kick each other's
-// results out of the store.
+// rail, the library wall) that need the complete list regardless of which
+// library page is open. loadLibraryBrowse() keeps paginating and resetting
+// albumList for the active browse view -- this loader never .set()s a single
+// page, or the two would repeatedly kick each other's results out of the
+// store: ensureAllAlbumsLoaded merges into the list, and only the gap re-read
+// (rereadAllAlbums) replaces it, with the complete fetched set.
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
 let allAlbumsInflight: Promise<boolean> | null = null;
 
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
-	return loadAllAlbums();
+	return loadAllAlbums(mergeFetchedAlbums);
 }
 
-function loadAllAlbums(): Promise<boolean> {
+// A browse reset never removes an album, so after a stream gap one deleted or
+// archived on another device would stay. Once a surface asked for every
+// album, the snapshot that follows a gap reads them all again and the fresh
+// set replaces the list; a read already under way began before the gap, so
+// it finishes first.
+export async function rereadAllAlbums(): Promise<boolean> {
+	if (get(allAlbumsLoad).status === 'idle') return true;
+	if (allAlbumsInflight !== null) await allAlbumsInflight;
+	return loadAllAlbums(replaceWithFetched);
+}
+
+// A browse reset reads only the first album page (history navigation and a
+// stream reconnect run one). Once a surface asked for every album, that page
+// refreshes the albums it holds and the rest stay, so neither the rail nor
+// the wall shrinks to one page and no navigation reads every album again.
+export function resetAlbumList(firstPage: AlbumItem[]): void {
+	if (get(allAlbumsLoad).status === 'idle') {
+		albumList.set(firstPage);
+		return;
+	}
+	albumList.update((current) => refreshAlbums(current, firstPage));
+}
+
+function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
+	const freshById = new Map(fresh.map((album) => [album.id, album]));
+	const currentIds = new Set(current.map((album) => album.id));
+	return [
+		...fresh.filter((album) => !currentIds.has(album.id)),
+		...current.map((album) => freshById.get(album.id) ?? album)
+	];
+}
+
+function loadAllAlbums(
+	combine: (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[]
+): Promise<boolean> {
 	if (allAlbumsInflight !== null) return allAlbumsInflight;
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
@@ -192,7 +227,7 @@ function loadAllAlbums(): Promise<boolean> {
 				offset += page.items.length;
 				if (!page.has_more || page.items.length === 0) break;
 			}
-			albumList.update((current) => mergeFetchedAlbums(current, collected));
+			albumList.update((current) => combine(current, collected));
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
@@ -213,6 +248,10 @@ function mergeFetchedAlbums(current: AlbumItem[], fetched: AlbumItem[]): AlbumIt
 	const currentIds = new Set(current.map((album) => album.id));
 	const newOnes = fetched.filter((album) => !currentIds.has(album.id));
 	return [...current, ...newOnes];
+}
+
+function replaceWithFetched(_current: AlbumItem[], fetched: AlbumItem[]): AlbumItem[] {
+	return fetched;
 }
 
 export function addSongsToList(songs: SongItem[]): void {

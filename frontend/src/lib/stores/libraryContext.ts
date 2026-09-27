@@ -16,7 +16,13 @@ import {
 	restoreLibrarySearch,
 	searchQuery
 } from '$lib/stores/librarySearch';
-import { albumList, loadSongsForAlbum, songList, upsertSongInList } from '$lib/stores/libraryData';
+import {
+	albumList,
+	loadSongsForAlbum,
+	rereadAllAlbums,
+	songList,
+	upsertSongInList
+} from '$lib/stores/libraryData';
 import { ensureGenerationsLoaded, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
 import {
@@ -86,6 +92,7 @@ let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
 let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
+let librarySnapshotTaken = false;
 let restoredHistory: unknown = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
@@ -881,7 +888,7 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 
 // A cold tab's `history.state` is SvelteKit's own bookkeeping object, not yet
 // a LibraryHistoryState, until whichever restores first writes one — the
-// live stream's own bootstrap (this function, called as its loadSnapshot) and
+// live stream's own bootstrap (hydrateLibraryFromHistory, its loadSnapshot) and
 // an address route's resolution (openAlbumAddress / openSongAddress /
 // openTakeAddress) both start independently and may finish in either order.
 // The fallback branch below must therefore tolerate its own
@@ -893,7 +900,7 @@ function fallbackBrowseIfDetailGone(intendedSurface: LibrarySurface): void {
 // #281's take address, whose extra generations fetch before it reaches
 // `applyLibraryHistory` reliably loses this race; the same race exists for
 // every address, just usually won).
-export async function hydrateLibraryFromHistory(): Promise<boolean> {
+async function hydrateBrowseFromHistory(): Promise<boolean> {
 	const existing = currentLibraryHistoryState();
 	if (isLibraryHistoryState(existing)) {
 		const applied = await applyLibraryHistory(existing);
@@ -906,6 +913,17 @@ export async function hydrateLibraryFromHistory(): Promise<boolean> {
 	}
 	await restoreLibraryBrowse(get(librarySort), 0, 0);
 	return get(libraryBrowse).status !== 'error';
+}
+
+// Only the first snapshot of a page load finds the album list fresh; a later
+// one follows a gap in the stream (a resync, or a bootstrap after a failed
+// one), during which albums may have been deleted or archived elsewhere.
+export async function hydrateLibraryFromHistory(): Promise<boolean> {
+	const followsAGap = librarySnapshotTaken;
+	librarySnapshotTaken = true;
+	const hydrated = await hydrateBrowseFromHistory();
+	if (!hydrated || !followsAGap) return hydrated;
+	return rereadAllAlbums();
 }
 
 export function setLibrarySurface(surface: LibrarySurface): void {
@@ -921,6 +939,7 @@ export function resetLibraryContextForTests(): void {
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
+	librarySnapshotTaken = false;
 	leaveRestoredLibraryHistory();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);

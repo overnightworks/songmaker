@@ -44,8 +44,15 @@ export async function searchLibrary(options: {
 	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
 }
 
-export async function fetchLibraryContinue(): Promise<LibraryContinueResponse> {
-	return apiFetch<LibraryContinueResponse>('/api/library/continue');
+export async function fetchLibraryContinue(page?: {
+	offset: number;
+	limit: number;
+}): Promise<LibraryContinueResponse> {
+	const query =
+		page === undefined
+			? ''
+			: `?${new URLSearchParams({ offset: String(page.offset), limit: String(page.limit) })}`;
+	return apiFetch<LibraryContinueResponse>(`/api/library/continue${query}`);
 }
 
 export async function fetchLibraryPoolQueue(options?: {

@@ -16,6 +16,7 @@ import {
 	DAY_LABEL_LOCALE,
 	DAYS_NAMED_BY_WEEKDAY,
 	localClockTime,
+	localWeekday,
 	localDaysBetween
 } from '$lib/utils/format';
 
@@ -102,7 +103,7 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 	const daysAgo = localDaysBetween(started, now);
 	if (daysAgo === 0) return DAY_LABEL_TODAY;
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
-		return started.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' });
+		return localWeekday(started);
 	}
 	const sameYear = started.getFullYear() === now.getFullYear();
 	return started.toLocaleDateString(DAY_LABEL_LOCALE, {

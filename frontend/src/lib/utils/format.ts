@@ -1,8 +1,11 @@
 import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_ART_INITIAL_COUNT,
+	DAY_LABEL_ADDED,
 	DAY_LABEL_TODAY,
-	DAY_LABEL_YESTERDAY
+	DAY_LABEL_YESTERDAY,
+	PLACE_KIND_PLAYLIST_LABEL,
+	PLACE_LINE_SEPARATOR
 } from '$lib/constants';
 
 const DAY_MS = 86_400_000;
@@ -19,16 +22,15 @@ function pluralize(count: number, noun: string): string {
 	return `${count} ${noun}${count === 1 ? '' : 's'}`;
 }
 
-function songCountLabel(songCount: number): string {
+export function songCountLabel(songCount: number): string {
 	return pluralize(songCount, 'song');
 }
 
-export function albumSummaryLabel(songCount: number, pickCount: number): string {
-	return `${songCountLabel(songCount)} · ${pluralize(pickCount, 'pick')}`;
-}
-
-export function playlistSummaryLabel(entryCount: number): string {
-	return pluralize(entryCount, 'track');
+/** A place tile's second line: a playlist says so first ("Playlist · 14 songs"), an album is just the detail. */
+export function placeLine(kind: 'album' | 'playlist', detail: string): string {
+	return kind === 'playlist'
+		? `${PLACE_KIND_PLAYLIST_LABEL}${PLACE_LINE_SEPARATOR}${detail}`
+		: detail;
 }
 
 export function titleInitials(title: string): string {
@@ -66,6 +68,20 @@ export function localClockTime(moment: Date): string {
 	});
 }
 
+/** The short local weekday every day label names: "Thu". */
+export function localWeekday(moment: Date): string {
+	return moment.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' });
+}
+
+// Day before month ("21 Sep") is composed by hand: the one locale that orders
+// it so, en-GB, abbreviates September as "Sept".
+function localDayAndMonth(moment: Date, now: Date): string {
+	const dayAndMonth = `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
+	return moment.getFullYear() === now.getFullYear()
+		? dayAndMonth
+		: `${dayAndMonth} ${moment.getFullYear()}`;
+}
+
 /** When a place was last worked in: "today 05:47", "yesterday 23:40", "Thu 20:31", "21 Sep". */
 export function activityTimeLabel(activityAt: string, now: Date): string {
 	const moment = new Date(activityAt);
@@ -73,13 +89,11 @@ export function activityTimeLabel(activityAt: string, now: Date): string {
 	const clock = localClockTime(moment);
 	if (daysAgo <= 0) return `${DAY_LABEL_TODAY} ${clock}`;
 	if (daysAgo === 1) return `${DAY_LABEL_YESTERDAY} ${clock}`;
-	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
-		return `${moment.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' })} ${clock}`;
-	}
-	// Day before month ("21 Sep") is composed by hand: the one locale that orders
-	// it so, en-GB, abbreviates September as "Sept".
-	const dayAndMonth = `${moment.getDate()} ${moment.toLocaleDateString(DAY_LABEL_LOCALE, { month: 'short' })}`;
-	return moment.getFullYear() === now.getFullYear()
-		? dayAndMonth
-		: `${dayAndMonth} ${moment.getFullYear()}`;
+	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) return `${localWeekday(moment)} ${clock}`;
+	return localDayAndMonth(moment, now);
+}
+
+/** The day a place was made: "added 3 Aug", "added 3 Aug 2025". */
+export function addedDayLabel(createdAt: string, now: Date): string {
+	return `${DAY_LABEL_ADDED} ${localDayAndMonth(new Date(createdAt), now)}`;
 }
