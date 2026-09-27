@@ -11,7 +11,6 @@
 		uploadAlbumCover
 	} from '$lib/api/client';
 	import { describeFailure, NetworkError } from '$lib/api/fetch';
-	import { untrack } from 'svelte';
 	import {
 		createAlbumCoverSuggestions,
 		discardAlbumCoverSuggestions,
@@ -46,7 +45,6 @@
 		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTIONS_LOADING,
 		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
-		UNREACHABLE_RELOAD_DELAYS_MS,
 		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SUGGESTIONS_TITLE,
 		ALBUM_COVER_SUGGESTING_LABEL,
@@ -61,7 +59,7 @@
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
-	import { offline } from '$lib/stores/connectivity';
+	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import type { CoverSuggestionsResponse } from '$lib/api/types';
 	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
@@ -122,7 +120,7 @@
 	let coverSuggestionsState = $state<CoverSuggestionsState | null>(null);
 	let coverSuggestionsBusyAlbumId = $state<string | null>(null);
 	let suggestionsRequest = 0;
-	let coverSuggestionsReloads = $state(0);
+	let coverSuggestionsBackoffSpent = $state(false);
 	let completedCoverJobId: string | null = null;
 
 	const activeCoverJob = $derived(
@@ -143,10 +141,7 @@
 		coverSuggestionsState?.albumId === currentAlbumId && coverSuggestionsState.isLoading
 	);
 	const coverSuggestionsReloadsExhausted = $derived(
-		coverSuggestionsUnreachable &&
-			!$offline &&
-			!coverSuggestionsLoading &&
-			coverSuggestionsReloads >= UNREACHABLE_RELOAD_DELAYS_MS.length
+		coverSuggestionsUnreachable && !$offline && coverSuggestionsBackoffSpent
 	);
 	const coverSuggestionsBusy = $derived(coverSuggestionsBusyAlbumId === currentAlbumId);
 	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
@@ -185,6 +180,9 @@
 			: null
 	);
 
+	const coverSuggestionsReloads = reloadWhileUnreachable(reloadCoverSuggestions);
+	$effect(() => () => coverSuggestionsReloads.stop());
+
 	$effect(() => {
 		const albumId = currentAlbumId;
 		if (!albumId) {
@@ -197,32 +195,21 @@
 			...COVER_SUGGESTIONS_SETTLED,
 			isLoading: true
 		};
-		coverSuggestionsReloads = 0;
+		coverSuggestionsReloads.stop();
 		queueMicrotask(() => void loadCoverSuggestions(albumId));
 	});
 
-	$effect(() => {
-		if ($offline) return;
-		untrack(() => {
-			if (coverSuggestionsUnreachable && currentAlbumId) void loadCoverSuggestions(currentAlbumId);
-		});
-	});
+	function reloadCoverSuggestions(): void {
+		if (currentAlbumId) void loadCoverSuggestions(currentAlbumId);
+	}
 
-	$effect(() => {
-		if ($offline) {
-			coverSuggestionsReloads = 0;
+	function reloadCoverSuggestionsAfter(outcome: CoverSuggestionsOutcome): void {
+		if (!outcome.unreachable) {
+			coverSuggestionsReloads.stop();
 			return;
 		}
-		if (!coverSuggestionsUnreachable || coverSuggestionsLoading || !currentAlbumId) return;
-		const delay = UNREACHABLE_RELOAD_DELAYS_MS[coverSuggestionsReloads];
-		if (delay === undefined) return;
-		const albumId = currentAlbumId;
-		const timer = setTimeout(() => {
-			coverSuggestionsReloads += 1;
-			void loadCoverSuggestions(albumId);
-		}, delay);
-		return () => clearTimeout(timer);
-	});
+		coverSuggestionsBackoffSpent = coverSuggestionsReloads.afterNetworkFailure() === 'exhausted';
+	}
 
 	$effect(() => {
 		if (activeCoverJob) {
@@ -238,6 +225,7 @@
 
 	async function loadCoverSuggestions(albumId: string): Promise<void> {
 		const request = ++suggestionsRequest;
+		coverSuggestionsBackoffSpent = false;
 		updateCoverSuggestionsState(albumId, (state) => ({ ...state, isLoading: true }));
 		try {
 			const response = await fetchAlbumCoverSuggestions(albumId);
@@ -248,18 +236,15 @@
 				...COVER_SUGGESTIONS_SETTLED,
 				isLoading: false
 			};
-			coverSuggestionsReloads = 0;
+			coverSuggestionsReloads.stop();
 			if (response.job?.status === 'queued' || response.job?.status === 'running') {
 				trackJob(response.job, { albumId });
 			}
 		} catch (error) {
 			if (request !== suggestionsRequest || albumId !== currentAlbumId) return;
-			coverSuggestionsState = {
-				albumId,
-				data: null,
-				...coverSuggestionsOutcomeOf(error),
-				isLoading: false
-			};
+			const outcome = coverSuggestionsOutcomeOf(error);
+			coverSuggestionsState = { albumId, data: null, ...outcome, isLoading: false };
+			reloadCoverSuggestionsAfter(outcome);
 		}
 	}
 
@@ -278,7 +263,6 @@
 	function retryCoverSuggestions(): void {
 		if (!currentAlbumId) return;
 		const albumId = currentAlbumId;
-		coverSuggestionsReloads = 0;
 		updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...COVER_SUGGESTIONS_SETTLED }));
 		void loadCoverSuggestions(albumId);
 	}
@@ -319,11 +303,10 @@
 			trackJob(job, { albumId });
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
-			updateCoverSuggestionsState(albumId, (state) => ({
-				...state,
-				...coverSuggestionsOutcomeOf(error),
-				isLoading: false
-			}));
+			if (albumId !== currentAlbumId) return;
+			const outcome = coverSuggestionsOutcomeOf(error);
+			updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...outcome, isLoading: false }));
+			reloadCoverSuggestionsAfter(outcome);
 		}
 	}
 
