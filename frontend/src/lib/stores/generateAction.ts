@@ -164,6 +164,7 @@ export type GenerateState =
 
 type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
 type GenerateJobState = GenerateBusyState & { jobId: string };
+type CancellableJobState = GenerateJobState & ({ kind: 'queued' } | { ended: false });
 
 export function isGenerateBusy(state: GenerateState): state is GenerateBusyState {
 	return state.kind === 'queued' || state.kind === 'generating';
@@ -173,7 +174,7 @@ export function isGenerateJobActive(state: GenerateState): state is GenerateJobS
 	return isGenerateBusy(state) && state.jobId !== null;
 }
 
-export function offersCancel(state: GenerateState): state is GenerateJobState {
+export function offersCancel(state: GenerateState): state is CancellableJobState {
 	return isGenerateJobActive(state) && !(state.kind === 'generating' && state.ended);
 }
 
