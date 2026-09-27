@@ -523,15 +523,22 @@ describe('session lost (401)', () => {
 		expect(goto).not.toHaveBeenCalled();
 	});
 
-	it('does not react to a 401 from the login form itself (wrong credentials, not a lost session)', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
+	it.each([
+		{ form: 'the login form', path: '/api/auth/login' },
+		{ form: 'the password change (wrong current password)', path: '/api/auth/password' }
+	])(
+		'does not react to a 401 from $form itself (a refusal, not a lost session)',
+		async ({ path }) => {
+			currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+			mockFetch.mockResolvedValueOnce(unauthorizedResponse());
 
-		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
+			const err = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
 
-		expect(clearAuth).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
-	});
+			expect(err).toBeInstanceOf(ApiError);
+			expect(clearAuth).not.toHaveBeenCalled();
+			expect(goto).not.toHaveBeenCalled();
+		}
+	);
 
 	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
