@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { LibraryContinueItem } from '$lib/api/library';
@@ -7,6 +7,7 @@ import { libraryContinueCollapsed } from '$lib/stores/ui';
 
 const fetchLibraryContinue = vi.fn();
 const openAlbum = vi.fn();
+const openPlaylist = vi.fn();
 const selectSong = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
@@ -14,6 +15,7 @@ vi.mock('$lib/api/library', () => ({
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	openAlbum: (...args: unknown[]) => openAlbum(...args),
+	openPlaylist: (...args: unknown[]) => openPlaylist(...args),
 	selectSong: (...args: unknown[]) => selectSong(...args)
 }));
 
@@ -27,13 +29,29 @@ function item(overrides: Partial<LibraryContinueItem> = {}): LibraryContinueItem
 		id: 'album-1',
 		title: 'Open Windows',
 		cover: { card: '/covers/open-windows.jpg', detail: '/covers/open-windows-detail.jpg' },
+		album_covers: [],
+		song_id: null,
+		song_title: null,
+		activity_at: '2026-09-27T03:47:00Z',
 		...overrides
 	};
 }
 
+beforeAll(() => {
+	vi.stubEnv('TZ', 'Europe/Berlin');
+	vi.useFakeTimers({ toFake: ['Date'] });
+	vi.setSystemTime(new Date('2026-09-27T10:00:00Z'));
+});
+
+afterAll(() => {
+	vi.useRealTimers();
+	vi.unstubAllEnvs();
+});
+
 beforeEach(() => {
 	fetchLibraryContinue.mockReset();
 	openAlbum.mockReset().mockResolvedValue(undefined);
+	openPlaylist.mockReset().mockResolvedValue(undefined);
 	selectSong.mockReset().mockResolvedValue(undefined);
 	localStorage.clear();
 	libraryContinueCollapsed.set(false);
@@ -75,10 +93,15 @@ async function settle(): Promise<void> {
 }
 
 describe('LibraryContinue', () => {
-	it('renders at most six tagged items with their cover and title', async () => {
+	it('renders at most six places, each with its cover, title, song and when', async () => {
 		fetchLibraryContinue.mockResolvedValue(
 			continueResponse([
-				item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' }),
+				item({
+					id: 'vernissage',
+					title: 'Vernissage',
+					song_id: 'song-1',
+					song_title: 'Kuratorenherz'
+				}),
 				...Array.from({ length: 6 }, (_, index) =>
 					item({ id: `album-${index + 2}`, title: `Album ${index + 2}` })
 				)
@@ -87,32 +110,67 @@ describe('LibraryContinue', () => {
 		const target = await render();
 		await settle();
 
-		expect(target.querySelectorAll('.continue-item')).toHaveLength(6);
-		expect(target.querySelector('.continue-item img')?.getAttribute('src')).toBe(
-			'/covers/open-windows.jpg'
-		);
-		expect(target.textContent).toContain('Stadion');
-		expect(
-			Array.from(target.querySelectorAll('.continue-tag')).map((tag) => tag.textContent)
-		).toEqual(['Song', 'Album', 'Album', 'Album', 'Album', 'Album']);
+		const tiles = target.querySelectorAll('.continue-item');
+		expect(tiles).toHaveLength(6);
+		expect(tiles[0].querySelector('img')?.getAttribute('src')).toBe('/covers/open-windows.jpg');
+		expect(tiles[0].querySelector('.tile-title')?.textContent).toBe('Vernissage');
+		expect(tiles[0].querySelector('.tile-subtitle')?.textContent).toBe('Kuratorenherz');
+		expect(tiles[0].querySelector('time')?.textContent).toBe('today 05:47');
+		expect(tiles[0].querySelector('time')?.getAttribute('datetime')).toBe('2026-09-27T03:47:00Z');
+		expect(tiles[1].querySelector('.tile-subtitle')?.textContent).toBe('');
+		expect(target.querySelector('.continue-tag')).toBeNull();
 	});
 
-	it('opens albums and songs through the navigation store', async () => {
+	it("shows a playlist's album covers as its mosaic unless it has its own cover", async () => {
+		const albumCover = { card: '/covers/anfield.jpg', detail: '/covers/anfield-detail.jpg' };
 		fetchLibraryContinue.mockResolvedValue(
 			continueResponse([
-				item(),
-				item({ type: 'song', id: 'song-1', title: 'Stadion', album_title: 'Anfield' })
+				item({ type: 'playlist', id: 'night-drive', cover: null, album_covers: [albumCover] }),
+				item({ type: 'playlist', id: 'late-shift', album_covers: [albumCover] })
 			])
 		);
 		const target = await render();
 		await settle();
 
-		const entries = target.querySelectorAll<HTMLButtonElement>('.continue-item');
-		entries[0].click();
-		entries[1].click();
+		const [mosaic, uploaded] = target.querySelectorAll('.continue-item');
+		expect(mosaic.querySelector('.playlist-cover img')?.getAttribute('src')).toBe(
+			'/covers/anfield.jpg'
+		);
+		expect(uploaded.querySelector('.playlist-cover')).toBeNull();
+		expect(uploaded.querySelector('img')?.getAttribute('src')).toBe('/covers/open-windows.jpg');
+	});
 
-		expect(openAlbum).toHaveBeenCalledWith('album-1');
-		expect(selectSong).toHaveBeenCalledWith('song-1');
+	it('continues on the song a place names, else opens the place itself', async () => {
+		fetchLibraryContinue.mockResolvedValue(
+			continueResponse([
+				item({ id: 'vernissage', song_id: 'song-1', song_title: 'Kuratorenherz' }),
+				item({
+					type: 'playlist',
+					id: 'night-drive',
+					title: 'Night drive',
+					song_id: 'song-2',
+					song_title: 'Lichtwechsel'
+				}),
+				item({ id: 'empty-album', title: 'Empty' }),
+				item({ type: 'playlist', id: 'empty-playlist', title: 'Empty list' })
+			])
+		);
+		const target = await render();
+		await settle();
+
+		expect(entryLabels(target)).toEqual([
+			'Open song Kuratorenherz in album Open Windows',
+			'Open song Lichtwechsel in playlist Night drive',
+			'Open album Empty',
+			'Open playlist Empty list'
+		]);
+		for (const entry of target.querySelectorAll<HTMLButtonElement>('.continue-item')) {
+			entry.click();
+		}
+
+		expect(selectSong.mock.calls).toEqual([['song-1'], ['song-2']]);
+		expect(openAlbum).toHaveBeenCalledExactlyOnceWith('empty-album');
+		expect(openPlaylist).toHaveBeenCalledExactlyOnceWith('empty-playlist');
 	});
 
 	it('names loading and empty states honestly', async () => {

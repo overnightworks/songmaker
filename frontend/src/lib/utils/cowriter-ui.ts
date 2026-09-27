@@ -5,17 +5,19 @@ import {
 	COWRITER_CONVERSATION_CONFIRM_TEMPLATE,
 	COWRITER_CONVERSATION_ROW_TEMPLATE,
 	COWRITER_CONVERSATION_SINCE_TEMPLATE,
-	COWRITER_CONVERSATION_STARTED_TODAY,
 	COWRITER_NEW_CONVERSATION_LABEL,
 	COWRITER_MESSAGE_COUNT_TEMPLATE,
 	COWRITER_NEW_CONVERSATION_LINE,
 	COWRITER_SINGLE_MESSAGE_COUNT,
-	COWRITER_TURN_FAILURE_TEMPLATE
+	COWRITER_TURN_FAILURE_TEMPLATE,
+	DAY_LABEL_TODAY
 } from '$lib/constants';
-
-const DAYS_NAMED_BY_WEEKDAY = 7;
-const DAY_MS = 86_400_000;
-const CONVERSATION_DAY_LOCALE = 'en-US';
+import {
+	DAY_LABEL_LOCALE,
+	DAYS_NAMED_BY_WEEKDAY,
+	localClockTime,
+	localDaysBetween
+} from '$lib/utils/format';
 
 const SONG_ID_TARGETING_TOOLS = new Set([
 	'update_song_lyrics',
@@ -94,32 +96,19 @@ export function cowriterHeaderLabel(provider: string, model: string): string {
 	return `${providerDisplayName(provider)} · ${model}`;
 }
 
-function startOfDay(moment: Date): number {
-	return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
-}
-
 /** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
 function conversationDayLabel(createdAt: string, now: Date): string {
 	const started = new Date(createdAt);
-	const daysAgo = Math.round((startOfDay(now) - startOfDay(started)) / DAY_MS);
-	if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;
+	const daysAgo = localDaysBetween(started, now);
+	if (daysAgo === 0) return DAY_LABEL_TODAY;
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
-		return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, { weekday: 'short' });
+		return started.toLocaleDateString(DAY_LABEL_LOCALE, { weekday: 'short' });
 	}
 	const sameYear = started.getFullYear() === now.getFullYear();
-	return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, {
+	return started.toLocaleDateString(DAY_LABEL_LOCALE, {
 		day: 'numeric',
 		month: 'short',
 		year: sameYear ? undefined : 'numeric'
-	});
-}
-
-/** The clock time a menu row adds, so two conversations started the same day read apart: "09:12". */
-function conversationStartTime(createdAt: string): string {
-	return new Date(createdAt).toLocaleTimeString(CONVERSATION_DAY_LOCALE, {
-		hour: '2-digit',
-		minute: '2-digit',
-		hourCycle: 'h23'
 	});
 }
 
@@ -149,9 +138,7 @@ export function conversationLineLabel(
 		);
 	}
 	if (isNewConversation(conversation, chatHasMessages)) return COWRITER_NEW_CONVERSATION_LINE;
-	const day = conversation
-		? conversationDayLabel(conversation.created_at, now)
-		: COWRITER_CONVERSATION_STARTED_TODAY;
+	const day = conversation ? conversationDayLabel(conversation.created_at, now) : DAY_LABEL_TODAY;
 	return COWRITER_CONVERSATION_SINCE_TEMPLATE.replace('{day}', day);
 }
 
@@ -163,7 +150,7 @@ export function conversationRowLabel(conversation: ConversationItem, now: Date):
 		: COWRITER_CONVERSATION_ROW_TEMPLATE;
 	return template
 		.replace('{day}', conversationDayLabel(conversation.created_at, now))
-		.replace('{time}', conversationStartTime(conversation.created_at));
+		.replace('{time}', localClockTime(new Date(conversation.created_at)));
 }
 
 export function conversationMessageCountLabel(count: number): string {
