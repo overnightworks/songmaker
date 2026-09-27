@@ -1,8 +1,0 @@
-claim_id = "8a6d6551331c4e869d20f13eec4c992b"
-agent = "claude-head"
-role = "builder"
-base = "5369e8c02e273060b1068e1ade8317e0057da477"
-branch = "claude/issue-1053-row-targets"
-scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/PlayingMark.svelte", "frontend/src/lib/components/PlayingMark.test.ts", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
-opened_commit = "7de48163376ab7a361bf4b2da88d3143e90f6739"
-whole_reason = "row targets and one playing mark across both detail views, the player's entry match and the mark's label"
