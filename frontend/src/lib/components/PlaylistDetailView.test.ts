@@ -7,7 +7,7 @@ import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	collectionPauseLabel,
 	collectionPlayLabel,
@@ -70,7 +70,13 @@ import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
-import { deletePlaylistCover, fetchPlaylist, uploadPlaylistCover } from '$lib/api/client';
+import {
+	createQueueStreamSnapshot,
+	deletePlaylistCover,
+	fetchPlaylist,
+	uploadPlaylistCover
+} from '$lib/api/client';
+import { addToast } from '$lib/stores/toast';
 
 function populatedPlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {
@@ -206,6 +212,52 @@ describe('PlaylistDetailView header', () => {
 		await tick();
 		expect(target.querySelector('.header-cover img')).toBeNull();
 		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
+	});
+
+	it.each([
+		{
+			action: 'a cover upload',
+			menuItem: 'Upload…',
+			picksFile: true,
+			failure: new NetworkError('/api/playlists/p1/cover', new TypeError('Failed to fetch')),
+			toast: 'Cover upload failed'
+		},
+		{
+			action: 'a cover upload',
+			menuItem: 'Upload…',
+			picksFile: true,
+			failure: new ApiError(413, 'Cover is too large', '/api/playlists/p1/cover'),
+			toast: 'Cover is too large'
+		},
+		{
+			action: 'saving for offline',
+			menuItem: 'Save offline',
+			picksFile: false,
+			failure: new NetworkError('/api/queue-streams', new TypeError('Failed to fetch')),
+			toast: 'Offline save failed'
+		}
+	])('toasts $toast when $action fails', async ({ menuItem, picksFile, failure, toast }) => {
+		vi.mocked(addToast).mockReset();
+		vi.mocked(uploadPlaylistCover).mockRejectedValue(failure);
+		vi.mocked(createQueueStreamSnapshot).mockRejectedValue(failure);
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+		await tick();
+		Array.from(document.body.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((item) => item.textContent?.trim() === menuItem)
+			?.click();
+		if (picksFile) {
+			const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+			const file = new File(['cover'], 'cover.png', { type: 'image/png' });
+			Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+			input.dispatchEvent(new Event('change', { bubbles: true }));
+		}
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
 	});
 
 	it('uses the collection header with play, shuffle and a … menu instead of a visible Share icon', async () => {
