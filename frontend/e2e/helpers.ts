@@ -106,6 +106,15 @@ export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
  */
 export const OFFLINE_FLOW_API_REQUEST_BUDGET = 30;
 
+/**
+ * What `offline.spec.ts`'s running-take flow costs the API: the same open,
+ * song, Takes tab and seeded running job as `TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET`,
+ * with the job stream's backoff attempts while the network is gone and the
+ * streams and song refresh that reopen on its return. Estimated from that
+ * flow's 36; the flow logs its real count for a tighter bound.
+ */
+export const OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET = 36;
+
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
