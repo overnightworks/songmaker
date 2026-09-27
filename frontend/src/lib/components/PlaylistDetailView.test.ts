@@ -806,4 +806,18 @@ describe('PlaylistDetailView with an empty playlistList (#139)', () => {
 
 		expect(requireElement(target, '[role="status"]').textContent).toBe('Loading playlist…');
 	});
+
+	it('offline, shows neither a failure nor a spinner text under the strip', async () => {
+		playlistList.set([]);
+		setOpenCollection({ kind: 'playlist', id: 'p9' });
+		selectedPlaylistDetail.set(null);
+		playlistDetailLoad.set({ status: 'unreachable', error: null });
+
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted.push(mount(PlaylistDetailView, { target }));
+		await tick();
+
+		expect(target.querySelector('[role="status"], [role="alert"], .retry-btn')).toBeNull();
+	});
 });
