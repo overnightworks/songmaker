@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { describeFailure } from '$lib/api/fetch';
 import { fetchAlbums } from '$lib/api/albums';
 import { searchLibrary, type LibrarySort } from '$lib/api/library';
 import { fetchSongs } from '$lib/api/songs';
@@ -19,6 +19,8 @@ import {
 } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { patchSharesFromSong } from '$lib/stores/shares';
+
+const SEARCH_FAILED_MESSAGE = 'Search failed';
 
 type LibrarySearchStatus = 'idle' | 'loading' | 'error' | 'ready';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
@@ -157,7 +159,7 @@ export async function loadLibraryBrowse(options?: { reset?: boolean }): Promise<
 		libraryBrowse.update((state) => ({
 			...state,
 			status: 'error',
-			error: errorMessage(err)
+			error: describeFailure(err, SEARCH_FAILED_MESSAGE)
 		}));
 		return false;
 	}
@@ -273,7 +275,7 @@ async function runLibrarySearch(
 			...state,
 			q,
 			status: 'error',
-			error: errorMessage(err)
+			error: describeFailure(err, SEARCH_FAILED_MESSAGE)
 		}));
 	}
 }
@@ -300,10 +302,4 @@ function dedupeById<T extends { id: string }>(items: T[]): T[] {
 		unique.push(item);
 	}
 	return unique;
-}
-
-function errorMessage(err: unknown): string {
-	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof Error) return err.message;
-	return 'Search failed';
 }
