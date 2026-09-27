@@ -20,6 +20,7 @@ import {
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
+	RATE_LIMITED_STATUS,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SERVER_ERROR_STATUS_FLOOR
 } from '$lib/constants';
@@ -46,6 +47,7 @@ import {
 // reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
 // server that cursor as a query parameter instead (#1020).
 const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
+const MS_PER_SECOND = 1000;
 
 type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
@@ -54,11 +56,12 @@ type ResourceAuthProbe = 'ok' | AuthFailureKind;
 
 // Why a song refresh failed decides whether it is shown and whether it is
 // fetched again on its own (#1099): the network did not carry it (the
-// offline strip says that, not this owner) or the server failed -- both heal
-// by themselves, so both retry until the take lands -- or the server refused
-// it (a 4xx), which another automatic try would only repeat, so it is shown
-// once and waits for the musician's Retry.
-type SongRefreshFailure = 'network' | 'server' | 'refused';
+// offline strip says that, not this owner), or the server failed or
+// rate-limited it (a 5xx or a 429) -- all of these pass by themselves, so
+// they retry until the take lands -- or the server refused it (any other
+// 4xx), which another automatic try would only repeat, so it is shown once
+// and waits for the musician's Retry.
+type SongRefreshFailure = 'network' | 'transient' | 'refused';
 
 interface ResourceSyncState {
 	status: ResourceSyncStatus;
@@ -137,6 +140,7 @@ export class ResourceSyncController {
 	private readonly reopenGap = new ImmediateReopenGap();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	private failedSongRetryDueAt = 0;
 	private failedSongRetryAttempt = 0;
 
 	constructor(
@@ -694,7 +698,7 @@ export class ResourceSyncController {
 			const failure = classifySongRefreshFailure(err);
 			this.failedSongs.set(songId, failure);
 			this.showFailure(err);
-			if (failure !== 'refused') this.scheduleFailedSongRetry();
+			if (failure !== 'refused') this.scheduleFailedSongRetry(retryAfterMs(err));
 		}
 	}
 
@@ -722,15 +726,27 @@ export class ResourceSyncController {
 	 * A song refresh that failed while the stream stays up has no stream
 	 * drop to piggyback on, and a network that returns without an `online`
 	 * event fires nothing either, so the failed songs that heal by themselves
-	 * retry on the stream's own capped backoff until they land (#1032).
+	 * retry on the stream's own capped backoff until they land (#1032), and
+	 * never before a rate limit's `Retry-After` has passed (#1099).
 	 */
-	private scheduleFailedSongRetry(): void {
-		if (this.failedSongRetryTimer !== null) return;
-		this.failedSongRetryAttempt += 1;
+	private scheduleFailedSongRetry(retryAfterMs: number): void {
+		if (this.failedSongRetryTimer === null) {
+			this.failedSongRetryAttempt += 1;
+			const backoffMs = nextReconnectDelayMs(this.failedSongRetryAttempt);
+			this.startFailedSongRetryTimer(Math.max(backoffMs, retryAfterMs));
+			return;
+		}
+		if (Date.now() + retryAfterMs <= this.failedSongRetryDueAt) return;
+		clearTimeout(this.failedSongRetryTimer);
+		this.startFailedSongRetryTimer(retryAfterMs);
+	}
+
+	private startFailedSongRetryTimer(delayMs: number): void {
+		this.failedSongRetryDueAt = Date.now() + delayMs;
 		this.failedSongRetryTimer = setTimeout(() => {
 			this.failedSongRetryTimer = null;
 			void this.retryFailedSongs();
-		}, nextReconnectDelayMs(this.failedSongRetryAttempt));
+		}, delayMs);
 	}
 
 	private async retryFailedSongs(): Promise<void> {
@@ -934,8 +950,16 @@ function visibleErrorMessage(err: unknown): string | null {
 
 function classifySongRefreshFailure(err: unknown): SongRefreshFailure {
 	if (err instanceof NetworkError) return 'network';
-	if (err instanceof ApiError && err.status >= SERVER_ERROR_STATUS_FLOOR) return 'server';
+	if (!(err instanceof ApiError)) return 'refused';
+	if (err.status >= SERVER_ERROR_STATUS_FLOOR || err.status === RATE_LIMITED_STATUS) {
+		return 'transient';
+	}
 	return 'refused';
+}
+
+function retryAfterMs(err: unknown): number {
+	if (!(err instanceof ApiError) || err.retryAfterSeconds === null) return 0;
+	return err.retryAfterSeconds * MS_PER_SECOND;
 }
 
 async function probeResourceAuth(): Promise<ResourceAuthProbe> {

@@ -885,6 +885,11 @@ describe('resource sync owner', () => {
 			'answered 503',
 			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`),
 			'error'
+		],
+		[
+			'answered 429',
+			(songId: string) => new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`),
+			'error'
 		]
 	] as const)(
 		'retries a live refresh that failed %s on its own, and brings the take in within 10 s of the network returning without any browser event',
@@ -914,7 +919,63 @@ describe('resource sync owner', () => {
 		}
 	);
 
-	it.each([403, 422, 429])(
+	it('fetches a rate-limited refresh again no sooner than its Retry-After, then brings the take in', async () => {
+		vi.useFakeTimers();
+		const retryAfterSeconds = 30;
+		let rateLimited = true;
+		const { controller, sources, store, fetchCalls, upserted } = setup({
+			fetchSong: async (songId) => {
+				if (!rateLimited) return song({ slug: 'track', title: 'Track', id: songId });
+				rateLimited = false;
+				throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		await controller.requestSongRefresh('s1');
+		expect(get(store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+
+		await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1);
+		expect(fetchCalls).toEqual(['s1']);
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect(fetchCalls).toEqual(['s1', 's1']);
+		expect(get(store)).toMatchObject({ status: 'live', error: null });
+		expect(upserted.at(-1)?.id).toBe('s1');
+		controller.stop();
+	});
+
+	it('holds an already scheduled retry of failed refreshes until a later Retry-After has passed', async () => {
+		vi.useFakeTimers();
+		const retryAfterSeconds = 30;
+		let failing = true;
+		const { controller, sources, fetchCalls } = setup({
+			listLoadedSongIds: () => ['s1', 's2'],
+			fetchSong: async (songId) => {
+				if (!failing) return song({ slug: 'track', title: 'Track', id: songId });
+				if (songId === 's1') throw new ApiError(503, 'Service Unavailable', `/api/songs/s1`);
+				throw new ApiError(429, 'Too Many Requests', `/api/songs/s2`, retryAfterSeconds);
+			}
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		await controller.requestSongRefresh('s1');
+		await controller.requestSongRefresh('s2');
+		failing = false;
+
+		await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - 1);
+		expect(fetchCalls).toEqual(['s1', 's2']);
+		await vi.advanceTimersByTimeAsync(1);
+
+		expect([...fetchCalls].sort()).toEqual(['s1', 's1', 's2', 's2']);
+		controller.stop();
+	});
+
+	it.each([403, 422])(
 		'shows a live refresh answered %s once and never fetches it again on its own',
 		async (status) => {
 			vi.useFakeTimers();

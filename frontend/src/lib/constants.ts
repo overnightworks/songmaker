@@ -581,6 +581,9 @@ export const OFFLINE_STRIP_MESSAGE = "You're offline — retrying";
 // a 429 or a 500 comes from a server that is there (#1099).
 export const SERVER_UNREACHABLE_STATUSES: ReadonlySet<number> = new Set([502, 503, 504]);
 export const SERVER_ERROR_STATUS_FLOOR = 500;
+// A rate limit passes: a song refresh it refused is fetched again on the
+// song-refresh backoff, no sooner than its `Retry-After` (#1099).
+export const RATE_LIMITED_STATUS = 429;
 export const RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT = 3;
 // `EventSource.CLOSED`, spelled out because the jsdom test runtime has no EventSource.
 export const EVENT_SOURCE_CLOSED = 2;
