@@ -145,6 +145,17 @@ describe('RailSearch', () => {
 		expect(page?.querySelector('small')?.textContent).toBe('Page · Settings');
 	});
 
+	it('marks the matched letters of a page found by its section', async () => {
+		railTreeQuery.set('set');
+		railSearch.set({ query: 'set', status: 'ready', error: null, hits: [] });
+		const root = await render();
+
+		const [page] = resultRows(root);
+		expect(page?.querySelector('small')?.textContent).toBe('Page · Settings');
+		expect(page?.querySelector('small mark')?.textContent).toBe('Set');
+		expect(page?.querySelector('.rail-search-title mark')).toBeNull();
+	});
+
 	it('opens a clicked result', async () => {
 		showVernissageResults();
 		const root = await render();
