@@ -15,7 +15,7 @@
 		deleteSongCover
 	} from '$lib/api/client';
 	import { describeFailure, NetworkError } from '$lib/api/fetch';
-	import { whenBackOnline } from '$lib/stores/connectivity';
+	import { offline, whenBackOnline } from '$lib/stores/connectivity';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -377,10 +377,11 @@
 	});
 
 	/**
-	 * A load that got no network answer leaves the list waiting, with what is
-	 * on screen kept: the one offline strip says it, and the list reloads by
-	 * itself once the page is back online (#1039 O4). A failure the server
-	 * reported is named in its own words.
+	 * A load that got no network answer while the page is offline leaves the
+	 * list waiting, with what is on screen kept: the one offline strip says it,
+	 * and the list reloads by itself once the page is back online (#1039 O4).
+	 * Without the strip nothing would ever reload it, so any other failure is
+	 * named, in the server's own words where it gave some, with Try again.
 	 */
 	async function refreshTakes(songId: string): Promise<void> {
 		const current = get(selectedSong);
@@ -401,7 +402,7 @@
 			takesStatus = 'ready';
 		} catch (e) {
 			if (editorSongId !== songId) return;
-			if (e instanceof NetworkError) return;
+			if (e instanceof NetworkError && get(offline)) return;
 			takesStatus = 'error';
 			takesError = describeFailure(e, TAKES_ERROR);
 		}

@@ -38,7 +38,8 @@ import {
 	TAKE_COVER_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	TAKES_ERROR,
-	TAKES_LOADING
+	TAKES_LOADING,
+	TAKES_RETRY_LABEL
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
@@ -595,7 +596,8 @@ describe('SongDetailView recipe and takes', () => {
 		);
 	}
 
-	it('keeps the takes on screen and names nothing when their reload gets no network answer', async () => {
+	it('keeps the takes on screen and names nothing when their reload gets no network answer offline', async () => {
+		reportResourceStreamReachable(false);
 		takesWithNoNetworkAnswer();
 		songList.set([song({ ...editableSongDefaults(), generation_count: 2 })]);
 		const target = await renderView();
@@ -604,6 +606,16 @@ describe('SongDetailView recipe and takes', () => {
 		expect(target.textContent).not.toContain(TAKES_ERROR);
 		expect(target.textContent).not.toContain('Failed to fetch');
 		expect(target.querySelector('.takes-list [role="alert"]')).toBeNull();
+	});
+
+	it('names the takes failure with Try again when a load gets no network answer while the page counts as online', async () => {
+		takesWithNoNetworkAnswer();
+		songList.set([song({ ...editableSongDefaults(), generation_count: 2 })]);
+		const target = await renderView();
+		await settleTakesLoad();
+		const alert = target.querySelector('.takes-list [role="alert"]') as HTMLElement;
+		expect(alert.textContent).toContain(TAKES_ERROR);
+		expect(getByRoleButton(alert, TAKES_RETRY_LABEL)).toBeTruthy();
 	});
 
 	it('waits for the takes offline and reloads them by itself once the page is back online', async () => {
