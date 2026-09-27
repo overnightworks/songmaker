@@ -1,0 +1,8 @@
+claim_id = "dba247c4a6bc4bc7baff93953e77a0ec"
+agent = "claude-head"
+role = "builder"
+base = "5369e8c02e273060b1068e1ade8317e0057da477"
+branch = "claude/issue-1052-now-playing-centre"
+scope = ["frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts"]
+opened_commit = "e8a70b8ad7f2417c2ed9273f72ed99ba9727baa0"
+whole_reason = "Now Playing frame, its constants, tests and the one phone spec"
