@@ -14,6 +14,7 @@ import {
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
+	LIBRARY_QUEUE_EMPTY_TITLE,
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
@@ -619,6 +620,49 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 			heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
 		).toHaveCount(0);
 	}
+});
+
+test('an album with nothing to play leaves the running album playing on and its circle at play', async ({
+	page
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+	const transport = page.getByRole('contentinfo');
+	const transportPause = transport.getByRole('button', {
+		name: TRANSPORT_PAUSE_LABEL,
+		exact: true
+	});
+	const albumCircle = surface.getByRole('button', {
+		name: collectionPlayLabel('album'),
+		exact: true
+	});
+
+	await page.goto(`/album/${library.albumId}`);
+	await albumCircle.click();
+	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
+
+	// The second seeded album holds songs without a take (see seed.ts).
+	const rail = await openRailNav(page, shell);
+	await railAlbumRow(rail, library.secondAlbumTitle)
+		.getByRole('button', { name: containing(library.secondAlbumTitle) })
+		.click();
+	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
+
+	await albumCircle.click();
+	await expect(
+		page.getByText(`${LIBRARY_QUEUE_EMPTY_TITLE} (${library.secondAlbumTitle})`)
+	).toBeVisible();
+	// The seeded take is a few seconds long: the running album moves on to its
+	// next song, so its queue is still the one that plays.
+	await expect(transport.getByText(library.pickedSongTitle)).toBeHidden();
+	await expect(transportPause).toBeVisible();
+	if (shell === 'mobile') {
+		await expect(transport.getByText(nowPlayingFromLabel(library.albumTitle))).toBeVisible();
+	}
+	await expect(
+		surface.getByRole('button', { name: collectionPauseLabel('album'), exact: true })
+	).toHaveCount(0);
 });
 
 /** One album's own one-target row inside the rail's LIBRARY group. */
