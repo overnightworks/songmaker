@@ -13,12 +13,7 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
-import { coWriterOpen } from '$lib/stores/recipe';
-import {
-	EDITOR_COWRITER_BACK_LABEL,
-	EDITOR_LYRICS_LABEL,
-	EDITOR_STYLE_PROMPT_LABEL
-} from '$lib/constants';
+import { EDITOR_LYRICS_LABEL, EDITOR_STYLE_PROMPT_LABEL } from '$lib/constants';
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
@@ -121,7 +116,6 @@ afterEach(async () => {
 	resetCollectionForTests();
 	albumList.set([]);
 	songList.set([]);
-	coWriterOpen.set(false);
 	delete document.documentElement.dataset.pointer;
 });
 
@@ -183,9 +177,8 @@ describe('detail views own no content back', () => {
 	});
 });
 
-describe('SongDetailView phone Co-Writer is a pushed screen, not a history step', () => {
-	it('replaces the page and returns via ‹ without adding a browser-history entry', async () => {
-		const { goto } = await import('$app/navigation');
+describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
+	it('opens and leaves the Co-writer tab with no back control and no browser-history entry', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
 		selectedGenerationId.set(null);
 		const target = await renderView((target) => mount(SongDetailView, { target }));
@@ -193,33 +186,21 @@ describe('SongDetailView phone Co-Writer is a pushed screen, not a history step'
 		document.body.append(bar);
 		mounted.push(mount(PhoneAppBar, { target: bar }));
 		await tick();
-		expect(target.querySelector('[role="tab"]')).not.toBeNull();
-		// Mounting the page itself normalizes the URL via `goto(..., {
-		// replaceState: true })` -- unrelated to the Co-Writer toggle this test
-		// proves. Only a call count past this baseline would mean opening or
-		// closing the screen pushed a history step.
-		const navigationCallsBeforeToggle = vi.mocked(goto).mock.calls.length;
+		const historyLengthBeforeSwitching = history.length;
 
-		coWriterOpen.set(true);
-		await tick();
-
-		expect(target.querySelector('[role="tab"]')).toBeNull();
-		// The back control now lives solely in the shell's one PhoneAppBar, not
-		// inside SongDetailView's own content (#990 ruling 5) -- there is no
-		// second, content-level back button to find here.
-		expect(target.querySelector(`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`)).toBeNull();
-		const backButton = bar.querySelector<HTMLButtonElement>(
-			`[aria-label="${EDITOR_COWRITER_BACK_LABEL}"]`
-		);
-		expect(backButton).not.toBeNull();
-		expect(vi.mocked(goto).mock.calls.length).toBe(navigationCallsBeforeToggle);
-
-		backButton?.click();
-		await tick();
-
-		expect(get(coWriterOpen)).toBe(false);
-		expect(target.querySelector('[role="tab"]')).not.toBeNull();
-		expect(vi.mocked(goto).mock.calls.length).toBe(navigationCallsBeforeToggle);
+		for (const tab of ['cowriter', 'edit'] as const) {
+			target.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)?.click();
+			await tick();
+			expect(target.querySelector('[role="tab"][aria-selected="true"]')?.id).toBe(
+				`song-tab-${tab}`
+			);
+			const buttonTexts = Array.from(
+				[...bar.querySelectorAll('button'), ...target.querySelectorAll('button')],
+				(button) => button.textContent?.trim()
+			);
+			expect(buttonTexts).not.toContain('‹');
+			expect(history.length).toBe(historyLengthBeforeSwitching);
+		}
 	});
 });
 

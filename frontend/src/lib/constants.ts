@@ -192,7 +192,6 @@ export const COWRITER_CLAUDE_UNVERIFIED_LABEL =
 export const EDITOR_VIEWS_LABEL = 'Editor views';
 export const EDITOR_VIEW_COWRITER_LABEL = 'Co-writer';
 export const EDITOR_VIEW_RECIPE_LABEL = 'Recipe';
-export const EDITOR_COWRITER_BACK_LABEL = 'Back to Edit';
 
 export const PROVIDER_CLI_LOGIN_LABELS: Record<string, string> = {
 	claude_cli: 'Claude Code CLI login',
