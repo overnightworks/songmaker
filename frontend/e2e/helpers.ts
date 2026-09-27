@@ -109,6 +109,9 @@ export const OFFLINE_FLOW_API_REQUEST_BUDGET = 30;
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
+// How it reports a load `loseNetwork` found still in flight and ended.
+const LOAD_STOPPED_ERROR = 'net::ERR_ABORTED';
+const pagesWithoutNetwork = new WeakSet<Page>();
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
 // Streams the client closes on purpose: leaving the library route (Settings,
@@ -136,6 +139,7 @@ const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_E
  * refused until `regainNetwork`.
  */
 export async function loseNetwork(page: Page, context: BrowserContext): Promise<void> {
+	pagesWithoutNetwork.add(page);
 	await page.route(isResourceEventStream, (route) => route.abort('internetdisconnected'));
 	await context.setOffline(true);
 	await page.evaluate(() => window.stop());
@@ -145,6 +149,15 @@ export async function loseNetwork(page: Page, context: BrowserContext): Promise<
 export async function regainNetwork(page: Page, context: BrowserContext): Promise<void> {
 	await page.unroute(isResourceEventStream);
 	await context.setOffline(false);
+	pagesWithoutNetwork.delete(page);
+}
+
+// Whether a load in flight when the network went, or started while it is
+// away, failed only because `loseNetwork` took it: which loads are still in
+// flight at that moment is a race the flow does not choose.
+function failedWithTheNetwork(page: Page, errorText: string): boolean {
+	if (errorText === NETWORK_LOST_ERROR) return true;
+	return errorText === LOAD_STOPPED_ERROR && pagesWithoutNetwork.has(page);
 }
 
 /** Which shell a test drives: the mobile project is the emulated phone. */
@@ -290,7 +303,7 @@ export class FlowGuard {
 			if (errorText === 'net::ERR_ABORTED' && isClosedOnPurpose(request.url())) {
 				return;
 			}
-			if (losesNetworkOnPurpose && errorText === NETWORK_LOST_ERROR) return;
+			if (losesNetworkOnPurpose && failedWithTheNetwork(page, errorText)) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
