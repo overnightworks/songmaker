@@ -1306,6 +1306,30 @@ describe('resource sync owner', () => {
 		expect(reachability.at(-1)).toBe(true);
 	});
 
+	it('keeps restarting a first sync that failed while the server could not be reached, until it says hello', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, store, reachability } = setup({
+			probeAuth: async () => 'retryable'
+		});
+		controller.start();
+		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
+			latestSource(sources).error();
+			await flush();
+		}
+		expect(get(store).status).toBe('error');
+		expect(reachability.at(-1)).toBe(false);
+		const sourcesWhenFailed = sources.length;
+
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(sources).toHaveLength(sourcesWhenFailed + 1);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+
+		expect(reachability.at(-1)).toBe(true);
+		expect(get(store).status).toBe('live');
+		controller.stop();
+	});
+
 	it('stops claiming the server is unreachable when the owner stops', async () => {
 		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
 		controller.start();
