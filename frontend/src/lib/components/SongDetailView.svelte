@@ -14,7 +14,8 @@
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
+	import { describeFailure, NetworkError } from '$lib/api/fetch';
+	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -298,6 +299,12 @@
 		void loadLoras(true).catch(() => {});
 	});
 
+	onMount(() =>
+		whenBackOnline(() => {
+			if (song && takesStatus !== 'ready') void refreshTakes(song.id);
+		})
+	);
+
 	$effect(() => {
 		seedRecipeModel($activeModels.map((m) => m.id));
 	});
@@ -369,6 +376,12 @@
 		clickVersion: onVersionClick
 	});
 
+	/**
+	 * A load that got no network answer leaves the list waiting, with what is
+	 * on screen kept: the one offline strip says it, and the list reloads by
+	 * itself once the page is back online (#1039 O4). A failure the server
+	 * reported is named in its own words.
+	 */
 	async function refreshTakes(songId: string): Promise<void> {
 		const current = get(selectedSong);
 		if (
@@ -388,6 +401,7 @@
 			takesStatus = 'ready';
 		} catch (e) {
 			if (editorSongId !== songId) return;
+			if (e instanceof NetworkError) return;
 			takesStatus = 'error';
 			takesError = describeFailure(e, TAKES_ERROR);
 		}

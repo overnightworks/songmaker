@@ -37,7 +37,8 @@ import {
 	TAKE_REPAINT_LABEL,
 	TAKE_COVER_LABEL,
 	TAKE_PLAYLIST_LABEL,
-	TAKES_ERROR
+	TAKES_ERROR,
+	TAKES_LOADING
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
@@ -180,6 +181,7 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
 function sourceRecipeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
@@ -343,6 +345,7 @@ afterEach(async () => {
 	generationFailures.set({});
 	clearHitboxStyles();
 	clearPointer();
+	resetConnectivityForTests();
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 });
@@ -580,13 +583,50 @@ describe('SongDetailView failure wording', () => {
 });
 
 describe('SongDetailView recipe and takes', () => {
+	async function settleTakesLoad(): Promise<void> {
+		await tick();
+		await Promise.resolve();
+		await tick();
+	}
+
+	function takesWithNoNetworkAnswer(): void {
+		vi.mocked(fetchSong).mockRejectedValueOnce(
+			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
+		);
+	}
+
+	it('keeps the takes on screen and names nothing when their reload gets no network answer', async () => {
+		takesWithNoNetworkAnswer();
+		songList.set([song({ ...editableSongDefaults(), generation_count: 2 })]);
+		const target = await renderView();
+		await settleTakesLoad();
+		expect(target.querySelectorAll('.take-row')).toHaveLength(1);
+		expect(target.textContent).not.toContain(TAKES_ERROR);
+		expect(target.textContent).not.toContain('Failed to fetch');
+		expect(target.querySelector('.takes-list [role="alert"]')).toBeNull();
+	});
+
+	it('waits for the takes offline and reloads them by itself once the page is back online', async () => {
+		reportResourceStreamReachable(false);
+		takesWithNoNetworkAnswer();
+		songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
+		const target = await renderView();
+		await settleTakesLoad();
+		expect(target.textContent).toContain(TAKES_LOADING);
+		expect(target.textContent).not.toContain(TAKES_ERROR);
+
+		vi.mocked(fetchSong).mockResolvedValueOnce(
+			song({
+				...editableSongDefaults(),
+				generation_count: 2,
+				generations: [generation({ id: 'g1' }), generation({ id: 'g2' })]
+			})
+		);
+		reportResourceStreamReachable(true);
+		await vi.waitFor(() => expect(target.querySelectorAll('.take-row')).toHaveLength(2));
+	});
+
 	it.each([
-		{
-			failure: 'no network answer',
-			error: new NetworkError('/api/songs/s1', new TypeError('Failed to fetch')),
-			shown: TAKES_ERROR,
-			hidden: 'Failed to fetch'
-		},
 		{
 			failure: 'a server refusal',
 			error: new ApiError(503, 'Takes are resting', '/api/songs/s1'),
@@ -605,9 +645,7 @@ describe('SongDetailView recipe and takes', () => {
 			vi.mocked(fetchSong).mockRejectedValueOnce(error);
 			songList.set([song({ ...editableSongDefaults(), generation_count: 2, generations: [] })]);
 			const target = await renderView();
-			await tick();
-			await Promise.resolve();
-			await tick();
+			await settleTakesLoad();
 			expect(target.textContent).toContain(shown);
 			expect(target.textContent).not.toContain(hidden);
 		}
