@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { NetworkError } from '$lib/api/fetch';
+import { serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
@@ -142,10 +143,6 @@ function coverJob(overrides: Partial<JobItem> = {}): JobItem {
 }
 
 const SUGGESTIONS_PATH = '/api/albums/a-local/cover-suggestions';
-
-function serverRefusal(detail: string): ApiError {
-	return new ApiError(429, detail, SUGGESTIONS_PATH);
-}
 
 function networkFailure(): NetworkError {
 	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));

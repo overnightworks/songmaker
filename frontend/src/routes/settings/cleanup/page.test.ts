@@ -1,7 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { GenerationRetentionReport } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
+import { lostNetwork } from '$lib/test-utils/network';
 import { addToast } from '$lib/stores/toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
@@ -55,10 +56,6 @@ afterEach(async () => {
 	vi.mocked(addToast).mockReset();
 	resetConnectivityForTests();
 });
-
-function lostNetwork(): NetworkError {
-	return new NetworkError('/api/admin/retention', new TypeError('Failed to fetch'));
-}
 
 describe('generation retention failures', () => {
 	it('offline, shows no failure of its own and the preview comes back once online', async () => {

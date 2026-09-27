@@ -14,7 +14,8 @@ import type {
 	SessionItem,
 	UserItem
 } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
+import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import {
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
@@ -237,14 +238,6 @@ const TAB_LABELS = [
 ];
 
 let mounted: ReturnType<typeof mount> | undefined;
-
-function serverRefusal(detail: string): ApiError {
-	return new ApiError(422, detail, '/api/admin');
-}
-
-function lostNetwork(): NetworkError {
-	return new NetworkError('/api/admin', new TypeError('Failed to fetch'));
-}
 
 function pageOf<T>(items: T[]): PaginatedResponse<T> {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
