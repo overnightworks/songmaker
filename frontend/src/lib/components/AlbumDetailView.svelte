@@ -601,7 +601,7 @@
 				{#each albumSongs as s (s.id)}
 					{@const current = isSongCurrent(s.id)}
 					<div class="item-row" class:current>
-						<button class="item-body" onclick={() => selectSong(s.id)}>
+						<button class="item-body" data-hitbox="text" onclick={() => selectSong(s.id)}>
 							<PlayingMark {current} />
 							<span class="item-title">{s.title}</span>
 							<span class="item-meta">
@@ -808,9 +808,6 @@
 
 	.item-row {
 		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		padding: 0.65rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -838,11 +835,17 @@
 		min-width: 0;
 		background: none;
 		border: none;
-		padding: 0;
+		padding: 0.65rem 0.8rem;
 		text-align: left;
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
+	}
+
+	/* The global press scale would shrink the target mid-press and send a release
+	   near the row's edge to the row. */
+	.item-row .item-body:active:not(:disabled) {
+		transform: none;
 	}
 
 	.item-title {

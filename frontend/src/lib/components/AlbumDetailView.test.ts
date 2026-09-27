@@ -13,7 +13,7 @@ import {
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
 	collectionPlayLabel,
-	RAIL_PLAYING_MARKER_LABEL,
+	PLAYING_MARK_LABEL,
 	collectionShuffleLabel
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -23,8 +23,10 @@ import {
 	clearPointer,
 	injectHitboxStyles,
 	minHeightPx,
+	px,
 	setPointer
 } from '$lib/test-utils/hitbox';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { curationActive, nowPlayingSurface, selectedAlbumId } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
@@ -95,6 +97,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
+import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -168,6 +171,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	clearHitboxStyles();
+	clearComponentStyles();
 	clearPointer();
 	selectedAlbumId.set(null);
 	albumList.set([]);
@@ -765,6 +769,19 @@ describe('AlbumDetailView song row', () => {
 		expect(playAlbum).not.toHaveBeenCalled();
 	});
 
+	it('is one target from edge to edge, 44 px high on a coarse pointer', async () => {
+		injectHitboxStyles();
+		const row = rowOf(await renderTwoSongs(), 'Tide');
+		injectComponentStyles(albumDetailViewSource, 'AlbumDetailView.svelte', row);
+		setPointer('coarse');
+
+		const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
+		expect([paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))).toEqual([
+			0, 0, 0, 0
+		]);
+		expect(minHeightPx(requireElement(row, '.item-body'), 'album row')).toBe(HITBOX_FREQUENT_PX);
+	});
+
 	it('carries no play glyph of its own: the row is its only button', async () => {
 		const target = await renderTwoSongs();
 
@@ -783,12 +800,10 @@ describe('AlbumDetailView song row', () => {
 			const target = await renderTwoSongs();
 
 			expect(
-				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', RAIL_PLAYING_MARKER_LABEL) !== null
+				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL) !== null
 			).toBe(marked);
 			expect(rowOf(target, 'Tide').classList.contains('current')).toBe(true);
-			expect(
-				findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', RAIL_PLAYING_MARKER_LABEL)
-			).toBeNull();
+			expect(findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', PLAYING_MARK_LABEL)).toBeNull();
 			expect(rowOf(target, 'Ebb').classList.contains('current')).toBe(false);
 		}
 	);

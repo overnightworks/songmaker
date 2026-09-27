@@ -6,7 +6,11 @@
 		selectedPlaylistDetail,
 		selectedPlaylistId
 	} from '$lib/stores/playlists';
-	import { isPlaylistEntryCurrent, playPlaylistEntryAndShowNowPlaying } from '$lib/stores/player';
+	import {
+		isPlaylistEntryCurrent,
+		playPlaylistEntryAndShowNowPlaying,
+		queueContext
+	} from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
@@ -104,14 +108,15 @@
 							<div class="playlist-songs-content">
 								<ul>
 									{#each entries as entry, index (entry.id)}
+										{@const current = isPlaylistEntryCurrent(entry, $queueContext)}
 										<li>
 											<button
 												type="button"
 												class="row row-sub2"
-												class:row-active={isPlaylistEntryCurrent(entry)}
+												class:row-active={current}
 												onclick={() => onEntryClick(index)}
 											>
-												<PlayingMark current={isPlaylistEntryCurrent(entry)} />
+												<PlayingMark {current} />
 												<span class="row-title">{entry.song_title}</span>
 											</button>
 										</li>

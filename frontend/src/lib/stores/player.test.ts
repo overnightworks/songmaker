@@ -92,6 +92,7 @@ import {
 	libraryQueueSkippedComplete,
 	curateAlbum,
 	curationActive,
+	isPlaylistEntryCurrent,
 	playAlbum,
 	playIdleStart,
 	retryLastPlayIntent,
@@ -1174,6 +1175,33 @@ describe('a clicked playlist row', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(get(nowPlayingOpen)).toBe(true);
 		expect(get(nowPlayingPanel)).toBe('take');
+	});
+
+	describe('when the playlist holds one take twice', () => {
+		const twice = [entries[0], makePlaylistEntry({ ...entries[0], id: 'pe-again', position: 1 })];
+		const playlist = makeDetail({ ...playlistDefaults, entry_count: twice.length, entries: twice });
+
+		function currentEntries(): boolean[] {
+			return twice.map((entry) => isPlaylistEntryCurrent(entry, get(queueContext)));
+		}
+
+		it('plays the other entry from its own place, and only that entry is current', async () => {
+			await playPlaylistEntryAndShowNowPlaying(playlist, 0);
+			startPlayingWithoutAnAudioElement();
+
+			await playPlaylistEntryAndShowNowPlaying(playlist, 1);
+
+			expect(get(queueContext)).toEqual(playlistQueue(twice, 1));
+			expect(currentEntries()).toEqual([false, true]);
+		});
+
+		it('marks neither entry once the same take plays outside the playlist', async () => {
+			await playPlaylistEntryAndShowNowPlaying(playlist, 0);
+
+			queueContext.set({ type: 'album', albumId: 'a1' });
+
+			expect(currentEntries()).toEqual([false, false]);
+		});
 	});
 });
 

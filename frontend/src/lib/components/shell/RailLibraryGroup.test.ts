@@ -3,11 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError } from '$lib/api/fetch';
-import {
-	LIBRARY_RETRY_LABEL,
-	RAIL_ALL_ALBUMS_LABEL,
-	RAIL_PLAYING_MARKER_LABEL
-} from '$lib/constants';
+import { LIBRARY_RETRY_LABEL, RAIL_ALL_ALBUMS_LABEL, PLAYING_MARK_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
@@ -362,7 +358,7 @@ describe('RailLibraryGroup', () => {
 
 			for (const trackTitle of ['Tide', 'Ebb']) {
 				const track = requireButtonContainingText(target, trackTitle);
-				expect(findElementByRoleAndName(track, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(
+				expect(findElementByRoleAndName(track, 'img', PLAYING_MARK_LABEL) !== null).toBe(
 					trackTitle === markedTrack
 				);
 			}
