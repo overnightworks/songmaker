@@ -15,8 +15,11 @@
 		oncancel: () => void;
 	} = $props();
 
+	// Claiming the key keeps the page's global Escape from also leaving the view (escape-level-up.ts).
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') oncancel();
+		if (e.key !== 'Escape') return;
+		e.preventDefault();
+		oncancel();
 	}
 </script>
 
