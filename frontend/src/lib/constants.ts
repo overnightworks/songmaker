@@ -164,6 +164,11 @@ export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
 export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
 export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
 export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
+// Beside play's exact centre line a phone narrower than this leaves the
+// mini player's left side too little room for cover and title, so the cover
+// goes and the title takes the whole side.
+export const MINI_PLAYER_COVER_MIN_VIEWPORT_PX = 360;
+export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(width < ${MINI_PLAYER_COVER_MIN_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';

@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	NOW_PLAYING_LABEL,
+	MINI_PLAYER_WITHOUT_COVER_MEDIA,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
@@ -681,6 +682,27 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		expect(transport).toEqual(['Previous', TRANSPORT_PLAY_LABEL, 'Next']);
 		expect(target.querySelector('.shuffle-btn')).toBeNull();
 		expect(target.querySelector('.now-playing-btn')).toBeNull();
+	});
+
+	it.each([
+		{ viewport: 'narrower than the cover needs', narrow: true, covers: 0 },
+		{ viewport: 'wide enough for the cover', narrow: false, covers: 1 }
+	])('gives the title the whole open target on a phone $viewport', async ({ narrow, covers }) => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query === MINI_PLAYER_WITHOUT_COVER_MEDIA ? narrow : true,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn()
+			}))
+		);
+		loadTake();
+		await mountBar();
+
+		const [titleTarget] = openTargets();
+		expect(titleTarget.querySelectorAll('.track-cover')).toHaveLength(covers);
+		expect(titleTarget.querySelector('.track-title')?.textContent).toBe('Opening Move');
+		expect(titleTarget.getAttribute('aria-label')).toBe(openNowPlayingLabel('Opening Move'));
 	});
 
 	it.each([
