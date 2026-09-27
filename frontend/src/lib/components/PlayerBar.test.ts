@@ -5,12 +5,15 @@ import {
 	makePlaylistDetail as playlistItem
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	NOW_PLAYING_LABEL,
+	MINI_PLAYER_WITHOUT_COVER_MEDIA,
+	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
+	REDUCED_MOTION_MEDIA,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -682,6 +685,27 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 	});
 
 	it.each([
+		{ viewport: 'narrower than the cover needs', narrow: true, covers: 0 },
+		{ viewport: 'wide enough for the cover', narrow: false, covers: 1 }
+	])('gives the title the whole open target on a phone $viewport', async ({ narrow, covers }) => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query === MINI_PLAYER_WITHOUT_COVER_MEDIA ? narrow : true,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn()
+			}))
+		);
+		loadTake();
+		await mountBar();
+
+		const [titleTarget] = openTargets();
+		expect(titleTarget.querySelectorAll('.track-cover')).toHaveLength(covers);
+		expect(titleTarget.querySelector('.track-title')?.textContent).toBe('Opening Move');
+		expect(titleTarget.getAttribute('aria-label')).toBe(openNowPlayingLabel('Opening Move'));
+	});
+
+	it.each([
 		{ place: 'the cover and title', index: 0 },
 		{ place: 'the empty right side', index: 1 }
 	])(
@@ -709,6 +733,136 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		expect(rightSide.getAttribute('aria-hidden')).toBe('true');
 	});
 
+	// A finger lands on the bar and lifts wherever the move ended, usually
+	// above the bar, so the lift is dispatched on the page, not on the bar.
+	function swipe(from: Element, { rise, drift = 0 }: { rise: number; drift?: number }): void {
+		const start = { clientX: 120, clientY: 800 };
+		from.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true, pointerId: 1, ...start }));
+		document.body.dispatchEvent(
+			new PointerEvent('pointerup', {
+				bubbles: true,
+				pointerId: 1,
+				clientX: start.clientX + drift,
+				clientY: start.clientY - rise
+			})
+		);
+	}
+
+	const swipeStarts = {
+		title: () => openTargets()[0],
+		rightSide: () => openTargets()[1],
+		control: (name: string) => () => {
+			const control = bar().querySelector(`.transport-controls button[aria-label="${name}"]`);
+			if (!control) throw new Error(`Expected the ${name} button`);
+			return control;
+		}
+	};
+
+	it.each([
+		{ gesture: 'a swipe up from the title', start: swipeStarts.title },
+		{ gesture: 'a swipe up from the empty right side', start: swipeStarts.rightSide }
+	])('opens Now Playing on $gesture', async ({ start }) => {
+		loadTake();
+		await mountBar();
+
+		swipe(start(), { rise: NOW_PLAYING_SWIPE_RISE_PX });
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('full');
+	});
+
+	it.each([
+		{
+			gesture: 'a move up too short',
+			start: swipeStarts.title,
+			rise: NOW_PLAYING_SWIPE_RISE_PX - 1
+		},
+		{
+			gesture: 'a move more sideways than up',
+			start: swipeStarts.title,
+			rise: NOW_PLAYING_SWIPE_RISE_PX,
+			drift: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{ gesture: 'a move down', start: swipeStarts.title, rise: -NOW_PLAYING_SWIPE_RISE_PX },
+		{
+			gesture: 'a swipe up from Previous',
+			start: swipeStarts.control('Previous'),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{
+			gesture: 'a swipe up from play',
+			start: swipeStarts.control(TRANSPORT_PLAY_LABEL),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		},
+		{
+			gesture: 'a swipe up from Next',
+			start: swipeStarts.control('Next'),
+			rise: NOW_PLAYING_SWIPE_RISE_PX
+		}
+	])('leaves Now Playing closed on $gesture', async ({ start, rise, drift }) => {
+		loadTake();
+		await mountBar();
+
+		swipe(start(), { rise, drift });
+		await tick();
+
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	// A finger's click counts its taps; a keyboard or screen reader press
+	// arrives as a click that counts none.
+	function click(control: Element, { by }: { by: 'finger' | 'keyboard' }): void {
+		control.dispatchEvent(
+			new MouseEvent('click', { bubbles: true, detail: by === 'finger' ? 1 : 0 })
+		);
+	}
+
+	it('keeps a docked panel open when the swipe that opened it ends in a click on the title', async () => {
+		nowPlayingDockable.set(true);
+		loadTake();
+		await mountBar();
+
+		swipe(openTargets()[0], { rise: NOW_PLAYING_SWIPE_RISE_PX });
+		click(openTargets()[0], { by: 'finger' });
+		await tick();
+		expect(get(nowPlayingSurface)).toBe('docked');
+
+		click(openTargets()[0], { by: 'finger' });
+		await tick();
+		expect(get(nowPlayingSurface)).toBe('closed');
+	});
+
+	// A docked panel leaves the bar in place, so a swipe that ended with no
+	// click on it must not eat the next keyboard press.
+	it.each([
+		{
+			control: 'the title',
+			press: () => openTargets()[0],
+			expectActed: () => expect(get(nowPlayingSurface)).toBe('closed')
+		},
+		{
+			control: 'Next',
+			press: swipeStarts.control('Next'),
+			expectActed: () => expect(playerStore.playNextSong).toHaveBeenCalledOnce()
+		}
+	])(
+		'acts on a keyboard press on $control after a swipe that ended without a click',
+		async ({ press, expectActed }) => {
+			vi.spyOn(playerStore, 'playNextSong').mockResolvedValue();
+			nowPlayingDockable.set(true);
+			audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
+			await mountBar();
+			swipe(openTargets()[0], { rise: NOW_PLAYING_SWIPE_RISE_PX });
+			await tick();
+			expect(get(nowPlayingSurface)).toBe('docked');
+
+			click(press(), { by: 'keyboard' });
+			await tick();
+
+			expectActed();
+		}
+	);
+
 	it.each([
 		{ step: 'Previous', action: 'playPrevSong' as const },
 		{ step: 'Next', action: 'playNextSong' as const }
@@ -722,6 +876,81 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		bar().querySelector<HTMLButtonElement>(`button[aria-label="${step}"]`)?.click();
 
 		expect(played).toHaveBeenCalledOnce();
+	});
+
+	const LONG_TITLE = 'An Opening Move Across The Longest Night';
+
+	// jsdom lays nothing out: a test says how wide the title runs and how much
+	// room it has, and records each motion the bar asks the browser for.
+	function arrangeTitle({
+		cut,
+		reducedMotion = false,
+		phone = true
+	}: {
+		cut: boolean;
+		reducedMotion?: boolean;
+		phone?: boolean;
+	}): { element: Element; keyframes: Keyframe[] }[] {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn((query: string) => ({
+				matches: query === REDUCED_MOTION_MEDIA ? reducedMotion : phone,
+				addEventListener: vi.fn(),
+				removeEventListener: vi.fn()
+			}))
+		);
+		vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(60);
+		vi.spyOn(HTMLElement.prototype, 'scrollWidth', 'get').mockReturnValue(cut ? 180 : 60);
+		const motions: { element: Element; keyframes: Keyframe[] }[] = [];
+		Object.defineProperty(HTMLElement.prototype, 'animate', {
+			configurable: true,
+			value(this: Element, keyframes: Keyframe[]) {
+				motions.push({ element: this, keyframes });
+				return { cancel: () => {} };
+			}
+		});
+		onTestFinished(() => {
+			delete (HTMLElement.prototype as Partial<HTMLElement>).animate;
+		});
+		return motions;
+	}
+
+	it('scrolls a cut title once to its end and back to its start, and once for each new title', async () => {
+		const motions = arrangeTitle({ cut: true });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(motions).toHaveLength(1);
+		const [{ element, keyframes }] = motions;
+		expect(element).toBe(bar().querySelector('.track-title'));
+		expect(keyframes.at(0)?.textIndent).toBe('0px');
+		expect(keyframes.map((frame) => frame.textIndent)).toContain('-120px');
+		expect(keyframes.at(-1)?.textIndent).toBe('0px');
+
+		loadTake(`${LONG_TITLE} Again`);
+		await tick();
+		expect(motions).toHaveLength(2);
+	});
+
+	it.each([
+		{ title: 'a title that fits', cut: false },
+		{ title: 'a cut title under reduced motion', cut: true, reducedMotion: true },
+		{ title: 'a cut title on the desktop bar', cut: true, phone: false }
+	])('keeps $title still', async ({ cut, reducedMotion, phone }) => {
+		const motions = arrangeTitle({ cut, reducedMotion, phone });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(motions).toHaveLength(0);
+	});
+
+	it('names the open target after the full title while the title is cut', async () => {
+		arrangeTitle({ cut: true, reducedMotion: true });
+		loadTake(LONG_TITLE);
+		await mountBar();
+
+		expect(openTargets()[0].getAttribute('aria-label')).toBe(openNowPlayingLabel(LONG_TITLE));
+		expect(bar().querySelector('.track-title')?.textContent).toBe(LONG_TITLE);
 	});
 
 	it('shows the idle target as plain words that open nothing', async () => {
