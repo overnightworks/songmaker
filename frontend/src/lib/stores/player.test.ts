@@ -113,7 +113,8 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
-import { ApiError, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	libraryTakePool,
 	setDesktopNowPlayingSurface,
@@ -224,6 +225,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
 	// module-level vi.fn() stubs from the vi.mock('$lib/api/client', ...)
 	// factory above need an explicit clear or their call history from one
@@ -2021,6 +2023,20 @@ describe('playAlbum start track', () => {
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: 'Too many requests', type: 'error' })
 		]);
+	});
+
+	it('offline, leaves a rejected take load to the strip instead of a toast', async () => {
+		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong).mockRejectedValueOnce(
+			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
+		);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('idle');
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it('leaves a superseded start silent when its take load is rejected', async () => {
