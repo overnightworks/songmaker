@@ -1397,7 +1397,7 @@ describe('toggle / play / pause', () => {
 		expect(audioPlayer.status).toBe(status);
 	});
 
-	it('NotAllowedError on autoplay sets paused with helpful error', async () => {
+	it('NotAllowedError on autoplay pauses and asks for Play, on a phone too', async () => {
 		fakeAudio.fire('canplay');
 		fakeAudio.playMock.mockReset();
 		fakeAudio.playMock.mockImplementation(() =>
@@ -1406,7 +1406,7 @@ describe('toggle / play / pause', () => {
 		audioPlayer.play();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('paused');
-		expect(audioPlayer.error).toMatch(/autoplay/i);
+		expect(audioPlayer.error).toBe('Autoplay blocked. Press Play to start.');
 	});
 
 	it('AbortError on play is silently ignored', async () => {
