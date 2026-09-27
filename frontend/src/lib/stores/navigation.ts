@@ -473,11 +473,20 @@ export function clearGenerationSelection(): void {
 
 export function navigateToSongTab(tab: DetailTab): void {
 	playerClearGeneration();
-	showSongTab(get(selectedSongId), tab);
+	chooseSongTab(tab);
 }
 
 export function openEditTab(): void {
-	showSongTab(get(selectedSongId), 'edit');
+	chooseSongTab('edit');
+}
+
+// The open entry carries the choice too, so a reload restores the tab the
+// song was left on; the address itself does not change.
+function chooseSongTab(tab: DetailTab): void {
+	showSongTab(get(selectedSongId), tab);
+	const current = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(current)) return;
+	void writeLibraryHistory({ ...current, detailTab: tab }, urlFromState(current), 'replace');
 }
 
 function openTakesTab(): void {

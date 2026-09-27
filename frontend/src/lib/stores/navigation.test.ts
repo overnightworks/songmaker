@@ -892,6 +892,14 @@ describe('the tab a song opens on (issue #1047)', () => {
 		expect(get(detailTab)).toBe('takes');
 	});
 
+	it('records the chosen tab in the open history entry so a reload restores it', async () => {
+		await selectSong('s1');
+		const address = window.location.pathname;
+		navigateToSongTab('takes');
+		expect(history.state.detailTab).toBe('takes');
+		expect(window.location.pathname).toBe(address);
+	});
+
 	it('keeps the current tab when stepping to the previous or next song', async () => {
 		await selectSong('s1');
 		navigateToSongTab('takes');

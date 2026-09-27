@@ -221,9 +221,10 @@ test.describe('song page at phone width', () => {
 	});
 
 	// Issue #1047: the tab choice is remembered per song for the session; a
-	// song opened for the first time lands on Edit, and stepping to the
-	// previous or next song keeps whichever tab is open.
-	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on next', async ({
+	// song opened for the first time lands on Edit, stepping to the previous
+	// or next song keeps whichever tab is open, and a reload restores the tab
+	// the open song was left on.
+	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on next and reload', async ({
 		page,
 		isMobile
 	}) => {
@@ -267,6 +268,10 @@ test.describe('song page at phone width', () => {
 			.click();
 		await expect(page.getByRole('heading', { name: firstTitle })).toHaveCount(0);
 		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+		await editTab.click();
+		await page.reload();
+		await expect(editTab).toHaveAttribute('aria-selected', 'true');
 	});
 });
 
