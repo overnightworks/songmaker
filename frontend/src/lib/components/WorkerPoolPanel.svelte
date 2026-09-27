@@ -11,9 +11,14 @@
 	import { createPollingStore } from '$lib/stores/adminPolling';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
-	import { ApiError } from '$lib/api/fetch';
+	import { ApiError, describeFailure } from '$lib/api/fetch';
 	import type { WorkerPoolResponse, WorkerInfoItem } from '$lib/api/types';
-	import { WORKER_TRAINING_REMAINING_TEMPLATE } from '$lib/constants';
+	import { offline } from '$lib/stores/connectivity';
+	import {
+		WORKER_POOL_LOAD_FAILED,
+		WORKER_POOL_REFRESH_FAILED,
+		WORKER_TRAINING_REMAINING_TEMPLATE
+	} from '$lib/constants';
 
 	const POLL_INTERVAL_MS = 3000;
 	const LOAD_JOB_TYPE = 'load_model_on_worker';
@@ -204,7 +209,7 @@
 			trackJob(job, { workerId, mode });
 			addToast(`Loading ${mode} on ${workerId}…`, 'info');
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : 'Failed to enqueue load';
+			actionError = describeFailure(e, 'Failed to enqueue load');
 		} finally {
 			busyAction = { ...busyAction, [workerId]: false };
 		}
@@ -219,7 +224,7 @@
 			addToast(`Evicted ${mode} from ${workerId}`, 'success');
 			await store.refresh();
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : 'Failed to evict model';
+			actionError = describeFailure(e, 'Failed to evict model');
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -239,7 +244,7 @@
 			await restartWorker(workerId);
 			addToast(`Restart requested for ${workerId}`, 'info');
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : 'Restart failed';
+			actionError = describeFailure(e, 'Restart failed');
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -259,7 +264,7 @@
 			}
 			await store.refresh();
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : 'Pin toggle failed';
+			actionError = describeFailure(e, 'Pin toggle failed');
 		} finally {
 			busyAction = { ...busyAction, [key]: false };
 		}
@@ -272,7 +277,9 @@
 	{#if forbidden}
 		<p class="panel-error">Admin access required.</p>
 	{:else if $error && workers.length === 0}
-		<p class="panel-error">Cannot reach the worker pool API. {$error.message}</p>
+		{#if !$offline}
+			<p class="panel-error">{describeFailure($error, WORKER_POOL_LOAD_FAILED)}</p>
+		{/if}
 	{:else if workers.length === 0}
 		<p class="hint">
 			No workers registered. Start the <code>songmaker-acestep-worker-0</code> container and wait a few
@@ -282,8 +289,8 @@
 		{#if actionError}
 			<p class="panel-error">{actionError}</p>
 		{/if}
-		{#if $error}
-			<p class="banner-error">⚠ Connection lost — retrying…</p>
+		{#if $error && !$offline}
+			<p class="banner-error">{describeFailure($error, WORKER_POOL_REFRESH_FAILED)}</p>
 		{/if}
 
 		<div class="cards">

@@ -1061,8 +1061,19 @@ Playing's take details) shows nothing of its own, keeps what it listed and loads
 again through the owner's `whenBackOnline`. Without the strip (a timeout, a
 refused connection) the rail's albums, rail search and the take details load
 again through `reloadWhileUnreachable` (`stores/connectivity.ts`) on a bounded
-backoff, and only then name the failure (the rail and search with a Retry);
-the audio player words a lost network as its generic "Playback failed". Such a self-healing failed refresh retries on the streams'
+backoff, and only then name the failure (the rail and search with a Retry).
+That owner also says what a failed load shows (`nameLoadFailure`, kept as its
+`loadFailure` store: nothing while a reload is coming, the named fallback once
+the backoff is spent and hidden again while the strip shows, the server's
+reason otherwise) and schedules the reload a failure calls for
+(`afterLoadFailure`); the reload itself belongs to the load's owner, so the
+album list's bounded reload lives in `stores/libraryData.ts`, which the rail and
+the wall only read. The Admin, My Voices and cleanup pages read through it, and
+a list that never loaded claims no empty state; the admin panels' polling
+(`stores/adminPolling.ts`) resumes once back online. An address page with
+nothing loaded (playlist, album, song, take, Home `?song=`) keeps its one line
+with Try again under the strip and opens by itself once back online. The audio
+player words a lost network as its generic "Playback failed". Such a self-healing failed refresh retries on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries
 at once, and the same events restart a bootstrap that failed. A bootstrap whose

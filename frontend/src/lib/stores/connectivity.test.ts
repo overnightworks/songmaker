@@ -1,8 +1,9 @@
 import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { ApiError } from '$lib/api/fetch';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { browserReportsOnline } from '$lib/test-utils/network';
+import { browserReportsOnline, lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import {
 	offline,
 	reloadWhileUnreachable,
@@ -122,5 +123,65 @@ describe('reloadWhileUnreachable', () => {
 		reloads.stop();
 
 		expect(reload).toHaveBeenCalledOnce();
+	});
+
+	describe('nameLoadFailure', () => {
+		const FALLBACK = 'Failed to load users';
+
+		it('names nothing for a lost network while a reload is still coming', () => {
+			vi.useFakeTimers();
+			const reloads = reloadWhileUnreachable(vi.fn());
+
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBeNull();
+			reportResourceStreamReachable(false);
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBeNull();
+		});
+
+		it('names the fallback, never the browser text, once the backoff is spent', () => {
+			vi.useFakeTimers();
+			const reloads = reloadWhileUnreachable(vi.fn());
+			UNREACHABLE_RELOAD_DELAYS_MS.forEach(() => reloads.afterNetworkFailure());
+
+			expect(reloads.nameLoadFailure(lostNetwork(), FALLBACK)).toBe(FALLBACK);
+		});
+
+		it('hides a spent backoff while the strip shows and forgets it once the load runs again', () => {
+			vi.useFakeTimers();
+			const reload = vi.fn();
+			const reloads = reloadWhileUnreachable(reload);
+			UNREACHABLE_RELOAD_DELAYS_MS.forEach(() => reloads.afterNetworkFailure());
+			reloads.nameLoadFailure(lostNetwork(), FALLBACK);
+			expect(get(reloads.loadFailure)).toBe(FALLBACK);
+
+			reportResourceStreamReachable(false);
+			expect(get(reloads.loadFailure)).toBeNull();
+
+			reportResourceStreamReachable(true);
+			expect(reload).toHaveBeenCalledOnce();
+			expect(get(reloads.loadFailure)).toBeNull();
+		});
+
+		it('keeps a server answer named while the strip shows', () => {
+			const reloads = reloadWhileUnreachable(vi.fn());
+			reloads.nameLoadFailure(serverRefusal('Database is migrating'), FALLBACK);
+
+			reportResourceStreamReachable(false);
+
+			expect(get(reloads.loadFailure)).toBe('Database is migrating');
+		});
+
+		it.each([
+			{ answer: 'its reason', err: new ApiError(503, 'Database is migrating', '/api/users') },
+			{ answer: 'no reason', err: new ApiError(500, '', '/api/users') }
+		])('names a server answer with $answer and stops a pending reload', ({ err }) => {
+			vi.useFakeTimers();
+			const reload = vi.fn();
+			const reloads = reloadWhileUnreachable(reload);
+			reloads.afterNetworkFailure();
+
+			expect(reloads.nameLoadFailure(err, FALLBACK)).toBe(err.detail || FALLBACK);
+			vi.runAllTimers();
+			expect(reload).not.toHaveBeenCalled();
+		});
 	});
 });
