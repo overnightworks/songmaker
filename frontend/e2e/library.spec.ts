@@ -272,11 +272,14 @@ async function swipeUp(page: Page, from: { x: number; y: number }, rise: number)
 // A tap this close to the bar's edge lands in the strip that used to be
 // padding and hit the footer (#1067).
 const MINI_PLAYER_EDGE_TAP_PX = 3;
+// Room enough to read a few letters of a cut title, not one glyph and an
+// ellipsis (#1067 G3).
+const MINI_PLAYER_NARROW_TITLE_MIN_PX = 60;
 
 /**
  * Swiping the mini player up and tapping its outer edge both open Now
- * Playing (#1067); at 320 px play still sits on the centre line and the
- * targets still reach the edges.
+ * Playing (#1067); at 320 px play still sits on the centre line, the targets
+ * still reach the edges, and the cover gives its room to the title.
  */
 async function expectMiniPlayerOpensNowPlaying(
 	page: Page,
@@ -288,7 +291,10 @@ async function expectMiniPlayerOpensNowPlaying(
 		await page.keyboard.press('Escape');
 		await expect(nowPlaying).toBeHidden();
 	};
+	const cover = transport.locator('.track-cover');
+	const title = transport.locator('.track-title');
 	const [bar] = await boundingBoxes(transport);
+	await expect(cover).toBeVisible();
 
 	await swipeUp(
 		page,
@@ -306,6 +312,9 @@ async function expectMiniPlayerOpensNowPlaying(
 
 	await page.setViewportSize(NARROW_VIEWPORT);
 	await expectCompactTransport(transport, playingSongTitle);
+	await expect(cover).toHaveCount(0);
+	const [narrowTitle] = await boundingBoxes(title);
+	expect(narrowTitle.width).toBeGreaterThanOrEqual(MINI_PLAYER_NARROW_TITLE_MIN_PX);
 	await page.setViewportSize(MOBILE_VIEWPORT);
 }
 

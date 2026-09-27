@@ -37,6 +37,7 @@
 		MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND,
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
 		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
+		MINI_PLAYER_WITHOUT_COVER_MEDIA,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
 	} from '$lib/constants';
@@ -52,6 +53,7 @@
 	const MOBILE_TRANSPORT_MEDIA = '(max-width: 640px), (any-pointer: coarse)';
 
 	let mobileTransport = $state(false);
+	let roomForCover = $state(true);
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 
 	const current = $derived(audioPlayer.current);
@@ -160,14 +162,26 @@
 			mobileTransport = value;
 		}, MOBILE_TRANSPORT_MEDIA);
 	});
+
+	$effect(() => {
+		const withoutCover = window.matchMedia(MINI_PLAYER_WITHOUT_COVER_MEDIA);
+		const sync = () => {
+			roomForCover = !withoutCover.matches;
+		};
+		sync();
+		withoutCover.addEventListener('change', sync);
+		return () => withoutCover.removeEventListener('change', sync);
+	});
 </script>
 
 {#snippet trackInfo(titleGlowStyle: string, inlineFailure: string | null)}
-	<span class="track-cover" aria-hidden="true">
-		{#if coverUrl}
-			<img src={coverUrl} alt="" />
-		{/if}
-	</span>
+	{#if roomForCover}
+		<span class="track-cover" aria-hidden="true">
+			{#if coverUrl}
+				<img src={coverUrl} alt="" />
+			{/if}
+		</span>
+	{/if}
 	<span class="track-text">
 		{#if current}
 			{#key current.songTitle}
