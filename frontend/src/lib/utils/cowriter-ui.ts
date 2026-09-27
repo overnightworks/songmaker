@@ -1,4 +1,16 @@
-import type { SongItem } from '$lib/api/types';
+import type { ConversationItem, SongItem } from '$lib/api/types';
+import {
+	COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE,
+	COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
+	COWRITER_CONVERSATION_ROW_TEMPLATE,
+	COWRITER_CONVERSATION_SINCE_TEMPLATE,
+	COWRITER_CONVERSATION_STARTED_TODAY,
+	COWRITER_NEW_CONVERSATION_LINE
+} from '$lib/constants';
+
+const DAYS_NAMED_BY_WEEKDAY = 7;
+const DAY_MS = 86_400_000;
+const CONVERSATION_DAY_LOCALE = 'en-US';
 
 const SONG_ID_TARGETING_TOOLS = new Set([
 	'update_song_lyrics',
@@ -53,4 +65,56 @@ export function providerDisplayName(provider: string): string {
 export function cowriterHeaderLabel(provider: string, model: string): string {
 	if (!model) return 'Co-Writer';
 	return `${providerDisplayName(provider)} · ${model}`;
+}
+
+function startOfDay(moment: Date): number {
+	return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
+}
+
+/** The one English day form every conversation label uses: "today", "Tue", "Sep 12", "Sep 12, 2025". */
+export function conversationDayLabel(createdAt: string, now: Date): string {
+	const started = new Date(createdAt);
+	const daysAgo = Math.round((startOfDay(now) - startOfDay(started)) / DAY_MS);
+	if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;
+	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
+		return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, { weekday: 'short' });
+	}
+	const sameYear = started.getFullYear() === now.getFullYear();
+	return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, {
+		day: 'numeric',
+		month: 'short',
+		year: sameYear ? undefined : 'numeric'
+	});
+}
+
+/**
+ * The line above the chat never contradicts the chat: a message in it means
+ * a conversation is running, even before the conversation list has caught up
+ * with the first turn; an empty conversation is a new one.
+ */
+export function conversationLineLabel(
+	conversation: ConversationItem | undefined,
+	chatHasMessages: boolean,
+	now: Date
+): string {
+	if (conversation?.archived_at) {
+		return COWRITER_ARCHIVED_CONVERSATION_TEMPLATE.replace(
+			'{day}',
+			conversationDayLabel(conversation.created_at, now)
+		);
+	}
+	const hasMessages = chatHasMessages || (conversation?.message_count ?? 0) > 0;
+	if (!hasMessages) return COWRITER_NEW_CONVERSATION_LINE;
+	const day = conversation
+		? conversationDayLabel(conversation.created_at, now)
+		: COWRITER_CONVERSATION_STARTED_TODAY;
+	return COWRITER_CONVERSATION_SINCE_TEMPLATE.replace('{day}', day);
+}
+
+export function conversationRowLabel(conversation: ConversationItem, now: Date): string {
+	if (conversation.title) return conversation.title;
+	const template = conversation.archived_at
+		? COWRITER_ARCHIVED_CONVERSATION_ROW_TEMPLATE
+		: COWRITER_CONVERSATION_ROW_TEMPLATE;
+	return template.replace('{day}', conversationDayLabel(conversation.created_at, now));
 }

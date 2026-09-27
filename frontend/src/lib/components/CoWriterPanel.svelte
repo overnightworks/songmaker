@@ -25,13 +25,9 @@
 	import { addToast } from '$lib/stores/toast';
 	import { health } from '$lib/stores/health';
 	import {
-		COWRITER_ARCHIVED_CONVERSATION_TEMPLATE,
 		COWRITER_CLAUDE_UNVERIFIED_LABEL,
 		COWRITER_CONVERSATION_MENU_LABEL,
-		COWRITER_CONVERSATION_SINCE_TEMPLATE,
-		COWRITER_CONVERSATION_STARTED_TODAY,
 		COWRITER_NEW_CONVERSATION_LABEL,
-		COWRITER_NEW_CONVERSATION_LINE,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
@@ -55,6 +51,8 @@
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { playerTakeIdForSong } from '$lib/utils/cowriter-take';
 	import {
+		conversationLineLabel,
+		conversationRowLabel,
 		cowriterHeaderLabel,
 		cowriterThinkingLabel,
 		cowriterToolCallTarget,
@@ -104,9 +102,6 @@
 	const INCOMPLETE_TURN_MESSAGE = 'The co-writer did not answer. Try again.';
 	const TURN_ALREADY_RUNNING_STATUS = 409;
 	const LATEST_MESSAGE_SLACK_PX = 32;
-	const DAYS_NAMED_BY_WEEKDAY = 7;
-	const DAY_MS = 86_400_000;
-	const CONVERSATION_DAY_LOCALE = 'en-US';
 
 	let messages: Message[] = $state([]);
 	let input = $state('');
@@ -432,8 +427,8 @@
 					if (activeConversationId !== event.conversation_id) {
 						activeConversationId = event.conversation_id;
 						viewingConversationId = event.conversation_id;
-						void loadConversations();
 					}
+					void loadConversations();
 					if (onturncompleted) onturncompleted();
 				}
 				void keepLatestInView();
@@ -764,40 +759,13 @@
 		}
 	}
 
-	function conversationLabel(conv: ConversationItem): string {
-		if (conv.title) return conv.title;
-		const when = new Date(conv.created_at).toLocaleDateString();
-		return `Conversation ${when}`;
-	}
-
-	function startOfDay(moment: Date): number {
-		return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
-	}
-
-	function conversationStartDay(createdAt: string): string {
-		const started = new Date(createdAt);
-		const today = new Date();
-		const daysAgo = Math.round((startOfDay(today) - startOfDay(started)) / DAY_MS);
-		if (daysAgo === 0) return COWRITER_CONVERSATION_STARTED_TODAY;
-		if (daysAgo < DAYS_NAMED_BY_WEEKDAY) {
-			return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, { weekday: 'short' });
-		}
-		const sameYear = started.getFullYear() === today.getFullYear();
-		return started.toLocaleDateString(CONVERSATION_DAY_LOCALE, {
-			day: 'numeric',
-			month: 'short',
-			year: sameYear ? undefined : 'numeric'
-		});
-	}
-
-	const conversationLine = $derived.by(() => {
-		const viewing = conversations.find((c) => c.id === viewingConversationId);
-		if (!viewing) return COWRITER_NEW_CONVERSATION_LINE;
-		const template = viewing.archived_at
-			? COWRITER_ARCHIVED_CONVERSATION_TEMPLATE
-			: COWRITER_CONVERSATION_SINCE_TEMPLATE;
-		return template.replace('{day}', conversationStartDay(viewing.created_at));
-	});
+	const conversationLine = $derived(
+		conversationLineLabel(
+			conversations.find((c) => c.id === viewingConversationId),
+			messages.length > 0,
+			new Date()
+		)
+	);
 
 	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
 		event.stopPropagation();
@@ -900,7 +868,7 @@
 								class="conv-pick"
 								onclick={() => chooseFromConversationMenu(() => openConversation(conv))}
 							>
-								<span class="conv-title">{conversationLabel(conv)}</span>
+								<span class="conv-title">{conversationRowLabel(conv, new Date())}</span>
 								<span class="conv-meta">
 									{conv.message_count} msg{conv.message_count === 1 ? '' : 's'}
 									{#if conv.archived_at}· archived{/if}
