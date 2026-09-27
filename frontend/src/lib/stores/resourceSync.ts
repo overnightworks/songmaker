@@ -206,8 +206,12 @@ export class ResourceSyncController {
 	}
 
 	private restartConnection(): void {
-		this.clearReconnectTimer();
 		this.reconnectAttempt = 0;
+		this.restartBootstrap();
+	}
+
+	private restartBootstrap(): void {
+		this.clearReconnectTimer();
 		this.closeSource();
 		this.abandonEpoch();
 		this.syncedOnce = false;
@@ -253,20 +257,22 @@ export class ResourceSyncController {
 	}
 
 	/**
-	 * Reopens the stream after a live (post-bootstrap) drop, with the same
-	 * backoff `jobs.ts` uses for its job streams -- an unbounded flat native
-	 * EventSource retry here is what produced the operator's ERR_QUIC storm
+	 * Reconnects after a live (post-bootstrap) drop, or after a first sync that
+	 * failed while the server could not be reached -- the offline strip says
+	 * "retrying" and offers no button, so that retry must really happen -- with
+	 * the same backoff `jobs.ts` uses for its job streams -- an unbounded flat
+	 * native EventSource retry here is what produced the operator's ERR_QUIC storm
 	 * (issue #257). `reconnectAttempt` resets on the next successful `hello`
 	 * (see `handleHello`), so a connection that recovers goes back to the
 	 * short delay on its next drop.
 	 */
-	private scheduleReconnect(): void {
+	private scheduleReconnect(reconnect: () => void): void {
 		this.reconnectAttempt += 1;
 		const delay = nextReconnectDelayMs(this.reconnectAttempt);
 		this.reconnectTimer = setTimeout(() => {
 			this.reconnectTimer = null;
 			if (!this.started) return;
-			this.openSource();
+			reconnect();
 		}, delay);
 	}
 
@@ -410,6 +416,7 @@ export class ResourceSyncController {
 			this.bootstrapErrors += 1;
 			if (this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
 				this.failBootstrap(RESOURCE_SYNC_ERROR);
+				if (result === 'retryable') this.scheduleReconnect(() => this.restartBootstrap());
 				return;
 			}
 			this.abandonEpoch();
@@ -418,7 +425,7 @@ export class ResourceSyncController {
 		}
 		this.closeSource();
 		if (this.state.status !== 'error') this.setStatus('reconnecting');
-		this.scheduleReconnect();
+		this.scheduleReconnect(() => this.openSource());
 	}
 
 	private async recoverLiveConnection(): Promise<void> {

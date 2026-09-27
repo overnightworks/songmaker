@@ -1016,7 +1016,9 @@ and the page (the phone's Generate bar included) stays above it; and Generate is
 disabled with no reason text of its own. A failed live refresh also retries on its own, on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries
-at once, and the same events restart a bootstrap that failed.
+at once, and the same events restart a bootstrap that failed. A bootstrap that
+failed because the server could not be reached also restarts itself on that
+backoff, so the strip's "retrying" holds even when none of those events fires.
 The owner remembers the id of the last event it saw and reopens a dropped stream
 with that `last_event_id` query cursor, so an event sent while the phone's screen
 was off or the connection was down is replayed rather than lost. A completed or
