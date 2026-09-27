@@ -667,28 +667,58 @@ function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	return { ...state, index: state.index - 1, layer: undefined };
 }
 
+// Opens and closes one overlay's layer as its shown value changes, and says
+// whether it holds an entry. Back closes it through `close`, which lands here
+// again with `false` after the stack has already let go of the layer.
+function historyLayerSwitch(id: string, close: () => void): (isShown: boolean) => boolean {
+	let registration: HistoryLayerRegistration | null = null;
+	return (isShown) => {
+		if (isShown === (registration !== null)) return registration?.layered ?? false;
+		if (isShown) {
+			registration = registerHistoryLayer(id, close);
+			return registration.layered;
+		}
+		const leaving = registration;
+		registration = null;
+		if (leaving?.layered) leaving.leave();
+		return false;
+	};
+}
+
 function followAsHistoryLayer(
 	id: string,
 	shown: Readable<boolean>,
 	close: () => void,
 	layered?: Writable<boolean>
 ): () => void {
-	let registration: HistoryLayerRegistration | null = null;
+	const show = historyLayerSwitch(id, close);
 	const stopFollowing = shown.subscribe((isShown) => {
-		if (isShown === (registration !== null)) return;
-		if (isShown) {
-			registration = registerHistoryLayer(id, close);
-		} else {
-			const leaving = registration;
-			registration = null;
-			if (leaving?.layered) leaving.leave();
-		}
-		layered?.set(registration?.layered ?? false);
+		const isLayered = show(isShown);
+		layered?.set(isLayered);
 	});
 	return () => {
 		stopFollowing();
 		layered?.set(false);
 	};
+}
+
+// A menu, list or sheet a component owns (issue #1119) keeps what it shows in
+// this store rather than in local state, `closed` meaning nothing is open.
+// Every write registers or leaves its layer synchronously -- a close path that
+// navigates straight afterwards has its step back queued ahead of the push,
+// which an effect running after that push could not promise -- and Back closes
+// it by writing `closed`. The owner unmounting while open drops the last
+// subscriber, which leaves the layer too.
+export function historyLayerState<T>(id: string, closed: T): Writable<T> {
+	let value = closed;
+	const show = historyLayerSwitch(id, () => set(closed));
+	const shown = writable(closed, () => () => show(false));
+	function set(next: T): void {
+		value = next;
+		show(next !== closed);
+		shown.set(next);
+	}
+	return { subscribe: shown.subscribe, set, update: (change) => set(change(value)) };
 }
 
 const NOW_PLAYING_LAYER = 'now-playing';

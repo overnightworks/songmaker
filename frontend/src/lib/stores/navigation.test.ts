@@ -5,7 +5,7 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { get } from 'svelte/store';
+import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
@@ -121,6 +121,7 @@ import {
 	albumTrackNeighbors,
 	backToCollection,
 	goBack,
+	historyLayerState,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
@@ -1734,18 +1735,168 @@ describe('the phone rail drawer owns one history entry', () => {
 	});
 });
 
+describe('a menu kept in historyLayerState owns one history entry while open', () => {
+	let stopNavigation: () => void = () => undefined;
+	const owners: Array<() => void> = [];
+
+	beforeEach(async () => {
+		stopNavigation = initNavigation();
+		await openAlbum('a1');
+		await openPlaylist('p1');
+	});
+
+	afterEach(() => {
+		for (const leave of owners.splice(0)) leave();
+		stopNavigation();
+		closeNowPlaying();
+	});
+
+	function ownedMenu(id = 'a-menu'): Writable<boolean> {
+		const menu = historyLayerState(id, false);
+		owners.push(menu.subscribe(() => undefined));
+		return menu;
+	}
+
+	async function openOnTopOfPlaylist(menu: Writable<boolean>): Promise<number> {
+		const below = history.state.index;
+		menu.set(true);
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		return below;
+	}
+
+	function playlistStands(below: number): void {
+		expect(history.state).toMatchObject({
+			index: below,
+			collection: { kind: 'playlist', id: 'p1' },
+			songId: null
+		});
+		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
+	}
+
+	it('Back closes the open menu and keeps the playlist below it', async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+
+		history.back();
+
+		await vi.waitFor(() => expect(get(menu)).toBe(false));
+		playlistStands(below);
+	});
+
+	it('closing the menu itself steps back off its entry, so one Back leaves the playlist', async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+
+		menu.set(false);
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		history.back();
+
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' }));
+		expect(history.state.index).toBe(below - 1);
+	});
+
+	it('a menu item that navigates leaves exactly one Back to the playlist', async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+
+		menu.set(false);
+		await selectSong('s1');
+		await vi.waitFor(() => expect(history.state).toMatchObject({ index: below + 1, songId: 's1' }));
+		history.back();
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		playlistStands(below);
+	});
+
+	it('open, close and open again in quick succession end on one entry that Back closes', async () => {
+		const menu = ownedMenu();
+		const below = history.state.index;
+
+		menu.set(true);
+		menu.set(false);
+		menu.set(true);
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
+		expect(history.state.index).toBe(below + 1);
+		history.back();
+
+		await vi.waitFor(() => expect(get(menu)).toBe(false));
+		playlistStands(below);
+	});
+
+	it('Back over a sheet in Now Playing closes only the sheet; the next Back closes Now Playing', async () => {
+		const below = history.state.index;
+		openNowPlaying('take');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		const sheet = ownedMenu('a-sheet');
+		sheet.set(true);
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+
+		history.back();
+		await vi.waitFor(() => expect(get(sheet)).toBe(false));
+		expect(get(nowPlayingOpen)).toBe(true);
+		history.back();
+
+		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
+		playlistStands(below);
+	});
+
+	it('closing Now Playing under an open sheet closes the sheet and leaves both entries', async () => {
+		const below = history.state.index;
+		openNowPlaying('take');
+		const sheet = ownedMenu('a-sheet');
+		sheet.set(true);
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+
+		closeNowPlaying();
+
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		expect(get(sheet)).toBe(false);
+		playlistStands(below);
+	});
+
+	it('a menu whose owner goes away while it is open leaves its entry', async () => {
+		const menu = historyLayerState('a-menu', false);
+		const leaveOwner = menu.subscribe(() => undefined);
+		const below = await openOnTopOfPlaylist(menu);
+
+		leaveOwner();
+
+		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		playlistStands(below);
+	});
+
+	it('a playlist entry menu moving from one row to another keeps one entry', async () => {
+		const entryMenu = historyLayerState<string | null>('an-entry-menu', null);
+		owners.push(entryMenu.subscribe(() => undefined));
+		const below = history.state.index;
+		entryMenu.set('e1');
+		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+
+		entryMenu.set('e2');
+		history.back();
+
+		await vi.waitFor(() => expect(get(entryMenu)).toBeNull());
+		playlistStands(below);
+	});
+});
+
 describe('overlays outside the library', () => {
-	it('are not layered on /settings, and opening the drawer there writes no history', () => {
+	it('are not layered on /settings, and opening the drawer or a menu there writes no history', () => {
 		history.replaceState(null, '', '/settings/playback');
 		const before = { length: history.length, state: history.state };
 
 		const registration = registerHistoryLayer('an-overlay', () => undefined);
+		const menu = historyLayerState('a-menu', false);
+		const leaveOwner = menu.subscribe(() => undefined);
+		menu.set(true);
 		toggleSidebar();
 
 		expect(registration).toEqual({ layered: false });
 		expect(get(railDrawerIsLayer)).toBe(false);
+		expect(get(menu)).toBe(true);
 		expect({ length: history.length, state: history.state }).toEqual(before);
 		closeSidebar();
+		leaveOwner();
 	});
 });
 
