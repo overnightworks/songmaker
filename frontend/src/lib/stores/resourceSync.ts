@@ -133,6 +133,7 @@ export class ResourceSyncController {
 	private streamGreeted = false;
 	private serverReachable = true;
 	private returnProbeTimer: ReturnType<typeof setTimeout> | null = null;
+	private latestReturnProbeId = 0;
 	private readonly reopenGap = new ImmediateReopenGap();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -483,10 +484,20 @@ export class ResourceSyncController {
 		}, RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
 	}
 
+	/**
+	 * Only the newest return probe may speak: a slow older one answering 'ok'
+	 * after a newer one found the server gone again would otherwise clear the
+	 * strip and reopen the stream on stale news. A stream failure's own probe
+	 * outranks every return probe already in flight (`probeGeneration`).
+	 */
 	private async probeForReturn(): Promise<void> {
-		const probeId = this.probeGeneration;
+		const returnProbeId = ++this.latestReturnProbeId;
+		const probeGeneration = this.probeGeneration;
 		const result = await this.deps.probeAuth();
-		if (!this.started || this.serverReachable || probeId !== this.probeGeneration) return;
+		if (!this.started || this.serverReachable) return;
+		if (returnProbeId !== this.latestReturnProbeId || probeGeneration !== this.probeGeneration) {
+			return;
+		}
 		if (result === 'unreachable') {
 			this.scheduleReturnProbe();
 			return;
