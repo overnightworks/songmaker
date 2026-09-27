@@ -305,6 +305,78 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 		expect(startNewConversation).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+	});
+
+	it('names each conversation in its ⋯ menu with the line’s day form', async () => {
+		const older = {
+			...activeConversation('c0'),
+			created_at: '2026-09-17T10:00:00',
+			archived_at: '2026-09-22T10:00:00'
+		};
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
+		const target = await render();
+
+		const menu = await openConversationMenu(target);
+
+		expect(Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent)).toEqual([
+			'Conversation since Tue',
+			'Conversation from Sep 17'
+		]);
+	});
+
+	it('reads “conversation since today” once the first message is sent, before the reply arrives', async () => {
+		let deliverReply = (): void => {};
+		const replyDelivered = new Promise<void>((resolve) => {
+			deliverReply = resolve;
+		});
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				await replyDelivered;
+				yield {
+					type: 'final',
+					conversation_id: 'c1',
+					user_message: chatMessage('m1', 'user', 'write a chorus'),
+					assistant_message: chatMessage('m2', 'assistant', 'Here it is.')
+				} as CoWriterStreamEvent;
+			})()
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(conversationLine(target)).toBe('Claude · conversation since today')
+		);
+		fetchConversations.mockResolvedValue([
+			conversationStartedAt(new Date('2026-09-27T11:59:00').toISOString())
+		]);
+		deliverReply();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+		expect(conversationLine(target)).toBe('Claude · conversation since today');
+	});
+
+	it('shows the current message count in its ⋯ menu after a turn', async () => {
+		const sent = chatMessage('m3', 'user', 'now a bridge');
+		const reply = chatMessage('m4', 'assistant', 'Four lines.');
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
+		streamCoWriterTurn.mockReturnValue(
+			turnEvents([
+				{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+			])
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		fetchConversations.mockResolvedValue([
+			{ ...conversationStartedAt('2026-09-22T10:00:00'), message_count: 4 }
+		]);
+
+		await sendTurn(target, sent.content);
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+		const menu = await openConversationMenu(target);
+
+		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('4 msgs');
 	});
 
 	it('closes its ⋯ menu on Escape without leaving the song', async () => {
