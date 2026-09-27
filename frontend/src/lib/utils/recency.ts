@@ -3,7 +3,10 @@ export type CreatedSort = 'newest' | 'oldest' | 'title';
 export const CREATED_SORTS: readonly CreatedSort[] = ['newest', 'oldest', 'title'];
 
 const TITLE_COLLATION_LOCALE = 'en';
-const titleCollator = new Intl.Collator(TITLE_COLLATION_LOCALE, { sensitivity: 'base' });
+const titleCollator = new Intl.Collator(TITLE_COLLATION_LOCALE, {
+	sensitivity: 'base',
+	numeric: true
+});
 
 function parseCreatedAt(iso: string | null | undefined): Date | null {
 	if (!iso) return null;
