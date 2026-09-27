@@ -57,7 +57,7 @@ function continueResponse(items: LibraryContinueItem[]): { items: LibraryContinu
 	return { items };
 }
 
-function setVisibility(state: DocumentVisibilityState): void {
+function dispatchVisibility(state: DocumentVisibilityState): void {
 	Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
 	document.dispatchEvent(new Event('visibilitychange'));
 }
@@ -167,12 +167,12 @@ describe('LibraryContinue', () => {
 		const target = await render();
 		await settle();
 
-		setVisibility('hidden');
+		dispatchVisibility('hidden');
 		await settle();
 		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
 		expect(entryLabels(target)).toEqual(['Open album Yesterday']);
 
-		setVisibility('visible');
+		dispatchVisibility('visible');
 		await settle();
 
 		expect(entryLabels(target)).toEqual(['Open album Vernissage', 'Open album Yesterday']);
@@ -186,8 +186,8 @@ describe('LibraryContinue', () => {
 		const target = await render();
 		await settle();
 
-		setVisibility('visible');
-		setVisibility('visible');
+		dispatchVisibility('visible');
+		dispatchVisibility('visible');
 		target.querySelector<HTMLButtonElement>('.continue-toggle')?.click();
 		target.querySelector<HTMLButtonElement>('.continue-toggle')?.click();
 		await settle();
@@ -205,7 +205,7 @@ describe('LibraryContinue', () => {
 		await settle();
 		await unmount(mounted.splice(0)[0]);
 
-		setVisibility('visible');
+		dispatchVisibility('visible');
 		await settle();
 
 		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
