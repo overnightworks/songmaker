@@ -19,7 +19,6 @@ import {
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
-	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -205,99 +204,89 @@ test.describe('losing the network while a take generates on the phone', () => {
 	// worker stays out of the loads the returning network makes.
 	test.use({ serviceWorkers: 'block' });
 
-	// A job that announced two takes and ended having made one is still ended:
-	// its take in the list replaces the card, as a single take's does.
-	for (const takeCount of [1, 2]) {
-		test(`greys the running card with its last progress, and keeps it until the take that finished offline is in the list (${takeCount} announced)`, async ({
-			page,
-			context,
-			isMobile
-		}) => {
-			test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-			const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-			const library = readSeededLibrary();
-			const songTitle = `${OFFLINE_SONG_TITLE} Running ${runMarker()}`;
-			const seededTakes = 1;
-			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, seededTakes);
-			const jobId = await seedRunningGenerationJob(songId, {
-				progress: 0.4,
-				takeIndex: 1,
-				takeCount,
-				phase: 'rendering',
-				generationStartedOffsetSeconds: 30
-			});
-			const panel = page.getByRole('tabpanel');
-			const takesTab = page.getByRole('tab', { name: /Takes/ });
-			const runningRing = takesTab.locator('.ring');
-			const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
-			const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
-			const lastSeenBar = panel.getByRole('progressbar', {
-				name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
-			});
-			const takeCounter =
-				takeCount > 1
-					? `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', String(takeCount))} · `
-					: '';
-
-			await page.goto(`/album/${library.songPhoneAlbumId}`);
-			await workspace(page)
-				.getByRole('button', { name: nameStartingWith(songTitle) })
-				.click();
-			await takesTab.click();
-			await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
-			await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
-			await expect(playButtons).toHaveCount(seededTakes);
-
-			await loseNetwork(page, context);
-
-			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
-				timeout: OFFLINE_NOTICE_MS
-			});
-			await expect(
-				panel.getByText(`${takeCounter}last seen at 40%`, { exact: true })
-			).toBeVisible();
-			await expect(panel.getByText(/~\d/)).toHaveCount(0);
-			await expect(lastSeenBar).toHaveAttribute('aria-valuenow', '40');
-			const cancel = panel.getByRole('button', { name: EDITOR_GENERATE_CANCEL_OFFLINE_LABEL });
-			await expect(cancel).toHaveAttribute('aria-disabled', 'true');
-			const grey = await resolvedToken(page, '--text-disabled');
-			await expect(lastSeenBar.locator('span')).toHaveCSS('background-color', grey);
-			await expect(lastSeenBar.locator('span')).toHaveAttribute('style', /width: 40%/);
-			await expect(cancel).toHaveCSS('color', grey);
-			await expect(runningRing).toHaveCSS('color', grey);
-
-			await completeGenerationJobWithoutEvent(jobId);
-			await expect(lastSeenBar).toBeVisible();
-			await page.evaluate(
-				({ prefix, takesBefore }) => {
-					const takes = document.querySelector('[role="tabpanel"]');
-					if (!takes) throw new Error('Expected the Takes panel');
-					const gaps = { seen: false };
-					Object.assign(window, { takeArrivalGaps: gaps });
-					new MutationObserver(() => {
-						const cardShows = takes.querySelector('[role="progressbar"]') !== null;
-						const takeShows =
-							takes.querySelectorAll(`button[aria-label^="${prefix}"]`).length > takesBefore;
-						if (!cardShows && !takeShows) gaps.seen = true;
-					}).observe(takes, { childList: true, subtree: true });
-				},
-				{ prefix: playTakePrefix, takesBefore: seededTakes }
-			);
-
-			await regainNetwork(page, context);
-
-			await expect(playButtons).toHaveCount(seededTakes + 1, { timeout: BACK_ONLINE_MS });
-			await expect(panel.getByRole('progressbar')).toHaveCount(0);
-			await expect(runningRing).toHaveCount(0);
-			await expect(offlineStrip(page)).toHaveCount(0);
-			const sawNeitherCardNorTake = await page.evaluate(
-				() => (window as unknown as { takeArrivalGaps: { seen: boolean } }).takeArrivalGaps.seen
-			);
-			expect(sawNeitherCardNorTake).toBe(false);
-
-			console.log(`Offline running-take flow /api requests: ${guard.apiRequestCount}`);
-			guard.assertClean();
-			guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
+	test('greys the running card with its last progress, and keeps it until the take that finished offline is in the list', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const songTitle = `${OFFLINE_SONG_TITLE} Running ${runMarker()}`;
+		const seededTakes = 1;
+		const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, seededTakes);
+		const jobId = await seedRunningGenerationJob(songId, {
+			progress: 0.4,
+			takeIndex: 1,
+			takeCount: 1,
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
 		});
-	}
+		const panel = page.getByRole('tabpanel');
+		const takesTab = page.getByRole('tab', { name: /Takes/ });
+		const runningRing = takesTab.locator('.ring');
+		const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
+		const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
+		const lastSeenBar = panel.getByRole('progressbar', {
+			name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
+		});
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.click();
+		await takesTab.click();
+		await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+		await expect(panel.getByText(/^40%/)).toBeVisible();
+		await expect(playButtons).toHaveCount(seededTakes);
+
+		await loseNetwork(page, context);
+
+		await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+			timeout: OFFLINE_NOTICE_MS
+		});
+		await expect(panel.getByText('last seen at 40%', { exact: true })).toBeVisible();
+		await expect(panel.getByText(/~\d/)).toHaveCount(0);
+		await expect(lastSeenBar).toHaveAttribute('aria-valuenow', '40');
+		const cancel = panel.getByRole('button', { name: EDITOR_GENERATE_CANCEL_OFFLINE_LABEL });
+		await expect(cancel).toHaveAttribute('aria-disabled', 'true');
+		const grey = await resolvedToken(page, '--text-disabled');
+		await expect(lastSeenBar.locator('span')).toHaveCSS('background-color', grey);
+		await expect(lastSeenBar.locator('span')).toHaveAttribute('style', /width: 40%/);
+		await expect(cancel).toHaveCSS('color', grey);
+		await expect(runningRing).toHaveCSS('color', grey);
+
+		await completeGenerationJobWithoutEvent(jobId);
+		await expect(lastSeenBar).toBeVisible();
+		await page.evaluate(
+			({ prefix, takesBefore }) => {
+				const takes = document.querySelector('[role="tabpanel"]');
+				if (!takes) throw new Error('Expected the Takes panel');
+				const gaps = { seen: false };
+				Object.assign(window, { takeArrivalGaps: gaps });
+				new MutationObserver(() => {
+					const cardShows = takes.querySelector('[role="progressbar"]') !== null;
+					const takeShows =
+						takes.querySelectorAll(`button[aria-label^="${prefix}"]`).length > takesBefore;
+					if (!cardShows && !takeShows) gaps.seen = true;
+				}).observe(takes, { childList: true, subtree: true });
+			},
+			{ prefix: playTakePrefix, takesBefore: seededTakes }
+		);
+
+		await regainNetwork(page, context);
+
+		await expect(playButtons).toHaveCount(seededTakes + 1, { timeout: BACK_ONLINE_MS });
+		await expect(panel.getByRole('progressbar')).toHaveCount(0);
+		await expect(runningRing).toHaveCount(0);
+		await expect(offlineStrip(page)).toHaveCount(0);
+		const sawNeitherCardNorTake = await page.evaluate(
+			() => (window as unknown as { takeArrivalGaps: { seen: boolean } }).takeArrivalGaps.seen
+		);
+		expect(sawNeitherCardNorTake).toBe(false);
+
+		console.log(`Offline running-take flow /api requests: ${guard.apiRequestCount}`);
+		guard.assertClean();
+		guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
+	});
 });

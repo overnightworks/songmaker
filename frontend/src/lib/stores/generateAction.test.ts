@@ -452,10 +452,17 @@ describe('generate action presentation', () => {
 				kind: 'idle'
 			},
 			{
-				case: 'it finished with fewer takes than it announced and its first take is in',
+				case: 'it finished its two takes and the refresh has brought only the first in',
 				awaitingTakes: true,
 				takes: [takeOfJob('a'), takeBeforeJob],
-				jobs: [runningJob({ status: 'completed', progress: 1, take_index: 1, take_count: 2 })],
+				jobs: [runningJob({ status: 'completed', progress: 1, take_index: 2, take_count: 2 })],
+				kind: 'generating'
+			},
+			{
+				case: 'it finished its two takes and the refresh brought both in',
+				awaitingTakes: true,
+				takes: [takeOfJob('b'), takeOfJob('a'), takeBeforeJob],
+				jobs: [runningJob({ status: 'completed', progress: 1, take_index: 2, take_count: 2 })],
 				kind: 'idle'
 			},
 			{
