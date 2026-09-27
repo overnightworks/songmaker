@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { AlbumItem, PaginatedResponse, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
+import { RAIL_LIBRARY_LOAD_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 
 const OFFLINE = new NetworkError('/api/x', new TypeError('Failed to fetch'));
 
@@ -28,11 +30,14 @@ import {
 	albumList,
 	albumSongsLoad,
 	allAlbumsLoad,
+	allAlbumsLoadFailure,
 	cancelAlbumSongLoads,
 	ensureAllAlbumsLoaded,
 	loadSongsForAlbum,
 	overlaySongList,
 	replaceSongInList,
+	rereadAllAlbums,
+	resetLibraryDataForTests,
 	songList,
 	upsertSongInList
 } from './libraryData';
@@ -74,9 +79,11 @@ beforeEach(() => {
 afterEach(() => {
 	vi.clearAllMocks();
 	vi.restoreAllMocks();
+	vi.useRealTimers();
 	songList.set([]);
 	albumList.set([]);
-	allAlbumsLoad.set({ status: 'idle', error: null });
+	resetLibraryDataForTests();
+	resetConnectivityForTests();
 });
 
 describe('song list mutations', () => {
@@ -370,7 +377,67 @@ describe('ensureAllAlbumsLoaded', () => {
 		vi.mocked(fetchAlbums).mockRejectedValueOnce(OFFLINE);
 		const ok = await ensureAllAlbumsLoaded();
 		expect(ok).toBe(false);
-		expect(get(allAlbumsLoad)).toEqual({ status: 'unreachable', error: null });
+		expect(get(allAlbumsLoad)).toEqual({
+			status: 'unreachable',
+			error: null,
+			reloadsExhausted: false
+		});
+		expect(get(allAlbumsLoadFailure)).toBeNull();
+	});
+
+	it('while no strip shows, reloads on a bounded backoff, then names the failure until a load starts', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchAlbums).mockRejectedValue(OFFLINE);
+
+		await ensureAllAlbumsLoaded();
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		expect(fetchAlbums).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
+		expect(get(allAlbumsLoadFailure)).toBe(RAIL_LIBRARY_LOAD_ERROR);
+
+		let resolvePage: ((value: PaginatedResponse<AlbumItem>) => void) | undefined;
+		vi.mocked(fetchAlbums).mockImplementationOnce(
+			() => new Promise((resolve) => (resolvePage = resolve))
+		);
+		const retry = ensureAllAlbumsLoaded();
+		expect(get(allAlbumsLoadFailure)).toBeNull();
+		resolvePage?.({ items: [makeAlbum()], total: 1, offset: 0, limit: 50, has_more: false });
+
+		expect(await retry).toBe(true);
+		expect(get(allAlbumsLoadFailure)).toBeNull();
+	});
+
+	it('under the offline strip names no failure and loads again once back online', async () => {
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(OFFLINE);
+		await ensureAllAlbumsLoaded();
+		expect(get(allAlbumsLoadFailure)).toBeNull();
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(get(allAlbumsLoad).status).toBe('ready'));
+		expect(fetchAlbums).toHaveBeenCalledTimes(2);
+	});
+
+	it('a gap re-read the network swallowed reads every album again on the same backoff', async () => {
+		vi.useFakeTimers();
+		albumList.set([makeAlbum({ id: 'a1' }), makeAlbum({ id: 'deleted-elsewhere' })]);
+		allAlbumsLoad.set({ status: 'ready', error: null });
+		vi.mocked(fetchAlbums)
+			.mockRejectedValueOnce(OFFLINE)
+			.mockResolvedValueOnce({
+				items: [makeAlbum({ id: 'a1' })],
+				total: 1,
+				offset: 0,
+				limit: 50,
+				has_more: false
+			});
+
+		expect(await rereadAllAlbums()).toBe(false);
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
+
+		expect(get(allAlbumsLoad).status).toBe('ready');
+		expect(get(albumList).map((a) => a.id)).toEqual(['a1']);
 	});
 
 	it.each([
@@ -391,6 +458,7 @@ describe('ensureAllAlbumsLoaded', () => {
 			const ok = await ensureAllAlbumsLoaded();
 			expect(ok).toBe(false);
 			expect(get(allAlbumsLoad)).toEqual({ status: 'error', error });
+			expect(get(allAlbumsLoadFailure)).toBe(error);
 		}
 	);
 });
