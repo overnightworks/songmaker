@@ -8,7 +8,8 @@
 		retryRailSearch,
 		syncRailSearch,
 		visibleRailSearchPages,
-		type RailSearchTarget
+		type RailSearchTarget,
+		type RailSearchTextPart
 	} from '$lib/stores/railSearch';
 	import { openRailSearchTarget } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
@@ -16,6 +17,7 @@
 	import PlaylistCover from '../PlaylistCover.svelte';
 
 	const ACTIVE_RESULT_CLASS = 'rail-search-result-active';
+	const DETAIL_SEPARATOR = ' · ';
 
 	const query = $derived($railTreeQuery);
 	const searchState = $derived($railSearch);
@@ -82,6 +84,11 @@
 		void openRailSearchTarget(target);
 	}
 </script>
+
+{#snippet markedText(parts: RailSearchTextPart[])}
+	{#each parts as part, index (index)}{#if part.matched}<mark>{part.text}</mark
+			>{:else}{part.text}{/if}{/each}
+{/snippet}
 
 <div class="rail-search-region" class:rail-search-results={hasQuery}>
 	<div class="rail-search">
@@ -166,14 +173,12 @@
 											>
 										{/if}
 										<span class="rail-search-text">
-											<span class="rail-search-title">
-												{#each result.labelParts as part, index (index)}
-													{#if part.matched}<mark>{part.text}</mark>{:else}{part.text}{/if}
-												{/each}
-											</span>
+											<span class="rail-search-title">{@render markedText(result.labelParts)}</span>
 											<small
 												><span class="rail-search-kind">{result.kindWord}</span
-												>{#if result.detail}{` · ${result.detail}`}{/if}</small
+												>{#if result.detailParts.length > 0}{DETAIL_SEPARATOR}{@render markedText(
+														result.detailParts
+													)}{/if}</small
 											>
 										</span>
 									</button>
@@ -414,7 +419,7 @@
 		font-size: 0.8rem;
 	}
 
-	.rail-search-title mark {
+	.rail-search-result mark {
 		background: none;
 		color: var(--primary);
 		font-weight: 600;
