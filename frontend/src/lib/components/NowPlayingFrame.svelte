@@ -769,6 +769,12 @@
 	.now-playing.stacked .np-right-col {
 		display: none;
 	}
+	/* On a short phone the column's own zero floor let its row collapse, and the
+	   centred lyrics spilled up over the transport; sized to content, the row
+	   stays whole and the body scrolls to the lyrics instead. */
+	.now-playing.stacked .np-lyrics-col {
+		min-height: min-content;
+	}
 	/* The take sheet's backdrop dims the surface, yet × and "Go to song" stay
 	   above it: a tap meant for them must not only close the sheet. */
 	.now-playing.stacked .np-header,
