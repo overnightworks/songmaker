@@ -101,7 +101,9 @@ import {
 	resolveLegacySongQueryAddress,
 	libraryRootState,
 	libraryScrollAnchor,
+	rememberedSongTab,
 	resetLibraryContextForTests,
+	showSongTab,
 	snapshotLibraryHistory,
 	writeLibraryHistory
 } from './libraryContext';
@@ -185,7 +187,7 @@ describe('library history snapshot', () => {
 			songOffset: 200,
 			songId: 's1',
 			scrollAnchor: 240,
-			detailTab: 'write'
+			detailTab: 'edit'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
 	});
@@ -419,23 +421,40 @@ describe('applyLibraryHistory', () => {
 		expect(get(librarySurface)).toBe('browse');
 	});
 
-	it('defaults a missing detailTab to the write tab without failing restore', async () => {
+	it('defaults a missing detailTab to the Edit tab without failing restore', async () => {
 		const { detailTab: recordedTab, ...withoutDetailTab } = libraryRootState();
-		expect(recordedTab).toBe('write');
+		expect(recordedTab).toBe('edit');
 		detailTab.set('takes');
 		await applyLibraryHistory(withoutDetailTab);
-		expect(get(detailTab)).toBe('write');
+		expect(get(detailTab)).toBe('edit');
 		expect(get(librarySurface)).toBe('browse');
 	});
 
-	it('maps a pre-#100 detailTab (generations/edit/chat) to the new write/takes tabs', async () => {
-		detailTab.set('takes');
-		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'generations' as never });
-		expect(get(detailTab)).toBe('takes');
-		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'edit' as never });
-		expect(get(detailTab)).toBe('write');
-		await applyLibraryHistory({ ...libraryRootState(), detailTab: 'chat' as never });
-		expect(get(detailTab)).toBe('write');
+	it.each([
+		['write', 'edit'],
+		['chat', 'edit'],
+		['generations', 'takes']
+	] as const)('restores an old %s history entry on the %s tab', async (legacy, restored) => {
+		detailTab.set(restored === 'edit' ? 'takes' : 'edit');
+		await applyLibraryHistory({ ...libraryRootState(), detailTab: legacy as never });
+		expect(get(detailTab)).toBe(restored);
+	});
+
+	it('remembers the tab a restored song was shown on, and only for that song', async () => {
+		await applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			songId: 's9',
+			detailTab: 'takes'
+		});
+		expect(rememberedSongTab('s9')).toBe('takes');
+		expect(rememberedSongTab('s8')).toBe('edit');
+	});
+
+	it('forgets every remembered tab on reset', () => {
+		showSongTab('s9', 'takes');
+		resetLibraryContextForTests();
+		expect(rememberedSongTab('s9')).toBe('edit');
 	});
 });
 
@@ -789,6 +808,30 @@ describe('openSongAddress', () => {
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
 		expect(history.state.scrollAnchor).toBe(320);
+	});
+
+	it('opens a song address on the tab last shown for that song', async () => {
+		fetchSongs.mockResolvedValueOnce({
+			...emptyPage([
+				song({
+					title: 'Tide',
+					generation_count: 0,
+					id: 's9',
+					slug: 'tide',
+					album_id: 'a9',
+					album_title: 'Remote'
+				})
+			]),
+			limit: 200
+		});
+		showSongTab('s9', 'takes');
+		detailTab.set('edit');
+		history.replaceState(null, '', '/album/a9/tide');
+
+		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
+
+		expect(history.state.detailTab).toBe('takes');
+		expect(get(detailTab)).toBe('takes');
 	});
 
 	it('seeds the take named by the take query and opens Takes', async () => {
