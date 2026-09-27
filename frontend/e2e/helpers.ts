@@ -10,6 +10,7 @@ import {
 	RAIL_NAV_LABEL,
 	RESOURCE_EVENT_STREAM_PATH
 } from '../src/lib/constants';
+import { BASE_URL } from './seed';
 
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
@@ -26,8 +27,8 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * What the library flow costs the API per shell, measured on a green full-suite
  * run against `library.spec.ts`'s own first test: 41 requests on desktop and
  * 30 on mobile against a clean stack, budgeted at 41 and 40 respectively. The
- * desktop increase is caused by Continue reloading after the listened event on
- * the return to the wall (measured 41 on 05.09.2026); mobile is unchanged. Both projects
+ * desktop increase is caused by Continue fetching fresh on the return to the
+ * wall (measured 41 on 05.09.2026); mobile is unchanged. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
@@ -150,6 +151,15 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 		.click();
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+}
+
+/** Headers a browser session's own out-of-page API write needs past the CSRF guard. */
+export async function csrfHeaders(page: Page): Promise<Record<string, string>> {
+	const csrf = (await page.context().cookies(BASE_URL)).find(
+		(cookie) => cookie.name === 'csrf_token'
+	);
+	if (!csrf) throw new Error('The E2E session has no CSRF token');
+	return { 'x-csrf-token': csrf.value, origin: BASE_URL };
 }
 
 /** The rail's own navigation — behind the drawer on the compact shell. */
