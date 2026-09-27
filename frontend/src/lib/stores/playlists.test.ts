@@ -17,7 +17,7 @@ import {
 } from '$lib/api/client';
 import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
 import { toasts } from '$lib/stores/toast';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
 	createNewPlaylist,
@@ -321,12 +321,31 @@ describe('loadPlaylistDetail', () => {
 });
 
 describe('loadPlaylists', () => {
-	it('records an error without throwing so the albums section can stay up', async () => {
-		vi.mocked(fetchPlaylists).mockRejectedValueOnce(new Error('offline'));
-		const ok = await loadPlaylists();
-		expect(ok).toBe(false);
-		expect(get(playlistLoad)).toEqual({ status: 'error', error: 'offline' });
-	});
+	it.each([
+		{
+			failure: 'a network failure',
+			err: new NetworkError('/api/playlists', new TypeError('Failed to fetch')),
+			error: LIBRARY_PLAYLISTS_ERROR
+		},
+		{
+			failure: 'a server answer without a reason',
+			err: new ApiError(500, '', '/api/playlists'),
+			error: LIBRARY_PLAYLISTS_ERROR
+		},
+		{
+			failure: 'a server reason',
+			err: new ApiError(503, 'Playlists are migrating', '/api/playlists'),
+			error: 'Playlists are migrating'
+		}
+	])(
+		'records $failure readably without throwing so the albums section can stay up',
+		async ({ err, error }) => {
+			vi.mocked(fetchPlaylists).mockRejectedValueOnce(err);
+			const ok = await loadPlaylists();
+			expect(ok).toBe(false);
+			expect(get(playlistLoad)).toEqual({ status: 'error', error });
+		}
+	);
 
 	it('ensurePlaylistsLoaded does not refetch when already ready', async () => {
 		vi.mocked(fetchPlaylists).mockResolvedValueOnce([]);
