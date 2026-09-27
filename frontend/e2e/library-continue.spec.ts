@@ -78,7 +78,16 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 
 	// Home stays open while the same musician listens somewhere else; the app
 	// coming back to the foreground must show that, not the list it opened with.
-	const listenElsewhere = await page.request.post(`/api/songs/${listenedSong.id}/listen`, {
+	// The listen elsewhere is to the album pick, so the in-app play below still
+	// has its own song to move.
+	const songsResponse = await page.request.get(`/api/songs?album_id=${library.albumId}`);
+	expect(songsResponse.status()).toBe(200);
+	const albumSongs: Array<{ id: string; title: string }> = (await songsResponse.json()).items;
+	const songListenedElsewhere = albumSongs.find((song) => song.title === library.pickedSongTitle);
+	if (!songListenedElsewhere) throw new Error(`Missing seeded song ${library.pickedSongTitle}`);
+	const songListenedElsewhereLabel = `Open song ${songListenedElsewhere.title}`;
+	expect(before.slice(0, 2)).not.toContain(songListenedElsewhereLabel);
+	const listenElsewhere = await page.request.post(`/api/songs/${songListenedElsewhere.id}/listen`, {
 		headers: await csrfHeaders(page)
 	});
 	expect(listenElsewhere.status()).toBe(200);
@@ -95,14 +104,15 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	});
 	expect((await continueAfterForeground).status()).toBe(200);
 	await expect(
-		continueRow.getByRole('button', { name: listenedSongLabel, exact: true })
+		continueRow.getByRole('button', { name: songListenedElsewhereLabel, exact: true })
 	).toBeVisible();
 	expect(continueRequests).toBe(2);
 	const afterForeground = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
 	expect(afterForeground).not.toEqual(before);
-	expect(afterForeground.slice(0, 2)).toContain(listenedSongLabel);
+	expect(afterForeground.slice(0, 2)).toContain(songListenedElsewhereLabel);
+	expect(afterForeground.slice(0, 2)).not.toContain(listenedSongLabel);
 	await page.evaluate(() => Reflect.deleteProperty(document, 'visibilityState'));
 
 	const surface = workspace(page);
@@ -137,7 +147,7 @@ test('Continue shows up to six tagged entries, follows a listen made elsewhere o
 	const afterSpaReturn = await entries.evaluateAll((buttons) =>
 		buttons.map((button) => button.getAttribute('aria-label'))
 	);
-	expect(afterSpaReturn).not.toEqual(before);
+	expect(afterSpaReturn).not.toEqual(afterForeground);
 	expect(afterSpaReturn.slice(0, 2)).toContain(listenedSongLabel);
 	const continueRequestsBeforeReload = continueRequests;
 	const continueCoverRequestsBeforeReload = continueCoverRequests;
