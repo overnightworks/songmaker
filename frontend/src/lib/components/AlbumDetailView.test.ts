@@ -154,7 +154,7 @@ async function renderDetail(): Promise<HTMLElement> {
 beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Night Drive' })]);
 	songList.set([
-		song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+		song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 1 })
 	]);
 	selectedAlbumId.set('a-local');
 	uploadAlbumCover.mockReset();
@@ -266,24 +266,54 @@ describe('AlbumDetailView header', () => {
 		).not.toBeNull();
 	});
 
-	it('dims play and shuffle on an album without songs, and a tap keeps the running queue', async () => {
-		setShuffle(true);
-		songList.set([]);
-		const running = { type: 'library' as const, index: 3 };
-		queueContext.set(running);
+	it.each([
+		['without songs', []],
+		[
+			'whose songs have no takes',
+			[
+				song({
+					id: 's-local',
+					album_id: 'a-local',
+					album_title: 'Night Drive',
+					generation_count: 0
+				})
+			]
+		]
+	])(
+		'dims play and shuffle on an album %s, and a tap keeps the running queue',
+		async (_, songs) => {
+			setShuffle(true);
+			songList.set(songs);
+			const running = { type: 'library' as const, index: 3 };
+			queueContext.set(running);
+			const target = await renderDetail();
+			const header = requireElement(target, '.collection-header');
+			const buttons = [collectionPlayLabel('album'), collectionShuffleLabel('album')].map((label) =>
+				getByRoleButton(header, label)
+			);
+
+			for (const button of buttons) button.click();
+			await tick();
+
+			expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
+			expect(playAlbum).not.toHaveBeenCalled();
+			expect(get(queueContext)).toBe(running);
+			expect(get(shuffleEnabled)).toBe(true);
+		}
+	);
+
+	it('keeps pause on the circle of a playing album whose songs have no takes, with shuffle dimmed', async () => {
+		songList.set([
+			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
+		]);
+		queueContext.set({ type: 'album', albumId: 'a-local' });
+		audioPlayer.current = { songId: 's-local' } as unknown as typeof audioPlayer.current;
+		audioPlayer.status = 'playing';
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
-		const buttons = [collectionPlayLabel('album'), collectionShuffleLabel('album')].map((label) =>
-			getByRoleButton(header, label)
-		);
 
-		for (const button of buttons) button.click();
-		await tick();
-
-		expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
-		expect(playAlbum).not.toHaveBeenCalled();
-		expect(get(queueContext)).toBe(running);
-		expect(get(shuffleEnabled)).toBe(true);
+		expect(getByRoleButton(header, collectionPauseLabel('album')).disabled).toBe(false);
+		expect(getByRoleButton(header, collectionShuffleLabel('album')).disabled).toBe(true);
 	});
 
 	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(

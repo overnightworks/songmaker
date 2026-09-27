@@ -95,6 +95,10 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
+	// Nothing to play is decided here once, from the songs the view shows: an
+	// album without songs, or whose songs have no take yet, gives the header
+	// nothing to start, so neither of its controls can reach the running queue.
+	const albumHasTakes = $derived(albumSongs.some((s) => s.generation_count > 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
@@ -489,9 +493,7 @@
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={currentAlbumId && albumSongs.length > 0
-				? (start) => playAlbum(currentAlbumId, start)
-				: null}
+			onplay={currentAlbumId && albumHasTakes ? (start) => playAlbum(currentAlbumId, start) : null}
 			onrename={onRenameAlbum}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
