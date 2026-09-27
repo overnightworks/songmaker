@@ -1,8 +1,0 @@
-claim_id = "cc21ff6f4e7144009fcd894d4ef453f1"
-agent = "claude-head"
-role = "builder"
-base = "f049cf050b5b0c24e1469ac641a047d2947486c9"
-branch = "claude/issue-1061-cowriter-tab"
-scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/album-address.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/EditorHeader.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/components/editor/WriteColumn.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/ui.ts"]
-opened_commit = "c5427085171524125ab904bdebf10128940bf024"
-whole_reason = "the co-writer tab across the tab owner, three renderers, the removed pushed-screen state and their tests and specs"
