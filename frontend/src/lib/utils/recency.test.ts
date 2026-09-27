@@ -47,6 +47,18 @@ describe('compareByCreatedAt', () => {
 		).toEqual(['Ärger', 'Für', 'fur', 'sonne']);
 	});
 
+	it('sorts numbers in titles by value, so "Demo 2" comes before "Demo 10"', () => {
+		const titles = [
+			{ id: 'a', title: 'Demo 10' },
+			{ id: 'b', title: 'Demo 2' },
+			{ id: 'c', title: 'Demo 1' }
+		];
+
+		expect(
+			titles.sort((a, b) => compareByCreatedAt(a, b, 'title')).map((item) => item.title)
+		).toEqual(['Demo 1', 'Demo 2', 'Demo 10']);
+	});
+
 	it('places missing or invalid dates last', () => {
 		expect(
 			[missing, older, { id: 'bad', title: 'Bad', created_at: 'nope' }].sort((a, b) =>

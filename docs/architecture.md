@@ -155,7 +155,8 @@ above one wall of albums and playlists together, with no filter chips (#1102,
 frame (g) of `docs/design/album-browsing.html`). The wall's heading row holds
 one switch, A–Z · Recent · Added; a first visit opens in A–Z and the choice is
 remembered on this device (`libraryWallOrder` in `stores/ui.ts`), never
-re-sorting Continue. A–Z compares titles ignoring case and accents (one
+re-sorting Continue. A–Z compares titles ignoring case and accents and
+reads numbers by value, so "Demo 2" precedes "Demo 10" (one
 `Intl.Collator` in `utils/recency.ts`); Recent is the rank the continue
 endpoint gives each place, read in pages of 200 until a short page, so every
 place is ranked and there is no second activity rule; Added is newest
