@@ -34,10 +34,10 @@ import { CREATED_SORTS } from '$lib/utils/recency';
 // whichever collection is currently open; 'create' shows the create form.
 // Song detail always wins over all three (see LibraryWorkspace.svelte).
 type LibrarySurface = 'browse' | 'detail' | 'create';
-// Editor tabs (epic #98): 'write' hosts style/lyrics (and Co-Writer mode),
-// 'takes' lists generations. Superseded the pre-#100 'generations'|'edit'|'chat'
-// trio; LEGACY_DETAIL_TAB_MAP below keeps old persisted history entries valid.
-export type DetailTab = 'write' | 'takes';
+// Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate; 'takes'
+// lists generations. LEGACY_DETAIL_TAB_MAP below keeps history entries written
+// under the older 'write' and pre-#100 'generations'|'chat' names valid.
+export type DetailTab = 'edit' | 'takes';
 
 type CollectionSnapshot = OpenCollection | null;
 
@@ -61,21 +61,24 @@ export interface LibraryHistoryState {
 	layer?: string;
 }
 
-// Opening a song lands on Write — on a compact layout the tabs are the only
-// way in, and writing is what the editor is for (#141/13).
-const DEFAULT_DETAIL_TAB: DetailTab = 'write';
+// A song opened for the first time lands on Edit — on a compact layout the
+// tabs are the only way in, and editing is what the song page is for (#141/13).
+const DEFAULT_DETAIL_TAB: DetailTab = 'edit';
 
 export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
 const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
-const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['write', 'takes']);
+const DETAIL_TABS: ReadonlySet<DetailTab> = new Set(['edit', 'takes']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
+	write: 'edit',
 	generations: 'takes',
-	edit: 'write',
-	chat: 'write'
+	chat: 'edit'
 };
+// Session memory only (#1047): a reload restores the open song's tab from its
+// history entry, and every other song lands on Edit again.
+const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
@@ -722,8 +725,17 @@ function songAddressState(song: SongItem, generationId: string | null): LibraryH
 		collection: { kind: 'album', id: song.album_id },
 		songId: song.id,
 		generationId,
-		detailTab: generationId ? 'takes' : base.detailTab
+		detailTab: generationId ? 'takes' : rememberedSongTab(song.id)
 	};
+}
+
+export function rememberedSongTab(songId: string): DetailTab {
+	return songTabs.get(songId) ?? DEFAULT_DETAIL_TAB;
+}
+
+export function showSongTab(songId: string | null, tab: DetailTab): void {
+	detailTab.set(tab);
+	if (songId) songTabs.set(songId, tab);
 }
 
 export function snapshotLibraryHistory(index: number): LibraryHistoryState {
@@ -754,7 +766,7 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
-	detailTab.set(normalizeDetailTab(state.detailTab));
+	showSongTab(state.songId, normalizeDetailTab(state.detailTab));
 	libraryScrollAnchor.set(state.scrollAnchor);
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
@@ -899,6 +911,7 @@ export function resetLibraryContextForTests(): void {
 	leaveRestoredLibraryHistory();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
+	songTabs.clear();
 	libraryScrollAnchor.set(0);
 	setOpenCollection(null);
 }
