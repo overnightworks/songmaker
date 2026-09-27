@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { NetworkError } from '$lib/api/fetch';
 
 const mockListLoras = vi.fn();
 const mockGetLora = vi.fn();
@@ -18,7 +18,6 @@ vi.mock('$lib/api/loras', () => ({
 
 import {
 	loras,
-	lorasError,
 	anyLoraActive,
 	isLoraActive,
 	loadLoras,
@@ -50,7 +49,6 @@ beforeEach(() => {
 	mockSoftDelete.mockReset();
 	mockTrainLora.mockReset();
 	loras.set([]);
-	lorasError.set(null);
 });
 
 describe('LoRA store', () => {
@@ -68,24 +66,15 @@ describe('LoRA store', () => {
 		mockListLoras.mockResolvedValueOnce([makeLora(), makeLora({ id: 'l2' })]);
 		await loadLoras();
 		expect(get(loras)).toHaveLength(2);
-		expect(get(lorasError)).toBeNull();
 	});
 
-	it.each([
-		{
-			failure: 'a refusal with a reason',
-			err: new ApiError(403, 'Voices are admin-only', '/api/loras'),
-			shown: 'Voices are admin-only'
-		},
-		{
-			failure: 'a network failure',
-			err: new NetworkError('/api/loras', new TypeError('Failed to fetch')),
-			shown: 'Failed to load voices'
-		}
-	])('loadLoras names $failure without browser text and rethrows', async ({ err, shown }) => {
+	it('loadLoras hands a failure to its caller and keeps the voices it listed', async () => {
+		loras.set([makeLora()]);
+		const err = new NetworkError('/api/loras', new TypeError('Failed to fetch'));
 		mockListLoras.mockRejectedValueOnce(err);
+
 		await expect(loadLoras()).rejects.toBe(err);
-		expect(get(lorasError)).toBe(shown);
+		expect(get(loras)).toHaveLength(1);
 	});
 
 	it('loadLoras passes includeDeleted flag through', async () => {

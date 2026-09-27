@@ -1,12 +1,14 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import { createPollingStore } from './adminPolling';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 
 beforeEach(() => {
 	vi.useFakeTimers();
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	vi.useRealTimers();
 });
 
@@ -146,6 +148,37 @@ describe('createPollingStore', () => {
 
 		document.dispatchEvent(new Event('visibilitychange'));
 		await vi.advanceTimersByTimeAsync(0);
+		expect(fetcher).toHaveBeenCalledTimes(1);
+	});
+
+	it('polls again by itself once the connection is back after its failures stopped it', async () => {
+		const fetcher = vi.fn().mockRejectedValue(new Error('offline'));
+		const store = createPollingStore(fetcher, 1000, { isHidden: () => false, maxErrors: 2 });
+		store.start();
+		reportResourceStreamReachable(false);
+		await vi.advanceTimersByTimeAsync(5000);
+		expect(fetcher).toHaveBeenCalledTimes(2);
+
+		fetcher.mockResolvedValue('back');
+		reportResourceStreamReachable(true);
+		await vi.advanceTimersByTimeAsync(1000);
+
+		expect(get(store.data)).toBe('back');
+		expect(fetcher).toHaveBeenCalledTimes(4);
+		store.stop();
+	});
+
+	it('once stopped by its caller, stays stopped when the connection comes back', async () => {
+		const fetcher = vi.fn().mockResolvedValue('ok');
+		const store = createPollingStore(fetcher, 1000, { isHidden: () => false });
+		store.start();
+		await vi.advanceTimersByTimeAsync(0);
+		store.stop();
+
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+		await vi.advanceTimersByTimeAsync(3000);
+
 		expect(fetcher).toHaveBeenCalledTimes(1);
 	});
 });

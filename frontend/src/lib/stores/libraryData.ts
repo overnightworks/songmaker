@@ -1,11 +1,15 @@
-import { get, writable } from 'svelte/store';
+import { derived, get, writable, type Readable } from 'svelte/store';
 import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
-import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
+import {
+	LIBRARY_ALBUM_PAGE_SIZE,
+	LIBRARY_SONG_PAGE_SIZE,
+	RAIL_LIBRARY_LOAD_ERROR
+} from '$lib/constants';
+import { reloadWhileUnreachable } from './connectivity';
 
 const ALBUM_SONGS_LOAD_ERROR = 'Failed to load songs';
-const ALL_ALBUMS_LOAD_ERROR = 'Failed to load albums';
 
 // The library's in-memory cache of every browsed album and song. Every
 // surface that lists, filters, or mutates library data reads and writes
@@ -157,13 +161,13 @@ export function addAlbumToList(album: AlbumItem): void {
 	});
 }
 
-// 'unreachable' is a load the network swallowed: the offline strip says so,
-// the albums already listed stay, and the load runs again once back online.
-type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
-
+// 'unreachable' is a load the network swallowed, 'error' one the server
+// refused; either keeps the albums already listed. Whether it runs again by
+// itself and what it says are allAlbumsReloads' answer, so the state holds
+// no words of its own.
 interface AllAlbumsLoadState {
-	status: AllAlbumsLoadStatus;
-	error: string | null;
+	status: 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
+	error: null;
 }
 
 // Tracks a route-independent full load of every album, for surfaces (the
@@ -176,10 +180,28 @@ interface AllAlbumsLoadState {
 export const allAlbumsLoad = writable<AllAlbumsLoadState>({ status: 'idle', error: null });
 
 let allAlbumsInflight: Promise<boolean> | null = null;
+// A gap re-read the network swallowed still owes its replace until a load
+// succeeds: whichever load runs first once back online -- the wall's own
+// catch-up merge or the reload -- reads every album and replaces the list,
+// so one deleted on another device cannot survive a merge.
+let replaceOwed = false;
+const allAlbumsReloads = reloadWhileUnreachable(() => {
+	void loadAllAlbums({ replace: false });
+});
+
+/**
+ * The failure a surface names about the full album load, or null while there
+ * is none to name (#1107): the reload owner's answer, quiet again while a
+ * load is under way.
+ */
+export const allAlbumsLoadFailure: Readable<string | null> = derived(
+	[allAlbumsLoad, allAlbumsReloads.loadFailure],
+	([load, failure]) => (load.status === 'loading' ? null : failure)
+);
 
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
-	return loadAllAlbums(mergeFetchedAlbums);
+	return loadAllAlbums({ replace: false });
 }
 
 // A browse reset never removes an album, so after a stream gap one deleted or
@@ -190,7 +212,7 @@ export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 export async function rereadAllAlbums(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'idle') return true;
 	if (allAlbumsInflight !== null) await allAlbumsInflight;
-	return loadAllAlbums(replaceWithFetched);
+	return loadAllAlbums({ replace: true });
 }
 
 // A browse reset reads only the first album page (history navigation and a
@@ -214,10 +236,10 @@ function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
 	];
 }
 
-function loadAllAlbums(
-	combine: (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[]
-): Promise<boolean> {
+function loadAllAlbums({ replace }: { replace: boolean }): Promise<boolean> {
 	if (allAlbumsInflight !== null) return allAlbumsInflight;
+	replaceOwed ||= replace;
+	const combine = replaceOwed ? replaceWithFetched : mergeFetchedAlbums;
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
 		try {
@@ -230,21 +252,22 @@ function loadAllAlbums(
 				if (!page.has_more || page.items.length === 0) break;
 			}
 			albumList.update((current) => combine(current, collected));
+			replaceOwed = false;
+			allAlbumsReloads.stop();
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsLoad.set(allAlbumsFailure(err));
+			allAlbumsReloads.nameLoadFailure(err, RAIL_LIBRARY_LOAD_ERROR);
+			allAlbumsLoad.set({
+				status: err instanceof NetworkError ? 'unreachable' : 'error',
+				error: null
+			});
 			return false;
 		} finally {
 			allAlbumsInflight = null;
 		}
 	})();
 	return allAlbumsInflight;
-}
-
-function allAlbumsFailure(err: unknown): AllAlbumsLoadState {
-	if (err instanceof NetworkError) return { status: 'unreachable', error: null };
-	return { status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) };
 }
 
 // Existing entries win on a conflicting id, matching loadLibraryBrowse's
@@ -288,4 +311,11 @@ export function removeGenerationFromSong(songId: string, genId: string): void {
 		generations: s.generations.filter((g) => g.id !== genId),
 		generation_count: s.generation_count - 1
 	}));
+}
+
+export function resetLibraryDataForTests(): void {
+	allAlbumsReloads.stop();
+	allAlbumsInflight = null;
+	replaceOwed = false;
+	allAlbumsLoad.set({ status: 'idle', error: null });
 }

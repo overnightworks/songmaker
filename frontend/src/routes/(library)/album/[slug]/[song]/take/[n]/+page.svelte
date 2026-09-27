@@ -5,6 +5,7 @@
 	import { describeFailure } from '$lib/api/fetch';
 	import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 	import { openTakeAddress } from '$lib/stores/libraryContext';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 
 	type AddressState =
@@ -26,6 +27,12 @@
 	let addressState = $state<AddressState>('resolving');
 	let failure = $state<string | null>(null);
 	let openRequests = 0;
+	// An address that could not be read shows its one line with Retry, and
+	// reads again by itself once the network lets it (#1107 S9).
+	const addressReloads = reloadWhileUnreachable(
+		() => void openAddress(albumSlug, songSlug, takeNumber)
+	);
+	$effect(() => () => addressReloads.stop());
 
 	const albumSlug = $derived(page.params.slug ?? '');
 	const songSlug = $derived(page.params.song ?? '');
@@ -52,9 +59,11 @@
 		try {
 			const address = await openTakeAddress(albumId, slug, n);
 			if (request !== openRequests) return;
+			addressReloads.stop();
 			addressState = address === 'found' ? 'open' : address;
 		} catch (err) {
 			if (request !== openRequests) return;
+			addressReloads.afterLoadFailure(err);
 			failure = describeFailure(err, UNREACHABLE_TAKE_MESSAGE);
 			addressState = 'unreachable';
 		}

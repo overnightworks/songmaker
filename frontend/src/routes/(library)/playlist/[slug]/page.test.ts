@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { ApiError, NetworkError } from '$lib/api/fetch';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -236,6 +237,25 @@ describe('/playlist/<slug> whose playlist cannot be reached', () => {
 			expect(target.textContent).toContain('This playlist could not be loaded.')
 		);
 		expect(target.textContent).not.toMatch(/Failed to fetch|No answer from/);
+	});
+
+	it('offline, shows its one line with Try again and opens by itself once back online', async () => {
+		browserReportsOnline(false);
+		api.fetchPlaylists.mockRejectedValue(
+			new NetworkError('/api/playlists', new TypeError('Failed to fetch'))
+		);
+		const target = openAddress();
+		await vi.waitFor(() =>
+			expect(target.textContent).toContain('This playlist could not be loaded.')
+		);
+		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+
+		api.fetchPlaylists.mockResolvedValue([
+			playlistItem({ entry_count: 1, share_slug: null, title: PLAYLIST_TITLE, slug: PLAYLIST_SLUG })
+		]);
+		browserReportsOnline(true);
+
+		await vi.waitFor(() => expect(target.textContent).toContain(ENTRY_SONG_TITLE));
 	});
 
 	it('shows the playlist after Try again once the failure is over', async () => {

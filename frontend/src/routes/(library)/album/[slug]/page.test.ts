@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -255,6 +256,19 @@ describe('/album/<slug> whose album cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain('This album could not be loaded.'));
 		expect(target.textContent).not.toContain('Failed to fetch');
+	});
+
+	it('offline, shows its one line with Try again and opens by itself once back online', async () => {
+		browserReportsOnline(false);
+		api.fetchAlbum.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('This album could not be loaded.'));
+		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+
+		api.fetchAlbum.mockResolvedValue(album({ id: ALBUM_SLUG, title: ALBUM_TITLE }));
+		browserReportsOnline(true);
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 	});
 
 	it('shows the album after Try again once the failure is over', async () => {

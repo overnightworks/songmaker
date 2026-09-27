@@ -22,6 +22,7 @@
 		isLibraryHistoryState,
 		resolveLegacySongQueryAddress
 	} from '$lib/stores/libraryContext';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 	import { addToast } from '$lib/stores/toast';
 
@@ -37,6 +38,12 @@
 	let addressState = $state<AddressState>('idle');
 	let failure = $state<string | null>(null);
 	let openRequests = 0;
+	// An address that could not be read shows its one line with Retry, and
+	// reads again by itself once the network lets it (#1107 S9).
+	const addressReloads = reloadWhileUnreachable(
+		() => void redirectLegacyAddress(songId, generationId)
+	);
+	$effect(() => () => addressReloads.stop());
 
 	const legacySongQuery = $derived(readLegacySongQuery(page.url.searchParams));
 	const songId = $derived(legacySongQuery.songId);
@@ -90,6 +97,7 @@
 		try {
 			const resolved = await resolveLegacySongQueryAddress(id, genId);
 			if (request !== openRequests) return;
+			addressReloads.stop();
 			if (resolved.kind === 'unknown-song') {
 				addressState = 'unknown-song';
 				return;
@@ -102,6 +110,7 @@
 			if (resolved.droppedUnknownTake) addToast(LEGACY_TAKE_LINK_NOT_FOUND_TOAST, 'error');
 		} catch (err) {
 			if (request !== openRequests) return;
+			addressReloads.afterLoadFailure(err);
 			failure = describeFailure(err, UNREACHABLE_SONG_MESSAGE);
 			addressState = 'unreachable';
 		}
