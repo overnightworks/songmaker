@@ -1,4 +1,4 @@
-import { derived, readable, writable, type Readable } from 'svelte/store';
+import { derived, get, readable, writable, type Readable } from 'svelte/store';
 
 /**
  * The one answer to "can this page reach the server right now" (#1039).
@@ -29,6 +29,19 @@ export const offline: Readable<boolean> = derived(
 	[browserOnline, resourceStreamReachable],
 	([online, reachable]) => !online || !reachable
 );
+
+/**
+ * Calls `callback` each time the connection comes back after it was lost, so
+ * a surface that hid what it could not load reads it again without a tap.
+ * Returns the function that stops listening.
+ */
+export function whenBackOnline(callback: () => void): () => void {
+	let wasOffline = get(offline);
+	return offline.subscribe((isOffline) => {
+		if (wasOffline && !isOffline) callback();
+		wasOffline = isOffline;
+	});
+}
 
 export function resetConnectivityForTests(): void {
 	resourceStreamReachable.set(true);

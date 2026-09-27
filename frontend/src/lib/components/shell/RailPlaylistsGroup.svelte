@@ -3,6 +3,7 @@
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
+		playlistLoad,
 		selectedPlaylistDetail,
 		selectedPlaylistId
 	} from '$lib/stores/playlists';
@@ -11,6 +12,7 @@
 		playPlaylistEntryAndShowNowPlaying,
 		queueContext
 	} from '$lib/stores/player';
+	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
@@ -23,6 +25,10 @@
 	const PLAYLISTS_OPEN_STORAGE_KEY = 'songmaker.rail-playlists-open';
 
 	const playlists = $derived($playlistList);
+	// A list that never loaded counts nothing yet, rather than a false 0.
+	const playlistCount = $derived(
+		playlists.length > 0 || $playlistLoad.status === 'ready' ? playlists.length : undefined
+	);
 	// Tracks exist only for the currently open playlist: loadPlaylistDetail
 	// navigates as a side effect (openPlaylist in stores/navigation.ts), and
 	// the frozen picture (docs/design/navigation.html) draws playlist rows
@@ -44,6 +50,8 @@
 	$effect(() => {
 		void ensurePlaylistsLoaded();
 	});
+
+	$effect(() => whenBackOnline(() => void ensurePlaylistsLoaded()));
 
 	function onPlaylistLabelClick(playlistId: string): void {
 		void openPlaylist(playlistId);
@@ -77,7 +85,7 @@
 	label={RAIL_PLAYLISTS_LABEL}
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
-	count={playlists.length}
+	count={playlistCount}
 	expandTrigger={openPlaylistId !== null || filtering}
 	{icon}
 >

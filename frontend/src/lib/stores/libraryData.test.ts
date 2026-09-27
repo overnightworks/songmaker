@@ -366,8 +366,14 @@ describe('ensureAllAlbumsLoaded', () => {
 		).toEqual(['a-from-grid', 'a1']);
 	});
 
+	it('records a load the network swallowed as unreachable, with no failure text of its own', async () => {
+		vi.mocked(fetchAlbums).mockRejectedValueOnce(OFFLINE);
+		const ok = await ensureAllAlbumsLoaded();
+		expect(ok).toBe(false);
+		expect(get(allAlbumsLoad)).toEqual({ status: 'unreachable', error: null });
+	});
+
 	it.each([
-		{ failure: 'a network failure', err: OFFLINE, error: 'Failed to load albums' },
 		{
 			failure: 'a server answer without a reason',
 			err: new ApiError(500, '', '/api/x'),

@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { LIBRARY_RETRY_LABEL, RAIL_ALL_ALBUMS_LABEL, PLAYING_MARK_LABEL } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
@@ -10,6 +10,7 @@ import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	albumsPage,
 	buildAlbum as album,
@@ -72,6 +73,7 @@ afterEach(async () => {
 	await cleanup();
 	openCollection.set(null);
 	resetLibraryContextForTests();
+	resetConnectivityForTests();
 	railTreeQuery.set('');
 });
 
@@ -392,5 +394,29 @@ describe('RailLibraryGroup', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('[role="alert"]')).toBeNull());
 		expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement);
+	});
+
+	it('offline, keeps the albums it shows with no failure of its own and loads again once back online', async () => {
+		reportResourceStreamReachable(false);
+		fetchAlbums.mockRejectedValueOnce(
+			new NetworkError('/api/albums', new TypeError('Failed to fetch'))
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(get(allAlbumsLoad).status).toBe('unreachable'));
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+		expect(target.textContent).not.toContain(LIBRARY_RETRY_LABEL);
+		expect(target.querySelectorAll('.album-label')).toHaveLength(1);
+
+		fetchAlbums.mockResolvedValueOnce(
+			albumsPage({ items: [album(), album({ id: 'a9', title: 'Recovered' })] })
+		);
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() =>
+			expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement)
+		);
 	});
 });

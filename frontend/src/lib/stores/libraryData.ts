@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { describeFailure } from '$lib/api/fetch';
+import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
@@ -157,7 +157,9 @@ export function addAlbumToList(album: AlbumItem): void {
 	});
 }
 
-type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error';
+// 'unreachable' is a load the network swallowed: the offline strip says so,
+// the albums already listed stay, and the load runs again once back online.
+type AllAlbumsLoadStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
 
 interface AllAlbumsLoadState {
 	status: AllAlbumsLoadStatus;
@@ -231,13 +233,18 @@ function loadAllAlbums(
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsLoad.set({ status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) });
+			allAlbumsLoad.set(allAlbumsFailure(err));
 			return false;
 		} finally {
 			allAlbumsInflight = null;
 		}
 	})();
 	return allAlbumsInflight;
+}
+
+function allAlbumsFailure(err: unknown): AllAlbumsLoadState {
+	if (err instanceof NetworkError) return { status: 'unreachable', error: null };
+	return { status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) };
 }
 
 // Existing entries win on a conflicting id, matching loadLibraryBrowse's
