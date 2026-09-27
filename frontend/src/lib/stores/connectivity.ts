@@ -66,19 +66,37 @@ interface UnreachableReloads {
 	 */
 	afterLoadFailure(err: unknown): UnreachableReload | null;
 	/**
-	 * The words a failed load shows, or null while it needs none: a lost
-	 * network stays unnamed while the strip says it or a reload is coming,
-	 * and is named `fallback` once the backoff is spent; any other failure
-	 * stops the reloads and shows the server's reason, else `fallback`.
+	 * Records a failed load for `loadFailure` and returns the words it shows
+	 * right now: a lost network stays unnamed while the strip says it or a
+	 * reload is coming, and is named `fallback` once the backoff is spent;
+	 * any other failure stops the reloads and shows the server's reason,
+	 * else `fallback`.
 	 */
 	nameLoadFailure(err: unknown, fallback: string): string | null;
+	/**
+	 * The words the last named failure shows, or null while it needs none.
+	 * A spent backoff hides again while the strip says the connection is
+	 * lost; the failure is forgotten once the load runs again or stops.
+	 */
+	readonly loadFailure: Readable<string | null>;
 	/** The load answered, or the surface moved on: forget the reloads. */
 	stop(): void;
+}
+
+interface NamedLoadFailure {
+	words: string;
+	networkLost: boolean;
+}
+
+function shownLoadFailure(named: NamedLoadFailure | null, isOffline: boolean): string | null {
+	if (named === null || (named.networkLost && isOffline)) return null;
+	return named.words;
 }
 
 export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 	let reloadsSpent = 0;
 	let cancelPending: (() => void) | null = null;
+	const namedFailure = writable<NamedLoadFailure | null>(null);
 
 	function stopPending(): void {
 		cancelPending?.();
@@ -87,6 +105,7 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 
 	function runPending(): void {
 		stopPending();
+		namedFailure.set(null);
 		reload();
 	}
 
@@ -112,6 +131,7 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 	function stop(): void {
 		stopPending();
 		reloadsSpent = 0;
+		namedFailure.set(null);
 	}
 
 	function afterLoadFailure(err: unknown): UnreachableReload | null {
@@ -124,12 +144,24 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		afterNetworkFailure,
 		afterLoadFailure,
 		nameLoadFailure(err, fallback) {
-			const reload = afterLoadFailure(err);
-			if (reload === null) return describeFailure(err, fallback);
-			return reload === 'exhausted' ? fallback : null;
+			const named = failureToName(afterLoadFailure(err), err, fallback);
+			namedFailure.set(named);
+			return shownLoadFailure(named, get(offline));
 		},
+		loadFailure: derived([namedFailure, offline], ([named, isOffline]) =>
+			shownLoadFailure(named, isOffline)
+		),
 		stop
 	};
+}
+
+function failureToName(
+	reload: UnreachableReload | null,
+	err: unknown,
+	fallback: string
+): NamedLoadFailure | null {
+	if (reload === null) return { words: describeFailure(err, fallback), networkLost: false };
+	return reload === 'exhausted' ? { words: fallback, networkLost: true } : null;
 }
 
 export function resetConnectivityForTests(): void {

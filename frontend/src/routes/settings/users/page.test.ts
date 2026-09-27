@@ -668,6 +668,18 @@ describe('admin reads and actions that fail', () => {
 		expect(requireElement(target, '.error').textContent).toBe('Failed to load users');
 	});
 
+	it('hides a users failure it named once the offline strip says the connection is lost', async () => {
+		vi.useFakeTimers();
+		api.fetchUsers.mockRejectedValue(lostNetwork());
+		const target = await renderPage(true);
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		reportResourceStreamReachable(false);
+		await tick();
+
+		expect(target.querySelector('.error')).toBeNull();
+	});
+
 	it('offline, Voices claims no empty list and shows the voices once back online', async () => {
 		reportResourceStreamReachable(false);
 		api.fetchAdminVoices.mockRejectedValueOnce(lostNetwork());

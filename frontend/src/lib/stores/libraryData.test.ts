@@ -377,11 +377,7 @@ describe('ensureAllAlbumsLoaded', () => {
 		vi.mocked(fetchAlbums).mockRejectedValueOnce(OFFLINE);
 		const ok = await ensureAllAlbumsLoaded();
 		expect(ok).toBe(false);
-		expect(get(allAlbumsLoad)).toEqual({
-			status: 'unreachable',
-			error: null,
-			reloadsExhausted: false
-		});
+		expect(get(allAlbumsLoad)).toEqual({ status: 'unreachable', error: null });
 		expect(get(allAlbumsLoadFailure)).toBeNull();
 	});
 
@@ -444,21 +440,21 @@ describe('ensureAllAlbumsLoaded', () => {
 		{
 			failure: 'a server answer without a reason',
 			err: new ApiError(500, '', '/api/x'),
-			error: 'Failed to load albums'
+			shown: RAIL_LIBRARY_LOAD_ERROR
 		},
 		{
 			failure: 'a server reason',
 			err: new ApiError(503, 'Library is migrating', '/api/x'),
-			error: 'Library is migrating'
+			shown: 'Library is migrating'
 		}
 	])(
 		'records a retryable error naming $failure readably when albums fail to load',
-		async ({ err, error }) => {
+		async ({ err, shown }) => {
 			vi.mocked(fetchAlbums).mockRejectedValueOnce(err);
 			const ok = await ensureAllAlbumsLoaded();
 			expect(ok).toBe(false);
-			expect(get(allAlbumsLoad)).toEqual({ status: 'error', error });
-			expect(get(allAlbumsLoadFailure)).toBe(error);
+			expect(get(allAlbumsLoad).status).toBe('error');
+			expect(get(allAlbumsLoadFailure)).toBe(shown);
 		}
 	);
 });

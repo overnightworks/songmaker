@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
+	import { derived } from 'svelte/store';
 	import {
 		fetchUsers,
 		fetchAdminVoices,
@@ -221,15 +222,17 @@
 	// Each read the page makes (#1107): a lost network shows no words of its
 	// own while the offline strip says it or a reload is coming, and the read
 	// runs again by itself; any other failure shows the server's reason.
-	type AdminLoad =
-		| 'users'
-		| 'voices'
-		| 'rateLimits'
-		| 'userLimits'
-		| 'providerStatus'
-		| 'cowriter'
-		| 'cover'
-		| 'scoring';
+	const ADMIN_LOADS = [
+		'users',
+		'voices',
+		'rateLimits',
+		'userLimits',
+		'providerStatus',
+		'cowriter',
+		'cover',
+		'scoring'
+	] as const;
+	type AdminLoad = (typeof ADMIN_LOADS)[number];
 
 	const LOAD_FAILURE_FALLBACKS: Record<AdminLoad, string> = {
 		users: 'Failed to load users',
@@ -260,18 +263,24 @@
 		cover: reloadWhileUnreachable(() => void loadCoverSettings()),
 		scoring: reloadWhileUnreachable(() => void loadJudgeSettings())
 	};
-	let loadFailures = $state<Partial<Record<AdminLoad, string | null>>>({});
+	const loadFailures = derived(
+		ADMIN_LOADS.map((load) => loadReloads[load].loadFailure),
+		(failures) =>
+			Object.fromEntries(ADMIN_LOADS.map((load, index) => [load, failures[index]])) as Record<
+				AdminLoad,
+				string | null
+			>
+	);
 	const pageLoadFailures = $derived([
-		...new Set(PAGE_WIDE_LOADS.flatMap((load) => loadFailures[load] ?? []))
+		...new Set(PAGE_WIDE_LOADS.flatMap((load) => $loadFailures[load] ?? []))
 	]);
 
 	function settleLoad(load: AdminLoad): void {
 		loadReloads[load].stop();
-		loadFailures[load] = null;
 	}
 
 	function failLoad(load: AdminLoad, e: unknown): void {
-		loadFailures[load] = loadReloads[load].nameLoadFailure(e, LOAD_FAILURE_FALLBACKS[load]);
+		loadReloads[load].nameLoadFailure(e, LOAD_FAILURE_FALLBACKS[load]);
 	}
 
 	onMount(loadAll);
@@ -487,7 +496,7 @@
 		}
 	}
 
-	const providerStatusError = $derived(loadFailures.providerStatus ?? '');
+	const providerStatusError = $derived($loadFailures.providerStatus ?? '');
 	const providerStatusFailure = $derived<SafeRouteReason | null>(
 		providerStatusError === '' ? null : { code: 'route_failed', message: providerStatusError }
 	);
@@ -1046,8 +1055,8 @@
 				<h2>{ADMIN_VOICES_HEADING}</h2>
 				{#if loadingVoices}
 					<p class="text-muted">{ADMIN_VOICES_LOADING}</p>
-				{:else if loadFailures.voices}
-					<p class="error">{loadFailures.voices}</p>
+				{:else if $loadFailures.voices}
+					<p class="error">{$loadFailures.voices}</p>
 				{:else if voicesLoaded && voices.length === 0}
 					<p class="text-muted">{ADMIN_VOICES_EMPTY}</p>
 				{:else if voices.length > 0}
