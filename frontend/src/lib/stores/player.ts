@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, readonly } from 'svelte/store';
 import { ApiError, describeFailure, handleSessionLost, NetworkError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
@@ -900,12 +900,15 @@ nowPlayingDockable.subscribe((dockable) => {
 
 // Whether Now Playing is a pushed screen: the full surface on a viewport with
 // no room for the docked panel beside the workspace. Such a screen leaves as a
-// whole (Escape closes it, the phone's Back pops it); a full surface with room
-// to dock steps down to the docked panel instead.
-export const nowPlayingIsPushedScreen = derived(
+// whole (Escape closes it); a full surface with room to dock steps down to the
+// docked panel instead.
+const nowPlayingIsPushedScreen = derived(
 	[nowPlayingSurface, nowPlayingDockable],
 	([surface, dockable]) => surface === 'full' && !dockable
 );
+
+const fullSurfaceChosen = writable(false);
+export const nowPlayingFullChosen = readonly(fullSurfaceChosen);
 
 // The element to return focus to when Now Playing closes. PlayerBar
 // registers its own "Now Playing" button here once on mount — every opener
@@ -942,13 +945,16 @@ function restoreNowPlayingTriggerFocus(closedFromFullSurface: boolean): void {
 export function openNowPlaying(panel: NowPlayingPanel): void {
 	closeSidebar();
 	nowPlayingPanel.set(panel);
-	nowPlayingSurface.set(get(nowPlayingDockable) ? get(desktopNowPlayingSurface) : 'full');
+	const surface = get(nowPlayingDockable) ? get(desktopNowPlayingSurface) : 'full';
+	nowPlayingSurface.set(surface);
+	fullSurfaceChosen.set(surface === 'full');
 }
 
 export function closeNowPlaying(): void {
 	const surface = get(nowPlayingSurface);
 	if (surface === 'closed') return;
 	nowPlayingSurface.set('closed');
+	fullSurfaceChosen.set(false);
 	curationActive.set(false);
 	restoreNowPlayingTriggerFocus(surface === 'full');
 }
@@ -966,6 +972,7 @@ export function dockNowPlaying(): void {
 function chooseDesktopSurface(surface: NowPlayingSurfaceKind): void {
 	setDesktopNowPlayingSurface(surface);
 	nowPlayingSurface.set(surface);
+	fullSurfaceChosen.set(surface === 'full');
 }
 
 // Escape leaves Now Playing one level at a time: the full surface falls back

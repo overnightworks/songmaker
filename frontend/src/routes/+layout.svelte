@@ -15,6 +15,7 @@
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import {
 		backToCollection,
+		forgetHistoryLayers,
 		initNavigation,
 		isLibraryWorkspacePath,
 		openLibraryWall
@@ -205,6 +206,7 @@
 	}
 
 	async function handleLogout() {
+		forgetHistoryLayers();
 		await logout();
 		window.location.href = '/login';
 	}
