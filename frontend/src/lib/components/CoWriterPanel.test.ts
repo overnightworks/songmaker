@@ -44,7 +44,7 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 
 import CoWriterPanel from './CoWriterPanel.svelte';
-import { startNewConversation } from '$lib/api/client';
+import { fetchMemory, startNewConversation } from '$lib/api/client';
 import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -305,6 +305,78 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		await tick();
 		expect(startNewConversation).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('[role="menu"]')).toBeNull();
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+	});
+
+	it('names each conversation in its ⋯ menu with the line’s day form', async () => {
+		const older = {
+			...activeConversation('c0'),
+			created_at: '2026-09-17T10:00:00',
+			archived_at: '2026-09-22T10:00:00'
+		};
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00'), older]);
+		const target = await render();
+
+		const menu = await openConversationMenu(target);
+
+		expect(Array.from(menu.querySelectorAll('.conv-title'), (title) => title.textContent)).toEqual([
+			'Conversation since Tue',
+			'Conversation from Sep 17'
+		]);
+	});
+
+	it('reads “conversation since today” once the first message is sent, before the reply arrives', async () => {
+		let deliverReply = (): void => {};
+		const replyDelivered = new Promise<void>((resolve) => {
+			deliverReply = resolve;
+		});
+		streamCoWriterTurn.mockReturnValue(
+			(async function* () {
+				await replyDelivered;
+				yield {
+					type: 'final',
+					conversation_id: 'c1',
+					user_message: chatMessage('m1', 'user', 'write a chorus'),
+					assistant_message: chatMessage('m2', 'assistant', 'Here it is.')
+				} as CoWriterStreamEvent;
+			})()
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(conversationLine(target)).toBe('Claude · new conversation'));
+
+		await sendTurn(target, 'write a chorus');
+
+		await vi.waitFor(() =>
+			expect(conversationLine(target)).toBe('Claude · conversation since today')
+		);
+		fetchConversations.mockResolvedValue([
+			conversationStartedAt(new Date('2026-09-27T11:59:00').toISOString())
+		]);
+		deliverReply();
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+		expect(conversationLine(target)).toBe('Claude · conversation since today');
+	});
+
+	it('shows the current message count in its ⋯ menu after a turn', async () => {
+		const sent = chatMessage('m3', 'user', 'now a bridge');
+		const reply = chatMessage('m4', 'assistant', 'Four lines.');
+		fetchConversations.mockResolvedValue([conversationStartedAt('2026-09-22T10:00:00')]);
+		streamCoWriterTurn.mockReturnValue(
+			turnEvents([
+				{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+			])
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		fetchConversations.mockResolvedValue([
+			{ ...conversationStartedAt('2026-09-22T10:00:00'), message_count: 4 }
+		]);
+
+		await sendTurn(target, sent.content);
+		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
+		const menu = await openConversationMenu(target);
+
+		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('4 msgs');
 	});
 
 	it('closes its ⋯ menu on Escape without leaving the song', async () => {
@@ -321,6 +393,39 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		expect(escape.defaultPrevented).toBe(true);
+	});
+
+	it('keeps Memory in its ⋯ menu rather than a row above the chat, opens the memory editor from there, and returns focus to ⋯ on close', async () => {
+		vi.mocked(fetchMemory).mockResolvedValueOnce({
+			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
+		});
+		const target = await render();
+		const userMemory = () =>
+			target.querySelector<HTMLTextAreaElement>('textarea[aria-label="User memory"]');
+		expect(
+			Array.from(target.querySelectorAll('button'), (button) => button.textContent?.trim())
+		).not.toContainEqual(expect.stringMatching(/^Memory/));
+
+		const menu = await openConversationMenu(target);
+		const memoryItem = Array.from(
+			menu.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')
+		).find((item) => item.textContent?.trim() === 'Memory');
+		memoryItem?.click();
+		await tick();
+
+		expect(target.querySelector('[role="menu"]')).toBeNull();
+		await vi.waitFor(() => expect(userMemory()?.value).toBe('Prefers short lines'));
+
+		const closeMemory = target.querySelector<HTMLButtonElement>(
+			'button[aria-label="Close memory"]'
+		);
+		closeMemory?.focus();
+		closeMemory?.click();
+		await tick();
+		expect(userMemory()).toBeNull();
+		expect(document.activeElement?.getAttribute('aria-label')).toBe(
+			COWRITER_CONVERSATION_MENU_LABEL
+		);
 	});
 });
 
@@ -460,7 +565,7 @@ describe('CoWriterPanel unavailable before any turn', () => {
 		startHealthPolling();
 		await vi.waitFor(() =>
 			expect(target.querySelector('.unavailable-banner')?.textContent).toContain(
-				'claude is currently unavailable'
+				'Claude is currently unavailable'
 			)
 		);
 
@@ -841,6 +946,65 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(target.querySelector('.typing')).toBeNull();
 		expect(onturncompleted).toHaveBeenCalledTimes(1);
 	});
+
+	const earlier = [
+		chatMessage('u0', 'user', 'Strophe eins'),
+		chatMessage('a0', 'assistant', 'Steht.')
+	];
+
+	/** The read that ends the turn: from then on the conversation list counts its reply too. */
+	function turnEndsWith(page: ReturnType<typeof conversation>): void {
+		fetchConversationMessages.mockImplementationOnce(async () => {
+			fetchConversations.mockResolvedValue([
+				{ ...activeConversation('c1'), message_count: page.messages.length }
+			]);
+			return page;
+		});
+	}
+
+	const followedTurns: Array<[string, () => Promise<HTMLElement>]> = [
+		[
+			'a turn it returned to',
+			() => {
+				conversationPages(conversation(true, ...earlier, sent));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return leaveDuringATurnAndReturn();
+			}
+		],
+		[
+			'a turn it followed after its stream dropped',
+			() => {
+				streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+				conversationPages(conversation(false, ...earlier), conversation(true, ...earlier, sent));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return sendInAnOpenConversation();
+			}
+		],
+		[
+			'a turn that finished while its stream was down',
+			() => {
+				streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+				conversationPages(conversation(false, ...earlier));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return sendInAnOpenConversation();
+			}
+		]
+	];
+
+	it.each(followedTurns)(
+		'counts the reply of %s in its ⋯ menu once the turn ends',
+		async (_shape, followTurn) => {
+			const target = await followTurn();
+			await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+			await vi.waitFor(() => expect(target.textContent).toContain('Erledigt.'));
+
+			const menu = await openConversationMenu(target);
+
+			await vi.waitFor(() =>
+				expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('4 msgs')
+			);
+		}
+	);
 
 	it('keeps an older failed message once a newer one is answered, as a reload shows it', async () => {
 		const failed = chatMessage('u0', 'user', 'Refrain kürzer');

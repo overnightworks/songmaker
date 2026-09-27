@@ -21,6 +21,8 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 
 import {
 	ADMIN_TABS_LABEL,
+	COWRITER_COMPOSER_PLACEHOLDER,
+	COWRITER_SEND_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	MODELS_ADVANCED_LABEL,
 	MODELS_COLUMN_MODEL_LABEL,
@@ -333,9 +335,9 @@ test('a route that is not set up ends the next co-writer turn with its reason', 
 	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
 	await surface.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 
-	const ask = surface.getByPlaceholder('Ask the co-writer... (@song, @album, or @v1)');
+	const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
 	await ask.fill('Write me a second verse.');
-	await surface.getByRole('button', { name: 'Send', exact: true }).click();
+	await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
 
 	// The turn ends with the reason the chosen route failed for -- never with a
 	// quiet switch to a provider that would have worked (#820, line 8).
