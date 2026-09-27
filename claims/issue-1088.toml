@@ -1,7 +1,0 @@
-claim_id = "4f69631176f84b81bd6db6d1d9d3b466"
-agent = "claude-head"
-role = "builder"
-base = "6a18cff17377ce3f85de5a2ed24159cb123a8299"
-branch = "claude/issue-1088-e2e-budget"
-scope = ["frontend/e2e/README.md", "frontend/e2e/helpers.ts"]
-opened_commit = "971f0381c2015dc12e7097846552df54a6a985ae"
