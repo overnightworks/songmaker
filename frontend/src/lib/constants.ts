@@ -155,6 +155,22 @@ export const NOW_PLAYING_LABEL = 'Now Playing';
 export function openNowPlayingLabel(songTitle: string): string {
 	return `${songTitle} — open ${NOW_PLAYING_LABEL}`;
 }
+// Swiping the mini player up opens Now Playing once the finger has risen
+// this far, and further up than sideways; anything less is a tap or a slip.
+export const NOW_PLAYING_SWIPE_RISE_PX = 40;
+// A cut mini-player title scrolls once, slowly: it rests, travels to its end
+// at this pace, rests again, and glides back to its start.
+export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
+export const MINI_PLAYER_TITLE_SCROLL_REST_MS = 1500;
+export const MINI_PLAYER_TITLE_SCROLL_RETURN_MS = 600;
+export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
+// Beside play's exact centre line a phone narrower than 360px leaves the
+// mini player's left side too little room for cover and title, so the cover
+// goes and the title takes the whole side. The query stays on max-width, like
+// every other breakpoint, because iOS Safari before 16.4 ignores range syntax;
+// the fraction also drops the cover on a sub-pixel viewport just under 360px.
+const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
+export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
