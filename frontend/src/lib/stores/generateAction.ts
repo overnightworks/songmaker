@@ -93,13 +93,6 @@ function takeCounterLabel(job: JobItem | null): string | null {
 	);
 }
 
-const JOB_STATUSES_AWAITING_TAKES: ReadonlySet<string> = new Set([
-	'queued',
-	'running',
-	'completed',
-	'partial'
-]);
-
 // A partial job made fewer takes than it was asked for and does not say how
 // many, so its first take in the list is the one it is known to have made.
 function takesTheJobWillLand(job: JobItem): number {
@@ -122,12 +115,16 @@ function jobTakesHaveLanded(job: JobItem, song: SongItem): boolean {
 	return landed.length >= takesTheJobWillLand(job);
 }
 
+function isStillWorking(job: JobItem): boolean {
+	return job.status === 'queued' || job.status === 'running';
+}
+
 function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem | null {
 	const active = jobs.find(
-		({ songId, job }) =>
+		({ songId, job, awaitingTakes }) =>
 			songId === song.id &&
 			job.type === JOB_TYPE_GENERATE &&
-			JOB_STATUSES_AWAITING_TAKES.has(job.status) &&
+			(isStillWorking(job) || awaitingTakes === true) &&
 			!jobTakesHaveLanded(job, song)
 	);
 	return active?.job ?? null;
