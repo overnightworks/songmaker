@@ -881,6 +881,12 @@
 	.pp-trow.pp-tap .pp-num { width: 18px; flex: none; font-family: var(--font-display); font-size: .8rem; color: var(--text-subtle); text-align: center; }
 
 	/* ── mini-player, Variant C ── */
+	/* ── #1039 the one offline notice on the mini-player's top edge (vocabulary.html owns its rule) ── */
+	.pp-offline { flex: none; height: 36px; display: flex; align-items: center; gap: .55rem; padding: 0 .85rem; background: #202024; border-top: 1px solid var(--border); color: var(--text); font-size: .82rem; }
+	.pp-offline .pp-ic { color: var(--text-muted); }
+	.pp-gone-card { display: flex; flex-direction: column; gap: .4rem; padding: .85rem; border: 1px solid #c0392b; border-left-width: 4px; border-radius: var(--card-radius); background: color-mix(in srgb, #c0392b 12%, var(--surface)); color: var(--text); font-size: .85rem; position: relative; }
+	.pp-gone-card p { color: var(--text-subtle); font-size: .83rem; }
+	.pp-gone-card::after { content: ""; position: absolute; left: 6px; right: 6px; top: 50%; border-top: 2px solid #b8b2c4; transform: rotate(-8deg); }
 	.pp-player { flex: none; height: var(--player-height); position: relative; display: flex; align-items: center; gap: 0; padding: 0 .7rem; background: var(--surface); border-top: 1px solid var(--border); }
 	.pp-cover { width: 40px; height: 40px; border-radius: var(--btn-radius-sm); flex: none; background: linear-gradient(135deg, #3b1d5e, #0e0b18); }
 	.pp-track { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
@@ -1854,6 +1860,83 @@ so the quiet never turns to storm</div>
 					<li><b>Remembered on this device:</b> the order you last chose stays until you change it; another phone or browser starts at A–Z.</li>
 					<li><b>The tile’s second line follows the order:</b> A–Z shows the size (“6 songs”), Recent the last work (“today 05:47”), Added the day it was made (“added 3 Aug”, today’s newest-first order). A playlist’s line starts with “Playlist ·”.</li>
 					<li><b>Continue is never re-sorted by the switch:</b> it always means “where I was”.</li>
+				</ol>
+			</div>
+		</section>
+	</section>
+
+	<section class="play-phone" id="album-offline" lang="en">
+		<svg style="display:none" aria-hidden="true">
+		<symbol id="pp-i-cloud-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/></symbol>
+		</svg>
+		<div class="state-head">
+			<h2>(h) Album page, offline — a card that cannot load is simply absent</h2>
+			<span class="tag tag-next">Blessed 27.09.2026 · #1104</span>
+		</div>
+		<p class="state-note">
+			The phone’s album page with the network cut, 390&nbsp;px wide, in the live dark theme. Frozen from the
+			operator-blessed picture <code>~/songmaker-mockups/v9-offline/offline.html</code> (frame&nbsp;4). The one offline
+			notice and its rule live in <code>docs/design/vocabulary.html</code> (offline, #1039); this owner holds only what the
+			album page does while it shows.
+		</p>
+		<div class="pp-board pp-bottom">
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>H1 · Album page, offline</b> — the cover-suggestions card shows no error of its own: while it cannot load it is simply not there, and the one strip covers it. Songs already on screen stay. Back online, the card loads by itself — no tap.<span class="pp-m">measured in px: strip 36 high on the mini-player’s top edge · bar 64 high</span></figcaption>
+				<div class="pp-device" id="ao-h1">
+					<header class="pp-appbar">
+						<button class="pp-icon-btn pp-ink" aria-label="Open navigation"><svg class="pp-ic"><use href="#pp-i-menu"/></svg></button>
+						<h1>Songmaker</h1>
+					</header>
+					<div class="pp-chead pp-proposed">
+						<span class="pp-ccover" aria-hidden="true"></span>
+						<div class="pp-titles">
+							<span class="pp-ctitle">Nightdrive</span>
+							<span class="pp-cmeta">Late-night synthwave · 2026</span>
+							<span class="pp-crumb">Library<i>›</i>Nightdrive</span>
+						</div>
+						<div class="pp-actions">
+							<button class="pp-circle" aria-label="Play album"><svg class="pp-ic pp-g22"><use href="#pp-i-play"/></svg></button>
+							<button class="pp-icon-btn" aria-label="Shuffle album"><svg class="pp-ic"><use href="#pp-i-shuffle"/></svg></button>
+							<span class="pp-spacer"></span>
+							<button class="pp-icon-btn" aria-label="Add song"><svg class="pp-ic"><use href="#pp-i-plus"/></svg></button>
+							<button class="pp-icon-btn" aria-label="Album menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></button>
+						</div>
+					</div>
+					<div class="pp-list">
+						<button class="pp-trow pp-tap"><span class="pp-num">1</span><span class="pp-body pp-col"><span class="pp-ttitle">Opening Move</span><span class="pp-tmeta">4 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">2</span><span class="pp-body pp-col"><span class="pp-ttitle">Headlights</span><span class="pp-tmeta">2 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">3</span><span class="pp-body pp-col"><span class="pp-ttitle">All Mine If I Follow</span><span class="pp-tmeta">7 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">4</span><span class="pp-body pp-col"><span class="pp-ttitle">Radio Low and Warm</span><span class="pp-tmeta">1 take</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">5</span><span class="pp-body pp-col"><span class="pp-ttitle">Quiet Never Storm</span><span class="pp-tmeta">no take yet</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">6</span><span class="pp-body pp-col"><span class="pp-ttitle">Berlin, 1984</span><span class="pp-tmeta">3 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+						<button class="pp-trow pp-tap"><span class="pp-num">7</span><span class="pp-body pp-col"><span class="pp-ttitle">Exit Signs Agree</span><span class="pp-tmeta">2 takes</span></span><span class="pp-overflow-btn" aria-label="Song menu"><svg class="pp-ic"><use href="#pp-i-more"/></svg></span></button>
+					</div>
+					<div class="pp-offline" role="status" aria-live="polite"><svg class="pp-ic pp-sm"><use href="#pp-i-cloud-off"/></svg><span>You're offline — retrying</span></div>
+					<div class="pp-player">
+						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Opening Move</span><span class="pp-track-detail">from Nightdrive</span></span></button>
+						<span class="pp-transport">
+							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
+							<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
+							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
+						</span>
+						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
+						<span class="pp-line"><span></span></span>
+					</div>
+				</div>
+			</figure>
+			<figure class="pp-figure">
+				<figcaption class="state-note"><b>Replaces</b> (27.09.2026, from #1032’s probe) — the card’s own red box with the raw browser text, still there 15&nbsp;s after the network came back. Gone.</figcaption>
+				<div class="pp-gone-card"><strong>Couldn’t make cover suggestions</strong><p>Failed to fetch</p></div>
+			</figure>
+		</div>
+		<section class="decisions">
+			<div class="decision">
+				<h3>The rules</h3>
+				<ol class="findings">
+					<li><b>No card says the network is gone:</b> when the suggestions cannot be reached, the card is absent — no “Failed to fetch”, no “Couldn’t make cover suggestions”, no Try again. The strip has said it once.</li>
+					<li><b>Back online, the card reloads by itself:</b> the moment the connectivity owner reports online again, without a tap.</li>
+					<li><b>A refusal the server gave still shows, once:</b> a daily limit or any other answer with a reason keeps the red card with the server’s own words.</li>
+					<li><b>Toasts on the album and playlist pages never carry browser text:</b> the server’s reason when it gave one, otherwise the action’s own short fallback (“Rename failed”).</li>
 				</ol>
 			</div>
 		</section>
