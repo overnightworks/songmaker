@@ -219,6 +219,8 @@ export const COWRITER_SEND_LABEL = 'Send';
 export const COWRITER_NEW_CONVERSATION_LABEL = 'New conversation';
 export const COWRITER_MEMORY_LABEL = 'Memory';
 export const COWRITER_MEMORY_PROPOSAL_WAITING_LABEL = 'Memory proposal waiting';
+export const COWRITER_DELETE_CONVERSATION_TITLE = 'Delete conversation?';
+export const COWRITER_DELETE_CONVERSATION_WARNING = "This can't be undone.";
 export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';
 export const COWRITER_CONVERSATION_SINCE_TEMPLATE = 'conversation since {day}';
 export const COWRITER_ARCHIVED_CONVERSATION_TEMPLATE = 'archived conversation from {day}';
@@ -405,6 +407,7 @@ export const RECIPE_STACKED_EDIT_LABEL = 'Edit';
 
 export const LIBRARY_QUERY_REQUIRED = 'Search query is required';
 export const RAIL_SEARCH_LABEL = 'Search or go to…';
+export const RAIL_SEARCH_CLEAR_LABEL = 'Clear search';
 export const LIBRARY_RETRY_LABEL = 'Retry';
 export const LIBRARY_SEARCH_DEBOUNCE_MS = 200;
 export const LIBRARY_ALBUM_PAGE_SIZE = 50;
