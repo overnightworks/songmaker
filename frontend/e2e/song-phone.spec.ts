@@ -35,6 +35,7 @@ import {
 	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
+	NOW_PLAYING_LABEL,
 	RAIL_LIBRARY_LABEL,
 	SONG_NEXT_LABEL,
 	SONG_PREVIOUS_LABEL,
@@ -280,7 +281,9 @@ test.describe('song page at phone width', () => {
 // screen it was opened from again, never the entry below that screen, and
 // leaves no copy of it behind for the next Back to land on. A take row opens
 // Now Playing on This take, whose sheet backdrop still takes the first tap
-// meant for × (#1003), so the × case closes that sheet with Escape first.
+// meant for × (#1003), so the × case closes that sheet with Escape first. A
+// playlist row only plays in place (#1010), so that origin opens Now Playing
+// through the mini-player's own entry, which brings no sheet up.
 // The base library's songs each carry one reimported take, their first.
 const SEEDED_TAKE_NUMBER = 1;
 
@@ -288,6 +291,7 @@ interface NowPlayingOrigin {
 	playing: string;
 	origin: Locator;
 	cameFrom: Locator;
+	opensOnTakeSheet: boolean;
 }
 
 const NOW_PLAYING_ORIGINS: {
@@ -307,14 +311,22 @@ const NOW_PLAYING_ORIGINS: {
 				.click();
 			const origin = workspace(page).getByRole('heading', { name: playlist.title });
 			await expect(origin).toBeVisible();
-			await playlistEntryRows(page)
-				.first()
-				.getByRole('button', { name: nameStartingWith(playing) })
+			const playedCard = playlistEntryRows(page).first();
+			const playedCardBox = await playedCard.boundingBox();
+			if (!playedCardBox) throw new Error('Expected a visible playlist row');
+			await playedCard.tap({ position: { x: 4, y: playedCardBox.height - 4 } });
+			await expect(page.getByRole('contentinfo').getByText(playing)).toBeVisible();
+			await expect(origin).toBeVisible();
+			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
+			await page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
 				.click();
 			return {
 				playing,
 				origin,
-				cameFrom: workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })
+				cameFrom: workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL }),
+				opensOnTakeSheet: false
 			};
 		}
 	},
@@ -334,10 +346,12 @@ const NOW_PLAYING_ORIGINS: {
 				.getByRole('tabpanel')
 				.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })
 				.click();
+			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 			return {
 				playing,
 				origin,
-				cameFrom: workspace(page).getByRole('heading', { name: library.albumTitle })
+				cameFrom: workspace(page).getByRole('heading', { name: library.albumTitle }),
+				opensOnTakeSheet: true
 			};
 		}
 	}
@@ -345,7 +359,7 @@ const NOW_PLAYING_ORIGINS: {
 
 const NOW_PLAYING_LEAVES: {
 	name: string;
-	leave: (page: Page, playing: string) => Promise<void>;
+	leave: (page: Page, opened: NowPlayingOrigin) => Promise<void>;
 }[] = [
 	{
 		name: 'Back',
@@ -372,9 +386,13 @@ const NOW_PLAYING_LEAVES: {
 	},
 	{
 		name: '× right after open',
-		leave: async (page, playing) => {
-			await page.keyboard.press('Escape');
-			await expect(page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })).toBeHidden();
+		leave: async (page, { playing, opensOnTakeSheet }) => {
+			if (opensOnTakeSheet) {
+				await page.keyboard.press('Escape');
+				await expect(
+					page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })
+				).toBeHidden();
+			}
 			await page
 				.getByRole('dialog', { name: playing })
 				.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true })
@@ -393,14 +411,15 @@ test.describe('leaving Now Playing at phone width', () => {
 			}) => {
 				test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
 				const guard = new FlowGuard(page);
-				const { playing, origin, cameFrom } = await openFromRow(page, request);
-				const nowPlayingTab = page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB });
-				await expect(nowPlayingTab).toBeVisible();
+				const opened = await openFromRow(page, request);
+				const { origin, cameFrom } = opened;
+				const nowPlaying = page.getByRole('dialog', { name: opened.playing });
+				await expect(nowPlaying).toBeVisible();
 				const originAddress = page.url();
 
-				await leave(page, playing);
+				await leave(page, opened);
 
-				await expect(nowPlayingTab).toBeHidden();
+				await expect(nowPlaying).toBeHidden();
 				await expect(origin).toBeVisible();
 				expect(page.url()).toBe(originAddress);
 

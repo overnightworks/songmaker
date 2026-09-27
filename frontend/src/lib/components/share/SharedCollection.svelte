@@ -16,7 +16,7 @@
 	import TransportBarFrame from '$lib/components/TransportBarFrame.svelte';
 	import NowPlayingFrame from '$lib/components/NowPlayingFrame.svelte';
 	import NowPlayingQueue from '$lib/components/NowPlayingQueue.svelte';
-	import Icon from '$lib/components/Icon.svelte';
+	import PlayingMark from '$lib/components/PlayingMark.svelte';
 	import ShareStatus from '$lib/components/ShareStatus.svelte';
 	import SharedFooter from './SharedFooter.svelte';
 
@@ -144,6 +144,7 @@
 			{coverAlt}
 			initials={titleInitials(view.title)}
 			artFill={null}
+			kind={view.kind}
 			onplay={onHeaderPlay}
 			{titleArea}
 			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
@@ -157,9 +158,7 @@
 					{@const row = playback.queueRows.find((r) => r.key === track.key)}
 					{@const current = playback.currentTrack?.key === track.key}
 					<button type="button" class="track-row" class:current onclick={() => onRowClick(track)}>
-						<span class="track-row-play" aria-hidden="true">
-							<Icon name={current && isPlaying ? 'pause' : 'play'} size={14} />
-						</span>
+						<PlayingMark {current} />
 						<span class="track-row-body">
 							<span class="track-row-title">{track.title}</span>
 							{#if track.subtitle}<span class="track-row-meta">{track.subtitle}</span>{/if}
@@ -345,26 +344,8 @@
 		border-image: linear-gradient(to bottom, var(--primary), var(--accent)) 1;
 	}
 
-	.track-row-play {
-		width: 2.4rem;
-		height: 2.4rem;
-		border-radius: 50%;
-		border: 2px solid var(--border, #333);
-		color: var(--text-muted, #888);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		flex-shrink: 0;
-	}
-
-	.track-row:hover .track-row-play {
-		border-color: var(--primary, #ff3220);
-		color: var(--primary, #ff3220);
-	}
-
-	.track-row.current .track-row-play {
-		border-color: var(--accent, #a020f0);
-		color: var(--accent, #a020f0);
+	.track-row.current .track-row-title {
+		color: var(--primary);
 	}
 
 	.track-row-body {

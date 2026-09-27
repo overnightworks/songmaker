@@ -46,8 +46,6 @@ import {
 import { selectedPlaylistDetail } from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
-	ALBUM_ROW_ARCHIVED_ONLY_TOAST,
-	ALBUM_ROW_NO_TAKE_TOAST,
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
@@ -267,16 +265,30 @@ function playGeneration(
 	else audioPlayer.load(info);
 }
 
+function randomIndex(length: number): number {
+	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
+}
+
+function shuffled<T>(items: T[]): T[] {
+	const copy = [...items];
+	for (let i = copy.length - 1; i > 0; i--) {
+		const j = randomIndex(i + 1);
+		[copy[i], copy[j]] = [copy[j], copy[i]];
+	}
+	return copy;
+}
+
 function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; startIndex: number } {
 	if (!get(shuffleEnabled) || items.length <= 1) return { items, startIndex };
 	const start = items[startIndex] ?? items[0];
 	const rest = items.filter((_, index) => index !== startIndex);
-	for (let i = rest.length - 1; i > 0; i--) {
-		const j = Math.floor(Math.random() * (i + 1)); // NOSONAR S2245: shuffle has no security context.
-		[rest[i], rest[j]] = [rest[j], rest[i]];
-	}
-	return { items: [start, ...rest], startIndex: 0 };
+	return { items: [start, ...shuffled(rest)], startIndex: 0 };
 }
+
+// Where a collection start begins: its top, or — for a shuffled start, which
+// has no top — a drawn entry, since shuffledWithStart keeps the start in front
+// and only shuffles what follows it.
+export type CollectionStart = 'top' | 'random';
 
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
@@ -526,7 +538,7 @@ export async function playIdleStart(): Promise<void> {
 	if (target.type === 'playlist') {
 		const playlist = get(selectedPlaylistDetail);
 		if (!playlist) return;
-		playPlaylist(playlist);
+		playPlaylist(playlist, 'top');
 		return;
 	}
 	if (target.type === 'album') {
@@ -929,21 +941,24 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	}
 }
 
-// What a click on a take row means, wherever that row lives (the click rule
-// of issue #140): play the take and surface Now Playing straight on its
-// judging panel. The editor's takes list and a playlist's rows differ only in
-// how playback starts, so both hand that start to this one action.
-//
+type TakeRow = { alreadyLoaded: boolean; start: () => void | Promise<void> };
+
 // A row body never stops the music. The take a row stands for is left
 // running, and a paused one picks up where it stands rather than starting
-// over, so clicking the row that is already loaded only brings up the panel.
-// Pausing belongs to the row's own ▶ and to the transport.
-async function playTakeRow(row: {
-	alreadyLoaded: boolean;
-	start: () => void | Promise<void>;
-}): Promise<void> {
+// over. Pausing belongs to a take row's own ▶ and to the transport.
+async function playRow(row: TakeRow): Promise<void> {
 	if (row.alreadyLoaded) audioPlayer.play();
 	else await row.start();
+}
+
+// What a click on a take row means where it has no page of its own to show
+// the result (the click rule of issue #140): play the take and surface Now
+// Playing straight on its judging panel. The editor's takes list and the
+// rail's playlist rows differ only in how playback starts, so both hand that
+// start to this one action; clicking the row already loaded only brings up
+// the panel.
+async function playTakeRow(row: TakeRow): Promise<void> {
+	await playRow(row);
 	openNowPlaying('take');
 }
 
@@ -961,15 +976,28 @@ export async function playTakeAndShowNowPlaying(
 	await playTakeRow({ alreadyLoaded: isTakeCurrent(gen), start: () => playTake(gen, song) });
 }
 
+function playlistEntryRow(playlist: PlaylistDetailItem, index: number): TakeRow {
+	const entry = playlist.entries[index];
+	return {
+		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
+		start: () => playPlaylistFrom(playlist, index)
+	};
+}
+
 export async function playPlaylistEntryAndShowNowPlaying(
 	playlist: PlaylistDetailItem,
 	index: number
 ): Promise<void> {
-	const entry = playlist.entries[index];
-	await playTakeRow({
-		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
-		start: () => playPlaylistEntry(playlist, index)
-	});
+	await playTakeRow(playlistEntryRow(playlist, index));
+}
+
+// A row on the playlist page (#1010): it plays from here and leaves the
+// listener on the page, whose playing row and mini-player show the result.
+export async function playPlaylistEntry(
+	playlist: PlaylistDetailItem,
+	index: number
+): Promise<void> {
+	await playRow(playlistEntryRow(playlist, index));
 }
 
 type QueueDirection = -1 | 1;
@@ -1081,13 +1109,14 @@ export async function playPrevSong(): Promise<void> {
 // unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
 // own playStartIsCurrent check. A rejected load (e.g. 429) is left
-// uncaught here and propagates to the caller, which mirrors
-// playAlbumSong's handling of the same call.
+// uncaught here and propagates to the caller.
 async function firstPlayableAlbumTake(
 	albumId: string,
-	seq: number
+	seq: number,
+	start: CollectionStart
 ): Promise<{ song: SongItem; gen: GenerationItem } | null> {
-	for (const song of albumSongsInOrder(albumId)) {
+	const inOrder = albumSongsInOrder(albumId);
+	for (const song of start === 'random' ? shuffled(inOrder) : inOrder) {
 		if (song.generation_count === 0) continue;
 		await ensureGenerationsLoaded(song.id);
 		if (!playStartIsCurrent(seq)) return null;
@@ -1098,7 +1127,7 @@ async function firstPlayableAlbumTake(
 	return null;
 }
 
-export async function playAlbum(albumId: string): Promise<void> {
+export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
@@ -1108,9 +1137,9 @@ export async function playAlbum(albumId: string): Promise<void> {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	let start: { song: SongItem; gen: GenerationItem } | null;
+	let startTake: { song: SongItem; gen: GenerationItem } | null;
 	try {
-		start = await firstPlayableAlbumTake(albumId, seq);
+		startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
 		playStartNotice.set('idle');
@@ -1118,45 +1147,21 @@ export async function playAlbum(albumId: string): Promise<void> {
 		return;
 	}
 	if (!playStartIsCurrent(seq)) return;
-	if (!start) {
-		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId));
+	if (!startTake) {
+		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
 		return;
 	}
 	playStartNotice.set('idle');
 	playNativeAlbumTakes(
 		albumId,
-		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(start.song, start.gen))],
+		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(startTake.song, startTake.gen))],
 		0
 	);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
-	setAlbumQueueTakes(albumId, entries, start.gen.id);
-}
-
-// A song row's play button inside an album. The row only knows the song's
-// `generation_count`; the takes themselves are loaded per song, so a row
-// tapped right after switching albums has none yet and must resolve one
-// before the album queue can be built from it. Silence is the failure this
-// replaces (#141): a song with no playable take now says so.
-export async function playAlbumSong(albumId: string, song: SongItem): Promise<void> {
-	try {
-		await ensureGenerationsLoaded(song.id);
-	} catch (err) {
-		addToast(albumSongsErrorMessage(err), 'error');
-		return;
-	}
-	const fresh = get(songList).find((item) => item.id === song.id) ?? song;
-	const gen = bestGen(fresh);
-	if (!gen) {
-		addToast(
-			fresh.generations.length > 0 ? ALBUM_ROW_ARCHIVED_ONLY_TOAST : ALBUM_ROW_NO_TAKE_TOAST,
-			'error'
-		);
-		return;
-	}
-	await playAlbumFromGeneration(albumId, fresh, gen);
+	setAlbumQueueTakes(albumId, entries, startTake.gen.id);
 }
 
 async function playAlbumFromGeneration(
@@ -1236,16 +1241,18 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 	return { id: playlist.id, title: playlist.title };
 }
 
-// The idle transport Play on an open playlist. It keeps the listener's
-// shuffle setting, unlike playPlaylistFrom, where picking a specific entry
-// is itself the statement that the queue should start in playlist order.
-function playPlaylist(playlist: PlaylistDetailItem): void {
+// A whole-playlist start: the idle transport Play and the playlist header. It
+// keeps the listener's shuffle setting, unlike playPlaylistFrom, where picking a
+// specific entry is itself the statement that the queue should start in
+// playlist order.
+export function playPlaylist(playlist: PlaylistDetailItem, start: CollectionStart): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
+		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist, start));
 		return;
 	}
 	playStartNotice.set('idle');
-	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, 0, { restart: true });
+	const startIndex = start === 'random' ? randomIndex(playlist.entries.length) : 0;
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
 
 // The one way a surface starts a playlist: name the playlist and the entry
@@ -1267,16 +1274,10 @@ export function isPlaylistEntryCurrent(entry: PlaylistEntryItem): boolean {
 	);
 }
 
-// A playlist row's ▶: pause or resume the entry that is already playing,
-// otherwise start the playlist from it. Every playlist surface — the
-// interior, the rail — shares this, so a row means the same thing in both.
-export function playPlaylistEntry(playlist: PlaylistDetailItem, index: number): void {
-	const entry = playlist.entries[index];
-	if (entry && isPlaylistEntryCurrent(entry)) {
-		audioPlayer.toggle();
-		return;
-	}
-	playPlaylistFrom(playlist, index);
+// Whether a song is the one the transport is holding right now, whichever of
+// its takes that is: an album row and its rail track mark the song, not a take.
+export function isSongCurrent(songId: string): boolean {
+	return audioPlayer.current?.songId === songId;
 }
 
 // A playlist entry's `position` is the playlist's order of record, so a
