@@ -1,0 +1,8 @@
+claim_id = "c0343f6dd8ca47e0877b97bbb6c7b30c"
+agent = "claude-head"
+role = "builder"
+base = "ba4a0a590432c6280d9a41e62d8d5f7fb96d4d24"
+branch = "claude/issue-1058-mini-player"
+scope = ["frontend/e2e/library.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "f168e983d9000450ab7716651d4f3809987bbc87"
+whole_reason = "the phone mini player, its one source-label owner in the player store, Now Playing's read of it, the stalled copy, and their tests and specs"
