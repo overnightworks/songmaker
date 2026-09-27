@@ -35,13 +35,20 @@
 		onToggleShuffle?: () => void;
 		onTogglePlay: () => void;
 		onSeek: (seconds: number) => void;
-		trackInfo: Snippet<[titleGlowStyle: string]>;
+		// The frame owns the layout, so it alone says whether the track info
+		// carries why playback stopped or the phone's right side does.
+		trackInfo: Snippet<[titleGlowStyle: string, inlineFailure: string | null]>;
 		nowPlayingOpen: boolean;
 		onOpenNowPlaying: () => void;
 		// A docked Now Playing is a panel in the page, not a popup: the trigger
 		// is then a plain disclosure and must not promise a dialog.
 		nowPlayingDocked?: boolean;
 		nowPlayingDisabled: boolean;
+		// The phone's cover-and-title target is named after the playing song.
+		nowPlayingTargetLabel?: string;
+		// That label replaces the target's own words for a screen reader, so
+		// the line under the title is read as its description.
+		nowPlayingTargetDescriptionId?: string;
 		onNowPlayingTriggerBind?: (el: HTMLButtonElement | undefined) => void;
 		mobileTransport: boolean;
 	}
@@ -68,6 +75,8 @@
 		onOpenNowPlaying,
 		nowPlayingDocked = false,
 		nowPlayingDisabled,
+		nowPlayingTargetLabel = NOW_PLAYING_LABEL,
+		nowPlayingTargetDescriptionId,
 		onNowPlayingTriggerBind,
 		mobileTransport
 	}: Props = $props();
@@ -80,6 +89,17 @@
 	let bassLevel = $state(0);
 	let energyLevel = $state(0);
 	let vizColors: VizColors = $state({ pr: 255, pg: 50, pb: 32, ar: 160, ag: 32, ab: 240 });
+
+	// Previous and next are frequent phone targets; the desktop row keeps
+	// its own press feedback.
+	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
+
+	const phoneFailureId = $props.id();
+	const playbackFailure = $derived(isError ? (errorMsg ?? 'Error') : null);
+	const nowPlayingTargetDescribedBy = $derived(
+		[nowPlayingTargetDescriptionId, playbackFailure && phoneFailureId].filter(Boolean).join(' ') ||
+			undefined
+	);
 
 	const viz = new AudioVisualizer();
 	const progressPercent = $derived(
@@ -169,6 +189,49 @@
 	});
 </script>
 
+{#snippet stepAndPlay()}
+	<button
+		class="nav-btn"
+		data-hitbox={phoneHitbox}
+		onclick={onPrev}
+		disabled={!canPrev}
+		aria-label="Previous"
+		title="Previous"
+	>
+		<Icon name="skip-back" size={21} />
+	</button>
+	<button
+		class="play-btn"
+		class:loading={isLoading}
+		class:playing={isPlaying}
+		class:errored={isError}
+		onclick={onTogglePlay}
+		aria-label={isError
+			? TRANSPORT_RETRY_LABEL
+			: isPlaying
+				? TRANSPORT_PAUSE_LABEL
+				: TRANSPORT_PLAY_LABEL}
+		title={isError && errorMsg ? errorMsg : ''}
+	>
+		<span class="play-btn-face" style={playFaceStyle}>
+			{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
+					name="refresh-cw"
+					size={24}
+				/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+		</span>
+	</button>
+	<button
+		class="nav-btn"
+		data-hitbox={phoneHitbox}
+		onclick={onNext}
+		disabled={!canNext}
+		aria-label="Next"
+		title="Next"
+	>
+		<Icon name="skip-forward" size={21} />
+	</button>
+{/snippet}
+
 <svelte:document onvisibilitychange={handleVisibilityChange} />
 
 <footer
@@ -182,86 +245,96 @@
 		<div class="mobile-progress-fill" style:width="{progressPercent}%"></div>
 	</div>
 	<div class="player-content">
-		<div class="transport-controls">
-			{#if onToggleShuffle}
+		{#if mobileTransport}
+			{#if nowPlayingDisabled}
+				<div class="phone-side track-info" aria-live="polite">
+					{@render trackInfo(trackTitleGlowStyle, null)}
+				</div>
+			{:else}
 				<button
-					class="nav-btn shuffle-btn"
-					class:on={shuffle}
-					data-hitbox="frequent"
-					onclick={onToggleShuffle}
-					aria-pressed={shuffle}
-					aria-label={shuffleLabel}
-					title={shuffleLabel}
+					bind:this={nowPlayingTrigger}
+					class="phone-side track-info open-now-playing"
+					onclick={onOpenNowPlaying}
+					aria-label={nowPlayingTargetLabel}
+					aria-describedby={nowPlayingTargetDescribedBy}
+					aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
+					aria-expanded={nowPlayingOpen}
+					aria-live="polite"
 				>
-					<Icon name="shuffle" size={18} />
+					{@render trackInfo(trackTitleGlowStyle, null)}
 				</button>
 			{/if}
+			<div class="transport-controls">
+				{@render stepAndPlay()}
+			</div>
+			<!-- The empty right side is only a wider tap target for the same
+				action, so keyboards and screen readers meet the one on the left.
+				It is also the only room wide enough to say why playback stopped. -->
+			{#if nowPlayingDisabled}
+				<span class="phone-side"></span>
+			{:else}
+				<button
+					class="phone-side open-now-playing"
+					onclick={onOpenNowPlaying}
+					tabindex="-1"
+					aria-hidden="true"
+				>
+					{#if playbackFailure}<span class="phone-failure" id={phoneFailureId}
+							>{playbackFailure}</span
+						>{/if}
+				</button>
+			{/if}
+		{:else}
+			<div class="transport-controls">
+				{#if onToggleShuffle}
+					<button
+						class="nav-btn shuffle-btn"
+						class:on={shuffle}
+						data-hitbox="frequent"
+						onclick={onToggleShuffle}
+						aria-pressed={shuffle}
+						aria-label={shuffleLabel}
+						title={shuffleLabel}
+					>
+						<Icon name="shuffle" size={18} />
+					</button>
+				{/if}
+				{@render stepAndPlay()}
+			</div>
+			<div class="track-info" aria-live="polite">
+				{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
+			</div>
+			<div class="timeline">
+				<span class="time">{formatTime(currentTime)}</span>
+				<input
+					class="timeline-range"
+					style={`--progress: ${progressPercent}%`}
+					type="range"
+					min="0"
+					max={duration || 0}
+					step="0.1"
+					value={duration > 0 ? currentTime : 0}
+					oninput={seekFromRange}
+					onclick={(e) => seekFromClick(e)}
+					disabled={duration <= 0}
+					aria-label="Seek playback"
+				/>
+				<span class="time">{formatTime(duration)}</span>
+			</div>
 			<button
-				class="nav-btn"
-				onclick={onPrev}
-				disabled={!canPrev}
-				aria-label="Previous"
-				title="Previous"
+				bind:this={nowPlayingTrigger}
+				class="now-playing-btn"
+				data-hitbox="frequent"
+				onclick={onOpenNowPlaying}
+				disabled={nowPlayingDisabled}
+				aria-label={NOW_PLAYING_LABEL}
+				aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
+				aria-expanded={nowPlayingOpen}
 			>
-				<Icon name="skip-back" size={21} />
+				<span>{NOW_PLAYING_LABEL}</span>
+				<Icon name="chevron-up" size={16} />
 			</button>
-			<button
-				class="play-btn"
-				class:loading={isLoading}
-				class:playing={isPlaying}
-				class:errored={isError}
-				onclick={onTogglePlay}
-				aria-label={isError
-					? TRANSPORT_RETRY_LABEL
-					: isPlaying
-						? TRANSPORT_PAUSE_LABEL
-						: TRANSPORT_PLAY_LABEL}
-				title={isError && errorMsg ? errorMsg : ''}
-			>
-				<span class="play-btn-face" style={playFaceStyle}>
-					{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-							name="refresh-cw"
-							size={24}
-						/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
-				</span>
-			</button>
-			<button class="nav-btn" onclick={onNext} disabled={!canNext} aria-label="Next" title="Next">
-				<Icon name="skip-forward" size={21} />
-			</button>
-		</div>
-		<div class="track-info" aria-live="polite">
-			{@render trackInfo(trackTitleGlowStyle)}
-		</div>
-		<div class="timeline">
-			<span class="time">{formatTime(currentTime)}</span>
-			<input
-				class="timeline-range"
-				style={`--progress: ${progressPercent}%`}
-				type="range"
-				min="0"
-				max={duration || 0}
-				step="0.1"
-				value={duration > 0 ? currentTime : 0}
-				oninput={seekFromRange}
-				onclick={(e) => seekFromClick(e)}
-				disabled={duration <= 0}
-				aria-label="Seek playback"
-			/>
-			<span class="time">{formatTime(duration)}</span>
-		</div>
-		<button
-			bind:this={nowPlayingTrigger}
-			class="now-playing-btn"
-			data-hitbox="frequent"
-			onclick={onOpenNowPlaying}
-			disabled={nowPlayingDisabled}
-			aria-label={NOW_PLAYING_LABEL}
-			aria-haspopup={nowPlayingDocked ? undefined : 'dialog'}
-			aria-expanded={nowPlayingOpen}
-		>
-			<span>{NOW_PLAYING_LABEL}</span>
-			<Icon name="chevron-up" size={16} />
-		</button>
+		{/if}
 	</div>
 </footer>
 
@@ -563,10 +636,11 @@
 		}
 	}
 
-	/* One 64px transport row on mobile / coarse pointers: cover, title,
-	   play/pause, and the Now Playing chevron. Prev/Next move into the Now
-	   Playing overlay — see NowPlaying.svelte — and the interactive seek
-	   timeline is replaced by the decorative .mobile-progress line above.
+	/* The phone's mini player (#1003, frames C2/C3): cover and title, then
+	   previous · play · next, then an empty side. Both sides take the same
+	   share of the row, so play sits on its exact centre line, and both open
+	   Now Playing. The seek timeline and shuffle live in Now Playing; the
+	   decorative .mobile-progress line stands in for the timeline here.
 	   `.mobile-transport` is set from `subscribeCompactLayout` (JS mirrors
 	   the same media query so jsdom tests can drive it via data-pointer). */
 	.player-bar.mobile-transport {
@@ -585,39 +659,60 @@
 	}
 	.mobile-transport .player-content {
 		display: flex;
-		align-items: center;
-		gap: 10px;
+		align-items: stretch;
+		gap: 6px;
+		height: 100%;
 	}
-	.mobile-transport .track-info {
-		order: 1;
-		flex: 1;
-		width: auto;
+	.phone-side {
+		flex: 1 1 0;
 		min-width: 0;
 	}
+	.phone-failure {
+		display: block;
+		padding-left: 8px;
+		font-size: 0.73rem;
+		line-height: 1.25;
+		color: #d34;
+		overflow: hidden;
+	}
+	.open-now-playing {
+		margin: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		color: inherit;
+		font: inherit;
+		text-align: left;
+		cursor: pointer;
+	}
 	.mobile-transport .transport-controls {
-		order: 2;
-		flex-shrink: 0;
+		flex: none;
 	}
 	.mobile-transport .nav-btn {
-		display: none;
-	}
-	.mobile-transport .shuffle-btn {
-		display: inline-flex;
-	}
-	.mobile-transport .play-btn {
 		width: 44px;
 		height: 44px;
-		min-width: 44px;
-		min-height: 44px;
+		border: none;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text);
+	}
+	.mobile-transport .play-btn,
+	.mobile-transport .play-btn.playing {
+		width: 48px;
+		height: 48px;
+		border: none;
+		background: var(--primary);
+		color: #fff;
+		animation: none;
+	}
+	.mobile-transport .play-btn.errored {
+		background: #d34;
 	}
 	.mobile-transport .play-btn-face {
 		transform: none !important;
 	}
-	.mobile-transport .now-playing-btn {
-		order: 3;
-		flex-shrink: 0;
-	}
-	.mobile-transport .timeline {
-		display: none;
+	.mobile-transport .spinner {
+		background-image:
+			linear-gradient(transparent, transparent), conic-gradient(#fff, transparent, #fff);
 	}
 </style>

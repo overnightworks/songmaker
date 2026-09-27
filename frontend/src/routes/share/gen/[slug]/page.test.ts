@@ -153,8 +153,10 @@ describe('shared generation (take) page', () => {
 
 		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
 		target.querySelector<HTMLButtonElement>('.track-row')?.click();
-		await vi.waitFor(() => expect(document.querySelector('.now-playing-btn')).not.toBeNull());
-		document.querySelector<HTMLButtonElement>('.now-playing-btn')?.click();
+		await vi.waitFor(() =>
+			expect(document.querySelector('.track-info.open-now-playing')).not.toBeNull()
+		);
+		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 		await vi.waitFor(() => expect(document.querySelector('.lyrics-synced')).not.toBeNull());
 
 		audioPlayer.currentTime = 8.5;

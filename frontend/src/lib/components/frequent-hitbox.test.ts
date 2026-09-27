@@ -230,8 +230,13 @@ const INVENTORY = [
 		component: 'Breadcrumb'
 	},
 	{
-		name: 'now-playing-trigger',
-		selector: '.now-playing-btn[data-hitbox="frequent"]',
+		name: 'transport-previous',
+		selector: '.nav-btn[data-hitbox="frequent"][aria-label="Previous"]',
+		component: 'TransportBarFrame'
+	},
+	{
+		name: 'transport-next',
+		selector: '.nav-btn[data-hitbox="frequent"][aria-label="Next"]',
 		component: 'TransportBarFrame'
 	}
 ] as const satisfies ReadonlyArray<{

@@ -88,12 +88,17 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 }
 
 // Where the playing queue comes from — the album or playlist it was built
-// from — and how to go back there. A library queue has no source.
-type NowPlayingSourceKind = 'album' | 'playlist';
+// from. A library queue has no source. The player store owns the answer
+// (playbackSource); Now Playing adds how to go back there.
+type PlaybackSourceKind = 'album' | 'playlist';
 
-export interface NowPlayingSource {
-	kind: NowPlayingSourceKind;
+export interface PlaybackSource {
+	kind: PlaybackSourceKind;
+	id: string;
 	title: string;
+}
+
+export interface NowPlayingSource extends PlaybackSource {
 	open: () => void;
 }
 
@@ -103,7 +108,7 @@ export function nowPlayingFromLabel(title: string): string {
 
 // Starts with the visible "from …" text so a voice command naming what is
 // on screen reaches the link (WCAG 2.5.3), then says what it opens.
-export function nowPlayingOpenSourceLabel(kind: NowPlayingSourceKind, title: string): string {
+export function nowPlayingOpenSourceLabel(kind: PlaybackSourceKind, title: string): string {
 	return `${nowPlayingFromLabel(title)} — open ${kind}`;
 }
 
