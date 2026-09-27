@@ -48,7 +48,7 @@ const CUT_OFF_MS = 16_000;
 const TAKE_AFTER_RETURN_MS = 10_000;
 
 test.describe('a finished generation on the phone', () => {
-	test('brings its take into the Takes list without navigation, even when its resource event never arrives', async ({
+	test('brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
 		page,
 		isMobile
 	}) => {
@@ -65,7 +65,7 @@ test.describe('a finished generation on the phone', () => {
 		const jobId = await seedRunningGenerationJob(songId, {
 			progress: 0.5,
 			takeIndex: 1,
-			takeCount: 1,
+			takeCount: 2,
 			phase: 'rendering',
 			generationStartedOffsetSeconds: 30
 		});
@@ -94,6 +94,7 @@ test.describe('a finished generation on the phone', () => {
 			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT + 1))
 		).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 1);
+		await expect(panel.getByRole('progressbar')).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveAttribute('aria-selected', 'true');
 
 		console.log(`Take-arrives flow /api requests: ${guard.apiRequestCount}`);

@@ -410,18 +410,22 @@ describe('resource sync owner', () => {
 			await flush();
 			expect(get(store).status).toBe('reconnecting');
 
-			await controller.requestSongRefresh('s1');
-			expect(fetchCalls).toEqual([]);
+			let refreshed = false;
+			void controller.requestSongRefresh('s1').then(() => (refreshed = true));
 			for (let drop = 0; drop < dropsAfterRequest; drop++) {
 				latestSource(sources).error();
 				await flush();
 			}
+			await flush();
+			expect(fetchCalls).toEqual([]);
+			expect(refreshed).toBe(false);
 
 			latestSource(sources).emit('hello', { high_water_mark: '0' });
 			await flush();
 			expect(get(store).status).toBe('live');
 			expect(fetchCalls).toEqual(['s1']);
 			expect(upserted.at(-1)?.id).toBe('s1');
+			expect(refreshed).toBe(true);
 		}
 	);
 

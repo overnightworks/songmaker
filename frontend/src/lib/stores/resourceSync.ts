@@ -214,12 +214,16 @@ export class ResourceSyncController {
 	 * bootstrap even across a dropped attempt, which abandons the epoch's own
 	 * pending songs: a job that ended while the stream was still reconnecting
 	 * must still bring its take in once the stream is back (#1032).
+	 *
+	 * The returned promise settles once the refresh has run, so a caller can
+	 * hold a stand-in until then: a deferred refresh settles with the
+	 * bootstrap that runs it, or when that bootstrap gives up (#1039 O3).
 	 */
 	requestSongRefresh(songId: string): Promise<void> {
 		this.invalidateSong(songId);
 		if (!this.canFlush()) {
 			this.refreshesAwaitingBootstrap.add(songId);
-			return Promise.resolve();
+			return this.waitForReady().then(() => undefined);
 		}
 		return this.flushPending(this.epoch);
 	}

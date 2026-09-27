@@ -1,6 +1,11 @@
 import { writable, get } from 'svelte/store';
 import { fetchActiveGeneration, fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
-import { JOB_STREAM_MAX_CONNECTION_ERRORS, JOB_TYPE_GENERATE } from '$lib/constants';
+import {
+	GENERATE_TAKE_ARRIVAL_WAIT_MS,
+	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	JOB_TYPE_GENERATE
+} from '$lib/constants';
+import { offline } from '$lib/stores/connectivity';
 import { requestSongRefresh } from '$lib/stores/resourceSync';
 import {
 	ImmediateReopenGap,
@@ -18,6 +23,8 @@ export interface ActiveJob {
 	genId?: string;
 	workerId?: string;
 	mode?: string;
+	/** A generate job that ended with takes, held until they are in its song's list. */
+	awaitingTakes?: boolean;
 }
 
 export const activeJobs = writable<ActiveJob[]>([]);
@@ -95,6 +102,7 @@ interface PendingReconnect {
 
 const eventSources = new Map<string, EventSource>();
 const pendingReconnects = new Map<string, PendingReconnect>();
+const takeArrivalWaits = new Map<string, () => void>();
 let stopWatchingReconnectOpportunities: (() => void) | null = null;
 
 function isTerminalJobStatus(status: JobStatus['status']): boolean {
@@ -103,23 +111,16 @@ function isTerminalJobStatus(status: JobStatus['status']): boolean {
 	);
 }
 
-// A generate job refreshes its song too, not only the `generation.created`
-// resource event: that event can fall into a gap while the resource stream
-// reconnects (a phone's screen going off), and the take would then stay
-// missing until the next navigation (#1020). Both triggers are idempotent:
-// the resource-sync owner refetches the song and skips a take it already has.
-function refreshSongAfterTerminalJob(songId: string | undefined): void {
-	if (songId) void requestSongRefresh(songId);
+function endedWithTakes(job: JobStatus): boolean {
+	return job.status === 'completed' || job.status === 'partial';
 }
 
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	if (job.status === 'completed') {
-		refreshSongAfterTerminalJob(songId);
 		addToast(`${job.type} completed`, 'success');
 		return;
 	}
 	if (job.status === 'partial') {
-		refreshSongAfterTerminalJob(songId);
 		addToast(job.error || `${job.type} partially completed`, 'info');
 		return;
 	}
@@ -134,11 +135,78 @@ function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
 	addToast(message, 'error');
 }
 
+/**
+ * A generate job that made takes stays tracked, with its end status, until a
+ * song refresh its end asked for has run while the page could reach the
+ * server: the job's card is what the musician sees until the take replaces
+ * it, so letting the job go at once -- or when a refresh failed offline --
+ * would leave a moment with neither (#1039 O3). The generate owner hides the
+ * card as soon as the take is in the list; the wait, counted only while
+ * online, bounds how long a refresh that never runs can keep it.
+ */
+function keepUntilSongRefreshed(jobId: string, songId: string, songRefresh: Promise<void>): void {
+	activeJobs.update((jobs) =>
+		jobs.map((active) => (active.job.id === jobId ? { ...active, awaitingTakes: true } : active))
+	);
+	let bound: ReturnType<typeof setTimeout> | undefined;
+	const stopWatchingConnectivity = offline.subscribe((isOffline) => {
+		clearTimeout(bound);
+		bound = isOffline
+			? undefined
+			: setTimeout(() => removeJob(jobId), GENERATE_TAKE_ARRIVAL_WAIT_MS);
+	});
+	const stopWaiting = (): void => {
+		clearTimeout(bound);
+		stopWatchingConnectivity();
+	};
+	takeArrivalWaits.set(jobId, stopWaiting);
+	const stillWaiting = (): boolean => takeArrivalWaits.get(jobId) === stopWaiting;
+	void refreshedWhileOnline(songId, songRefresh, stillWaiting).then(() => {
+		if (stillWaiting()) removeJob(jobId);
+	});
+}
+
+async function refreshedWhileOnline(
+	songId: string,
+	songRefresh: Promise<void>,
+	stillWaiting: () => boolean
+): Promise<void> {
+	await songRefresh;
+	while (get(offline)) {
+		await backOnline();
+		if (!stillWaiting()) return;
+		await requestSongRefresh(songId);
+	}
+}
+
+function backOnline(): Promise<void> {
+	return new Promise((resolve) => {
+		const stop = offline.subscribe((isOffline) => {
+			if (isOffline) return;
+			queueMicrotask(() => stop());
+			resolve();
+		});
+	});
+}
+
+// A job that made takes refreshes its song too, not only the
+// `generation.created` resource event: that event can fall into a gap while
+// the resource stream reconnects (a phone's screen going off), and the take
+// would then stay missing until the next navigation (#1020). Both triggers are
+// idempotent: the resource-sync owner refetches the song and skips a take it
+// already has.
 function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource): void {
 	source.close();
 	eventSources.delete(jobId);
 	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
 	notifyTerminalJob(job, songId);
+	if (songId && endedWithTakes(job)) {
+		const songRefresh = requestSongRefresh(songId);
+		if (job.type === JOB_TYPE_GENERATE) {
+			keepUntilSongRefreshed(jobId, songId, songRefresh);
+			return;
+		}
+	}
 	activeJobs.update((jobs) => jobs.filter((active) => active.job.id !== jobId));
 }
 
@@ -170,6 +238,8 @@ export function removeJob(jobId: string): void {
 
 function stopTracking(jobId: string): void {
 	cancelPendingReconnect(jobId);
+	takeArrivalWaits.get(jobId)?.();
+	takeArrivalWaits.delete(jobId);
 	const source = eventSources.get(jobId);
 	if (source) {
 		source.close();

@@ -108,6 +108,15 @@ export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
  */
 export const OFFLINE_FLOW_API_REQUEST_BUDGET = 30;
 
+/**
+ * What `offline.spec.ts`'s running-take flow costs the API: the same open,
+ * song, Takes tab and seeded running job as `TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET`,
+ * with the job stream's backoff attempts while the network is gone and the
+ * streams and song refresh that reopen on its return. Measured 26 on the
+ * local CI stack (27.09.2026), with the same headroom as the offline flow's.
+ */
+export const OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET = 34;
+
 const API_PATH_PREFIX = '/api';
 // How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
@@ -138,13 +147,19 @@ const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_E
  * leaves a live event stream the page already holds running (see
  * docs/testing.md), so the page's open loads are stopped the way a dropped
  * network ends them, and every reopen of the library's resource stream is
- * refused until `regainNetwork`.
+ * refused until `regainNetwork`. `keepOpenStreams` leaves the streams already
+ * open running and refuses only new requests: the moment a stream's last
+ * event is already on its way when the network goes.
  */
-export async function loseNetwork(page: Page, context: BrowserContext): Promise<void> {
+export async function loseNetwork(
+	page: Page,
+	context: BrowserContext,
+	{ keepOpenStreams = false }: { keepOpenStreams?: boolean } = {}
+): Promise<void> {
 	pagesWithoutNetwork.add(page);
 	await page.route(isResourceEventStream, (route) => route.abort('internetdisconnected'));
 	await context.setOffline(true);
-	await page.evaluate(() => window.stop());
+	if (!keepOpenStreams) await page.evaluate(() => window.stop());
 }
 
 /** Gives the page its network back: the browser reports online and the stream may reopen. */

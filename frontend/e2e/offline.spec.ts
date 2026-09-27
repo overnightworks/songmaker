@@ -1,8 +1,11 @@
-// Losing the network on the phone (#1039 O1, O3, O5; slice #1080): within
+// Losing the network on the phone (#1039 O1, O3, O5; slices #1080, #1098): within
 // about a second one calm strip, "You're offline — retrying", rests on the
 // top edge of the mini player, Generate is disabled without a reason of its
 // own and stays above the strip, and once the network is back the strip goes
-// by itself. Mobile project only: the phone's Generate bar is compact-shell
+// by itself. A take generating meanwhile stops looking live (#1098): its card
+// reads "Reconnecting…" with the last progress it saw, in grey, its cancel and
+// the Takes ring grey too, and when the job ended while the network was gone
+// the card stays until its take is in the list. Mobile project only: the phone's Generate bar is compact-shell
 // UI, and the unit suite pins the desktop placement (PlayerBar.test.ts).
 //
 // The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
@@ -12,7 +15,11 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
+	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
+	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_GENERATE_RECONNECTING_LABEL,
+	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
@@ -26,11 +33,18 @@ import {
 	FlowGuard,
 	loseNetwork,
 	OFFLINE_FLOW_API_REQUEST_BUDGET,
+	OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET,
 	nameStartingWith,
 	regainNetwork,
 	workspace
 } from './helpers';
-import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
+import {
+	completeGenerationJobWithoutEvent,
+	readSeededLibrary,
+	runMarker,
+	seedRunningGenerationJob,
+	seedSongPhoneSong
+} from './seed';
 
 const OFFLINE_SONG_TITLE = 'Offline Strip';
 // The ruled "within about a second" of losing the network.
@@ -44,6 +58,8 @@ const SERVER_BACK_MS = 2 * RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS;
 const RESOURCE_STREAM = `**${RESOURCE_EVENT_STREAM_PATH}**`;
 const SESSION_CHECK = '**/api/auth/me';
 const GENERATE_LABEL = EDITOR_GENERATE_MODE_LABELS.generate;
+// The toast a generate job's end raises (`notifyTerminalJob` in stores/jobs.ts).
+const JOB_COMPLETED_TOAST = 'generate completed';
 // CI's stack runs no ACE-Step worker, so online the Generate bar names that
 // reason inside its own box (#1011).
 const GENERATE_WITHOUT_GPU = `${GENERATE_LABEL} — ${EDITOR_GPU_OFFLINE_TITLE}`;
@@ -54,6 +70,18 @@ function generateButton(page: Page): Locator {
 
 function offlineStrip(page: Page): Locator {
 	return page.getByRole('status').filter({ hasText: OFFLINE_STRIP_MESSAGE });
+}
+
+/** What a colour token resolves to on the page right now, as `getComputedStyle` reports it. */
+function resolvedToken(page: Page, token: string): Promise<string> {
+	return page.evaluate((name) => {
+		const probe = document.createElement('span');
+		probe.style.color = `var(${name})`;
+		document.body.append(probe);
+		const color = getComputedStyle(probe).color;
+		probe.remove();
+		return color;
+	}, token);
 }
 
 type ServerAnswer = (route: Route) => Promise<void>;
@@ -217,4 +245,123 @@ test.describe('losing the network while a take plays on the phone', () => {
 		await context.setOffline(false);
 		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
 	});
+});
+
+test.describe('losing the network while a take generates on the phone', () => {
+	// The same shape as take-arrives.spec.ts's offline flow: the service
+	// worker stays out of the loads the returning network makes.
+	test.use({ serviceWorkers: 'block' });
+
+	// The job's end reaches the page either on its stream reopened once the
+	// network is back, or on the stream still open when the network went --
+	// the end then arrives offline, while the song refresh it asks for cannot.
+	for (const { endArrives, keepOpenStreams } of [
+		{ endArrives: 'once the network is back', keepOpenStreams: false },
+		{ endArrives: 'offline, on the job stream still open', keepOpenStreams: true }
+	]) {
+		test(`greys the running card with its last progress, and keeps it until the take that finished offline is in the list, when the end arrives ${endArrives}`, async ({
+			page,
+			context,
+			isMobile
+		}) => {
+			test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+			const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+			const library = readSeededLibrary();
+			const songTitle = `${OFFLINE_SONG_TITLE} Running ${runMarker()}`;
+			const seededTakes = 1;
+			const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, seededTakes);
+			const jobId = await seedRunningGenerationJob(songId, {
+				progress: 0.4,
+				takeIndex: 1,
+				takeCount: 2,
+				phase: 'rendering',
+				generationStartedOffsetSeconds: 30
+			});
+			const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+			const panel = page.getByRole('tabpanel');
+			const takesTab = page.getByRole('tab', { name: /Takes/ });
+			const runningRing = takesTab.locator('.ring');
+			const playTakePrefix = `${TRANSPORT_PLAY_LABEL} v`;
+			const playButtons = panel.getByRole('button', { name: new RegExp(`^${playTakePrefix}`) });
+			const lastSeenBar = panel.getByRole('progressbar', {
+				name: EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL
+			});
+
+			await page.goto(`/album/${library.songPhoneAlbumId}`);
+			await workspace(page)
+				.getByRole('button', { name: nameStartingWith(songTitle) })
+				.click();
+			await takesTab.click();
+			await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
+			await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
+			await expect(playButtons).toHaveCount(seededTakes);
+			// The card shows before the song's route module has loaded; the address
+			// moves to the song only once it has, and cutting the network earlier
+			// fails that load into SvelteKit's error page.
+			await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
+
+			await loseNetwork(page, context, { keepOpenStreams });
+
+			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+				timeout: OFFLINE_NOTICE_MS
+			});
+			await expect(
+				panel.getByText(`${takeCounter}last seen at 40%`, { exact: true })
+			).toBeVisible();
+			await expect(panel.getByText(/~\d/)).toHaveCount(0);
+			await expect(lastSeenBar).toHaveAttribute('aria-valuenow', '40');
+			const cancel = panel.getByRole('button', { name: EDITOR_GENERATE_CANCEL_OFFLINE_LABEL });
+			await expect(cancel).toHaveAttribute('aria-disabled', 'true');
+			const grey = await resolvedToken(page, '--text-disabled');
+			await expect(lastSeenBar.locator('span')).toHaveCSS('background-color', grey);
+			await expect(lastSeenBar.locator('span')).toHaveAttribute('style', /width: 40%/);
+			await expect(cancel).toHaveCSS('color', grey);
+			await expect(runningRing).toHaveCSS('color', grey);
+
+			await page.evaluate(
+				({ prefix, takesBefore }) => {
+					const takes = document.querySelector('[role="tabpanel"]');
+					if (!takes) throw new Error('Expected the Takes panel');
+					const gaps = { seen: false };
+					Object.assign(window, { takeArrivalGaps: gaps });
+					new MutationObserver(() => {
+						const cardShows = takes.querySelector('[role="progressbar"]') !== null;
+						const takeShows =
+							takes.querySelectorAll(`button[aria-label^="${prefix}"]`).length > takesBefore;
+						if (!cardShows && !takeShows) gaps.seen = true;
+					}).observe(takes, { childList: true, subtree: true });
+				},
+				{ prefix: playTakePrefix, takesBefore: seededTakes }
+			);
+
+			const songRefreshFailed = keepOpenStreams
+				? page.waitForEvent(
+						'requestfailed',
+						(request) => new URL(request.url()).pathname === `/api/songs/${songId}`
+					)
+				: null;
+			await completeGenerationJobWithoutEvent(jobId);
+			if (songRefreshFailed) {
+				await expect(page.getByText(JOB_COMPLETED_TOAST)).toBeVisible();
+				await songRefreshFailed;
+				await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible();
+			}
+			await expect(lastSeenBar).toBeVisible();
+
+			await regainNetwork(page, context);
+
+			await expect(playButtons).toHaveCount(seededTakes + 1, { timeout: BACK_ONLINE_MS });
+			await expect(panel.getByRole('progressbar')).toHaveCount(0);
+			await expect(runningRing).toHaveCount(0);
+			await expect(offlineStrip(page)).toHaveCount(0);
+			const sawNeitherCardNorTake = await page.evaluate(
+				() => (window as unknown as { takeArrivalGaps: { seen: boolean } }).takeArrivalGaps.seen
+			);
+			expect(sawNeitherCardNorTake).toBe(false);
+
+			console.log(`Offline running-take flow /api requests: ${guard.apiRequestCount}`);
+			guard.assertClean();
+			guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
+		});
+	}
 });
