@@ -395,7 +395,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(escape.defaultPrevented).toBe(true);
 	});
 
-	it('keeps Memory in its ⋯ menu rather than a row above the chat, and opens the memory editor from there', async () => {
+	it('keeps Memory in its ⋯ menu rather than a row above the chat, opens the memory editor from there, and returns focus to ⋯ on close', async () => {
 		vi.mocked(fetchMemory).mockResolvedValueOnce({
 			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
 		});
@@ -416,9 +416,16 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(target.querySelector('[role="menu"]')).toBeNull();
 		await vi.waitFor(() => expect(userMemory()?.value).toBe('Prefers short lines'));
 
-		target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click();
+		const closeMemory = target.querySelector<HTMLButtonElement>(
+			'button[aria-label="Close memory"]'
+		);
+		closeMemory?.focus();
+		closeMemory?.click();
 		await tick();
 		expect(userMemory()).toBeNull();
+		expect(document.activeElement?.getAttribute('aria-label')).toBe(
+			COWRITER_CONVERSATION_MENU_LABEL
+		);
 	});
 });
 
