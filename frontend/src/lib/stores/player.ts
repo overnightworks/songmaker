@@ -13,6 +13,7 @@ import type {
 	LibraryPoolTakeItem,
 	PlaylistDetailItem,
 	PlaylistEntryItem,
+	PlaylistItem,
 	QueueStreamManifest,
 	QueueStreamSkipItem,
 	SongItem
@@ -43,13 +44,19 @@ import {
 	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	loadPlaylistDetail,
+	playlistDetailLoad,
+	selectedPlaylist,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
 	QUEUE_STREAM_EMPTY_POOL_PREFIX,
 	QUEUE_STREAM_UNPLAYABLE_START_DETAIL,
 	QUEUE_TAKE_MISSING_TOAST,
+	PLAYLIST_LOADING_LABEL,
 	RAIL_LIBRARY_LABEL,
 	SHUFFLE_SCOPE_ALBUM,
 	SHUFFLE_SCOPE_LIBRARY,
@@ -518,7 +525,7 @@ async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<v
 }
 
 type IdlePlayTarget =
-	| { type: 'playlist'; label: string; playlist: PlaylistDetailItem }
+	| { type: 'playlist'; label: string; playlistId: string }
 	| { type: 'album'; label: string; albumId: string }
 	| { type: 'library'; label: string };
 
@@ -530,17 +537,28 @@ type IdlePlayTarget =
 export function idlePlayTarget(input: {
 	collection: OpenCollection | null;
 	playlist: PlaylistDetailItem | null;
+	listedPlaylist: PlaylistItem | null;
+	playlistLoading: boolean;
 	albums: AlbumItem[];
 }): IdlePlayTarget {
 	if (input.collection?.kind === 'playlist') {
-		// A playlist whose detail failed to load (or hasn't loaded yet) has no
-		// title to show and nothing to natively play — fall back to the named
-		// library target instead of an empty label and a dead Play button. A
-		// detail still holding the previously opened playlist is not loaded
-		// yet either: Play must never start the list the listener just left.
-		const playlist = input.playlist;
-		if (playlist?.id !== input.collection.id) return { type: 'library', label: RAIL_LIBRARY_LABEL };
-		return { type: 'playlist', label: playlist.title, playlist };
+		const playlistId = input.collection.id;
+		if (input.playlist?.id === playlistId) {
+			return { type: 'playlist', label: input.playlist.title, playlistId };
+		}
+		// The listener opened this playlist: while its detail is still on the
+		// way, Play means this playlist and waits for it -- never the library,
+		// never the list they just left.
+		if (input.playlistLoading) {
+			return {
+				type: 'playlist',
+				label: input.listedPlaylist?.title ?? PLAYLIST_LOADING_LABEL,
+				playlistId
+			};
+		}
+		// A detail that failed to load has nothing to natively play -- fall
+		// back to the named library target instead of a dead Play button.
+		return { type: 'library', label: RAIL_LIBRARY_LABEL };
 	}
 	if (input.collection?.kind === 'album') {
 		return {
@@ -556,10 +574,12 @@ export async function playIdleStart(): Promise<void> {
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
+		listedPlaylist: get(selectedPlaylist),
+		playlistLoading: get(playlistDetailLoad).status === 'loading',
 		albums: get(albumList)
 	});
 	if (target.type === 'playlist') {
-		playPlaylist(target.playlist, 'top');
+		await playOpenPlaylistOnceLoaded(target.playlistId);
 		return;
 	}
 	if (target.type === 'album') {
@@ -567,6 +587,21 @@ export async function playIdleStart(): Promise<void> {
 		return;
 	}
 	await playLibrary();
+}
+
+// The playlist store owns loading and joins the fetch already in flight; a
+// listener who moves on while it loads leaves nothing here to play.
+async function playOpenPlaylistOnceLoaded(playlistId: string): Promise<void> {
+	if (get(selectedPlaylistDetail)?.id !== playlistId) {
+		playStartNotice.set('building');
+		await loadPlaylistDetail(playlistId);
+	}
+	const playlist = get(selectedPlaylistDetail);
+	if (playlist?.id !== playlistId) {
+		playStartNotice.set('idle');
+		return;
+	}
+	playPlaylist(playlist, 'top');
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {

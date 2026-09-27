@@ -24,6 +24,7 @@ import {
 	createQueueStreamSnapshot,
 	fetchLastFailedGeneration,
 	fetchLibraryPoolQueue,
+	fetchPlaylist,
 	fetchSong,
 	fetchSongs
 } from '$lib/api/client';
@@ -46,6 +47,7 @@ vi.mock('$lib/api/client', () => ({
 	createQueueStreamSnapshot: vi.fn(),
 	createLibraryQueueStreamSnapshot: vi.fn(),
 	fetchLibraryPoolQueue: vi.fn(),
+	fetchPlaylist: vi.fn(),
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn().mockResolvedValue({
 		items: [],
@@ -121,9 +123,9 @@ import {
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool
 } from '$lib/stores/playbackSettings';
-import { selectedPlaylistDetail } from '$lib/stores/playlists';
+import { loadPlaylistDetail, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
-import { RAIL_LIBRARY_LABEL } from '$lib/constants';
+import { PLAYLIST_LOADING_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 
 const genDefaults = {
 	mp3_path: 'a1/song_v1.mp3',
@@ -2407,42 +2409,55 @@ describe('idlePlayTarget', () => {
 		entries: []
 	};
 
+	const listedPlaylist = { ...playlist, entries: undefined };
+	const loaded = { playlist, listedPlaylist, playlistLoading: false };
+
 	it.each([
 		[
 			'none: falls back to the named library target',
 			null,
-			playlist,
+			loaded,
 			{ type: 'library', label: RAIL_LIBRARY_LABEL }
 		],
 		[
 			'album: names the open album',
 			{ kind: 'album' as const, id: 'a1' },
-			playlist,
+			loaded,
 			{ type: 'album', label: 'Nachtstrom', albumId: 'a1' }
 		],
 		[
 			'playlist: names the open playlist',
 			{ kind: 'playlist' as const, id: 'p1' },
-			playlist,
-			{ type: 'playlist', label: 'Night Drive', playlist }
+			loaded,
+			{ type: 'playlist', label: 'Night Drive', playlistId: 'p1' }
 		],
 		[
-			'playlist: never names the previous playlist while the opened one loads',
+			'playlist: names the opened playlist, not the one left, while it loads',
 			{ kind: 'playlist' as const, id: 'p2' },
-			playlist,
-			{ type: 'library', label: RAIL_LIBRARY_LABEL }
+			{
+				playlist,
+				listedPlaylist: { ...listedPlaylist, id: 'p2', title: 'Late Drives' },
+				playlistLoading: true
+			},
+			{ type: 'playlist', label: 'Late Drives', playlistId: 'p2' }
 		],
 		[
-			// A playlist whose detail failed to load (or hasn't loaded yet)
-			// has no title and nothing to natively play — fall back to the
-			// named library target instead of an empty label and dead Play.
+			'playlist: says it is loading when the opened playlist is not listed yet',
+			{ kind: 'playlist' as const, id: 'p2' },
+			{ playlist: null, listedPlaylist: null, playlistLoading: true },
+			{ type: 'playlist', label: PLAYLIST_LOADING_LABEL, playlistId: 'p2' }
+		],
+		[
+			// A playlist whose detail failed to load has nothing to natively
+			// play — fall back to the named library target instead of a dead
+			// Play button.
 			'playlist: falls back to the library target when the detail failed to load',
 			{ kind: 'playlist' as const, id: 'p1' },
-			null,
+			{ playlist: null, listedPlaylist, playlistLoading: false },
 			{ type: 'library', label: RAIL_LIBRARY_LABEL }
 		]
-	])('%s', (_name, collection, playlistDetail, expected) => {
-		const target = idlePlayTarget({ collection, albums, playlist: playlistDetail });
+	])('%s', (_name, collection, playlistState, expected) => {
+		const target = idlePlayTarget({ collection, albums, ...playlistState });
 		expect(target).toEqual(expected);
 	});
 });
@@ -2572,17 +2587,72 @@ describe('playIdleStart', () => {
 		expect(ctx.entries.map((entry) => entry.id)).toEqual(['pe1', 'pe3', 'pe2']);
 	});
 
-	it('never plays the previous playlist while the newly opened one is still loading', async () => {
-		openCollection.set({ kind: 'playlist', id: 'p2' });
-		selectedPlaylistDetail.set(
-			makeDetail({
-				...playlistDefaults,
-				entries: [makePlaylistEntry({ ...playlistEntryDefaults, song_title: 'Previous list' })]
-			})
-		);
-		await playIdleStart();
-		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
-		expect(get(queueContext).type).not.toBe('playlist');
+	describe('while a newly opened playlist is still loading', () => {
+		const left = makeDetail({
+			...playlistDefaults,
+			entries: [makePlaylistEntry({ ...playlistEntryDefaults, song_title: 'Previous list' })]
+		});
+		const opened = makeDetail({
+			...playlistDefaults,
+			id: 'p2',
+			title: 'Late Drives',
+			slug: 'late-drives',
+			entries: [
+				makePlaylistEntry({
+					...playlistEntryDefaults,
+					id: 'pe-b',
+					song_title: 'Opened list'
+				})
+			]
+		});
+		let answerOpened: { resolve: (d: PlaylistDetailItem) => void; reject: (e: unknown) => void };
+
+		beforeEach(async () => {
+			resetPlaylists();
+			vi.mocked(fetchPlaylist).mockResolvedValueOnce(left);
+			await loadPlaylistDetail(left.id);
+			vi.mocked(fetchPlaylist).mockReturnValueOnce(
+				new Promise<PlaylistDetailItem>((resolve, reject) => {
+					answerOpened = { resolve, reject };
+				})
+			);
+			void loadPlaylistDetail(opened.id);
+		});
+
+		afterEach(() => {
+			resetPlaylists();
+		});
+
+		it('waits for it and then plays it, never the library or the list just left', async () => {
+			const started = playIdleStart();
+			await Promise.resolve();
+
+			expect(get(playStartNotice)).toBe('building');
+			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+			expect(get(queueContext).type).not.toBe('playlist');
+
+			answerOpened.resolve(opened);
+			await started;
+
+			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+			const ctx = get(queueContext);
+			if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
+			expect(ctx.playlist.id).toBe(opened.id);
+			expect(audioPlayer.load).toHaveBeenCalledWith(
+				expect.objectContaining({ songTitle: 'Opened list' }),
+				{ restart: true }
+			);
+		});
+
+		it('plays nothing when it fails to load', async () => {
+			const started = playIdleStart();
+			answerOpened.reject(new Error('offline'));
+			await started;
+
+			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+			expect(get(queueContext).type).not.toBe('playlist');
+			expect(get(playStartNotice)).toBe('idle');
+		});
 	});
 
 	it('falls back to the library pool when the open playlist detail failed to load', async () => {

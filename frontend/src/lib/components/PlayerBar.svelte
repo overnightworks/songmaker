@@ -21,7 +21,11 @@
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
-	import { selectedPlaylistDetail } from '$lib/stores/playlists';
+	import {
+		playlistDetailLoad,
+		selectedPlaylist,
+		selectedPlaylistDetail
+	} from '$lib/stores/playlists';
 	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import {
@@ -63,6 +67,8 @@
 		idlePlayTarget({
 			collection: $openCollection,
 			playlist: $selectedPlaylistDetail,
+			listedPlaylist: $selectedPlaylist,
+			playlistLoading: $playlistDetailLoad.status === 'loading',
 			albums: $albumList
 		})
 	);
