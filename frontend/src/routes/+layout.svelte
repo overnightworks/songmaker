@@ -15,6 +15,7 @@
 	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
 	import {
 		backToCollection,
+		followBackIntoLibrary,
 		forgetHistoryLayers,
 		initNavigation,
 		isLibraryWorkspacePath,
@@ -146,6 +147,10 @@
 	// `initNavigation` still waits for the first snapshot — it
 	// normalises the history entry from the live stores, so running it before
 	// they are hydrated would overwrite a restorable entry with an empty one.
+	$effect(() => {
+		if (hasPrivatePlayer && !libraryRouteActive) return followBackIntoLibrary();
+	});
+
 	$effect(() => {
 		if (!libraryRouteActive) return;
 		startLibraryResourceSync();

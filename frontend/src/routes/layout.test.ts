@@ -825,6 +825,22 @@ describe('signing out from the phone rail drawer', () => {
 	});
 });
 
+describe('Back from Settings onto a library entry', () => {
+	it('mounts the library route for that entry again', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		history.replaceState(libraryRootState(), '', '/');
+		history.pushState({ 'sveltekit:history': 2 }, '', '/settings/voices');
+		await renderLayout('/settings/voices');
+
+		history.back();
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith('/', expect.objectContaining({ replaceState: true }))
+		);
+	});
+});
+
 // The live library stream and the history listener used to belong to the
 // workspace page. Three addresses share that workspace now (`/`,
 // `/album/<slug>` and `/album/<slug>/<song-slug>`, issues #269, #275, #276)

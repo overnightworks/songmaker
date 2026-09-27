@@ -120,6 +120,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
+	followBackIntoLibrary,
 	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
@@ -1743,6 +1744,33 @@ describe('overlays outside the library', () => {
 		expect(get(railDrawerIsLayer)).toBe(false);
 		expect({ length: history.length, state: history.state }).toEqual(before);
 		closeSidebar();
+	});
+});
+
+describe('Back from a page outside the library', () => {
+	it('mounts the library again for the library entry it lands on, as that entry left it', async () => {
+		const stopNavigation = initNavigation();
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
+		await openPlaylist('p1');
+		const playlistEntry: unknown = history.state;
+		const playlistPath = '/playlist/night-drive';
+		expect(location.pathname).toBe(playlistPath);
+		stopNavigation();
+		const stopFollowing = followBackIntoLibrary();
+		history.pushState({ 'sveltekit:history': 2 }, '', '/settings/voices');
+		vi.mocked(goto).mockClear();
+
+		history.back();
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(
+				playlistPath,
+				expect.objectContaining({ replaceState: true })
+			)
+		);
+		await vi.waitFor(() => expect(history.state).toEqual(playlistEntry));
+		expect(location.pathname).toBe(playlistPath);
+		stopFollowing();
 	});
 });
 
