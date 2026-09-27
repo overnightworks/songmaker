@@ -176,7 +176,18 @@ let allAlbumsInflight: Promise<boolean> | null = null;
 
 export async function ensureAllAlbumsLoaded(): Promise<boolean> {
 	if (get(allAlbumsLoad).status === 'ready') return true;
-	return loadAllAlbums();
+	return loadAllAlbums(mergeFetchedAlbums);
+}
+
+// A browse reset never removes an album, so after a stream gap one deleted or
+// archived on another device would stay. Once a surface asked for every
+// album, the snapshot that follows a gap reads them all again and the fresh
+// set replaces the list; a read already under way began before the gap, so
+// it finishes first.
+export async function rereadAllAlbums(): Promise<boolean> {
+	if (get(allAlbumsLoad).status === 'idle') return true;
+	if (allAlbumsInflight !== null) await allAlbumsInflight;
+	return loadAllAlbums(replaceWithFetched);
 }
 
 // A browse reset reads only the first album page (history navigation and a
@@ -200,7 +211,9 @@ function refreshAlbums(current: AlbumItem[], fresh: AlbumItem[]): AlbumItem[] {
 	];
 }
 
-function loadAllAlbums(): Promise<boolean> {
+function loadAllAlbums(
+	combine: (current: AlbumItem[], fetched: AlbumItem[]) => AlbumItem[]
+): Promise<boolean> {
 	if (allAlbumsInflight !== null) return allAlbumsInflight;
 	allAlbumsLoad.set({ status: 'loading', error: null });
 	allAlbumsInflight = (async () => {
@@ -213,7 +226,7 @@ function loadAllAlbums(): Promise<boolean> {
 				offset += page.items.length;
 				if (!page.has_more || page.items.length === 0) break;
 			}
-			albumList.update((current) => mergeFetchedAlbums(current, collected));
+			albumList.update((current) => combine(current, collected));
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
@@ -234,6 +247,10 @@ function mergeFetchedAlbums(current: AlbumItem[], fetched: AlbumItem[]): AlbumIt
 	const currentIds = new Set(current.map((album) => album.id));
 	const newOnes = fetched.filter((album) => !currentIds.has(album.id));
 	return [...current, ...newOnes];
+}
+
+function replaceWithFetched(_current: AlbumItem[], fetched: AlbumItem[]): AlbumItem[] {
+	return fetched;
 }
 
 export function addSongsToList(songs: SongItem[]): void {
