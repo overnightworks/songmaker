@@ -29,6 +29,7 @@ import {
 	trackJob
 } from './jobs';
 import { toasts } from './toast';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import type { JobStatus } from '$lib/api/client';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
@@ -113,6 +114,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	vi.useRealTimers();
 	vi.unstubAllGlobals();
 });
@@ -420,17 +422,22 @@ describe('jobs store', () => {
 	);
 
 	describe.each(['completed', 'partial'] as const)('a generate job that ended %s', (status) => {
-		function endWhileTheSongRefreshes(): { ended: JobStatus; refreshRuns: () => void } {
-			let refreshRuns = (): void => {};
-			mockRequestSongRefresh.mockReturnValue(
+		function songRefreshThatRunsLater(): () => void {
+			let run = (): void => {};
+			mockRequestSongRefresh.mockReturnValueOnce(
 				new Promise<void>((resolve) => {
-					refreshRuns = resolve;
+					run = resolve;
 				})
 			);
+			return () => run();
+		}
+
+		function endWhileTheSongRefreshes(): { ended: JobStatus; refreshRuns: () => void } {
+			const refreshRuns = songRefreshThatRunsLater();
 			trackJob(makeJob({ status: 'running' }), { songId: 's1' });
 			const ended = makeJob({ status });
 			latestSource().simulateMessage(ended);
-			return { ended, refreshRuns: () => refreshRuns() };
+			return { ended, refreshRuns };
 		}
 
 		it('stays tracked for its song until the song refresh its end asked for has run', async () => {
@@ -440,6 +447,23 @@ describe('jobs store', () => {
 			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
 
 			refreshRuns();
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(activeJobs)).toEqual([]);
+		});
+
+		it('stays tracked through an offline stretch longer than the wait, until a song refresh back online has run', async () => {
+			reportResourceStreamReachable(false);
+			const { ended, refreshRuns } = endWhileTheSongRefreshes();
+			refreshRuns();
+			await vi.advanceTimersByTimeAsync(2 * GENERATE_TAKE_ARRIVAL_WAIT_MS);
+			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
+
+			const refreshBackOnlineRuns = songRefreshThatRunsLater();
+			reportResourceStreamReachable(true);
+			await vi.advanceTimersByTimeAsync(0);
+			expect(get(activeJobs)).toEqual([{ job: ended, songId: 's1', awaitingTakes: true }]);
+
+			refreshBackOnlineRuns();
 			await vi.advanceTimersByTimeAsync(0);
 			expect(get(activeJobs)).toEqual([]);
 		});
