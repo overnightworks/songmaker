@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	HITBOX_COMPACT_PX,
 	HITBOX_FREQUENT_PX,
+	LIBRARY_NARROW_MEDIA,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_MOVE_UP_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL
@@ -125,6 +126,7 @@ vi.mock('$lib/stores/auth', async (importOriginal) => {
 
 import { removeFromPlaylist, reorderPlaylistEntry } from '$lib/api/client';
 import { backToCollection, openLibraryWall } from '$lib/stores/navigation';
+import AlbumDetailView from './AlbumDetailView.svelte';
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import PlayerBar from './PlayerBar.svelte';
@@ -132,6 +134,7 @@ import ThemeToggle from './ThemeToggle.svelte';
 import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
+import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
@@ -710,4 +713,61 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		expect(openLibraryWall).not.toHaveBeenCalled();
 		expect(backToCollection).not.toHaveBeenCalled();
 	});
+});
+
+// Frame A2 of docs/design/album-browsing.html draws a phone's album and
+// playlist rows 62 px high (#1082).
+const PHONE_ROW_HEIGHT_PX = 62;
+
+// jsdom matches no media feature, so a component's narrow-screen block never
+// reaches the cascade. Lifting the injected stylesheets' narrow block out of
+// its @media puts back the cascade a phone-wide window sees; the lifted sheet
+// goes with the component styles in afterEach.
+function applyNarrowScreenRules(): void {
+	const narrowRules = Array.from(document.styleSheets)
+		.flatMap((sheet) => Array.from(sheet.cssRules))
+		.filter(
+			(rule): rule is CSSMediaRule =>
+				rule instanceof CSSMediaRule && rule.media.mediaText === LIBRARY_NARROW_MEDIA
+		)
+		.flatMap((rule) => Array.from(rule.cssRules, (inner) => inner.cssText));
+	const sheet = document.createElement('style');
+	sheet.setAttribute('data-component-styles', 'narrow-screen');
+	sheet.textContent = narrowRules.join('\n');
+	document.head.append(sheet);
+}
+
+async function mountRow(view: 'album' | 'playlist'): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	if (view === 'album') {
+		mounted.push(mount(AlbumDetailView, { target, props: { albumId: 'a-local' } }));
+	} else {
+		mounted.push(mount(PlaylistDetailView, { target }));
+	}
+	await tick();
+	const row = target.querySelector<HTMLElement>(view === 'album' ? '.item-row' : '.entry-row');
+	if (!row) throw new Error(`the ${view} row is missing`);
+	injectComponentStyles(
+		view === 'album' ? albumDetailViewSource : playlistDetailViewSource,
+		view === 'album' ? 'AlbumDetailView.svelte' : 'PlaylistDetailView.svelte',
+		row
+	);
+	return row;
+}
+
+describe('collection rows on a phone', () => {
+	it.each(['album', 'playlist'] as const)(
+		'draws the %s row 62 px high, the whole row inside its border its target',
+		async (view) => {
+			const row = await mountRow(view);
+			applyNarrowScreenRules();
+
+			const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
+			expect(minHeightPx(row, `${view} row`)).toBe(PHONE_ROW_HEIGHT_PX);
+			expect(
+				[paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))
+			).toEqual([0, 0, 0, 0]);
+		}
+	);
 });

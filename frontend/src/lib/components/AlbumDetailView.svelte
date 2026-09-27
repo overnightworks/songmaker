@@ -95,6 +95,10 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
+	// Nothing to play is decided here once, from the songs the view shows: an
+	// album without songs, or whose songs have no take yet, gives the header
+	// nothing to start, so neither of its controls can reach the running queue.
+	const albumHasTakes = $derived(albumSongs.some((s) => s.generation_count > 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
@@ -483,12 +487,13 @@
 	<div class="detail-panel">
 		<CollectionHeader
 			kind="album"
+			collectionId={selectedAlbum.id}
 			title={selectedAlbum.title}
 			{coverUrl}
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={currentAlbumId ? (start) => playAlbum(currentAlbumId, start) : null}
+			onplay={currentAlbumId && albumHasTakes ? (start) => playAlbum(currentAlbumId, start) : null}
 			onrename={onRenameAlbum}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
@@ -892,6 +897,10 @@
 		.picker-anchor {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
+		}
+
+		.item-row {
+			min-height: 62px;
 		}
 
 		.empty-tab {

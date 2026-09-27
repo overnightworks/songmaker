@@ -1184,11 +1184,13 @@ async function firstPlayableAlbumTake(
 	return null;
 }
 
+// The album becomes the queue only once its opening take starts: an album
+// that turns out to have nothing playable leaves the running queue, and the
+// place it names as its source, exactly as they were.
 export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	setQueueContext({ type: 'album', albumId });
 	playStartNotice.set('building');
 	if (albumSongsInOrder(albumId).length === 0) {
 		await loadSongsForAlbum(albumId);
