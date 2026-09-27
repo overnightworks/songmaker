@@ -1555,6 +1555,55 @@ describe('resource sync owner', () => {
 		controller.stop();
 	});
 
+	it('still revalidates on focus inside the reopen gap while the waiting stream keeps its backoff', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, fetchCalls } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+		latestSource(sources).error();
+		await flush();
+		const fetchesBefore = fetchCalls.length;
+
+		window.dispatchEvent(new Event('focus'));
+		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+
+		expect(sources).toHaveLength(2);
+		expect(fetchCalls.slice(fetchesBefore)).toEqual(['s1']);
+		controller.stop();
+	});
+
+	it('restarts a first sync that failed with a visible error on focus inside the reopen gap', async () => {
+		vi.useFakeTimers();
+		let snapshotLoads = 0;
+		const { controller, sources, store } = setup({
+			loadSnapshot: async () => ++snapshotLoads === 1
+		});
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		window.dispatchEvent(new Event('focus'));
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		latestSource(sources).emit('resync', { high_water_mark: '1' });
+		await flush();
+		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_ERROR });
+
+		window.dispatchEvent(new Event('focus'));
+
+		expect(sources).toHaveLength(3);
+		expect(get(store)).toMatchObject({ status: 'connecting', error: null });
+		controller.stop();
+	});
+
 	it('stops claiming the server is unreachable when the owner stops', async () => {
 		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();

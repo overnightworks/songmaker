@@ -621,10 +621,10 @@ export const RATE_LIMITED_TOAST_MESSAGE =
 // browser reports the network back (`watchReconnectOpportunities`); those
 // reopens follow the musician's own actions, one per waiting stream each,
 // and at most one per `SSE_IMMEDIATE_REOPEN_MIN_GAP_MS` per stream -- 20
-// app switches in 3s once opened 40 streams (#1099). An opportunity inside
-// the gap is dropped whole: a waiting stream keeps its backoff, and the
-// library's revalidation and the restart of a first sync that failed with a
-// visible error wait for the next opportunity after the gap or for Retry.
+// app switches in 3s once opened 40 streams (#1099). Only the reopen is
+// spaced: inside the gap a waiting stream keeps its backoff, while the
+// library's revalidation (debounced on its own) and the restart of a first
+// sync that failed with a visible error (no backoff to wait on) still run.
 // The gap never adds opens to the math below.
 //
 // The ruling on #1032 (26.09.2026) caps the wait at 10s: a phone whose

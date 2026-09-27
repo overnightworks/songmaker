@@ -159,7 +159,7 @@ export class ResourceSyncController {
 		if (this.started) return;
 		this.started = true;
 		this.bootstrapErrors = 0;
-		this.stopWatchingOpportunities ??= watchReconnectOpportunities(this.reopenSpaced);
+		this.stopWatchingOpportunities ??= watchReconnectOpportunities(this.onReconnectOpportunity);
 		this.bindLoadedWatch();
 		this.setStatus('connecting');
 		this.openSource();
@@ -503,7 +503,7 @@ export class ResourceSyncController {
 			return;
 		}
 		this.reportReachable(true);
-		this.reopenSpaced();
+		this.onReconnectOpportunity();
 	}
 
 	private stopReturnProbe(): void {
@@ -828,16 +828,18 @@ export class ResourceSyncController {
 		for (const waiter of waiters) waiter(ok);
 	}
 
-	private readonly reopenSpaced = (): void => {
-		this.reopenGap.run(this.onReconnectOpportunity);
-	};
-
+	/**
+	 * Only a reopen of a stream that waits out its backoff is spaced by the
+	 * reopen gap (#1099): the revalidation is debounced on its own, and a first
+	 * sync that failed with a visible error has no backoff to fall back on, so
+	 * dropping its restart would leave it waiting for Retry.
+	 */
 	private readonly onReconnectOpportunity = (): void => {
 		if (this.bootstrapFailed()) {
-			this.restartConnection();
+			this.restartFailedBootstrap();
 			return;
 		}
-		this.reconnectNowIfWaiting();
+		this.reopenWaitingStreamSpaced(() => this.reopenLiveStreamNow());
 		this.scheduleRevalidation();
 	};
 
@@ -845,8 +847,20 @@ export class ResourceSyncController {
 		return !this.syncedOnce && this.state.status === 'error';
 	}
 
-	private reconnectNowIfWaiting(): void {
-		if (this.reconnectTimer === null) return;
+	private restartFailedBootstrap(): void {
+		if (this.isWaitingToReconnect()) this.reopenWaitingStreamSpaced(() => this.restartConnection());
+		else this.restartConnection();
+	}
+
+	private isWaitingToReconnect(): boolean {
+		return this.reconnectTimer !== null;
+	}
+
+	private reopenWaitingStreamSpaced(reopen: () => void): void {
+		if (this.isWaitingToReconnect()) this.reopenGap.run(reopen);
+	}
+
+	private reopenLiveStreamNow(): void {
 		this.clearReconnectTimer();
 		this.openSource();
 	}
