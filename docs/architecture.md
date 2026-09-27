@@ -1019,6 +1019,9 @@ event still brings the take in; the next `online`, focus or visible event retrie
 at once, and the same events restart a bootstrap that failed. A bootstrap that
 failed because the server could not be reached also restarts itself on that
 backoff, so the strip's "retrying" holds even when none of those events fires.
+A first stream the browser closed for good — a non-200 answer, such as the
+edge's 5xx while the server restarts, ends its native retries — counts as such a
+failed bootstrap at once rather than waiting for errors that will never come.
 The owner remembers the id of the last event it saw and reopens a dropped stream
 with that `last_event_id` query cursor, so an event sent while the phone's screen
 was off or the connection was down is replayed rather than lost. A completed or
