@@ -46,7 +46,6 @@ import {
 	libraryRootState,
 	libraryWallStateFrom,
 	rememberedSongTab,
-	remountLibraryHistory,
 	setLibrarySurface,
 	showSongTab,
 	snapshotLibraryHistory,
@@ -694,7 +693,6 @@ function followAsHistoryLayer(
 
 const NOW_PLAYING_LAYER = 'now-playing';
 const RAIL_DRAWER_LAYER = 'rail-drawer';
-const LIBRARY_ROUTE_GROUP = '/(library)';
 
 const railDrawerLayered = writable(false);
 export const railDrawerIsLayer = readonly(railDrawerLayered);
@@ -774,21 +772,6 @@ export function forgetHistoryLayers(): void {
 	libraryHistoryRunning = false;
 	historyLayers.length = 0;
 	ownLayerStepBacks = 0;
-}
-
-export function isLibraryRouteId(routeId: string | null): boolean {
-	return (
-		routeId === LIBRARY_ROUTE_GROUP || (routeId?.startsWith(`${LIBRARY_ROUTE_GROUP}/`) ?? false)
-	);
-}
-
-export function followBackIntoLibrary(): () => void {
-	function remountLibraryEntry(event: PopStateEvent): void {
-		if (!isLibraryHistoryState(event.state)) return;
-		void remountLibraryHistory(event.state, `${location.pathname}${location.search}`);
-	}
-	window.addEventListener('popstate', remountLibraryEntry);
-	return () => window.removeEventListener('popstate', remountLibraryEntry);
 }
 
 export function resetNavigationForTests(): void {
