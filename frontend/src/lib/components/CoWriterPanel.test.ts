@@ -581,9 +581,9 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 
 		const proposal = target.querySelector('.proposal');
 		const firstField = target.querySelector('section[aria-label="Memory"] textarea');
-		expect(firstField).not.toBeNull();
+		if (!proposal || !firstField) throw new Error('Expected the proposal and the memory fields');
 		expect(
-			proposal?.compareDocumentPosition(firstField as Node) & Node.DOCUMENT_POSITION_FOLLOWING
+			proposal.compareDocumentPosition(firstField) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
 });
