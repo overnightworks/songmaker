@@ -8,7 +8,7 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
-import { albumList, songList } from '$lib/stores/libraryData';
+import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 
 const searchLibrary = vi.fn();
@@ -55,6 +55,7 @@ afterEach(() => {
 	vi.useRealTimers();
 	selectedSongId.set(null);
 	resetLibrarySearchForTests();
+	allAlbumsLoad.set({ status: 'idle', error: null });
 });
 
 describe('restoreLibrarySearch', () => {
@@ -289,6 +290,42 @@ describe('loadLibraryBrowse', () => {
 			sort: 'newest'
 		});
 		expect(get(libraryBrowse).songOffset).toBe(2);
+	});
+
+	it('keeps every album after a reset once a surface asked for the complete set, refreshing only the first page', async () => {
+		const pages: Record<number, { items: AlbumItem[]; hasMore: boolean }> = {
+			0: { items: [album({ id: 'a-1', title: 'First' })], hasMore: true },
+			1: { items: [album({ id: 'a-2', title: 'Second' })], hasMore: false }
+		};
+		fetchAlbums.mockImplementation((offset: number) =>
+			Promise.resolve({
+				items: pages[offset].items,
+				total: 2,
+				offset,
+				limit: 50,
+				has_more: pages[offset].hasMore
+			})
+		);
+		fetchSongs.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false });
+		albumList.set([]);
+		await ensureAllAlbumsLoaded();
+		pages[0] = {
+			items: [
+				album({ id: 'a-new', title: 'Made elsewhere' }),
+				album({ id: 'a-1', title: 'Renamed' })
+			],
+			hasMore: true
+		};
+
+		await loadLibraryBrowse({ reset: true });
+		await ensureAllAlbumsLoaded();
+
+		expect(get(albumList).map((item) => [item.id, item.title])).toEqual([
+			['a-new', 'Made elsewhere'],
+			['a-1', 'Renamed'],
+			['a-2', 'Second']
+		]);
+		expect(fetchAlbums).toHaveBeenCalledTimes(3);
 	});
 
 	it('keeps loaded generations when browse resets over a summary page', async () => {

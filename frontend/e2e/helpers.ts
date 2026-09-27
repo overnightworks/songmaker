@@ -31,10 +31,12 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
 
 /**
  * What the library flow costs the API per shell, measured on a green full-suite
- * run against `library.spec.ts`'s own first test: 41 requests on desktop and
- * 30 on mobile against a clean stack, budgeted at 41 and 40 respectively. The
- * desktop increase is caused by Continue fetching fresh on the return to the
- * wall (measured 41 on 05.09.2026); mobile is unchanged. Both projects
+ * run against `library.spec.ts`'s own first test: 42 requests on desktop and
+ * 35 on mobile, budgeted at 42 and 40 respectively (27.09.2026). Continue
+ * fetching fresh on the return to the wall brought desktop to 41 (05.09.2026).
+ * The flow's round trip to Settings stops the live stream, so the snapshot on
+ * the return follows a gap and reads every album again (#1102): one request
+ * per 50 albums, one more on each shell. Both projects
  * share one IP rate-limit window, so a flow that suddenly needs more round
  * trips is a regression — find the extra requests instead of raising this
  * number. Every other mention of this budget (the `e2e/README.md` table,
@@ -45,7 +47,7 @@ export const NARROW_VIEWPORT = { width: 320, height: 844 };
  * constant, or its callers, ever being re-measured.
  */
 export const LIBRARY_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
-	desktop: 41,
+	desktop: 42,
 	mobile: 40
 };
 

@@ -228,6 +228,9 @@ export const COWRITER_DELETE_CONVERSATION_TITLE = 'Delete conversation?';
 export const COWRITER_DELETE_CONVERSATION_WARNING = "This can't be undone.";
 export const DAY_LABEL_TODAY = 'today';
 export const DAY_LABEL_YESTERDAY = 'yesterday';
+export const DAY_LABEL_ADDED = 'added';
+export const PLACE_KIND_PLAYLIST_LABEL = 'Playlist';
+export const PLACE_LINE_SEPARATOR = ' · ';
 export const COWRITER_NEW_CONVERSATION_LINE = 'new conversation';
 export const COWRITER_CONVERSATION_SINCE_TEMPLATE = 'conversation since {day}';
 export const COWRITER_ARCHIVED_CONVERSATION_TEMPLATE = 'archived conversation from {day}';
@@ -433,6 +436,17 @@ export const COMPACT_LAYOUT_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px), (a
 export const COARSE_POINTER_MEDIA = '(any-pointer: coarse)';
 export const LIBRARY_NARROW_MEDIA = `(max-width: ${COMPACT_LAYOUT_MAX_PX}px)`;
 export const LIBRARY_ALBUM_CARD_TRACK_MAX_PX = 208;
+export const LIBRARY_WALL_ORDERS = ['title', 'recent', 'added'] as const;
+export type LibraryWallOrder = (typeof LIBRARY_WALL_ORDERS)[number];
+export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
+	title: 'A–Z',
+	recent: 'Recent',
+	added: 'Added'
+};
+export const LIBRARY_WALL_HEADING = 'Albums & playlists';
+export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums and playlists';
+// The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
+export const LIBRARY_WALL_RECENT_PAGE_SIZE = 200;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';

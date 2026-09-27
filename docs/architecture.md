@@ -150,12 +150,33 @@ selected track pre-expand automatically on entry without overriding a later
 manual collapse; the LIBRARY group's own title does not yet navigate (planned
 for a later slice). There is no Studio/Listen mode split and no third library
 tab for
-Shared; `LibraryWall.svelte` (the main-area library browser) filters by chips
-`Albums · Playlists · Shared` instead, backed by `libraryFilter` in
-`stores/libraryContext.ts`. Share inventory is the same complete server list
-of the current user's public slugs (`GET /api/library/shares`) as before,
-just reached via the Shared chip; membership, `N`, and the DELETE endpoints
-are unchanged.
+Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
+above one wall of albums and playlists together, with no filter chips (#1102,
+frame (g) of `docs/design/album-browsing.html`). The wall's heading row holds
+one switch, A–Z · Recent · Added; a first visit opens in A–Z and the choice is
+remembered on this device (`libraryWallOrder` in `stores/ui.ts`), never
+re-sorting Continue. A–Z compares titles ignoring case and accents and
+reads numbers by value, so "Demo 2" precedes "Demo 10" (one
+`Intl.Collator` in `utils/recency.ts`); Recent is the rank the continue
+endpoint gives each place, read in pages of 200 until a short page, so every
+place is ranked and there is no second activity rule; Added is newest
+`created_at` first. Each tile's second line follows the order: the size, the
+last work, or "added 3 Aug", a playlist's line starting "Playlist ·". The
+wall sorts the complete set from the same route-independent loader the rail
+uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
+which history navigation (Back and Forward, an address, returning to the
+wall) and a live stream reconnect run, reads only the first album page; once
+a surface asked for every album, that page refreshes the albums it holds and
+the rest stay (`resetAlbumList`), so neither surface shrinks to one page and
+no navigation reads every album again. Navigation therefore never removes an
+album, and albums changed on another device past that first page show their
+change only later: a stream snapshot that follows a gap (a resync, or a
+bootstrap after a failed one) reads every album again and replaces the list
+(`rereadAllAlbums`), so one deleted or archived elsewhere leaves then or on
+the next page load. Share inventory is the
+complete server list of the current user's public slugs
+(`GET /api/library/shares`); membership, `N`, and the DELETE endpoints are
+unchanged.
 
 An open album has an address of its own, `/album/<slug>` (issue #269; album
 ids are already readable slugs), an open song one segment deeper,
@@ -1064,7 +1085,7 @@ close the stream.
 | GET | `/api/albums?offset=0&limit=50` | user | List the caller's albums (`q` title contains, `sort=newest\|oldest\|title`). `has_more` is explicit. |
 | GET | `/api/songs?offset=0&limit=50` | user | List the caller's songs (`album_id`, `q`, `sort`). `has_more` is explicit. |
 | GET | `/api/library/search` | user | Keyset search of the caller's album and song titles. `q` required; `next_cursor` is null iff `has_more` is false. Invalid or mismatched cursors are 422. |
-| GET | `/api/library/continue` | user | Up to six of the caller's places — non-archived albums and playlists, each once, never a song — newest activity first, ties album before playlist, then id. A song's activity is the latest of its edit, listen, newest take and newest message from the caller's own co-writer conversations; an album takes its newest live song's (else `created_at`), a playlist the latest of its listen, edit, newest live entry and creation. Each item carries `type`, `id`, `title`, `cover`/`album_covers` as `PlaylistResponse` has them, the song the musician was on (`song_id`, `song_title`; a playlist's last-played song while it is live and still held, else its newest added live entry's) and `activity_at` in UTC. Owner: `db/queries/activity.py#list_place_activity`, at most three statements, independent of the number of places. |
+| GET | `/api/library/continue` | user | Up to `limit` of the caller's places after the first `offset` (default six from the start, at most 200 per read; the Library wall's Recent order reads every place in pages of 200) — non-archived albums and playlists, each once, never a song — newest activity first, ties album before playlist, then id. A song's activity is the latest of its edit, listen, newest take and newest message from the caller's own co-writer conversations; an album takes its newest live song's (else `created_at`), a playlist the latest of its listen, edit, newest live entry and creation. Each item carries `type`, `id`, `title`, `cover`/`album_covers` as `PlaylistResponse` has them, the song the musician was on (`song_id`, `song_title`; a playlist's last-played song while it is live and still held, else its newest added live entry's) and `activity_at` in UTC. Owner: `db/queries/activity.py#list_place_activity`, at most three statements, independent of the number of places. |
 | GET | `/api/library/pool-queue` | user | Ordered playable Mix/Picks/Keeps/All takes (`pool`, `shuffle`, `start_generation_id`) without ffmpeg concat. Same membership as `POST /api/queue-streams/library`. Shares the queue-stream per-user rate limit (429; 503 if Redis is down). Empty pool 422; foreign start 404. |
 | GET | `/api/resource-events/stream` | user | User-exact `generation.created` SSE with fresh baseline, bounded replay after a `Last-Event-ID` header or `last_event_id` query cursor (the header wins when both are sent), gap resync, comment heartbeats, and 60-second reauthentication boundary. |
 | POST | `/api/albums` | user | Create album |
