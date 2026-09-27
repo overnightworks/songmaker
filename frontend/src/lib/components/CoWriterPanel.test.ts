@@ -391,6 +391,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 				{ ...archivedThisMorning, updated_at: '2026-09-27T11:00:00' },
 				{ ...runningSinceNine, message_count: 6 }
 			]);
+			fetchConversationMessages.mockResolvedValue(conversation(false, sent, reply));
 			await sendTurn(target, sent.content);
 			await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
 
@@ -420,14 +421,16 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		const replyDelivered = new Promise<void>((resolve) => {
 			deliverReply = resolve;
 		});
+		const ask = chatMessage('m1', 'user', 'write a chorus');
+		const answer = chatMessage('m2', 'assistant', 'Here it is.');
 		streamCoWriterTurn.mockReturnValue(
 			(async function* () {
 				await replyDelivered;
 				yield {
 					type: 'final',
 					conversation_id: 'c1',
-					user_message: chatMessage('m1', 'user', 'write a chorus'),
-					assistant_message: chatMessage('m2', 'assistant', 'Here it is.')
+					user_message: ask,
+					assistant_message: answer
 				} as CoWriterStreamEvent;
 			})()
 		);
@@ -442,9 +445,40 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		fetchConversations.mockResolvedValue([
 			conversationStartedAt(new Date('2026-09-27T11:59:00').toISOString())
 		]);
+		fetchConversationMessages.mockResolvedValue(conversation(false, ask, answer));
 		deliverReply();
 		await vi.waitFor(() => expect(fetchConversations).toHaveBeenCalledTimes(2));
 		expect(conversationLine(target)).toBe('Claude · conversation since today');
+	});
+
+	it('counts an earlier failed message the server stored once the answered turn is read back', async () => {
+		const failed = chatMessage('m1', 'user', 'write a verse');
+		const sent = chatMessage('m2', 'user', 'now a bridge');
+		const reply = chatMessage('m3', 'assistant', 'Four lines.');
+		fetchConversations
+			.mockResolvedValueOnce([conversationStartedAt('2026-09-22T10:00:00')])
+			.mockReturnValue(new Promise(() => {}));
+		conversationPages(conversation(false), conversation(false, failed, sent, reply));
+		streamCoWriterTurn
+			.mockReturnValueOnce(
+				turnEvents([{ type: 'error', message: 'CLI is unavailable.' } as CoWriterStreamEvent])
+			)
+			.mockReturnValue(
+				turnEvents([
+					{ type: 'final', conversation_id: 'c1', user_message: sent, assistant_message: reply }
+				])
+			);
+		const target = await render();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(1));
+		await sendTurn(target, failed.content);
+		await vi.waitFor(() => expect(target.querySelector('.turn-error')).not.toBeNull());
+
+		await sendTurn(target, sent.content);
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(2));
+		await vi.waitFor(() => expect(target.querySelector('.turn-error')).toBeNull());
+		const menu = await openConversationMenu(target);
+
+		expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('3 msgs');
 	});
 
 	it('shows the current message count in its ⋯ menu as soon as the reply is in', async () => {

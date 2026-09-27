@@ -517,6 +517,7 @@
 			...message,
 			toolCalls: streamedToolCalls.get(message.persistedId)
 		}));
+		countPersistedChatInItsRow();
 		followOrSettleTurn(conversation);
 	}
 
