@@ -367,9 +367,14 @@
 		conversationAwaitingDelete = conv;
 	}
 
+	function closeDeleteConfirm(): void {
+		conversationAwaitingDelete = null;
+		conversationMenuTrigger?.focus();
+	}
+
 	async function confirmDelete(): Promise<void> {
 		const conv = conversationAwaitingDelete;
-		conversationAwaitingDelete = null;
+		closeDeleteConfirm();
 		if (conv) await deleteConversationNow(conv);
 	}
 
@@ -956,7 +961,7 @@
 			items={[conversationRowLabel(conversationAwaitingDelete, new Date())]}
 			warning={COWRITER_DELETE_CONVERSATION_WARNING}
 			onconfirm={confirmDelete}
-			oncancel={() => (conversationAwaitingDelete = null)}
+			oncancel={closeDeleteConfirm}
 		/>
 	{/if}
 
