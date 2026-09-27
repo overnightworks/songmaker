@@ -1,0 +1,8 @@
+claim_id = "7185e7abef0c41598256935723de5c53"
+agent = "claude-head"
+role = "builder"
+base = "faa8e23eefc103882610ea8b0a2c2d43a1fc37ca"
+branch = "claude/issue-1072-cowriter-delete-confirm"
+scope = ["docs/architecture.md", "frontend/e2e/cowriter-return.spec.ts", "frontend/src/lib/api/conversations.ts", "frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/ConfirmDeleteDialog.svelte", "frontend/src/lib/components/MemoryEditor.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/utils/cowriter-ui.test.ts", "frontend/src/lib/utils/cowriter-ui.ts"]
+opened_commit = "308fb8a33a50de1a16c0914adce9206ba7b6b2c4"
+whole_reason = "co-writer delete confirmation, memory proposal in view, provider from the error frame and docs"
