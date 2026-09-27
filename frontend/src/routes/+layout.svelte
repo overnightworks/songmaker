@@ -18,7 +18,6 @@
 		currentUser,
 		authLoading,
 		authCheckError,
-		authCheckLostNetwork,
 		authCheckUnreachable,
 		logout
 	} from '$lib/stores/auth';
@@ -84,8 +83,7 @@
 	const libraryRouteActive = $derived(
 		hasPrivatePlayer && isLibraryWorkspacePath(page.url.pathname)
 	);
-	const authCheckFailure = $derived($authCheckError ?? $authCheckLostNetwork);
-	const authRetryable = $derived(authCheckFailure !== null && me === null);
+	const authRetryable = $derived($authCheckError !== null && me === null);
 	const sessionUnreachable = $derived($authCheckUnreachable && me === null);
 
 	let compact = $state(false);
@@ -254,19 +252,16 @@
 
 {#if isPublicRoute}
 	{@render children()}
+{:else if sessionUnreachable}
+	<div class="session-unreachable">
+		<OfflineStrip />
+	</div>
 {:else if $authLoading}
 	<div class="loading">Loading...</div>
 {:else if authRetryable}
 	<div class="auth-retry">
-		<p>{authCheckFailure}</p>
+		<p>{$authCheckError}</p>
 		<button type="button" onclick={initAuth}>{AUTH_CHECK_RETRY_LABEL}</button>
-	</div>
-{:else if sessionUnreachable}
-	{#if !$offline}
-		<div class="loading">Loading...</div>
-	{/if}
-	<div class="session-unreachable">
-		<OfflineStrip />
 	</div>
 {:else if me}
 	{#if compact}

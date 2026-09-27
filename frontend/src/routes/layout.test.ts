@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX, OFFLINE_STRIP_MESSAGE } from '$lib/constants';
-import { AUTH_CHECK_NETWORK_ERROR } from '$lib/constants/auth';
+import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
 	currentUser,
@@ -763,12 +763,11 @@ describe('auth check failure', () => {
 		expect(target.querySelector('.auth-retry')?.textContent).toContain('Too many requests');
 	});
 
-	it('with the server out of reach shows the offline strip, not the session error, and loads the app once back online', async () => {
+	it('with the server out of reach and the browser online shows the offline strip, not the session error, and loads the app once the server answers', async () => {
 		const actual = await vi.importActual<typeof import('$lib/stores/auth')>('$lib/stores/auth');
 		vi.mocked(checkAuth).mockImplementation(actual.checkAuth);
 		currentUser.set(null);
 		authLoading.set(true);
-		reportResourceStreamReachable(false);
 		vi.stubGlobal(
 			'fetch',
 			vi
@@ -784,9 +783,10 @@ describe('auth check failure', () => {
 		expect(target.querySelector('.auth-retry')).toBeNull();
 		expect(signInRedirects()).toEqual([]);
 
-		reportResourceStreamReachable(true);
-
-		await vi.waitFor(() => expect(target.querySelector('.app-shell')).not.toBeNull());
+		await vi.waitFor(() => expect(target.querySelector('.app-shell')).not.toBeNull(), {
+			timeout: AUTH_CHECK_RETURN_PROBE_INTERVAL_MS * 3
+		});
+		expect(target.textContent).not.toContain(OFFLINE_STRIP_MESSAGE);
 		expect(signInRedirects()).toEqual([]);
 	});
 
