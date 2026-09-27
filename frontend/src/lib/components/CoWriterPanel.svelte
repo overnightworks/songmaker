@@ -518,7 +518,9 @@
 	);
 
 	function streamFailureMessage(frame: Extract<CoWriterStreamEvent, { type: 'error' }>): string {
-		if (frame.reason?.message) return cowriterTurnFailureLabel(providerName, frame.reason.message);
+		if (frame.reason?.message) {
+			return cowriterTurnFailureLabel(frame.provider ?? providerName, frame.reason.message);
+		}
 		return frame.message ?? INCOMPLETE_TURN_MESSAGE;
 	}
 
