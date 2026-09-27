@@ -1,4 +1,4 @@
-import { writable, derived, get, type Readable } from 'svelte/store';
+import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
@@ -6,9 +6,10 @@ import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
-import { reloadWhileUnreachable } from '$lib/stores/connectivity';
+import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
@@ -17,16 +18,11 @@ export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
 export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
-// A session check the network swallowed (#1118): the offline strip or the
-// coming reload says it, and the gate that asked runs again by itself.
+// A session check the server did not answer (#1118): the offline strip says
+// it, and the gate that asked runs again until the server answers.
 export const authCheckUnreachable = writable(false);
 let sessionGate: () => void = () => {};
-const sessionCheckReloads = reloadWhileUnreachable(() => sessionGate());
-/**
- * The words for a session check the network swallowed, once its bounded
- * backoff is spent; null while the strip or a coming reload says it.
- */
-export const authCheckLostNetwork: Readable<string | null> = sessionCheckReloads.loadFailure;
+let pendingSessionCheck: ReturnType<typeof setTimeout> | null = null;
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 type AuthNotice = 'unauthorized' | 'disabled';
@@ -57,8 +53,8 @@ function describeAuthCheckFailure(error: unknown): string {
 }
 
 /**
- * `checkAgain` is the gate asking: when the network swallows the check, the
- * gate runs again once the server is reachable, so its routing follows too.
+ * `checkAgain` is the gate asking: while the server does not answer, the
+ * gate runs again until it does, so its routing follows too.
  */
 export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null> {
 	sessionGate = checkAgain;
@@ -74,8 +70,7 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 		authNotice.set(null);
 		authCheckError.set(null);
 		if (err instanceof NetworkError) {
-			authCheckUnreachable.set(true);
-			sessionCheckReloads.nameLoadFailure(err, AUTH_CHECK_NETWORK_ERROR);
+			rememberUnreachableSessionCheck();
 			return get(currentUser);
 		}
 		forgetUnreachableSessionCheck();
@@ -92,9 +87,26 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 	}
 }
 
+function rememberUnreachableSessionCheck(): void {
+	stopPendingSessionCheck();
+	authCheckUnreachable.set(true);
+	reportSessionCheckReachable(false);
+	pendingSessionCheck = setTimeout(() => {
+		pendingSessionCheck = null;
+		sessionGate();
+	}, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS);
+}
+
 function forgetUnreachableSessionCheck(): void {
-	sessionCheckReloads.stop();
+	stopPendingSessionCheck();
 	authCheckUnreachable.set(false);
+	reportSessionCheckReachable(true);
+}
+
+function stopPendingSessionCheck(): void {
+	if (pendingSessionCheck === null) return;
+	clearTimeout(pendingSessionCheck);
+	pendingSessionCheck = null;
 }
 
 export function resetAuthForTests(): void {

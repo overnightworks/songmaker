@@ -6,9 +6,9 @@ import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 /**
  * The one answer to "can this page reach the server right now" (#1039).
  * The browser's own network state says it first; the library's live stream
- * adds the case the browser cannot see — online, but the server does not
- * answer when the stream tries to reopen. Surfaces read `offline` and never
- * decide on their own.
+ * and, before any library runs, the session check add the case the browser
+ * cannot see — online, but the server does not answer (#1118). Surfaces read
+ * `offline` and never decide on their own.
  */
 const browserOnline = readable(true, (set) => {
 	if (typeof window === 'undefined') return;
@@ -28,9 +28,15 @@ export function reportResourceStreamReachable(reachable: boolean): void {
 	resourceStreamReachable.set(reachable);
 }
 
+const sessionCheckReachable = writable(true);
+
+export function reportSessionCheckReachable(reachable: boolean): void {
+	sessionCheckReachable.set(reachable);
+}
+
 export const offline: Readable<boolean> = derived(
-	[browserOnline, resourceStreamReachable],
-	([online, reachable]) => !online || !reachable
+	[browserOnline, resourceStreamReachable, sessionCheckReachable],
+	([online, streamReachable, sessionReachable]) => !online || !streamReachable || !sessionReachable
 );
 
 /**
@@ -166,4 +172,5 @@ function failureToName(
 
 export function resetConnectivityForTests(): void {
 	resourceStreamReachable.set(true);
+	sessionCheckReachable.set(true);
 }

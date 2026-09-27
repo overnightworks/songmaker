@@ -25,7 +25,6 @@ import {
 	authLoading,
 	authError,
 	authCheckError,
-	authCheckLostNetwork,
 	authCheckUnreachable,
 	authNotice,
 	isAdmin,
@@ -36,9 +35,8 @@ import {
 	clearAuth,
 	resetAuthForTests
 } from './auth';
-import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
-import { AUTH_CHECK_NETWORK_ERROR } from '$lib/constants/auth';
-import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+import { offline, resetConnectivityForTests } from './connectivity';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -161,46 +159,42 @@ describe('checkAuth', () => {
 
 describe('checkAuth with the server out of reach', () => {
 	const lostNetwork = () => new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'));
+	const LONGER_THAN_ANY_BACKOFF_MS = 60_000;
 
-	it('under the offline strip names no failure and runs the asking gate again once back online', async () => {
-		reportResourceStreamReachable(false);
-		mockFetchMe.mockRejectedValueOnce(lostNetwork());
-		const checkAgain = vi.fn();
-
-		expect(await checkAuth(checkAgain)).toBeNull();
-		expect(get(authCheckUnreachable)).toBe(true);
-		expect(get(authCheckError)).toBeNull();
-		expect(get(authCheckLostNetwork)).toBeNull();
-		expect(checkAgain).not.toHaveBeenCalled();
-
-		reportResourceStreamReachable(true);
-
-		expect(checkAgain).toHaveBeenCalledTimes(1);
-	});
-
-	it('while no strip shows, checks again on a bounded backoff, then names the lost network', async () => {
+	it('with the browser online shows the offline strip, names no failure, and asks again until the server answers', async () => {
 		vi.useFakeTimers();
 		mockFetchMe.mockRejectedValue(lostNetwork());
 		const checkAgain = vi.fn(() => void checkAuth(checkAgain));
 
-		await checkAuth(checkAgain);
-		expect(get(authCheckLostNetwork)).toBeNull();
-		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+		expect(await checkAuth(checkAgain)).toBeNull();
+		await vi.advanceTimersByTimeAsync(LONGER_THAN_ANY_BACKOFF_MS);
 
-		expect(mockFetchMe).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
-		expect(get(authCheckLostNetwork)).toBe(AUTH_CHECK_NETWORK_ERROR);
+		expect(get(offline)).toBe(true);
+		expect(get(authCheckUnreachable)).toBe(true);
 		expect(get(authCheckError)).toBeNull();
+
+		mockFetchMe.mockResolvedValue(KNOWN_USER);
+		await vi.advanceTimersByTimeAsync(AUTH_CHECK_RETURN_PROBE_INTERVAL_MS);
+
+		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(get(offline)).toBe(false);
+		expect(get(authCheckUnreachable)).toBe(false);
+		const checksUntilAnswered = mockFetchMe.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(LONGER_THAN_ANY_BACKOFF_MS);
+		expect(mockFetchMe).toHaveBeenCalledTimes(checksUntilAnswered);
 	});
 
-	it('a check that answers again forgets it was out of reach', async () => {
-		reportResourceStreamReachable(false);
-		mockFetchMe.mockRejectedValueOnce(lostNetwork()).mockResolvedValueOnce(KNOWN_USER);
+	it('a server that answers with a refusal clears the offline strip', async () => {
+		mockFetchMe
+			.mockRejectedValueOnce(lostNetwork())
+			.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
 		await checkAuth(vi.fn());
 
 		await checkAuth(vi.fn());
 
+		expect(get(offline)).toBe(false);
 		expect(get(authCheckUnreachable)).toBe(false);
-		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(get(authNotice)).toBe('unauthorized');
 	});
 });
 
