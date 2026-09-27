@@ -152,7 +152,7 @@ test('a take address opens cold, in a tab that knows nothing else', async ({ pag
 	// Same reasoning as the two cold-opens above: shell-independent router
 	// behaviour, and the three tests already share a budget window. Which take
 	// is selected has no desktop-visible marker to assert on (the compact
-	// shell's own Write/Takes tab split is walked by library.spec.ts) --
+	// shell's own Edit/Takes tab split is walked by library.spec.ts) --
 	// what only a real browser can show is the router-level contract: the
 	// address resolves cold, under its song, without tearing the workspace
 	// down. That the address seeds selectedGenerationId and the Takes tab is
