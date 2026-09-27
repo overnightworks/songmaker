@@ -135,15 +135,36 @@ export function groupRailSearchResults(
 	const query = state.query.toLocaleLowerCase();
 	const results = [
 		...state.hits.map((hit) => libraryResult(hit, query)),
-		...playlists
+		...newestPlaylistsFirst(playlists)
 			.filter((playlist) => playlist.title.toLocaleLowerCase().includes(query))
 			.map((playlist) => playlistResult(playlist, query)),
 		...pages.filter((page) => pageMatches(page, query)).map((page) => pageResult(page, query))
 	];
 	return RAIL_SEARCH_GROUP_ORDER.map((kind) => ({
 		label: RAIL_SEARCH_KINDS[kind].group,
-		results: results.filter((result) => result.target.kind === kind)
+		results: prefixMatchesFirst(
+			results.filter((result) => result.target.kind === kind),
+			query
+		)
 	})).filter((group) => group.results.length > 0);
+}
+
+function newestPlaylistsFirst(playlists: PlaylistItem[]): PlaylistItem[] {
+	return [...playlists].sort(
+		(left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)
+	);
+}
+
+function prefixMatchesFirst(results: RailSearchResult[], query: string): RailSearchResult[] {
+	return [...results].sort(
+		(left, right) => titleMatchRank(left.label, query) - titleMatchRank(right.label, query)
+	);
+}
+
+function titleMatchRank(label: string, query: string): number {
+	const title = label.toLocaleLowerCase();
+	if (title.startsWith(query)) return 0;
+	return title.includes(query) ? 1 : 2;
 }
 
 function railSearchLabelParts(label: string, query: string): RailSearchLabelPart[] {
