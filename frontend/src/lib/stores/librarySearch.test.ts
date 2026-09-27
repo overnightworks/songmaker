@@ -34,6 +34,7 @@ import {
 	listLoadedSongIds,
 	watchLoadedSongIds,
 	loadLibraryBrowse,
+	loadMoreLibraryAlbums,
 	resetLibrarySearchForTests,
 	restoreLibraryBrowse,
 	restoreLibrarySearch
@@ -345,6 +346,56 @@ describe('loadLibraryBrowse', () => {
 		await loadLibraryBrowse({ reset: true });
 		expect(get(songList)[0].generations.map((item) => item.id)).toEqual(['g1']);
 		expect(get(songList)[0].generation_count).toBe(1);
+	});
+});
+
+describe('loadMoreLibraryAlbums', () => {
+	function albumPage(ids: string[], hasMore: boolean) {
+		return {
+			items: ids.map((id) => album({ id })),
+			total: 3,
+			offset: 0,
+			limit: 50,
+			has_more: hasMore
+		};
+	}
+
+	beforeEach(async () => {
+		fetchAlbums.mockResolvedValueOnce(albumPage(['a-1'], true));
+		fetchSongs.mockResolvedValueOnce({
+			items: [],
+			total: 0,
+			offset: 0,
+			limit: 200,
+			has_more: false
+		});
+		await loadLibraryBrowse({ reset: true });
+	});
+
+	it('appends the next album page without asking for songs again', async () => {
+		fetchAlbums.mockResolvedValueOnce(albumPage(['a-2', 'a-3'], false));
+
+		expect(await loadMoreLibraryAlbums()).toBe(true);
+
+		expect(fetchAlbums).toHaveBeenLastCalledWith(1, expect.any(Number), { sort: 'newest' });
+		expect(fetchSongs).toHaveBeenCalledTimes(1);
+		expect(get(albumList).map((item) => item.id)).toEqual(['a-1', 'a-2', 'a-3']);
+		expect(get(libraryBrowse)).toMatchObject({
+			status: 'ready',
+			albumHasMore: false,
+			albumOffset: 3
+		});
+	});
+
+	it('names the failure and keeps the albums it has', async () => {
+		fetchAlbums.mockRejectedValueOnce(
+			new NetworkError('/api/albums', new TypeError('Failed to fetch'))
+		);
+
+		expect(await loadMoreLibraryAlbums()).toBe(false);
+
+		expect(get(albumList).map((item) => item.id)).toEqual(['a-1']);
+		expect(get(libraryBrowse)).toMatchObject({ status: 'error', albumHasMore: true });
 	});
 });
 
