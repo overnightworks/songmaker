@@ -488,7 +488,7 @@
 					onclick={() => $selectedPlaylistId && loadPlaylistDetail($selectedPlaylistId)}
 					>{LIBRARY_RETRY_LABEL}</button
 				>
-			{:else}
+			{:else if detailLoad.status !== 'unreachable'}
 				<p class="empty-tab" role="status">Loading playlist…</p>
 			{/if}
 		</div>
