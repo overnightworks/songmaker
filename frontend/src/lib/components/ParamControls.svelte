@@ -17,7 +17,6 @@
 	import { ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import { addToast } from '$lib/stores/toast';
-	import { describeFailure } from '$lib/api/fetch';
 
 	interface Props {
 		values: VersionGenerationParams;
@@ -96,20 +95,20 @@
 		return value;
 	}
 
-	function fieldErrorMessage(key: keyof VersionGenerationParams, error: unknown): string {
-		return describeFailure(error, `${DEFAULT_MISSING_PREFIX} ${key}`);
+	function fieldErrorMessage(key: keyof VersionGenerationParams): string {
+		return `${DEFAULT_MISSING_PREFIX} ${key}`;
 	}
 
 	function reportFieldError(key: keyof VersionGenerationParams, error: unknown): void {
 		console.error(error);
-		addToast(fieldErrorMessage(key, error), 'error');
+		addToast(fieldErrorMessage(key), 'error');
 	}
 </script>
 
-{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string }, error: unknown)}
+{#snippet fieldError(f: { key: keyof VersionGenerationParams; label: string })}
 	<div class="setting param-error" title={tooltip(f.key)}>
 		<span>{f.label}</span>
-		<p class="param-error-text">{fieldErrorMessage(f.key, error)}</p>
+		<p class="param-error-text">{fieldErrorMessage(f.key)}</p>
 	</div>
 {/snippet}
 
@@ -128,8 +127,8 @@
 				oninput={(e) => handleNumber(f.key, e.currentTarget.value)}
 			/>
 		</label>
-		{#snippet failed(error)}
-			{@render fieldError(f, error)}
+		{#snippet failed()}
+			{@render fieldError(f)}
 		{/snippet}
 	</svelte:boundary>
 {/snippet}
@@ -151,8 +150,8 @@
 				{/each}
 			</select>
 		</label>
-		{#snippet failed(error)}
-			{@render fieldError(f, error)}
+		{#snippet failed()}
+			{@render fieldError(f)}
 		{/snippet}
 	</svelte:boundary>
 {/snippet}
