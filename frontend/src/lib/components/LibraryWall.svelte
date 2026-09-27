@@ -302,7 +302,7 @@
 	.wall-order-choice {
 		display: inline-flex;
 		align-items: center;
-		height: 44px;
+		height: var(--hitbox-frequent);
 		padding: 0;
 		border: 0;
 		background: none;
