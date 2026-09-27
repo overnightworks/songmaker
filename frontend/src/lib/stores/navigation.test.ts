@@ -1709,20 +1709,23 @@ describe('the phone rail drawer owns one history entry', () => {
 				closeSidebar();
 			}
 		}
-	])('one Back after leaving the drawer by $way returns to the playlist', async ({ go }) => {
-		const { below, path } = await openDrawer();
+	])(
+		'leaving the drawer by $way leaves no entry behind: one Back lands on the playlist entry',
+		async ({ go }) => {
+			const { below, path } = await openDrawer();
 
-		await go();
-		await vi.waitFor(() => expect(location.pathname).not.toBe(path));
-		expect(get(sidebarOpen)).toBe(false);
-		history.back();
+			await go();
+			await vi.waitFor(() => expect(location.pathname).not.toBe(path));
+			expect(get(sidebarOpen)).toBe(false);
+			history.back();
 
-		await vi.waitFor(() => expect(location.pathname).toBe(path));
-		expect(history.state).toMatchObject({
-			index: below,
-			collection: { kind: 'playlist', id: 'p1' }
-		});
-	});
+			await vi.waitFor(() => expect(location.pathname).toBe(path));
+			expect(history.state).toMatchObject({
+				index: below,
+				collection: { kind: 'playlist', id: 'p1' }
+			});
+		}
+	);
 
 	it('marks the drawer as a layer so a link inside it replaces the entry', async () => {
 		await openDrawer();
