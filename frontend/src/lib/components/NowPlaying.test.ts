@@ -17,9 +17,14 @@ import {
 } from '$lib/constants';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
+	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
+	nowPlayingFromLabel,
+	nowPlayingOpenSourceLabel,
+	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel
 } from '$lib/constants/now-playing';
+import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
 	curationActive,
@@ -30,7 +35,8 @@ import {
 	queueContext,
 	selectedSongId,
 	setShuffle,
-	shuffleEnabled
+	shuffleEnabled,
+	shuffleLabel
 } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { setLibraryTakePool } from '$lib/stores/playbackSettings';
@@ -168,6 +174,7 @@ afterEach(async () => {
 	setLibraryTakePool('picks');
 	libraryQueueSkipped.set([]);
 	nowPlayingPanel.set('queue');
+	resetCollectionForTests();
 	vi.unstubAllGlobals();
 });
 
@@ -345,6 +352,24 @@ describe('NowPlaying', () => {
 		expect(shuffleBtn?.getAttribute('aria-label')).toBe('Disable shuffle (this album)');
 	});
 
+	it('centres play between shuffle · previous and next · an empty slot, with no repeat', async () => {
+		await renderSurface(info());
+
+		const [before, play, after, ...rest] = Array.from(
+			target.querySelector('.transport')?.children ?? []
+		);
+		const controlNames = (side: Element | undefined) =>
+			Array.from(side?.children ?? []).map(
+				(control) => control.getAttribute('aria-label') ?? 'empty slot'
+			);
+		expect(rest).toHaveLength(0);
+		expect(play?.getAttribute('aria-label')).toBe('Play');
+		expect(controlNames(before)).toEqual([get(shuffleLabel), 'Previous song']);
+		expect(controlNames(after)).toEqual(['Next song', 'empty slot']);
+		expect(after?.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
+		expect(target.querySelector('[aria-label*="repeat" i]')).toBeNull();
+	});
+
 	it('shows queue skip feedback while playing the library queue', async () => {
 		queueContext.set({ type: 'library' });
 		libraryQueueSkipped.set([{ generation_id: 'g2', song_id: 's2', reason: 'missing_file' }]);
@@ -485,8 +510,14 @@ describe('NowPlaying', () => {
 		target.querySelector<HTMLButtonElement>('.mobile-panel-trigger')?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).not.toBeNull();
+		// Only × is named Close: the backdrop around the sheet closes the sheet.
+		expect(target.querySelectorAll(`button[aria-label="${NOW_PLAYING_CLOSE}"]`)).toHaveLength(1);
 
-		target.querySelector<HTMLButtonElement>('.mobile-sheet-backdrop')?.click();
+		target
+			.querySelector<HTMLButtonElement>(
+				`button[aria-label="${nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)}"]`
+			)
+			?.click();
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 	});
@@ -536,6 +567,86 @@ describe('NowPlaying', () => {
 		await tick();
 		expect(target.querySelector('.mobile-sheet')).toBeNull();
 		expect(get(nowPlayingSurface)).toBe('full');
+	});
+});
+
+describe('NowPlaying source line on the phone (#1052)', () => {
+	// A fetch that never answers keeps the collection a source opens from
+	// reaching the network; the open itself is already visible in the stores.
+	beforeEach(() => {
+		document.documentElement.dataset.pointer = 'coarse';
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(() => new Promise(() => {}))
+		);
+	});
+
+	const sources = [
+		{
+			name: 'an album',
+			kind: 'album' as const,
+			title: 'Nachtstrom',
+			arrange: () => {
+				albumList.set([album({ created_at: '' })]);
+				queueContext.set({ type: 'album', albumId: 'a1' });
+			},
+			opens: { kind: 'album', id: 'a1' }
+		},
+		{
+			name: 'a playlist',
+			kind: 'playlist' as const,
+			title: 'Night Drive',
+			arrange: () => {
+				queueContext.set({
+					type: 'playlist',
+					playlist: { id: 'p1', title: 'Night Drive' },
+					entries: [],
+					index: 0
+				});
+			},
+			opens: { kind: 'playlist', id: 'p1' }
+		}
+	];
+
+	it.each(sources)(
+		'says where $name playing comes from and opens it, leaving Now Playing',
+		async ({ kind, title, arrange, opens }) => {
+			arrange();
+			await renderSurface(info());
+
+			const from = target.querySelector<HTMLButtonElement>(
+				`button[aria-label="${nowPlayingOpenSourceLabel(kind, title)}"]`
+			);
+			expect(from?.textContent).toContain(`${nowPlayingFromLabel(title)} ›`);
+			expect(from?.getAttribute('aria-label')?.startsWith(`${nowPlayingFromLabel(title)} `)).toBe(
+				true
+			);
+			expect(target.textContent).not.toContain('Nachtstrom · Artist');
+			expect(target.textContent).toContain(nowPlayingTakeLabel(1, 2));
+
+			from?.click();
+
+			expect(get(openCollection)).toEqual(opens);
+			expect(get(nowPlayingSurface)).toBe('closed');
+		}
+	);
+
+	it('names no source for a library queue and keeps the album line', async () => {
+		queueContext.set({ type: 'library' });
+		await renderSurface(info());
+
+		expect(target.querySelector('.from-link')).toBeNull();
+		expect(target.textContent).not.toContain('from ');
+		expect(target.textContent).toContain('Nachtstrom · Artist');
+	});
+
+	it('keeps the album line on the desktop layout', async () => {
+		document.documentElement.dataset.pointer = '';
+		sources[0].arrange();
+		await renderSurface(info());
+
+		expect(target.querySelector('.from-link')).toBeNull();
+		expect(target.textContent).toContain('Nachtstrom · Artist');
 	});
 });
 
