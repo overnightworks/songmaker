@@ -11,6 +11,10 @@ type StreamEndReason = 'normal' | 'window-end';
 
 type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
 
+type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
+
+type Failure = { kind: FailureKind; message: string };
+
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
 // restoreCallbacks move the whole set atomically so a new owner never
@@ -55,9 +59,13 @@ class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
 	currentTime = $state(0);
 	duration = $state(0);
-	error = $state<string | null>(null);
 	current = $state<PlaybackInfo | null>(null);
 	mode = $state<'classic' | 'stream'>('classic');
+	private failure = $state<Failure | null>(null);
+
+	get error(): string | null {
+		return this.failure?.message ?? null;
+	}
 
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
 	private audio: HTMLAudioElement | null = null;
@@ -196,7 +204,7 @@ class AudioPlayer {
 		if (sameGen && this.audio && this.status !== 'error' && !restart) {
 			this.setCurrent(info);
 			this.currentUrl = url;
-			this.error = null;
+			this.failure = null;
 			if (autoplay && (this.status !== 'playing' || this.clockStoodStill)) this.play();
 			return;
 		}
@@ -212,7 +220,7 @@ class AudioPlayer {
 		this.pauseElement(el);
 		this.setCurrent(info);
 		this.currentUrl = url;
-		this.error = null;
+		this.failure = null;
 		this.currentTime = 0;
 		this.duration = 0;
 		this.loadSource(el, url);
@@ -242,7 +250,7 @@ class AudioPlayer {
 		this.currentUrl = manifest.stream_url;
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
-		this.error = null;
+		this.failure = null;
 		this.loadSource(el, manifest.stream_url);
 		// The start-track seek is applied on loadedmetadata, never eagerly:
 		// browsers accept a currentTime assignment before metadata without
@@ -362,7 +370,7 @@ class AudioPlayer {
 		this.mode = 'classic';
 		this.currentTime = 0;
 		this.duration = 0;
-		this.error = null;
+		this.failure = null;
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
@@ -394,7 +402,7 @@ class AudioPlayer {
 		this.mode = 'classic';
 		this.currentTime = 0;
 		this.duration = 0;
-		this.error = null;
+		this.failure = null;
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
@@ -419,7 +427,7 @@ class AudioPlayer {
 
 		el.addEventListener('loadstart', () => {
 			this.status = 'loading';
-			this.error = null;
+			this.failure = null;
 		});
 		el.addEventListener('loadedmetadata', () => {
 			if (this.streamEngine.active) {
@@ -529,7 +537,7 @@ class AudioPlayer {
 		const bufferedAtStall = bufferedUntil(el);
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
-			if (this.status !== 'buffering') return;
+			if (this.status !== 'buffering' && this.status !== 'loading') return;
 			if (bufferedUntil(el) > bufferedAtStall) this.scheduleStallRecovery();
 			else this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
@@ -547,18 +555,22 @@ class AudioPlayer {
 	// the stalled message.
 	private giveUpOnStall(): void {
 		this.stopProgressWatchdog();
-		this.status = 'error';
-		this.error = ERROR_MSG_STALLED;
+		this.fail('stalled', ERROR_MSG_STALLED);
 		if (this.audio) this.pauseElement(this.audio);
 	}
 
+	private fail(kind: FailureKind, message: string): void {
+		this.status = 'error';
+		this.failure = { kind, message };
+	}
+
 	private get gaveUpOnStall(): boolean {
-		return this.status === 'error' && this.error === ERROR_MSG_STALLED;
+		return this.status === 'error' && this.failure?.kind === 'stalled';
 	}
 
 	private resumeAfterGivingUp(): void {
 		this.status = 'playing';
-		this.error = null;
+		this.failure = null;
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
@@ -614,6 +626,15 @@ class AudioPlayer {
 	private pauseElement(el: HTMLAudioElement): void {
 		if (!el.paused) this.pauseRequestedByApp = true;
 		el.pause();
+	}
+
+	// A reload whose data stops arriving is a stall of its own: watching it the
+	// way a buffering stall is watched lets it spend the recovery budget and end
+	// in Retry instead of loading forever.
+	private reloadSource(el: HTMLAudioElement, url: string): void {
+		this.pauseElement(el);
+		this.loadSource(el, this.urlWithRecovery(url));
+		this.scheduleStallRecovery();
 	}
 
 	// Loading a source drops the 'pause' event an app pause just queued, so the
@@ -686,7 +707,7 @@ class AudioPlayer {
 		this.currentTime = seekTime;
 		this.lastObservedTime = seekTime;
 		this.status = 'loading';
-		this.error = null;
+		this.failure = null;
 		this.autoplayPending = true;
 		this.clearStallRecoveryTimer();
 
@@ -697,8 +718,7 @@ class AudioPlayer {
 			generationId: this.current.generation.id
 		});
 
-		this.pauseElement(el);
-		this.loadSource(el, this.urlWithRecovery(this.currentUrl));
+		this.reloadSource(el, this.currentUrl);
 	}
 
 	private applyPendingRecoverySeek(el: HTMLAudioElement): void {
@@ -763,7 +783,7 @@ class AudioPlayer {
 		this.stillChecks = 0;
 		this.clearStallRecoveryTimer();
 		this.status = 'loading';
-		this.error = null;
+		this.failure = null;
 		this.autoplayPending = true;
 
 		const track = state.manifest.tracks[state.trackIndex];
@@ -794,8 +814,7 @@ class AudioPlayer {
 				});
 				return;
 			}
-			this.status = 'error';
-			this.error = ERROR_MSG_NOT_FOUND;
+			this.fail('failed', ERROR_MSG_NOT_FOUND);
 			return;
 		}
 
@@ -805,9 +824,7 @@ class AudioPlayer {
 			absoluteTime
 		});
 		this.streamEngine.resumeAt(absoluteTime);
-		this.pauseElement(el);
-		const url = state.manifest.stream_url;
-		this.loadSource(el, this.urlWithRecovery(url));
+		this.reloadSource(el, state.manifest.stream_url);
 	}
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
@@ -824,15 +841,17 @@ class AudioPlayer {
 		if (name === 'AbortError') return;
 		if (name === 'NotAllowedError') {
 			this.status = 'paused';
-			this.error = 'Autoplay blocked. Click play to start.';
+			this.failure = {
+				kind: 'autoplay-blocked',
+				message: 'Autoplay blocked. Click play to start.'
+			};
 			return;
 		}
 		this.handleMediaError(this.audio?.error ?? null);
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
-		this.status = 'error';
-		this.error = ERROR_MSG_GENERIC;
+		this.fail('failed', ERROR_MSG_GENERIC);
 
 		const target = this.current;
 		const url = this.currentUrl;
@@ -846,9 +865,10 @@ class AudioPlayer {
 			await this.callbacks.onAuthLost?.();
 			return;
 		}
-		if (probe.status === 404) this.error = ERROR_MSG_NOT_FOUND;
-		else if (probe.status === 0) this.error = ERROR_MSG_NETWORK;
-		else if (probe.ok && mediaError) this.error = decodeMediaError(mediaError);
+		if (probe.status === 404) this.failure = { kind: 'failed', message: ERROR_MSG_NOT_FOUND };
+		else if (probe.status === 0) this.failure = { kind: 'failed', message: ERROR_MSG_NETWORK };
+		else if (probe.ok && mediaError)
+			this.failure = { kind: 'failed', message: decodeMediaError(mediaError) };
 	}
 
 	private setCurrent(current: PlaybackInfo | null): void {
