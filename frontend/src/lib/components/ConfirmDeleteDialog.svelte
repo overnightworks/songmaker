@@ -1,4 +1,7 @@
 <script lang="ts">
+	import { onMount, tick } from 'svelte';
+	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+
 	let {
 		title,
 		items,
@@ -16,26 +19,39 @@
 	} = $props();
 
 	const titleId = $props.id();
+	let dialog: HTMLDivElement;
+	let cancelButton: HTMLButtonElement | undefined;
 
-	// Claiming the key keeps the page's global Escape from also leaving the view (escape-level-up.ts).
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key !== 'Escape') return;
-		e.preventDefault();
-		oncancel();
+	// A menu that opens this confirm hands focus back to its trigger in a
+	// microtask queued behind the mount, so the opener is read after that.
+	onMount(() => {
+		let opener: Element | null = null;
+		void tick().then(() => {
+			if (!cancelButton?.isConnected) return;
+			opener = document.activeElement;
+			cancelButton.focus();
+		});
+		return () => {
+			if (opener instanceof HTMLElement && opener.isConnected) opener.focus();
+		};
+	});
+
+	// The trap claims Escape with preventDefault before closing, so the page's
+	// global Escape (escape-level-up.ts) still yields once the dialog is gone.
+	function trapKeys(event: KeyboardEvent): void {
+		handleFocusTrapKeydown(dialog, event, oncancel);
 	}
 </script>
 
-<svelte:window onkeydown={handleKeydown} />
+<svelte:window onkeydown={trapKeys} />
 
-<div
-	class="overlay"
-	onclick={oncancel}
-	onkeydown={(e) => e.key === 'Escape' && oncancel()}
-	role="presentation"
->
+<div class="overlay" onclick={oncancel} role="presentation">
 	<div
 		class="dialog"
+		bind:this={dialog}
 		onclick={(e) => e.stopPropagation()}
+		onkeydown={trapKeys}
+		tabindex="-1"
 		role="dialog"
 		aria-modal="true"
 		aria-labelledby={titleId}
@@ -48,7 +64,7 @@
 		</ul>
 		<p class="warning">{warning}</p>
 		<div class="actions">
-			<button class="cancel-btn" onclick={oncancel}>Cancel</button>
+			<button class="cancel-btn" bind:this={cancelButton} onclick={oncancel}>Cancel</button>
 			<button class="confirm-btn" onclick={onconfirm}>{confirmLabel}</button>
 		</div>
 	</div>

@@ -6,7 +6,8 @@ import logging
 from dataclasses import dataclass
 from typing import Callable, Final
 
-from sqlalchemy.orm import Session, joinedload
+from sqlalchemy import ColumnElement, Exists, exists, select
+from sqlalchemy.orm import Session, aliased, joinedload
 
 from songmaker_cli.db.models import (
     Album,
@@ -85,14 +86,26 @@ def get_playlist(session: Session, playlist_id: str) -> Playlist | None:
     )
 
 
+def playlist_holds_song_clause(
+    playlist_id: ColumnElement[str] | str, song_id: ColumnElement[str] | str,
+) -> Exists:
+    """Whether the playlist holds any take of the song, as a SQL condition.
+
+    Aliased so a caller correlating on its own entries or takes never binds
+    the check to the rows its outer query already names.
+    """
+    entry = aliased(PlaylistEntry)
+    take = aliased(Generation)
+    return exists().where(
+        entry.playlist_id == playlist_id,
+        entry.generation_id == take.id,
+        take.song_id == song_id,
+    )
+
+
 def playlist_holds_song(session: Session, playlist: Playlist, song: Song) -> bool:
     """Whether the playlist holds any take of the song."""
-    return session.query(
-        session.query(PlaylistEntry)
-        .join(Generation, PlaylistEntry.generation_id == Generation.id)
-        .filter(PlaylistEntry.playlist_id == playlist.id, Generation.song_id == song.id)
-        .exists(),
-    ).scalar()
+    return bool(session.scalar(select(playlist_holds_song_clause(playlist.id, song.id))))
 
 
 def create_playlist(session: Session, title: str, user_id: str, slug: str) -> Playlist:
