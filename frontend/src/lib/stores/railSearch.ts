@@ -3,6 +3,7 @@ import { get, writable } from 'svelte/store';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 
@@ -152,9 +153,7 @@ export function groupRailSearchResults(
 }
 
 function newestPlaylistsFirst(playlists: PlaylistItem[]): PlaylistItem[] {
-	return [...playlists].sort(
-		(left, right) => Date.parse(right.created_at) - Date.parse(left.created_at)
-	);
+	return [...playlists].sort((left, right) => compareByCreatedAt(left, right, 'newest'));
 }
 
 function prefixMatchesFirst(results: RailSearchResult[], query: string): RailSearchResult[] {
