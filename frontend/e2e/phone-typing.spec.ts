@@ -243,7 +243,7 @@ test.describe('typing on the phone', () => {
 		await expect(generateButton(page)).toBeVisible();
 
 		await appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
-		await page.getByRole('searchbox', { name: RAIL_SEARCH_LABEL }).click();
+		await page.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).click();
 		await expect(miniPlayer).toBeHidden();
 		await page.keyboard.press('Escape');
 		await page.keyboard.press('Escape');
