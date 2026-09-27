@@ -1,0 +1,8 @@
+claim_id = "ace015197fdb4c40b5bc2e7a8930d34c"
+agent = "claude-head"
+role = "builder"
+base = "6dd57751aa5b9f20155ba22fb7a975957503ac30"
+branch = "claude/issue-1082-header-pause"
+scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/components/PlayingMark.svelte", "frontend/src/lib/components/PlayingMark.test.ts", "frontend/src/lib/components/PlaylistDetailView.svelte", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "5a06a57f669b96cc5145bb59e6b77a62a2a0b778"
+whole_reason = "collection header pause and empty states, the paused playing mark and 62 px rows across both detail views and the shared page"
