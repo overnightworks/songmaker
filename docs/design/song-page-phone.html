@@ -258,6 +258,8 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	border: 2px solid var(--score-ok);
 	flex: none;
 }
+/* offline: the job's result cannot arrive yet, so the ring loses its amber */
+.tabs .ring.stale { border-color: var(--text-disabled); }
 
 /* ── the page: one scroller, nothing nested ───────────────────────────── */
 .body {
@@ -431,6 +433,9 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .score.ok .shape { border: 2px solid var(--score-ok); border-radius: 50%; }
 .score.bad { color: var(--score-bad); }
 .score.bad .shape { background: var(--score-bad); }
+.score.pending { font-family: var(--font-body); font-size: .75rem; color: var(--text-muted); }
+/* a take that arrived while you looked away: a thin grey edge for a few seconds */
+.take-row.arrived { box-shadow: inset 3px 0 0 var(--text-muted); }
 
 /* ── the status slot: the one place a run or a failure speaks ─────────── */
 .status-slot {
@@ -459,6 +464,12 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .bar span { display: block; height: 100%; background: var(--score-ok); }
 .status-line { font-size: .78rem; color: var(--text-muted); padding-right: .45rem; }
 .status-line.reason { color: var(--text-subtle); }
+/* offline (#1039): not live — the amber leaves, the ticking numbers leave,
+   the bar holds its last width in grey, and cancel waits for the connection */
+.status-slot.reconnecting .status-title b { color: var(--text-light); }
+.status-slot.reconnecting .bar span { background: var(--text-disabled); }
+.status-slot.reconnecting .status-line { color: var(--text-subtle); }
+.status-slot.reconnecting .icon-btn[aria-disabled="true"] { color: var(--text-disabled); }
 
 /* ── empty and error states ───────────────────────────────────────────── */
 .state-block {
@@ -529,6 +540,21 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 .track-detail { font-size: .72rem; color: var(--text-subtle); }
 .player .line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--border); }
 .player .line span { display: block; height: 100%; width: 38%; background: var(--action); }
+
+/* ── the one offline notice (vocabulary.html §7, #1039): a neutral strip on the mini-player's top edge ── */
+.offline-strip {
+	flex: none;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	padding: 0 .85rem;
+	background: var(--bg-deep);
+	border-top: 1px solid var(--border);
+	color: var(--text-light);
+	font-size: .82rem;
+}
+.offline-strip .ic { color: var(--text-muted); }
 
 /* ── frame 1b: typing — the page has scrolled, the field has focus ────── */
 /* the tabs went up with the content; the page now starts mid-Style, under the app bar */
@@ -741,6 +767,13 @@ figcaption b { color: #1b1a20; font-weight: 500; }
 	geschobenen Co-writer-Bildschirm aus <code>#990</code> auf — keine <i>Co-writer ›</i>-Zeile unter
 	den Lyrics, kein ‹ zurück; Frames 7 und 7b sind jetzt der Co-writer-Tab.
 </p>
+<p class="freeze-note">
+	Offline freigegeben 27.09.2026 (Operator: „ja passt", aus <code>~/songmaker-mockups/v9-offline/</code>,
+	<code>#1039</code>, Zeilen O1–O5 mit ihren Defaults): Frames 8, 8b und 8c. Ein ruhiger Hinweis
+	„You're offline — retrying" auf der Oberkante des Mini-Players, die laufende Karte wird
+	<i>Reconnecting…</i>, Generate ist offline aus, kein „Back online". Die Komponente gehört
+	<code>vocabulary.html</code> §7; der Albumseiten-Frame (v9 Frame 4) gehört <code>album-browsing.html</code>.
+</p>
 <div class="board">
 
 <figure>
@@ -852,7 +885,7 @@ I don't take the<span class="type-caret" aria-hidden="true"></span></div>
 	<div class="frame-note">
 		<p><b>Rule (phone, every screen).</b> While a text field has focus and the on-screen keyboard is open, the keyboard owns the bottom of the screen: the mini-player and any action bar (Generate) step aside and come back as soon as the keyboard closes — leaving the field, or closing the keyboard with Back while the field keeps focus (#1017). A hardware keyboard opens no on-screen keyboard, so the bars stay. Only what belongs to the field stays — on the Co-writer tab that is the composer with Send. Playback is untouched, and sticky tabs scroll away with the content while you type.</p>
 		<p><b>Rejected.</b> Shrinking the bars to a slim strip instead of hiding them: a compressed Generate and a compressed player still take two lines from the text, and a Generate you cannot read or hit properly is worse than one that comes back the moment you are done.</p>
-		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Edit; Send the only primary on Co-writer; none on Takes.</p>
+		<p><b>Where things live:</b> mini-player on every phone screen except while typing and in full Now Playing; Generate only on Edit; Send the only primary on Co-writer; none on Takes; the offline strip only on the mini-player's top edge, stepping aside with it (frame 8).</p>
 	</div>
 </figure>
 
@@ -1455,6 +1488,251 @@ can wait a mile for me</span></div>
 			<div class="krow"><span class="key wide">⇧</span><span class="key">z</span><span class="key">x</span><span class="key">c</span><span class="key">v</span><span class="key">b</span><span class="key">n</span><span class="key">m</span><span class="key wide">⌫</span></div>
 			<div class="krow"><span class="key num">123</span><span class="key space">space</span><span class="key ret">return</span></div>
 			<div class="home"><span></span></div>
+		</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>8 · Takes — the network is lost while a take generates</b> — the one offline strip sits on the top edge of the mini-player; the running card stops pretending: <i>Reconnecting…</i> instead of a ticking “40% · ~0:32”, the bar holds its last width in grey, × is greyed because a cancel cannot reach the server, and the Takes ring goes grey with it. Blessed 27.09.2026, #1039 (v9 frame 1).</figcaption>
+	<div class="device" id="f8">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button>Co-writer</button>
+			<button class="active" aria-current="page">Takes <span class="count">(4)</span> <span class="ring stale" aria-hidden="true"></span></button>
+		</nav>
+		<div class="body">
+			<div class="status-slot reconnecting">
+				<div class="status-head">
+					<span class="status-title">v8 · <b>Reconnecting…</b></span>
+					<button class="icon-btn" aria-label="Cancel generation (waits for the connection)" title="Cancel generation" aria-disabled="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+				</div>
+				<div class="bar" role="progressbar" aria-valuenow="40" aria-label="Last known progress"><span style="width:40%"></span></div>
+				<div class="status-line">Take 1 of 1 · last seen at 40%</div>
+			</div>
+			<div class="version-header">v7 · 4 takes</div>
+			<div class="takes">
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 4</span>
+					<span class="take-meta">
+						<span class="take-duration">2:58</span>
+						<span class="score bad" aria-label="Score 34"><span class="shape" aria-hidden="true"></span>34</span>
+						
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 4" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 4" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 4 menu" title="Take 4 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 3" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 3</span>
+					<span class="take-meta">
+						<span class="take-duration">3:02</span>
+						<span class="score ok" aria-label="Score 58"><span class="shape" aria-hidden="true"></span>58</span>
+						
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 3" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 3" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 3 menu" title="Take 3 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row playing">
+					<button class="icon-btn on" aria-label="Pause take 2" title="Pause"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button>
+					<span class="take-label">Take 2</span>
+					<span class="take-meta">
+						<span class="take-duration">3:05</span>
+						<span class="score good" aria-label="Score 82"><span class="shape" aria-hidden="true"></span>82</span>
+						
+					</span>
+					<button class="icon-btn star on" aria-label="Picked take 2" title="Picked" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 2" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 1" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 1</span>
+					<span class="take-meta">
+						<span class="take-duration">3:04</span>
+						<span class="score ok" aria-label="Score 61"><span class="shape" aria-hidden="true"></span>61</span>
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart on" aria-label="Unkeep take 1" title="Unkeep" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+			</div>
+		</div>
+		<div class="offline-strip" role="status" aria-live="polite"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/></svg><span>You're offline — retrying</span></div>
+		<div class="player">
+			<span class="cover" aria-hidden="true"></span>
+			<span class="track">
+				<span class="track-title">AMIF</span>
+				<span class="track-detail">v7 · take 2</span>
+			</span>
+			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
+			<span class="line"><span></span></span>
+		</div>
+	</div>
+	<div class="frame-note">
+		<p><b>Where the strip lives, on every phone page:</b> the top edge of the mini-player — the bottom chrome every screen already has; on Edit it sits between Generate and the player. It never pushes the page's content down and never covers the app bar or the tabs. While typing, the keyboard owns the bottom (frame 1b, #1017): the strip steps aside with the bars and comes back when the keyboard closes. The component and its rule are owned by <code>vocabulary.html</code> §7.</p>
+		<p><b>Replaces</b> (probe on #1032, 27.09.2026): the frozen “v1 · Generating… 40% · ~0:32” with no hint for 20–30 s, and the red “You're offline — retrying” sentence with a Retry button that only appeared when a song refresh happened to fail.</p>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>8b · Edit — offline, idle</b> — the same strip in the same place. You can keep typing: the draft stays in the editor on this screen, but it is <i>not</i> saved or queued, so nothing promises “saves when you're back”. Generate is disabled — a tap could only fail — in the disabled shape of frame 6, the label unchanged and no reason of its own: the strip is the reason. Blessed 27.09.2026, #1039 (v9 frame 2, O5).</figcaption>
+	<div class="device" id="f8b">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button class="active" aria-current="page">Edit</button>
+			<button>Co-writer</button>
+			<button>Takes <span class="count">(4)</span></button>
+		</nav>
+		<div class="body">
+			<div class="card">
+				<button class="card-head">
+					<span class="grow">
+						<span class="lbl">Recipe</span>
+						<span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span>
+					</span>
+					<span class="icon-btn" aria-hidden="true"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span>
+				</button>
+			</div>
+			<div class="field">
+				<span class="label">Style</span>
+				<div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div>
+			</div>
+			<div class="field">
+				<span class="label">Lyrics <span class="field-stamp">v8 · draft</span></span>
+				<div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to storm
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div>
+			</div>
+		</div>
+		<div class="actionbar">
+			<button class="btn-primary off" aria-disabled="true">Generate</button>
+		</div>
+		<div class="offline-strip" role="status" aria-live="polite"><svg class="ic sm" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/></svg><span>You're offline — retrying</span></div>
+		<div class="player">
+			<span class="cover" aria-hidden="true"></span>
+			<span class="track">
+				<span class="track-title">AMIF</span>
+				<span class="track-detail">v7 · take 2</span>
+			</span>
+			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
+			<span class="line"><span></span></span>
+		</div>
+	</div>
+</figure>
+
+<figure>
+	<figcaption><b>8c · Takes — back online</b> — the strip simply goes, the running card goes, and Take 1 of v8 is in the list, a thin grey edge marking it new for a few seconds. No “Back online” message: the arriving take <i>is</i> the proof. Blessed 27.09.2026, #1039 (v9 frame 3).</figcaption>
+	<div class="device" id="f8c">
+		<header class="appbar">
+			<button class="icon-btn ink" aria-label="Open navigation" title="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+			<h1>AMIF</h1>
+			<button class="icon-btn" aria-label="Share song" title="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+			<button class="icon-btn" aria-label="Song menu" title="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+		</header>
+		<nav class="tabs" aria-label="Song tabs">
+			<button>Edit</button>
+			<button>Co-writer</button>
+			<button class="active" aria-current="page">Takes <span class="count">(5)</span></button>
+		</nav>
+		<div class="body">
+			<div class="version-header">v8 · 1 take</div>
+			<div class="takes">
+				<div class="take-row row arrived">
+					<button class="icon-btn" aria-label="Play take 1" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 1</span>
+					<span class="take-meta">
+						<span class="take-duration">3:01</span>
+						<span class="score pending">scoring…</span>
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 1" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+			</div>
+			<div class="version-header">v7 · 4 takes</div>
+			<div class="takes">
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 4" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 4</span>
+					<span class="take-meta">
+						<span class="take-duration">2:58</span>
+						<span class="score bad" aria-label="Score 34"><span class="shape" aria-hidden="true"></span>34</span>
+						
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 4" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 4" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 4 menu" title="Take 4 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 3" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 3</span>
+					<span class="take-meta">
+						<span class="take-duration">3:02</span>
+						<span class="score ok" aria-label="Score 58"><span class="shape" aria-hidden="true"></span>58</span>
+						
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 3" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 3" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 3 menu" title="Take 3 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row playing">
+					<button class="icon-btn on" aria-label="Pause take 2" title="Pause"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button>
+					<span class="take-label">Take 2</span>
+					<span class="take-meta">
+						<span class="take-duration">3:05</span>
+						<span class="score good" aria-label="Score 82"><span class="shape" aria-hidden="true"></span>82</span>
+						
+					</span>
+					<button class="icon-btn star on" aria-label="Picked take 2" title="Picked" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart" aria-label="Keep take 2" title="Keep" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 2 menu" title="Take 2 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+				<div class="take-row row">
+					<button class="icon-btn" aria-label="Play take 1" title="Play"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button>
+					<span class="take-label">Take 1</span>
+					<span class="take-meta">
+						<span class="take-duration">3:04</span>
+						<span class="score ok" aria-label="Score 61"><span class="shape" aria-hidden="true"></span>61</span>
+					</span>
+					<button class="icon-btn star" aria-label="Pick take 1" title="Pick" aria-pressed="false"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button>
+					<button class="icon-btn heart on" aria-label="Unkeep take 1" title="Unkeep" aria-pressed="true"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button>
+					<button class="icon-btn" aria-label="Take 1 menu" title="Take 1 menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+				</div>
+			</div>
+		</div>
+		<div class="player">
+			<span class="cover" aria-hidden="true"></span>
+			<span class="track">
+				<span class="track-title">AMIF</span>
+				<span class="track-detail">v7 · take 2</span>
+			</span>
+			<button class="icon-btn ink" aria-label="Pause" title="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button>
+			<button class="icon-btn" aria-label="Next take" title="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button>
+			<span class="line"><span></span></span>
 		</div>
 	</div>
 </figure>
