@@ -83,8 +83,6 @@ export async function restoreSong(songId: string): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}/restore`, { method: 'POST' });
 }
 
-// A listen names the playlist it was played from, so that playlist moves up
-// in Continue; a listen from anywhere else sends no body.
 export async function recordSongListen(songId: string, playlistId: string | null): Promise<void> {
 	if (playlistId === null) {
 		await apiFetch(`/api/songs/${songId}/listen`, { method: 'POST' });

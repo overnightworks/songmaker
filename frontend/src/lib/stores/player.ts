@@ -1337,8 +1337,6 @@ function playingPlaylistEntry(ctx: QueueContext): PlaylistEntryItem | undefined 
 	return playing && holdsEntryTake(current, playing) ? playing : undefined;
 }
 
-// The playlist a listen is played from: only while its queue is playing one
-// of its entries, never for a take loaded from outside while the queue waits.
 function listenSourcePlaylistId(ctx: QueueContext): string | null {
 	if (ctx.type !== 'playlist' || !playingPlaylistEntry(ctx)) return null;
 	return ctx.playlist.id;
@@ -1479,8 +1477,6 @@ function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
 	void playNextSong();
 }
 
-// A take counts once per place it is heard from: once outside any playlist
-// and once for each playlist it is played from.
 const recordedListens = new Set<string>();
 
 function recordFirstTakeListen(): void {
