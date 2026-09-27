@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Final
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
@@ -50,10 +52,14 @@ from songmaker_cli.queue_stream_api import (
 
 router = APIRouter()
 
+# Each Continue page re-reads every place before its window, so the offset is
+# bounded far beyond any real library to keep one request's work finite.
+CONTINUE_MAX_OFFSET: Final[int] = 100_000
+
 
 @router.get("/library/continue")
 def api_library_continue(
-    offset: int = Query(0, ge=0),
+    offset: int = Query(0, ge=0, le=CONTINUE_MAX_OFFSET),
     limit: int = Query(CONTINUE_MAX_PLACES, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),

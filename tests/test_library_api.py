@@ -35,6 +35,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
+from songmaker_cli.library_api import CONTINUE_MAX_OFFSET
 
 USER_A = "user-a"
 USER_B = "user-b"
@@ -605,7 +606,13 @@ def test_continue_returns_the_window_of_places_the_caller_asks_for(
 
 
 @pytest.mark.parametrize(
-    "window", [{"limit": 0}, {"limit": PAGE_MAX_LIMIT + 1}, {"offset": -1}],
+    "window",
+    [
+        {"limit": 0},
+        {"limit": PAGE_MAX_LIMIT + 1},
+        {"offset": -1},
+        {"offset": CONTINUE_MAX_OFFSET + 1},
+    ],
 )
 def test_continue_refuses_a_window_outside_its_bound(
     alice: TestClient, window: dict[str, int],
