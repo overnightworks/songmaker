@@ -7,7 +7,8 @@
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
 		NOW_PLAYING_TAKE_TAB,
 		nowPlayingCurateProgress,
-		type NowPlayingSource
+		type NowPlayingSource,
+		type PlaybackSource
 	} from '$lib/constants/now-playing';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
@@ -29,6 +30,7 @@
 		nowPlayingDockable,
 		nowPlayingPanel,
 		nowPlayingSurface,
+		playbackSource,
 		playNextSong,
 		playPrevSong,
 		queueContext,
@@ -82,26 +84,9 @@
 	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
 	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current));
-	// Where the music comes from, named by the queue itself — never by the
-	// collection the listener happens to have open, which they are free to
-	// leave mid-track.
 	const source: NowPlayingSource | null = $derived.by(() => {
-		if (ctx.type === 'album') {
-			const albumId = ctx.albumId;
-			const title = $albumList.find((a) => a.id === albumId)?.title;
-			return title
-				? { kind: 'album', title, open: () => leaveFor(() => openAlbum(albumId)) }
-				: null;
-		}
-		if (ctx.type === 'playlist') {
-			const playlistId = ctx.playlist.id;
-			return {
-				kind: 'playlist',
-				title: ctx.playlist.title,
-				open: () => leaveFor(() => openPlaylist(playlistId))
-			};
-		}
-		return null;
+		const playing = $playbackSource;
+		return playing ? { ...playing, open: () => leaveFor(() => openSource(playing)) } : null;
 	});
 
 	const coverUrl = $derived.by(() => {
@@ -160,6 +145,10 @@
 	function leaveFor(destination: () => Promise<void>): void {
 		closeNowPlaying();
 		void destination();
+	}
+
+	function openSource(source: PlaybackSource): Promise<void> {
+		return source.kind === 'album' ? openAlbum(source.id) : openPlaylist(source.id);
 	}
 
 	function goToSong(): void {
