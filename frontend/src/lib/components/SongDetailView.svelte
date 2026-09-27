@@ -14,7 +14,8 @@
 		uploadSongCover,
 		deleteSongCover
 	} from '$lib/api/client';
-	import { ApiError, NetworkError } from '$lib/api/fetch';
+	import { describeFailure, NetworkError } from '$lib/api/fetch';
+	import { offline, whenBackOnline } from '$lib/stores/connectivity';
 	import { fetchAlbum } from '$lib/api/albums';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { startHealthPolling, stopHealthPolling } from '$lib/stores/health';
@@ -90,8 +91,8 @@
 		SONG_COVER_ALT_TYPE,
 		SONG_COVER_REPLACE_LABEL,
 		SONG_COVER_UPLOAD_LABEL,
-		EDITOR_NETWORK_ERROR,
 		EDITOR_SAVE_ACCESSIBLE_LABEL,
+		EDITOR_SAVE_FAILED,
 		EDITOR_SAVE_LABEL,
 		EDITOR_UNSAVED_TITLE,
 		EDITOR_UNSAVED_MESSAGE,
@@ -224,7 +225,7 @@
 			coverFailed = false;
 			addToast('Cover saved', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cover upload failed', 'error');
+			addToast(describeFailure(e, 'Cover upload failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -239,7 +240,7 @@
 			coverFailed = false;
 			addToast('Cover removed', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cover remove failed', 'error');
+			addToast(describeFailure(e, 'Cover remove failed'), 'error');
 		} finally {
 			coverBusy = false;
 		}
@@ -297,6 +298,12 @@
 	onMount(() => {
 		void loadLoras(true).catch(() => {});
 	});
+
+	onMount(() =>
+		whenBackOnline(() => {
+			if (song && takesStatus !== 'ready') void refreshTakes(song.id);
+		})
+	);
 
 	$effect(() => {
 		seedRecipeModel($activeModels.map((m) => m.id));
@@ -369,6 +376,13 @@
 		clickVersion: onVersionClick
 	});
 
+	/**
+	 * A load that got no network answer while the page is offline leaves the
+	 * list waiting, with what is on screen kept: the one offline strip says it,
+	 * and the list reloads by itself once the page is back online (#1039 O4).
+	 * Without the strip nothing would ever reload it, so any other failure is
+	 * named, in the server's own words where it gave some, with Try again.
+	 */
 	async function refreshTakes(songId: string): Promise<void> {
 		const current = get(selectedSong);
 		if (
@@ -388,8 +402,9 @@
 			takesStatus = 'ready';
 		} catch (e) {
 			if (editorSongId !== songId) return;
+			if (e instanceof NetworkError && get(offline)) return;
 			takesStatus = 'error';
-			takesError = describeTakesLoadFailure(e);
+			takesError = describeFailure(e, TAKES_ERROR);
 		}
 	}
 
@@ -430,7 +445,7 @@
 			updateSongInList(songId, () => updated);
 			addToast('Song renamed', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Rename failed', 'error');
+			addToast(describeFailure(e, 'Rename failed'), 'error');
 			throw e;
 		}
 	}
@@ -466,13 +481,13 @@
 						const restored = await restoreSong(songId);
 						addSongsToList([restored]);
 						addToast('Song restored', 'success');
-					} catch {
-						addToast('Restore failed', 'error');
+					} catch (e) {
+						addToast(describeFailure(e, 'Restore failed'), 'error');
 					}
 				}
 			});
-		} catch {
-			addToast('Delete failed', 'error');
+		} catch (e) {
+			addToast(describeFailure(e, 'Delete failed'), 'error');
 		}
 	}
 
@@ -505,7 +520,7 @@
 			}
 			addToast('Take deleted', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Delete failed', 'error');
+			addToast(describeFailure(e, 'Delete failed'), 'error');
 		}
 	}
 
@@ -515,34 +530,11 @@
 			await addSongToPlaylist(playlistId, song.id);
 			addToast('Added to playlist', 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Failed to add', 'error');
+			addToast(describeFailure(e, 'Failed to add'), 'error');
 		}
 	}
 
 	let songPlaylistPickerOpen = $state(false);
-
-	/**
-	 * A takes load that got no answer at all carries the browser's own text
-	 * (`Failed to fetch`); name the network instead. Any other failure keeps
-	 * its own message.
-	 */
-	function describeTakesLoadFailure(e: unknown): string {
-		if (e instanceof NetworkError) return EDITOR_NETWORK_ERROR;
-		return e instanceof Error ? e.message : TAKES_ERROR;
-	}
-
-	/**
-	 * `updateSong` fails either as an `ApiError` (server responded with a
-	 * useful detail message) or with no answer (offline, timeout — a
-	 * `NetworkError` or an abort whose text is not user-facing copy). Reuse the
-	 * network-error copy already shown elsewhere in the app instead of
-	 * surfacing the raw browser message.
-	 */
-	function describeSaveFailure(e: unknown): string {
-		if (e instanceof ApiError) return e.message || 'Save failed';
-		if (e instanceof Error) return EDITOR_NETWORK_ERROR;
-		return 'Save failed';
-	}
 
 	async function onSaveVersion(): Promise<void> {
 		if (!song) return;
@@ -551,7 +543,7 @@
 			const savedVersionNumber = get(versions)[0]?.version_number;
 			addToast(`Saved version ${savedVersionNumber}`, 'success');
 		} catch (e) {
-			addToast(describeSaveFailure(e), 'error');
+			addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
 		}
 	}
 
@@ -602,7 +594,7 @@
 			try {
 				await handleSave(song.id);
 			} catch (e) {
-				addToast(describeSaveFailure(e), 'error');
+				addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
 				return;
 			}
 		} else {
