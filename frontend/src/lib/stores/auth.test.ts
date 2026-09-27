@@ -73,12 +73,16 @@ describe('classifyAuthFailure', () => {
 		['a 401 ApiError', new ApiError(401, 'unauthorized', AUTH_ME_PATH), 'unauthorized'],
 		['a 403 ApiError', new ApiError(403, 'Account disabled', AUTH_ME_PATH), 'disabled'],
 		['a 429 ApiError', new ApiError(429, 'slow down', AUTH_ME_PATH), 'retryable'],
-		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'retryable'],
+		['a 500 ApiError', new ApiError(500, 'boom', AUTH_ME_PATH), 'retryable'],
+		['a 502 ApiError', new ApiError(502, 'bad gateway', AUTH_ME_PATH), 'unreachable'],
+		['a 503 ApiError', new ApiError(503, 'unavailable', AUTH_ME_PATH), 'unreachable'],
+		['a 504 ApiError', new ApiError(504, 'gateway timeout', AUTH_ME_PATH), 'unreachable'],
 		[
 			'a network error',
 			new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch')),
-			'retryable'
-		]
+			'unreachable'
+		],
+		['an unexpected failure', new TypeError('bad json'), 'retryable']
 	])('classifies %s as %s', (_label, error, expected) => {
 		expect(classifyAuthFailure(error)).toBe(expected);
 	});
