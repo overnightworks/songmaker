@@ -26,6 +26,7 @@ export type CoWriterStreamEvent =
 			type: 'error';
 			status: number;
 			message?: string;
+			provider?: string;
 			reason?: { message?: string };
 	  };
 
