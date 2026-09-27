@@ -24,7 +24,7 @@ from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi import Request
 from fastapi.testclient import TestClient
 
-from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE
+from songmaker_cli.constants import CURRENT_SONG_FRESHNESS_NOTE, GET_SONG_ONLY_FOR_OTHER_SONGS
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     Album,
@@ -829,6 +829,17 @@ def test_chat_turn_injects_current_song_block(client):
     assert "title: Thunder" in last_user
     assert "lyrics:\nverse" in last_user
     assert captured_kwargs["user_id"] == "u-test"
+
+
+@pytest.mark.parametrize("tools_available", [True, False])
+def test_only_a_route_with_tools_is_told_when_to_call_get_song(tools_available):
+    from songmaker_cli.conversation_api import build_cowriter_system_prompt
+
+    prompt = build_cowriter_system_prompt(tools_available=tools_available)
+
+    assert (GET_SONG_ONLY_FOR_OTHER_SONGS in prompt) is tools_available
+    assert ("get_song" in prompt) is tools_available
+    assert "get_song" not in CURRENT_SONG_FRESHNESS_NOTE
 
 
 def test_chat_turn_forwards_tool_call_events(client):
