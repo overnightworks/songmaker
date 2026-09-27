@@ -14,8 +14,15 @@ import type {
 	SessionItem,
 	UserItem
 } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { ADMIN_TABS_LABEL, COMPACT_LAYOUT_MEDIA } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import {
+	ADMIN_TABS_LABEL,
+	ADMIN_VOICES_EMPTY,
+	COMPACT_LAYOUT_MEDIA,
+	MODELS_SAVE_FAILED_FALLBACK,
+	UNREACHABLE_RELOAD_DELAYS_MS
+} from '$lib/constants';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { COMPACT_SELECT_CLASS, COMPACT_STACK_CLASS } from '$lib/styles/compact-ui';
 import { currentUser } from '$lib/stores/auth';
 
@@ -231,6 +238,14 @@ const TAB_LABELS = [
 
 let mounted: ReturnType<typeof mount> | undefined;
 
+function serverRefusal(detail: string): ApiError {
+	return new ApiError(422, detail, '/api/admin');
+}
+
+function lostNetwork(): NetworkError {
+	return new NetworkError('/api/admin', new TypeError('Failed to fetch'));
+}
+
 function pageOf<T>(items: T[]): PaginatedResponse<T> {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
 }
@@ -403,8 +418,10 @@ afterEach(async () => {
 	document.head.querySelectorAll('[data-compact-ui]').forEach((el) => el.remove());
 	delete document.documentElement.dataset.pointer;
 	currentUser.set(null);
+	resetConnectivityForTests();
 	vi.clearAllMocks();
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
 });
 
 describe('admin settings compact layout', () => {
@@ -533,7 +550,7 @@ describe('admin settings compact layout', () => {
 		{ action: 'changing the role', selector: 'select', value: 'admin', event: 'change' },
 		{ action: 'submitting again', selector: null, value: '', event: 'submit' }
 	])('clears a create-user refusal on $action', async ({ selector, value, event }) => {
-		api.createUser.mockRejectedValueOnce(new Error('Username already exists'));
+		api.createUser.mockRejectedValueOnce(serverRefusal('Username already exists'));
 		const target = await renderPage(true);
 		const form = requireElement<HTMLFormElement>(target, '.create-form');
 		for (const [placeholder, value] of [
@@ -584,12 +601,12 @@ describe('admin settings compact layout', () => {
 	});
 
 	it('names a voices loading failure instead of showing an empty state', async () => {
-		api.fetchAdminVoices.mockRejectedValueOnce(new Error('Failed to load voices'));
+		api.fetchAdminVoices.mockRejectedValueOnce(serverRefusal('Voice index is rebuilding'));
 		const target = await renderPage(true);
 		await selectTab(target, 'voices');
 		const voices = sectionByHeading(target, 'Voice operations');
 
-		expect(voices.textContent).toContain('Failed to load voices');
+		expect(voices.textContent).toContain('Voice index is rebuilding');
 		expect(voices.textContent).not.toContain('No voices have been created.');
 	});
 
@@ -620,6 +637,70 @@ describe('admin settings compact layout', () => {
 		expect(target.querySelector(`select[aria-label="${ADMIN_TABS_LABEL}"]`)).toBeNull();
 		expect(buttons).toEqual(TAB_LABELS);
 		expect(getComputedStyle(requireElement(target, '.stack-table')).display).not.toBe('block');
+	});
+});
+
+describe('admin reads and actions that fail', () => {
+	it('offline, Users shows no failure of its own and the list is back without a tap once online', async () => {
+		reportResourceStreamReachable(false);
+		api.fetchUsers.mockRejectedValueOnce(lostNetwork());
+		const target = await renderPage(true);
+
+		expect(target.querySelector('.error')).toBeNull();
+		expect(target.textContent).not.toContain('Failed to fetch');
+		expect(target.textContent).not.toContain('jane');
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('jane'));
+		expect(target.querySelector('.error')).toBeNull();
+	});
+
+	it('names a users read the server refused in its own words', async () => {
+		api.fetchUsers.mockRejectedValueOnce(serverRefusal('Database is migrating'));
+		const target = await renderPage(true);
+
+		expect(requireElement(target, '.error').textContent).toBe('Database is migrating');
+	});
+
+	it('while no strip shows, reads users again on a bounded backoff before naming the failure', async () => {
+		vi.useFakeTimers();
+		api.fetchUsers.mockRejectedValue(lostNetwork());
+		const target = await renderPage(true);
+		expect(target.querySelector('.error')).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		expect(api.fetchUsers).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
+		expect(requireElement(target, '.error').textContent).toBe('Failed to load users');
+	});
+
+	it('offline, Voices claims no empty list and shows the voices once back online', async () => {
+		reportResourceStreamReachable(false);
+		api.fetchAdminVoices.mockRejectedValueOnce(lostNetwork());
+		const target = await renderPage(true);
+		await selectTab(target, 'voices');
+		const voices = sectionByHeading(target, 'Voice operations');
+
+		expect(voices.textContent).not.toContain(ADMIN_VOICES_EMPTY);
+		expect(voices.querySelector('.error')).toBeNull();
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(voices.textContent).toContain('Warm Tenor'));
+	});
+
+	it('names a save the network swallowed without browser text', async () => {
+		api.updateCowriterSettings.mockRejectedValue(lostNetwork());
+		const target = await renderPage(true);
+		await selectTab(target, 'models');
+		const budget = requireElement<HTMLInputElement>(target, '#cowriter-budget');
+		budget.value = '32000';
+		budget.dispatchEvent(new Event('change', { bubbles: true }));
+		await flush();
+
+		expect(requireElement(target, '.budget-error').textContent).toBe(MODELS_SAVE_FAILED_FALLBACK);
+		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 });
 
@@ -670,7 +751,7 @@ describe('admin models tab', () => {
 	});
 
 	it('keeps every provider offered after the reachability probe fails', async () => {
-		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
+		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
@@ -716,7 +797,7 @@ describe('admin models tab', () => {
 	});
 
 	it('names a failed reachability probe in the row instead of claiming Checking', async () => {
-		api.fetchProviderStatus.mockRejectedValue(new Error('Provider probe failed'));
+		api.fetchProviderStatus.mockRejectedValue(serverRefusal('Provider probe failed'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
@@ -852,7 +933,7 @@ describe('admin models tab', () => {
 	});
 
 	it('names a rejected history-tail save next to the field with a retry', async () => {
-		api.updateCowriterSettings.mockRejectedValue(new Error('Tail budget out of range'));
+		api.updateCowriterSettings.mockRejectedValue(serverRefusal('Tail budget out of range'));
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
