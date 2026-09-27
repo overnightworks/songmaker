@@ -19,7 +19,8 @@ import {
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
-	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	SERVER_ERROR_STATUS_FLOOR
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
@@ -46,9 +47,13 @@ type ResourceSyncStatus =
 
 type ResourceAuthProbe = 'ok' | AuthFailureKind;
 
-// A song refresh fails either because the network did not carry it -- the
-// offline strip says that, not this owner -- or with a failure worth showing.
-type SongRefreshFailure = 'network' | 'shown';
+// Why a song refresh failed decides whether it is shown and whether it is
+// fetched again on its own (#1099): the network did not carry it (the
+// offline strip says that, not this owner) or the server failed -- both heal
+// by themselves, so both retry until the take lands -- or the server refused
+// it (a 4xx), which another automatic try would only repeat, so it is shown
+// once and waits for the musician's Retry.
+type SongRefreshFailure = 'network' | 'server' | 'refused';
 
 interface ResourceSyncState {
 	status: ResourceSyncStatus;
@@ -176,7 +181,7 @@ export class ResourceSyncController {
 			this.restartConnection();
 			return this.waitForReady();
 		}
-		this.requeueFailedSongs(this.deps.listPrioritySongIds());
+		this.requeueSongs([...this.failedSongs.keys(), ...this.deps.listPrioritySongIds()]);
 		this.failedSongs.clear();
 		await this.flushPending(this.epoch);
 		if (!this.started) return false;
@@ -203,7 +208,7 @@ export class ResourceSyncController {
 	async handleVisibility(): Promise<void> {
 		if (!this.started || !this.syncedOnce) return;
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-		this.requeueFailedSongs(this.deps.listPrioritySongIds());
+		this.requeueSongs([...this.selfHealingFailedSongIds(), ...this.deps.listPrioritySongIds()]);
 		if (this.pendingSongIds.size === 0) return;
 		await this.flushPending(this.epoch);
 	}
@@ -450,7 +455,7 @@ export class ResourceSyncController {
 
 	private async recoverLiveConnection(): Promise<void> {
 		this.promoteDeferredSongs();
-		this.requeueFailedSongs();
+		this.requeueSongs(this.selfHealingFailedSongIds());
 		if (this.pendingSongIds.size > 0) {
 			await this.flushPending(this.epoch);
 		}
@@ -627,19 +632,26 @@ export class ResourceSyncController {
 				this.clearLiveErrorIfHealed();
 				return;
 			}
-			this.failedSongs.set(songId, err instanceof NetworkError ? 'network' : 'shown');
+			const failure = classifySongRefreshFailure(err);
+			this.failedSongs.set(songId, failure);
 			this.showFailure(err);
-			this.scheduleFailedSongRetry();
+			if (failure !== 'refused') this.scheduleFailedSongRetry();
 		}
 	}
 
 	private forgetFailedSong(songId: string): void {
 		this.failedSongs.delete(songId);
-		if (this.failedSongs.size === 0) this.failedSongRetryAttempt = 0;
+		if (this.selfHealingFailedSongIds().length === 0) this.failedSongRetryAttempt = 0;
+	}
+
+	private selfHealingFailedSongIds(): string[] {
+		return [...this.failedSongs]
+			.filter(([, failure]) => failure !== 'refused')
+			.map(([songId]) => songId);
 	}
 
 	private hasShownSongFailure(): boolean {
-		return [...this.failedSongs.values()].includes('shown');
+		return [...this.failedSongs.values()].some((failure) => failure !== 'network');
 	}
 
 	/** The bootstrap's own words for failed songs; a network failure has none. */
@@ -650,8 +662,8 @@ export class ResourceSyncController {
 	/**
 	 * A song refresh that failed while the stream stays up has no stream
 	 * drop to piggyback on, and a network that returns without an `online`
-	 * event fires nothing either, so the failed songs retry on the stream's
-	 * own capped backoff until they land (#1032).
+	 * event fires nothing either, so the failed songs that heal by themselves
+	 * retry on the stream's own capped backoff until they land (#1032).
 	 */
 	private scheduleFailedSongRetry(): void {
 		if (this.failedSongRetryTimer !== null) return;
@@ -663,15 +675,14 @@ export class ResourceSyncController {
 	}
 
 	private async retryFailedSongs(): Promise<void> {
-		if (!this.canFlush() || this.failedSongs.size === 0) return;
-		this.requeueFailedSongs();
+		const songIds = this.selfHealingFailedSongIds();
+		if (!this.canFlush() || songIds.length === 0) return;
+		this.requeueSongs(songIds);
 		await this.flushPending(this.epoch);
 	}
 
-	private requeueFailedSongs(extraIds: readonly string[] = []): void {
-		for (const songId of new Set([...this.failedSongs.keys(), ...extraIds])) {
-			this.invalidateSong(songId);
-		}
+	private requeueSongs(songIds: readonly string[]): void {
+		for (const songId of new Set(songIds)) this.invalidateSong(songId);
 	}
 
 	private clearFailedSongRetry(): void {
@@ -842,6 +853,12 @@ function visibleErrorMessage(err: unknown): string | null {
 	if (err instanceof NetworkError) return null;
 	if (err instanceof Error) return err.message;
 	return RESOURCE_SYNC_ERROR;
+}
+
+function classifySongRefreshFailure(err: unknown): SongRefreshFailure {
+	if (err instanceof NetworkError) return 'network';
+	if (err instanceof ApiError && err.status >= SERVER_ERROR_STATUS_FLOOR) return 'server';
+	return 'refused';
 }
 
 async function probeResourceAuth(): Promise<ResourceAuthProbe> {

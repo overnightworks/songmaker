@@ -913,6 +913,35 @@ describe('resource sync owner', () => {
 		}
 	);
 
+	it.each([403, 422, 429])(
+		'shows a live refresh answered %s once and never fetches it again on its own',
+		async (status) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, fetchCalls } = setup({
+				fetchSong: async (songId) => {
+					throw new ApiError(status, 'Refused', `/api/songs/${songId}`);
+				}
+			});
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			await controller.requestSongRefresh('s1');
+			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+
+			await vi.advanceTimersByTimeAsync(60_000);
+			latestSource(sources).error();
+			await flush();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+
+			expect(fetchCalls).toEqual(['s1']);
+			expect(get(store)).toMatchObject({ status: 'error', error: 'Refused' });
+			controller.stop();
+		}
+	);
+
 	it('shows a bug in applying a fetched song as itself, not as the musician being offline', async () => {
 		const { controller, sources, store } = setup({
 			applySong: () => {
@@ -1144,7 +1173,7 @@ describe('resource sync owner', () => {
 		let fail = true;
 		const { controller, sources, store, upserted } = setup({
 			fetchSong: async () => {
-				if (fail) throw new Error('boom');
+				if (fail) throw new ApiError(500, 'boom', '/api/songs/s1');
 				return song({
 					slug: 'track',
 					title: 'Track',
