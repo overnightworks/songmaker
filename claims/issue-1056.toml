@@ -1,0 +1,7 @@
+claim_id = "6f55e92cea5c4ef5a8a1e0e311e3c2ab"
+agent = "claude-head"
+role = "builder"
+base = "bbd3bb10e9bb8b462869ae6848cc204973f2a030"
+branch = "claude/issue-1056-unanswered-reload"
+scope = ["frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
+opened_commit = "5428111f53e256e6549db41d236f94aaacd40546"
