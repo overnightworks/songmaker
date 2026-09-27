@@ -342,9 +342,9 @@ describe('RailLibraryGroup', () => {
 	it.each([
 		{ currentSongId: 's1', status: 'playing' as const, markedTrack: 'Tide' },
 		{ currentSongId: 's2', status: 'playing' as const, markedTrack: 'Ebb' },
-		{ currentSongId: 's2', status: 'paused' as const, markedTrack: null }
+		{ currentSongId: 's2', status: 'paused' as const, markedTrack: 'Ebb' }
 	])(
-		'shows a playing marker only for the current track while playback is active',
+		'shows a playing marker only for the current track while it plays or is paused',
 		async ({ currentSongId, status, markedTrack }) => {
 			openCollection.set({ kind: 'album', id: 'a1' });
 			songList.set([
