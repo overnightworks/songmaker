@@ -8,6 +8,7 @@ import {
 	cowriterHeaderLabel,
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
+	cowriterTurnFailureLabel,
 	cowriterUnavailableLabel,
 	providerDisplayName
 } from './cowriter-ui';
@@ -18,6 +19,12 @@ describe('co-writer provider copy', () => {
 		expect(cowriterThinkingLabel('claude')).toBe('Claude is thinking…');
 		expect(cowriterThinkingLabel('codex')).toBe('Codex is thinking…');
 		expect(cowriterUnavailableLabel('grok')).toBe('Grok is currently unavailable');
+	});
+
+	it('names the provider in front of the reason its turn failed for', () => {
+		expect(cowriterTurnFailureLabel('claude', 'CLI is unavailable.')).toBe(
+			'Claude: CLI is unavailable.'
+		);
 	});
 
 	it.each([
@@ -137,6 +144,19 @@ describe('conversation day and line copy', () => {
 			'an archived one from an earlier year with the year',
 			conversationFrom('2025-09-17T10:00:00', { archived_at: '2025-09-20T10:00:00' }),
 			'Conversation from Sep 17, 2025'
+		],
+		[
+			'an empty one as a new conversation, like the line above the chat',
+			conversationFrom('2026-09-22T10:00:00', { message_count: 0 }),
+			'New conversation'
+		],
+		[
+			'an empty archived one by its day',
+			conversationFrom('2026-09-20T10:00:00', {
+				message_count: 0,
+				archived_at: '2026-09-22T10:00:00'
+			}),
+			'Conversation from Sep 20'
 		],
 		[
 			'a titled one',
