@@ -8,10 +8,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import {
-	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
-	HITBOX_FREQUENT_PX
-} from '$lib/constants';
+import { EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL, HITBOX_FREQUENT_PX } from '$lib/constants';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const action = await vi.hoisted(async () => {
