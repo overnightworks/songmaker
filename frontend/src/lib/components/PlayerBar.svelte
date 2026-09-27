@@ -42,6 +42,7 @@
 		openNowPlayingLabel
 	} from '$lib/constants';
 	import TransportBarFrame from './TransportBarFrame.svelte';
+	import OfflineStrip from './OfflineStrip.svelte';
 	import {
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
@@ -213,8 +214,9 @@
 {/snippet}
 
 <!-- The bar steps aside for the full surface and for the phone's keyboard;
-	playback runs on untouched. -->
+	playback runs on untouched, and the offline strip on its top edge goes with it. -->
 {#if !$transportBarHidden}
+	<OfflineStrip />
 	<TransportBarFrame
 		{isPlaying}
 		{isLoading}

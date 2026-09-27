@@ -33,6 +33,7 @@ import {
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
@@ -230,6 +231,7 @@ afterEach(async () => {
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
+	resetConnectivityForTests();
 });
 
 const TAKE = makeGeneration({
@@ -497,6 +499,34 @@ describe('app shell', () => {
 		closeKeyboard();
 	});
 
+	// O1 (#1080): the offline strip rests on the transport bar, and the room
+	// every surface reserves for the bar grows by the strip while it shows, so
+	// the phone's Generate bar stays above the strip instead of under it.
+	it('adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
+		await renderLayout('/');
+		expect(document.documentElement.dataset.offline).toBeUndefined();
+
+		reportResourceStreamReachable(false);
+		await tick();
+		expect(document.documentElement.dataset.offline).toBe('');
+		expect(extractRule(appCss, ':root')).toContain(
+			'--player-height: calc(var(--transport-bar-height) + var(--offline-strip-room))'
+		);
+		expect(extractRule(appCss, 'html[data-offline]')).toContain(
+			'--offline-strip-room: var(--offline-strip-height)'
+		);
+
+		reportResourceStreamReachable(true);
+		await tick();
+		expect(document.documentElement.dataset.offline).toBeUndefined();
+	});
+
+	it('leaves the offline room out of public routes, which have no transport bar to rest on', async () => {
+		reportResourceStreamReachable(false);
+		await renderLayout('/login');
+		expect(document.documentElement.dataset.offline).toBeUndefined();
+	});
+
 	it('lays out the mobile app-shell as a flex column, mirroring desktop, so content below the fold stays reachable', () => {
 		const rule = extractRule(layoutSource, '.app-shell.mobile');
 		expect(rule).toContain('display: flex');
@@ -662,11 +692,6 @@ describe('docked Now Playing', () => {
 		expect(document.documentElement.dataset.transportBar).toBe('hidden');
 		expect(extractRule(appCss, "html[data-transport-bar='hidden']")).toContain(
 			'--player-height: 0px'
-		);
-		// Same specificity as the coarse-pointer override of the same variable,
-		// so only source order makes the collapse win.
-		expect(appCss.indexOf("html[data-transport-bar='hidden']")).toBeGreaterThan(
-			appCss.indexOf("html[data-pointer='coarse']")
 		);
 
 		closeNowPlaying();

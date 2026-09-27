@@ -9,11 +9,14 @@
 
 	let { current }: Props = $props();
 
-	const sounding = $derived(current && audioPlayer.status === 'playing');
+	// A paused take is still the one the transport is on, so its row keeps the
+	// mark; only a sounding take moves it.
+	const paused = $derived(audioPlayer.status === 'paused');
+	const shown = $derived(current && (audioPlayer.status === 'playing' || paused));
 </script>
 
-{#if sounding}
-	<span class="playing-mark" role="img" aria-label={PLAYING_MARK_LABEL}>
+{#if shown}
+	<span class="playing-mark" class:paused role="img" aria-label={PLAYING_MARK_LABEL}>
 		<span></span><span></span><span></span>
 	</span>
 {/if}
@@ -46,6 +49,10 @@
 
 	.playing-mark span:nth-child(3) {
 		height: 65%;
+	}
+
+	.playing-mark.paused span {
+		animation: none;
 	}
 
 	@media (prefers-reduced-motion: reduce) {

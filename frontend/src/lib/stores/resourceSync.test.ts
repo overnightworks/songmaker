@@ -32,11 +32,11 @@ import { selectedSongId } from '$lib/stores/player';
 import { goto } from '$app/navigation';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
+	EVENT_SOURCE_CLOSED,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
-	RESOURCE_SYNC_OFFLINE_MESSAGE,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
 	SSE_RECONNECT_BASE_DELAY_MS,
@@ -44,6 +44,7 @@ import {
 	SSE_RECONNECT_MAX_DELAY_MS
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
+import { offline } from '$lib/stores/connectivity';
 import {
 	ResourceSyncController,
 	requestSongRefresh,
@@ -74,12 +75,14 @@ const DISCONNECTED_SYNC: ResourceSyncState = {
 // safe amount to advance fake timers by when a test just needs "long enough
 // for any pending reconnect, at any attempt count, to have fired".
 const SAFE_RECONNECT_ADVANCE_MS = SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO);
+const EVENT_SOURCE_CONNECTING = 0;
 
 class MockEventSource implements ResourceEventSource {
 	static instances: MockEventSource[] = [];
 	url: string;
 	withCredentials: boolean;
 	closed = false;
+	readyState = EVENT_SOURCE_CONNECTING;
 	onerror: ((event: Event) => void) | null = null;
 	private readonly listeners = new Map<string, Set<(event: Event) => void>>();
 
@@ -110,6 +113,11 @@ class MockEventSource implements ResourceEventSource {
 
 	error(): void {
 		this.onerror?.(new Event('error'));
+	}
+
+	failWithoutNativeRetry(): void {
+		this.readyState = EVENT_SOURCE_CLOSED;
+		this.error();
 	}
 }
 
@@ -167,6 +175,7 @@ function setup(options?: {
 	const cancelled: number[] = [];
 	const forgotten: string[] = [];
 	const loadedWatch: { notify: (() => void) | null } = { notify: null };
+	const reachability: boolean[] = [];
 	const innerFetch =
 		options?.fetchSong ??
 		(async (songId: string) =>
@@ -218,7 +227,8 @@ function setup(options?: {
 				cancelled.push(1);
 			},
 			probeAuth: options?.probeAuth ?? (async () => 'ok'),
-			onUnauthorized: options?.onUnauthorized ?? (async () => undefined)
+			onUnauthorized: options?.onUnauthorized ?? (async () => undefined),
+			reportStreamReachable: (reachable) => reachability.push(reachable)
 		},
 		store
 	);
@@ -231,7 +241,8 @@ function setup(options?: {
 		snapshotStarts,
 		cancelled,
 		forgotten,
-		loadedWatch
+		loadedWatch,
+		reachability
 	};
 }
 
@@ -838,10 +849,10 @@ describe('resource sync owner', () => {
 		expect(upserted.at(-1)?.generations[0]?.id).toBe('g1');
 	});
 
-	it('says the musician is offline, not the browser text, and clears it once back online', async () => {
+	it('keeps a live refresh that failed offline out of sight and brings the take in once back online', async () => {
 		vi.useFakeTimers();
 		let offline = true;
-		const { controller, sources, store } = setup({
+		const { controller, sources, store, upserted } = setup({
 			fetchSong: async (songId) => {
 				if (offline) throw offlineFailure(songId);
 				return song({ slug: 'track', title: 'Track', id: songId, generation_count: 0 });
@@ -853,24 +864,26 @@ describe('resource sync owner', () => {
 		await controller.waitForReady();
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		await flush();
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+		expect(get(store)).toMatchObject({ status: 'live', error: null });
 
 		offline = false;
 		window.dispatchEvent(new Event('online'));
 		await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
 		await flush();
 		expect(get(store)).toMatchObject({ status: 'live', error: null });
+		expect(upserted.at(-1)?.id).toBe('s1');
 	});
 
 	it.each([
-		['offline', (songId: string) => offlineFailure(songId)],
+		['offline', (songId: string) => offlineFailure(songId), 'live'],
 		[
 			'answered 503',
-			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`)
+			(songId: string) => new ApiError(503, 'Service Unavailable', `/api/songs/${songId}`),
+			'error'
 		]
-	])(
+	] as const)(
 		'retries a live refresh that failed %s on its own, and brings the take in within 10 s of the network returning without any browser event',
-		async (_kind, failure) => {
+		async (_kind, failure, statusDuringOutage) => {
 			vi.useFakeTimers();
 			let networkDown = true;
 			const { controller, sources, store, upserted } = setup({
@@ -884,10 +897,10 @@ describe('resource sync owner', () => {
 			await flush();
 			await controller.waitForReady();
 			await controller.requestSongRefresh('s1');
-			expect(get(store).status).toBe('error');
+			expect(get(store).status).toBe(statusDuringOutage);
 
 			await vi.advanceTimersByTimeAsync(60_000);
-			expect(get(store).status).toBe('error');
+			expect(get(store).status).toBe(statusDuringOutage);
 			networkDown = false;
 			await vi.advanceTimersByTimeAsync(10_000);
 
@@ -926,7 +939,7 @@ describe('resource sync owner', () => {
 		latestSource(sources).emit('generation.created', created('1', 'g1'));
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
-		expect(get(store)).toMatchObject({ status: 'error', error: RESOURCE_SYNC_OFFLINE_MESSAGE });
+		expect(get(store)).toMatchObject({ status: 'error', error: null, ready: false });
 
 		offline = false;
 		window.dispatchEvent(new Event('online'));
@@ -1053,21 +1066,6 @@ describe('resource sync owner', () => {
 		expect(await ready).toBe(false);
 		expect(get(store).status).toBe('error');
 		expect(get(store).ready).toBe(false);
-	});
-
-	it('persistent stream errors during bootstrap become a retryable error', async () => {
-		const { controller, sources, store } = setup();
-		controller.start();
-		const ready = controller.waitForReady();
-		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
-			latestSource(sources).error();
-			await flush();
-		}
-		expect(await ready).toBe(false);
-		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
-		expect(get(store).ready).toBe(false);
-		expect(sources[0].closed).toBe(true);
 	});
 
 	it('ignores a stale auth probe after a new hello starts a snapshot', async () => {
@@ -1261,6 +1259,134 @@ describe('resource sync owner', () => {
 
 		await vi.advanceTimersByTimeAsync(SSE_RECONNECT_BASE_DELAY_MS * SSE_RECONNECT_JITTER_RATIO + 1);
 		expect(sources).toHaveLength(beforeError + 1);
+	});
+
+	it.each([
+		['gets no answer', 'retryable', false],
+		['is answered', 'ok', true]
+	] as const)(
+		'reports whether the server can be reached when the probe after a dropped stream %s',
+		async (_case, probe, reachable) => {
+			const { controller, sources, reachability } = setup({ probeAuth: async () => probe });
+			controller.start();
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await controller.waitForReady();
+			reachability.splice(0);
+
+			latestSource(sources).error();
+			await flush();
+
+			expect(reachability).toEqual([reachable]);
+		}
+	);
+
+	it('reports the server reachable again once the reopened stream says hello', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+
+		expect(reachability.at(-1)).toBe(true);
+	});
+
+	it.each([
+		['gets no answer', 'retryable'],
+		['is answered', 'ok']
+	] as const)(
+		'keeps restarting, without a visible error, a first sync whose stream never opens while the probe %s, until it says hello',
+		async (_case, probe) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
+			controller.start();
+			const ready = controller.waitForReady();
+			for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
+				latestSource(sources).error();
+				await flush();
+			}
+			expect(await ready).toBe(false);
+			expect(get(store)).toMatchObject({ status: 'error', error: null, ready: false });
+			expect(sources[0].closed).toBe(true);
+			expect(reachability.at(-1)).toBe(false);
+			const sourcesWhenFailed = sources.length;
+
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(sourcesWhenFailed + 1);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+
+			expect(reachability.at(-1)).toBe(true);
+			expect(get(store).status).toBe('live');
+			controller.stop();
+		}
+	);
+
+	it.each([
+		['gets no answer', 'retryable'],
+		['is answered', 'ok']
+	] as const)(
+		'restarts, without a visible error, a first sync whose stream the browser closed for good while the probe %s',
+		async (_case, probe) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
+			controller.start();
+			latestSource(sources).failWithoutNativeRetry();
+			await flush();
+			expect(get(store).error).toBeNull();
+			expect(reachability.at(-1)).toBe(false);
+			const sourcesWhenClosed = sources.length;
+
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(sourcesWhenClosed + 1);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+
+			expect(reachability.at(-1)).toBe(true);
+			expect(get(store).status).toBe('live');
+			controller.stop();
+		}
+	);
+
+	it('reports the server unreachable while a dropped live stream keeps failing to reopen, though the probe is answered', async () => {
+		vi.useFakeTimers();
+		const { controller, sources, reachability } = setup();
+		controller.start();
+		latestSource(sources).emit('hello', { high_water_mark: '0' });
+		await flush();
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(true);
+
+		for (let reopen = 1; reopen <= 2; reopen++) {
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(1 + reopen);
+			latestSource(sources).failWithoutNativeRetry();
+			await flush();
+			expect(reachability.at(-1)).toBe(false);
+		}
+		controller.stop();
+	});
+
+	it('stops claiming the server is unreachable when the owner stops', async () => {
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		controller.start();
+		latestSource(sources).error();
+		await flush();
+		expect(reachability.at(-1)).toBe(false);
+
+		controller.stop();
+
+		expect(reachability.at(-1)).toBe(true);
 	});
 
 	it('reopens a dropped live stream at once when the network comes back, resuming after the last seen event', async () => {
@@ -1494,11 +1620,11 @@ describe('library resource sync wiring', () => {
 	});
 
 	it.each([
-		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE],
-		[500, 'reconnecting', null]
+		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE, false],
+		[500, 'reconnecting', null, true]
 	] as const)(
 		'handles a %s auth probe through the singleton owner',
-		async (status, syncStatus, error) => {
+		async (status, syncStatus, error, pageOffline) => {
 			vi.useFakeTimers();
 			vi.mocked(clearAuth).mockClear();
 			vi.mocked(goto).mockClear();
@@ -1520,6 +1646,7 @@ describe('library resource sync wiring', () => {
 			await flush();
 
 			expect(get(resourceSync)).toMatchObject({ status: syncStatus, error, ready: false });
+			expect(get(offline)).toBe(pageOffline);
 			expect(clearAuth).not.toHaveBeenCalled();
 			expect(goto).not.toHaveBeenCalled();
 			expect(MockEventSource.instances[0].closed).toBe(status === 403);
