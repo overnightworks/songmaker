@@ -102,9 +102,7 @@ export const TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET = 36;
 export const OFFLINE_FLOW_API_REQUEST_BUDGET = 30;
 
 const API_PATH_PREFIX = '/api';
-// How Chromium fails a request while `loseNetwork` holds the network away:
-// the flow drives that loss on purpose, so neither the failed request nor the
-// console line Chromium adds for it is a guard failure.
+// How Chromium fails a request while `loseNetwork` holds the network away.
 const NETWORK_LOST_ERROR = 'net::ERR_INTERNET_DISCONNECTED';
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
@@ -242,6 +240,10 @@ export async function boundingBoxes(...locators: Locator[]): Promise<RenderedBox
  */
 export interface FlowGuardOptions {
 	refusalsExpectedOn?: readonly string[];
+	// A flow that calls `loseNetwork` drives that loss on purpose, so neither
+	// the failed request nor the console line Chromium adds for it is a guard
+	// failure there — and stays one in every other flow.
+	losesNetworkOnPurpose?: boolean;
 }
 
 const REFUSED_STATUSES: readonly number[] = [401, 403, 429];
@@ -259,6 +261,7 @@ export class FlowGuard {
 
 	constructor(page: Page, options: FlowGuardOptions = {}) {
 		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
+		const losesNetworkOnPurpose = options.losesNetworkOnPurpose ?? false;
 		const refusalIsExpectedOn = (url: string): boolean =>
 			refusalsExpectedOn.includes(new URL(url).pathname);
 		page.on('request', (request) => {
@@ -273,7 +276,7 @@ export class FlowGuard {
 			if (errorText === 'net::ERR_ABORTED' && isClosedOnPurpose(request.url())) {
 				return;
 			}
-			if (errorText === NETWORK_LOST_ERROR) return;
+			if (losesNetworkOnPurpose && errorText === NETWORK_LOST_ERROR) return;
 			this.failures.push(`request failed: ${request.url()} (${errorText})`);
 		});
 		page.on('response', (response) => {
@@ -285,7 +288,7 @@ export class FlowGuard {
 		});
 		page.on('console', (message) => {
 			if (message.type() !== 'error') return;
-			if (message.text().includes(NETWORK_LOST_ERROR)) return;
+			if (losesNetworkOnPurpose && message.text().includes(NETWORK_LOST_ERROR)) return;
 			const reportsAnExpectedRefusal =
 				REFUSED_RESOURCE_CONSOLE_MESSAGE.test(message.text()) &&
 				refusalIsExpectedOn(message.location().url);

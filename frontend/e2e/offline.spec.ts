@@ -53,7 +53,7 @@ test.describe('losing the network on the phone', () => {
 		isMobile
 	}) => {
 		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const guard = new FlowGuard(page);
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		const library = readSeededLibrary();
 		const songTitle = `${OFFLINE_SONG_TITLE} ${runMarker()}`;
 		await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
