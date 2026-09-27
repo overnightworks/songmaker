@@ -1,6 +1,6 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { get, writable } from 'svelte/store';
+import { get, readonly, writable, type Readable, type Writable } from 'svelte/store';
 import { fetchAlbum } from '$lib/api/albums';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
@@ -14,9 +14,9 @@ import {
 	selectedSong,
 	selectSong as playerSelectSong,
 	clearGenerationSelection as playerClearGeneration,
-	closeNowPlaying,
 	ensureGenerationsLoaded,
-	nowPlayingIsPushedScreen
+	escapeNowPlaying,
+	nowPlayingFullChosen
 } from '$lib/stores/player';
 import {
 	deselectPlaylist as storeDeselectPlaylist,
@@ -25,7 +25,7 @@ import {
 	selectedPlaylist
 } from '$lib/stores/playlists';
 import { openCollection, setOpenCollection, type OpenCollection } from '$lib/stores/collection';
-import { closeSidebar } from '$lib/stores/ui';
+import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
 import {
@@ -242,7 +242,10 @@ export async function openPlaylist(playlistId: string): Promise<void> {
 
 // The rail search has one selected result and therefore one destination. Its
 // data owner only describes that destination; this navigation owner performs
-// the transition and closes the compact drawer on every successful choice.
+// the transition and closes the compact drawer on every successful choice. A
+// page outside the library takes the drawer's own history entry when it has
+// one, and the drawer closes only once the page is reached: closing first
+// would step back off that entry while the navigation is still under way.
 export async function openRailSearchTarget(target: RailSearchTarget): Promise<void> {
 	if (target.kind === 'album') {
 		await openAlbum(target.id);
@@ -260,8 +263,8 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openLibraryWall();
 		return;
 	}
+	await goto(resolve(target.href), { replaceState: get(railDrawerLayered) });
 	closeSidebar();
-	await goto(resolve(target.href));
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb
@@ -568,18 +571,28 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
-// History layers (issue #1002): an overlay that is a pushed screen on the
-// phone owns one history entry on top of the library it covers, at the same
-// address. The phone's Back then closes the topmost layer and leaves that
-// library exactly as it was -- no workspace re-apply, no dirty-draft save --
-// instead of applying whatever entry sits below it while the overlay stays
-// on top. The entry is a copy of that library marked with the layer's id,
-// and replace writes keep the mark (libraryContext.ts). An overlay registers
-// when it opens and unregisters when it closes any other way (×, Done,
-// Escape, a surface change); unregistering steps back off its entry, so no
-// stale copy of the library is left for Back to land on. The full Now
-// Playing surface is the first registrant.
+// History layers (issues #1002, #1114): an open overlay owns one history
+// entry on top of the library it covers, at the same address. Back then closes
+// the topmost layer and leaves that library exactly as it was -- no workspace
+// re-apply, no dirty-draft save -- instead of applying whatever entry sits
+// below it while the overlay stays on top. The entry is a copy of that library
+// marked with the layer's id, and replace writes keep the mark
+// (libraryContext.ts). An overlay registers when it opens and unregisters when
+// it closes any other way (×, Done, Escape, a surface change); unregistering
+// steps back off its entry, so no stale copy of the library is left for Back to
+// land on. A navigation off the library that replaces the layer's entry
+// instead (a link inside the rail drawer) leaves nothing to step back off, and
+// stepping back would pop the page it went to.
+//
+// Only a running library (initNavigation) has entries to layer; anywhere else
+// -- /settings, say -- registering answers "not layered" and the overlay stays
+// a plain one there.
+type HistoryLayerRegistration = { layered: true; leave: () => void } | { layered: false };
+
+const NOT_LAYERED: HistoryLayerRegistration = { layered: false };
+
 interface HistoryLayer {
+	id: string;
 	close: () => void;
 	base: LibraryHistoryState;
 }
@@ -588,18 +601,22 @@ const historyLayers: HistoryLayer[] = [];
 // Step-backs issued here rather than by the browser: their popstates land on
 // an entry whose library is already showing, so they apply nothing.
 let ownLayerStepBacks = 0;
+let libraryHistoryRunning = false;
 
-function registerHistoryLayer(id: string, close: () => void): () => void {
+// `close` must end in the overlay calling its own `leave` synchronously: a
+// navigation straight after the close (a row tap in the drawer) then writes
+// its entry behind the step back off the layer's entry, not under it.
+export function registerHistoryLayer(id: string, close: () => void): HistoryLayerRegistration {
 	const base = currentLibraryHistoryState();
-	if (!isLibraryHistoryState(base)) return () => undefined;
-	const layer: HistoryLayer = { close, base };
+	if (!libraryHistoryRunning || !isLibraryHistoryState(base)) return NOT_LAYERED;
+	const layer: HistoryLayer = { id, close, base };
 	historyLayers.push(layer);
 	void writeLibraryHistory(
 		{ ...base, index: base.index + 1, layer: id },
 		urlFromState(base),
 		'push'
 	);
-	return () => unregisterHistoryLayer(layer);
+	return { layered: true, leave: () => unregisterHistoryLayer(layer) };
 }
 
 // A layer closed from below the top takes the layers above it along.
@@ -608,8 +625,13 @@ function unregisterHistoryLayer(layer: HistoryLayer): void {
 	if (depth === -1) return;
 	for (const leaving of historyLayers.splice(depth).reverse()) {
 		if (leaving !== layer) leaving.close();
-		stepBackOnto(leaving.base);
+		if (ownsTopEntry(leaving)) stepBackOnto(leaving.base);
 	}
+}
+
+function ownsTopEntry(layer: HistoryLayer): boolean {
+	const top = currentLibraryHistoryState();
+	return isLibraryHistoryState(top) && top.layer === layer.id && top.index === layer.base.index + 1;
 }
 
 function stepBackOnto(landing: LibraryHistoryState): void {
@@ -657,18 +679,41 @@ function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	return { ...state, index: state.index - 1, layer: undefined };
 }
 
-const NOW_PLAYING_LAYER = 'now-playing';
-let leaveNowPlayingLayer: (() => void) | null = null;
-
-function followNowPlayingScreen(pushed: boolean): void {
-	if (pushed && !leaveNowPlayingLayer) {
-		leaveNowPlayingLayer = registerHistoryLayer(NOW_PLAYING_LAYER, closeNowPlaying);
-	} else if (!pushed && leaveNowPlayingLayer) {
-		const leave = leaveNowPlayingLayer;
-		leaveNowPlayingLayer = null;
-		leave();
-	}
+// An overlay whose open state is a store is followed from here, never from a
+// component effect: the store's own close then unregisters in the same
+// synchronous step Back relies on.
+function followAsHistoryLayer(
+	id: string,
+	shown: Readable<boolean>,
+	close: () => void,
+	layered?: Writable<boolean>
+): () => void {
+	let registration: HistoryLayerRegistration | null = null;
+	const stopFollowing = shown.subscribe((isShown) => {
+		if (isShown === (registration !== null)) return;
+		if (isShown) {
+			registration = registerHistoryLayer(id, close);
+		} else {
+			const leaving = registration;
+			registration = null;
+			if (leaving?.layered) leaving.leave();
+		}
+		layered?.set(registration?.layered ?? false);
+	});
+	return () => {
+		stopFollowing();
+		layered?.set(false);
+	};
 }
+
+const NOW_PLAYING_LAYER = 'now-playing';
+const RAIL_DRAWER_LAYER = 'rail-drawer';
+
+// Whether the open rail drawer owns a history entry. A link inside it then
+// replaces that entry (RailDrawer.svelte), so Back from where it leads returns
+// to the page the drawer was opened over.
+const railDrawerLayered = writable(false);
+export const railDrawerIsLayer = readonly(railDrawerLayered);
 
 // A cold tab's history.state carries no LibraryHistoryState until something
 // writes one -- this seeds a fresh root entry for that case, but only on a
@@ -721,18 +766,38 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	const stopFollowingNowPlaying = nowPlayingIsPushedScreen.subscribe(followNowPlayingScreen);
+	libraryHistoryRunning = true;
+	const stopFollowingNowPlaying = followAsHistoryLayer(
+		NOW_PLAYING_LAYER,
+		nowPlayingFullChosen,
+		escapeNowPlaying
+	);
+	const stopFollowingRailDrawer = followAsHistoryLayer(
+		RAIL_DRAWER_LAYER,
+		sidebarOpen,
+		closeSidebar,
+		railDrawerLayered
+	);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		stopFollowingNowPlaying();
+		stopFollowingRailDrawer();
+		forgetHistoryLayers();
 	};
+}
+
+// Leaving the library leaves its layer entries to the history below: nothing
+// is listening for their popstates any more.
+function forgetHistoryLayers(): void {
+	libraryHistoryRunning = false;
+	historyLayers.length = 0;
+	ownLayerStepBacks = 0;
 }
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
-	historyLayers.length = 0;
-	ownLayerStepBacks = 0;
-	leaveNowPlayingLayer = null;
+	forgetHistoryLayers();
+	railDrawerLayered.set(false);
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
 	addressedSong = null;

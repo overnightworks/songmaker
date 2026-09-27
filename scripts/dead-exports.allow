@@ -39,3 +39,6 @@ frontend/src/lib/stores/shares.ts:refreshShareCount # #928 C / finding 1: shares
 frontend/src/lib/stores/shares.ts:loadShareInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:loadMoreShares # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/shares.ts:setShareTypeFilter # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
+
+# The history layer stack (#1114 B4) is a public owner before its outside registrants land.
+frontend/src/lib/stores/navigation.ts:registerHistoryLayer # #1114 B4: the one registration call; dialogs and menus register through it in #1006 S2/S3.
