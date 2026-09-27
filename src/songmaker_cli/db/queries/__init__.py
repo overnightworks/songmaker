@@ -280,6 +280,7 @@ from songmaker_cli.db.queries.playlists import (
 from songmaker_cli.db.queries.playlists import get_playlist as get_playlist
 from songmaker_cli.db.queries.playlists import get_playlist_by_slug as get_playlist_by_slug
 from songmaker_cli.db.queries.playlists import list_playlists as list_playlists
+from songmaker_cli.db.queries.playlists import playlist_holds_song as playlist_holds_song
 from songmaker_cli.db.queries.playlists import remove_from_playlist as remove_from_playlist
 from songmaker_cli.db.queries.playlists import (
     reorder_playlist_entry as reorder_playlist_entry,

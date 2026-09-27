@@ -571,6 +571,12 @@ class SongMoveRequest(BaseModel):
     album_id: str = Field(max_length=64)
 
 
+class SongListenRequest(BaseModel):
+    """The playlist a listen was started from; a listen from anywhere else names none."""
+
+    playlist_id: str | None = Field(default=None, min_length=1, max_length=36)
+
+
 class TitleUpdateRequest(BaseModel):
     title: str = Field(min_length=1, max_length=200)
 

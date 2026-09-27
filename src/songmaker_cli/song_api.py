@@ -13,6 +13,7 @@ from webauth.dependencies import AuthenticatedUser
 from songmaker_cli.api_helpers import (
     Pagination,
     check_album_access,
+    check_own_playlist_access,
     check_song_access,
     check_song_access_including_deleted,
     cleanup_generation_files,
@@ -38,6 +39,7 @@ from songmaker_cli.api_models import (
     VersionResponse,
 )
 from songmaker_cli.api_models.generation_params import BaseGenerationParams
+from songmaker_cli.api_models.songs import SongListenRequest
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -76,7 +78,7 @@ from songmaker_cli.db.queries import (
     soft_delete_song,
     update_song,
 )
-from songmaker_cli.db.queries.playlists import best_playable_generation
+from songmaker_cli.db.queries.playlists import best_playable_generation, playlist_holds_song
 from songmaker_cli.reference_audio import (
     ReferenceAudioRejected,
     resolve_owned_reference_audio,
@@ -307,17 +309,26 @@ def api_restore_song(
 
 @router.post(
     "/songs/{song_id}/listen",
-    responses={422: {"description": "Song has no playable take"}},
+    responses={
+        404: {"description": "Song not found, or playlist not found or not the caller's"},
+        422: {"description": "Song has no playable take, or the playlist does not hold it"},
+    },
 )
 def api_record_song_listen(
     song_id: str,
+    req: SongListenRequest | None = None,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> StatusResponse:
     song = check_song_access(session, song_id, user)
     if best_playable_generation(song) is None:
         raise HTTPException(422, "Song is not playable")
-    record_song_listen(session, song)
+    playlist = None
+    if req is not None and req.playlist_id is not None:
+        playlist = check_own_playlist_access(session, req.playlist_id, user)
+        if not playlist_holds_song(session, playlist, song):
+            raise HTTPException(422, "Playlist does not hold this song")
+    record_song_listen(session, song, playlist=playlist)
     session.commit()
     return StatusResponse()
 
