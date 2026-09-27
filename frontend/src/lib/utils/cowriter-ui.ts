@@ -98,7 +98,7 @@ function conversationDayLabel(createdAt: string, now: Date): string {
 }
 
 /** A live conversation nobody has written in yet; the line and its menu row both ask this. */
-export function isNewConversation(
+function isNewConversation(
 	conversation: ConversationItem | undefined,
 	chatHasMessages = false
 ): boolean {
