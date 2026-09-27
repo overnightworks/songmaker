@@ -1,0 +1,8 @@
+claim_id = "3b602b36984a499686e208d53753e8ad"
+agent = "claude-head"
+role = "builder"
+base = "faa8e23eefc103882610ea8b0a2c2d43a1fc37ca"
+branch = "claude/issue-1077-continue-fresh"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/library-continue.spec.ts", "frontend/src/lib/components/LibraryContinue.svelte", "frontend/src/lib/components/LibraryContinue.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "7d5f66b99cbf31c178cc198790c51c401320eee1"
+whole_reason = "Continue's fetch owner and the stale cache resets across four stores, with tests and specs"
