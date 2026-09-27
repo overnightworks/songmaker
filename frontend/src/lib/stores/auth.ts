@@ -1,6 +1,8 @@
 import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
+import { NetworkError } from '$lib/api/fetch';
+import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
@@ -16,15 +18,20 @@ export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
-type AuthFailureKind = 'unauthorized' | 'disabled' | 'retryable';
-type AuthNotice = Exclude<AuthFailureKind, 'retryable'>;
+type AuthNotice = 'unauthorized' | 'disabled';
+// `unreachable`: the server could not be reached at all, so the connectivity
+// owner says "offline". `retryable`: it answered, but not with the user
+// (a rate limit, a server error) -- worth another try, not offline (#1099).
+export type AuthFailureKind = AuthNotice | 'unreachable' | 'retryable';
 
 export const authNotice = writable<AuthNotice | null>(null);
 
 export function classifyAuthFailure(error: unknown): AuthFailureKind {
+	if (error instanceof NetworkError) return 'unreachable';
 	if (!(error instanceof ApiError)) return 'retryable';
 	if (error.status === 401) return 'unauthorized';
 	if (error.status === 403) return 'disabled';
+	if (SERVER_UNREACHABLE_STATUSES.has(error.status)) return 'unreachable';
 	return 'retryable';
 }
 
@@ -48,7 +55,7 @@ export async function checkAuth(): Promise<AuthUser | null> {
 		return user;
 	} catch (err) {
 		const failure = classifyAuthFailure(err);
-		if (failure !== 'retryable') {
+		if (failure === 'unauthorized' || failure === 'disabled') {
 			authCheckError.set(null);
 			authNotice.set(failure);
 			currentUser.set(null);

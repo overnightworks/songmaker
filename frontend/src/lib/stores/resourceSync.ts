@@ -18,8 +18,11 @@ import {
 	RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT,
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_ERROR,
+	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
-	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS
+	RATE_LIMITED_STATUS,
+	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	SERVER_ERROR_STATUS_FLOOR
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
@@ -32,23 +35,33 @@ import {
 } from '$lib/stores/librarySearch';
 import { cancelAlbumSongLoads } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
-import { classifyAuthFailure } from '$lib/stores/auth';
+import { classifyAuthFailure, type AuthFailureKind } from '$lib/stores/auth';
 import { reportResourceStreamReachable } from '$lib/stores/connectivity';
-import { nextReconnectDelayMs, watchReconnectOpportunities } from '$lib/stores/sseReconnect';
+import {
+	ImmediateReopenGap,
+	nextReconnectDelayMs,
+	watchReconnectOpportunities
+} from '$lib/stores/sseReconnect';
 
 // The browser only sends `Last-Event-ID` on its own native retry; the owner
 // reopens a dropped stream itself (see `scheduleReconnect`), so it hands the
 // server that cursor as a query parameter instead (#1020).
 const RESOURCE_EVENT_RESUME_QUERY = 'last_event_id';
+const MS_PER_SECOND = 1000;
 
 type ResourceSyncStatus =
 	'disconnected' | 'connecting' | 'bootstrapping' | 'live' | 'reconnecting' | 'error';
 
-type ResourceAuthProbe = 'ok' | 'unauthorized' | 'disabled' | 'retryable';
+type ResourceAuthProbe = 'ok' | AuthFailureKind;
 
-// A song refresh fails either because the network did not carry it -- the
-// offline strip says that, not this owner -- or with a failure worth showing.
-type SongRefreshFailure = 'network' | 'shown';
+// Why a song refresh failed decides whether it is shown and whether it is
+// fetched again on its own (#1099): the network did not carry it (the
+// offline strip says that, not this owner), or the server failed or
+// rate-limited it (a 5xx or a 429) -- all of these pass by themselves, so
+// they retry until the take lands -- or the server refused it (any other
+// 4xx), which another automatic try would only repeat, so it is shown once
+// and waits for the musician's Retry.
+type SongRefreshFailure = 'network' | 'transient' | 'refused';
 
 interface ResourceSyncState {
 	status: ResourceSyncStatus;
@@ -107,6 +120,7 @@ export class ResourceSyncController {
 	private readonly pendingSongIds = new Set<string>();
 	private readonly refreshesAwaitingBootstrap = new Set<string>();
 	private readonly failedSongs = new Map<string, SongRefreshFailure>();
+	private readonly songFetchNotBefore = new Map<string, number>();
 	private readonly queuedGenerationIds = new Set<string>();
 	private readonly seenGenerationIds = new Set<string>();
 	private readonly songRevisions = new Map<string, number>();
@@ -121,8 +135,13 @@ export class ResourceSyncController {
 	private probeGeneration = 0;
 	private reconnectAttempt = 0;
 	private streamGreeted = false;
+	private serverReachable = true;
+	private returnProbeTimer: ReturnType<typeof setTimeout> | null = null;
+	private latestReturnProbeId = 0;
+	private readonly reopenGap = new ImmediateReopenGap();
 	private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 	private failedSongRetryTimer: ReturnType<typeof setTimeout> | null = null;
+	private failedSongRetryDueAt = 0;
 	private failedSongRetryAttempt = 0;
 
 	constructor(
@@ -163,6 +182,7 @@ export class ResourceSyncController {
 	}
 
 	async retry(): Promise<boolean> {
+		const shownError = this.state.error;
 		this.store.update((state) => ({ ...state, error: null }));
 		// A retry after teardown (an 'unauthorized' or 'disabled' probe result)
 		// finds the owner stopped: start() alone opens the one EventSource it
@@ -176,11 +196,15 @@ export class ResourceSyncController {
 			this.restartConnection();
 			return this.waitForReady();
 		}
-		this.requeueFailedSongs(this.deps.listPrioritySongIds());
-		this.failedSongs.clear();
+		this.requeueSongs([...this.failedSongs.keys(), ...this.deps.listPrioritySongIds()]);
+		this.forgetFailuresFetchableNow();
 		await this.flushPending(this.epoch);
 		if (!this.started) return false;
 		if (this.state.error) return false;
+		if (this.hasShownSongFailure()) {
+			this.setVisibleError(shownError || RESOURCE_SYNC_ERROR);
+			return false;
+		}
 		this.setStatus('live');
 		return true;
 	}
@@ -203,7 +227,7 @@ export class ResourceSyncController {
 	async handleVisibility(): Promise<void> {
 		if (!this.started || !this.syncedOnce) return;
 		if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-		this.requeueFailedSongs(this.deps.listPrioritySongIds());
+		this.requeueSongs([...this.selfHealingFailedSongIds(), ...this.deps.listPrioritySongIds()]);
 		if (this.pendingSongIds.size === 0) return;
 		await this.flushPending(this.epoch);
 	}
@@ -302,7 +326,7 @@ export class ResourceSyncController {
 		this.songRevisions.clear();
 		this.refreshesAwaitingBootstrap.clear();
 		this.flushing = null;
-		this.deps.reportStreamReachable(true);
+		this.reportReachable(true);
 		if (options.resetStore) this.store.set({ ...INITIAL });
 		this.resolveReady(false);
 	}
@@ -316,6 +340,7 @@ export class ResourceSyncController {
 		this.lastEventId = null;
 		this.pendingSongIds.clear();
 		this.failedSongs.clear();
+		this.songFetchNotBefore.clear();
 		this.clearFailedSongRetry();
 		this.queuedGenerationIds.clear();
 	}
@@ -347,7 +372,7 @@ export class ResourceSyncController {
 		}
 		this.reconnectAttempt = 0;
 		this.streamGreeted = true;
-		this.deps.reportStreamReachable(true);
+		this.reportReachable(true);
 		this.rememberEventId(event);
 		this.store.update((state) => ({ ...state, highWaterMark: hello.high_water_mark }));
 		this.invalidateInflightProbes();
@@ -395,10 +420,10 @@ export class ResourceSyncController {
 	}
 
 	/**
-	 * A stream that fails before it says hello did not open: the server cannot
-	 * be reached, whatever the auth probe answers, and the offline strip says so
-	 * while the stream keeps retrying. A stream that drops after its hello is
-	 * only unreachable once the probe gets no answer or its reopen fails too.
+	 * A stream failure carries no status, so the auth probe decides what it
+	 * means: only a probe the server never answered reads as offline (#1099).
+	 * A stream that failed before its hello is still worth another try
+	 * whatever the probe answers -- the server may just be coming back.
 	 */
 	private async handleStreamError(): Promise<void> {
 		if (!this.started) return;
@@ -424,15 +449,14 @@ export class ResourceSyncController {
 			await this.deps.onUnauthorized();
 			return;
 		}
-		const serverUnreachable = failedToOpen || result === 'retryable';
-		this.deps.reportStreamReachable(!serverUnreachable);
+		this.reportReachable(result !== 'unreachable');
 		if (!this.syncedOnce) {
 			this.bootstrapErrors += 1;
 			// A non-200 answer (the edge's 5xx while the server restarts) closes the
 			// source for good: the browser will not retry it, so this attempt is over.
 			const browserGaveUp = source?.readyState === EVENT_SOURCE_CLOSED;
 			if (browserGaveUp || this.bootstrapErrors >= RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT) {
-				if (!serverUnreachable) {
+				if (!failedToOpen && result === 'ok') {
 					this.failBootstrap(RESOURCE_SYNC_ERROR);
 					return;
 				}
@@ -449,9 +473,59 @@ export class ResourceSyncController {
 		this.scheduleReconnect(() => this.openSource());
 	}
 
+	/**
+	 * While the server cannot be reached, the stream's own backoff would keep
+	 * the offline strip up for up to ten seconds after the server is back, so
+	 * the auth probe asks once per interval instead: its first answer clears
+	 * the strip and reopens the stream at once, within the stream's reopen gap
+	 * (#1099).
+	 */
+	private reportReachable(reachable: boolean): void {
+		this.serverReachable = reachable;
+		this.deps.reportStreamReachable(reachable);
+		if (reachable) this.stopReturnProbe();
+		else this.scheduleReturnProbe();
+	}
+
+	private scheduleReturnProbe(): void {
+		if (!this.started || this.returnProbeTimer !== null) return;
+		this.returnProbeTimer = setTimeout(() => {
+			this.returnProbeTimer = null;
+			void this.probeForReturn();
+		}, RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS);
+	}
+
+	/**
+	 * Only the newest return probe may speak: a slow older one answering 'ok'
+	 * after a newer one found the server gone again would otherwise clear the
+	 * strip and reopen the stream on stale news. A stream failure's own probe
+	 * outranks every return probe already in flight (`probeGeneration`).
+	 */
+	private async probeForReturn(): Promise<void> {
+		const returnProbeId = ++this.latestReturnProbeId;
+		const probeGeneration = this.probeGeneration;
+		const result = await this.deps.probeAuth();
+		if (!this.started || this.serverReachable) return;
+		if (returnProbeId !== this.latestReturnProbeId || probeGeneration !== this.probeGeneration) {
+			return;
+		}
+		if (result === 'unreachable') {
+			this.scheduleReturnProbe();
+			return;
+		}
+		this.reportReachable(true);
+		this.onReconnectOpportunity();
+	}
+
+	private stopReturnProbe(): void {
+		if (this.returnProbeTimer === null) return;
+		clearTimeout(this.returnProbeTimer);
+		this.returnProbeTimer = null;
+	}
+
 	private async recoverLiveConnection(): Promise<void> {
 		this.promoteDeferredSongs();
-		this.requeueFailedSongs();
+		this.requeueSongs(this.selfHealingFailedSongIds());
 		if (this.pendingSongIds.size > 0) {
 			await this.flushPending(this.epoch);
 		}
@@ -597,10 +671,19 @@ export class ResourceSyncController {
 		}
 	}
 
+	/**
+	 * The one place a song is fetched, so the one place a rate limit is
+	 * honoured (#1099): a song still inside its `Retry-After` is dropped from
+	 * the queue whichever path queued it -- focus, the stream's hello, a job's
+	 * refresh, Retry -- and stays failed, and the retry timer fetches it once
+	 * that deadline has passed.
+	 */
 	private async drainPending(epoch: number): Promise<void> {
 		while (this.isCurrentEpoch(epoch) && this.pendingSongIds.size > 0) {
-			const songIds = [...this.pendingSongIds];
+			const queued = [...this.pendingSongIds];
 			this.pendingSongIds.clear();
+			const songIds = queued.filter((songId) => this.isFetchableNow(songId));
+			this.retryWhenFetchable(queued.filter((songId) => !this.isFetchableNow(songId)));
 			await runLimited(songIds, RESOURCE_SYNC_FETCH_CONCURRENCY, (songId) =>
 				this.fetchAndApply(songId, epoch)
 			);
@@ -628,19 +711,54 @@ export class ResourceSyncController {
 				this.clearLiveErrorIfHealed();
 				return;
 			}
-			this.failedSongs.set(songId, err instanceof NetworkError ? 'network' : 'shown');
+			const failure = classifySongRefreshFailure(err);
+			const waitMs = retryAfterMs(err);
+			this.failedSongs.set(songId, failure);
+			this.holdFetchFor(songId, waitMs);
 			this.showFailure(err);
-			this.scheduleFailedSongRetry();
+			if (failure !== 'refused') this.scheduleFailedSongRetry(waitMs);
+		}
+	}
+
+	private holdFetchFor(songId: string, waitMs: number): void {
+		if (waitMs > 0) this.songFetchNotBefore.set(songId, Date.now() + waitMs);
+		else this.songFetchNotBefore.delete(songId);
+	}
+
+	private isFetchableNow(songId: string): boolean {
+		return Date.now() >= (this.songFetchNotBefore.get(songId) ?? 0);
+	}
+
+	private retryWhenFetchable(heldSongIds: readonly string[]): void {
+		const selfHealing = heldSongIds.filter((songId) => this.failedSongs.get(songId) !== 'refused');
+		if (selfHealing.length === 0) return;
+		const latestDeadline = Math.max(
+			...selfHealing.map((id) => this.songFetchNotBefore.get(id) ?? 0)
+		);
+		this.scheduleFailedSongRetry(latestDeadline - Date.now());
+	}
+
+	/** Retry clears every failure it fetches again; a song still waiting out its rate limit stays failed. */
+	private forgetFailuresFetchableNow(): void {
+		for (const songId of [...this.failedSongs.keys()]) {
+			if (this.isFetchableNow(songId)) this.failedSongs.delete(songId);
 		}
 	}
 
 	private forgetFailedSong(songId: string): void {
 		this.failedSongs.delete(songId);
-		if (this.failedSongs.size === 0) this.failedSongRetryAttempt = 0;
+		this.songFetchNotBefore.delete(songId);
+		if (this.selfHealingFailedSongIds().length === 0) this.failedSongRetryAttempt = 0;
+	}
+
+	private selfHealingFailedSongIds(): string[] {
+		return [...this.failedSongs]
+			.filter(([, failure]) => failure !== 'refused')
+			.map(([songId]) => songId);
 	}
 
 	private hasShownSongFailure(): boolean {
-		return [...this.failedSongs.values()].includes('shown');
+		return [...this.failedSongs.values()].some((failure) => failure !== 'network');
 	}
 
 	/** The bootstrap's own words for failed songs; a network failure has none. */
@@ -651,28 +769,39 @@ export class ResourceSyncController {
 	/**
 	 * A song refresh that failed while the stream stays up has no stream
 	 * drop to piggyback on, and a network that returns without an `online`
-	 * event fires nothing either, so the failed songs retry on the stream's
-	 * own capped backoff until they land (#1032).
+	 * event fires nothing either, so the failed songs that heal by themselves
+	 * retry on the stream's own capped backoff until they land (#1032), and
+	 * never before a rate limit's `Retry-After` has passed (#1099).
 	 */
-	private scheduleFailedSongRetry(): void {
-		if (this.failedSongRetryTimer !== null) return;
-		this.failedSongRetryAttempt += 1;
+	private scheduleFailedSongRetry(retryAfterMs: number): void {
+		if (this.failedSongRetryTimer === null) {
+			this.failedSongRetryAttempt += 1;
+			const backoffMs = nextReconnectDelayMs(this.failedSongRetryAttempt);
+			this.startFailedSongRetryTimer(Math.max(backoffMs, retryAfterMs));
+			return;
+		}
+		if (Date.now() + retryAfterMs <= this.failedSongRetryDueAt) return;
+		clearTimeout(this.failedSongRetryTimer);
+		this.startFailedSongRetryTimer(retryAfterMs);
+	}
+
+	private startFailedSongRetryTimer(delayMs: number): void {
+		this.failedSongRetryDueAt = Date.now() + delayMs;
 		this.failedSongRetryTimer = setTimeout(() => {
 			this.failedSongRetryTimer = null;
 			void this.retryFailedSongs();
-		}, nextReconnectDelayMs(this.failedSongRetryAttempt));
+		}, delayMs);
 	}
 
 	private async retryFailedSongs(): Promise<void> {
-		if (!this.canFlush() || this.failedSongs.size === 0) return;
-		this.requeueFailedSongs();
+		const songIds = this.selfHealingFailedSongIds();
+		if (!this.canFlush() || songIds.length === 0) return;
+		this.requeueSongs(songIds);
 		await this.flushPending(this.epoch);
 	}
 
-	private requeueFailedSongs(extraIds: readonly string[] = []): void {
-		for (const songId of new Set([...this.failedSongs.keys(), ...extraIds])) {
-			this.invalidateSong(songId);
-		}
+	private requeueSongs(songIds: readonly string[]): void {
+		for (const songId of new Set(songIds)) this.invalidateSong(songId);
 	}
 
 	private clearFailedSongRetry(): void {
@@ -759,12 +888,18 @@ export class ResourceSyncController {
 		for (const waiter of waiters) waiter(ok);
 	}
 
+	/**
+	 * Only a reopen of a stream that waits out its backoff is spaced by the
+	 * reopen gap (#1099): the revalidation is debounced on its own, and a first
+	 * sync that failed with a visible error has no backoff to fall back on, so
+	 * dropping its restart would leave it waiting for Retry.
+	 */
 	private readonly onReconnectOpportunity = (): void => {
 		if (this.bootstrapFailed()) {
-			this.restartConnection();
+			this.restartFailedBootstrap();
 			return;
 		}
-		this.reconnectNowIfWaiting();
+		this.reopenWaitingStreamSpaced(() => this.reopenLiveStreamNow());
 		this.scheduleRevalidation();
 	};
 
@@ -772,8 +907,20 @@ export class ResourceSyncController {
 		return !this.syncedOnce && this.state.status === 'error';
 	}
 
-	private reconnectNowIfWaiting(): void {
-		if (this.reconnectTimer === null) return;
+	private restartFailedBootstrap(): void {
+		if (this.isWaitingToReconnect()) this.reopenWaitingStreamSpaced(() => this.restartConnection());
+		else this.restartConnection();
+	}
+
+	private isWaitingToReconnect(): boolean {
+		return this.reconnectTimer !== null;
+	}
+
+	private reopenWaitingStreamSpaced(reopen: () => void): void {
+		if (this.isWaitingToReconnect()) this.reopenGap.run(reopen);
+	}
+
+	private reopenLiveStreamNow(): void {
 		this.clearReconnectTimer();
 		this.openSource();
 	}
@@ -845,13 +992,26 @@ function visibleErrorMessage(err: unknown): string | null {
 	return RESOURCE_SYNC_ERROR;
 }
 
+function classifySongRefreshFailure(err: unknown): SongRefreshFailure {
+	if (err instanceof NetworkError) return 'network';
+	if (!(err instanceof ApiError)) return 'refused';
+	if (err.status >= SERVER_ERROR_STATUS_FLOOR || err.status === RATE_LIMITED_STATUS) {
+		return 'transient';
+	}
+	return 'refused';
+}
+
+function retryAfterMs(err: unknown): number {
+	if (!(err instanceof ApiError) || err.retryAfterSeconds === null) return 0;
+	return err.retryAfterSeconds * MS_PER_SECOND;
+}
+
 async function probeResourceAuth(): Promise<ResourceAuthProbe> {
 	try {
 		await fetchMe();
 		return 'ok';
 	} catch (err) {
-		const failure = classifyAuthFailure(err);
-		return failure === 'retryable' ? 'retryable' : failure;
+		return classifyAuthFailure(err);
 	}
 }
 
