@@ -1,8 +1,0 @@
-claim_id = "b7e578f934d44190b7b95dc8e019ae94"
-agent = "claude-head"
-role = "builder"
-base = "438620ab47e70fdb7a4194f9e4821b2c1f4ce468"
-branch = "claude/issue-1110-offline-take-actions"
-scope = ["docs/design/song-page-phone.html", "docs/design/vocabulary.html", "frontend/src/lib/components/EditableTitle.svelte", "frontend/src/lib/components/EditableTitle.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/takeActions.test.ts", "frontend/src/lib/stores/takeActions.ts"]
-opened_commit = "f1775653b8e04883ef07ade4f37ff939a499661d"
-whole_reason = "take-row actions' failure wording, the double rename toast, and the frozen cancel wording"
