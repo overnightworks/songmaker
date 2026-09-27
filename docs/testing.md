@@ -271,7 +271,9 @@ request budget per shell.
   network does) and refuses every reopen of the resource stream until the
   network returns. Such a flow builds its `FlowGuard` with
   `losesNetworkOnPurpose`, so that guard does not count a request failed with
-  `net::ERR_INTERNET_DISCONNECTED`; every other flow still fails on one.
+  `net::ERR_INTERNET_DISCONNECTED`, nor a load `window.stop()` ended in flight
+  (`net::ERR_ABORTED` while the network is away); every other flow still fails
+  on one.
 
 `frontend/e2e/README.md` has the exact commands, the audio fixture, and the
 budget rule.
