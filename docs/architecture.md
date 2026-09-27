@@ -498,7 +498,7 @@ stops the music**: the take a row stands for is left running and a paused one
 resumes where it stands, so clicking the row that is already loaded only brings
 up the panel, or on the playlist page resumes it. Pausing belongs to the
 transport and to the play face a take keeps of its own (#914 L8) — on an editor
-take row and on the Co-Writer `TakeStrip`'s chip, both `playTake`, which plays
+take row and on the Co-writer `TakeStrip`'s chip, both `playTake`, which plays
 or pauses that take without ever opening Now Playing.
 The docked panel is what makes the rule affordable on desktop — the take is
 judged beside the playlist rather than over it; below the dock threshold Now
