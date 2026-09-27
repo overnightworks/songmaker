@@ -93,7 +93,6 @@ async function render(overrides: Partial<Record<string, unknown>> = {}) {
 		coWriterOpen: false,
 		compact: false,
 		cowriterPanel: makeCowriterPanel(testSong),
-		onopencowriter: vi.fn(),
 		...overrides
 	};
 	mounted.push(mount(WriteColumn, { target, props }));
@@ -115,23 +114,18 @@ describe('WriteColumn write mode', () => {
 		expect(get(editLyrics)).toBe('verse two');
 	});
 
-	it('has no Co-Writer row on desktop', async () => {
-		const { target } = await render({ compact: false });
-		expect(target.querySelector('.cowriter-row')).toBeNull();
-	});
+	it.each([false, true])(
+		'leaves the co-writer to its own tab and toggle (compact: %s)',
+		async (compact) => {
+			const { target } = await render({ compact });
+			const buttonTexts = Array.from(target.querySelectorAll('button'), (b) => b.textContent);
+			expect(buttonTexts.some((text) => text?.includes(EDITOR_VIEW_COWRITER_LABEL))).toBe(false);
+		}
+	);
 
 	it('leaves takes to the Takes tab in compact Write mode', async () => {
 		const { target } = await render({ compact: true });
 		expect(target.querySelector('.take-strip')).toBeNull();
-	});
-
-	it('opens the co-writer from the compact "Co-Writer" row', async () => {
-		const onopencowriter = vi.fn();
-		const { target } = await render({ compact: true, onopencowriter });
-		const row = target.querySelector<HTMLButtonElement>('.cowriter-row');
-		expect(row?.textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
-		row?.click();
-		expect(onopencowriter).toHaveBeenCalledOnce();
 	});
 
 	// L9: the compact page is the one scroll surface, so a field that

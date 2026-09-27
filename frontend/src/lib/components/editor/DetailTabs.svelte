@@ -1,6 +1,12 @@
 <script lang="ts">
 	import { detailTab, navigateToSongTab, type DetailTab } from '$lib/stores/navigation';
-	import { EDITOR_TAB_EDIT_LABEL, EDITOR_TAB_TAKES_LABEL, EDITOR_TABS_LABEL } from '$lib/constants';
+	import { DETAIL_TABS } from '$lib/stores/libraryContext';
+	import {
+		EDITOR_TAB_EDIT_LABEL,
+		EDITOR_TAB_TAKES_LABEL,
+		EDITOR_TABS_LABEL,
+		EDITOR_VIEW_COWRITER_LABEL
+	} from '$lib/constants';
 	import { generateAction, isGenerateBusy } from '$lib/stores/generateAction';
 	import { typingOnPhone } from '$lib/stores/ui';
 
@@ -9,21 +15,27 @@
 	}
 
 	let { takeCount }: Props = $props();
-	const tabs: readonly DetailTab[] = ['edit', 'takes'];
 	const jobRunning = $derived(isGenerateBusy($generateAction));
+
+	function tabAfter(current: DetailTab, step: number): DetailTab {
+		const count = DETAIL_TABS.length;
+		return DETAIL_TABS[(DETAIL_TABS.indexOf(current) + step + count) % count];
+	}
 
 	function onKeydown(event: KeyboardEvent): void {
 		let tab: DetailTab;
 		switch (event.key) {
 			case 'ArrowLeft':
+				tab = tabAfter($detailTab, -1);
+				break;
 			case 'ArrowRight':
-				tab = $detailTab === 'edit' ? 'takes' : 'edit';
+				tab = tabAfter($detailTab, 1);
 				break;
 			case 'Home':
-				tab = 'edit';
+				tab = DETAIL_TABS[0];
 				break;
 			case 'End':
-				tab = 'takes';
+				tab = DETAIL_TABS[DETAIL_TABS.length - 1];
 				break;
 			default:
 				return;
@@ -41,7 +53,7 @@
 	role="tablist"
 	aria-label={EDITOR_TABS_LABEL}
 >
-	{#each tabs as tab (tab)}
+	{#each DETAIL_TABS as tab (tab)}
 		<button
 			type="button"
 			role="tab"
@@ -57,6 +69,8 @@
 		>
 			{#if tab === 'edit'}
 				{EDITOR_TAB_EDIT_LABEL}
+			{:else if tab === 'cowriter'}
+				{EDITOR_VIEW_COWRITER_LABEL}
 			{:else}
 				{EDITOR_TAB_TAKES_LABEL} <span class="count">({takeCount})</span>
 				{#if jobRunning}<span class="ring" aria-hidden="true"></span>{/if}

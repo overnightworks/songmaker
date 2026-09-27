@@ -2,7 +2,7 @@ import { makeSong as song } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
+import { EDITOR_VIEW_COWRITER_LABEL, HITBOX_COMPACT_PX, HITBOX_FREQUENT_PX } from '$lib/constants';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -103,7 +103,7 @@ describe('EditorHeader', () => {
 		expect(rows).toHaveLength(1);
 		const toggles = target.querySelectorAll('.view-toggle');
 		expect(toggles).toHaveLength(2);
-		expect(toggles[0].textContent).toContain('Co-Writer');
+		expect(toggles[0].textContent).toContain(EDITOR_VIEW_COWRITER_LABEL);
 		expect(toggles[1].textContent).toContain('Recipe');
 		const generateButtons = target.querySelectorAll('.generate-action .primary-button');
 		expect(generateButtons).toHaveLength(1);
