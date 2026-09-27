@@ -2,8 +2,9 @@ import { makeAlbum, makeGeneration as makeGen, makeSong } from '$lib/test-utils/
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 import type { AlbumItem, PaginatedResponse, SongItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { API_ERROR_GENERIC_MESSAGE } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+
+const OFFLINE = new NetworkError('/api/x', new TypeError('Failed to fetch'));
 
 vi.mock('$lib/api/client', () => ({
 	fetchSongs: vi.fn().mockResolvedValue({
@@ -22,23 +23,16 @@ vi.mock('$lib/api/client', () => ({
 	})
 }));
 
-vi.mock('$lib/api/library', () => ({
-	fetchLibraryContinue: vi.fn()
-}));
-
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
-import { fetchLibraryContinue } from '$lib/api/library';
 import {
 	albumList,
 	albumSongsLoad,
 	allAlbumsLoad,
 	cancelAlbumSongLoads,
 	ensureAllAlbumsLoaded,
-	loadLibraryContinueItems,
 	loadSongsForAlbum,
 	overlaySongList,
 	replaceSongInList,
-	resetLibraryContinueItems,
 	songList,
 	upsertSongInList
 } from './libraryData';
@@ -61,7 +55,6 @@ function loadedSongDefaults(): Partial<SongItem> {
 }
 
 beforeEach(() => {
-	resetLibraryContinueItems();
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items: [],
 		total: 0,
@@ -75,36 +68,6 @@ beforeEach(() => {
 		offset: 0,
 		limit: 50,
 		has_more: false
-	});
-});
-
-describe('Continue items', () => {
-	it('reloads Continue after a mutation clears the cache for a wall remount', async () => {
-		const beforeListen = [{ type: 'song' as const, id: 'before', title: 'Before' }];
-		const afterListen = [{ type: 'song' as const, id: 'after', title: 'After' }];
-		vi.mocked(fetchLibraryContinue)
-			.mockResolvedValueOnce({ items: beforeListen })
-			.mockResolvedValueOnce({ items: afterListen });
-
-		await expect(loadLibraryContinueItems()).resolves.toEqual(beforeListen);
-		await expect(loadLibraryContinueItems()).resolves.toEqual(beforeListen);
-
-		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
-		// recordSongListen and the editor mutation owners call this before the
-		// library wall mounts again in the same SPA document.
-		resetLibraryContinueItems();
-		await expect(loadLibraryContinueItems()).resolves.toEqual(afterListen);
-		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
-	});
-
-	it('retries after a failed request', async () => {
-		vi.mocked(fetchLibraryContinue)
-			.mockRejectedValueOnce(new Error('offline'))
-			.mockResolvedValueOnce({ items: [] });
-
-		await expect(loadLibraryContinueItems()).rejects.toThrow('offline');
-		await expect(loadLibraryContinueItems()).resolves.toEqual([]);
-		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
 	});
 });
 
@@ -158,20 +121,31 @@ describe('song list mutations', () => {
 		expect(get(songList).some((item) => item.id === 's-stale')).toBe(false);
 	});
 
-	it('records a retryable error when album songs fail to load', async () => {
-		vi.mocked(fetchSongs).mockRejectedValueOnce(new Error('offline'));
-		await loadSongsForAlbum('a1');
-		expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error: 'offline' });
-	});
-
-	it('shows a readable sentence, not a raw status line, when the server sends no detail', async () => {
-		vi.mocked(fetchSongs).mockRejectedValueOnce(new ApiError(500, '', '/api/albums/a1/songs'));
-		await loadSongsForAlbum('a1');
-		expect(get(albumSongsLoad).a1).toEqual({
-			status: 'error',
-			error: API_ERROR_GENERIC_MESSAGE
-		});
-	});
+	it.each([
+		{ failure: 'a network failure', err: OFFLINE, error: 'Failed to load songs' },
+		{
+			failure: 'a server answer without a reason',
+			err: new ApiError(500, '', '/api/x'),
+			error: 'Failed to load songs'
+		},
+		{
+			failure: 'a browser error',
+			err: new Error('Failed to fetch'),
+			error: 'Failed to load songs'
+		},
+		{
+			failure: 'a server reason',
+			err: new ApiError(409, 'Album is locked', '/api/x'),
+			error: 'Album is locked'
+		}
+	])(
+		'records a retryable error naming $failure readably when album songs fail to load',
+		async ({ err, error }) => {
+			vi.mocked(fetchSongs).mockRejectedValueOnce(err);
+			await loadSongsForAlbum('a1');
+			expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error });
+		}
+	);
 
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
 		songList.set([makeSong({ ...loadedSongDefaults(), id: 's-page' })]);
@@ -392,20 +366,25 @@ describe('ensureAllAlbumsLoaded', () => {
 		).toEqual(['a-from-grid', 'a1']);
 	});
 
-	it('records a retryable error when albums fail to load', async () => {
-		vi.mocked(fetchAlbums).mockRejectedValueOnce(new Error('offline'));
-		const ok = await ensureAllAlbumsLoaded();
-		expect(ok).toBe(false);
-		expect(get(allAlbumsLoad)).toEqual({ status: 'error', error: 'offline' });
-	});
-
-	it('shows a readable sentence, not a raw status line, when the server sends no detail', async () => {
-		vi.mocked(fetchAlbums).mockRejectedValueOnce(new ApiError(500, '', '/api/albums'));
-		const ok = await ensureAllAlbumsLoaded();
-		expect(ok).toBe(false);
-		expect(get(allAlbumsLoad)).toEqual({
-			status: 'error',
-			error: API_ERROR_GENERIC_MESSAGE
-		});
-	});
+	it.each([
+		{ failure: 'a network failure', err: OFFLINE, error: 'Failed to load albums' },
+		{
+			failure: 'a server answer without a reason',
+			err: new ApiError(500, '', '/api/x'),
+			error: 'Failed to load albums'
+		},
+		{
+			failure: 'a server reason',
+			err: new ApiError(503, 'Library is migrating', '/api/x'),
+			error: 'Library is migrating'
+		}
+	])(
+		'records a retryable error naming $failure readably when albums fail to load',
+		async ({ err, error }) => {
+			vi.mocked(fetchAlbums).mockRejectedValueOnce(err);
+			const ok = await ensureAllAlbumsLoaded();
+			expect(ok).toBe(false);
+			expect(get(allAlbumsLoad)).toEqual({ status: 'error', error });
+		}
+	);
 });

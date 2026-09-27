@@ -3,8 +3,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { ShareInventoryItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
-import { API_ERROR_GENERIC_MESSAGE, LIBRARY_SHARES_ERROR } from '$lib/constants';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { LIBRARY_SHARES_ERROR } from '$lib/constants';
+
+const OFFLINE = new NetworkError('/api/shares', new TypeError('Failed to fetch'));
 
 const fetchShares = vi.fn();
 
@@ -78,9 +80,10 @@ describe('share request failures', () => {
 			'count',
 			'an API message without a detail',
 			new ApiError(400, '', '/api/shares'),
-			API_ERROR_GENERIC_MESSAGE
+			LIBRARY_SHARES_ERROR
 		],
 		['count', 'an unknown rejection', 'offline', LIBRARY_SHARES_ERROR],
+		['count', 'a network failure', OFFLINE, LIBRARY_SHARES_ERROR],
 		[
 			'inventory',
 			'an API detail',
@@ -91,9 +94,10 @@ describe('share request failures', () => {
 			'inventory',
 			'an API message without a detail',
 			new ApiError(400, '', '/api/shares'),
-			API_ERROR_GENERIC_MESSAGE
+			LIBRARY_SHARES_ERROR
 		],
-		['inventory', 'an unknown rejection', null, LIBRARY_SHARES_ERROR]
+		['inventory', 'an unknown rejection', null, LIBRARY_SHARES_ERROR],
+		['inventory', 'a network failure', OFFLINE, LIBRARY_SHARES_ERROR]
 	])('shows %s request failure for %s', async (target, _caseName, failure, error) => {
 		fetchShares.mockRejectedValueOnce(failure);
 
@@ -125,9 +129,13 @@ describe('share count', () => {
 	it('keeps a previous total on error instead of claiming zero', async () => {
 		fetchShares.mockResolvedValueOnce(page({ total: 3 }));
 		await refreshShareCount();
-		fetchShares.mockRejectedValueOnce(new Error('offline'));
+		fetchShares.mockRejectedValueOnce(OFFLINE);
 		expect(await refreshShareCount({ force: true })).toBe(false);
-		expect(get(shareCount)).toMatchObject({ status: 'error', total: 3, error: 'offline' });
+		expect(get(shareCount)).toMatchObject({
+			status: 'error',
+			total: 3,
+			error: LIBRARY_SHARES_ERROR
+		});
 	});
 
 	it('dedupes concurrent refreshes into a single request', async () => {

@@ -22,20 +22,36 @@ export class ApiError extends Error {
 	}
 }
 
+type NetworkFailureReason = 'unreachable' | 'timeout';
+
 /**
  * The request got no answer at all -- offline, DNS, a refused connection --
- * so `fetch` itself rejected, or the connection broke off while its body was
- * still being read. Only the fetch boundary below knows that a rejection came
- * from the network rather than from the caller's own code.
+ * so `fetch` itself rejected, the connection broke off while its body was
+ * still being read, or no answer came before the client timeout. Only the
+ * fetch boundary below knows that a rejection came from the network rather
+ * than from the caller's own code.
  */
 export class NetworkError extends Error {
 	constructor(
 		public readonly path: string,
-		cause: TypeError
+		cause: TypeError | DOMException,
+		public readonly reason: NetworkFailureReason = 'unreachable'
 	) {
-		super(cause.message, { cause });
+		super(reason === 'timeout' ? `No answer from ${path} before the timeout` : cause.message, {
+			cause
+		});
 		this.name = 'NetworkError';
 	}
+}
+
+/**
+ * The one place a failure becomes user-facing text: the server's own words
+ * when it answered with a reason, otherwise the caller's named fallback --
+ * never a browser error's text.
+ */
+export function describeFailure(err: unknown, fallback: string): string {
+	if (err instanceof ApiError && err.detail) return err.detail;
+	return fallback;
 }
 
 async function readErrorDetail(response: Pick<Response, 'json'>): Promise<{
@@ -188,11 +204,18 @@ async function throwForFailedResponse(response: Response, path: string): Promise
 	);
 }
 
-async function orNetworkError<T>(path: string, networkRead: Promise<T>): Promise<T> {
+async function orNetworkError<T>(
+	path: string,
+	timeoutSignal: AbortSignal,
+	networkRead: Promise<T>
+): Promise<T> {
 	try {
 		return await networkRead;
 	} catch (err) {
 		if (err instanceof TypeError) throw new NetworkError(path, err);
+		if (timeoutSignal.aborted && err instanceof DOMException) {
+			throw new NetworkError(path, err, 'timeout');
+		}
 		throw err;
 	}
 }
@@ -214,9 +237,9 @@ export async function apiFetch<T>(
 		method
 	);
 	try {
-		const resp = await orNetworkError(path, fetch(path, opts));
+		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
-		return await orNetworkError(path, resp.json() as Promise<T>);
+		return await orNetworkError(path, controller.signal, resp.json() as Promise<T>);
 	} finally {
 		clearTimeout(timeout);
 	}
@@ -226,13 +249,14 @@ export type JobStatus = JobItem;
 
 async function* parseSseEvents<T>(
 	path: string,
+	timeoutSignal: AbortSignal,
 	body: ReadableStream<Uint8Array>
 ): AsyncGenerator<T> {
 	const reader = body.getReader();
 	const decoder = new TextDecoder('utf-8');
 	let buffer = '';
 	while (true) {
-		const { value, done } = await orNetworkError(path, reader.read());
+		const { value, done } = await orNetworkError(path, timeoutSignal, reader.read());
 		if (done) return;
 		buffer += decoder.decode(value, { stream: true });
 		let boundary = buffer.indexOf('\n\n');
@@ -273,9 +297,9 @@ export async function* sseFetch<T = unknown>(
 		method
 	);
 	try {
-		const resp = await orNetworkError(path, fetch(path, opts));
+		const resp = await orNetworkError(path, controller.signal, fetch(path, opts));
 		await throwForFailedResponse(resp, path);
-		if (resp.body) yield* parseSseEvents<T>(path, resp.body);
+		if (resp.body) yield* parseSseEvents<T>(path, controller.signal, resp.body);
 	} finally {
 		clearTimeout(timeout);
 	}

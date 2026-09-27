@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
 
@@ -72,6 +73,39 @@ describe('restoreLibrarySearch', () => {
 		await restoreLibrarySearch('Catalog', 'newest', 2);
 		expect(searchLibrary).toHaveBeenCalledTimes(2);
 		expect(get(librarySearch).items).toHaveLength(2);
+	});
+});
+
+describe('a failed search or browse', () => {
+	const failures = [
+		{
+			failure: 'a network failure',
+			err: new NetworkError('/api/library/search', new TypeError('Failed to fetch')),
+			error: 'Search failed'
+		},
+		{
+			failure: 'a server answer without a reason',
+			err: new ApiError(500, '', '/api/library/search'),
+			error: 'Search failed'
+		},
+		{
+			failure: 'a server reason',
+			err: new ApiError(422, 'Query too long', '/api/library/search'),
+			error: 'Query too long'
+		}
+	];
+
+	it.each(failures)('shows $failure readably on a search', async ({ err, error }) => {
+		searchLibrary.mockRejectedValueOnce(err);
+		await restoreLibrarySearch('Catalog', 'newest', 1);
+		expect(get(librarySearch)).toMatchObject({ status: 'error', error });
+	});
+
+	it.each(failures)('shows $failure readably on a browse', async ({ err, error }) => {
+		fetchAlbums.mockRejectedValueOnce(err);
+		fetchSongs.mockResolvedValueOnce({ items: [], total: 0, offset: 0, has_more: false });
+		expect(await loadLibraryBrowse({ reset: true })).toBe(false);
+		expect(get(libraryBrowse)).toMatchObject({ status: 'error', error });
 	});
 });
 

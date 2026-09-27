@@ -1,9 +1,11 @@
 import { get, writable } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { describeFailure } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
-import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants';
+
+const ALBUM_SONGS_LOAD_ERROR = 'Failed to load songs';
+const ALL_ALBUMS_LOAD_ERROR = 'Failed to load albums';
 
 // The library's in-memory cache of every browsed album and song. Every
 // surface that lists, filters, or mutates library data reads and writes
@@ -11,22 +13,6 @@ import { LIBRARY_ALBUM_PAGE_SIZE, LIBRARY_SONG_PAGE_SIZE } from '$lib/constants'
 // view is picked everywhere else without a refetch.
 export const albumList = writable<AlbumItem[]>([]);
 export const songList = writable<SongItem[]>([]);
-
-let libraryContinueItemsRequest: Promise<LibraryContinueItem[]> | null = null;
-
-export function loadLibraryContinueItems(): Promise<LibraryContinueItem[]> {
-	libraryContinueItemsRequest ??= fetchLibraryContinue()
-		.then((response) => response.items)
-		.catch((error: unknown) => {
-			libraryContinueItemsRequest = null;
-			throw error;
-		});
-	return libraryContinueItemsRequest;
-}
-
-export function resetLibraryContinueItems(): void {
-	libraryContinueItemsRequest = null;
-}
 
 function retainRicherSong(current: SongItem | undefined, incoming: SongItem): SongItem {
 	if (!current) return incoming;
@@ -123,9 +109,7 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 }
 
 export function albumSongsErrorMessage(err: unknown): string {
-	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof Error) return err.message;
-	return 'Failed to load songs';
+	return describeFailure(err, ALBUM_SONGS_LOAD_ERROR);
 }
 
 function mergeAlbumSongs(list: SongItem[], incoming: SongItem[]): SongItem[] {
@@ -212,7 +196,7 @@ function loadAllAlbums(): Promise<boolean> {
 			allAlbumsLoad.set({ status: 'ready', error: null });
 			return true;
 		} catch (err) {
-			allAlbumsLoad.set({ status: 'error', error: allAlbumsErrorMessage(err) });
+			allAlbumsLoad.set({ status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) });
 			return false;
 		} finally {
 			allAlbumsInflight = null;
@@ -229,12 +213,6 @@ function mergeFetchedAlbums(current: AlbumItem[], fetched: AlbumItem[]): AlbumIt
 	const currentIds = new Set(current.map((album) => album.id));
 	const newOnes = fetched.filter((album) => !currentIds.has(album.id));
 	return [...current, ...newOnes];
-}
-
-function allAlbumsErrorMessage(err: unknown): string {
-	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof Error) return err.message;
-	return 'Failed to load albums';
 }
 
 export function addSongsToList(songs: SongItem[]): void {

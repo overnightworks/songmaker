@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { ApiError } from '$lib/api/fetch';
+import { describeFailure } from '$lib/api/fetch';
 import * as libraryApi from '$lib/api/library';
 import type { PaginatedResponse, ShareInventoryItem, SongItem } from '$lib/api/types';
 import {
@@ -145,7 +145,7 @@ export async function refreshShareCount(options: { force?: boolean } = {}): Prom
 			if (generation !== countGeneration) return false;
 			shareCount.set({
 				status: 'error',
-				error: shareErrorMessage(err),
+				error: describeFailure(err, LIBRARY_SHARES_ERROR),
 				total: previous.total
 			});
 			return false;
@@ -204,7 +204,7 @@ export async function loadShareInventory(options: {
 			shareInventory.update((state) => ({
 				...state,
 				status: 'error',
-				error: shareErrorMessage(err)
+				error: describeFailure(err, LIBRARY_SHARES_ERROR)
 			}));
 			return false;
 		}
@@ -285,12 +285,6 @@ function requestShares(options: {
 		throw new TypeError(LIBRARY_SHARES_ERROR);
 	}
 	return libraryApi.fetchShares(options);
-}
-
-function shareErrorMessage(err: unknown): string {
-	if (err instanceof ApiError) return err.detail || err.message;
-	if (err instanceof Error) return err.message;
-	return LIBRARY_SHARES_ERROR;
 }
 
 function onVisibility(): void {
