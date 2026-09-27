@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { ApiError, describeFailure, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, describeFailure, handleSessionLost, NetworkError } from '$lib/api/fetch';
 import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
@@ -33,6 +33,7 @@ import {
 	upsertSongInList
 } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
+import { offline } from '$lib/stores/connectivity';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -258,6 +259,12 @@ function reportNothingPlayable(label: string, retry: () => Promise<void>): void 
 
 function albumTitle(albums: AlbumItem[], albumId: string): string {
 	return albums.find((album) => album.id === albumId)?.title ?? '';
+}
+
+// Offline, the one strip already says why the songs could not load (#1039).
+function toastAlbumSongsFailure(err: unknown): void {
+	if (err instanceof NetworkError && get(offline)) return;
+	addToast(albumSongsErrorMessage(err), 'error');
 }
 
 function libraryStreamFailureToast(err: unknown): string {
@@ -1204,7 +1211,7 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
 		playStartNotice.set('idle');
-		addToast(albumSongsErrorMessage(err), 'error');
+		toastAlbumSongsFailure(err);
 		return;
 	}
 	if (!playStartIsCurrent(seq)) return;
@@ -1464,7 +1471,7 @@ export async function navigateToPlaying(): Promise<void> {
 		try {
 			song = await fetchSong(cur.songId);
 		} catch (err) {
-			addToast(albumSongsErrorMessage(err), 'error');
+			toastAlbumSongsFailure(err);
 			return;
 		}
 		upsertSongInList(song);
