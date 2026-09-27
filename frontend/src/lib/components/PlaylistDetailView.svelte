@@ -228,10 +228,13 @@
 	}
 
 	// The header can show a newly opened playlist before its detail arrives;
-	// until then this view has no playlist to start, so the header plays nothing
-	// rather than the previously opened playlist or the library.
+	// until then, and while the playlist holds no entry, this view has nothing
+	// to start, so the header plays nothing rather than the previously opened
+	// playlist or the library.
 	const playWhole = $derived(
-		playlistDetail ? (start: CollectionStart) => playPlaylist(playlistDetail, start) : null
+		playlistDetail && playlistDetail.entries.length > 0
+			? (start: CollectionStart) => playPlaylist(playlistDetail, start)
+			: null
 	);
 
 	// The row is the play target: a tap plays this take from here, with the
@@ -332,6 +335,7 @@
 		{#if playlistMeta}
 			<CollectionHeader
 				kind="playlist"
+				collectionId={playlistMeta.id}
 				title={playlistMeta.title}
 				{coverUrl}
 				{coverAlt}
@@ -728,6 +732,7 @@
 			--entry-inset-block: 0.7rem;
 			--entry-inset-inline: 0.7rem;
 			--entry-actions-gap: 0.6rem;
+			min-height: 62px;
 		}
 
 		.entry-actions {

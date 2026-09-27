@@ -12,6 +12,7 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
+	collectionPauseLabel,
 	collectionPlayLabel,
 	PLAYING_MARK_LABEL,
 	collectionShuffleLabel
@@ -28,7 +29,12 @@ import {
 } from '$lib/test-utils/hitbox';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { curationActive, nowPlayingSurface, selectedAlbumId } from '$lib/stores/player';
+import {
+	curationActive,
+	nowPlayingSurface,
+	queueContext,
+	selectedAlbumId
+} from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
 
 const uploadAlbumCover = vi.fn();
@@ -178,6 +184,7 @@ afterEach(async () => {
 	songList.set([]);
 	openCollection.set(null);
 	curationActive.set(false);
+	queueContext.set({ type: 'library' });
 	nowPlayingSurface.set('closed');
 	activeJobs.set([]);
 	audioPlayer.current = null;
@@ -244,6 +251,38 @@ describe('AlbumDetailView header', () => {
 		).click();
 
 		expect(playAlbum).toHaveBeenCalledWith('a-local', 'random');
+		expect(get(shuffleEnabled)).toBe(true);
+	});
+
+	it('offers to pause this album while it plays', async () => {
+		queueContext.set({ type: 'album', albumId: 'a-local' });
+		audioPlayer.current = { songId: 's-local' } as unknown as typeof audioPlayer.current;
+		audioPlayer.status = 'playing';
+
+		const target = await renderDetail();
+
+		expect(
+			getByRoleButton(requireElement(target, '.collection-header'), collectionPauseLabel('album'))
+		).not.toBeNull();
+	});
+
+	it('dims play and shuffle on an album without songs, and a tap keeps the running queue', async () => {
+		setShuffle(true);
+		songList.set([]);
+		const running = { type: 'library' as const, index: 3 };
+		queueContext.set(running);
+		const target = await renderDetail();
+		const header = requireElement(target, '.collection-header');
+		const buttons = [collectionPlayLabel('album'), collectionShuffleLabel('album')].map((label) =>
+			getByRoleButton(header, label)
+		);
+
+		for (const button of buttons) button.click();
+		await tick();
+
+		expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
+		expect(playAlbum).not.toHaveBeenCalled();
+		expect(get(queueContext)).toBe(running);
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 
@@ -788,20 +827,17 @@ describe('AlbumDetailView song row', () => {
 		expect(rowOf(target, 'Tide').querySelectorAll('button')).toHaveLength(1);
 	});
 
-	it.each([
-		['playing', true],
-		['paused', false]
-	] as const)(
+	it.each(['playing', 'paused'] as const)(
 		'marks the row the transport holds while %s, and only that row',
-		async (status, marked) => {
+		async (status) => {
 			audioPlayer.current = { songId: 's-tide' } as unknown as typeof audioPlayer.current;
 			audioPlayer.status = status;
 
 			const target = await renderTwoSongs();
 
 			expect(
-				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL) !== null
-			).toBe(marked);
+				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL)
+			).not.toBeNull();
 			expect(rowOf(target, 'Tide').classList.contains('current')).toBe(true);
 			expect(findElementByRoleAndName(rowOf(target, 'Ebb'), 'img', PLAYING_MARK_LABEL)).toBeNull();
 			expect(rowOf(target, 'Ebb').classList.contains('current')).toBe(false);

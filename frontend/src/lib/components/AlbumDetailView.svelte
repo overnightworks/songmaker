@@ -483,12 +483,15 @@
 	<div class="detail-panel">
 		<CollectionHeader
 			kind="album"
+			collectionId={selectedAlbum.id}
 			title={selectedAlbum.title}
 			{coverUrl}
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={currentAlbumId ? (start) => playAlbum(currentAlbumId, start) : null}
+			onplay={currentAlbumId && albumSongs.length > 0
+				? (start) => playAlbum(currentAlbumId, start)
+				: null}
 			onrename={onRenameAlbum}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
@@ -892,6 +895,10 @@
 		.picker-anchor {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
+		}
+
+		.item-row {
+			min-height: 62px;
 		}
 
 		.empty-tab {

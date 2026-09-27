@@ -145,7 +145,8 @@
 			initials={titleInitials(view.title)}
 			artFill={null}
 			kind={view.kind}
-			onplay={onHeaderPlay}
+			playing={playback.currentTrack !== null && isPlaying}
+			onplay={tracks.length > 0 ? onHeaderPlay : null}
 			{titleArea}
 			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
 		/>

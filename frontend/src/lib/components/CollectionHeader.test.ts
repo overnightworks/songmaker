@@ -5,9 +5,17 @@ vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => ({ openLibraryWall: vi.fn() }));
 
 import { get } from 'svelte/store';
-import { ALBUM_ADD_SONG_LABEL, collectionPlayLabel, collectionShuffleLabel } from '$lib/constants';
+import {
+	ALBUM_ADD_SONG_LABEL,
+	collectionPauseLabel,
+	collectionPlayLabel,
+	collectionShuffleLabel
+} from '$lib/constants';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { albumList } from '$lib/stores/libraryData';
 import { openLibraryWall } from '$lib/stores/navigation';
-import { setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
 import CollectionHeader from './CollectionHeader.svelte';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
@@ -24,6 +32,7 @@ type CollectionHeaderProps = ComponentProps<typeof CollectionHeader>;
 function baseProps(): CollectionHeaderProps {
 	return {
 		kind: 'album',
+		collectionId: 'c-night-drive',
 		title: 'Night Drive',
 		coverUrl: null,
 		coverAlt: 'Album Night Drive',
@@ -72,8 +81,47 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	setShuffle(false);
+	queueContext.set({ type: 'library' });
+	albumList.set([]);
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
+	vi.restoreAllMocks();
 	document.body.replaceChildren();
 });
+
+type HeaderKind = CollectionHeaderProps['kind'];
+
+// The queue plays `collectionId` of `kind`, sounding or paused. jsdom gives the
+// player no media element, so pause and play are stubbed to move the status
+// the way a real element does and a click's effect reads as state.
+function queuePlays(kind: HeaderKind, collectionId: string, status: 'playing' | 'paused'): void {
+	if (kind === 'album') {
+		albumList.set([makeAlbum({ id: collectionId, title: 'Queued' })]);
+		queueContext.set({ type: 'album', albumId: collectionId });
+	} else {
+		queueContext.set({
+			type: 'playlist',
+			playlist: { id: collectionId, title: 'Queued' },
+			entries: [],
+			index: 0
+		});
+	}
+	audioPlayer.current = {
+		generation: makeGeneration(),
+		songId: 's1',
+		songTitle: 'Song',
+		artist: 'Artist',
+		albumTitle: 'Queued',
+		lyrics: null
+	};
+	audioPlayer.status = status;
+	vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
+		audioPlayer.status = 'paused';
+	});
+	vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
+		audioPlayer.status = 'playing';
+	});
+}
 
 describe('CollectionHeader', () => {
 	it('shows cover, title and a Library › title breadcrumb', async () => {
@@ -106,6 +154,58 @@ describe('CollectionHeader', () => {
 			getByRoleButton(target, collectionShuffleLabel(kind)).click();
 
 			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('random');
+			expect(get(shuffleEnabled)).toBe(true);
+		}
+	);
+
+	it.each(['album', 'playlist'] as const)(
+		'pauses the %s from its circle while it plays and resumes it on the next tap',
+		async (kind) => {
+			setShuffle(true);
+			const props = { ...baseProps(), kind };
+			queuePlays(kind, props.collectionId, 'playing');
+			const target = await render(props);
+
+			getByRoleButton(target, collectionPauseLabel(kind)).click();
+			await tick();
+
+			expect(audioPlayer.status).toBe('paused');
+			getByRoleButton(target, collectionPlayLabel(kind)).click();
+			await tick();
+
+			expect(audioPlayer.status).toBe('playing');
+			expect(getByRoleButton(target, collectionPauseLabel(kind))).not.toBeNull();
+			expect(props.onplay).not.toHaveBeenCalled();
+			expect(get(shuffleEnabled)).toBe(true);
+		}
+	);
+
+	it.each(['album', 'playlist'] as const)(
+		'starts the %s from the top while another collection plays',
+		async (kind) => {
+			const props = { ...baseProps(), kind };
+			queuePlays(kind, 'c-other', 'playing');
+			const target = await render(props);
+
+			getByRoleButton(target, collectionPlayLabel(kind)).click();
+
+			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('top');
+			expect(audioPlayer.status).toBe('playing');
+		}
+	);
+
+	it.each(['album', 'playlist'] as const)(
+		'dims the circle and shuffle while the %s has nothing to start, and a tap changes nothing',
+		async (kind) => {
+			setShuffle(true);
+			const target = await render({ ...baseProps(), kind, onplay: null });
+			const circle = getByRoleButton(target, collectionPlayLabel(kind));
+			const shuffle = getByRoleButton(target, collectionShuffleLabel(kind));
+
+			circle.click();
+			shuffle.click();
+
+			expect([circle, shuffle].map((button) => button.disabled)).toEqual([true, true]);
 			expect(get(shuffleEnabled)).toBe(true);
 		}
 	);
