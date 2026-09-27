@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	NOW_PLAYING_LABEL,
+	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -36,6 +37,7 @@ import { get } from 'svelte/store';
 import { LIBRARY_QUEUE_EMPTY_TITLE, LIBRARY_QUEUE_LOADING_TITLE } from '$lib/constants';
 import PlayerBar from './PlayerBar.svelte';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { nowPlayingFromLabel, nowPlayingTakeLabel } from '$lib/constants/now-playing';
 
 function playablePlaylistDefaults(): Partial<PlaylistDetailItem> {
 	return {
@@ -112,6 +114,31 @@ function manifest(tracks: QueueStreamTrackItem[]): QueueStreamManifest {
 		skipped: [],
 		skipped_complete: true
 	};
+}
+
+function useDesktopLayout(): void {
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+	);
+}
+
+function loadTake(songTitle = 'Opening Move'): void {
+	audioPlayer.load(
+		{
+			generation: makeGeneration({
+				version_number: 7,
+				generation_number: 2,
+				mp3_path: 'take.mp3'
+			}),
+			songId: 's1',
+			songTitle,
+			artist: 'Artist',
+			albumTitle: 'Album',
+			lyrics: null
+		},
+		{ autoplay: false }
+	);
 }
 
 let component: ReturnType<typeof mount> | undefined;
@@ -309,6 +336,7 @@ describe('PlayerBar take identifier', () => {
 		[7, 'v7 · take 2'],
 		[null, 'take 2']
 	])('reads the take as %s from nowPlayingTakeLabel', async (versionNumber, expected) => {
+		queueContext.set({ type: 'library' });
 		audioPlayer.load(
 			{
 				generation: makeGeneration({
@@ -342,6 +370,7 @@ describe('PlayerBar shuffle', () => {
 	}
 
 	it('toggles shuffle from the transport bar and names the queue it would shuffle', async () => {
+		useDesktopLayout();
 		queueContext.set({ type: 'album', albumId: 'a1' });
 		albumList.set([albumItem({ share_slug: null, cover: null })]);
 		component = mount(PlayerBar, { target });
@@ -356,16 +385,6 @@ describe('PlayerBar shuffle', () => {
 		expect(get(shuffleEnabled)).toBe(true);
 		expect(shuffleButton().getAttribute('aria-pressed')).toBe('true');
 		expect(shuffleButton().getAttribute('aria-label')).toBe('Disable shuffle (this album)');
-	});
-
-	it('survives the compact transport row that hides prev and next', async () => {
-		component = mount(PlayerBar, { target });
-		await tick();
-		await Promise.resolve();
-		await tick();
-
-		expect(target.querySelector('.player-bar.mobile-transport')).not.toBeNull();
-		expect(shuffleButton().dataset.hitbox).toBe('frequent');
 	});
 });
 
@@ -405,6 +424,8 @@ describe('PlayerBar transport labels', () => {
 });
 
 describe('PlayerBar Now Playing', () => {
+	beforeEach(useDesktopLayout);
+
 	function nowPlayingButton(): HTMLButtonElement {
 		const button = target.querySelector<HTMLButtonElement>(
 			`button[aria-label="${NOW_PLAYING_LABEL}"]`
@@ -563,6 +584,176 @@ describe('PlayerBar Now Playing', () => {
 		expect(document.activeElement).toBe(
 			target.querySelector(`button[aria-label="${NOW_PLAYING_LABEL}"]`)
 		);
+	});
+});
+
+describe('PlayerBar mini player on the phone (#1058)', () => {
+	function bar(): HTMLElement {
+		const content = target.querySelector<HTMLElement>(
+			'.player-bar.mobile-transport .player-content'
+		);
+		if (!content) throw new Error('Expected the phone mini player');
+		return content;
+	}
+
+	function openTargets(): HTMLButtonElement[] {
+		return Array.from(bar().querySelectorAll<HTMLButtonElement>('.open-now-playing'));
+	}
+
+	async function mountBar(): Promise<void> {
+		component = mount(PlayerBar, { target });
+		await tick();
+	}
+
+	it.each([
+		{
+			source: 'an album',
+			arrange: () => {
+				albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
+				queueContext.set({ type: 'album', albumId: 'a1' });
+			},
+			line: nowPlayingFromLabel('Nightdrive'),
+			hides: nowPlayingTakeLabel(7, 2)
+		},
+		{
+			source: 'a playlist',
+			arrange: () =>
+				queueContext.set({
+					type: 'playlist',
+					playlist: { id: 'p1', title: 'Late Drives' },
+					entries: [],
+					index: 0
+				}),
+			line: nowPlayingFromLabel('Late Drives'),
+			hides: nowPlayingTakeLabel(7, 2)
+		},
+		{
+			source: 'the library',
+			arrange: () => queueContext.set({ type: 'library' }),
+			line: nowPlayingTakeLabel(7, 2),
+			hides: nowPlayingFromLabel('')
+		}
+	])('names $source playing as "$line" under the title', async ({ arrange, line, hides }) => {
+		arrange();
+		loadTake();
+		await mountBar();
+
+		const detail = bar().querySelector('.track-detail')?.textContent;
+		expect(bar().querySelector('.track-title')?.textContent).toBe('Opening Move');
+		expect(detail).toContain(line);
+		expect(detail).not.toContain(hides);
+	});
+
+	it('says where the music comes from by the queue, never by the page that is open', async () => {
+		queueContext.set({
+			type: 'playlist',
+			playlist: { id: 'p1', title: 'Late Drives' },
+			entries: [],
+			index: 0
+		});
+		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
+		openCollection.set({ kind: 'album', id: 'a1' });
+		loadTake();
+		await mountBar();
+
+		expect(bar().querySelector('.track-detail')?.textContent).toContain(
+			nowPlayingFromLabel('Late Drives')
+		);
+	});
+
+	it('reads open target · previous · play · next · open target, with no shuffle or chevron', async () => {
+		loadTake();
+		await mountBar();
+
+		const targets = Array.from(bar().children).map(
+			(child) => child.getAttribute('aria-label') ?? child.className.split(' ')[0]
+		);
+		expect(targets).toEqual([
+			openNowPlayingLabel('Opening Move'),
+			'transport-controls',
+			NOW_PLAYING_LABEL
+		]);
+		const transport = Array.from(
+			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
+		).map((button) => button.getAttribute('aria-label'));
+		expect(transport).toEqual(['Previous', TRANSPORT_PLAY_LABEL, 'Next']);
+		expect(target.querySelector('.shuffle-btn')).toBeNull();
+		expect(target.querySelector('.now-playing-btn')).toBeNull();
+	});
+
+	it.each([
+		{ place: 'the cover and title', index: 0 },
+		{ place: 'the empty right side', index: 1 }
+	])(
+		'opens Now Playing from $place, and hands focus back to the title on close',
+		async ({ index }) => {
+			loadTake();
+			await mountBar();
+
+			openTargets()[index].click();
+			await tick();
+			expect(get(nowPlayingSurface)).toBe('full');
+
+			closeNowPlaying();
+			await tick();
+			expect(document.activeElement).toBe(openTargets()[0]);
+		}
+	);
+
+	it('keeps the right side out of the keyboard and screen reader path', async () => {
+		loadTake();
+		await mountBar();
+
+		const rightSide = openTargets()[1];
+		expect(rightSide.tabIndex).toBe(-1);
+		expect(rightSide.getAttribute('aria-hidden')).toBe('true');
+	});
+
+	it.each([
+		{ step: 'Previous', action: 'playPrevSong' as const },
+		{ step: 'Next', action: 'playNextSong' as const }
+	])('steps with $step', async ({ step, action }) => {
+		const played = vi.spyOn(playerStore, action).mockResolvedValue();
+		audioPlayer.loadStream(manifest([track(0), track(1)]), 0, { autoplay: false });
+		audio.currentTime = step === 'Previous' ? 15 : 0;
+		audio.fire('timeupdate');
+		await mountBar();
+
+		bar().querySelector<HTMLButtonElement>(`button[aria-label="${step}"]`)?.click();
+
+		expect(played).toHaveBeenCalledOnce();
+	});
+
+	it('shows the idle target as plain words that open nothing', async () => {
+		queueContext.set({ type: 'library' });
+		await mountBar();
+
+		expect(openTargets()).toHaveLength(0);
+		expect(bar().querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
+	});
+});
+
+describe('PlayerBar failure line', () => {
+	it.each([
+		{ layout: 'phone', arrange: () => {} },
+		{ layout: 'desktop', arrange: useDesktopLayout }
+	])('shows why playback stopped on the $layout', async ({ arrange }) => {
+		arrange();
+		queueContext.set({ type: 'album', albumId: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null, title: 'Nightdrive' })]);
+		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
+		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
+		component = mount(PlayerBar, { target });
+		await tick();
+		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
+
+		target.querySelector<HTMLButtonElement>('.play-btn')?.click();
+		await tick();
+		audio.fire('canplay');
+
+		await vi.waitFor(() => expect(audioPlayer.error).toBeTruthy());
+		await tick();
+		expect(target.querySelector('.error-text')?.textContent).toBe(audioPlayer.error);
 	});
 });
 

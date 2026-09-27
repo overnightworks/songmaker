@@ -34,7 +34,7 @@ import {
 	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
-	NOW_PLAYING_LABEL,
+	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
@@ -264,7 +264,7 @@ const NOW_PLAYING_ORIGINS: {
 			await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
 			await page
 				.getByRole('contentinfo')
-				.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
+				.getByRole('button', { name: openNowPlayingLabel(playing), exact: true })
 				.click();
 			return {
 				playing,
