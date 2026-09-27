@@ -160,7 +160,16 @@ test.describe('song page at phone width', () => {
 		await panel
 			.getByRole('button', { name: `${TRANSPORT_PLAY_LABEL} ${SECOND_TAKE_LABEL}`, exact: true })
 			.click();
-		await expect(page.getByRole('contentinfo').getByText(SECOND_TAKE_LABEL)).toBeVisible();
+		// The phone bar says where the music comes from (#1058, frame C2); the
+		// player names the take on Now Playing, opened from the bar's title.
+		await page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
+			.click();
+		const nowPlaying = page.getByRole('dialog', { name: songTitle });
+		await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
+		await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+		await expect(nowPlaying).toBeHidden();
 
 		// A seeded running job, discovered the same way a reload would: a fresh
 		// cold open re-runs loadSongContext's hydrateActiveGeneration.
