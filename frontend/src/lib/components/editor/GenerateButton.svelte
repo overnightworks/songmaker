@@ -78,7 +78,7 @@
 			class="primary-button"
 			class:failed={presentation.kind === 'failed'}
 			disabled={presentation.kind === 'disabled'}
-			title={presentation.kind === 'disabled' ? presentation.reason : undefined}
+			title={presentation.kind === 'disabled' ? (presentation.reason ?? undefined) : undefined}
 			aria-label={reasonInsideButton === null ? undefined : `${modeLabel} — ${reasonInsideButton}`}
 			onclick={() => void generate()}
 		>
@@ -89,7 +89,7 @@
 				{modeLabel}
 			{/if}
 		</button>
-		{#if presentation.kind === 'disabled' && reasonInsideButton === null}
+		{#if presentation.kind === 'disabled' && presentation.reason !== null && reasonInsideButton === null}
 			<p class="reason-below">{@render disabledReason(presentation.reason)}</p>
 		{:else if presentation.kind === 'failed'}
 			<div class="failure" class:expanded>

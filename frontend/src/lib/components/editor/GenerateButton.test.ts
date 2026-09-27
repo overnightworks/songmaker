@@ -173,6 +173,17 @@ describe('GenerateButton', () => {
 		expect(document.body.textContent?.trim()).toBe(button.textContent?.trim());
 	});
 
+	it.each([false, true])(
+		'keeps its label and shows no ⓘ when disabled without a reason of its own (reason inside: %s)',
+		async (reasonInside) => {
+			await render({ kind: 'disabled', mode: 'generate', reason: null }, { reasonInside });
+			const button = getByRoleButton(document.body, 'Generate');
+			expect(button.disabled).toBe(true);
+			expect(button.title).toBe('');
+			expect(document.body.textContent?.trim()).toBe('Generate');
+		}
+	);
+
 	it('expands and collapses the literal worker sentence and retries through Generate', async () => {
 		const cause =
 			'Generation failed because the worker exhausted GPU memory while processing the second take. Reduce the batch size and try again.';
