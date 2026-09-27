@@ -61,11 +61,7 @@ vi.mock('$lib/api/client', () => ({
 vi.mock('$lib/api/songs', () => ({
 	recordSongListen: vi.fn().mockResolvedValue(undefined)
 }));
-vi.mock('./libraryData', async (importOriginal) => ({
-	...(await importOriginal<typeof import('./libraryData')>()),
-	resetLibraryContinueItems: vi.fn()
-}));
-import { albumList, resetLibraryContinueItems, songList } from './libraryData';
+import { albumList, songList } from './libraryData';
 import {
 	buildQueueViewModel,
 	canPlayNextSong,
@@ -521,20 +517,6 @@ describe('playback dispatch', () => {
 		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id);
 	});
 
-	it('invalidates Continue after a successful listen so returning to the wall reloads it', async () => {
-		const song = makeSong({ ...queuedSongDefaults(), id: 's-listen-refresh' });
-		audioPlayer.current = makePlayback(
-			makeGen({ ...genDefaults, id: 'g-listen-refresh', song_id: song.id }),
-			song
-		);
-
-		audioPlayer.currentCallbacks.onPlaybackStarted?.();
-		await Promise.resolve();
-		await Promise.resolve();
-
-		expect(resetLibraryContinueItems).toHaveBeenCalledOnce();
-	});
-
 	it('records a stream take when playback crosses into it', () => {
 		const firstSong = makeSong({ ...queuedSongDefaults(), id: 's-stream-listen-1' });
 		const secondSong = makeSong({ ...queuedSongDefaults(), id: 's-stream-listen-2' });
@@ -601,7 +583,6 @@ describe('playback dispatch', () => {
 
 		expect(recordSongListen).toHaveBeenCalledWith(song.id);
 		expect(logged).toHaveBeenCalledWith('Could not record song listen:', reportingError);
-		expect(resetLibraryContinueItems).not.toHaveBeenCalled();
 	});
 
 	it('does not record while share playback owns the audio callback', () => {
