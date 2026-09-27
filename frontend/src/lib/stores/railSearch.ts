@@ -104,18 +104,13 @@ let searchGeneration = 0;
 
 export function syncRailSearch(rawQuery: string): void {
 	const query = rawQuery.trim();
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
+	if (isRailSearchUnderwayFor(query)) return;
+	cancelPendingRailSearch();
 	if (!query) {
 		searchGeneration += 1;
 		railSearch.set({ ...EMPTY_RAIL_SEARCH });
 		return;
 	}
-	const current = get(railSearch);
-	if (current.query === query && (current.status === 'loading' || current.status === 'ready'))
-		return;
 	setRailSearchLoading(query);
 	searchTimer = setTimeout(() => {
 		searchTimer = null;
@@ -126,10 +121,7 @@ export function syncRailSearch(rawQuery: string): void {
 export function retryRailSearch(): void {
 	const { query } = get(railSearch);
 	if (!query) return;
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
+	cancelPendingRailSearch();
 	setRailSearchLoading(query);
 	void runRailSearch(query);
 }
@@ -170,12 +162,20 @@ export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[
 }
 
 export function resetRailSearchForTests(): void {
-	if (searchTimer !== null) {
-		clearTimeout(searchTimer);
-		searchTimer = null;
-	}
+	cancelPendingRailSearch();
 	searchGeneration += 1;
 	resetRailSearch();
+}
+
+function isRailSearchUnderwayFor(query: string): boolean {
+	const current = get(railSearch);
+	return current.query === query && (current.status === 'loading' || current.status === 'ready');
+}
+
+function cancelPendingRailSearch(): void {
+	if (searchTimer === null) return;
+	clearTimeout(searchTimer);
+	searchTimer = null;
 }
 
 function setRailSearchLoading(query: string): void {

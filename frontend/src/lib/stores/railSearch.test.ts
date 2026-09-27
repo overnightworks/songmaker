@@ -75,6 +75,18 @@ describe('syncRailSearch', () => {
 		expect(get(railSearch)).toMatchObject({ query: '', status: 'idle' });
 	});
 
+	it('still searches when a trailing space follows the word before the debounce fires', async () => {
+		searchLibrary.mockResolvedValue({ items: [], next_cursor: null, has_more: false });
+
+		syncRailSearch('Vernissage');
+		syncRailSearch('Vernissage ');
+		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
+
+		expect(searchLibrary).toHaveBeenCalledTimes(1);
+		expect(searchLibrary).toHaveBeenCalledWith({ q: 'Vernissage', sort: 'newest', limit: 100 });
+		expect(get(railSearch)).toMatchObject({ query: 'Vernissage', status: 'ready' });
+	});
+
 	it('records a server error and retries the same query', async () => {
 		searchLibrary.mockRejectedValueOnce(new Error('Offline'));
 		syncRailSearch('stadion');
