@@ -1,8 +1,0 @@
-claim_id = "025e1b9ab885495d89be3af20e828796"
-agent = "claude-head"
-role = "builder"
-base = "2d23f1947902f00c14dec881b608639cd3921a13"
-branch = "claude/issue-1047-edit-tab-memory"
-scope = ["docs/architecture.md", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/e2e/voices.spec.ts", "frontend/src/lib/components/CreateForm.svelte", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/SongPhoneView.svelte", "frontend/src/lib/components/editor/SongPhoneView.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/routes/(library)/album/[slug]/[song]/page.test.ts", "frontend/src/routes/(library)/album/[slug]/[song]/take/[n]/page.test.ts"]
-opened_commit = "29fa8c69716550dc69e9c99272c927bd2793268d"
-whole_reason = "rename and per-song tab memory across the tab owner, navigation, three renderers and their tests"
