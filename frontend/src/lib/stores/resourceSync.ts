@@ -120,6 +120,7 @@ export class ResourceSyncController {
 	private readonly pendingSongIds = new Set<string>();
 	private readonly refreshesAwaitingBootstrap = new Set<string>();
 	private readonly failedSongs = new Map<string, SongRefreshFailure>();
+	private readonly songFetchNotBefore = new Map<string, number>();
 	private readonly queuedGenerationIds = new Set<string>();
 	private readonly seenGenerationIds = new Set<string>();
 	private readonly songRevisions = new Map<string, number>();
@@ -181,6 +182,7 @@ export class ResourceSyncController {
 	}
 
 	async retry(): Promise<boolean> {
+		const shownError = this.state.error;
 		this.store.update((state) => ({ ...state, error: null }));
 		// A retry after teardown (an 'unauthorized' or 'disabled' probe result)
 		// finds the owner stopped: start() alone opens the one EventSource it
@@ -195,10 +197,14 @@ export class ResourceSyncController {
 			return this.waitForReady();
 		}
 		this.requeueSongs([...this.failedSongs.keys(), ...this.deps.listPrioritySongIds()]);
-		this.failedSongs.clear();
+		this.forgetFailuresFetchableNow();
 		await this.flushPending(this.epoch);
 		if (!this.started) return false;
 		if (this.state.error) return false;
+		if (this.hasShownSongFailure()) {
+			this.setVisibleError(shownError || RESOURCE_SYNC_ERROR);
+			return false;
+		}
 		this.setStatus('live');
 		return true;
 	}
@@ -334,6 +340,7 @@ export class ResourceSyncController {
 		this.lastEventId = null;
 		this.pendingSongIds.clear();
 		this.failedSongs.clear();
+		this.songFetchNotBefore.clear();
 		this.clearFailedSongRetry();
 		this.queuedGenerationIds.clear();
 	}
@@ -664,10 +671,19 @@ export class ResourceSyncController {
 		}
 	}
 
+	/**
+	 * The one place a song is fetched, so the one place a rate limit is
+	 * honoured (#1099): a song still inside its `Retry-After` is dropped from
+	 * the queue whichever path queued it -- focus, the stream's hello, a job's
+	 * refresh, Retry -- and stays failed, and the retry timer fetches it once
+	 * that deadline has passed.
+	 */
 	private async drainPending(epoch: number): Promise<void> {
 		while (this.isCurrentEpoch(epoch) && this.pendingSongIds.size > 0) {
-			const songIds = [...this.pendingSongIds];
+			const queued = [...this.pendingSongIds];
 			this.pendingSongIds.clear();
+			const songIds = queued.filter((songId) => this.isFetchableNow(songId));
+			this.retryWhenFetchable(queued.filter((songId) => !this.isFetchableNow(songId)));
 			await runLimited(songIds, RESOURCE_SYNC_FETCH_CONCURRENCY, (songId) =>
 				this.fetchAndApply(songId, epoch)
 			);
@@ -696,14 +712,42 @@ export class ResourceSyncController {
 				return;
 			}
 			const failure = classifySongRefreshFailure(err);
+			const waitMs = retryAfterMs(err);
 			this.failedSongs.set(songId, failure);
+			this.holdFetchFor(songId, waitMs);
 			this.showFailure(err);
-			if (failure !== 'refused') this.scheduleFailedSongRetry(retryAfterMs(err));
+			if (failure !== 'refused') this.scheduleFailedSongRetry(waitMs);
+		}
+	}
+
+	private holdFetchFor(songId: string, waitMs: number): void {
+		if (waitMs > 0) this.songFetchNotBefore.set(songId, Date.now() + waitMs);
+		else this.songFetchNotBefore.delete(songId);
+	}
+
+	private isFetchableNow(songId: string): boolean {
+		return Date.now() >= (this.songFetchNotBefore.get(songId) ?? 0);
+	}
+
+	private retryWhenFetchable(heldSongIds: readonly string[]): void {
+		const selfHealing = heldSongIds.filter((songId) => this.failedSongs.get(songId) !== 'refused');
+		if (selfHealing.length === 0) return;
+		const latestDeadline = Math.max(
+			...selfHealing.map((id) => this.songFetchNotBefore.get(id) ?? 0)
+		);
+		this.scheduleFailedSongRetry(latestDeadline - Date.now());
+	}
+
+	/** Retry clears every failure it fetches again; a song still waiting out its rate limit stays failed. */
+	private forgetFailuresFetchableNow(): void {
+		for (const songId of [...this.failedSongs.keys()]) {
+			if (this.isFetchableNow(songId)) this.failedSongs.delete(songId);
 		}
 	}
 
 	private forgetFailedSong(songId: string): void {
 		this.failedSongs.delete(songId);
+		this.songFetchNotBefore.delete(songId);
 		if (this.selfHealingFailedSongIds().length === 0) this.failedSongRetryAttempt = 0;
 	}
 

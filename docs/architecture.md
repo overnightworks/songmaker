@@ -1007,8 +1007,12 @@ explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect; a later
 successful fetch clears Retry. Only a refresh that failed for the network, with
 a 5xx or with a 429 rate limit is fetched again on its own (on the next `hello`,
-on focus and on the backoff below, which waits at least a 429's `Retry-After`);
-one the server refused with any other 4xx is shown once and waits for the
+on focus and on the backoff below). A song answered with a `Retry-After` is never
+fetched sooner than that deadline on any path — focus, `hello`, a job's refresh,
+the backoff, and the musician's Retry too: the one place that fetches
+(`drainPending`) drops it from the queue until the deadline passes, it stays failed
+with its error shown, and the backoff fetches it once the deadline has passed. One
+the server refused with any other 4xx is shown once and waits for the
 musician's Retry, since another try would only repeat the refusal. A refresh that got no
 answer at all is not an error of this owner: it sets no visible error and no Retry,
 and the library shows no failure of its own. Whether the page can reach the server
