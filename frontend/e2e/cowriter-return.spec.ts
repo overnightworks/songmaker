@@ -29,9 +29,16 @@
 // Once a newer message is answered, the chat shows what the conversation
 // holds: an older failed message the server stored stays, without Try again,
 // exactly as a reload shows it.
+//
+// The ⋯ menu names each conversation with its start time, so two started the
+// same day read apart there and in the delete confirm, and keeps the active
+// one first, the rest newest first, however the server orders a re-read list
+// (#1090).
 
 import { expect, test, type Page, type Route } from '@playwright/test';
 import {
+	COWRITER_CONVERSATION_MENU_LABEL,
+	COWRITER_DELETE_CONVERSATION_TITLE,
 	COWRITER_TURN_PATH,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
@@ -326,6 +333,83 @@ test.describe('co-writer return at phone width', () => {
 		await openCowriterOnPickedSong(page);
 		await expect(chat).toHaveText(shown);
 		await expect(tryAgain).toHaveCount(0);
+	});
+	test('two conversations started the same day read apart and keep their order after a turn', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
+		const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
+		const stored: ChatMessage[] = [];
+		const running = {
+			id: CONVERSATION_ID,
+			title: null,
+			archived_at: null,
+			created_at: minutesAgo(2),
+			updated_at: minutesAgo(2),
+			last_message_at: null
+		};
+		const archived = {
+			id: 'e2e-cowriter-archived',
+			title: null,
+			message_count: 2,
+			archived_at: minutesAgo(3),
+			created_at: minutesAgo(4),
+			updated_at: minutesAgo(3),
+			last_message_at: null
+		};
+		let listReads = 0;
+		await page.route('**/api/conversations', (route: Route) => {
+			listReads += 1;
+			const current = { ...running, message_count: stored.length };
+			return route.fulfill({
+				json: { conversations: listReads === 1 ? [archived, current] : [current, archived] }
+			});
+		});
+		await page.route(`**/api/conversations/${CONVERSATION_ID}`, (route: Route) =>
+			route.fulfill({
+				json: {
+					conversation_id: CONVERSATION_ID,
+					title: null,
+					archived_at: null,
+					messages: stored,
+					turn_running: false
+				}
+			})
+		);
+		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
+			stored.push(sentMessage, replyMessage);
+			return route.fulfill({
+				contentType: 'text/event-stream',
+				body: turnStream({
+					type: 'final',
+					conversation_id: CONVERSATION_ID,
+					user_message: sentMessage,
+					assistant_message: replyMessage
+				})
+			});
+		});
+		const menuButton = page.getByRole('button', { name: COWRITER_CONVERSATION_MENU_LABEL });
+		const rowNames = page.locator('.convo-menu .conv-title');
+		const sameDayNames = [/^Conversation since .+ \d\d:\d\d$/, /^Archived · .+ \d\d:\d\d$/];
+
+		await openCowriterOnPickedSong(page);
+		await menuButton.click();
+		await expect(rowNames).toHaveText(sameDayNames);
+		const firstNames = await rowNames.allTextContents();
+		await page.keyboard.press('Escape');
+		const composer = page.getByPlaceholder(/Ask for a rewrite/);
+		await composer.fill(SENT);
+		await composer.press('Enter');
+		await expect(page.locator('.cowriter .message').last()).toHaveText(REPLY);
+		await expect.poll(() => listReads).toBeGreaterThan(1);
+		await menuButton.click();
+
+		await expect(rowNames).toHaveText(firstNames);
+		await page.getByRole('menuitem', { name: 'Delete conversation' }).last().click();
+		await expect(
+			page.getByRole('dialog', { name: COWRITER_DELETE_CONVERSATION_TITLE }).getByRole('listitem')
+		).toHaveText(`${firstNames[1]} · 2 msgs`);
 	});
 	for (const { musician, scrolledUp, inView, outOfView } of [
 		{
