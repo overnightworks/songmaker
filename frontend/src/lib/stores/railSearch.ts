@@ -1,13 +1,15 @@
 import { get, writable } from 'svelte/store';
 
+import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
 
-type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error';
+type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
 
 type RailSearchPageHref =
 	| '/'
@@ -67,6 +69,8 @@ interface RailSearchState {
 	hits: LibrarySearchHit[];
 }
 
+const SEARCH_FAILED_MESSAGE = 'Search failed';
+
 const SETTINGS_SECTION = 'Settings';
 
 const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
@@ -104,6 +108,7 @@ export const railSearch = writable<RailSearchState>({ ...EMPTY_RAIL_SEARCH });
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null;
 let searchGeneration = 0;
+const railSearchReloads = reloadWhileUnreachable(searchCurrentQueryAgain);
 
 export function syncRailSearch(rawQuery: string): void {
 	const query = rawQuery.trim();
@@ -122,9 +127,13 @@ export function syncRailSearch(rawQuery: string): void {
 }
 
 export function retryRailSearch(): void {
+	cancelPendingRailSearch();
+	searchCurrentQueryAgain();
+}
+
+function searchCurrentQueryAgain(): void {
 	const { query } = get(railSearch);
 	if (!query) return;
-	cancelPendingRailSearch();
 	setRailSearchLoading(query);
 	void runRailSearch(query);
 }
@@ -195,6 +204,7 @@ function isRailSearchUnderwayFor(query: string): boolean {
 }
 
 function cancelPendingRailSearch(): void {
+	railSearchReloads.stop();
 	if (searchTimer === null) return;
 	clearTimeout(searchTimer);
 	searchTimer = null;
@@ -217,13 +227,22 @@ async function runRailSearch(query: string): Promise<void> {
 			limit: RAIL_SEARCH_RESULT_LIMIT
 		});
 		if (generation !== searchGeneration) return;
+		railSearchReloads.stop();
 		railSearch.set({ query, status: 'ready', error: null, hits: response.items });
 	} catch (error) {
 		if (generation !== searchGeneration) return;
+		if (error instanceof NetworkError) {
+			const reload = railSearchReloads.afterNetworkFailure();
+			if (reload === 'on-reconnect') {
+				railSearch.set({ query, status: 'unreachable', error: null, hits: [] });
+				return;
+			}
+			if (reload === 'scheduled') return;
+		}
 		railSearch.set({
 			query,
 			status: 'error',
-			error: error instanceof Error ? error.message : 'Search failed',
+			error: describeFailure(error, SEARCH_FAILED_MESSAGE),
 			hits: []
 		});
 	}

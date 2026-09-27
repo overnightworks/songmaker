@@ -99,7 +99,7 @@
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
 	const phoneFailureId = $props.id();
-	const playbackFailure = $derived(isError ? (errorMsg ?? 'Error') : null);
+	const playbackFailure = $derived(isError ? errorMsg : null);
 	const nowPlayingTargetDescribedBy = $derived(
 		[nowPlayingTargetDescriptionId, playbackFailure && phoneFailureId].filter(Boolean).join(' ') ||
 			undefined

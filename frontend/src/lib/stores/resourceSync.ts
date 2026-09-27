@@ -1,5 +1,5 @@
 import { get, writable, type Writable } from 'svelte/store';
-import { ApiError, NetworkError, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, NetworkError, describeFailure, handleSessionLost } from '$lib/api/fetch';
 import { fetchMe } from '$lib/api/auth';
 import {
 	compareDecimalId,
@@ -990,10 +990,8 @@ async function runLimited<T>(
 // (#1039) while the failed work retries on its own, and its browser text
 // ("Failed to fetch") is not copy a musician should read either.
 function visibleErrorMessage(err: unknown): string | null {
-	if (err instanceof ApiError) return err.detail || err.message;
 	if (err instanceof NetworkError) return null;
-	if (err instanceof Error) return err.message;
-	return RESOURCE_SYNC_ERROR;
+	return describeFailure(err, RESOURCE_SYNC_ERROR);
 }
 
 function classifySongRefreshFailure(err: unknown): SongRefreshFailure {

@@ -113,7 +113,8 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
-import { ApiError, handleSessionLost } from '$lib/api/fetch';
+import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	libraryTakePool,
 	setDesktopNowPlayingSurface,
@@ -224,6 +225,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	resetConnectivityForTests();
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now: the
 	// module-level vi.fn() stubs from the vi.mock('$lib/api/client', ...)
 	// factory above need an explicit clear or their call history from one
@@ -2023,6 +2025,20 @@ describe('playAlbum start track', () => {
 		]);
 	});
 
+	it('offline, leaves a rejected take load to the strip instead of a toast', async () => {
+		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong).mockRejectedValueOnce(
+			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
+		);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('idle');
+		expect(get(toasts)).toEqual([]);
+	});
+
 	it('leaves a superseded start silent when its take load is rejected', async () => {
 		songList.set([
 			makeSong({ ...queuedSongDefaults(), generations: [] }),
@@ -3072,16 +3088,26 @@ describe('playTake', () => {
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
-	it('reports a generic toast when the queue-stream path rejects a non-Error value', async () => {
+	it.each([
+		{ failure: 'a non-Error value', thrown: 'offline', toast: 'Playback failed' },
+		{
+			failure: 'a browser error',
+			thrown: new TypeError('Failed to fetch'),
+			toast: 'Playback failed'
+		},
+		{
+			failure: 'a refusal with a reason',
+			thrown: new ApiError(409, 'Take is still rendering', '/api/generations/g1'),
+			toast: 'Take is still rendering'
+		}
+	])('names $failure as $toast, never browser text', async ({ thrown, toast }) => {
 		vi.mocked(audioPlayer.load).mockImplementationOnce(() => {
-			throw 'offline';
+			throw thrown;
 		});
 
 		await playTake(makeGen(genDefaults), makeSong(queuedSongDefaults()));
 
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ type: 'error', message: 'Playback failed' })
-		]);
+		expect(get(toasts)).toEqual([expect.objectContaining({ type: 'error', message: toast })]);
 	});
 });
 
@@ -3271,5 +3297,16 @@ describe('audioPlayer onAuthLost wiring', () => {
 		await onAuthLost();
 
 		expect(handleSessionLost).toHaveBeenCalledOnce();
+	});
+});
+
+describe('audioPlayer offline announcement wiring', () => {
+	it.each([
+		{ connection: 'offline', reachable: false, announced: true },
+		{ connection: 'online', reachable: true, announced: false }
+	])('leaves a lost network to the strip only while $connection', ({ reachable, announced }) => {
+		reportResourceStreamReachable(reachable);
+
+		expect(audioPlayer.currentCallbacks.networkFailureIsAnnounced()).toBe(announced);
 	});
 });

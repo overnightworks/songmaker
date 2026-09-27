@@ -12,7 +12,7 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
-	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS,
+	UNREACHABLE_RELOAD_DELAYS_MS,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
 	collectionPauseLabel,
@@ -152,9 +152,8 @@ function networkFailure(): NetworkError {
 }
 
 const ONE_SUGGESTION = { suggestions: [{ id: 'one', url: '/suggestion-one.png' }] };
-const RELOAD_ATTEMPTS = ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.length;
-const PAST_EVERY_RELOAD_MS =
-	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
+const RELOAD_ATTEMPTS = UNREACHABLE_RELOAD_DELAYS_MS.length;
+const PAST_EVERY_RELOAD_MS = UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
 
 async function reachSuggestionsLoads(count: number): Promise<void> {
 	await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(count));
@@ -576,7 +575,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		await reachSuggestionsLoads(1);
 		expect(target.querySelector('.cover-suggestions')).toBeNull();
 
-		await vi.advanceTimersByTimeAsync(ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS[0]);
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS[0]);
 
 		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
@@ -587,7 +586,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
 		const target = await renderDetail();
 		await reachSuggestionsLoads(1);
-		for (const [attempt, delay] of ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.entries()) {
+		for (const [attempt, delay] of UNREACHABLE_RELOAD_DELAYS_MS.entries()) {
 			expect(target.querySelector('.cover-suggestions')).toBeNull();
 			await vi.advanceTimersByTimeAsync(delay);
 			await reachSuggestionsLoads(attempt + 2);

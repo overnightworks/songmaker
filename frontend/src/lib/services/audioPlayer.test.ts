@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
 
+const NO_STRIP_SHOWN = (): boolean => false;
+
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
 		onEnded: null,
@@ -10,6 +12,7 @@ function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCa
 		onAuthLost: null,
 		onStreamRebuild: null,
 		onCurrentChange: null,
+		networkFailureIsAnnounced: NO_STRIP_SHOWN,
 		...overrides
 	};
 }
@@ -1158,11 +1161,35 @@ describe('error handling', () => {
 		expect(audioPlayer.error).toMatch(/not found/i);
 	});
 
-	it('network failure (probe rejects) yields network error message', async () => {
-		fetchMock.mockRejectedValueOnce(new Error('offline'));
+	it.each([
+		{
+			loss: 'the probe finding no network',
+			arrange: () => fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+		},
+		{
+			loss: 'the element reporting a network error',
+			arrange: () => {
+				fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+			}
+		}
+	])(
+		'adds no text of its own after $loss when the owner strip already says it',
+		async ({ arrange }) => {
+			audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => true }));
+			arrange();
+			fakeAudio.fire('error');
+			await new Promise((r) => setTimeout(r, 0));
+			expect(audioPlayer.status).toBe('error');
+			expect(audioPlayer.error).toBeNull();
+		}
+	);
+
+	it('names a failure no strip explains and offers the Retry', async () => {
+		fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
-		expect(audioPlayer.error).toMatch(/network/i);
+		expect(audioPlayer.status).toBe('error');
+		expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
 	});
 
 	it('decodes MEDIA_ERR_DECODE', async () => {
@@ -1184,13 +1211,6 @@ describe('error handling', () => {
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.error).toMatch(/aborted/i);
-	});
-
-	it('decodes MEDIA_ERR_NETWORK', async () => {
-		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
-		fakeAudio.fire('error');
-		await new Promise((r) => setTimeout(r, 0));
-		expect(audioPlayer.error).toMatch(/network/i);
 	});
 
 	it('unknown media error code falls back to generic message', async () => {
@@ -1377,7 +1397,7 @@ describe('toggle / play / pause', () => {
 		expect(audioPlayer.status).toBe(status);
 	});
 
-	it('NotAllowedError on autoplay sets paused with helpful error', async () => {
+	it('NotAllowedError on autoplay pauses and asks for Play, on a phone too', async () => {
 		fakeAudio.fire('canplay');
 		fakeAudio.playMock.mockReset();
 		fakeAudio.playMock.mockImplementation(() =>
@@ -1386,7 +1406,7 @@ describe('toggle / play / pause', () => {
 		audioPlayer.play();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('paused');
-		expect(audioPlayer.error).toMatch(/autoplay/i);
+		expect(audioPlayer.error).toBe('Autoplay blocked. Press Play to start.');
 	});
 
 	it('AbortError on play is silently ignored', async () => {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -410,6 +410,14 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain('Song service is down'));
 		expect(target.textContent).not.toContain('No such');
+	});
+
+	it('names a lost connection in its own words, never the browser text', async () => {
+		api.fetchSong.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
+		const target = openAddress();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
+		expect(target.textContent).not.toContain('Failed to fetch');
 	});
 
 	it('redirects after Try again once the failure is over', async () => {

@@ -15,8 +15,9 @@ import {
 	uploadPlaylistCover as uploadPlaylistCoverApi,
 	updatePlaylist
 } from '$lib/api/client';
-import { LIBRARY_PLAYLISTS_ERROR } from '$lib/constants';
+import { LIBRARY_PLAYLISTS_ERROR, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { toasts } from '$lib/stores/toast';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { AddAlbumToPlaylistResult, PlaylistDetailItem, PlaylistItem } from '$lib/api/types';
 import {
@@ -65,6 +66,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetPlaylists();
+	resetConnectivityForTests();
 	toasts.set([]);
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now; the
 	// module-level vi.fn() stubs from vi.mock('$lib/api/client', ...) above
@@ -317,6 +319,40 @@ describe('loadPlaylistDetail', () => {
 		expect(get(toasts)).toEqual([
 			expect.objectContaining({ message: 'Too many requests', type: 'error' })
 		]);
+	});
+});
+
+describe('loadPlaylistDetail without a connection', () => {
+	const unreachable = new NetworkError('/api/playlists/p1', new TypeError('Failed to fetch'));
+	const openPlaylist = makeDetail({ id: 'p1', title: 'Road Trip', slug: 'road-trip' });
+
+	it('offline, names no failure and loads the playlist once the connection is back', async () => {
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchPlaylist).mockRejectedValueOnce(unreachable);
+
+		await loadPlaylistDetail('p1');
+
+		expect(get(playlistDetailLoad)).toEqual({ status: 'unreachable', error: null });
+		expect(get(toasts)).toEqual([]);
+
+		vi.mocked(fetchPlaylist).mockResolvedValueOnce(openPlaylist);
+		reportResourceStreamReachable(true);
+		await vi.waitFor(() => expect(get(playlistDetailLoad).status).toBe('ready'));
+
+		expect(get(selectedPlaylistDetail)?.title).toBe('Road Trip');
+	});
+
+	it('online, names the failure with its Retry only once the reload backoff is spent', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchPlaylist).mockRejectedValue(unreachable);
+
+		await loadPlaylistDetail('p1');
+		for (const delay of UNREACHABLE_RELOAD_DELAYS_MS) {
+			expect(get(playlistDetailLoad).status).toBe('loading');
+			await vi.advanceTimersByTimeAsync(delay);
+		}
+
+		expect(get(playlistDetailLoad)).toEqual({ status: 'error', error: LIBRARY_PLAYLISTS_ERROR });
 	});
 });
 

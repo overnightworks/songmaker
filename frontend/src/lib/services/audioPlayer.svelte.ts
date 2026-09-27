@@ -13,7 +13,8 @@ type RecoveryReason = 'stall-timeout' | 'frozen-clock' | 'media-error';
 
 type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
 
-type Failure = { kind: FailureKind; message: string };
+// 'unreachable' carries no words: the owner's offline strip names the cause.
+type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
 
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
@@ -27,6 +28,9 @@ export interface AudioPlayerCallbacks {
 	onAuthLost: (() => void | Promise<void>) | null;
 	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null;
 	onCurrentChange: ((current: PlaybackInfo | null) => void) | null;
+	// Only the owner knows whether its page shows the offline strip; a page
+	// without one needs the player's own failure line.
+	networkFailureIsAnnounced: () => boolean;
 }
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
@@ -34,13 +38,13 @@ const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onPlaybackStarted: null,
 	onAuthLost: null,
 	onStreamRebuild: null,
-	onCurrentChange: null
+	onCurrentChange: null,
+	networkFailureIsAnnounced: () => false
 };
 
 const AUDIO_URL_PREFIX = '/audio/';
-const ERROR_MSG_GENERIC = 'Playback failed. Click play to retry.';
+const ERROR_MSG_GENERIC = 'Playback failed. Press Retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
-const ERROR_MSG_NETWORK = 'Network error. Check connection and retry.';
 const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const STALL_RECOVERY_MS = 5000;
 const MAX_RECOVERY_ATTEMPTS = 2;
@@ -64,7 +68,7 @@ class AudioPlayer {
 	private failure = $state<Failure | null>(null);
 
 	get error(): string | null {
-		return this.failure?.message ?? null;
+		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
 	}
 
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
@@ -843,7 +847,7 @@ class AudioPlayer {
 			this.status = 'paused';
 			this.failure = {
 				kind: 'autoplay-blocked',
-				message: 'Autoplay blocked. Click play to start.'
+				message: 'Autoplay blocked. Press Play to start.'
 			};
 			return;
 		}
@@ -851,7 +855,7 @@ class AudioPlayer {
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
-		this.fail('failed', ERROR_MSG_GENERIC);
+		this.failForAnUnknownReason();
 
 		const target = this.current;
 		const url = this.currentUrl;
@@ -866,9 +870,18 @@ class AudioPlayer {
 			return;
 		}
 		if (probe.status === 404) this.failure = { kind: 'failed', message: ERROR_MSG_NOT_FOUND };
-		else if (probe.status === 0) this.failure = { kind: 'failed', message: ERROR_MSG_NETWORK };
-		else if (probe.ok && mediaError)
+		else if (probe.ok && mediaError && mediaError.code !== MediaError.MEDIA_ERR_NETWORK)
 			this.failure = { kind: 'failed', message: decodeMediaError(mediaError) };
+		else this.failForAnUnknownReason();
+	}
+
+	private failForAnUnknownReason(): void {
+		if (this.callbacks.networkFailureIsAnnounced()) {
+			this.status = 'error';
+			this.failure = { kind: 'unreachable' };
+			return;
+		}
+		this.fail('failed', ERROR_MSG_GENERIC);
 	}
 
 	private setCurrent(current: PlaybackInfo | null): void {
@@ -882,12 +895,12 @@ function bufferedUntil(el: HTMLAudioElement): number {
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
+// A lost network is never decoded here: where the owner's strip names it
+// (#1039), the player adds no network wording of its own.
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:
 			return 'Playback aborted.';
-		case MediaError.MEDIA_ERR_NETWORK:
-			return ERROR_MSG_NETWORK;
 		case MediaError.MEDIA_ERR_DECODE:
 			return 'Audio file is corrupted.';
 		case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
