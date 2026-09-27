@@ -32,7 +32,6 @@
 		COWRITER_CONVERSATION_STARTED_TODAY,
 		COWRITER_NEW_CONVERSATION_LABEL,
 		COWRITER_NEW_CONVERSATION_LINE,
-		COWRITER_PROVIDER_LABELS,
 		COWRITER_RUNNING_TURN_POLL_FAILURE_LIMIT,
 		COWRITER_RUNNING_TURN_POLL_MS,
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
@@ -59,7 +58,8 @@
 		cowriterHeaderLabel,
 		cowriterThinkingLabel,
 		cowriterToolCallTarget,
-		cowriterUnavailableLabel
+		cowriterUnavailableLabel,
+		providerDisplayName
 	} from '$lib/utils/cowriter-ui';
 	import ChatInput from './ChatInput.svelte';
 	import Icon from './Icon.svelte';
@@ -799,8 +799,6 @@
 		return template.replace('{day}', conversationStartDay(viewing.created_at));
 	});
 
-	const providerLabel = $derived(COWRITER_PROVIDER_LABELS[providerName] ?? providerName);
-
 	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
 		event.stopPropagation();
 		conversationMenuOpen = !conversationMenuOpen;
@@ -856,7 +854,7 @@
 <div class="cowriter">
 	<div class="convo">
 		<span class="convo-line">
-			{#if providerModel}<b>{providerLabel}</b> ·{/if}
+			{#if providerModel}<b>{providerDisplayName(providerName)}</b> ·{/if}
 			{conversationLine}
 		</span>
 		<div class="convo-menu-anchor">

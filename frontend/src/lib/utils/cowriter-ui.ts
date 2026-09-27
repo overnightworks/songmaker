@@ -46,7 +46,11 @@ export function cowriterUnavailableLabel(provider: string): string {
 	return `${provider} is currently unavailable`;
 }
 
+export function providerDisplayName(provider: string): string {
+	return provider.charAt(0).toUpperCase() + provider.slice(1);
+}
+
 export function cowriterHeaderLabel(provider: string, model: string): string {
 	if (!model) return 'Co-Writer';
-	return `${provider} · ${model}`;
+	return `${providerDisplayName(provider)} · ${model}`;
 }
