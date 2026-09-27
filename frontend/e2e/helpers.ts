@@ -145,13 +145,19 @@ const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_E
  * leaves a live event stream the page already holds running (see
  * docs/testing.md), so the page's open loads are stopped the way a dropped
  * network ends them, and every reopen of the library's resource stream is
- * refused until `regainNetwork`.
+ * refused until `regainNetwork`. `keepOpenStreams` leaves the streams already
+ * open running and refuses only new requests: the moment a stream's last
+ * event is already on its way when the network goes.
  */
-export async function loseNetwork(page: Page, context: BrowserContext): Promise<void> {
+export async function loseNetwork(
+	page: Page,
+	context: BrowserContext,
+	{ keepOpenStreams = false }: { keepOpenStreams?: boolean } = {}
+): Promise<void> {
 	pagesWithoutNetwork.add(page);
 	await page.route(isResourceEventStream, (route) => route.abort('internetdisconnected'));
 	await context.setOffline(true);
-	await page.evaluate(() => window.stop());
+	if (!keepOpenStreams) await page.evaluate(() => window.stop());
 }
 
 /** Gives the page its network back: the browser reports online and the stream may reopen. */
