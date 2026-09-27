@@ -1,6 +1,7 @@
 import { mount, tick, unmount, type Component } from 'svelte';
 import { vi } from 'vitest';
 
+import type { LibrarySearchHit } from '$lib/api/library';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -8,8 +9,10 @@ import type {
 	PlaylistDetailItem,
 	PlaylistEntryItem,
 	PlaylistItem,
-	SongItem
+	SongItem,
+	SongSummaryResponse
 } from '$lib/api/types';
+import { makeSongSummary } from '$lib/test-utils/factories';
 
 // Shared across every Rail*.test.ts in this directory. Vitest only hoists
 // vi.mock from the test file, so each test still registers the modules; the
@@ -127,6 +130,18 @@ export function buildPlaylist(overrides: Partial<PlaylistItem> = {}): PlaylistIt
 		created_at: '2026-01-01T00:00:00+00:00',
 		...overrides
 	};
+}
+
+export function buildAlbumSearchHit(overrides: Partial<AlbumItem> = {}): LibrarySearchHit {
+	return { type: 'album', album: buildAlbum(overrides) };
+}
+
+export function buildSongSearchHit(
+	overrides: Partial<SongSummaryResponse> = {},
+	albumTitle = 'Nachtstrom'
+): LibrarySearchHit {
+	const song = makeSongSummary({ album_title: albumTitle, ...overrides });
+	return { type: 'song', song, album_id: song.album_id, album_title: albumTitle };
 }
 
 export function buildPlaylistEntry(overrides: Partial<PlaylistEntryItem> = {}): PlaylistEntryItem {
