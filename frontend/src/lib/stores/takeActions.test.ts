@@ -14,7 +14,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import type { JobStatus } from '$lib/api/client';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	fetchSong,
 	keepGeneration,
@@ -29,6 +29,9 @@ import { songList } from '$lib/stores/libraryData';
 import { toasts } from '$lib/stores/toast';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, rescoringTakeIds, setKeep, setPick } from './takeActions';
+
+const unreachableServer = () =>
+	new NetworkError('/api/generations/g1', new TypeError('Failed to fetch'));
 
 function actionSongDefaults(): Partial<SongItem> {
 	return {
@@ -123,7 +126,7 @@ describe('setPick', () => {
 	});
 
 	it('leaves songList unchanged when the API call fails', async () => {
-		vi.mocked(pickGeneration).mockRejectedValue(new TypeError('Failed to fetch'));
+		vi.mocked(pickGeneration).mockRejectedValue(unreachableServer());
 		songList.set([song(actionSongDefaults())]);
 
 		await setPick('s1', 'g1', true);
@@ -188,7 +191,7 @@ describe('rate', () => {
 	});
 
 	it('leaves songList unchanged when the API call fails', async () => {
-		vi.mocked(rateGeneration).mockRejectedValue(new TypeError('Failed to fetch'));
+		vi.mocked(rateGeneration).mockRejectedValue(unreachableServer());
 		songList.set([song(actionSongDefaults())]);
 
 		await rate('s1', 'g1', 80);
@@ -308,7 +311,7 @@ describe('a failed take action', () => {
 	it.each(actions)(
 		'names its own short failure, never the browser text, when $name cannot reach the server',
 		async ({ request, run, fallback }) => {
-			vi.mocked(request).mockRejectedValue(new TypeError('Failed to fetch'));
+			vi.mocked(request).mockRejectedValue(unreachableServer());
 
 			await run();
 
