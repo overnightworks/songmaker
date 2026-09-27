@@ -33,7 +33,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 const mounted: Array<ReturnType<typeof mount>> = [];
 const snippets = {
 	sharedLink: createRawSnippet(() => ({ render: () => '<div>Share link</div>' })),
-	write: createRawSnippet(() => ({
+	edit: createRawSnippet(() => ({
 		render: () => '<textarea aria-label="Lyrics">Draft</textarea>'
 	})),
 	cowriter: createRawSnippet(() => ({ render: () => '<div class="cowriter-screen">Chat</div>' })),
@@ -42,7 +42,7 @@ const snippets = {
 
 beforeEach(() => {
 	generateAction.set(IDLE_GENERATE);
-	detailTab.set('write');
+	detailTab.set('edit');
 	coWriterOpen.set(false);
 	generationFailures.set({});
 	clearSelection();
@@ -51,7 +51,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	detailTab.set('write');
+	detailTab.set('edit');
 	coWriterOpen.set(false);
 	clearComponentStyles();
 });
@@ -92,7 +92,7 @@ function expectGenerateAsPrimaryAction(target: HTMLElement): void {
 }
 
 describe('SongPhoneView', () => {
-	it('switches from the supplied Write surface to the real takes and back', async () => {
+	it('switches from the supplied Edit surface to the real takes and back', async () => {
 		const takes = [makeGeneration(), makeGeneration({ id: 'g2', generation_number: 2 })];
 		const target = await render({ song: makeSong({ generations: takes, generation_count: 2 }) });
 		expect(target.querySelector('textarea')?.value).toBe('Draft');
@@ -136,32 +136,32 @@ describe('SongPhoneView', () => {
 		}
 	);
 
-	// #993: the Generate action used to scroll away with the rest of the Write
+	// #993: the Generate action used to scroll away with the rest of the Edit
 	// tab. jsdom computes no layout, so the real cascade has to be injected onto
 	// the action bar before its position can be read back; this proves the
 	// action sits in its own end-of-tab container and that container is the
 	// one declared sticky.
-	it('pins the Generate action in a sticky action bar at the end of the Write tab', async () => {
+	it('pins the Generate action in a sticky action bar at the end of the Edit tab', async () => {
 		const target = await render();
 		const actionBar = target.querySelector('[role="tabpanel"] > :last-child');
-		expect(actionBar?.classList.contains('write-actionbar')).toBe(true);
+		expect(actionBar?.classList.contains('edit-actionbar')).toBe(true);
 		expect(actionBar?.querySelector('.generate-action')).not.toBeNull();
 		if (!actionBar) throw new Error('Expected an action bar');
 		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
 		expect(getComputedStyle(actionBar).position).toBe('sticky');
 	});
 
-	it('keeps the Write action bar one row: a disabled Generate says why inside itself', async () => {
+	it('keeps the Edit action bar one row: a disabled Generate says why inside itself', async () => {
 		generateAction.set({ kind: 'disabled', mode: 'generate', reason: EDITOR_GPU_OFFLINE_TITLE });
 		const target = await render();
-		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
+		const actionBar = target.querySelector<HTMLElement>('.edit-actionbar');
 		const button = actionBar?.querySelector('button');
 		expect(button?.disabled).toBe(true);
 		expect(button?.textContent?.trim()).toBe(`ⓘ ${EDITOR_GPU_OFFLINE_TITLE}`);
 		expect(actionBar?.textContent?.trim()).toBe(button?.textContent?.trim());
 	});
 
-	it('raises the reserved Write space to match a taller action bar (#993 follow-up)', async () => {
+	it('raises the reserved Edit space to match a taller action bar (#993 follow-up)', async () => {
 		// jsdom ships no ResizeObserver (src/tests/setup.ts stubs an inert one); this
 		// records the real callback so the test can fire it like the browser would
 		// once the action bar changes size.
@@ -181,15 +181,15 @@ describe('SongPhoneView', () => {
 			for (const callback of resizeCallbacks) callback([], {} as ResizeObserver);
 		};
 		const target = await render();
-		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
-		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
-		if (!actionBar || !writeScroll) throw new Error('Expected the action bar and write scroll');
+		const actionBar = target.querySelector<HTMLElement>('.edit-actionbar');
+		const editScroll = target.querySelector<HTMLElement>('.edit-scroll');
+		if (!actionBar || !editScroll) throw new Error('Expected the action bar and edit scroll');
 
 		vi.spyOn(actionBar, 'offsetHeight', 'get').mockReturnValue(140);
 		triggerResize();
 		await tick();
 
-		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('140px');
+		expect(editScroll.style.getPropertyValue('--generate-bar-height')).toBe('140px');
 	});
 
 	it('steps the Generate bar and its reserved room aside while the lyrics have focus, and brings them back on leaving', async () => {
@@ -197,15 +197,15 @@ describe('SongPhoneView', () => {
 		const stopWatching = watchTypingOnPhone(document, true);
 		const target = await render();
 		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea[aria-label="Lyrics"]');
-		const actionBar = target.querySelector<HTMLElement>('.write-actionbar');
-		const writeScroll = target.querySelector<HTMLElement>('.write-scroll');
-		if (!lyrics || !actionBar || !writeScroll) throw new Error('Expected the Write tab');
+		const actionBar = target.querySelector<HTMLElement>('.edit-actionbar');
+		const editScroll = target.querySelector<HTMLElement>('.edit-scroll');
+		if (!lyrics || !actionBar || !editScroll) throw new Error('Expected the Edit tab');
 		injectComponentStyles(songPhoneViewSource, 'SongPhoneView.svelte', actionBar);
 
 		lyrics.focus();
 		await tick();
 		expect(getComputedStyle(actionBar).display).toBe('none');
-		expect(writeScroll.style.getPropertyValue('--generate-bar-height')).toBe('0px');
+		expect(editScroll.style.getPropertyValue('--generate-bar-height')).toBe('0px');
 
 		lyrics.blur();
 		await tick();

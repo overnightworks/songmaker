@@ -1,10 +1,6 @@
 <script lang="ts">
 	import { detailTab, navigateToSongTab, type DetailTab } from '$lib/stores/navigation';
-	import {
-		EDITOR_TAB_TAKES_LABEL,
-		EDITOR_TAB_WRITE_LABEL,
-		EDITOR_TABS_LABEL
-	} from '$lib/constants';
+	import { EDITOR_TAB_EDIT_LABEL, EDITOR_TAB_TAKES_LABEL, EDITOR_TABS_LABEL } from '$lib/constants';
 	import { generateAction, isGenerateBusy } from '$lib/stores/generateAction';
 	import { typingOnPhone } from '$lib/stores/ui';
 
@@ -13,7 +9,7 @@
 	}
 
 	let { takeCount }: Props = $props();
-	const tabs: readonly DetailTab[] = ['write', 'takes'];
+	const tabs: readonly DetailTab[] = ['edit', 'takes'];
 	const jobRunning = $derived(isGenerateBusy($generateAction));
 
 	function onKeydown(event: KeyboardEvent): void {
@@ -21,10 +17,10 @@
 		switch (event.key) {
 			case 'ArrowLeft':
 			case 'ArrowRight':
-				tab = $detailTab === 'write' ? 'takes' : 'write';
+				tab = $detailTab === 'edit' ? 'takes' : 'edit';
 				break;
 			case 'Home':
-				tab = 'write';
+				tab = 'edit';
 				break;
 			case 'End':
 				tab = 'takes';
@@ -59,8 +55,8 @@
 			onclick={() => navigateToSongTab(tab)}
 			onkeydown={onKeydown}
 		>
-			{#if tab === 'write'}
-				{EDITOR_TAB_WRITE_LABEL}
+			{#if tab === 'edit'}
+				{EDITOR_TAB_EDIT_LABEL}
 			{:else}
 				{EDITOR_TAB_TAKES_LABEL} <span class="count">({takeCount})</span>
 				{#if jobRunning}<span class="ring" aria-hidden="true"></span>{/if}

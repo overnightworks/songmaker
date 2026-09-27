@@ -8,7 +8,11 @@ import { ApiError } from '$lib/api/fetch';
 import { EDITOR_LYRICS_LABEL } from '$lib/constants';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { detailTab, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import {
+	detailTab,
+	libraryRootState,
+	resetLibraryContextForTests
+} from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
@@ -198,12 +202,36 @@ afterEach(() => {
 });
 
 describe('/album/<slug>/<song-slug> opened cold', () => {
-	it('shows the song in the editor', async () => {
+	it('shows the song in the editor on the Edit tab', async () => {
 		const target = openAddress();
 
 		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
 		expect(target.textContent).toContain(EDITOR_LYRICS_LABEL);
+		expect(get(detailTab)).toBe('edit');
 		expect(workspaceWrapper(target).hasAttribute('inert')).toBe(false);
+	});
+
+	it.each([
+		['write', 'edit'],
+		['generations', 'takes']
+	] as const)('restores a reload of an old %s history entry on %s', async (legacy, restored) => {
+		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
+		history.replaceState(
+			{
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: ALBUM_SLUG },
+				songId: 'song-1',
+				detailTab: legacy as never
+			},
+			'',
+			`/album/${ALBUM_SLUG}/${SONG_SLUG}`
+		);
+
+		const target = openAddress();
+
+		await vi.waitFor(() => expect(target.textContent).toContain(TRACK_TITLE));
+		expect(get(detailTab)).toBe(restored);
 	});
 
 	it('keeps the address it was opened with', async () => {
