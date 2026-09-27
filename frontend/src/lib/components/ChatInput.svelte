@@ -1,9 +1,10 @@
 <script lang="ts">
+	import { COWRITER_COMPOSER_PLACEHOLDER, COWRITER_SEND_LABEL } from '$lib/constants';
+
 	interface Props {
 		value: string;
 		disabled: boolean;
 		inputRef?: HTMLTextAreaElement;
-		placeholder?: string;
 		oninput: () => void;
 		onkeydown: (e: KeyboardEvent) => void;
 		onsend: () => void;
@@ -13,7 +14,6 @@
 		value = $bindable(),
 		disabled,
 		inputRef = $bindable(),
-		placeholder = 'Ask the co-writer... (@song, @album, or @v1)',
 		oninput,
 		onkeydown,
 		onsend
@@ -23,61 +23,67 @@
 <div class="input-row">
 	<textarea
 		class="chat-input"
-		rows="2"
-		{placeholder}
+		rows="1"
+		placeholder={COWRITER_COMPOSER_PLACEHOLDER}
 		bind:value
 		bind:this={inputRef}
 		{onkeydown}
 		{oninput}></textarea>
-	<button class="send-btn" onclick={onsend} {disabled} aria-label="Send"> ↑ </button>
+	<button type="button" class="send-btn" onclick={onsend} {disabled}>{COWRITER_SEND_LABEL}</button>
 </div>
 
 <style>
 	.input-row {
 		display: flex;
-		gap: 6px;
-		padding: 8px;
+		align-items: flex-end;
+		gap: 0.5rem;
+		padding: 0.6rem 0.6rem 0.6rem 0.75rem;
+		background: var(--header-bg);
 		border-top: 1px solid var(--border);
 	}
 
 	.chat-input {
 		flex: 1;
-		padding: 6px 10px;
+		min-width: 0;
+		min-height: var(--hitbox-frequent);
+		max-height: 9rem;
+		field-sizing: content;
+		padding: 0.5rem 0.85rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
-		border-radius: 4px;
+		border-radius: var(--input-radius);
 		color: var(--text);
 		font-family: var(--font-body);
 		font-size: 1rem;
+		line-height: 1.4;
 		resize: none;
 	}
 
 	.chat-input:focus {
-		border-color: var(--accent);
+		border-color: var(--primary);
 		outline: none;
-		box-shadow: 0 0 8px rgba(160, 32, 240, 0.2);
+		box-shadow: 0 0 0 1px var(--primary);
 	}
 
 	.send-btn {
-		width: 36px;
-		height: 36px;
-		border-radius: 50%;
-		border: 2px solid var(--primary);
-		background: transparent;
-		color: var(--primary);
-		font-size: 1.07rem;
 		flex-shrink: 0;
-		align-self: flex-end;
-	}
-
-	.send-btn:hover:not(:disabled) {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		border-color: transparent;
-		color: #fff;
+		min-height: var(--hitbox-frequent);
+		padding: 0 1.5rem;
+		border: 1px solid var(--primary);
+		border-radius: var(--btn-radius-sm);
+		background: var(--primary);
+		color: var(--surface);
+		font-family: var(--font-display);
+		font-size: var(--btn-font-size);
+		letter-spacing: var(--btn-letter-spacing);
+		text-transform: uppercase;
+		cursor: pointer;
 	}
 
 	.send-btn:disabled {
-		opacity: 0.3;
-		cursor: not-allowed;
+		background: none;
+		border-color: var(--border);
+		color: var(--text-disabled);
+		cursor: default;
 	}
 </style>
