@@ -2653,6 +2653,52 @@ describe('playIdleStart', () => {
 			expect(get(queueContext).type).not.toBe('playlist');
 			expect(get(playStartNotice)).toBe('idle');
 		});
+
+		it('plays nothing when the listener opens an album before it arrives', async () => {
+			const started = playIdleStart();
+			openCollection.set({ kind: 'album', id: 'a1' });
+			answerOpened.resolve(opened);
+			await started;
+
+			expect(get(queueContext).type).not.toBe('playlist');
+			expect(audioPlayer.load).not.toHaveBeenCalled();
+			expect(get(playStartNotice)).toBe('idle');
+		});
+
+		it('never replaces a play the listener started after pressing Play', async () => {
+			songList.set([
+				makeSong({
+					...queuedSongDefaults(),
+					title: 'Album song',
+					generations: [makeGen({ ...genDefaults, is_picked: true })]
+				})
+			]);
+			const started = playIdleStart();
+			openCollection.set({ kind: 'album', id: 'a1' });
+			await playAlbum('a1');
+			void loadPlaylistDetail(opened.id);
+			answerOpened.resolve(opened);
+			await started;
+
+			expect(get(queueContext)).toMatchObject({ type: 'album', albumId: 'a1' });
+			expect(audioPlayer.load).not.toHaveBeenCalledWith(
+				expect.objectContaining({ songTitle: 'Opened list' }),
+				expect.anything()
+			);
+		});
+
+		it('keeps a newer failed start visible when it arrives', async () => {
+			const started = playIdleStart();
+			openCollection.set(null);
+			vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(new Error('server error'));
+			await playIdleStart();
+			expect(get(playStartNotice)).toBe('error');
+
+			answerOpened.resolve(opened);
+			await started;
+
+			expect(get(playStartNotice)).toBe('error');
+		});
 	});
 
 	it('falls back to the library pool when the open playlist detail failed to load', async () => {
