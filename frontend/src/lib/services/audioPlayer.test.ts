@@ -593,6 +593,32 @@ describe('frozen-clock watchdog', () => {
 		}
 	);
 
+	it.each([
+		{ action: 'Retry', leaveGivenUpState: () => audioPlayer.play() },
+		{
+			action: 'loading another take',
+			leaveGivenUpState: () =>
+				audioPlayer.load(
+					makeInfo({ generation: makeGen({ id: 'g2', mp3_path: 'a1/other.mp3' }) }),
+					{ autoplay: false }
+				)
+		}
+	])('leaves the stalled state behind after $action', async ({ leaveGivenUpState }) => {
+		await freezeUntilTheRecoveryBudgetIsSpent();
+
+		leaveGivenUpState();
+		const afterLeaving = { status: audioPlayer.status, error: audioPlayer.error };
+		startPlayingAt(fakeAudio.currentTime);
+
+		expect({
+			afterLeaving,
+			afterPlaying: { status: audioPlayer.status, error: audioPlayer.error }
+		}).toEqual({
+			afterLeaving: { status: 'loading', error: null },
+			afterPlaying: { status: 'playing', error: null }
+		});
+	});
+
 	it.each(playbackModes)(
 		'tries again when a reload of $mode never answers, then offers Retry once the budget is spent',
 		async ({ loadMode }) => {
@@ -609,6 +635,7 @@ describe('frozen-clock watchdog', () => {
 				retried: true
 			});
 
+			fakeAudio.paused = false;
 			advanceSeconds(5);
 			await vi.advanceTimersByTimeAsync(0);
 			expect({
