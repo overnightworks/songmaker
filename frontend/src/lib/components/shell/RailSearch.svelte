@@ -16,8 +16,11 @@
 	import { titleInitials } from '$lib/utils/format';
 	import PlaylistCover from '../PlaylistCover.svelte';
 
-	const ACTIVE_RESULT_CLASS = 'rail-search-result-active';
 	const DETAIL_SEPARATOR = ' · ';
+	const SELECTED_RESULT_SELECTOR = '[aria-selected="true"]';
+
+	const uid = $props.id();
+	const listboxId = `${uid}-results`;
 
 	const query = $derived($railTreeQuery);
 	const searchState = $derived($railSearch);
@@ -34,9 +37,19 @@
 		)
 	);
 	const activeResultId = $derived(results[activeIndex]?.id ?? null);
+	const activeOptionId = $derived(activeResultId === null ? undefined : optionId(activeResultId));
+	const listboxShown = $derived(hasQuery && results.length > 0);
 
 	let input: HTMLInputElement;
 	let panel: HTMLElement | undefined = $state();
+
+	function optionId(resultId: string): string {
+		return `${uid}-option-${resultId}`;
+	}
+
+	function groupLabelId(groupIndex: number): string {
+		return `${uid}-group-${groupIndex}`;
+	}
 
 	function setQuery(value: string): void {
 		chosenResultId = null;
@@ -55,7 +68,7 @@
 
 	$effect(() => {
 		if (chosenResultId === null) return;
-		panel?.querySelector(`.${ACTIVE_RESULT_CLASS}`)?.scrollIntoView({ block: 'nearest' });
+		panel?.querySelector(SELECTED_RESULT_SELECTOR)?.scrollIntoView({ block: 'nearest' });
 	});
 
 	function moveActiveResult(step: 1 | -1): void {
@@ -108,10 +121,15 @@
 		<input
 			bind:this={input}
 			type="search"
+			role="combobox"
 			data-hitbox="text"
 			value={query}
 			placeholder={RAIL_SEARCH_LABEL}
 			aria-label={RAIL_SEARCH_LABEL}
+			aria-autocomplete="list"
+			aria-expanded={listboxShown}
+			aria-controls={listboxId}
+			aria-activedescendant={listboxShown ? activeOptionId : undefined}
 			oninput={onInput}
 			onkeydown={onKeydown}
 		/>
@@ -138,55 +156,58 @@
 			{/if}
 
 			{#if groups.length > 0}
-				{#each groups as group (group.label)}
-					<section class="rail-search-group" aria-label={`${group.label} results`}>
-						<h2>{group.label}</h2>
-						<ul>
+				<div id={listboxId} role="listbox" aria-label="Search results">
+					{#each groups as group, groupIndex (group.label)}
+						<ul class="rail-search-group" role="group" aria-labelledby={groupLabelId(groupIndex)}>
+							<li id={groupLabelId(groupIndex)} class="rail-search-group-label" role="presentation">
+								{group.label}
+							</li>
 							{#each group.results as result (result.id)}
-								<li>
-									<button
-										type="button"
-										class="rail-search-result"
-										class:rail-search-result-active={result.id === activeResultId}
-										onclick={() => selectResult(result.target)}
-									>
-										{#if result.picture.kind === 'album'}
-											<span class="rail-search-art" aria-hidden="true">
-												{#if result.picture.cover}
-													<img src={result.picture.cover.card} alt="" />
-												{:else}
-													{titleInitials(result.label)}
-												{/if}
-											</span>
-										{:else if result.picture.kind === 'playlist'}
-											<PlaylistCover
-												title={result.label}
-												covers={result.picture.covers}
-												cover={result.picture.cover}
-												size="var(--rail-search-picture)"
-											/>
-										{:else}
-											<span
-												class="rail-search-glyph"
-												class:rail-search-page-glyph={result.picture.kind === 'page'}
-												aria-hidden="true">{result.picture.glyph}</span
-											>
-										{/if}
-										<span class="rail-search-text">
-											<span class="rail-search-title">{@render markedText(result.labelParts)}</span>
-											<small
-												><span class="rail-search-kind">{result.kindWord}</span
-												>{#if result.detailParts.length > 0}{DETAIL_SEPARATOR}{@render markedText(
-														result.detailParts
-													)}{/if}</small
-											>
+								<li
+									id={optionId(result.id)}
+									class="rail-search-result"
+									role="option"
+									tabindex="-1"
+									aria-selected={result.id === activeResultId}
+									onclick={() => selectResult(result.target)}
+									onkeydown={onKeydown}
+								>
+									{#if result.picture.kind === 'album'}
+										<span class="rail-search-art" aria-hidden="true">
+											{#if result.picture.cover}
+												<img src={result.picture.cover.card} alt="" />
+											{:else}
+												{titleInitials(result.label)}
+											{/if}
 										</span>
-									</button>
+									{:else if result.picture.kind === 'playlist'}
+										<PlaylistCover
+											title={result.label}
+											covers={result.picture.covers}
+											cover={result.picture.cover}
+											size="var(--rail-search-picture)"
+										/>
+									{:else}
+										<span
+											class="rail-search-glyph"
+											class:rail-search-page-glyph={result.picture.kind === 'page'}
+											aria-hidden="true">{result.picture.glyph}</span
+										>
+									{/if}
+									<span class="rail-search-text">
+										<span class="rail-search-title">{@render markedText(result.labelParts)}</span>
+										<small
+											><span class="rail-search-kind">{result.kindWord}</span
+											>{#if result.detailParts.length > 0}{DETAIL_SEPARATOR}{@render markedText(
+													result.detailParts
+												)}{/if}</small
+										>
+									</span>
 								</li>
 							{/each}
 						</ul>
-					</section>
-				{/each}
+					{/each}
+				</div>
 			{:else if searchState.status === 'ready'}
 				<p class="rail-search-status">No results for “{searchState.query}”.</p>
 			{/if}
@@ -308,7 +329,7 @@
 		cursor: pointer;
 	}
 
-	.rail-search-group h2 {
+	.rail-search-group-label {
 		margin: 8px 16px 3px;
 		color: var(--text-subtle);
 		font-family: var(--font-display);
@@ -318,7 +339,7 @@
 		text-transform: uppercase;
 	}
 
-	.rail-search-group ul {
+	.rail-search-group {
 		list-style: none;
 		margin: 0;
 		padding: 0;
@@ -328,14 +349,10 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
-		width: 100%;
 		padding: 5px 16px 5px 13px;
-		border: 0;
 		border-left: 3px solid transparent;
-		background: none;
+		outline: 0;
 		color: var(--text-muted);
-		font: inherit;
-		text-align: left;
 		cursor: pointer;
 	}
 
@@ -357,11 +374,13 @@
 		min-height: 48px;
 	}
 
-	.rail-search-result:hover,
-	.rail-search-result:focus-visible,
-	.rail-search-result-active {
+	.rail-search-result:hover {
+		background: color-mix(in srgb, var(--primary) 4%, transparent);
+		color: var(--text);
+	}
+
+	.rail-search-result[aria-selected='true'] {
 		border-left-color: var(--primary);
-		outline: 0;
 		background: color-mix(in srgb, var(--primary) 8%, transparent);
 		color: var(--text);
 	}
