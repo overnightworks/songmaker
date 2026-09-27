@@ -14,7 +14,6 @@ import {
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
-	LIBRARY_QUEUE_EMPTY_TITLE,
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
@@ -622,19 +621,19 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 	}
 });
 
-test('an album with nothing to play leaves the running album playing on and its circle at play', async ({
+test('an album with nothing to play dims its circle and shuffle and leaves the running album playing on', async ({
 	page
 }, testInfo) => {
 	const shell = shellOf(testInfo);
 	const library = readSeededLibrary();
 	const surface = workspace(page);
 	const transport = page.getByRole('contentinfo');
-	const transportPause = transport.getByRole('button', {
-		name: TRANSPORT_PAUSE_LABEL,
-		exact: true
-	});
 	const albumCircle = surface.getByRole('button', {
 		name: collectionPlayLabel('album'),
+		exact: true
+	});
+	const albumShuffle = surface.getByRole('button', {
+		name: collectionShuffleLabel('album'),
 		exact: true
 	});
 
@@ -649,16 +648,22 @@ test('an album with nothing to play leaves the running album playing on and its 
 		.click();
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
-	await albumCircle.click();
+	await expect(albumCircle).toBeDisabled();
+	await expect(albumShuffle).toBeDisabled();
+	await albumCircle.click({ force: true });
+	await albumShuffle.click({ force: true });
+
 	await expect(
-		page.getByText(`${LIBRARY_QUEUE_EMPTY_TITLE} (${library.secondAlbumTitle})`)
+		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 	).toBeVisible();
-	// The seeded take is a few seconds long: the running album moves on to its
-	// next song, so its queue is still the one that plays.
-	await expect(transport.getByText(library.pickedSongTitle)).toBeHidden();
-	await expect(transportPause).toBeVisible();
 	if (shell === 'mobile') {
 		await expect(transport.getByText(nowPlayingFromLabel(library.albumTitle))).toBeVisible();
+	} else {
+		await expect(
+			transport.getByRole('button', {
+				name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+			})
+		).toHaveAttribute('aria-pressed', 'false');
 	}
 	await expect(
 		surface.getByRole('button', { name: collectionPauseLabel('album'), exact: true })
