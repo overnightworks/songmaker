@@ -1,8 +1,0 @@
-claim_id = "9c5d30747dc540888a0311e8324bdd9d"
-agent = "claude-head"
-role = "builder"
-base = "2d23f1947902f00c14dec881b608639cd3921a13"
-branch = "claude/issue-1045-current-song-prompt"
-scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/conversation_api.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/mcp_server/server.py", "tests/fixtures/cowriter_tool_catalog_prompt.txt", "tests/test_conversation_api.py", "tests/test_cowriter_catalog.py", "tests/test_cowriter_tool_catalog.py", "tests/test_cowriter_tools.py", "tests/test_mcp_server.py"]
-opened_commit = "53ce5ad56c2ee5376a8289766ba0c6e6e725327d"
-whole_reason = "one prompt sentence and its tool description with their tests"
