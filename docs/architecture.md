@@ -1062,8 +1062,9 @@ again through the owner's `whenBackOnline`. Without the strip (a timeout, a
 refused connection) the rail's albums, rail search and the take details load
 again through `reloadWhileUnreachable` (`stores/connectivity.ts`) on a bounded
 backoff, and only then name the failure (the rail and search with a Retry).
-That owner also says what a failed load shows (`nameLoadFailure`: nothing while
-a reload is coming, the named fallback once the backoff is spent, the server's
+That owner also says what a failed load shows (`nameLoadFailure`, kept as its
+`loadFailure` store: nothing while a reload is coming, the named fallback once
+the backoff is spent and hidden again while the strip shows, the server's
 reason otherwise) and schedules the reload a failure calls for
 (`afterLoadFailure`); the reload itself belongs to the load's owner, so the
 album list's bounded reload lives in `stores/libraryData.ts`, which the rail and
