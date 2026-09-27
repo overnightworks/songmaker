@@ -8,8 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
+	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS,
 	ALBUM_YEAR_MIN,
 	HITBOX_FREQUENT_PX,
 	collectionPauseLabel,
@@ -138,6 +141,26 @@ function coverJob(overrides: Partial<JobItem> = {}): JobItem {
 	return { id: 'cover-job', type: 'cover', status: 'queued', progress: 0, ...overrides };
 }
 
+const SUGGESTIONS_PATH = '/api/albums/a-local/cover-suggestions';
+
+function serverRefusal(detail: string): ApiError {
+	return new ApiError(429, detail, SUGGESTIONS_PATH);
+}
+
+function networkFailure(): NetworkError {
+	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));
+}
+
+const ONE_SUGGESTION = { suggestions: [{ id: 'one', url: '/suggestion-one.png' }] };
+const RELOAD_ATTEMPTS = ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.length;
+const PAST_EVERY_RELOAD_MS =
+	ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
+
+async function reachSuggestionsLoads(count: number): Promise<void> {
+	await vi.waitFor(() => expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(count));
+	await tick();
+}
+
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 	let resolve!: (value: T) => void;
 	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
@@ -190,6 +213,8 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
 	vi.unstubAllGlobals();
+	vi.useRealTimers();
+	resetConnectivityForTests();
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -396,6 +421,22 @@ describe('AlbumDetailView header', () => {
 		);
 	});
 
+	it.each([
+		{ failure: networkFailure(), toast: 'Cover upload failed' },
+		{ failure: serverRefusal('Cover must be an image'), toast: 'Cover must be an image' }
+	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
+		uploadAlbumCover.mockRejectedValue(failure);
+		const target = await renderDetail();
+		const menu = await openCollectionMenu(target);
+		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+		requireElement<HTMLButtonElement>(menu, '.menu-item').click();
+		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
+		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+		input.dispatchEvent(new Event('change', { bubbles: true }));
+
+		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
+	});
+
 	it('renames the album through the menu, reusing the EditableTitle interaction', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
@@ -460,7 +501,7 @@ describe('AlbumDetailView cover suggestions', () => {
 
 	it('shows the API detail when suggesting a cover fails', async () => {
 		createAlbumCoverSuggestions.mockRejectedValue(
-			new Error('Daily cover suggestion limit reached')
+			serverRefusal('Daily cover suggestion limit reached')
 		);
 		const target = await renderDetail();
 		await vi.waitFor(() => expect(target.querySelector('.suggest-cover')).not.toBeNull());
@@ -474,6 +515,95 @@ describe('AlbumDetailView cover suggestions', () => {
 			'Couldn’t make cover suggestions'
 		);
 		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
+		expect(target.textContent?.split('Daily cover suggestion limit reached')).toHaveLength(2);
+		expect(addToast).not.toHaveBeenCalled();
+	});
+
+	it.each([
+		{
+			moment: 'loading the card',
+			arrange: () => fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			act: async () => {}
+		},
+		{
+			moment: 'a deliberate Suggest cover',
+			arrange: () => createAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			act: async (target: HTMLElement) => {
+				await vi.waitFor(() => expect(target.querySelector('.suggest-cover')).not.toBeNull());
+				requireElement<HTMLButtonElement>(target, '.suggest-cover').click();
+				await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalled());
+			}
+		}
+	])(
+		'hides the suggestions card without an error of its own when $moment finds no network',
+		async ({ arrange, act }) => {
+			arrange();
+			const target = await renderDetail();
+			await act(target);
+
+			await vi.waitFor(() => expect(target.querySelector('.cover-suggestions')).toBeNull());
+			expect(target.textContent).not.toContain('Failed to fetch');
+			expect(target.textContent).not.toContain('Couldn’t make cover suggestions');
+			expect(target.querySelector('[role="alert"]')).toBeNull();
+			expect(addToast).not.toHaveBeenCalled();
+			expect(target.textContent).toContain('Night Drive');
+		}
+	);
+
+	it('keeps the suggestions card hidden while offline and reloads it once the connection is back', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		reportResourceStreamReachable(false);
+		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
+		expect(target.querySelector('.cover-suggestions')).toBeNull();
+
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
+	});
+
+	it('reloads a card that found no network while online and shows it once the server answers', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		fetchAlbumCoverSuggestions
+			.mockRejectedValueOnce(networkFailure())
+			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+		expect(target.querySelector('.cover-suggestions')).toBeNull();
+
+		await vi.advanceTimersByTimeAsync(ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS[0]);
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(2);
+	});
+
+	it('offers a quiet Try again once the bounded reloads still find no network while online', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+		for (const [attempt, delay] of ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.entries()) {
+			expect(target.querySelector('.cover-suggestions')).toBeNull();
+			await vi.advanceTimersByTimeAsync(delay);
+			await reachSuggestionsLoads(attempt + 2);
+		}
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-suggestions')?.textContent?.trim()).toBe('Try again')
+		);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1 + RELOAD_ATTEMPTS);
+
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		requireElement<HTMLButtonElement>(target, '.cover-suggestions-retry').click();
+
+		await vi.waitFor(() => expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1));
 	});
 
 	it('keeps a delayed previous album response from replacing the current album state', async () => {
@@ -578,7 +708,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
 		);
-		discardAlbumCoverSuggestions.mockRejectedValue(new Error('Could not discard suggestions'));
+		discardAlbumCoverSuggestions.mockRejectedValue(serverRefusal('Could not discard suggestions'));
 		const target = await renderDetail();
 
 		await vi.waitFor(() => expect(target.querySelector('.suggestion-discard')).not.toBeNull());
@@ -595,7 +725,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(
 			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
 		);
-		selectAlbumCoverSuggestion.mockRejectedValue(new Error('Could not save cover'));
+		selectAlbumCoverSuggestion.mockRejectedValue(serverRefusal('Could not save cover'));
 		const target = await renderDetail();
 
 		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion button')).not.toBeNull());
@@ -605,6 +735,36 @@ describe('AlbumDetailView cover suggestions', () => {
 		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(1);
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 	});
+
+	it.each([
+		{
+			action: 'discarding suggestions',
+			arrange: () => discardAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			button: '.suggestion-discard'
+		},
+		{
+			action: 'choosing a suggestion',
+			arrange: () => selectAlbumCoverSuggestion.mockRejectedValue(networkFailure()),
+			button: '.cover-suggestion button'
+		}
+	])(
+		'names the action, never the browser text, when $action finds no network',
+		async ({ arrange, button }) => {
+			fetchAlbumCoverSuggestions.mockResolvedValue(
+				coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+			);
+			arrange();
+			const target = await renderDetail();
+
+			await vi.waitFor(() => expect(target.querySelector(button)).not.toBeNull());
+			requireElement<HTMLButtonElement>(target, button).click();
+
+			await vi.waitFor(() =>
+				expect(addToast).toHaveBeenCalledWith('Cover suggestions failed. Try again.', 'error')
+			);
+			expect(vi.mocked(addToast).mock.calls.flat()).not.toContain('Failed to fetch');
+		}
+	);
 
 	it('puts replacement by suggestion beside upload and removal in the existing overflow', async () => {
 		albumList.set([
@@ -651,7 +811,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		);
 		discardAlbumCoverSuggestions.mockResolvedValue(undefined);
 		createAlbumCoverSuggestions.mockRejectedValue(
-			new Error('Daily cover suggestion limit reached')
+			serverRefusal('Daily cover suggestion limit reached')
 		);
 		const target = await renderDetail();
 
