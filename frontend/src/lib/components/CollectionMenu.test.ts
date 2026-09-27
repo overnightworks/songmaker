@@ -1,6 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '$lib/api/types';
+import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import CollectionMenu from './CollectionMenu.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -122,4 +124,39 @@ describe('CollectionMenu share warning', () => {
 
 		expect(shareWarningDialog(target)).toBeNull();
 	});
+});
+
+let renameSawHistoryAt: number | undefined;
+
+describeBackClosesOverlay({
+	name: 'the collection menu',
+	render: async () =>
+		(
+			await render({
+				onrename: vi.fn(() => {
+					renameSawHistoryAt = plannedHistoryIndex();
+				})
+			})
+		).target,
+	open: (target) => target.querySelector<HTMLButtonElement>('.menu-trigger')?.click(),
+	isShown: (target) => target.querySelector('.menu-panel') !== null,
+	closeWays: [
+		{
+			way: 'a tap outside',
+			close: (target) => target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click()
+		},
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		},
+		{
+			way: 'choosing Rename',
+			close: (target) =>
+				Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
+					.find((item) => item.textContent?.trim() === COLLECTION_MENU_RENAME_LABEL)
+					?.click(),
+			actionSawHistoryAt: () => renameSawHistoryAt
+		}
+	]
 });
