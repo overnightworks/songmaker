@@ -379,6 +379,23 @@ section{
 .errbox .t{font-size:15px;color:var(--score-bad);display:flex;align-items:center;gap:6px}
 .errbox p{font-size:.85rem;color:var(--text-light);line-height:1.5}
 .errbox .foot{display:flex;justify-content:flex-end}
+/* offline (#1039) — the one calm notice on the mini-player's top edge, and the not-live running card */
+.offline-strip{
+	display:flex;align-items:center;gap:9px;height:36px;padding:0 14px;
+	background:var(--bg-deep);border-top:1px solid var(--border);color:var(--text-light);font-size:.82rem;
+}
+.offline-strip .ic{color:var(--text-muted)}
+.offline-chrome{width:100%;border:1px solid var(--border);border-radius:var(--card-radius);overflow:hidden;background:var(--surface)}
+.offline-chrome .player{display:flex;align-items:center;gap:8px;height:64px;padding:0 10px;border-top:1px solid var(--border)}
+.offline-chrome .player .cover{width:40px;height:40px;flex:none;border-radius:var(--btn-radius-sm);background:linear-gradient(135deg,var(--action),#2b2545)}
+.offline-chrome .player .track{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:2px}
+.offline-chrome .player .title{font-family:var(--font-display);font-size:.92rem;letter-spacing:.3px}
+.offline-chrome .player .detail{font-size:.72rem;color:var(--text-subtle)}
+.offline-chrome .player .right{flex:1 1 0}
+.slot.reconnecting .ttl b{color:var(--text-light)}
+.slot.reconnecting .bar span{background:var(--text-disabled)}
+.slot.reconnecting .line{color:var(--text-subtle)}
+.slot.reconnecting .icon-btn[aria-disabled="true"]{color:var(--text-disabled)}
 /* loading — skeleton rows plus one sentence, never a spinner alone */
 .skel{width:100%;background:var(--surface);border:1px solid var(--border);border-radius:var(--card-radius);overflow:hidden}
 .skrow{display:flex;align-items:center;gap:10px;padding:0 12px;min-height:calc(var(--h) + 16px);border-bottom:1px solid var(--border)}
@@ -456,6 +473,12 @@ section{
 	UI-Lane zitiert sie, Farbwerte sind Tokens in <code>app.css</code>, Bedeutungen sind
 	geregelt.
 </p>
+<p class="freeze-note">
+	Offline freigegeben 27.09.2026 (Operator: „ja passt", aus <code>~/songmaker-mockups/v9-offline/</code>,
+	<code>#1039</code>): §7 besitzt jetzt den einen ruhigen Offline-Hinweis und die Regel, dass keine
+	Oberfläche eigene Netzwerk-Worte erfindet und eine Karte, die nicht laden konnte, verschwindet,
+	bis sie neu lädt.
+</p>
 <svg style="display:none" aria-hidden="true">
 <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5l11 7-11 7z" fill="currentColor" stroke="none"/></symbol>
 <symbol id="i-pause" viewBox="0 0 24 24"><path d="M9 5v14M15 5v14" stroke-width="2.6"/></symbol>
@@ -483,6 +506,7 @@ section{
 <symbol id="i-save" viewBox="0 0 24 24"><path d="M5 4h11l3 3v13H5zM8 4v6h7V4M8 20v-6h8v6"/></symbol>
 <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20.2 12a8.2 8.2 0 1 1-2.6-6"/><path d="M20.4 4.2v4.4h-4.4"/></symbol>
 <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></symbol>
+<symbol id="i-cloud-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M9.2 6.3A5.5 5.5 0 0 1 17.3 10a4 4 0 0 1 3 5.7M17 18H7a4 4 0 0 1-.9-7.9 5.4 5.4 0 0 1 .6-1.4"/></symbol>
 <symbol id="i-grip" viewBox="0 0 24 24"><circle cx="9" cy="6" r="1.7"/><circle cx="15" cy="6" r="1.7"/><circle cx="9" cy="12" r="1.7"/><circle cx="15" cy="12" r="1.7"/><circle cx="9" cy="18" r="1.7"/><circle cx="15" cy="18" r="1.7"/></symbol>
 </svg>
 <div class="page">
@@ -906,7 +930,7 @@ all mine if I stay</div>
 <!-- ═══ 7 ══════════════════════════════════════════════════════════════ -->
 <section>
 	<div class="shead"><span class="n">7</span><h2>Status and feedback</h2>
-		<span class="rule">A surface reports its own state <b>where the state happens</b>: progress <i>and failure</i> inside the control that started it, one dashed <b>status slot</b> per surface <b>while a run is going</b> — and only then — and a <b>toast only for an event with no surface of its own</b>. <b>Loading is skeleton rows plus one sentence, never a spinner alone.</b> Empty and error name the real cause and offer the one next step. Every failure wears the triangle.</span>
+		<span class="rule">A surface reports its own state <b>where the state happens</b>: progress <i>and failure</i> inside the control that started it, one dashed <b>status slot</b> per surface <b>while a run is going</b> — and only then — and a <b>toast only for an event with no surface of its own</b>. <b>Loading is skeleton rows plus one sentence, never a spinner alone.</b> Empty and error name the real cause and offer the one next step. Every failure wears the triangle. <b>Offline is not a surface's failure:</b> one calm notice says it, and <b>no surface invents its own network wording</b> (#1039).</span>
 	</div>
 	<div class="cols">
 		<div class="spec">
@@ -952,12 +976,43 @@ all mine if I stay</div>
 			<span class="caps">Error — nothing to press, so the arrow is the step</span>
 			<div class="errbox">
 				<span class="t"><svg class="ic sm"><use href="#i-warn"/></svg>Failed to load takes</span>
-				<p>The server did not answer. Nothing was lost — ask again.</p>
+				<p>The server reported an error. Nothing was lost — ask again.</p>
 				<div class="foot"><button class="icon-btn ink" aria-label="Try again" title="Try again"><svg class="ic"><use href="#i-refresh"/></svg></button></div>
 			</div>
 			<span class="caps">Toast — only for what has no surface</span>
 			<div class="toast"><svg class="ic sm"><use href="#i-check"/></svg>Added to “Late Night Drive”.<span class="x"><svg class="ic sm"><use href="#i-x"/></svg></span></div>
 			<span class="note"><b>Not a toast:</b> <span class="gone">Failed to execute 'writeText' on 'Clipboard'</span> — a raw browser exception thrown at the user. A failure with a surface belongs on that surface.</span>
+		</div>
+	</div>
+	<div class="cols">
+		<div class="spec phone">
+			<span class="caps">Offline — one strip on the mini-player's top edge</span>
+			<div class="offline-chrome">
+				<div class="offline-strip" role="status" aria-live="polite"><svg class="ic sm"><use href="#i-cloud-off"/></svg><span>You're offline — retrying</span></div>
+				<div class="player">
+					<span class="cover" aria-hidden="true"></span>
+					<span class="track"><span class="title">AMIF</span><span class="detail">v7 · take 2</span></span>
+					<button class="icon-btn ink" aria-label="Previous" title="Previous"><svg class="ic"><use href="#i-prev"/></svg></button>
+					<button class="circle" aria-label="Pause" style="--circle:48px"><svg class="ic"><use href="#i-pause"/></svg></button>
+					<button class="icon-btn ink" aria-label="Next" title="Next"><svg class="ic"><use href="#i-next"/></svg></button>
+					<span class="right"></span>
+				</div>
+			</div>
+			<span class="caps">Offline — the running card is not live</span>
+			<div class="slot reconnecting">
+				<div class="head"><span class="ttl"><b>v8</b> · Reconnecting…</span><button class="icon-btn" aria-label="Cancel run (waits for the connection)" title="Cancel run" aria-disabled="true"><svg class="ic sm"><use href="#i-x"/></svg></button></div>
+				<div class="bar"><span style="width:40%"></span></div>
+				<span class="line">Take 1 of 1 · last seen at 40%</span>
+			</div>
+			<span class="caps">Back online — nothing to say</span>
+			<span class="note">The strip goes by itself, the running card goes, and what was missed — a take, a card — appears without a tap. <b>No <span class="gone">Back online</span> toast</b>: what arrives is the proof.</span>
+		</div>
+		<div class="spec">
+			<span class="caps">The one calm offline notice — its rule</span>
+			<span class="note"><b>One notice, one place, one sentence.</b> A slim neutral strip — <code>--bg-deep</code>, the muted cloud glyph, <b>You're offline — retrying</b> — on the top edge of the mini-player, on every phone page; on Edit it sits between Generate and the player. It is not red, wears no triangle and has <b>no button</b>: nothing is broken, and retrying is already happening. It appears within about a second of losing the network, never pushes the page's content down, never covers the app bar or the tabs, and <b>steps aside with the bars while the on-screen keyboard is open</b> (#1017).</span>
+			<span class="note"><b>No surface invents its own network wording.</b> While offline no card, list or button says <span class="gone">Failed to fetch</span>, <span class="gone">Network error. Check connection and retry.</span>, <span class="gone">signal is aborted without reason</span> or a raw <span class="gone">TypeError</span> — the strip has said it once. <b>A card that could not load hides until it reloads</b>; content already on screen stays. The error box above remains for a failure the server itself reported.</span>
+			<span class="note"><b>What offline changes on a surface:</b> a running card stops looking live — <i>Reconnecting…</i>, the bar holds its last width in grey, no ticking time, cancel greyed because it cannot reach the server; the tab's ring goes grey. <b>Generate is disabled</b> — a tap could only fail — in the disabled shape, the label unchanged and no reason of its own: the strip is the reason. Editing makes <b>no save promise</b>: the draft stays on screen, nothing is queued.</span>
+			<span class="note"><b>Frames:</b> the song page in <code>song-page-phone.html</code> (8, 8b, 8c); the album page's hidden cover-suggestions card belongs to <code>album-browsing.html</code>.</span>
 		</div>
 	</div>
 	<div class="ex"><span class="k">Example</span>A generation never announces itself twice: the Write button carries the percent, the Takes tab carries a ring, the button carries the cause when it breaks — and no toast fires for any of it. <b>The tab's ring means “a job is running”</b>, drawn on the tab that will receive its result; the <b>pill's ring of §2 means “waiting”</b> — same shape, two owners, and each is read where it sits. The three failure marks on this page are one shape: the pill's triangle, the score's triangle, the failed button's triangle.</div>
