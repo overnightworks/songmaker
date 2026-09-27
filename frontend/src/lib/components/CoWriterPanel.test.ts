@@ -460,7 +460,7 @@ describe('CoWriterPanel unavailable before any turn', () => {
 		startHealthPolling();
 		await vi.waitFor(() =>
 			expect(target.querySelector('.unavailable-banner')?.textContent).toContain(
-				'claude is currently unavailable'
+				'Claude is currently unavailable'
 			)
 		);
 
