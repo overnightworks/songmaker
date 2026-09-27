@@ -1,8 +1,0 @@
-claim_id = "da30653003e04a16ae01739c4ac86e21"
-agent = "claude-head"
-role = "builder"
-base = "8ced4eaeb56690ad81ddd88427aa74227974d8f5"
-branch = "claude/issue-1114-back-closes-layers"
-scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/RailDrawer.svelte", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/components/shell/RailSettings.svelte", "frontend/src/lib/components/shell/UserRow.svelte", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "scripts/dead-exports.allow"]
-opened_commit = "2826f872fc47aa9ec6e5fc3aee6efafcdb4dcdf2"
-whole_reason = "the history layer stack opened to every overlay, full Now Playing at every width and the rail drawer"
