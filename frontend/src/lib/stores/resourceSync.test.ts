@@ -1068,21 +1068,6 @@ describe('resource sync owner', () => {
 		expect(get(store).ready).toBe(false);
 	});
 
-	it('persistent stream errors during bootstrap become a retryable error', async () => {
-		const { controller, sources, store } = setup();
-		controller.start();
-		const ready = controller.waitForReady();
-		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
-			latestSource(sources).error();
-			await flush();
-		}
-		expect(await ready).toBe(false);
-		expect(get(store).status).toBe('error');
-		expect(get(store).error).toBe(RESOURCE_SYNC_ERROR);
-		expect(get(store).ready).toBe(false);
-		expect(sources[0].closed).toBe(true);
-	});
-
 	it('ignores a stale auth probe after a new hello starts a snapshot', async () => {
 		const probe = deferred<ResourceAuthProbe>();
 		const firstSnapshot = deferred<boolean>();
@@ -1314,48 +1299,81 @@ describe('resource sync owner', () => {
 		expect(reachability.at(-1)).toBe(true);
 	});
 
-	it('keeps restarting a first sync that failed while the server could not be reached, until it says hello', async () => {
-		vi.useFakeTimers();
-		const { controller, sources, store, reachability } = setup({
-			probeAuth: async () => 'retryable'
-		});
-		controller.start();
-		for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
-			latestSource(sources).error();
+	it.each([
+		['gets no answer', 'retryable'],
+		['is answered', 'ok']
+	] as const)(
+		'keeps restarting, without a visible error, a first sync whose stream never opens while the probe %s, until it says hello',
+		async (_case, probe) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
+			controller.start();
+			const ready = controller.waitForReady();
+			for (let i = 0; i < RESOURCE_SYNC_BOOTSTRAP_ERROR_LIMIT; i++) {
+				latestSource(sources).error();
+				await flush();
+			}
+			expect(await ready).toBe(false);
+			expect(get(store)).toMatchObject({ status: 'error', error: null, ready: false });
+			expect(sources[0].closed).toBe(true);
+			expect(reachability.at(-1)).toBe(false);
+			const sourcesWhenFailed = sources.length;
+
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(sourcesWhenFailed + 1);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
 			await flush();
+
+			expect(reachability.at(-1)).toBe(true);
+			expect(get(store).status).toBe('live');
+			controller.stop();
 		}
-		expect(get(store).status).toBe('error');
-		expect(reachability.at(-1)).toBe(false);
-		const sourcesWhenFailed = sources.length;
+	);
 
-		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		expect(sources).toHaveLength(sourcesWhenFailed + 1);
-		latestSource(sources).emit('hello', { high_water_mark: '0' });
-		await flush();
+	it.each([
+		['gets no answer', 'retryable'],
+		['is answered', 'ok']
+	] as const)(
+		'restarts, without a visible error, a first sync whose stream the browser closed for good while the probe %s',
+		async (_case, probe) => {
+			vi.useFakeTimers();
+			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
+			controller.start();
+			latestSource(sources).failWithoutNativeRetry();
+			await flush();
+			expect(get(store).error).toBeNull();
+			expect(reachability.at(-1)).toBe(false);
+			const sourcesWhenClosed = sources.length;
 
-		expect(reachability.at(-1)).toBe(true);
-		expect(get(store).status).toBe('live');
-		controller.stop();
-	});
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(sourcesWhenClosed + 1);
+			latestSource(sources).emit('hello', { high_water_mark: '0' });
+			await flush();
 
-	it('restarts a first sync whose stream the browser closed for good while the server could not be reached', async () => {
+			expect(reachability.at(-1)).toBe(true);
+			expect(get(store).status).toBe('live');
+			controller.stop();
+		}
+	);
+
+	it('reports the server unreachable while a dropped live stream keeps failing to reopen, though the probe is answered', async () => {
 		vi.useFakeTimers();
-		const { controller, sources, store, reachability } = setup({
-			probeAuth: async () => 'retryable'
-		});
+		const { controller, sources, reachability } = setup();
 		controller.start();
-		latestSource(sources).failWithoutNativeRetry();
-		await flush();
-		expect(reachability.at(-1)).toBe(false);
-		const sourcesWhenClosed = sources.length;
-
-		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
-		expect(sources).toHaveLength(sourcesWhenClosed + 1);
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
-
+		await controller.waitForReady();
+		latestSource(sources).error();
+		await flush();
 		expect(reachability.at(-1)).toBe(true);
-		expect(get(store).status).toBe('live');
+
+		for (let reopen = 1; reopen <= 2; reopen++) {
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			expect(sources).toHaveLength(1 + reopen);
+			latestSource(sources).failWithoutNativeRetry();
+			await flush();
+			expect(reachability.at(-1)).toBe(false);
+		}
 		controller.stop();
 	});
 
