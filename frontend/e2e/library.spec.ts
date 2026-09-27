@@ -36,6 +36,7 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
+import { compareTitles } from '../src/lib/utils/recency';
 import {
 	nowPlayingFromLabel,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -888,8 +889,7 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	await expect(continueTiles.first()).toBeVisible();
 	const continueOrder = await continueTiles.allTextContents();
 	const alphabetical = await tiles.locator('.tile-title').allTextContents();
-	const byTitle = new Intl.Collator('en', { sensitivity: 'base' }).compare;
-	expect(alphabetical).toEqual([...alphabetical].sort(byTitle));
+	expect(alphabetical).toEqual([...alphabetical].sort(compareTitles));
 	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
 		/^Playlist · \d+ songs?$/
 	);

@@ -8,6 +8,10 @@ const titleCollator = new Intl.Collator(TITLE_COLLATION_LOCALE, {
 	numeric: true
 });
 
+export function compareTitles(a: string, b: string): number {
+	return titleCollator.compare(a, b);
+}
+
 function parseCreatedAt(iso: string | null | undefined): Date | null {
 	if (!iso) return null;
 	const date = new Date(iso);
@@ -19,7 +23,7 @@ export function compareByCreatedAt<
 	T extends { id: string; created_at?: string | null; title?: string }
 >(a: T, b: T, mode: CreatedSort): number {
 	if (mode === 'title') {
-		const titles = titleCollator.compare(a.title ?? '', b.title ?? '');
+		const titles = compareTitles(a.title ?? '', b.title ?? '');
 		if (titles !== 0) return titles;
 		return a.id.localeCompare(b.id);
 	}
