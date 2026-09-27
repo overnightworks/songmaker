@@ -152,6 +152,7 @@ test.describe('Back closes the open overlay first', () => {
 				.click();
 			const playlistHeading = surface.getByRole('heading', { name: playlist.title });
 			await expect(playlistHeading).toBeVisible();
+			await expect(page).toHaveURL(/\/playlist\//);
 			const pages: Pages = { wall, playlist: playlistHeading, playlistAddress: page.url() };
 
 			await row.open(page, playlist);
