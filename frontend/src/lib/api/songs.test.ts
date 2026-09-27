@@ -13,12 +13,25 @@ beforeEach(() => {
 });
 
 describe('recordSongListen', () => {
-	it('posts the listen event to its song endpoint', async () => {
-		await recordSongListen('song-1');
+	it('posts a listen from outside a playlist without a body', async () => {
+		await recordSongListen('song-1', null);
 
 		expect(mockFetch).toHaveBeenCalledWith(
 			'/api/songs/song-1/listen',
 			expect.objectContaining({ method: 'POST', credentials: 'include' })
+		);
+		expect(mockFetch.mock.calls[0]?.[1]).not.toHaveProperty('body');
+	});
+
+	it('names the playlist a listen was played from', async () => {
+		await recordSongListen('song-1', 'playlist-1');
+
+		expect(mockFetch).toHaveBeenCalledWith(
+			'/api/songs/song-1/listen',
+			expect.objectContaining({
+				method: 'POST',
+				body: JSON.stringify({ playlist_id: 'playlist-1' })
+			})
 		);
 	});
 });

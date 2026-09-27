@@ -513,8 +513,8 @@ describe('playback dispatch', () => {
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 
 		expect(recordSongListen).toHaveBeenCalledTimes(2);
-		expect(recordSongListen).toHaveBeenNthCalledWith(1, song.id);
-		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, song.id, null);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id, null);
 	});
 
 	it('records a stream take when playback crosses into it', () => {
@@ -534,8 +534,8 @@ describe('playback dispatch', () => {
 		audioPlayer.currentCallbacks.onCurrentChange?.(audioPlayer.current);
 
 		expect(recordSongListen).toHaveBeenCalledTimes(2);
-		expect(recordSongListen).toHaveBeenNthCalledWith(1, firstSong.id);
-		expect(recordSongListen).toHaveBeenNthCalledWith(2, secondSong.id);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, firstSong.id, null);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, secondSong.id, null);
 	});
 
 	it('does not record a replacement take until it starts playing', () => {
@@ -564,7 +564,87 @@ describe('playback dispatch', () => {
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 
 		expect(recordSongListen).toHaveBeenCalledOnce();
-		expect(recordSongListen).toHaveBeenCalledWith(secondSong.id);
+		expect(recordSongListen).toHaveBeenCalledWith(secondSong.id, null);
+	});
+
+	it('names the playlist when its queue plays the current entry', async () => {
+		const entry = makePlaylistEntry({
+			...playlistEntryDefaults,
+			id: 'pe-listen',
+			generation_id: 'g-playlist-listen',
+			song_id: 's-playlist-listen'
+		});
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({ ...playlistDefaults, entry_count: 1, entries: [entry] }),
+			0
+		);
+		vi.mocked(recordSongListen).mockClear();
+		audioPlayer.status = 'playing';
+
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledOnce();
+		expect(recordSongListen).toHaveBeenCalledWith('s-playlist-listen', QUEUE_PLAYLIST.id);
+	});
+
+	it('records a take heard from its album and later from a playlist both times', async () => {
+		const song = makeSong({ ...queuedSongDefaults(), id: 's-album-then-playlist' });
+		const take = makeGen({
+			...genDefaults,
+			id: 'g-album-then-playlist',
+			song_id: song.id,
+			mp3_path: 'a1/album-then-playlist.mp3'
+		});
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(take, song);
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({
+				...playlistDefaults,
+				entry_count: 1,
+				entries: [
+					makePlaylistEntry({
+						...playlistEntryDefaults,
+						id: 'pe-album-then-playlist',
+						generation_id: take.id,
+						song_id: song.id,
+						mp3_path: take.mp3_path
+					})
+				]
+			}),
+			0
+		);
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledTimes(2);
+		expect(recordSongListen).toHaveBeenNthCalledWith(1, song.id, null);
+		expect(recordSongListen).toHaveBeenNthCalledWith(2, song.id, QUEUE_PLAYLIST.id);
+	});
+
+	it('does not name the playlist for a take played from outside its queue', async () => {
+		await playPlaylistEntryAndShowNowPlaying(
+			makeDetail({
+				...playlistDefaults,
+				entry_count: 1,
+				entries: [makePlaylistEntry({ ...playlistEntryDefaults, id: 'pe-outside' })]
+			}),
+			0
+		);
+		expect(get(queueContext).type).toBe('playlist');
+		const song = makeSong({ ...queuedSongDefaults(), id: 's-outside-queue' });
+		vi.mocked(recordSongListen).mockClear();
+		audioPlayer.status = 'playing';
+		audioPlayer.current = makePlayback(
+			makeGen({ ...genDefaults, id: 'g-outside-queue', song_id: song.id }),
+			song
+		);
+
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+
+		expect(recordSongListen).toHaveBeenCalledOnce();
+		expect(recordSongListen).toHaveBeenCalledWith(song.id, null);
 	});
 
 	it('logs a reporting failure without interrupting playback', async () => {
@@ -581,7 +661,7 @@ describe('playback dispatch', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 
-		expect(recordSongListen).toHaveBeenCalledWith(song.id);
+		expect(recordSongListen).toHaveBeenCalledWith(song.id, null);
 		expect(logged).toHaveBeenCalledWith('Could not record song listen:', reportingError);
 	});
 

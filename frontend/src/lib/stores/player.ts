@@ -1329,10 +1329,19 @@ function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): voi
 // the queue is no entry's. The queue context is passed in so a template that
 // reads it as `$queueContext` re-renders when the queue moves.
 export function isPlaylistEntryCurrent(entry: PlaylistEntryItem, ctx: QueueContext): boolean {
+	return playingPlaylistEntry(ctx)?.id === entry.id;
+}
+
+function playingPlaylistEntry(ctx: QueueContext): PlaylistEntryItem | undefined {
 	const current = audioPlayer.current;
-	if (ctx.type !== 'playlist' || !current) return false;
+	if (ctx.type !== 'playlist' || !current) return undefined;
 	const playing = ctx.entries[currentPlaylistIndex(ctx, current)];
-	return playing?.id === entry.id && holdsEntryTake(current, playing);
+	return playing && holdsEntryTake(current, playing) ? playing : undefined;
+}
+
+function listenSourcePlaylistId(ctx: QueueContext): string | null {
+	if (ctx.type !== 'playlist' || !playingPlaylistEntry(ctx)) return null;
+	return ctx.playlist.id;
 }
 
 // Whether a song is the one the transport is holding right now, whichever of
@@ -1470,14 +1479,17 @@ function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
 	void playNextSong();
 }
 
-const listenedTakeIds = new Set<string>();
+const recordedListens = new Set<string>();
 
 function recordFirstTakeListen(): void {
 	clearWindowEnd();
 	const current = audioPlayer.current;
-	if (!current || listenedTakeIds.has(current.generation.id)) return;
-	listenedTakeIds.add(current.generation.id);
-	void recordSongListen(current.songId).catch((error: unknown) => {
+	if (!current) return;
+	const playlistId = listenSourcePlaylistId(get(queueContext));
+	const listenKey = `${current.generation.id}:${playlistId ?? ''}`;
+	if (recordedListens.has(listenKey)) return;
+	recordedListens.add(listenKey);
+	void recordSongListen(current.songId, playlistId).catch((error: unknown) => {
 		console.error('Could not record song listen:', error);
 	});
 }
