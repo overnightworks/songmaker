@@ -1,7 +1,10 @@
 import { makeSong as song } from '$lib/test-utils/factories';
 import { describe, expect, it } from 'vitest';
 
+import type { ConversationItem } from '$lib/api/types';
 import {
+	conversationLineLabel,
+	conversationRowLabel,
 	cowriterHeaderLabel,
 	cowriterThinkingLabel,
 	cowriterToolCallTarget,
@@ -10,11 +13,11 @@ import {
 } from './cowriter-ui';
 
 describe('co-writer provider copy', () => {
-	it('uses the active provider instead of a hardcoded Claude name', () => {
+	it('names the active provider by its display name in the header, thinking and unavailable copy', () => {
 		expect(cowriterHeaderLabel('grok', 'grok-4.6')).toBe('Grok · grok-4.6');
-		expect(cowriterThinkingLabel('codex')).toBe('codex is thinking...');
-		expect(cowriterUnavailableLabel('grok')).toBe('grok is currently unavailable');
-		expect(cowriterThinkingLabel('claude')).not.toContain('Claude Co-Writer');
+		expect(cowriterThinkingLabel('claude')).toBe('Claude is thinking…');
+		expect(cowriterThinkingLabel('codex')).toBe('Codex is thinking…');
+		expect(cowriterUnavailableLabel('grok')).toBe('Grok is currently unavailable');
 	});
 
 	it.each([
@@ -60,5 +63,87 @@ describe('cowriterToolCallTarget', () => {
 		expect(
 			cowriterToolCallTarget('rename_song', { song_id: 's-missing' }, allSongs, 's1')
 		).toBeNull();
+	});
+});
+
+describe('conversation day and line copy', () => {
+	const now = new Date('2026-09-27T12:00:00');
+
+	function conversationFrom(
+		createdAt: string,
+		overrides: Partial<ConversationItem> = {}
+	): ConversationItem {
+		return {
+			id: 'c1',
+			title: null,
+			message_count: 2,
+			archived_at: null,
+			created_at: createdAt,
+			updated_at: createdAt,
+			last_message_at: null,
+			...overrides
+		};
+	}
+
+	it.each([
+		['no conversation and an empty chat', undefined, false, 'new conversation'],
+		[
+			'a first message the conversation list does not know yet',
+			undefined,
+			true,
+			'conversation since today'
+		],
+		[
+			'a new empty conversation',
+			conversationFrom('2026-09-27T08:00:00', { message_count: 0 }),
+			false,
+			'new conversation'
+		],
+		[
+			'a new conversation whose first message is in the chat',
+			conversationFrom('2026-09-27T08:00:00', { message_count: 0 }),
+			true,
+			'conversation since today'
+		],
+		[
+			'a conversation with messages',
+			conversationFrom('2026-09-22T10:00:00'),
+			true,
+			'conversation since Tue'
+		],
+		[
+			'an archived conversation',
+			conversationFrom('2026-09-20T10:00:00', { archived_at: '2026-09-22T10:00:00' }),
+			true,
+			'archived conversation from Sep 20'
+		]
+	])('reads the line for %s', (_case, conversation, chatHasMessages, line) => {
+		expect(conversationLineLabel(conversation, chatHasMessages, now)).toBe(line);
+	});
+
+	it.each([
+		['one started today', conversationFrom('2026-09-27T08:00:00'), 'Conversation since today'],
+		[
+			'one started this week by weekday',
+			conversationFrom('2026-09-22T10:00:00'),
+			'Conversation since Tue'
+		],
+		[
+			'one started earlier this year by month and day',
+			conversationFrom('2026-09-12T10:00:00'),
+			'Conversation since Sep 12'
+		],
+		[
+			'an archived one from an earlier year with the year',
+			conversationFrom('2025-09-17T10:00:00', { archived_at: '2025-09-20T10:00:00' }),
+			'Conversation from Sep 17, 2025'
+		],
+		[
+			'a titled one',
+			conversationFrom('2026-09-22T10:00:00', { title: 'Bridge ideas' }),
+			'Bridge ideas'
+		]
+	])('names %s in the conversation menu with the same day form', (_case, conversation, label) => {
+		expect(conversationRowLabel(conversation, now)).toBe(label);
 	});
 });

@@ -130,9 +130,9 @@ async function showCowriterTab(page: Page): Promise<void> {
 
 async function lookAtEditAndTakes(page: Page): Promise<void> {
 	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
-	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
+	await expect(page.getByPlaceholder(/Ask for a rewrite/)).toBeHidden();
 	await page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) }).click();
-	await expect(page.getByPlaceholder(/Ask the co-writer/)).toBeHidden();
+	await expect(page.getByPlaceholder(/Ask for a rewrite/)).toBeHidden();
 }
 
 /** Scrolls the chat the way a finger does: the panel hears it before the next step. */
@@ -178,7 +178,7 @@ test.describe('co-writer return at phone width', () => {
 		});
 
 		await openCowriterOnPickedSong(page);
-		const composer = page.getByPlaceholder(/Ask the co-writer/);
+		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		await composer.fill(SENT);
 		await composer.press('Enter');
 		await expect(page.getByText(THINKING)).toBeVisible();
@@ -208,11 +208,11 @@ test.describe('co-writer return at phone width', () => {
 		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
 
 		await openCowriterOnPickedSong(page);
-		await page.getByPlaceholder(/Ask the co-writer/).fill(draft);
+		await page.getByPlaceholder(/Ask for a rewrite/).fill(draft);
 		await lookAtEditAndTakes(page);
 		await showCowriterTab(page);
 
-		await expect(page.getByPlaceholder(/Ask the co-writer/)).toHaveValue(draft);
+		await expect(page.getByPlaceholder(/Ask for a rewrite/)).toHaveValue(draft);
 	});
 
 	test('retrying the unanswered message it came back to shows it once when the retry fails too', async ({
@@ -258,7 +258,7 @@ test.describe('co-writer return at phone width', () => {
 		});
 
 		await openCowriterOnPickedSong(page);
-		const composer = page.getByPlaceholder(/Ask the co-writer/);
+		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		const tryAgain = page.getByRole('button', { name: 'Try again' });
 		await composer.fill(older);
 		await composer.press('Enter');
@@ -303,7 +303,7 @@ test.describe('co-writer return at phone width', () => {
 		});
 
 		await openCowriterOnPickedSong(page);
-		const composer = page.getByPlaceholder(/Ask the co-writer/);
+		const composer = page.getByPlaceholder(/Ask for a rewrite/);
 		const tryAgain = page.getByRole('button', { name: 'Try again' });
 		await composer.fill(failed);
 		await composer.press('Enter');
@@ -363,7 +363,7 @@ test.describe('co-writer return at phone width', () => {
 			});
 
 			await openCowriterOnPickedSong(page);
-			const composer = page.getByPlaceholder(/Ask the co-writer/);
+			const composer = page.getByPlaceholder(/Ask for a rewrite/);
 			await composer.fill(SENT);
 			await composer.press('Enter');
 			await expect.poll(() => turnState).toBe('running');
