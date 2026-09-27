@@ -36,6 +36,11 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		})),
 		deleteConversation: vi.fn(),
 		fetchMemory: vi.fn().mockResolvedValue(null),
+		saveUserMemory: vi.fn(async (body: string) => ({
+			scope: 'user',
+			target_id: 'u1',
+			body
+		})),
 		fetchCowriterSettings: (...args: Parameters<typeof fetchCowriterSettings>) =>
 			fetchCowriterSettings(...args),
 		fetchHealth: (...args: Parameters<typeof fetchHealth>) => fetchHealth(...args),
@@ -460,7 +465,7 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 		expect(focusedConversationMenuTrigger()).toBe(true);
 	});
 
-	it('marks ⋯ and its Memory item while a memory proposal waits, until it is answered', async () => {
+	async function renderWithOneWaitingProposal(): Promise<HTMLElement> {
 		vi.mocked(fetchMemory).mockResolvedValue({
 			user: { scope: 'user', target_id: 'u1', body: 'Prefers short lines' }
 		});
@@ -477,7 +482,39 @@ describe('CoWriterPanel conversation line (#1063)', () => {
 				)
 			)
 		);
-		const target = await render();
+		return render();
+	}
+
+	it.each(['accept', 'reject'])(
+		'keeps focus in Memory after %s answers the last proposal, so Escape closes Memory without leaving the song',
+		async (answer) => {
+			const target = await renderWithOneWaitingProposal();
+			await openMemoryFromMenu(target);
+			await vi.waitFor(() => expect(target.querySelector(`.proposal .${answer}`)).not.toBeNull());
+			const answerButton = target.querySelector<HTMLButtonElement>(`.proposal .${answer}`);
+			answerButton?.focus();
+			answerButton?.click();
+			await vi.waitFor(() => expect(target.querySelector('.proposal')).toBeNull());
+			await tick();
+
+			const memory = target.querySelector('section[aria-label="Memory"]');
+			expect(memory?.contains(document.activeElement)).toBe(true);
+			const escape = new KeyboardEvent('keydown', {
+				key: 'Escape',
+				bubbles: true,
+				cancelable: true
+			});
+			document.activeElement?.dispatchEvent(escape);
+			await tick();
+
+			expect(target.querySelector('section[aria-label="Memory"]')).toBeNull();
+			expect(escape.defaultPrevented).toBe(true);
+			expect(focusedConversationMenuTrigger()).toBe(true);
+		}
+	);
+
+	it('marks ⋯ and its Memory item while a memory proposal waits, until it is answered', async () => {
+		const target = await renderWithOneWaitingProposal();
 		const waitingMarks = () =>
 			target.querySelectorAll(
 				`[role="img"][aria-label="${COWRITER_MEMORY_PROPOSAL_WAITING_LABEL}"]`

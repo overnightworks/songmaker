@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
 	import { COWRITER_MEMORY_LABEL } from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -54,6 +55,14 @@
 		openEditor.addEventListener('keydown', closeOnEscape);
 		return () => openEditor.removeEventListener('keydown', closeOnEscape);
 	});
+
+	// Answering the last proposal removes the button that held focus; keep focus
+	// inside the editor so the next Escape closes it instead of leaving the song.
+	async function answerProposal(answer: () => void | Promise<void>): Promise<void> {
+		await answer();
+		await tick();
+		if (!editor?.contains(document.activeElement)) closeButton?.focus();
+	}
 
 	let userDraft = $state('');
 	let songDraft = $state('');
@@ -195,8 +204,12 @@
 							</p>
 							<pre class="proposal-body">{proposal.proposedBody}</pre>
 							<div class="proposal-actions">
-								<button class="accept" onclick={() => onAccept(proposal)}>Accept</button>
-								<button class="reject" onclick={() => onReject(proposal)}>Reject</button>
+								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}
+									>Accept</button
+								>
+								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}
+									>Reject</button
+								>
 							</div>
 						</div>
 					{/each}
