@@ -39,6 +39,7 @@ import {
 	RESOURCE_SYNC_FETCH_CONCURRENCY,
 	RESOURCE_SYNC_TRACKED_EVENT_LIMIT,
 	RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS,
+	SERVER_UNREACHABLE_STATUSES,
 	SSE_RECONNECT_BASE_DELAY_MS,
 	SSE_RECONNECT_JITTER_RATIO,
 	SSE_RECONNECT_MAX_DELAY_MS
@@ -253,9 +254,12 @@ function latestSource(sources: MockEventSource[]): MockEventSource {
 beforeEach(() => {
 	MockEventSource.instances = [];
 	mockClassifyAuthFailure.mockReset();
-	mockClassifyAuthFailure.mockImplementation((error: { status?: unknown }) => {
+	mockClassifyAuthFailure.mockImplementation((error: { status?: number }) => {
 		if (error.status === 401) return 'unauthorized';
 		if (error.status === 403) return 'disabled';
+		if (error instanceof NetworkError || SERVER_UNREACHABLE_STATUSES.has(error.status ?? 0)) {
+			return 'unreachable';
+		}
 		return 'retryable';
 	});
 });
@@ -1262,7 +1266,8 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['gets no answer', 'retryable', false],
+		['gets no answer', 'unreachable', false],
+		['is answered with a failure such as a rate limit', 'retryable', true],
 		['is answered', 'ok', true]
 	] as const)(
 		'reports whether the server can be reached when the probe after a dropped stream %s',
@@ -1283,7 +1288,7 @@ describe('resource sync owner', () => {
 
 	it('reports the server reachable again once the reopened stream says hello', async () => {
 		vi.useFakeTimers();
-		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();
 		latestSource(sources).emit('hello', { high_water_mark: '0' });
 		await flush();
@@ -1300,11 +1305,11 @@ describe('resource sync owner', () => {
 	});
 
 	it.each([
-		['gets no answer', 'retryable'],
-		['is answered', 'ok']
+		['gets no answer', 'unreachable', false],
+		['is answered', 'ok', true]
 	] as const)(
 		'keeps restarting, without a visible error, a first sync whose stream never opens while the probe %s, until it says hello',
-		async (_case, probe) => {
+		async (_case, probe, reachableWhileRestarting) => {
 			vi.useFakeTimers();
 			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
 			controller.start();
@@ -1316,7 +1321,7 @@ describe('resource sync owner', () => {
 			expect(await ready).toBe(false);
 			expect(get(store)).toMatchObject({ status: 'error', error: null, ready: false });
 			expect(sources[0].closed).toBe(true);
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(reachableWhileRestarting);
 			const sourcesWhenFailed = sources.length;
 
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
@@ -1331,18 +1336,18 @@ describe('resource sync owner', () => {
 	);
 
 	it.each([
-		['gets no answer', 'retryable'],
-		['is answered', 'ok']
+		['gets no answer', 'unreachable', false],
+		['is answered', 'ok', true]
 	] as const)(
 		'restarts, without a visible error, a first sync whose stream the browser closed for good while the probe %s',
-		async (_case, probe) => {
+		async (_case, probe, reachableWhileRestarting) => {
 			vi.useFakeTimers();
 			const { controller, sources, store, reachability } = setup({ probeAuth: async () => probe });
 			controller.start();
 			latestSource(sources).failWithoutNativeRetry();
 			await flush();
 			expect(get(store).error).toBeNull();
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(reachableWhileRestarting);
 			const sourcesWhenClosed = sources.length;
 
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
@@ -1356,7 +1361,7 @@ describe('resource sync owner', () => {
 		}
 	);
 
-	it('reports the server unreachable while a dropped live stream keeps failing to reopen, though the probe is answered', async () => {
+	it('does not read as offline while a dropped live stream keeps failing to reopen but the server answers the probe', async () => {
 		vi.useFakeTimers();
 		const { controller, sources, reachability } = setup();
 		controller.start();
@@ -1372,13 +1377,13 @@ describe('resource sync owner', () => {
 			expect(sources).toHaveLength(1 + reopen);
 			latestSource(sources).failWithoutNativeRetry();
 			await flush();
-			expect(reachability.at(-1)).toBe(false);
+			expect(reachability.at(-1)).toBe(true);
 		}
 		controller.stop();
 	});
 
 	it('stops claiming the server is unreachable when the owner stops', async () => {
-		const { controller, sources, reachability } = setup({ probeAuth: async () => 'retryable' });
+		const { controller, sources, reachability } = setup({ probeAuth: async () => 'unreachable' });
 		controller.start();
 		latestSource(sources).error();
 		await flush();
@@ -1621,7 +1626,9 @@ describe('library resource sync wiring', () => {
 
 	it.each([
 		[403, 'error', AUTH_ACCOUNT_DISABLED_MESSAGE, false],
-		[500, 'reconnecting', null, true]
+		[429, 'reconnecting', null, false],
+		[500, 'reconnecting', null, false],
+		[502, 'reconnecting', null, true]
 	] as const)(
 		'handles a %s auth probe through the singleton owner',
 		async (status, syncStatus, error, pageOffline) => {
