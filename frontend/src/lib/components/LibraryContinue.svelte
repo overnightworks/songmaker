@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
-	import { openAlbum, selectSong } from '$lib/stores/navigation';
+	import { openAlbum, openPlaylist, selectSong } from '$lib/stores/navigation';
 	import {
 		initLibraryContinueCollapsed,
 		libraryContinueCollapsed,
 		toggleLibraryContinueCollapsed
 	} from '$lib/stores/ui';
+	import { activityTimeLabel } from '$lib/utils/format';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	const MAX_CONTINUE_ITEMS = 6;
@@ -15,6 +16,7 @@
 
 	let items = $state<LibraryContinueItem[]>([]);
 	let loadState = $state<LoadState>('loading');
+	let loadedAt = $state(new Date());
 
 	const visibleItems = $derived(items.slice(0, MAX_CONTINUE_ITEMS));
 
@@ -40,6 +42,7 @@
 		if (loadState === 'error') loadState = 'loading';
 		try {
 			items = (await fetchLibraryContinue()).items;
+			loadedAt = new Date();
 			loadState = 'ready';
 		} catch {
 			if (loadState !== 'ready') loadState = 'error';
@@ -50,20 +53,18 @@
 		if (document.visibilityState === 'visible') void refreshItems();
 	}
 
-	function itemSubtitle(item: LibraryContinueItem): string {
-		return item.type === 'song' && item.album_title
-			? item.album_title
-			: item.type === 'song'
-				? 'Song'
-				: 'Album';
+	function itemLabel(item: LibraryContinueItem): string {
+		return item.song_title
+			? `Open song ${item.song_title} in ${item.type} ${item.title}`
+			: `Open ${item.type} ${item.title}`;
 	}
 
+	// A tap continues where the musician was: the song, on the tab it was left
+	// on; a place with no song opens its own page.
 	function openItem(item: LibraryContinueItem): void {
-		if (item.type === 'album') {
-			void openAlbum(item.id);
-			return;
-		}
-		void selectSong(item.id);
+		if (item.song_id) void selectSong(item.song_id);
+		else if (item.type === 'album') void openAlbum(item.id);
+		else void openPlaylist(item.id);
 	}
 </script>
 
@@ -99,15 +100,18 @@
 						type="button"
 						class="continue-item"
 						onclick={() => openItem(item)}
-						aria-label={`Open ${item.type} ${item.title}`}
+						aria-label={itemLabel(item)}
 					>
 						<LibraryTileContent
 							title={item.title}
-							subtitle={itemSubtitle(item)}
+							subtitle={item.song_title ?? ''}
 							coverAlt={`${item.type} cover for ${item.title}`}
 							coverUrl={item.cover?.card ?? null}
+							playlistCovers={item.type === 'playlist' ? item.album_covers : null}
 						/>
-						<span class="continue-tag">{item.type === 'song' ? 'Song' : 'Album'}</span>
+						<time class="continue-when" datetime={item.activity_at}
+							>{activityTimeLabel(item.activity_at, loadedAt)}</time
+						>
 					</button>
 				{/each}
 			</div>
@@ -152,9 +156,9 @@
 	}
 
 	.continue-item {
-		position: relative;
 		display: grid;
 		grid-template-columns: 56px minmax(0, 1fr);
+		grid-template-rows: auto auto;
 		align-items: center;
 		min-width: 0;
 		padding: 6px;
@@ -174,12 +178,14 @@
 	}
 
 	.continue-item :global(.tile-cover) {
+		grid-row: 1 / span 2;
 		width: 56px;
 		border-radius: 3px;
 	}
 
 	.continue-item :global(.tile-meta) {
-		padding: 0 22px 0 8px;
+		align-self: end;
+		padding: 0 8px;
 	}
 
 	.continue-item :global(.tile-title) {
@@ -187,17 +193,19 @@
 	}
 
 	.continue-item :global(.tile-subtitle) {
-		font-size: 0.68rem;
+		color: var(--text-muted);
+		font-size: 0.7rem;
 	}
 
-	.continue-tag {
-		position: absolute;
-		top: 6px;
-		right: 6px;
+	.continue-when {
+		align-self: start;
+		min-width: 0;
+		overflow: hidden;
+		padding: 1px 8px 0;
 		color: var(--text-subtle);
-		font-size: 0.62rem;
-		line-height: 1;
-		text-transform: uppercase;
+		font-size: 0.64rem;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.continue-state {
@@ -239,6 +247,15 @@
 
 		.continue-items {
 			grid-template-columns: repeat(2, minmax(0, 1fr));
+		}
+
+		.continue-item {
+			grid-template-columns: 44px minmax(0, 1fr);
+			min-height: 58px;
+		}
+
+		.continue-item :global(.tile-cover) {
+			width: 44px;
 		}
 	}
 </style>
