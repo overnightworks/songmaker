@@ -351,7 +351,7 @@ describe('SongDetailView header — one row, every state', () => {
 		);
 	});
 
-	it('toggles the Recipe panel independently of the Write/Takes content', async () => {
+	it('toggles the Recipe panel independently of the Edit/Takes content', async () => {
 		const target = await renderView();
 		expect(target.querySelector('.recipe-panel')).toBeNull();
 		clickNamed(header(target), EDITOR_VIEW_RECIPE_LABEL);
