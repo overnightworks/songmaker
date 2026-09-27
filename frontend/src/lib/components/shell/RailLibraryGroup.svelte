@@ -94,6 +94,7 @@
 	}
 
 	async function loadLibrary(): Promise<void> {
+		libraryReloadsExhausted = false;
 		if (await ensureAllAlbumsLoaded()) {
 			libraryReloads.stop();
 			return;
