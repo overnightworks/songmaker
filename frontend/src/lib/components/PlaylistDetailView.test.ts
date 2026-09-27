@@ -6,7 +6,7 @@ import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
-import type { PlaylistDetailItem } from '$lib/api/types';
+import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
 import { ApiError } from '$lib/api/fetch';
 import {
 	collectionPlayLabel,
@@ -356,29 +356,29 @@ describe('PlaylistDetailView row overflow menu', () => {
 	});
 });
 
-async function renderTwoEntryPlaylist(): Promise<HTMLElement> {
+async function renderPlaylist(entries: PlaylistEntryItem[]): Promise<HTMLElement> {
 	openPlaylistDetail(
-		detail({
-			...populatedPlaylistDefaults(),
-			entry_count: 2,
-			entries: [
-				entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' }),
-				entry({
-					album_title: 'Night Drive',
-					mp3_path: 'tide.mp3',
-					id: 'pe2',
-					position: 1,
-					generation_id: 'g2',
-					song_title: 'Ebb'
-				})
-			]
-		})
+		detail({ ...populatedPlaylistDefaults(), entry_count: entries.length, entries })
 	);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(mount(PlaylistDetailView, { target }));
 	await tick();
 	return target;
+}
+
+async function renderTwoEntryPlaylist(): Promise<HTMLElement> {
+	return renderPlaylist([
+		entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' }),
+		entry({
+			album_title: 'Night Drive',
+			mp3_path: 'tide.mp3',
+			id: 'pe2',
+			position: 1,
+			generation_id: 'g2',
+			song_title: 'Ebb'
+		})
+	]);
 }
 
 function expectQueueStartsAtSecondEntry(): void {
@@ -490,6 +490,22 @@ describe('PlaylistDetailView row actions', () => {
 			expect(tide.classList.contains('current')).toBe(false);
 		}
 	);
+
+	it('marks only the entry that plays when the playlist holds one take twice', async () => {
+		const tide = entry({ song_title: 'Tide', album_title: 'Night Drive', mp3_path: 'tide.mp3' });
+		const target = await renderPlaylist([tide, entry({ ...tide, id: 'pe2', position: 1 })]);
+		const rows = Array.from(target.querySelectorAll<HTMLElement>('.entry-row'));
+		const marks = (): boolean[] =>
+			rows.map((row) => findElementByRoleAndName(row, 'img', RAIL_PLAYING_MARKER_LABEL) !== null);
+
+		requireElement<HTMLButtonElement>(rows[1], '.entry-info').click();
+		await tick();
+		expect(marks()).toEqual([false, true]);
+
+		requireElement<HTMLButtonElement>(rows[0], '.entry-info').click();
+		await tick();
+		expect(marks()).toEqual([true, false]);
+	});
 
 	it('moves Move up/down and Remove into the … menu instead of inline, keeping only the row and … inline', async () => {
 		document.documentElement.dataset.pointer = 'coarse';
