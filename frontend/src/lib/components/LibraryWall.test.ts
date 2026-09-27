@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import { libraryBrowse, resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
@@ -62,6 +63,8 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
+	Reflect.deleteProperty(document, 'visibilityState');
+	resetConnectivityForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
@@ -70,6 +73,16 @@ afterEach(async () => {
 
 function albumPage(items: ReturnType<typeof album>[], hasMore: boolean) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: hasMore };
+}
+
+function returnToForeground(): void {
+	Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+	document.dispatchEvent(new Event('visibilitychange'));
+}
+
+function reconnect(): void {
+	reportResourceStreamReachable(false);
+	reportResourceStreamReachable(true);
 }
 
 async function render(): Promise<HTMLElement> {
@@ -266,26 +279,59 @@ describe('LibraryWall', () => {
 		expect(tileTitles(reopened)[0]).toBe('nachtstrom');
 	});
 
-	it('says when the recent order cannot be read and reads it again on Retry', async () => {
+	it.each([
+		[
+			'a browse reload',
+			() =>
+				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'offline' }))
+		],
+		['a playlist reload', () => playlistLoad.set({ status: 'error', error: 'offline' })]
+	])('keeps the tiles on screen and names no failure when %s fails', async (_, failReload) => {
 		seedWall();
-		fetchLibraryContinue.mockImplementation((options?: { limit?: number }) =>
-			options?.limit ? Promise.reject(new Error('offline')) : Promise.resolve({ items: [] })
-		);
 		const root = await render();
 
-		orderButton(root, 'Recent').click();
-		await vi.waitFor(() =>
-			expect(root.querySelector('[role="alert"]')?.textContent).toContain(
-				'Could not load recent work.'
-			)
-		);
-		fetchLibraryContinue.mockResolvedValue({
-			items: [place('album', 'a-sonne', 'Sonnenlauf', '2026-09-21T10:00:00Z')]
-		});
-		root.querySelector<HTMLButtonElement>('[role="alert"] button')?.click();
+		failReload();
+		await tick();
 
-		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Sonnenlauf'));
+		expect(tileTitles(root)).toHaveLength(4);
 		expect(root.querySelector('[role="alert"]')).toBeNull();
+	});
+
+	it('keeps the recent ranking when a later read fails and reads again on the foreground and on reconnect', async () => {
+		seedWall();
+		const rankedBy = (album: string) =>
+			Promise.resolve({ items: [place('album', album, album, '2026-09-21T10:00:00Z')] });
+		fetchLibraryContinue.mockImplementation(() => rankedBy('a-sonne'));
+		const root = await render();
+		orderButton(root, 'Recent').click();
+		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Sonnenlauf'));
+
+		const failedRead = Promise.reject(new Error('offline'));
+		failedRead.catch(() => undefined);
+		fetchLibraryContinue.mockImplementation(() => failedRead);
+		returnToForeground();
+		await failedRead.catch(() => undefined);
+		await tick();
+
+		expect(tileTitles(root)[0]).toBe('Sonnenlauf');
+		expect(root.querySelector('[role="alert"]')).toBeNull();
+
+		fetchLibraryContinue.mockImplementation(() => rankedBy('a-nacht'));
+		reconnect();
+		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('nachtstrom'));
+	});
+
+	it('reads the albums it could not load again once the network is back', async () => {
+		seedWall();
+		fetchAlbums.mockRejectedValueOnce(new Error('offline'));
+		const root = await render();
+		await vi.waitFor(() => expect(get(allAlbumsLoad).status).toBe('error'));
+		expect(root.querySelector('[role="alert"]')).toBeNull();
+
+		fetchAlbums.mockResolvedValueOnce(albumPage([album({ id: 'a-arger', title: 'Ärger' })], false));
+		reconnect();
+
+		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Ärger'));
 	});
 
 	it('sorts the complete set, reading every album page before ordering the wall', async () => {
