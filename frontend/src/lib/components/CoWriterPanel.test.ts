@@ -940,6 +940,65 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 		expect(onturncompleted).toHaveBeenCalledTimes(1);
 	});
 
+	const earlier = [
+		chatMessage('u0', 'user', 'Strophe eins'),
+		chatMessage('a0', 'assistant', 'Steht.')
+	];
+
+	/** The read that ends the turn: from then on the conversation list counts its reply too. */
+	function turnEndsWith(page: ReturnType<typeof conversation>): void {
+		fetchConversationMessages.mockImplementationOnce(async () => {
+			fetchConversations.mockResolvedValue([
+				{ ...activeConversation('c1'), message_count: page.messages.length }
+			]);
+			return page;
+		});
+	}
+
+	const followedTurns: Array<[string, () => Promise<HTMLElement>]> = [
+		[
+			'a turn it returned to',
+			() => {
+				conversationPages(conversation(true, ...earlier, sent));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return leaveDuringATurnAndReturn();
+			}
+		],
+		[
+			'a turn it followed after its stream dropped',
+			() => {
+				streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+				conversationPages(conversation(false, ...earlier), conversation(true, ...earlier, sent));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return sendInAnOpenConversation();
+			}
+		],
+		[
+			'a turn that finished while its stream was down',
+			() => {
+				streamCoWriterTurn.mockReturnValue(droppedStreams[2][1]());
+				conversationPages(conversation(false, ...earlier));
+				turnEndsWith(conversation(false, ...earlier, sent, reply));
+				return sendInAnOpenConversation();
+			}
+		]
+	];
+
+	it.each(followedTurns)(
+		'counts the reply of %s in its ⋯ menu once the turn ends',
+		async (_shape, followTurn) => {
+			const target = await followTurn();
+			await vi.advanceTimersByTimeAsync(COWRITER_RUNNING_TURN_POLL_MS);
+			await vi.waitFor(() => expect(target.textContent).toContain('Erledigt.'));
+
+			const menu = await openConversationMenu(target);
+
+			await vi.waitFor(() =>
+				expect(menu.querySelector('.conv-meta')?.textContent?.trim()).toBe('4 msgs')
+			);
+		}
+	);
+
 	it('keeps an older failed message once a newer one is answered, as a reload shows it', async () => {
 		const failed = chatMessage('u0', 'user', 'Refrain kürzer');
 		const persisted = conversation(false, failed, sent, reply);
