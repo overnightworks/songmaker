@@ -1,0 +1,8 @@
+claim_id = "f2eebe26a4904e829fed934e300921ee"
+agent = "claude-head"
+role = "builder"
+base = "eaf5521e7833d95df706cab7aff64830c07c78bb"
+branch = "claude/issue-1095-confirm-dialog-focus"
+scope = ["frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/CoWriterPanel.test.ts", "frontend/src/lib/components/ConfirmDeleteDialog.svelte", "frontend/src/lib/components/ConfirmDeleteDialog.test.ts", "frontend/src/lib/components/PlaylistDetailView.test.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/utils/escape-level-up.test.ts", "frontend/src/lib/utils/escape-level-up.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings/voices/page.test.ts"]
+opened_commit = "d75f5fe77279072db466a9554055b2a2684167ca"
+whole_reason = "the shared confirm dialog's focus, labelling and Escape, the global Escape guard, and the caller tests that pin focus"
