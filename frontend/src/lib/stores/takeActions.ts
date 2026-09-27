@@ -1,4 +1,5 @@
 import { derived, get, writable } from 'svelte/store';
+import { describeFailure } from '$lib/api/fetch';
 import {
 	fetchSong,
 	keepGeneration,
@@ -37,7 +38,7 @@ export async function setPick(songId: string, genId: string, picked: boolean): P
 		await refreshSong(songId);
 		return true;
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Pick failed', 'error');
+		addToast(describeFailure(e, 'Pick failed'), 'error');
 		return false;
 	}
 }
@@ -48,7 +49,7 @@ export async function setKeep(songId: string, genId: string, kept: boolean): Pro
 		else await unkeepGeneration(genId);
 		await refreshSong(songId);
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Keep failed', 'error');
+		addToast(describeFailure(e, 'Keep failed'), 'error');
 	}
 }
 
@@ -63,7 +64,7 @@ export async function rate(
 		await refreshSong(songId);
 		addToast('Rating saved', 'success');
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Rating failed', 'error');
+		addToast(describeFailure(e, 'Rating failed'), 'error');
 	}
 }
 
@@ -98,7 +99,7 @@ export async function rescore(songId: string, genId: string): Promise<void> {
 		trackJob(job, { songId, genId });
 		addToast(TAKE_RESCORE_QUEUED_TOAST, 'info');
 	} catch (e) {
-		addToast(e instanceof Error ? e.message : 'Re-score failed', 'error');
+		addToast(describeFailure(e, 'Re-score failed'), 'error');
 	} finally {
 		clearRequestInFlight(genId);
 	}
