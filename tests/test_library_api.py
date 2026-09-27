@@ -579,7 +579,17 @@ def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Pa
     assert len(queries) == 3, f"expected three Continue statements, got {len(queries)}: {queries}"
 
 
-def test_continue_returns_as_many_places_as_the_caller_asks_for(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    ("window", "expected_indexes"),
+    [
+        ({"limit": 8}, [7, 6, 5, 4, 3, 2, 1, 0]),
+        ({"offset": 0, "limit": 3}, [7, 6, 5]),
+        ({"offset": 5, "limit": 3}, [2, 1, 0]),
+    ],
+)
+def test_continue_returns_the_window_of_places_the_caller_asks_for(
+    tmp_path: Path, window: dict[str, int], expected_indexes: list[int],
+) -> None:
     client, factory = _make_client(tmp_path, USER_A)
     with factory() as session:
         for index in range(8):
@@ -589,14 +599,18 @@ def test_continue_returns_as_many_places_as_the_caller_asks_for(tmp_path: Path) 
             )
         session.commit()
 
-    items = _continue_items(client, limit=8)
+    items = _continue_items(client, **window)
 
-    assert [item["id"] for item in items] == [f"album-{index}" for index in reversed(range(8))]
+    assert [item["id"] for item in items] == [f"album-{index}" for index in expected_indexes]
 
 
-@pytest.mark.parametrize("limit", [0, PAGE_MAX_LIMIT + 1])
-def test_continue_refuses_a_limit_outside_its_bound(alice: TestClient, limit: int) -> None:
-    assert alice.get("/api/library/continue", params={"limit": limit}).status_code == 422
+@pytest.mark.parametrize(
+    "window", [{"limit": 0}, {"limit": PAGE_MAX_LIMIT + 1}, {"offset": -1}],
+)
+def test_continue_refuses_a_window_outside_its_bound(
+    alice: TestClient, window: dict[str, int],
+) -> None:
+    assert alice.get("/api/library/continue", params=window).status_code == 422
 
 
 def test_search_requires_query(alice: TestClient) -> None:

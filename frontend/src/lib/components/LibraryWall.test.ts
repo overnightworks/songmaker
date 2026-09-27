@@ -217,8 +217,8 @@ describe('LibraryWall', () => {
 				place('album', 'a-nacht', 'nachtstrom', '2026-09-24T18:31:00Z'),
 				place('album', 'a-sonne', 'Sonnenlauf', '2026-09-20T10:00:00Z')
 			];
-			fetchLibraryContinue.mockImplementation((options?: { limit?: number }) =>
-				Promise.resolve({ items: options?.limit ? everyPlace : continueRow })
+			fetchLibraryContinue.mockImplementation((page?: { offset: number; limit: number }) =>
+				Promise.resolve({ items: page ? everyPlace : continueRow })
 			);
 			const root = await render();
 			await vi.waitFor(() => expect(continueTitles(root)).toEqual(['nachtstrom']));
@@ -233,7 +233,7 @@ describe('LibraryWall', () => {
 					'Sonnenlauf'
 				])
 			);
-			expect(fetchLibraryContinue).toHaveBeenCalledWith({ limit: 200 });
+			expect(fetchLibraryContinue).toHaveBeenCalledWith({ offset: 0, limit: 200 });
 			expect(pressedOrder(root)).toEqual(['Recent']);
 			expect(tileLines(root)).toEqual([
 				'today 05:47',
@@ -242,6 +242,28 @@ describe('LibraryWall', () => {
 				'20 Sep'
 			]);
 			expect(continueTitles(root)).toEqual(['nachtstrom']);
+		});
+
+		it('orders Recent by the activity of every place and names its last work, past one page of that activity', async () => {
+			const titles = Array.from(
+				{ length: 209 },
+				(_, index) => `Album ${String(index).padStart(3, '0')}`
+			);
+			albumList.set(titles.map((title) => album({ id: title, title, song_count: 0 })));
+			const byActivity = titles
+				.toReversed()
+				.map((title) => place('album', title, title, '2026-09-27T03:47:00Z'));
+			fetchLibraryContinue.mockImplementation((page?: { offset: number; limit: number }) =>
+				Promise.resolve({
+					items: page ? byActivity.slice(page.offset, page.offset + page.limit) : []
+				})
+			);
+			const root = await render();
+
+			orderButton(root, 'Recent').click();
+
+			await vi.waitFor(() => expect(tileTitles(root)).toEqual(titles.toReversed()));
+			expect(new Set(tileLines(root))).toEqual(new Set(['today 05:47']));
 		});
 
 		it('orders Added newest first and names the day each was made', async () => {

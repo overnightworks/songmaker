@@ -70,13 +70,13 @@ describe('fetchLibraryContinue', () => {
 		);
 	});
 
-	it('asks for as many places as the caller names', async () => {
+	it('asks for the page of places the caller names', async () => {
 		mockOk({ items: [] });
 
-		await fetchLibraryContinue({ limit: 200 });
+		await fetchLibraryContinue({ offset: 200, limit: 200 });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/library/continue?limit=200',
+			'/api/library/continue?offset=200&limit=200',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});
