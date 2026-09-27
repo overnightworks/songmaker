@@ -1,0 +1,8 @@
+claim_id = "83ff44720b914006bd04a52c9a5510ae"
+agent = "claude-head"
+role = "builder"
+base = "03578d2e0727a50c0a471f21fcb9a5d1412bbe9a"
+branch = "claude/issue-1098-offline-running-card"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/offline.spec.ts", "frontend/src/lib/components/editor/DetailTabs.svelte", "frontend/src/lib/components/editor/DetailTabs.test.ts", "frontend/src/lib/components/editor/EditorHeader.svelte", "frontend/src/lib/components/editor/EditorHeader.test.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/components/editor/WriteColumn.svelte", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts"]
+opened_commit = "76722290c02d9ee9e1319e508b7a4b332a39bae7"
+whole_reason = "the running take's offline state across the status slot, tabs, header, generate owner and job store, with the e2e guard"
