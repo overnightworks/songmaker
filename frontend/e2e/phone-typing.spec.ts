@@ -20,6 +20,7 @@ import {
 	EDITOR_COWRITER_BACK_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
+	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_VIEW_COWRITER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SEARCH_LABEL,
@@ -175,12 +176,12 @@ test.describe('typing on the phone', () => {
 		const panel = page.getByRole('tabpanel');
 		const miniPlayer = page.getByRole('contentinfo');
 		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-		const writeTab = page.getByRole('tab', { name: /Write/ });
+		const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await panel.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) }).click();
 		await expect(pause).toBeVisible();
-		await writeTab.click();
+		await editTab.click();
 		const progress = panel.getByRole('status');
 		await expect(progress.getByText(RUNNING_JOB_TAKE_COUNTER)).toBeVisible();
 
@@ -193,14 +194,14 @@ test.describe('typing on the phone', () => {
 		await page.keyboard.type(LYRICS_TYPED_ON);
 		await expect(miniPlayer).toBeHidden();
 		await expect(progress).toBeHidden();
-		await expect(writeTab).not.toBeInViewport();
+		await expect(editTab).not.toBeInViewport();
 
 		await showOnScreenKeyboard(page, false);
 		await expect(lyrics).toBeFocused();
 		await expect(pause).toBeVisible();
 		await expect(progress.getByText(RUNNING_JOB_TAKE_COUNTER)).toBeVisible();
 		await expect(progress.getByText(RUNNING_JOB_PERCENT)).toBeVisible();
-		await expect(writeTab).toBeInViewport();
+		await expect(editTab).toBeInViewport();
 
 		guard.assertClean();
 	});
