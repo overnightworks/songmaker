@@ -37,8 +37,6 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_LABEL,
 	RAIL_LIBRARY_LABEL,
-	SONG_NEXT_LABEL,
-	SONG_PREVIOUS_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
@@ -225,10 +223,10 @@ test.describe('song page at phone width', () => {
 	});
 
 	// Issue #1047: the tab choice is remembered per song for the session; a
-	// song opened for the first time lands on Edit, stepping to the previous
-	// or next song keeps whichever tab is open, and a reload restores the tab
-	// the open song was left on.
-	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on next and reload', async ({
+	// song opened for the first time lands on Edit, and a reload restores the
+	// tab the open song was left on. The phone song page has no previous/next
+	// control (#970), so stepping between songs is proven in navigation.test.ts.
+	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on reload', async ({
 		page,
 		isMobile
 	}) => {
@@ -263,18 +261,13 @@ test.describe('song page at phone width', () => {
 		await openFromAlbum(firstTitle);
 		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
 
-		await workspace(page)
-			.getByRole('button', {
-				name: new RegExp(`^(${SONG_PREVIOUS_LABEL}|${SONG_NEXT_LABEL})$`),
-				disabled: false
-			})
-			.first()
-			.click();
-		await expect(page.getByRole('heading', { name: firstTitle })).toHaveCount(0);
+		await page.reload();
+		await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
 		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
 
 		await editTab.click();
 		await page.reload();
+		await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
 		await expect(editTab).toHaveAttribute('aria-selected', 'true');
 	});
 });
