@@ -5,6 +5,7 @@ import { get } from 'svelte/store';
 
 import type { AlbumItem, SongItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
+import { browserReportsOnline } from '$lib/test-utils/network';
 import { LEGACY_TAKE_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { resetCollectionForTests } from '$lib/stores/collection';
 import { albumList, songList } from '$lib/stores/libraryData';
@@ -418,6 +419,34 @@ describe('a legacy /?song= address whose song cannot be reached', () => {
 
 		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
 		expect(target.textContent).not.toContain('Failed to fetch');
+	});
+
+	it('offline, shows its one line with Try again and opens by itself once back online', async () => {
+		browserReportsOnline(false);
+		api.fetchSong.mockRejectedValue(new NetworkError('/api/x', new TypeError('Failed to fetch')));
+		const target = openAddress();
+		await vi.waitFor(() => expect(target.textContent).toContain('This song could not be loaded.'));
+		expect(requireElement(target, 'button.address-action').textContent).toBe('Try again');
+
+		api.fetchSong.mockResolvedValue(
+			song({
+				album_title: 'Anfield',
+				generation_count: 0,
+				id: SONG_ID,
+				slug: SONG_SLUG,
+				title: TRACK_TITLE,
+				album_id: ALBUM_SLUG
+			})
+		);
+		browserReportsOnline(true);
+
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
+				replaceState: true,
+				noScroll: true,
+				keepFocus: true
+			})
+		);
 	});
 
 	it('redirects after Try again once the failure is over', async () => {

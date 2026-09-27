@@ -1,5 +1,5 @@
 import { derived, get, writable, type Readable } from 'svelte/store';
-import { describeFailure, NetworkError } from '$lib/api/fetch';
+import { describeFailure } from '$lib/api/fetch';
 import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import type { AlbumItem, GenerationItem, SongItem } from '$lib/api/types';
 import {
@@ -270,12 +270,11 @@ function loadAllAlbums(combine: CombineAlbums): Promise<boolean> {
 }
 
 function allAlbumsFailure(err: unknown, combine: CombineAlbums): AllAlbumsLoadState {
-	if (!(err instanceof NetworkError)) {
-		allAlbumsReloads.stop();
+	unreachableLoadCombine = combine;
+	const reload = allAlbumsReloads.afterLoadFailure(err);
+	if (reload === null) {
 		return { status: 'error', error: describeFailure(err, ALL_ALBUMS_LOAD_ERROR) };
 	}
-	unreachableLoadCombine = combine;
-	const reload = allAlbumsReloads.afterNetworkFailure();
 	return { status: 'unreachable', error: null, reloadsExhausted: reload === 'exhausted' };
 }
 

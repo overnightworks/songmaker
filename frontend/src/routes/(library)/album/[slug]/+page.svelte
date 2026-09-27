@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import { describeFailure } from '$lib/api/fetch';
 	import { openAlbumAddress } from '$lib/stores/libraryContext';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
 
 	type AddressState = 'resolving' | 'open' | 'unknown' | 'unreachable';
@@ -17,6 +18,10 @@
 	let addressState = $state<AddressState>('resolving');
 	let failure = $state<string | null>(null);
 	let openRequests = 0;
+	// An address that could not be read shows its one line with Retry, and
+	// reads again by itself once the network lets it (#1107 S9).
+	const addressReloads = reloadWhileUnreachable(() => void openAddress(slug));
+	$effect(() => () => addressReloads.stop());
 
 	const slug = $derived(page.params.slug ?? '');
 
@@ -43,9 +48,11 @@
 		try {
 			const address = await openAlbumAddress(albumId);
 			if (request !== openRequests) return;
+			addressReloads.stop();
 			addressState = address === 'found' ? 'open' : 'unknown';
 		} catch (err) {
 			if (request !== openRequests) return;
+			addressReloads.afterLoadFailure(err);
 			failure = describeFailure(err, UNREACHABLE_ALBUM_MESSAGE);
 			addressState = 'unreachable';
 		}

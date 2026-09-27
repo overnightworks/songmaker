@@ -61,6 +61,11 @@ type UnreachableReload = 'on-reconnect' | 'scheduled' | 'exhausted';
 interface UnreachableReloads {
 	afterNetworkFailure(): UnreachableReload;
 	/**
+	 * A lost network schedules the reload and says which; any other failure
+	 * stops the reloads and answers null.
+	 */
+	afterLoadFailure(err: unknown): UnreachableReload | null;
+	/**
 	 * The words a failed load shows, or null while it needs none: a lost
 	 * network stays unnamed while the strip says it or a reload is coming,
 	 * and is named `fallback` once the backoff is spent; any other failure
@@ -109,14 +114,19 @@ export function reloadWhileUnreachable(reload: () => void): UnreachableReloads {
 		reloadsSpent = 0;
 	}
 
+	function afterLoadFailure(err: unknown): UnreachableReload | null {
+		if (err instanceof NetworkError) return afterNetworkFailure();
+		stop();
+		return null;
+	}
+
 	return {
 		afterNetworkFailure,
+		afterLoadFailure,
 		nameLoadFailure(err, fallback) {
-			if (err instanceof NetworkError) {
-				return afterNetworkFailure() === 'exhausted' ? fallback : null;
-			}
-			stop();
-			return describeFailure(err, fallback);
+			const reload = afterLoadFailure(err);
+			if (reload === null) return describeFailure(err, fallback);
+			return reload === 'exhausted' ? fallback : null;
 		},
 		stop
 	};
