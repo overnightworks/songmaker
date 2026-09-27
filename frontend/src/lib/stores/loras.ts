@@ -1,5 +1,4 @@
 import { writable, derived } from 'svelte/store';
-import { describeFailure } from '$lib/api/fetch';
 import {
 	listLoras,
 	getLora,
@@ -8,8 +7,6 @@ import {
 	trainLora as apiTrainLora
 } from '$lib/api/loras';
 import type { UserLoraItem } from '$lib/api/types';
-
-const LORAS_LOAD_FAILED = 'Failed to load voices';
 
 const LORA_STATUS_QUEUED = 'queued';
 const LORA_STATUS_PREPROCESSING = 'preprocessing';
@@ -29,7 +26,6 @@ export function isLoraActive(status: string): boolean {
 
 export const loras = writable<UserLoraItem[]>([]);
 export const lorasLoading = writable<boolean>(false);
-export const lorasError = writable<string | null>(null);
 
 export const anyLoraActive = derived(loras, ($loras) =>
 	$loras.some((lora) => isLoraActive(lora.status))
@@ -40,11 +36,7 @@ export async function loadLoras(includeDeleted: boolean = false): Promise<UserLo
 	try {
 		const items = await listLoras(includeDeleted);
 		loras.set(items);
-		lorasError.set(null);
 		return items;
-	} catch (e) {
-		lorasError.set(describeFailure(e, LORAS_LOAD_FAILED));
-		throw e;
 	} finally {
 		lorasLoading.set(false);
 	}

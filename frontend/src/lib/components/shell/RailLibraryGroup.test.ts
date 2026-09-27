@@ -12,7 +12,12 @@ import {
 } from '$lib/constants';
 import { openCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { albumList, allAlbumsLoad, songList } from '$lib/stores/libraryData';
+import {
+	albumList,
+	allAlbumsLoad,
+	resetLibraryDataForTests,
+	songList
+} from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -56,7 +61,7 @@ beforeEach(() => {
 	resetLibraryContextForTests();
 	fetchAlbums.mockClear().mockResolvedValue(albumsPage());
 	fetchSongs.mockClear().mockResolvedValue(songsPage());
-	allAlbumsLoad.set({ status: 'idle', error: null });
+	resetLibraryDataForTests();
 	albumList.set([album()]);
 	songList.set([
 		song({ id: 's1', title: 'Tide', track_number: 1 }),
@@ -425,6 +430,27 @@ describe('RailLibraryGroup', () => {
 		await vi.waitFor(() =>
 			expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement)
 		);
+	});
+
+	it('offline with nothing loaded yet, claims no album count until the albums have loaded', async () => {
+		reportResourceStreamReachable(false);
+		albumList.set([]);
+		fetchAlbums.mockRejectedValueOnce(
+			new NetworkError('/api/albums', new TypeError('Failed to fetch'))
+		);
+		const target = await render();
+		await vi.waitFor(() => expect(get(allAlbumsLoad).status).toBe('unreachable'));
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+
+		const allAlbums = requireElement(target, `.${RAIL_ALL_ALBUMS_ITEM_CLASS}`);
+		expect(allAlbums.querySelector('.row-meta')).toBeNull();
+		expect(target.querySelector('.meta')).toBeNull();
+
+		fetchAlbums.mockResolvedValueOnce(albumsPage({ items: [] }));
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(allAlbums.querySelector('.row-meta')?.textContent).toBe('0'));
 	});
 
 	it('while no strip shows, loads again on a bounded backoff and then names the failure with its Retry', async () => {

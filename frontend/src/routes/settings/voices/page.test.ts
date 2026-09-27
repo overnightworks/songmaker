@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 
 const mocks = vi.hoisted(() => ({
@@ -39,9 +40,21 @@ vi.mock('$lib/stores/toast', async (importOriginal) => {
 
 import VoicesPage from './+page.svelte';
 import voicesPageSource from './+page.svelte?raw';
-import { loras, lorasError, lorasLoading } from '$lib/stores/loras';
+import { loras, lorasLoading } from '$lib/stores/loras';
 
 let mounted: ReturnType<typeof mount> | undefined;
+
+const VOICE = {
+	id: 'l1',
+	user_id: 'u1',
+	name: 'My Tenor',
+	slug: 'my-tenor',
+	status: 'ready',
+	model_mode: 'sft',
+	created_at: '2026-09-05T00:00:00Z',
+	deleted_at: null,
+	samples: []
+};
 
 beforeEach(() => {
 	mocks.loadLoras.mockReset().mockResolvedValue([]);
@@ -52,7 +65,6 @@ beforeEach(() => {
 	mocks.addLoraSampleFromGeneration.mockReset();
 	loras.set([]);
 	lorasLoading.set(false);
-	lorasError.set(null);
 });
 
 afterEach(async () => {
@@ -60,6 +72,57 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	clearComponentStyles();
+	resetConnectivityForTests();
+});
+
+const NO_VOICES_YET = 'No voices yet.';
+
+async function renderVoicesPage(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	mounted = mount(VoicesPage, { target });
+	await tick();
+	return target;
+}
+
+describe('voices page reads', () => {
+	it('offline, claims no empty list, shows no failure of its own and lists the voices once back online', async () => {
+		reportResourceStreamReachable(false);
+		mocks.loadLoras.mockRejectedValue(
+			new NetworkError('/api/loras', new TypeError('Failed to fetch'))
+		);
+		const target = await renderVoicesPage();
+		await vi.waitFor(() => expect(mocks.loadLoras).toHaveBeenCalled());
+		await tick();
+
+		expect(target.textContent).not.toContain(NO_VOICES_YET);
+		expect(target.querySelector('.error')).toBeNull();
+		expect(target.textContent).not.toContain('Failed to fetch');
+
+		mocks.loadLoras.mockImplementation(async () => {
+			loras.set([VOICE]);
+			return [VOICE];
+		});
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('My Tenor'));
+	});
+
+	it('names a read the server refused in its own words', async () => {
+		mocks.loadLoras.mockRejectedValue(new ApiError(503, 'Voice storage is offline', '/api/loras'));
+		const target = await renderVoicesPage();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('.error')?.textContent).toBe('Voice storage is offline')
+		);
+		expect(target.textContent).not.toContain(NO_VOICES_YET);
+	});
+
+	it('says there are no voices yet once the read answered with none', async () => {
+		const target = await renderVoicesPage();
+
+		await vi.waitFor(() => expect(target.textContent).toContain(NO_VOICES_YET));
+	});
 });
 
 describe('voices page', () => {

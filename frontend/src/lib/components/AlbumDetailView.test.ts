@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { NetworkError } from '$lib/api/fetch';
+import { serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
@@ -142,10 +143,6 @@ function coverJob(overrides: Partial<JobItem> = {}): JobItem {
 }
 
 const SUGGESTIONS_PATH = '/api/albums/a-local/cover-suggestions';
-
-function serverRefusal(detail: string): ApiError {
-	return new ApiError(429, detail, SUGGESTIONS_PATH);
-}
 
 function networkFailure(): NetworkError {
 	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));
@@ -832,6 +829,36 @@ describe('AlbumDetailView cover suggestions', () => {
 		);
 		expect(target.querySelectorAll('.cover-suggestion')).toHaveLength(0);
 		expect(target.querySelector('[role="alert"] button')?.textContent).toBe('Try again');
+	});
+
+	it('starting suggestions from the header menu stops a pending reload of the card', async () => {
+		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		albumList.set([
+			album({
+				id: 'a-local',
+				title: 'Night Drive',
+				cover: { card: '/cover-card.jpg', detail: '/cover-detail.jpg' }
+			})
+		]);
+		fetchAlbumCoverSuggestions
+			.mockRejectedValueOnce(networkFailure())
+			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		const suggestionJob = deferred<JobItem>();
+		createAlbumCoverSuggestions.mockImplementation(() => suggestionJob.promise);
+		const target = await renderDetail();
+		await reachSuggestionsLoads(1);
+
+		const menu = await openCollectionMenu(target);
+		Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((element) => element.textContent?.trim() === 'Replace…')
+			?.click();
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
+
+		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
+		suggestionJob.resolve(coverJob());
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
 	});
 
 	it('keeps replacement suggestions reachable when the album already has a cover', async () => {

@@ -1,16 +1,15 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { get } from 'svelte/store';
 	import { openCollection } from '$lib/stores/collection';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import {
 		albumList,
 		allAlbumsLoad,
+		allAlbumsLoadFailure,
 		ensureAllAlbumsLoaded,
 		loadSongsForAlbum,
 		songList
 	} from '$lib/stores/libraryData';
-	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
@@ -25,7 +24,6 @@
 		RAIL_ALL_ALBUMS_LABEL,
 		RAIL_CONTEXT_NO_TAKES,
 		RAIL_LIBRARY_LABEL,
-		RAIL_LIBRARY_LOAD_ERROR,
 		RAIL_LIBRARY_NAV_LABEL
 	} from '$lib/constants';
 	import type { SongItem } from '$lib/api/types';
@@ -59,13 +57,8 @@
 	const filtering = $derived(query.length > 0);
 	const isAlbumDetail = $derived(surface === 'detail' && openAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
-	const loadError = $derived($allAlbumsLoad.error);
-	let libraryReloadsExhausted = $state(false);
-	// A load the network swallowed shows no failure while it reloads, nor while
-	// the offline strip says it; only a spent backoff names it with a Retry.
-	const showLoadFailure = $derived(
-		loadStatus === 'error' || (loadStatus === 'unreachable' && libraryReloadsExhausted && !$offline)
-	);
+	const loadFailure = $derived($allAlbumsLoadFailure);
+	// A list that has not loaded yet shows no count rather than claiming zero.
 	const albumCount = $derived(
 		albums.length > 0 || loadStatus === 'ready' ? albums.length : undefined
 	);
@@ -83,24 +76,11 @@
 	// complete album list regardless of which library page, or which non-library
 	// route (e.g. Settings), is currently open.
 	$effect(() => {
-		void loadLibrary();
+		void ensureAllAlbumsLoaded();
 	});
 
-	const libraryReloads = reloadWhileUnreachable(retryLibraryLoad);
-	$effect(() => () => libraryReloads.stop());
-
 	function retryLibraryLoad(): void {
-		void loadLibrary();
-	}
-
-	async function loadLibrary(): Promise<void> {
-		libraryReloadsExhausted = false;
-		if (await ensureAllAlbumsLoaded()) {
-			libraryReloads.stop();
-			return;
-		}
-		if (get(allAlbumsLoad).status !== 'unreachable') return;
-		libraryReloadsExhausted = libraryReloads.afterNetworkFailure() === 'exhausted';
+		void ensureAllAlbumsLoaded();
 	}
 
 	// A single slot, not a set (issue #323, operator ruling): with 42 albums,
@@ -227,13 +207,13 @@
 		groupId="rail-library-group"
 		storageKey={LIBRARY_OPEN_STORAGE_KEY}
 		count={albumCount}
-		expandTrigger={isAlbumDetail || showLoadFailure || filtering}
+		expandTrigger={isAlbumDetail || loadFailure !== null || filtering}
 		{icon}
 	>
 		<nav class="rail-library-nav" aria-label={RAIL_LIBRARY_NAV_LABEL}>
-			{#if showLoadFailure}
+			{#if loadFailure !== null}
 				<div class="rail-load-error">
-					<p class="rail-status" role="alert">{loadError ?? RAIL_LIBRARY_LOAD_ERROR}</p>
+					<p class="rail-status" role="alert">{loadFailure}</p>
 					<button type="button" class="rail-retry" onclick={retryLibraryLoad}>
 						{LIBRARY_RETRY_LABEL}
 					</button>
@@ -258,7 +238,9 @@
 								<polyline points="9 6 15 12 9 18" />
 							</svg>
 							<span class="row-title">{RAIL_ALL_ALBUMS_LABEL}</span>
-							<span class="row-meta">{albums.length}</span>
+							{#if albumCount !== undefined}
+								<span class="row-meta">{albumCount}</span>
+							{/if}
 						</button>
 					</li>
 				{/if}
