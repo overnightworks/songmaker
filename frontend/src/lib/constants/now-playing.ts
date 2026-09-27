@@ -81,6 +81,24 @@ export function nowPlayingTakeMeta(parts: TakeMetaParts): string {
 	return written.filter((part): part is string => Boolean(part)).join(META_SEPARATOR);
 }
 
+// Where the playing queue comes from — the album or playlist it was built
+// from — and how to go back there. A library queue has no source.
+export type NowPlayingSourceKind = 'album' | 'playlist';
+
+export interface NowPlayingSource {
+	kind: NowPlayingSourceKind;
+	title: string;
+	open: () => void;
+}
+
+export function nowPlayingFromLabel(title: string): string {
+	return `from ${title}`;
+}
+
+export function nowPlayingOpenSourceLabel(kind: NowPlayingSourceKind, title: string): string {
+	return `Open ${kind} ${title}`;
+}
+
 export const NOW_PLAYING_UP_NEXT_PREFIX = 'Up next:';
 export const NOW_PLAYING_SHUFFLE_LABEL_PREFIX = 'Shuffle';
 export const NOW_PLAYING_SHUFFLE_DISABLE_PREFIX = 'Disable shuffle';

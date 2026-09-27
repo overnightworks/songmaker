@@ -19,7 +19,10 @@
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
+		nowPlayingFromLabel,
+		nowPlayingOpenSourceLabel,
 		nowPlayingTakeLabel,
+		type NowPlayingSource,
 		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
 	import { formatTime } from '$lib/utils/format';
@@ -31,6 +34,7 @@
 	let {
 		info,
 		coverUrl,
+		source = null,
 		surface = 'full',
 		onclose,
 		onEscape,
@@ -65,6 +69,9 @@
 	}: {
 		info: PlaybackInfo;
 		coverUrl: string | null;
+		// Where the playing queue comes from. The stacked layout names it under
+		// the title as a way back there; everywhere else the album line stands.
+		source?: NowPlayingSource | null;
 		// 'full' covers the viewport as a modal dialog; 'docked' is a column in
 		// the page's own layout — no dialog role, no focus trap, no transport
 		// of its own, since the transport bar beside it keeps carrying that.
@@ -240,7 +247,16 @@
 				</div>
 				<div class="cover-meta">
 					<span class="cover-title">{info.songTitle}</span>
-					{#if albumLine}<span class="cover-line">{albumLine}</span>{/if}
+					{#if stacked && source}
+						<button
+							type="button"
+							class="from-link"
+							data-hitbox="text"
+							onclick={source.open}
+							aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
+							>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
+						>
+					{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
 					{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
 				</div>
 				{#if curationBar}{@render curationBar()}{/if}
@@ -263,33 +279,37 @@
 						/>
 						<span class="time">{formatTime(duration)}</span>
 					</div>
+					<!-- Play sits on the column's centre line: two equal sides around it,
+						the right one closed by an empty square where no repeat control is. -->
 					<div class="transport">
-						<button
-							type="button"
-							class="icon-btn"
-							class:active={shuffle}
-							style:min-width="{HITBOX_FREQUENT_PX}px"
-							style:min-height="{HITBOX_FREQUENT_PX}px"
-							onclick={onToggleShuffle}
-							aria-pressed={shuffle}
-							aria-label={shuffleLabel}
-							title={shuffleLabel}
-						>
-							<Icon name="shuffle" size={18} />
-						</button>
-						{#if onprev}
+						<div class="transport-side before">
 							<button
 								type="button"
 								class="icon-btn"
+								class:active={shuffle}
 								style:min-width="{HITBOX_FREQUENT_PX}px"
 								style:min-height="{HITBOX_FREQUENT_PX}px"
-								onclick={onprev}
-								disabled={!canPrev}
-								aria-label={SONG_PREVIOUS_LABEL}
+								onclick={onToggleShuffle}
+								aria-pressed={shuffle}
+								aria-label={shuffleLabel}
+								title={shuffleLabel}
 							>
-								<Icon name="skip-back" size={20} />
+								<Icon name="shuffle" size={18} />
 							</button>
-						{/if}
+							{#if onprev}
+								<button
+									type="button"
+									class="icon-btn"
+									style:min-width="{HITBOX_FREQUENT_PX}px"
+									style:min-height="{HITBOX_FREQUENT_PX}px"
+									onclick={onprev}
+									disabled={!canPrev}
+									aria-label={SONG_PREVIOUS_LABEL}
+								>
+									<Icon name="skip-back" size={20} />
+								</button>
+							{/if}
+						</div>
 						<button
 							type="button"
 							class="play-btn"
@@ -298,19 +318,27 @@
 						>
 							<Icon name={isPlaying ? 'pause' : 'play'} size={26} />
 						</button>
-						{#if onnext}
-							<button
-								type="button"
-								class="icon-btn"
-								style:min-width="{HITBOX_FREQUENT_PX}px"
-								style:min-height="{HITBOX_FREQUENT_PX}px"
-								onclick={onnext}
-								disabled={!canNext}
-								aria-label={SONG_NEXT_LABEL}
-							>
-								<Icon name="skip-forward" size={20} />
-							</button>
-						{/if}
+						<div class="transport-side after">
+							{#if onnext}
+								<button
+									type="button"
+									class="icon-btn"
+									style:min-width="{HITBOX_FREQUENT_PX}px"
+									style:min-height="{HITBOX_FREQUENT_PX}px"
+									onclick={onnext}
+									disabled={!canNext}
+									aria-label={SONG_NEXT_LABEL}
+								>
+									<Icon name="skip-forward" size={20} />
+								</button>
+							{/if}
+							<span
+								class="transport-slot"
+								style:width="{HITBOX_FREQUENT_PX}px"
+								style:height="{HITBOX_FREQUENT_PX}px"
+								aria-hidden="true"
+							></span>
+						</div>
 					</div>
 				{/if}
 			</section>
@@ -520,6 +548,18 @@
 		font-size: 0.8rem;
 		color: var(--text-muted);
 	}
+	.from-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		padding: 0 0.5rem;
+		border: none;
+		background: none;
+		color: var(--primary);
+		font: inherit;
+		font-size: 0.8rem;
+		cursor: pointer;
+	}
 	.progress {
 		width: min(320px, 80%);
 		display: grid;
@@ -567,13 +607,29 @@
 		margin-top: -5px;
 	}
 	.transport {
+		align-self: stretch;
+		display: grid;
+		grid-template-columns: 1fr auto 1fr;
+		align-items: center;
+		gap: 1rem;
+	}
+	.transport-side {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
 	}
+	.transport-side.before {
+		justify-content: flex-end;
+	}
+	.transport-side.after {
+		justify-content: flex-start;
+	}
+	.transport-slot {
+		flex-shrink: 0;
+	}
 	.play-btn {
-		width: 62px;
-		height: 62px;
+		width: 64px;
+		height: 64px;
 		border-radius: 50%;
 		border: 2px solid var(--primary);
 		background: color-mix(in srgb, var(--surface) 72%, transparent);

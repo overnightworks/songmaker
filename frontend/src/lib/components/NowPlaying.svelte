@@ -6,9 +6,11 @@
 		NOW_PLAYING_QUEUE_TAB,
 		NOW_PLAYING_RIGHT_PANEL_LABEL,
 		NOW_PLAYING_TAKE_TAB,
-		nowPlayingCurateProgress
+		nowPlayingCurateProgress,
+		type NowPlayingSource
 	} from '$lib/constants/now-playing';
 	import { albumList, songList } from '$lib/stores/libraryData';
+	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
 		buildQueueViewModel,
 		canPlayNextSong,
@@ -80,11 +82,25 @@
 	const skipped = $derived(isLibraryQueue ? $libraryQueueSkipped : []);
 	const skippedComplete = $derived(isLibraryQueue ? $libraryQueueSkippedComplete : true);
 	const queueVm = $derived(buildQueueViewModel(ctx, audioPlayer.current));
-	// What is playing, named by the queue itself — never by the collection the
-	// listener happens to have open, which they are free to leave mid-track.
-	const contextLabel = $derived.by(() => {
-		if (ctx.type === 'album') return $albumList.find((a) => a.id === ctx.albumId)?.title ?? null;
-		if (ctx.type === 'playlist') return ctx.playlist.title;
+	// Where the music comes from, named by the queue itself — never by the
+	// collection the listener happens to have open, which they are free to
+	// leave mid-track.
+	const source: NowPlayingSource | null = $derived.by(() => {
+		if (ctx.type === 'album') {
+			const albumId = ctx.albumId;
+			const title = $albumList.find((a) => a.id === albumId)?.title;
+			return title
+				? { kind: 'album', title, open: () => leaveFor(() => openAlbum(albumId)) }
+				: null;
+		}
+		if (ctx.type === 'playlist') {
+			const playlistId = ctx.playlist.id;
+			return {
+				kind: 'playlist',
+				title: ctx.playlist.title,
+				open: () => leaveFor(() => openPlaylist(playlistId))
+			};
+		}
 		return null;
 	});
 
@@ -141,9 +157,13 @@
 		void chooseLibraryTakePool(next);
 	}
 
-	function goToSong(): void {
+	function leaveFor(destination: () => Promise<void>): void {
 		closeNowPlaying();
-		void navigateToPlaying();
+		void destination();
+	}
+
+	function goToSong(): void {
+		leaveFor(navigateToPlaying);
 	}
 
 	// Curation's three actions all act on the resolved take (song/
@@ -242,7 +262,7 @@
 		{#if rightPanelTab === 'queue'}
 			<NowPlayingQueue
 				queue={queueVm}
-				{contextLabel}
+				contextLabel={source?.title ?? null}
 				currentSongTitle={info.songTitle}
 				{takePool}
 				onJump={jumpToQueueIndex}
@@ -276,6 +296,7 @@
 <NowPlayingFrame
 	{info}
 	{coverUrl}
+	{source}
 	{surface}
 	onclose={closeNowPlaying}
 	onExpand={expandNowPlaying}

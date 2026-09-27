@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { nowPlayingTakeLabel, nowPlayingTakeMeta, takeBatchReductionLabel } from './now-playing';
+import {
+	nowPlayingFromLabel,
+	nowPlayingOpenSourceLabel,
+	nowPlayingTakeLabel,
+	nowPlayingTakeMeta,
+	takeBatchReductionLabel
+} from './now-playing';
 
 describe('nowPlayingTakeLabel', () => {
 	it('names the version and the take', () => {
@@ -68,5 +74,18 @@ describe('takeBatchReductionLabel', () => {
 
 	it('shows nothing for a take with no generation_params at all', () => {
 		expect(takeBatchReductionLabel(null)).toBeNull();
+	});
+});
+
+describe('the source Now Playing names (#1052)', () => {
+	it('says where the music comes from', () => {
+		expect(nowPlayingFromLabel('Nightdrive')).toBe('from Nightdrive');
+	});
+
+	it.each([
+		{ kind: 'album' as const, title: 'Nightdrive', label: 'Open album Nightdrive' },
+		{ kind: 'playlist' as const, title: 'Late Drives', label: 'Open playlist Late Drives' }
+	])('names opening the $kind', ({ kind, title, label }) => {
+		expect(nowPlayingOpenSourceLabel(kind, title)).toBe(label);
 	});
 });
