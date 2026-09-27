@@ -947,6 +947,64 @@ describe('resource sync owner', () => {
 		controller.stop();
 	});
 
+	describe('a song rate-limited with a Retry-After of 30 s', () => {
+		const retryAfterSeconds = 30;
+
+		function setupAlwaysRateLimited() {
+			vi.useFakeTimers();
+			const harness = setup({
+				fetchSong: async (songId) => {
+					throw new ApiError(429, 'Too Many Requests', `/api/songs/${songId}`, retryAfterSeconds);
+				}
+			});
+			return harness;
+		}
+
+		async function startLiveAndRateLimit(harness: ReturnType<typeof setup>): Promise<void> {
+			harness.controller.start();
+			latestSource(harness.sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			await harness.controller.waitForReady();
+			await harness.controller.requestSongRefresh('s1');
+			expect(harness.fetchCalls).toEqual(['s1']);
+		}
+
+		it('is not fetched again by five focus events or a reopened stream until 30 s have passed, then once', async () => {
+			const harness = setupAlwaysRateLimited();
+			await startLiveAndRateLimit(harness);
+
+			for (let focus = 0; focus < 5; focus++) {
+				window.dispatchEvent(new Event('focus'));
+				await vi.advanceTimersByTimeAsync(RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS);
+			}
+			latestSource(harness.sources).error();
+			await flush();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource(harness.sources).emit('hello', { high_water_mark: '0' });
+			await flush();
+			const elapsedMs = 5 * RESOURCE_SYNC_VISIBILITY_DEBOUNCE_MS + SAFE_RECONNECT_ADVANCE_MS;
+			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000 - elapsedMs - 1);
+			expect(harness.fetchCalls).toEqual(['s1']);
+
+			await vi.advanceTimersByTimeAsync(1);
+			expect(harness.fetchCalls).toEqual(['s1', 's1']);
+			harness.controller.stop();
+		});
+
+		it('is not fetched by a Retry tap inside the 30 s, keeps its error shown, and is fetched once they pass', async () => {
+			const harness = setupAlwaysRateLimited();
+			await startLiveAndRateLimit(harness);
+
+			await expect(harness.controller.retry()).resolves.toBe(false);
+			expect(harness.fetchCalls).toEqual(['s1']);
+			expect(get(harness.store)).toMatchObject({ status: 'error', error: 'Too Many Requests' });
+
+			await vi.advanceTimersByTimeAsync(retryAfterSeconds * 1000);
+			expect(harness.fetchCalls).toEqual(['s1', 's1']);
+			harness.controller.stop();
+		});
+	});
+
 	it('holds an already scheduled retry of failed refreshes until a later Retry-After has passed', async () => {
 		vi.useFakeTimers();
 		const retryAfterSeconds = 30;
