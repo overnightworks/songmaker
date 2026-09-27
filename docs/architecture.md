@@ -1001,11 +1001,29 @@ The open song editor reloads only when the selected song id changes or the user
 explicitly applies a fresh song, including after deleting the version on screen.
 A live refresh error stays visible across the 60-second reconnect and is retried
 on the next `hello`; a later successful fetch clears Retry. A refresh that got no
-answer at all reads "You're offline — retrying" rather than the browser's own
-`Failed to fetch`. A failed live refresh also retries on its own, on the streams'
+answer at all is not an error of this owner: it sets no visible error and no Retry,
+and the library shows no failure of its own. Whether the page can reach the server
+has one owner, `stores/connectivity.ts`: it combines `navigator.onLine`, the
+`online`/`offline` events and the resource stream's health, which the resource
+sync owner reports (a `hello` means reachable; a stream that fails before its
+`hello`, to open or to reopen, means not, whatever the auth probe answers, and so
+does a probe that gets no answer; a live stream that drops after its `hello`
+stays reachable until its reopen fails). Surfaces read its
+`offline` store and never decide on their own: the one `OfflineStrip` — a calm
+neutral "You're offline — retrying" with no button — rests on the top edge of the
+private transport bar, steps aside with it for the phone keyboard and full Now
+Playing, and goes by itself once back online; the root layout marks
+`html[data-offline]` so `app.css` adds the strip's height to `--player-height`
+and the page (the phone's Generate bar included) stays above it; and Generate is
+disabled with no reason text of its own. A failed live refresh also retries on its own, on the streams'
 backoff capped below 10 seconds, so a network that returns without an `online`
 event still brings the take in; the next `online`, focus or visible event retries
-at once, and the same events restart a bootstrap that failed.
+at once, and the same events restart a bootstrap that failed. A bootstrap that
+failed because the server could not be reached also restarts itself on that
+backoff, so the strip's "retrying" holds even when none of those events fires.
+A first stream the browser closed for good — a non-200 answer, such as the
+edge's 5xx while the server restarts, ends its native retries — counts as such a
+failed bootstrap at once rather than waiting for errors that will never come.
 The owner remembers the id of the last event it saw and reopens a dropped stream
 with that `last_event_id` query cursor, so an event sent while the phone's screen
 was off or the connection was down is replayed rather than lost. A completed or

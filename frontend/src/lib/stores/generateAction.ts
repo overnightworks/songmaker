@@ -15,6 +15,7 @@ import {
 	JOB_TYPE_GENERATE
 } from '$lib/constants';
 import { formatTime } from '$lib/utils/format';
+import { offline } from './connectivity';
 import {
 	currentVersionIndex,
 	editLyrics,
@@ -120,7 +121,7 @@ export type GenerateState =
 			readout: string | null;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
-	| { kind: 'disabled'; mode: GenerateMode; reason: string };
+	| { kind: 'disabled'; mode: GenerateMode; reason: string | null };
 
 type GenerateBusyState = Extract<GenerateState, { kind: 'queued' | 'generating' }>;
 type GenerateJobState = GenerateBusyState & { jobId: string };
@@ -145,7 +146,8 @@ export const generateAction = derived(
 		activeModels,
 		sourceGeneration,
 		sourceMode,
-		generationFailures
+		generationFailures,
+		offline
 	],
 	([
 		song,
@@ -158,7 +160,8 @@ export const generateAction = derived(
 		models,
 		source,
 		mode,
-		failures
+		failures,
+		isOffline
 	]): GenerateState => {
 		const job = song ? pendingGenerateJob(song, jobs) : null;
 		const pending = inFlight || job?.status === 'queued' || job?.status === 'running';
@@ -169,7 +172,7 @@ export const generateAction = derived(
 			disabledReason = models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
 		} else if (gpuOffline) disabledReason = EDITOR_GPU_OFFLINE_TITLE;
 
-		const disabled = pending || !lyrics || !prompt || model === null || gpuOffline;
+		const disabled = pending || isOffline || !lyrics || !prompt || model === null || gpuOffline;
 		const actionMode: GenerateMode = source ? mode : 'generate';
 		const cause = song ? failures[song.id] : undefined;
 		if (job?.status === 'queued') {
@@ -190,7 +193,10 @@ export const generateAction = derived(
 				readout: progressReadout(job)
 			};
 		}
-		if (disabled) return { kind: 'disabled', mode: actionMode, reason: disabledReason };
+		// Offline, Generate has no words of its own: the one offline strip says it.
+		if (disabled) {
+			return { kind: 'disabled', mode: actionMode, reason: isOffline ? null : disabledReason };
+		}
 		if (cause !== undefined) return { kind: 'failed', mode: actionMode, cause };
 		return { kind: 'idle', mode: actionMode };
 	}
