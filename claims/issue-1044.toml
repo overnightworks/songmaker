@@ -1,7 +1,0 @@
-claim_id = "dada38454f9a49cfb4847476b8f1104e"
-agent = "claude-head"
-role = "builder"
-base = "ed4a03921b8e5c77d3bb606359e74dd101b99445"
-branch = "claude/issue-1044-scoring-order-test"
-scope = ["src/songmaker_cli/scoring/pipeline.py", "tests/test_scoring_pipeline.py"]
-opened_commit = "1e6387582a3b9088b505858e4b909e495a58e57e"
