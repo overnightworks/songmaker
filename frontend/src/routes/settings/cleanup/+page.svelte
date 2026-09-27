@@ -1,8 +1,10 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { onMount } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { goto } from '$app/navigation';
+	import { describeFailure } from '$lib/api/fetch';
 	import { isAdmin } from '$lib/stores/auth';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { addToast } from '$lib/stores/toast';
 	import {
 		previewGenerationRetention,
@@ -14,6 +16,7 @@
 	let loading = $state(false);
 	let running = $state(false);
 	let confirming = $state(false);
+	const previewReloads = reloadWhileUnreachable(() => void refreshPreview());
 
 	onMount(() => {
 		if (!$isAdmin) {
@@ -22,13 +25,16 @@
 		}
 		refreshPreview();
 	});
+	onDestroy(() => previewReloads.stop());
 
 	async function refreshPreview(): Promise<void> {
 		loading = true;
 		try {
 			report = await previewGenerationRetention();
+			previewReloads.stop();
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Preview failed', 'error');
+			const failure = previewReloads.nameLoadFailure(e, 'Preview failed');
+			if (failure !== null) addToast(failure, 'error');
 		} finally {
 			loading = false;
 		}
@@ -40,7 +46,7 @@
 			report = await runGenerationRetention();
 			addToast(`Archived ${report.archived_count}, deleted ${report.deleted_count}`, 'success');
 		} catch (e) {
-			addToast(e instanceof Error ? e.message : 'Cleanup failed', 'error');
+			addToast(describeFailure(e, 'Cleanup failed'), 'error');
 		} finally {
 			running = false;
 			confirming = false;
