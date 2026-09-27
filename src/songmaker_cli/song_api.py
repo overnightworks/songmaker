@@ -324,7 +324,7 @@ def api_record_song_listen(
     if best_playable_generation(song) is None:
         raise HTTPException(422, "Song is not playable")
     playlist = None
-    if req is not None:
+    if req is not None and req.playlist_id is not None:
         playlist = check_own_playlist_access(session, req.playlist_id, user)
         if not playlist_holds_song(session, playlist, song):
             raise HTTPException(422, "Playlist does not hold this song")

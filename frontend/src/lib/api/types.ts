@@ -1034,7 +1034,7 @@ export interface SongItem {
 }
 
 export interface SongListenRequest {
-	playlist_id: string;
+	playlist_id?: string | null;
 }
 
 export interface SongMoveRequest {
