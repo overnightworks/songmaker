@@ -12,7 +12,16 @@
 	import { APP_NAME } from '$lib/constants';
 	import { AUTH_CHECK_RETRY_LABEL } from '$lib/constants/auth';
 	import { HITBOX_STYLE } from '$lib/styles/hitbox';
-	import { checkAuth, currentUser, authLoading, authCheckError, logout } from '$lib/stores/auth';
+	import OfflineStrip from '$lib/components/OfflineStrip.svelte';
+	import {
+		checkAuth,
+		currentUser,
+		authLoading,
+		authCheckError,
+		authCheckLostNetwork,
+		authCheckUnreachable,
+		logout
+	} from '$lib/stores/auth';
 	import {
 		backToCollection,
 		forgetHistoryLayers,
@@ -75,7 +84,9 @@
 	const libraryRouteActive = $derived(
 		hasPrivatePlayer && isLibraryWorkspacePath(page.url.pathname)
 	);
-	const authRetryable = $derived($authCheckError !== null && me === null);
+	const authCheckFailure = $derived($authCheckError ?? $authCheckLostNetwork);
+	const authRetryable = $derived(authCheckFailure !== null && me === null);
+	const sessionUnreachable = $derived($authCheckUnreachable && me === null);
 
 	let compact = $state(false);
 
@@ -185,12 +196,12 @@
 			return;
 		}
 
-		const user = await checkAuth();
+		const user = await checkAuth(() => void initAuth());
 		if (user) {
 			fetchCapabilities().catch(() => {});
 			return;
 		}
-		if (get(authCheckError)) {
+		if (get(authCheckError) || get(authCheckUnreachable)) {
 			return;
 		}
 		try {
@@ -247,8 +258,15 @@
 	<div class="loading">Loading...</div>
 {:else if authRetryable}
 	<div class="auth-retry">
-		<p>{$authCheckError}</p>
+		<p>{authCheckFailure}</p>
 		<button type="button" onclick={initAuth}>{AUTH_CHECK_RETRY_LABEL}</button>
+	</div>
+{:else if sessionUnreachable}
+	{#if !$offline}
+		<div class="loading">Loading...</div>
+	{/if}
+	<div class="session-unreachable">
+		<OfflineStrip />
 	</div>
 {:else if me}
 	{#if compact}
@@ -306,6 +324,10 @@
 		font-size: 1.1rem;
 		text-align: center;
 		padding: 0 24px;
+	}
+
+	.session-unreachable {
+		--transport-bar-height: 0px;
 	}
 
 	.auth-retry button {

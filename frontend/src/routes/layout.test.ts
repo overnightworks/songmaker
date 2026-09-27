@@ -5,8 +5,15 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX } from '$lib/constants';
-import { checkAuth, currentUser, authLoading, authCheckError } from '$lib/stores/auth';
+import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX, OFFLINE_STRIP_MESSAGE } from '$lib/constants';
+import { AUTH_CHECK_NETWORK_ERROR } from '$lib/constants/auth';
+import {
+	checkAuth,
+	currentUser,
+	authLoading,
+	authCheckError,
+	resetAuthForTests
+} from '$lib/stores/auth';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { openCollection } from '$lib/stores/collection';
 import {
@@ -231,6 +238,7 @@ afterEach(async () => {
 	audioPlayer.destroy();
 	vi.mocked(checkAuth).mockReset();
 	vi.unstubAllGlobals();
+	resetAuthForTests();
 	resetConnectivityForTests();
 });
 
@@ -726,6 +734,13 @@ describe('docked Now Playing', () => {
 });
 
 describe('auth check failure', () => {
+	function signInRedirects(): unknown[] {
+		return vi
+			.mocked(goto)
+			.mock.calls.map(([to]) => to)
+			.filter((to) => to === '/login' || to === '/setup');
+	}
+
 	it('shows a retry-able error instead of navigating to /login on a transient failure', async () => {
 		currentUser.set(null);
 		authLoading.set(true);
@@ -746,6 +761,33 @@ describe('auth check failure', () => {
 		const retry = requireElement<HTMLButtonElement>(target, '.auth-retry button');
 		expect(retry.textContent).toBe('Retry');
 		expect(target.querySelector('.auth-retry')?.textContent).toContain('Too many requests');
+	});
+
+	it('with the server out of reach shows the offline strip, not the session error, and loads the app once back online', async () => {
+		const actual = await vi.importActual<typeof import('$lib/stores/auth')>('$lib/stores/auth');
+		vi.mocked(checkAuth).mockImplementation(actual.checkAuth);
+		currentUser.set(null);
+		authLoading.set(true);
+		reportResourceStreamReachable(false);
+		vi.stubGlobal(
+			'fetch',
+			vi
+				.fn()
+				.mockRejectedValueOnce(new TypeError('Failed to fetch'))
+				.mockImplementation(async () => Response.json(USER))
+		);
+
+		const target = mountLayout('/');
+
+		await vi.waitFor(() => expect(target.textContent).toContain(OFFLINE_STRIP_MESSAGE));
+		expect(target.textContent).not.toContain(AUTH_CHECK_NETWORK_ERROR);
+		expect(target.querySelector('.auth-retry')).toBeNull();
+		expect(signInRedirects()).toEqual([]);
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.querySelector('.app-shell')).not.toBeNull());
+		expect(signInRedirects()).toEqual([]);
 	});
 
 	it('navigates to /login on a 401 (no known user, no check error)', async () => {
