@@ -4,8 +4,10 @@
 	import { createPollingStore } from '$lib/stores/adminPolling';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { addToast } from '$lib/stores/toast';
-	import { ApiError } from '$lib/api/fetch';
+	import { ApiError, describeFailure } from '$lib/api/fetch';
 	import type { RegistryResponse } from '$lib/api/types';
+	import { MODEL_REGISTRY_LOAD_FAILED } from '$lib/constants';
+	import { offline } from '$lib/stores/connectivity';
 	import { COMPACT_STACK_CLASS, ensureCompactUiStyles } from '$lib/styles/compact-ui';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 
@@ -83,7 +85,7 @@
 			trackJob(job, { mode });
 			addToast(`Downloading ${mode}…`, 'info');
 		} catch (e) {
-			actionError = e instanceof Error ? e.message : 'Failed to start download';
+			actionError = describeFailure(e, 'Failed to start download');
 		} finally {
 			busyMode = { ...busyMode, [mode]: false };
 		}
@@ -99,7 +101,9 @@
 	{#if forbidden}
 		<p class="panel-error">Admin access required.</p>
 	{:else if $error && models.length === 0}
-		<p class="panel-error">Cannot reach the registry API. {$error.message}</p>
+		{#if !$offline}
+			<p class="panel-error">{describeFailure($error, MODEL_REGISTRY_LOAD_FAILED)}</p>
+		{/if}
 	{:else if models.length === 0}
 		<p class="hint">Loading registry…</p>
 	{:else}
