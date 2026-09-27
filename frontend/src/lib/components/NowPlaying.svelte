@@ -43,6 +43,7 @@
 	import { setKeep, setPick } from '$lib/stores/takeActions';
 	import { addToast } from '$lib/stores/toast';
 	import { describeFailure, NetworkError } from '$lib/api/fetch';
+	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import { isEditableElement } from '$lib/utils/escape-level-up';
 	import NowPlayingCuration from './NowPlayingCuration.svelte';
 	import NowPlayingFrame from './NowPlayingFrame.svelte';
@@ -117,6 +118,8 @@
 	// this component's own read, not the actual enforcement.
 	const curating = $derived($curationActive && ctx.type === 'album');
 
+	const takeDetailsReloads = reloadWhileUnreachable(() => loadTakeDetails(info.songId));
+
 	$effect(() => {
 		const songId = info.songId;
 		// Read so Svelte tracks this effect on a take switch too, not just a
@@ -125,11 +128,27 @@
 		// re-resolved once its song's data is (re)loaded.
 		const trackedGenerationId = info.generation.id;
 		void trackedGenerationId;
-		void ensureGenerationsLoaded(songId).catch((err: unknown) => {
-			if (err instanceof NetworkError) return;
-			addToast(describeFailure(err, TAKE_DETAILS_LOAD_FAILED), 'error');
-		});
+		loadTakeDetails(songId);
+		return () => takeDetailsReloads.stop();
 	});
+
+	function loadTakeDetails(songId: string): void {
+		void ensureGenerationsLoaded(songId).then(
+			() => {
+				if (songId === info.songId) takeDetailsReloads.stop();
+			},
+			(err: unknown) => {
+				if (songId === info.songId) settleTakeDetailsFailure(err);
+			}
+		);
+	}
+
+	function settleTakeDetailsFailure(err: unknown): void {
+		if (err instanceof NetworkError && takeDetailsReloads.afterNetworkFailure() !== 'exhausted') {
+			return;
+		}
+		addToast(describeFailure(err, TAKE_DETAILS_LOAD_FAILED), 'error');
+	}
 
 	function onTabsKeydown(event: KeyboardEvent): void {
 		if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;

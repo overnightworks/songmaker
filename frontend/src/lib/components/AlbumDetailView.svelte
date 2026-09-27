@@ -46,7 +46,7 @@
 		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTIONS_LOADING,
 		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
-		ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS,
+		UNREACHABLE_RELOAD_DELAYS_MS,
 		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
 		ALBUM_COVER_SUGGESTIONS_TITLE,
 		ALBUM_COVER_SUGGESTING_LABEL,
@@ -146,7 +146,7 @@
 		coverSuggestionsUnreachable &&
 			!$offline &&
 			!coverSuggestionsLoading &&
-			coverSuggestionsReloads >= ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS.length
+			coverSuggestionsReloads >= UNREACHABLE_RELOAD_DELAYS_MS.length
 	);
 	const coverSuggestionsBusy = $derived(coverSuggestionsBusyAlbumId === currentAlbumId);
 	const latestCoverJob = $derived(coverSuggestions?.job ?? null);
@@ -214,7 +214,7 @@
 			return;
 		}
 		if (!coverSuggestionsUnreachable || coverSuggestionsLoading || !currentAlbumId) return;
-		const delay = ALBUM_COVER_SUGGESTIONS_RELOAD_DELAYS_MS[coverSuggestionsReloads];
+		const delay = UNREACHABLE_RELOAD_DELAYS_MS[coverSuggestionsReloads];
 		if (delay === undefined) return;
 		const albumId = currentAlbumId;
 		const timer = setTimeout(() => {

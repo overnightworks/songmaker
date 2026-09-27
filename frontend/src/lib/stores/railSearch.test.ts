@@ -7,7 +7,7 @@ vi.mock('$lib/api/library', () => ({
 }));
 
 import { ApiError, NetworkError } from '$lib/api/fetch';
-import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import { LIBRARY_SEARCH_DEBOUNCE_MS, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	buildAlbumSearchHit,
@@ -136,15 +136,25 @@ describe('syncRailSearch offline', () => {
 		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'ready', error: null });
 	});
 
-	it('does not search again on its own while the connection never dropped', async () => {
-		searchLibrary.mockRejectedValueOnce(unreachable);
+	it('keeps searching on a bounded backoff while no strip shows, then names the failure with its Retry', async () => {
+		searchLibrary.mockRejectedValue(unreachable);
 		syncRailSearch('stadion');
 		await vi.advanceTimersByTimeAsync(LIBRARY_SEARCH_DEBOUNCE_MS);
-		reportResourceStreamReachable(true);
+		expect(get(railSearch)).toMatchObject({ status: 'loading', error: null });
+
 		await vi.runAllTimersAsync();
 
-		expect(searchLibrary).toHaveBeenCalledTimes(1);
-		expect(get(railSearch)).toMatchObject({ status: 'unreachable', error: null });
+		expect(searchLibrary).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
+		expect(get(railSearch)).toMatchObject({
+			query: 'stadion',
+			status: 'error',
+			error: 'Search failed'
+		});
+
+		searchLibrary.mockResolvedValueOnce({ items: [], next_cursor: null, has_more: false });
+		retryRailSearch();
+		await vi.runAllTimersAsync();
+		expect(get(railSearch)).toMatchObject({ query: 'stadion', status: 'ready', error: null });
 	});
 
 	it('forgets the pending search again once the query is cleared', async () => {
