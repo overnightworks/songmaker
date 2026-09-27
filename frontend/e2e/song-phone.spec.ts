@@ -2,7 +2,7 @@
 // a Takes list with a real play control per take, a running generation's
 // progress in both the Generate button and the Takes status slot, and a
 // failed generation's literal worker sentence. Mobile project only —
-// everything this proves (the compact Write/Takes tabs, the phone status
+// everything this proves (the compact Edit/Takes tabs, the phone status
 // slot, the button's own failure state) is compact-shell UI with no desktop
 // counterpart to exercise, the same reason kinetic-strip.spec.ts gives for
 // staying desktop-only.
@@ -31,10 +31,13 @@ import {
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
+	EDITOR_TAB_EDIT_LABEL,
 	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
 	RAIL_LIBRARY_LABEL,
+	SONG_NEXT_LABEL,
+	SONG_PREVIOUS_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
@@ -126,7 +129,7 @@ test.describe('song page at phone width', () => {
 		const songAddress = `/album/${library.songPhoneAlbumId}/${expectedSongSlug(songTitle)}`;
 		// The one song-phone-panel element (SongPhoneView.svelte): its content
 		// swaps with the active tab, so this locator always reads whichever tab
-		// is current rather than naming Write and Takes separately.
+		// is current rather than naming Edit and Takes separately.
 		const panel = page.getByRole('tabpanel');
 
 		// Opens through the album's own song row (selectSong), not a direct deep
@@ -191,7 +194,7 @@ test.describe('song page at phone width', () => {
 		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
 		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
 
-		await page.getByRole('tab', { name: /Write/ }).click();
+		await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
 		await expect(generateStatus).toContainText(
 			new RegExp(
 				`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
@@ -201,7 +204,6 @@ test.describe('song page at phone width', () => {
 		// Failing the same job live, over its still-open SSE stream — no
 		// reload, matching a real worker crash's own reporting path.
 		await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
-		await page.getByRole('tab', { name: /Write/ }).click();
 		await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
 		// The same failure also raises a toast (ToastContainer.svelte) that
 		// overlaps the expand button until it is dismissed or its own 5s timer
@@ -216,6 +218,55 @@ test.describe('song page at phone width', () => {
 		console.log(`Song-phone flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();
 		guard.assertWithinBudget(SONG_PHONE_FLOW_API_REQUEST_BUDGET);
+	});
+
+	// Issue #1047: the tab choice is remembered per song for the session; a
+	// song opened for the first time lands on Edit, and stepping to the
+	// previous or next song keeps whichever tab is open.
+	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on next', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		const library = readSeededLibrary();
+		const albumAddress = `/album/${library.songPhoneAlbumId}`;
+		const marker = runMarker();
+		const firstTitle = `${SONG_PHONE_SONG_TITLE} ${marker} first`;
+		const secondTitle = `${SONG_PHONE_SONG_TITLE} ${marker} second`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, firstTitle, 1, 1);
+		await seedSongPhoneSong(library.songPhoneAlbumId, secondTitle, 1, 1);
+		const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
+		const takesTab = page.getByRole('tab', { name: /^Takes/ });
+		const openFromAlbum = async (title: string) => {
+			await workspace(page)
+				.getByRole('button', { name: nameStartingWith(title) })
+				.click();
+			await expect(page.getByRole('heading', { name: title })).toBeVisible();
+		};
+
+		await page.goto(albumAddress);
+		await openFromAlbum(firstTitle);
+		await expect(editTab).toHaveAttribute('aria-selected', 'true');
+		await takesTab.click();
+		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+		await page.goBack();
+		await openFromAlbum(secondTitle);
+		await expect(editTab).toHaveAttribute('aria-selected', 'true');
+
+		await page.goBack();
+		await openFromAlbum(firstTitle);
+		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+		await workspace(page)
+			.getByRole('button', {
+				name: new RegExp(`^(${SONG_PREVIOUS_LABEL}|${SONG_NEXT_LABEL})$`),
+				disabled: false
+			})
+			.first()
+			.click();
+		await expect(page.getByRole('heading', { name: firstTitle })).toHaveCount(0);
+		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
 	});
 });
 
