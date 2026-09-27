@@ -11,6 +11,8 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	collectionPlayLabel,
 	collectionShuffleLabel,
+	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
+	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
@@ -388,6 +390,98 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	console.log(`Library flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertWithinBudget(LIBRARY_FLOW_API_REQUEST_BUDGET[shell]);
+});
+
+// A card's border is the only part of it that is not its target (#1053).
+const ROW_BORDER_PX = 1;
+
+type RowEdge = 'top' | 'bottom';
+
+/**
+ * A phone row is one target (#1053): its target is the whole card inside the
+ * border, at least a thumb high, and a tap on the card's top or bottom edge --
+ * away from its label and the rounded corners -- lands on it.
+ */
+async function tapRowEdge(row: Locator, target: Locator, edge: RowEdge): Promise<void> {
+	const [rowBox, targetBox] = await boundingBoxes(row, target);
+	const insets = [
+		targetBox.y - rowBox.y,
+		rowBox.x + rowBox.width - (targetBox.x + targetBox.width),
+		rowBox.y + rowBox.height - (targetBox.y + targetBox.height),
+		targetBox.x - rowBox.x
+	];
+	expect(insets.map((inset) => Math.round(inset))).toEqual(Array(4).fill(ROW_BORDER_PX));
+	expect(targetBox.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+	const inset = ROW_BORDER_PX + 1;
+	await row.tap({
+		position: { x: rowBox.width / 4, y: edge === 'top' ? inset : rowBox.height - inset }
+	});
+}
+
+test('a phone row answers a tap on its edge, and a take held twice marks one row', async ({
+	page
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	test.skip(shell !== 'mobile', 'The edge taps prove the touch target.');
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+	const albumHeading = surface.getByRole('heading', { name: library.albumTitle });
+
+	await page.goto('/');
+	await surface
+		.locator('.library-wall .tile-grid')
+		.locator('.wall-tile-body')
+		.filter({ hasText: library.albumTitle })
+		.click();
+	await expect(albumHeading).toBeVisible();
+
+	// An album row opens its song from either edge.
+	const songRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
+	for (const edge of ['top', 'bottom'] as const) {
+		await tapRowEdge(songRow, songRow.getByRole('button'), edge);
+		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
+		await page.goBack();
+		await expect(albumHeading).toBeVisible();
+	}
+
+	// Adding the album puts the playlist's first take in it a second time.
+	await surface.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+	await surface
+		.getByRole('button', { name: COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, exact: true })
+		.click();
+	const albumAdded = page.waitForResponse(
+		(response) =>
+			response.request().method() === 'POST' &&
+			new URL(response.url()).pathname.endsWith('/entries/album')
+	);
+	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+	expect((await albumAdded).ok()).toBe(true);
+
+	await openLibraryWall(page, shell);
+	await surface
+		.locator('.library-wall .tile-grid')
+		.locator('.wall-tile-body')
+		.filter({ hasText: playlist.title })
+		.click();
+	const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
+	await expect(heldTwice).toHaveCount(2);
+
+	// A playlist row plays from either edge, and only the copy that plays is marked.
+	const pause = page
+		.getByRole('contentinfo')
+		.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+	for (const [edge, played, other] of [
+		['top', 1, 0],
+		['bottom', 0, 1]
+	] as const) {
+		const row = heldTwice.nth(played);
+		await tapRowEdge(row, row.locator('.entry-info'), edge);
+		await expect(pause).toBeVisible();
+		await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+		await expect(
+			heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+		).toHaveCount(0);
+	}
 });
 
 /** One album's own one-target row inside the rail's LIBRARY group. */
