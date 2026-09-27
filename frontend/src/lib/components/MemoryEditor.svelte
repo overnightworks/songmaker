@@ -152,6 +152,26 @@
 			</button>
 		</header>
 		<div class="memory-body">
+			{#if proposals.length > 0}
+				<div class="proposals">
+					{#each proposals as proposal, i (i)}
+						<div class="proposal">
+							<p class="proposal-title">
+								Proposed {scopeLabel(proposal.scope)}
+							</p>
+							<pre class="proposal-body">{proposal.proposedBody}</pre>
+							<div class="proposal-actions">
+								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}
+									>Accept</button
+								>
+								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}
+									>Reject</button
+								>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{/if}
 			{#if loading}
 				<p class="hint">Loading memory…</p>
 			{:else if error}
@@ -199,26 +219,6 @@
 						</button>
 					</label>
 				{/if}
-			{/if}
-			{#if proposals.length > 0}
-				<div class="proposals">
-					{#each proposals as proposal, i (i)}
-						<div class="proposal">
-							<p class="proposal-title">
-								Proposed {scopeLabel(proposal.scope)}
-							</p>
-							<pre class="proposal-body">{proposal.proposedBody}</pre>
-							<div class="proposal-actions">
-								<button class="accept" onclick={() => answerProposal(() => onAccept(proposal))}
-									>Accept</button
-								>
-								<button class="reject" onclick={() => answerProposal(() => onReject(proposal))}
-									>Reject</button
-								>
-							</div>
-						</div>
-					{/each}
-				</div>
 			{/if}
 		</div>
 	</section>
