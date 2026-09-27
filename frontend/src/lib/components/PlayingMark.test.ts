@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
+import { PLAYING_MARK_LABEL } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
 import PlayingMark from './PlayingMark.svelte';
@@ -36,6 +36,6 @@ describe('PlayingMark', () => {
 
 		const target = await render(current);
 
-		expect(findElementByRoleAndName(target, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(shown);
+		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL) !== null).toBe(shown);
 	});
 });

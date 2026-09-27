@@ -705,23 +705,22 @@ function setAlbumQueueTakes(
 	);
 }
 
+// Whether the transport holds an entry's take: the same generation played
+// from the same file, since a re-import keeps the id but changes the path.
+function holdsEntryTake(current: PlaybackInfo, entry: PlaylistEntryItem): boolean {
+	return (
+		current.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
+	);
+}
+
 function currentPlaylistIndex(
 	ctx: { entries: PlaylistEntryItem[]; index: number },
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
 	if (!current) return ctx.index;
 	const indexedEntry = ctx.entries[ctx.index];
-	if (
-		indexedEntry?.generation_id === current.generation.id &&
-		indexedEntry.mp3_path === current.generation.mp3_path
-	) {
-		return ctx.index;
-	}
-	const idx = ctx.entries.findIndex(
-		(entry) =>
-			entry.generation_id === current.generation.id &&
-			entry.mp3_path === current.generation.mp3_path
-	);
+	if (indexedEntry && holdsEntryTake(current, indexedEntry)) return ctx.index;
+	const idx = ctx.entries.findIndex((entry) => holdsEntryTake(current, entry));
 	return idx >= 0 ? idx : ctx.index;
 }
 
@@ -979,7 +978,7 @@ export async function playTakeAndShowNowPlaying(
 function playlistEntryRow(playlist: PlaylistDetailItem, index: number): TakeRow {
 	const entry = playlist.entries[index];
 	return {
-		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry),
+		alreadyLoaded: entry !== undefined && isPlaylistEntryCurrent(entry, get(queueContext)),
 		start: () => playPlaylistFrom(playlist, index)
 	};
 }
@@ -1264,14 +1263,16 @@ function playPlaylistFrom(playlist: PlaylistDetailItem, startIndex: number): voi
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
 }
 
-// Whether an entry is the take the transport is holding right now: the same
-// generation played from the same file, since a re-import keeps the id but
-// changes the path.
-export function isPlaylistEntryCurrent(entry: PlaylistEntryItem): boolean {
+// Whether an entry is the one the playlist queue is playing right now. The
+// entry, not its take, settles it: a playlist may hold one take twice, and
+// only the place the queue stands on is playing. A take loaded from outside
+// the queue is no entry's. The queue context is passed in so a template that
+// reads it as `$queueContext` re-renders when the queue moves.
+export function isPlaylistEntryCurrent(entry: PlaylistEntryItem, ctx: QueueContext): boolean {
 	const current = audioPlayer.current;
-	return (
-		current?.generation.id === entry.generation_id && current.generation.mp3_path === entry.mp3_path
-	);
+	if (ctx.type !== 'playlist' || !current) return false;
+	const playing = ctx.entries[currentPlaylistIndex(ctx, current)];
+	return playing?.id === entry.id && holdsEntryTake(current, playing);
 }
 
 // Whether a song is the one the transport is holding right now, whichever of

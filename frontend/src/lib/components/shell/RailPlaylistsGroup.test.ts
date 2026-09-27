@@ -2,7 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { RAIL_PLAYING_MARKER_LABEL } from '$lib/constants';
+import { PLAYING_MARK_LABEL } from '$lib/constants';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
@@ -15,7 +15,6 @@ import {
 	buildPlaylistEntry as entry,
 	createComponentMount,
 	findElementByRoleAndName,
-	requireButtonContainingText,
 	requireElement
 } from './rail-test-fixtures';
 
@@ -148,44 +147,37 @@ describe('RailPlaylistsGroup', () => {
 		expect(target.textContent).not.toContain('Quiet hour');
 	});
 
+	const tide = entry({ id: 'pe1', song_title: 'Tide', generation_id: 'g1', mp3_path: 'tide.mp3' });
+	const tideThenEbb = [
+		tide,
+		entry({ id: 'pe2', position: 1, song_title: 'Ebb', generation_id: 'g2', mp3_path: 'ebb.mp3' })
+	];
+	const tideTwice = [tide, entry({ ...tide, id: 'pe3', position: 1 })];
+
 	it.each([
-		{ currentEntryId: 'pe1', status: 'playing' as const, markedEntry: 'Tide' },
-		{ currentEntryId: 'pe2', status: 'playing' as const, markedEntry: 'Ebb' },
-		{ currentEntryId: 'pe2', status: 'paused' as const, markedEntry: null }
-	])(
-		'shows a playing marker only for the current playlist entry while playback is active',
-		async ({ currentEntryId, status, markedEntry }) => {
+		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 0, status: 'playing', marks: [true, false] },
+		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 1, status: 'playing', marks: [false, true] },
+		{ held: 'Tide, Ebb', entries: tideThenEbb, played: 1, status: 'paused', marks: [false, false] },
+		{ held: 'Tide twice', entries: tideTwice, played: 1, status: 'playing', marks: [false, true] }
+	] as const)(
+		'marks only the entry played from its row ($held, row $played, $status)',
+		async ({ entries, played, status, marks }) => {
 			setOpenCollection({ kind: 'playlist', id: 'p1' });
-			selectedPlaylistDetail.set(
-				detail({
-					id: 'p1',
-					entries: [
-						entry({ id: 'pe1', song_title: 'Tide', generation_id: 'g1', mp3_path: 'tide.mp3' }),
-						entry({ id: 'pe2', song_title: 'Ebb', generation_id: 'g2', mp3_path: 'ebb.mp3' })
-					]
-				})
-			);
-			audioPlayer.current = {
-				generation: {
-					id: currentEntryId === 'pe1' ? 'g1' : 'g2',
-					mp3_path: currentEntryId === 'pe1' ? 'tide.mp3' : 'ebb.mp3'
-				}
-			} as unknown as typeof audioPlayer.current;
-			audioPlayer.status = status;
-
+			selectedPlaylistDetail.set(detail({ id: 'p1', entries: [...entries] }));
 			const target = await render();
+			const rows = Array.from(target.querySelectorAll<HTMLButtonElement>('.row-sub2'));
 
-			const rows = target.querySelectorAll('.row-sub2 .row-title');
-			expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Tide', 'Ebb']);
-			const active = target.querySelector('.row-sub2.row-active .row-title');
-			expect(active?.textContent).toBe(currentEntryId === 'pe1' ? 'Tide' : 'Ebb');
+			rows[played].click();
+			await tick();
+			audioPlayer.status = status;
+			await tick();
 
-			for (const entryTitle of ['Tide', 'Ebb']) {
-				const entryRow = requireButtonContainingText(target, entryTitle);
-				expect(findElementByRoleAndName(entryRow, 'img', RAIL_PLAYING_MARKER_LABEL) !== null).toBe(
-					entryTitle === markedEntry
-				);
-			}
+			expect(rows.map((row) => row.classList.contains('row-active'))).toEqual(
+				entries.map((_, index) => index === played)
+			);
+			expect(
+				rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null)
+			).toEqual(marks);
 		}
 	);
 

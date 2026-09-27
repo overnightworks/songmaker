@@ -4,6 +4,7 @@
 		isPlaylistEntryCurrent,
 		playPlaylist,
 		playPlaylistEntry,
+		queueContext,
 		type CollectionStart
 	} from '$lib/stores/player';
 	import {
@@ -368,9 +369,14 @@
 				     strips in Safari/VoiceOver. -->
 				<ul class="entry-rows" role="list">
 					{#each playlistDetail.entries as entry, i (entry.id)}
-						{@const current = isPlaylistEntryCurrent(entry)}
+						{@const current = isPlaylistEntryCurrent(entry, $queueContext)}
 						<li class="entry-row" class:current>
-							<button type="button" class="entry-info" onclick={() => playEntry(i)}>
+							<button
+								type="button"
+								class="entry-info"
+								data-hitbox="text"
+								onclick={() => playEntry(i)}
+							>
 								<PlayingMark {current} />
 								<span class="entry-text">
 									<span class="entry-title">
@@ -536,13 +542,15 @@
 		list-style: none;
 	}
 
+	/* The play target and the ⋯ share the row's one grid cell (#1053): the target
+	   fills the whole card, and the later-painted ⋯ stays its own target above it. */
 	.entry-row {
-		position: relative;
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
+		--entry-inset-block: 0.65rem;
+		--entry-inset-inline: 0.8rem;
+		--entry-actions-gap: 0.75rem;
+		display: grid;
+		grid-template-areas: 'entry';
 		min-height: 64px;
-		padding: 0.65rem 0.8rem;
 		background: var(--surface);
 		border: 1px solid var(--border);
 		border-radius: var(--card-radius);
@@ -568,29 +576,24 @@
 	}
 
 	.entry-info {
-		flex: 1;
+		grid-area: entry;
 		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
 		background: none;
 		border: none;
-		padding: 0;
+		padding: var(--entry-inset-block)
+			calc(var(--entry-inset-inline) + var(--hitbox-frequent) + var(--entry-actions-gap))
+			var(--entry-inset-block) var(--entry-inset-inline);
 		color: inherit;
 		font: inherit;
 		text-align: left;
 		cursor: pointer;
 	}
 
-	/* The whole card plays the entry (#1010); the later-painted ⋯ anchor stays above it. */
-	.entry-info::after {
-		content: '';
-		position: absolute;
-		inset: 0;
-	}
-
-	/* The global press scale would make the button the ::after's containing block,
-	   shrink the target mid-press and send a release near the card's edge to the card. */
+	/* The global press scale would shrink the target mid-press and send a release
+	   near the card's edge to the card. */
 	.entry-row .entry-info:active:not(:disabled) {
 		transform: none;
 	}
@@ -623,10 +626,13 @@
 	}
 
 	.entry-actions {
+		grid-area: entry;
+		justify-self: end;
+		align-self: center;
+		margin-right: var(--entry-inset-inline);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		flex-shrink: 0;
 	}
 
 	.entry-overflow-anchor {
@@ -719,9 +725,9 @@
 		}
 
 		.entry-row {
-			align-items: flex-start;
-			gap: 0.6rem;
-			padding: 0.7rem;
+			--entry-inset-block: 0.7rem;
+			--entry-inset-inline: 0.7rem;
+			--entry-actions-gap: 0.6rem;
 		}
 
 		.entry-actions {
