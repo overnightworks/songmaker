@@ -63,23 +63,44 @@ export function cancelAlbumSongLoads(): void {
 	albumSongLoads.clear();
 }
 
-type AlbumSongsLoadStatus = 'idle' | 'loading' | 'error';
+// 'unreachable' is a load the network swallowed: the offline strip or the
+// bounded backoff says so, and the album's songs load again by themselves;
+// 'failed' is a refusal, named by albumSongsLoadFailure with its Retry.
+type AlbumSongsLoadStatus = 'idle' | 'loading' | 'unreachable' | 'failed';
 
-interface AlbumSongsLoadState {
-	status: AlbumSongsLoadStatus;
-	error: string | null;
+export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadStatus>>>({});
+
+const albumSongsReloads = new Map<string, ReturnType<typeof reloadWhileUnreachable>>();
+
+function albumSongsReloadsFor(albumId: string): ReturnType<typeof reloadWhileUnreachable> {
+	let reloads = albumSongsReloads.get(albumId);
+	if (reloads === undefined) {
+		reloads = reloadWhileUnreachable(() => void loadSongsForAlbum(albumId));
+		albumSongsReloads.set(albumId, reloads);
+	}
+	return reloads;
 }
 
-export const albumSongsLoad = writable<Readonly<Record<string, AlbumSongsLoadState>>>({});
+/**
+ * The failure a surface names about an album's songs, or null while there is
+ * none to name (#1118): the reload owner's answer, quiet again while a load
+ * is under way.
+ */
+export function albumSongsLoadFailure(albumId: string): Readable<string | null> {
+	return derived([albumSongsLoad, albumSongsReloadsFor(albumId).loadFailure], ([load, failure]) =>
+		load[albumId] === 'loading' ? null : failure
+	);
+}
+
+function setAlbumSongsLoad(albumId: string, status: AlbumSongsLoadStatus): void {
+	albumSongsLoad.update((state) => ({ ...state, [albumId]: status }));
+}
 
 export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	const inflight = albumSongLoads.get(albumId);
 	if (inflight !== undefined) return inflight;
 	const generation = albumSongsGeneration;
-	albumSongsLoad.update((state) => ({
-		...state,
-		[albumId]: { status: 'loading', error: null }
-	}));
+	setAlbumSongsLoad(albumId, 'loading');
 	const load = (async () => {
 		let offset = 0;
 		const collected: SongItem[] = [];
@@ -97,16 +118,12 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	try {
 		await load;
 		if (generation !== albumSongsGeneration) return;
-		albumSongsLoad.update((state) => ({
-			...state,
-			[albumId]: { status: 'idle', error: null }
-		}));
+		albumSongsReloads.get(albumId)?.stop();
+		setAlbumSongsLoad(albumId, 'idle');
 	} catch (err) {
 		if (generation !== albumSongsGeneration) return;
-		albumSongsLoad.update((state) => ({
-			...state,
-			[albumId]: { status: 'error', error: albumSongsErrorMessage(err) }
-		}));
+		albumSongsReloadsFor(albumId).nameLoadFailure(err, ALBUM_SONGS_LOAD_ERROR);
+		setAlbumSongsLoad(albumId, err instanceof NetworkError ? 'unreachable' : 'failed');
 	} finally {
 		albumSongLoads.delete(albumId);
 	}
@@ -315,6 +332,9 @@ export function removeGenerationFromSong(songId: string, genId: string): void {
 
 export function resetLibraryDataForTests(): void {
 	allAlbumsReloads.stop();
+	for (const reloads of albumSongsReloads.values()) reloads.stop();
+	albumSongsReloads.clear();
+	albumSongsLoad.set({});
 	allAlbumsInflight = null;
 	replaceOwed = false;
 	allAlbumsLoad.set({ status: 'idle', error: null });

@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
 import { get } from 'svelte/store';
 
 const mockFetchMe = vi.fn();
@@ -25,14 +25,18 @@ import {
 	authLoading,
 	authError,
 	authCheckError,
+	authCheckUnreachable,
 	authNotice,
 	isAdmin,
 	checkAuth,
 	classifyAuthFailure,
 	login,
 	logout,
-	clearAuth
+	clearAuth,
+	resetAuthForTests
 } from './auth';
+import { offline, resetConnectivityForTests } from './connectivity';
+import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -52,6 +56,12 @@ beforeEach(() => {
 	authError.set('');
 	authCheckError.set(null);
 	authNotice.set(null);
+});
+
+afterEach(() => {
+	vi.useRealTimers();
+	resetAuthForTests();
+	resetConnectivityForTests();
 });
 
 describe('auth store', () => {
@@ -93,7 +103,7 @@ describe('checkAuth', () => {
 		authCheckError.set('stale error');
 		authNotice.set('disabled');
 		mockFetchMe.mockResolvedValueOnce({ id: 'u1', username: 'admin', role: 'admin' });
-		const user = await checkAuth();
+		const user = await checkAuth(vi.fn());
 		expect(user).toEqual({ id: 'u1', username: 'admin', role: 'admin' });
 		expect(get(currentUser)).toEqual(user);
 		expect(get(authLoading)).toBe(false);
@@ -104,7 +114,7 @@ describe('checkAuth', () => {
 	it('logs out on a 401 and clears the known user', async () => {
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
-		const user = await checkAuth();
+		const user = await checkAuth(vi.fn());
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
@@ -115,7 +125,7 @@ describe('checkAuth', () => {
 	it('logs out on a 403 (account disabled) and clears the known user', async () => {
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockRejectedValueOnce(new ApiError(403, 'Account disabled', AUTH_ME_PATH));
-		const user = await checkAuth();
+		const user = await checkAuth(vi.fn());
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
@@ -126,7 +136,7 @@ describe('checkAuth', () => {
 	it('keeps an unknown user null through a transient failure on first load', async () => {
 		authNotice.set('disabled');
 		mockFetchMe.mockRejectedValueOnce(new ApiError(429, 'slow down', AUTH_ME_PATH));
-		const user = await checkAuth();
+		const user = await checkAuth(vi.fn());
 		expect(user).toBeNull();
 		expect(get(currentUser)).toBeNull();
 		expect(get(authCheckError)).not.toBeNull();
@@ -135,16 +145,56 @@ describe('checkAuth', () => {
 
 	it.each([
 		['a 429 rate limit', new ApiError(429, 'slow down', AUTH_ME_PATH)],
-		['a 503 outage', new ApiError(503, 'unavailable', AUTH_ME_PATH)],
-		['a network error', new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'))]
+		['a 503 outage', new ApiError(503, 'unavailable', AUTH_ME_PATH)]
 	])('keeps the known user through %s and records a retryable error', async (_label, error) => {
 		currentUser.set(KNOWN_USER);
 		mockFetchMe.mockRejectedValueOnce(error);
-		const user = await checkAuth();
+		const user = await checkAuth(vi.fn());
 		expect(user).toEqual(KNOWN_USER);
 		expect(get(currentUser)).toEqual(KNOWN_USER);
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).not.toBeNull();
+	});
+});
+
+describe('checkAuth with the server out of reach', () => {
+	const lostNetwork = () => new NetworkError(AUTH_ME_PATH, new TypeError('Failed to fetch'));
+	const LONGER_THAN_ANY_BACKOFF_MS = 60_000;
+
+	it('with the browser online shows the offline strip, names no failure, and asks again until the server answers', async () => {
+		vi.useFakeTimers();
+		mockFetchMe.mockRejectedValue(lostNetwork());
+		const checkAgain = vi.fn(() => void checkAuth(checkAgain));
+
+		expect(await checkAuth(checkAgain)).toBeNull();
+		await vi.advanceTimersByTimeAsync(LONGER_THAN_ANY_BACKOFF_MS);
+
+		expect(get(offline)).toBe(true);
+		expect(get(authCheckUnreachable)).toBe(true);
+		expect(get(authCheckError)).toBeNull();
+
+		mockFetchMe.mockResolvedValue(KNOWN_USER);
+		await vi.advanceTimersByTimeAsync(AUTH_CHECK_RETURN_PROBE_INTERVAL_MS);
+
+		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(get(offline)).toBe(false);
+		expect(get(authCheckUnreachable)).toBe(false);
+		const checksUntilAnswered = mockFetchMe.mock.calls.length;
+		await vi.advanceTimersByTimeAsync(LONGER_THAN_ANY_BACKOFF_MS);
+		expect(mockFetchMe).toHaveBeenCalledTimes(checksUntilAnswered);
+	});
+
+	it('a server that answers with a refusal clears the offline strip', async () => {
+		mockFetchMe
+			.mockRejectedValueOnce(lostNetwork())
+			.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+		await checkAuth(vi.fn());
+
+		await checkAuth(vi.fn());
+
+		expect(get(offline)).toBe(false);
+		expect(get(authCheckUnreachable)).toBe(false);
+		expect(get(authNotice)).toBe('unauthorized');
 	});
 });
 

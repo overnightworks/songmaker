@@ -33,6 +33,7 @@ import { fetchAlbums, fetchSongs } from '$lib/api/client';
 import {
 	albumList,
 	albumSongsLoad,
+	albumSongsLoadFailure,
 	allAlbumsLoad,
 	allAlbumsLoadFailure,
 	cancelAlbumSongLoads,
@@ -133,7 +134,6 @@ describe('song list mutations', () => {
 	});
 
 	it.each([
-		{ failure: 'a network failure', err: OFFLINE, error: 'Failed to load songs' },
 		{
 			failure: 'a server answer without a reason',
 			err: new ApiError(500, '', '/api/x'),
@@ -150,13 +150,48 @@ describe('song list mutations', () => {
 			error: 'Album is locked'
 		}
 	])(
-		'records a retryable error naming $failure readably when album songs fail to load',
+		'names a refusal ($failure) readably when album songs fail to load',
 		async ({ err, error }) => {
 			vi.mocked(fetchSongs).mockRejectedValueOnce(err);
 			await loadSongsForAlbum('a1');
-			expect(get(albumSongsLoad).a1).toEqual({ status: 'error', error });
+			expect(get(albumSongsLoad).a1).toBe('failed');
+			expect(get(albumSongsLoadFailure('a1'))).toBe(error);
 		}
 	);
+
+	it('under the offline strip names no album-songs failure and loads the songs once back online', async () => {
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSongs)
+			.mockRejectedValueOnce(OFFLINE)
+			.mockResolvedValueOnce({
+				items: [makeSong({ ...loadedSongDefaults(), album_id: 'a1' })],
+				total: 1,
+				offset: 0,
+				limit: 200,
+				has_more: false
+			});
+		await loadSongsForAlbum('a1');
+		expect(get(albumSongsLoad).a1).toBe('unreachable');
+		expect(get(albumSongsLoadFailure('a1'))).toBeNull();
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(get(albumSongsLoad).a1).toBe('idle'));
+		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
+		expect(fetchSongs).toHaveBeenCalledTimes(2);
+	});
+
+	it('while no strip shows, reloads album songs on a bounded backoff, then names the failure', async () => {
+		vi.useFakeTimers();
+		vi.mocked(fetchSongs).mockRejectedValue(OFFLINE);
+
+		await loadSongsForAlbum('a1');
+		expect(get(albumSongsLoadFailure('a1'))).toBeNull();
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		expect(fetchSongs).toHaveBeenCalledTimes(1 + UNREACHABLE_RELOAD_DELAYS_MS.length);
+		expect(get(albumSongsLoadFailure('a1'))).toBe('Failed to load songs');
+	});
 
 	it('loadSongsForAlbum merges album tracks that were outside the browse slice', async () => {
 		songList.set([makeSong({ ...loadedSongDefaults(), id: 's-page' })]);
@@ -200,7 +235,7 @@ describe('song list mutations', () => {
 
 		expect(fetchSongs).toHaveBeenLastCalledWith('a1', 1, 200);
 		expect(get(songList).map((item) => item.id)).toEqual(['s1']);
-		expect(get(albumSongsLoad).a1).toEqual({ status: 'idle', error: null });
+		expect(get(albumSongsLoad).a1).toBe('idle');
 	});
 
 	it('dedupes concurrent requests for the same album songs', async () => {

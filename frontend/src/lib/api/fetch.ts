@@ -93,7 +93,10 @@ function getCsrfToken(): string {
 	return match ? decodeURIComponent(match[1]) : '';
 }
 
-const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup']);
+// A 401 from these refuses the credentials the person just typed -- a wrong
+// password at sign-in, setup, or a password change (#1117) -- rather than
+// saying the session is gone, so it never signs anyone out.
+const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
 
 // A path whose own 429 is already visible some other way, so the generic
 // toast below would only repeat it. Kept as its own literal list, not
