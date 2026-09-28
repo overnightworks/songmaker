@@ -848,13 +848,6 @@ describe('signing out from the phone rail drawer', () => {
 		resetNavigationForTests();
 		replaceHistoryEntry('/');
 		const target = await renderLayout('/');
-		await new Promise((r) => setTimeout(r, 200));
-		console.log(
-			'DBG',
-			location.href,
-			JSON.stringify(history.state),
-			JSON.stringify(vi.mocked(goto).mock.calls)
-		);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		sidebarOpen.set(true);
 		await vi.waitFor(() =>

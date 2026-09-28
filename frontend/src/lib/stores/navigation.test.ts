@@ -1,4 +1,11 @@
 import {
+	historyEntry,
+	historyLength,
+	pressBack,
+	pressForward,
+	replaceHistoryEntry
+} from '$lib/test-utils/library-history';
+import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylist as playlistItem,
@@ -191,7 +198,7 @@ beforeEach(() => {
 	// stale selectedSongId and re-derives openCollection through the
 	// selectedSong subscription in navigation.ts before this line clears it.
 	resetCollectionForTests();
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 	vi.mocked(goto).mockClear();
 });
 
@@ -218,7 +225,7 @@ describe('isLibraryWorkspacePath', () => {
 	// through '/', or opening a song from an album would take a detour
 	// through the wall on the way there.
 	it('goes straight from an album address to the song, without a detour', async () => {
-		history.replaceState(null, '', '/album/a1');
+		replaceHistoryEntry('/album/a1');
 		await selectSong('s1');
 		expect(vi.mocked(goto).mock.calls.map((call) => call[0])).toEqual(['/album/a1/s1']);
 	});
@@ -238,7 +245,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 			keepFocus: true
 		});
 		expect(window.location.pathname).toBe('/album/a1');
-		expect(history.state.collection).toEqual({ kind: 'album', id: 'a1' });
+		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a1' });
 	});
 
 	it('leaves an album address through the router', async () => {
@@ -251,7 +258,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 			keepFocus: true
 		});
 		expect(window.location.pathname).toBe('/');
-		expect(history.state.surface).toBe('browse');
+		expect(historyEntry().surface).toBe('browse');
 	});
 
 	it('writes the mixed library scroll position inside one route straight to history', async () => {
@@ -262,12 +269,12 @@ describe('history writes across the route boundary (issue #269)', () => {
 		persistLibraryHistory();
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
-		expect(history.state.scrollAnchor).toBe(240);
-		expect(history.state).not.toHaveProperty('filter');
+		expect(historyEntry().scrollAnchor).toBe(240);
+		expect(historyEntry()).not.toHaveProperty('filter');
 	});
 
 	it('keeps a second write behind the crossing one it follows', async () => {
-		history.replaceState(null, '', '/album/a1');
+		replaceHistoryEntry('/album/a1');
 		songList.set([song({ ...navigableSongDefaults(), slug: 's1', generations: [generation()] })]);
 
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -276,7 +283,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		// Pinning the take crosses a second time (issue #281: the take is its
 		// own route file too), queued behind the song's own crossing write.
-		await vi.waitFor(() => expect(history.state.generationId).toBe('g1'));
+		await vi.waitFor(() => expect(historyEntry().generationId).toBe('g1'));
 		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
@@ -467,13 +474,13 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 	it('replaces the address when the open song is renamed', async () => {
 		await openAlbum('a1');
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		const indexBeforeRename = history.state.index;
+		const indexBeforeRename = historyEntry().index;
 		vi.mocked(goto).mockClear();
 
 		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
 
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/renamed'));
-		expect(history.state.index).toBe(indexBeforeRename);
+		expect(historyEntry().index).toBe(indexBeforeRename);
 	});
 
 	it('leaves the address alone for an edit that is not a rename', async () => {
@@ -488,7 +495,7 @@ describe("a rename pulls the open song's address along (issue #275)", () => {
 	});
 
 	it("leaves a legacy ?song= address alone -- redirecting it onto its canonical address is (library)/+page.svelte's job (issue #284), not this rename-follow", async () => {
-		history.replaceState(null, '', '/?song=s1');
+		replaceHistoryEntry('/?song=s1');
 		selectedSongId.set('s1');
 
 		updateSongInList('s1', (s) => ({ ...s, slug: 'renamed' }));
@@ -506,13 +513,13 @@ describe("a rename pulls the open playlist's address along (issue #286)", () => 
 	it('replaces the address when the open playlist is renamed', async () => {
 		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
-		const indexBeforeRename = history.state.index;
+		const indexBeforeRename = historyEntry().index;
 		vi.mocked(goto).mockClear();
 
 		updatePlaylistInList('p1', (p) => ({ ...p, slug: 'renamed' }));
 
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/playlist/renamed'));
-		expect(history.state.index).toBe(indexBeforeRename);
+		expect(historyEntry().index).toBe(indexBeforeRename);
 	});
 
 	it('leaves the address alone for an edit that is not a rename', async () => {
@@ -539,24 +546,24 @@ describe('openAlbum / openPlaylist', () => {
 
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(libraryScrollAnchor)).toBe(240);
-		expect(history.state).toMatchObject({ surface: 'browse', scrollAnchor: 240 });
-		expect(history.state).not.toHaveProperty('filter');
+		expect(historyEntry()).toMatchObject({ surface: 'browse', scrollAnchor: 240 });
+		expect(historyEntry()).not.toHaveProperty('filter');
 	});
 
 	it('opens an album collection and pushes one history entry', async () => {
-		const before = history.state?.index ?? 0;
+		const before = historyEntry()?.index ?? 0;
 		await openAlbum('a1');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 		expect(get(librarySurface)).toBe('detail');
-		expect(history.state.index).toBe(before + 1);
+		expect(historyEntry().index).toBe(before + 1);
 	});
 
 	it('opens a playlist collection and pushes one history entry', async () => {
-		const before = history.state?.index ?? 0;
+		const before = historyEntry()?.index ?? 0;
 		await openPlaylist('p1');
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
 		expect(get(selectedPlaylistId)).toBe('p1');
-		expect(history.state.index).toBe(before + 1);
+		expect(historyEntry().index).toBe(before + 1);
 	});
 
 	it('clears the open song when a new collection opens', async () => {
@@ -576,7 +583,7 @@ describe('openAlbum / openPlaylist', () => {
 // call.
 describe('opening a collection from off the library route', () => {
 	it('openAlbum leaves settings for the album address with the album open', async () => {
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 		await openAlbum('a1');
 		expect(window.location.pathname).toBe('/album/a1');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
@@ -584,7 +591,7 @@ describe('opening a collection from off the library route', () => {
 	});
 
 	it('openPlaylist lands on the library route with the playlist open', async () => {
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 		await openPlaylist('p1');
 		expect(window.location.pathname).toBe('/');
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
@@ -595,7 +602,7 @@ describe('opening a collection from off the library route', () => {
 	// #264's review found selectSong missing the same guard as openAlbum):
 	// clicking a track from Settings must land on the library route too.
 	it('selectSong lands on the song address with the song selected', async () => {
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 		selectSong('s1');
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(window.location.pathname).toBe('/album/a1/s1');
@@ -609,7 +616,7 @@ describe('opening a collection from off the library route', () => {
 	// pushState` that changes the address bar to '/' while SvelteKit's router
 	// stays mounted on Settings' route file underneath it.
 	it('openLibraryWall leaves settings for the wall through the router, not a raw history write', async () => {
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
 		expect(get(librarySurface)).toBe('browse');
@@ -664,9 +671,9 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 	});
 
 	it('pushes a new history entry per selectSong call', async () => {
-		const before = history.state?.index ?? 0;
+		const before = historyEntry()?.index ?? 0;
 		await selectSong('s1');
-		expect(history.state.index).toBe(before + 1);
+		expect(historyEntry().index).toBe(before + 1);
 	});
 
 	it('pushes a new history entry when opening the first song from the album interior', async () => {
@@ -675,9 +682,9 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
 		await openAlbum('a1');
-		const afterOpen = history.state.index;
+		const afterOpen = historyEntry().index;
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		expect(history.state.index).toBe(afterOpen + 1);
+		expect(historyEntry().index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
@@ -688,9 +695,9 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 		]);
 		await openAlbum('a1');
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		const afterFirstSong = history.state.index;
+		const afterFirstSong = historyEntry().index;
 		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
-		expect(history.state.index).toBe(afterFirstSong);
+		expect(historyEntry().index).toBe(afterFirstSong);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
@@ -700,12 +707,12 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		]);
 		await openAlbum('a1');
-		const afterOpen = history.state.index;
+		const afterOpen = historyEntry().index;
 		await selectSong(
 			's2',
 			song({ ...navigableSongDefaults(), slug: 's2', id: 's2', album_id: 'a2' })
 		);
-		expect(history.state.index).toBe(afterOpen + 1);
+		expect(historyEntry().index).toBe(afterOpen + 1);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 
@@ -714,15 +721,15 @@ describe('selectSong keeps the rail context pinned to the song album', () => {
 			song({ ...navigableSongDefaults(), slug: 's1' }),
 			song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
 		]);
-		const wallIndex = history.state?.index ?? 0;
+		const wallIndex = historyEntry()?.index ?? 0;
 		await openAlbum('a1');
-		const albumIndex = history.state.index;
+		const albumIndex = historyEntry().index;
 		expect(albumIndex).toBe(wallIndex + 1);
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		const track1Index = history.state.index;
+		const track1Index = historyEntry().index;
 		expect(track1Index).toBe(albumIndex + 1);
 		await selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
-		expect(history.state.index).toBe(track1Index);
+		expect(historyEntry().index).toBe(track1Index);
 	});
 });
 
@@ -915,7 +922,7 @@ describe('the tab a song opens on (issue #1047)', () => {
 		await selectSong('s1');
 		const address = window.location.pathname;
 		navigateToSongTab('takes');
-		expect(history.state.detailTab).toBe('takes');
+		expect(historyEntry().detailTab).toBe('takes');
 		expect(window.location.pathname).toBe(address);
 	});
 
@@ -947,9 +954,9 @@ describe('the tab a song opens on (issue #1047)', () => {
 describe('selectNeighborSong', () => {
 	it('replaces the current history entry instead of pushing', async () => {
 		await selectSong('s1');
-		const afterFirst = history.state.index;
+		const afterFirst = historyEntry().index;
 		await selectNeighborSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }));
-		expect(history.state.index).toBe(afterFirst);
+		expect(historyEntry().index).toBe(afterFirst);
 		expect(get(selectedSongId)).toBe('s2');
 	});
 });
@@ -1049,7 +1056,7 @@ describe('a dirty draft guards song switch / leave', () => {
 	});
 
 	it('defers revealPlayingSong the same way', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1070,12 +1077,12 @@ describe('a dirty draft guards song switch / leave', () => {
 	// independent of the current route). The guard must run first, so parking
 	// leaves the route untouched.
 	it('does not navigate off the current route before the dirty-draft confirm resolves', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 		vi.mocked(goto).mockClear();
 
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }), 'g2');
@@ -1143,7 +1150,7 @@ describe('goBack', () => {
 
 	it('returns to the wall and clears selection when there is no predecessor', async () => {
 		await selectSong('s1');
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		goBack();
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(selectedSongId)).toBeNull();
@@ -1156,7 +1163,7 @@ describe('goBack', () => {
 	});
 
 	it('keeps the create surface while the browser returns to its predecessor', () => {
-		history.replaceState({ ...libraryRootState(), index: 1, surface: 'create' }, '', '/');
+		replaceHistoryEntry('/', { ...libraryRootState(), index: 1, surface: 'create' });
 		librarySurface.set('create');
 		const backSpy = vi.spyOn(history, 'back').mockImplementation(() => undefined);
 
@@ -1170,7 +1177,7 @@ describe('goBack', () => {
 
 describe('revealPlayingSong', () => {
 	it('opens the song at its own address, then crosses again to the take', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		// The song's own address crosses the route boundary once; the take is
 		// its own route file too (issue #281), so pinning it crosses a second
@@ -1193,7 +1200,7 @@ describe('revealPlayingSong', () => {
 	// library route lands straight on the song's own address instead of
 	// stopping at '/' first.
 	it('crosses directly from another route to the song address, with no detour through /', async () => {
-		history.replaceState(null, '', '/settings');
+		replaceHistoryEntry('/settings');
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		await vi.waitFor(() =>
 			expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1')
@@ -1212,7 +1219,7 @@ describe('revealPlayingSong', () => {
 // e2e/album-address.spec.ts covers the redirect landing on the real router.
 describe('initNavigation', () => {
 	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1233,7 +1240,7 @@ describe('initNavigation', () => {
 	});
 
 	it('saves a dirty draft once when two popstates fire before the first save settles', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1258,7 +1265,7 @@ describe('initNavigation', () => {
 	});
 
 	it('still applies the browser-back navigation when the auto-save fails', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1278,7 +1285,7 @@ describe('initNavigation', () => {
 	});
 
 	it('does not attempt a save on browser-back when the draft is clean', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1302,21 +1309,21 @@ describe('initNavigation', () => {
 	// won once the live stream's own bootstrap finished, replacing the
 	// intended 404 overlay with a crossing `goto('/')` back to the wall.
 	it('does not seed a default root entry on an address route, leaving its own resolver the only writer', () => {
-		history.replaceState(null, '', '/album/ghost');
+		replaceHistoryEntry('/album/ghost');
 
 		const cleanup = initNavigation();
 
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
-		expect(history.state).toBeNull();
+		expect(historyEntry()).toBeNull();
 		cleanup();
 	});
 
 	it('still seeds a default root entry on a genuinely cold "/" visit', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 
 		const cleanup = initNavigation();
 
-		await vi.waitFor(() => expect(isLibraryHistoryState(history.state)).toBe(true));
+		await vi.waitFor(() => expect(isLibraryHistoryState(historyEntry())).toBe(true));
 		cleanup();
 	});
 });
@@ -1374,14 +1381,14 @@ describe('full Now Playing owns one history entry', () => {
 		'popstate while the compact Now Playing is open closes it and keeps the library state of $origin',
 		async ({ open, library }) => {
 			await open();
-			const below = history.state.index;
+			const below = historyEntry().index;
 
 			openNowPlaying('take');
-			history.back();
+			await pressBack();
 
 			await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
-			expect(history.state).toMatchObject({ index: below, ...library });
+			expect(historyEntry()).toMatchObject({ index: below, ...library });
 		}
 	);
 
@@ -1389,13 +1396,13 @@ describe('full Now Playing owns one history entry', () => {
 		'closing the compact Now Playing steps back off its entry onto $origin',
 		async ({ open, library }) => {
 			await open();
-			const below = history.state.index;
+			const below = historyEntry().index;
 			openNowPlaying('take');
-			await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
 			closeNowPlaying();
 
-			await vi.waitFor(() => expect(history.state.index).toBe(below));
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below));
 			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
 		}
 	);
@@ -1405,11 +1412,11 @@ describe('full Now Playing owns one history entry', () => {
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 		expect(get(isDirty)).toBe(true);
@@ -1423,7 +1430,7 @@ describe('full Now Playing owns one history entry', () => {
 		resetNavigationForTests();
 		closeNowPlaying();
 		loadLibraryHistoryPageForTests();
-		history.replaceState(SVELTEKIT_START_ENTRY, '');
+		replaceHistoryEntry(location.href, SVELTEKIT_START_ENTRY);
 	}
 
 	it.each([
@@ -1437,24 +1444,20 @@ describe('full Now Playing owns one history entry', () => {
 		{
 			way: 'Forward after Back closed it',
 			reach: async () => {
-				history.back();
+				await pressBack();
 				await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
-				const landed = new Promise((resolve) =>
-					window.addEventListener('popstate', resolve, { once: true })
-				);
-				history.forward();
-				await landed;
+				await pressForward();
 			}
 		}
 	])('steps off the Now Playing entry it reaches by $way', async ({ reach }) => {
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
 		await reach();
 
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
 		expect(get(nowPlayingOpen)).toBe(false);
 		expect(libraryShown()).toEqual({
 			collection: { kind: 'playlist', id: 'p1' },
@@ -1465,19 +1468,19 @@ describe('full Now Playing owns one history entry', () => {
 
 	it('a reload on a sheet entry over Now Playing steps off both entries onto the playlist', async () => {
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
 		const sheet = historyLayerState('a-sheet', false);
 		const leaveSheetOwner = sheet.subscribe(() => undefined);
 		sheet.set(true);
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
 
 		reloadBeforeNavigationStarts();
 		stopNavigation = initNavigation();
 
 		await vi.waitFor(() => {
-			expect(history.state.index).toBe(below);
-			expect(currentLibraryHistoryState()).toBe(history.state);
+			expect(historyEntry().index).toBe(below);
+			expect(currentLibraryHistoryState()).toBe(historyEntry());
 		});
 		expect(get(nowPlayingOpen)).toBe(false);
 		expect(libraryShown()).toEqual({
@@ -1490,65 +1493,56 @@ describe('full Now Playing owns one history entry', () => {
 
 	it('stays on the playlist Back reaches from the Now Playing entry a reload left before navigation started', async () => {
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		const playlistPath = location.pathname;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 		reloadBeforeNavigationStarts();
-		const backLanded = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-		history.back();
-		await backLanded;
+		await pressBack();
 
 		stopNavigation = initNavigation();
 
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
-		expect(history.state.index).toBe(below);
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
+		expect(historyEntry().index).toBe(below);
 		expect(location.pathname).toBe(playlistPath);
 	});
 
 	it('Forward onto a Now Playing entry the library below has since outgrown shows the library of the entry it steps back onto', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
-		history.back();
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await pressBack();
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 		backToCollection();
-		await vi.waitFor(() => expect(history.state).toMatchObject({ index: below, songId: null }));
-		const forwardLanded = new Promise((resolve) =>
-			window.addEventListener('popstate', resolve, { once: true })
-		);
-
-		history.forward();
-		await forwardLanded;
+		await vi.waitFor(() => expect(historyEntry()).toMatchObject({ index: below, songId: null }));
+		await pressForward();
 
 		const collectionEntry = {
 			collection: { kind: 'album', id: 'a1' },
 			songId: null
 		};
 		await vi.waitFor(() => {
-			expect(history.state).toMatchObject({ index: below, ...collectionEntry });
+			expect(historyEntry()).toMatchObject({ index: below, ...collectionEntry });
 			expect(libraryShown()).toEqual({ ...collectionEntry, surface: 'detail' });
 		});
 	});
 
 	it('opens the playing song from Now Playing straight on top of its origin', async () => {
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
 
 		closeNowPlaying();
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 
 		await vi.waitFor(() =>
-			expect(history.state).toMatchObject({ index: below + 1, songId: 's1', generationId: 'g1' })
+			expect(historyEntry()).toMatchObject({ index: below + 1, songId: 's1', generationId: 'g1' })
 		);
-		history.back();
+		await pressBack();
 		await vi.waitFor(() =>
-			expect(history.state).toMatchObject({
+			expect(historyEntry()).toMatchObject({
 				index: below,
 				collection: { kind: 'playlist', id: 'p1' },
 				songId: null
@@ -1559,12 +1553,12 @@ describe('full Now Playing owns one history entry', () => {
 	it('the docked desktop panel leaves no history entry behind', async () => {
 		nowPlayingDockable.set(true);
 		await openPlaylist('p1');
-		const before = { length: history.length, index: history.state.index };
+		const before = { length: historyLength(), index: historyEntry().index };
 
 		openNowPlaying('queue');
 		closeNowPlaying();
 
-		expect({ length: history.length, index: history.state.index }).toEqual(before);
+		expect({ length: historyLength(), index: historyEntry().index }).toEqual(before);
 	});
 
 	it.each([
@@ -1587,15 +1581,15 @@ describe('full Now Playing owns one history entry', () => {
 		async ({ open }) => {
 			nowPlayingDockable.set(true);
 			await openPlaylist('p1');
-			const below = history.state.index;
+			const below = historyEntry().index;
 			open();
-			await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
-			history.back();
+			await pressBack();
 
 			await vi.waitFor(() => expect(get(nowPlayingSurface)).toBe('docked'));
 			expect(localStorage.getItem('nowPlayingDesktopSurface')).toBe('docked');
-			expect(history.state).toMatchObject({
+			expect(historyEntry()).toMatchObject({
 				index: below,
 				collection: { kind: 'playlist', id: 'p1' }
 			});
@@ -1611,17 +1605,17 @@ describe('full Now Playing owns one history entry', () => {
 		nowPlayingDockable.set(true);
 		await openAlbum('a1');
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('queue');
 		expandNowPlaying();
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
 		dockNowPlaying();
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
-		history.back();
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await pressBack();
 
 		await vi.waitFor(() =>
-			expect(history.state).toMatchObject({
+			expect(historyEntry()).toMatchObject({
 				index: below - 1,
 				collection: { kind: 'album', id: 'a1' }
 			})
@@ -1632,45 +1626,45 @@ describe('full Now Playing owns one history entry', () => {
 	it('the next Back after Back closed Now Playing reaches the page before', async () => {
 		await openAlbum('a1');
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
-		history.back();
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await pressBack();
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' }));
-		expect(history.state).toMatchObject({ index: below - 1 });
+		expect(historyEntry()).toMatchObject({ index: below - 1 });
 	});
 
 	it('a docked panel the window narrows into the full surface writes no history', async () => {
 		nowPlayingDockable.set(true);
 		await openPlaylist('p1');
 		openNowPlaying('queue');
-		const before = { length: history.length, index: history.state.index };
+		const before = { length: historyLength(), index: historyEntry().index };
 
 		nowPlayingDockable.set(false);
 		await tick();
 
 		expect(get(nowPlayingSurface)).toBe('full');
-		expect({ length: history.length, index: history.state.index }).toEqual(before);
+		expect({ length: historyLength(), index: historyEntry().index }).toEqual(before);
 	});
 
 	it('keeps its entry when the window grows room for the docked panel, and Back then docks it', async () => {
 		await openPlaylist('p1');
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('queue');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
-		const opened = { length: history.length, index: history.state.index };
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		const opened = { length: historyLength(), index: historyEntry().index };
 
 		nowPlayingDockable.set(true);
 		await tick();
-		expect({ length: history.length, index: history.state.index }).toEqual(opened);
-		history.back();
+		expect({ length: historyLength(), index: historyEntry().index }).toEqual(opened);
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(nowPlayingSurface)).toBe('docked'));
-		expect(history.state.index).toBe(below);
+		expect(historyEntry().index).toBe(below);
 	});
 });
 
@@ -1688,21 +1682,21 @@ describe('the phone rail drawer owns one history entry', () => {
 	});
 
 	async function openDrawer(): Promise<{ below: number; path: string }> {
-		const below = history.state.index;
+		const below = historyEntry().index;
 		const path = location.pathname;
 		toggleSidebar();
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 		return { below, path };
 	}
 
 	it('Back closes the drawer and keeps the address and the playlist', async () => {
 		const { below, path } = await openDrawer();
 
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(sidebarOpen)).toBe(false));
 		expect(location.pathname).toBe(path);
-		expect(history.state).toMatchObject({
+		expect(historyEntry()).toMatchObject({
 			index: below,
 			collection: { kind: 'playlist', id: 'p1' }
 		});
@@ -1714,7 +1708,7 @@ describe('the phone rail drawer owns one history entry', () => {
 
 		closeSidebar();
 
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
 		expect(location.pathname).toBe(path);
 	});
 
@@ -1727,7 +1721,7 @@ describe('the phone rail drawer owns one history entry', () => {
 		{
 			way: 'a Settings link, which replaces the drawer entry before the drawer closes',
 			go: async () => {
-				history.replaceState(null, '', '/settings/voices');
+				replaceHistoryEntry('/settings/voices');
 				closeSidebar();
 			}
 		}
@@ -1739,10 +1733,10 @@ describe('the phone rail drawer owns one history entry', () => {
 			await go();
 			await vi.waitFor(() => expect(location.pathname).not.toBe(path));
 			expect(get(sidebarOpen)).toBe(false);
-			history.back();
+			await pressBack();
 
 			await vi.waitFor(() => expect(location.pathname).toBe(path));
-			expect(history.state).toMatchObject({
+			expect(historyEntry()).toMatchObject({
 				index: below,
 				collection: { kind: 'playlist', id: 'p1' }
 			});
@@ -1779,14 +1773,14 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 	}
 
 	async function openOnTopOfPlaylist(menu: Writable<boolean>): Promise<number> {
-		const below = history.state.index;
+		const below = historyEntry().index;
 		menu.set(true);
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 		return below;
 	}
 
 	function playlistStands(below: number): void {
-		expect(history.state).toMatchObject({
+		expect(historyEntry()).toMatchObject({
 			index: below,
 			collection: { kind: 'playlist', id: 'p1' },
 			songId: null
@@ -1798,7 +1792,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const menu = ownedMenu();
 		const below = await openOnTopOfPlaylist(menu);
 
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(menu)).toBe(false));
 		playlistStands(below);
@@ -1809,11 +1803,11 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const below = await openOnTopOfPlaylist(menu);
 
 		menu.set(false);
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
-		history.back();
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' }));
-		expect(history.state.index).toBe(below - 1);
+		expect(historyEntry().index).toBe(below - 1);
 	});
 
 	it('a menu item that navigates leaves exactly one Back to the playlist', async () => {
@@ -1822,8 +1816,10 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 		menu.set(false);
 		await selectSong('s1');
-		await vi.waitFor(() => expect(history.state).toMatchObject({ index: below + 1, songId: 's1' }));
-		history.back();
+		await vi.waitFor(() =>
+			expect(historyEntry()).toMatchObject({ index: below + 1, songId: 's1' })
+		);
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		playlistStands(below);
@@ -1831,67 +1827,67 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 	it('open, close and open again in quick succession end on one entry that Back closes', async () => {
 		const menu = ownedMenu();
-		const below = history.state.index;
+		const below = historyEntry().index;
 
 		menu.set(true);
 		menu.set(false);
 		menu.set(true);
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
-		expect(history.state.index).toBe(below + 1);
-		history.back();
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
+		expect(historyEntry().index).toBe(below + 1);
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(menu)).toBe(false));
 		playlistStands(below);
 	});
 
 	it('Back over a sheet in Now Playing closes only the sheet; the next Back closes Now Playing', async () => {
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
 
-		history.back();
+		await pressBack();
 		await vi.waitFor(() => expect(get(sheet)).toBe(false));
 		expect(get(nowPlayingOpen)).toBe(true);
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 		playlistStands(below);
 	});
 
 	it('a sheet in Now Playing closed and opened again in quick succession keeps both entries for Back', async () => {
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
 
 		sheet.set(false);
 		sheet.set(true);
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(history.state));
-		expect(history.state.index).toBe(below + 2);
-		history.back();
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
+		expect(historyEntry().index).toBe(below + 2);
+		await pressBack();
 		await vi.waitFor(() => expect(get(sheet)).toBe(false));
 		expect(get(nowPlayingOpen)).toBe(true);
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 		playlistStands(below);
 	});
 
 	it('closing Now Playing under an open sheet closes the sheet and leaves both entries', async () => {
-		const below = history.state.index;
+		const below = historyEntry().index;
 		openNowPlaying('take');
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 2));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
 
 		closeNowPlaying();
 
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
 		expect(get(sheet)).toBe(false);
 		playlistStands(below);
 	});
@@ -1903,19 +1899,19 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 		leaveOwner();
 
-		await vi.waitFor(() => expect(history.state.index).toBe(below));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
 		playlistStands(below);
 	});
 
 	it('a playlist entry menu moving from one row to another keeps one entry', async () => {
 		const entryMenu = historyLayerState<string | null>('an-entry-menu', null);
 		owners.push(entryMenu.subscribe(() => undefined));
-		const below = history.state.index;
+		const below = historyEntry().index;
 		entryMenu.set('e1');
-		await vi.waitFor(() => expect(history.state.index).toBe(below + 1));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
 
 		entryMenu.set('e2');
-		history.back();
+		await pressBack();
 
 		await vi.waitFor(() => expect(get(entryMenu)).toBeNull());
 		playlistStands(below);
@@ -1924,8 +1920,8 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 describe('overlays outside the library', () => {
 	it('are not layered on /settings, and opening the drawer or a menu there writes no history', () => {
-		history.replaceState(null, '', '/settings/playback');
-		const before = { length: history.length, state: history.state };
+		replaceHistoryEntry('/settings/playback');
+		const before = { length: historyLength(), state: historyEntry() };
 
 		const registration = registerHistoryLayer('an-overlay', () => undefined);
 		const menu = historyLayerState('a-menu', false);
@@ -1936,7 +1932,7 @@ describe('overlays outside the library', () => {
 		expect(registration).toEqual({ layered: false });
 		expect(get(railDrawerIsLayer)).toBe(false);
 		expect(get(menu)).toBe(true);
-		expect({ length: history.length, state: history.state }).toEqual(before);
+		expect({ length: historyLength(), state: historyEntry() }).toEqual(before);
 		closeSidebar();
 		leaveOwner();
 	});
@@ -1944,7 +1940,7 @@ describe('overlays outside the library', () => {
 
 describe('openRailSearchTarget', () => {
 	it('uses the Library action for the Library page target', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		selectedSongId.set('s1');
 		librarySurface.set('detail');
 		toggleSidebar();
@@ -1957,7 +1953,7 @@ describe('openRailSearchTarget', () => {
 	});
 
 	it('opens one page target and closes the rail drawer', async () => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		toggleSidebar();
 		expect(get(sidebarOpen)).toBe(true);
 
