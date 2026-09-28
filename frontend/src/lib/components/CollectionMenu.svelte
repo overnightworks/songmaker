@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
 	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
+	import { historyLayerState } from '$lib/stores/navigation';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL,
@@ -70,7 +71,7 @@
 	const shareLabel = $derived(`${COLLECTION_MENU_SHARE_PREFIX} ${kind}`);
 	const deleteLabel = $derived(`${COLLECTION_MENU_DELETE_PREFIX} ${kind}`);
 
-	let menuOpen = $state(false);
+	const menuOpen = historyLayerState('collection-menu', false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
 	let menu: HTMLDivElement | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
@@ -92,24 +93,24 @@
 	}
 
 	async function openMenu(): Promise<void> {
-		menuOpen = true;
+		$menuOpen = true;
 		await tick();
 		if (menu) focusFirstIn(menu);
 	}
 
 	function closeMenu(restoreFocus = true): void {
-		if (!menuOpen) return;
-		menuOpen = false;
+		if (!$menuOpen) return;
+		$menuOpen = false;
 		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
 	}
 
 	function toggleMenu(): void {
-		if (menuOpen) closeMenu();
+		if ($menuOpen) closeMenu();
 		else void openMenu();
 	}
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!menuOpen || !menu) return;
+		if (!$menuOpen || !menu) return;
 		handleFocusTrapKeydown(menu, event, () => closeMenu());
 	}
 
@@ -127,13 +128,13 @@
 		class="menu-trigger"
 		data-hitbox="frequent"
 		aria-haspopup="dialog"
-		aria-expanded={menuOpen}
+		aria-expanded={$menuOpen}
 		aria-label={COLLECTION_MENU_LABEL}
 		onclick={toggleMenu}
 	>
 		<Icon name="more-horizontal" size={18} />
 	</button>
-	{#if menuOpen}
+	{#if $menuOpen}
 		<div class="menu-backdrop-layer">
 			<button
 				class="menu-backdrop"

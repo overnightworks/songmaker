@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
+	import { writable, type Writable } from 'svelte/store';
 	import type { WhisperCue } from '$lib/api/types';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -53,6 +54,7 @@
 		rightPanelLabel,
 		sheetLabel,
 		rightPanelOpenOnMount = false,
+		sheetOpen = writable(false),
 		showTakeLabel = true,
 		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
 		// #45: the fully-resolved take's cues/transcript, distinct from `info`
@@ -103,6 +105,10 @@
 		// so the dialog's aria-label stays a stable description.
 		sheetLabel: string;
 		rightPanelOpenOnMount?: boolean;
+		// Whether the stacked layout's sheet is up. The app hands in one Back
+		// closes (stores/navigation's historyLayerState); a share page, which
+		// keeps no library history, leaves the plain default.
+		sheetOpen?: Writable<boolean>;
 		// Take/version numbering is an internal editing concept — the app's
 		// NowPlaying shows it, a public share listener never sees "Take N"
 		// (share's classic-mode playback has no real take number to show
@@ -124,7 +130,6 @@
 
 	let root: HTMLDivElement | undefined = $state();
 	let stacked = $state(false);
-	let mobilePanelOpen = $state(false);
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 
@@ -146,7 +151,7 @@
 		return subscribeCompactLayout((value) => {
 			stacked = value;
 			if (!value) {
-				mobilePanelOpen = false;
+				$sheetOpen = false;
 				return;
 			}
 			// Seed the sheet open state from the requested panel exactly once per
@@ -156,7 +161,7 @@
 			// change) must not reopen it.
 			if (!mobilePanelSeeded) {
 				mobilePanelSeeded = true;
-				if (rightPanelOpenOnMount) mobilePanelOpen = true;
+				if (rightPanelOpenOnMount) $sheetOpen = true;
 			}
 		}, NOW_PLAYING_STACKED_MEDIA);
 	});
@@ -174,10 +179,10 @@
 		// answers Escape — the page's own level-up owns that key while it is
 		// open, exactly as it would with no panel at all.
 		if (isDocked || !root) return;
-		if (mobilePanelOpen) {
+		if ($sheetOpen) {
 			if (!mobileSheet) return;
 			handleFocusTrapKeydown(mobileSheet, event, () => {
-				mobilePanelOpen = false;
+				$sheetOpen = false;
 			});
 			return;
 		}
@@ -185,7 +190,7 @@
 	}
 
 	async function openMobilePanel(): Promise<void> {
-		mobilePanelOpen = true;
+		$sheetOpen = true;
 		await tick();
 		if (mobileSheet) focusFirstIn(mobileSheet);
 	}
@@ -375,7 +380,7 @@
 				class="mobile-panel-trigger"
 				onclick={openMobilePanel}
 				aria-haspopup="dialog"
-				aria-expanded={mobilePanelOpen}
+				aria-expanded={$sheetOpen}
 			>
 				{#if upNextTitle}
 					<span class="trigger-up-next">{NOW_PLAYING_UP_NEXT_PREFIX} {upNextTitle}</span>
@@ -385,13 +390,13 @@
 					<Icon name="chevron-up" size={14} /></span
 				>
 			</button>
-			{#if mobilePanelOpen}
+			{#if $sheetOpen}
 				<button
 					type="button"
 					class="mobile-sheet-backdrop"
 					tabindex="-1"
 					aria-label={nowPlayingSheetCloseLabel(sheetLabel)}
-					onclick={() => (mobilePanelOpen = false)}
+					onclick={() => ($sheetOpen = false)}
 				></button>
 				<div
 					bind:this={mobileSheet}

@@ -11,7 +11,7 @@
 		type PlaybackSource
 	} from '$lib/constants/now-playing';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
+	import { historyLayerState, openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
 		buildQueueViewModel,
 		canPlayNextSong,
@@ -63,6 +63,7 @@
 	// (see openNowPlaying). Each open is a fresh mount, so this stays correct
 	// without the tab flipping under the listener while the panel is open.
 	let rightPanelTab: 'queue' | 'take' = $state(get(nowPlayingPanel));
+	const sheetOpen = historyLayerState('now-playing-sheet', false);
 	let queueTabBtn: HTMLButtonElement | undefined = $state();
 	let takeTabBtn: HTMLButtonElement | undefined = $state();
 
@@ -322,6 +323,7 @@
 	rightPanelLabel={mobileTriggerLabel}
 	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}
 	rightPanelOpenOnMount={rightPanelTab === 'take'}
+	{sheetOpen}
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}

@@ -37,6 +37,7 @@
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
+	import { historyLayerState } from '$lib/stores/navigation';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		collectPendingProposals,
@@ -124,7 +125,7 @@
 	let conversations: ConversationItem[] = $state([]);
 	let activeConversationId: string | null = $state(null);
 	let viewingConversationId: string | null = $state(null);
-	let conversationMenuOpen = $state(false);
+	const conversationMenuOpen = historyLayerState('cowriter-conversations-menu', false);
 	let conversationMenuTrigger: HTMLButtonElement | undefined = $state();
 	let conversationMenu: HTMLDivElement | undefined = $state();
 
@@ -141,7 +142,7 @@
 	let mentionedVersionIds: string[] = $state([]);
 	let mentionedAlbumId: string | null = $state(null);
 	let mentionQuery = $state('');
-	let showMentions = $state(false);
+	const showMentions = historyLayerState('cowriter-mention-list', false);
 	let mentionCursorPos = $state(0);
 	let selectedMentionIdx = $state(0);
 	let providerName = $state('claude');
@@ -157,7 +158,7 @@
 		mentionedSongIds = [];
 		mentionedVersionIds = [];
 		mentionedAlbumId = null;
-		showMentions = false;
+		$showMentions = false;
 	});
 
 	$effect(() => {
@@ -756,10 +757,10 @@
 		if (found) {
 			mentionQuery = found.query;
 			mentionCursorPos = pos;
-			showMentions = true;
+			$showMentions = true;
 			selectedMentionIdx = 0;
 		} else {
-			showMentions = false;
+			$showMentions = false;
 			mentionQuery = '';
 		}
 	}
@@ -778,13 +779,13 @@
 			input = replaceMentionToken(input, mentionCursorPos, `@${item.item.title} `);
 			mentionedSongIds = [...mentionedSongIds, item.item.id];
 		}
-		showMentions = false;
+		$showMentions = false;
 		mentionQuery = '';
 		inputEl.focus();
 	}
 
 	function handleKeydown(e: KeyboardEvent): void {
-		if (showMentions && (activeMentionResults.length > 0 || catalogLoading)) {
+		if ($showMentions && (activeMentionResults.length > 0 || catalogLoading)) {
 			if (e.key === 'ArrowDown') {
 				e.preventDefault();
 				if (activeMentionResults.length === 0) return;
@@ -807,7 +808,7 @@
 			if (e.key === 'Escape') {
 				e.preventDefault();
 				e.stopPropagation();
-				showMentions = false;
+				$showMentions = false;
 				return;
 			}
 		}
@@ -829,8 +830,8 @@
 
 	async function toggleConversationMenu(event: MouseEvent): Promise<void> {
 		event.stopPropagation();
-		conversationMenuOpen = !conversationMenuOpen;
-		if (!conversationMenuOpen) return;
+		$conversationMenuOpen = !$conversationMenuOpen;
+		if (!$conversationMenuOpen) return;
 		await tick();
 		if (conversationMenu) focusFirstIn(conversationMenu);
 	}
@@ -845,20 +846,20 @@
 	}
 
 	function chooseFromConversationMenu(choice: () => void | Promise<void>): void {
-		conversationMenuOpen = false;
+		$conversationMenuOpen = false;
 		conversationMenuTrigger?.focus();
 		void choice();
 	}
 
 	$effect(() => {
-		if (!conversationMenuOpen) return;
+		if (!$conversationMenuOpen) return;
 		function closeOnOutsideClick(): void {
-			conversationMenuOpen = false;
+			$conversationMenuOpen = false;
 		}
 		function trapMenuKeys(event: KeyboardEvent): void {
 			if (!conversationMenu) return;
 			handleFocusTrapKeydown(conversationMenu, event, () => {
-				conversationMenuOpen = false;
+				$conversationMenuOpen = false;
 				conversationMenuTrigger?.focus();
 			});
 		}
@@ -905,7 +906,7 @@
 				class="convo-menu-btn"
 				data-hitbox="frequent"
 				aria-haspopup="menu"
-				aria-expanded={conversationMenuOpen}
+				aria-expanded={$conversationMenuOpen}
 				aria-label={announcingProposalWaiting(COWRITER_CONVERSATION_MENU_LABEL)}
 				title={COWRITER_CONVERSATION_MENU_LABEL}
 				onclick={toggleConversationMenu}
@@ -913,7 +914,7 @@
 				<Icon name="more-horizontal" size={18} />
 				{#if memoryProposalWaiting}{@render proposalWaitingMark()}{/if}
 			</button>
-			{#if conversationMenuOpen}
+			{#if $conversationMenuOpen}
 				<div
 					bind:this={conversationMenu}
 					class="convo-menu"
@@ -1096,7 +1097,7 @@
 	{/if}
 
 	<div class="input-area" bind:this={inputArea}>
-		{#if showMentions}
+		{#if $showMentions}
 			<MentionDropdown
 				items={activeMentionResults}
 				selectedIndex={selectedMentionIdx}

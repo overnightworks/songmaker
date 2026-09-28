@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { historyLayerState } from '$lib/stores/navigation';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import type { GenerationItem, ShareResult } from '$lib/api/types';
 	import {
@@ -31,15 +32,15 @@
 			: `Take · ${gen.generation_number}`
 	);
 
-	let open = $state(false);
+	const open = historyLayerState('take-menu', false);
 	let trigger: HTMLButtonElement | undefined = $state();
 	let menuEl: HTMLDivElement | undefined = $state();
 	let flipUp = $state(false);
 
 	async function toggle(e: MouseEvent): Promise<void> {
 		e.stopPropagation();
-		open = !open;
-		if (!open) return;
+		$open = !$open;
+		if (!$open) return;
 		await tick();
 		if (!menuEl) return;
 		flipUp = menuEl.getBoundingClientRect().bottom > window.innerHeight;
@@ -47,20 +48,20 @@
 	}
 
 	function runAndClose(action: () => void): void {
-		open = false;
+		$open = false;
 		trigger?.focus();
 		action();
 	}
 
 	$effect(() => {
-		if (!open) return;
+		if (!$open) return;
 		function onDocClick(): void {
-			open = false;
+			$open = false;
 		}
 		function onDocKeydown(event: KeyboardEvent): void {
 			if (!menuEl) return;
 			handleFocusTrapKeydown(menuEl, event, () => {
-				open = false;
+				$open = false;
 				trigger?.focus();
 			});
 		}
@@ -81,14 +82,14 @@
 		data-hitbox="frequent"
 		data-hitbox-face
 		aria-haspopup="menu"
-		aria-expanded={open}
+		aria-expanded={$open}
 		aria-label={TAKE_OVERFLOW_LABEL}
 		title={TAKE_OVERFLOW_LABEL}
 		onclick={toggle}
 	>
 		<Icon name="more-horizontal" size={16} />
 	</button>
-	{#if open}
+	{#if $open}
 		<div
 			bind:this={menuEl}
 			class="overflow-menu"

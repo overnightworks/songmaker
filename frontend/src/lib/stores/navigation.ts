@@ -637,6 +637,7 @@ function topHistoryLayer(): HistoryLayer | undefined {
 function popsHistoryLayers(state: unknown): boolean {
 	if (ownLayerStepBacks > 0) {
 		ownLayerStepBacks -= 1;
+		stepOffStackedStaleLayerEntry(state);
 		return true;
 	}
 	const landing = isLibraryHistoryState(state) ? state.index : -1;
@@ -657,14 +658,47 @@ function popsHistoryLayers(state: unknown): boolean {
 	return lowestLeft?.base.index === landing;
 }
 
+// Layers stack (a menu over Now Playing), so the last of this module's own
+// step-backs off a stale layer entry -- after a reload on the top one -- can
+// land on the stale entry of the layer below, and steps on until it reaches
+// the library.
+function stepOffStackedStaleLayerEntry(state: unknown): void {
+	if (ownLayerStepBacks > 0) return;
+	const staleLanding = staleLayerEntryLanding(state);
+	if (staleLanding) stepBackOnto(staleLanding);
+}
+
 // An entry marked as a layer that no open layer owns -- left behind by a
 // reload, or reached again with Forward after Back closed its layer -- is a
 // copy of the library below it, where Back would visibly do nothing; the
-// caller steps off it onto that library.
+// caller steps off it onto that library. Any open layer can own it, not only
+// the top one: a sheet reopened over Now Playing before the step back off its
+// old entry lands already sits above the Now Playing entry that step reaches.
 function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
-	if (topHistoryLayer()?.base.index === state.index - 1) return null;
+	const ownedByOpenLayer = historyLayers.some(
+		(layer) => layer.id === state.layer && layer.base.index === state.index - 1
+	);
+	if (ownedByOpenLayer) return null;
 	return { ...state, index: state.index - 1, layer: undefined };
+}
+
+// Opens and closes one overlay's layer as its shown value changes, and says
+// whether it holds an entry. Back closes it through `close`, which lands here
+// again with `false` after the stack has already let go of the layer.
+function historyLayerSwitch(id: string, close: () => void): (isShown: boolean) => boolean {
+	let registration: HistoryLayerRegistration | null = null;
+	return (isShown) => {
+		if (isShown === (registration !== null)) return registration?.layered ?? false;
+		if (isShown) {
+			registration = registerHistoryLayer(id, close);
+			return registration.layered;
+		}
+		const leaving = registration;
+		registration = null;
+		if (leaving?.layered) leaving.leave();
+		return false;
+	};
 }
 
 function followAsHistoryLayer(
@@ -673,22 +707,34 @@ function followAsHistoryLayer(
 	close: () => void,
 	layered?: Writable<boolean>
 ): () => void {
-	let registration: HistoryLayerRegistration | null = null;
+	const show = historyLayerSwitch(id, close);
 	const stopFollowing = shown.subscribe((isShown) => {
-		if (isShown === (registration !== null)) return;
-		if (isShown) {
-			registration = registerHistoryLayer(id, close);
-		} else {
-			const leaving = registration;
-			registration = null;
-			if (leaving?.layered) leaving.leave();
-		}
-		layered?.set(registration?.layered ?? false);
+		const isLayered = show(isShown);
+		layered?.set(isLayered);
 	});
 	return () => {
 		stopFollowing();
 		layered?.set(false);
 	};
+}
+
+// A menu, list or sheet a component owns (issue #1119) keeps what it shows in
+// this store rather than in local state, `closed` meaning nothing is open.
+// Every write registers or leaves its layer synchronously -- a close path that
+// navigates straight afterwards has its step back queued ahead of the push,
+// which an effect running after that push could not promise -- and Back closes
+// it by writing `closed`. The owner unmounting while open drops the last
+// subscriber, which leaves the layer too.
+export function historyLayerState<T>(id: string, closed: T): Writable<T> {
+	let value = closed;
+	const show = historyLayerSwitch(id, () => set(closed));
+	const shown = writable(closed, () => () => show(false));
+	function set(next: T): void {
+		value = next;
+		show(next !== closed);
+		shown.set(next);
+	}
+	return { subscribe: shown.subscribe, set, update: (change) => set(change(value)) };
 }
 
 const NOW_PLAYING_LAYER = 'now-playing';

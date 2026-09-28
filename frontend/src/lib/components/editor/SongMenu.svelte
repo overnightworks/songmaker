@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { historyLayerState } from '$lib/stores/navigation';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_CLOSE_LABEL,
@@ -22,29 +23,29 @@
 
 	let { title, saveDisabled, onsave, onrename, onaddtoplaylist, ondelete }: Props = $props();
 
-	let menuOpen = $state(false);
+	const menuOpen = historyLayerState('song-menu', false);
 	let triggerButton: HTMLButtonElement | undefined = $state();
 	let menu: HTMLDivElement | undefined = $state();
 
 	async function openMenu(): Promise<void> {
-		menuOpen = true;
+		$menuOpen = true;
 		await tick();
 		if (menu) focusFirstIn(menu);
 	}
 
 	function closeMenu(restoreFocus = true): void {
-		if (!menuOpen) return;
-		menuOpen = false;
+		if (!$menuOpen) return;
+		$menuOpen = false;
 		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
 	}
 
 	function toggleMenu(): void {
-		if (menuOpen) closeMenu();
+		if ($menuOpen) closeMenu();
 		else void openMenu();
 	}
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!menuOpen || !menu) return;
+		if (!$menuOpen || !menu) return;
 		handleFocusTrapKeydown(menu, event, () => closeMenu());
 	}
 
@@ -62,13 +63,13 @@
 		class="menu-trigger"
 		data-hitbox="frequent"
 		aria-haspopup="dialog"
-		aria-expanded={menuOpen}
+		aria-expanded={$menuOpen}
 		aria-label={SONG_MENU_LABEL}
 		onclick={toggleMenu}
 	>
 		<Icon name="more-horizontal" size={18} />
 	</button>
-	{#if menuOpen}
+	{#if $menuOpen}
 		<div class="menu-backdrop-layer">
 			<button
 				class="menu-backdrop"
