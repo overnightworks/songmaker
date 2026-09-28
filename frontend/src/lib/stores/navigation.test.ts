@@ -63,13 +63,9 @@ const fetchActiveGeneration = vi.fn();
 // goto actually changes the URL (via the History API, like the real
 // SvelteKit goto) so tests can assert the landed-on route, not just that
 // goto was called with some argument (see issue #264's done-when).
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
 }));

@@ -4,6 +4,7 @@ import {
 	makePlaylistDetail as playlistDetail,
 	makeSong as song
 } from '$lib/test-utils/factories';
+import { historyEntry, historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -60,13 +61,9 @@ vi.mock('$lib/stores/toast', () => ({
 // own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/state', () => ({
 	page: { url: new URL('https://songmaker.test/settings') }
 }));
@@ -151,11 +148,11 @@ describe('detail views own no content back', () => {
 		const { goBack, initNavigation, resetNavigationForTests } =
 			await import('$lib/stores/navigation');
 		resetNavigationForTests();
-		history.replaceState(null, '', '/?song=s1&gen=g1');
+		replaceHistoryEntry('/?song=s1&gen=g1');
 		const cleanup = initNavigation();
 		// The write crosses into the song's own address (issue #275) and is
 		// therefore asynchronous -- see the note on writeLibraryHistory.
-		await vi.waitFor(() => expect(history.state.index).toBe(0));
+		await vi.waitFor(() => expect(historyEntry().index).toBe(0));
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		goBack();
@@ -186,7 +183,7 @@ describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
 		document.body.append(bar);
 		mounted.push(mount(PhoneAppBar, { target: bar }));
 		await tick();
-		const historyLengthBeforeSwitching = history.length;
+		const historyLengthBeforeSwitching = historyLength();
 
 		for (const tab of ['cowriter', 'edit'] as const) {
 			target.querySelector<HTMLButtonElement>(`[role="tab"][data-tab="${tab}"]`)?.click();
@@ -199,7 +196,7 @@ describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
 				(button) => button.textContent?.trim()
 			);
 			expect(buttonTexts).not.toContain('‹');
-			expect(history.length).toBe(historyLengthBeforeSwitching);
+			expect(historyLength()).toBe(historyLengthBeforeSwitching);
 		}
 	});
 });

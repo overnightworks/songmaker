@@ -194,13 +194,6 @@ export function songsPage(
 	return { items: [], total: 0, offset: 0, limit: 200, has_more: false, ...overrides };
 }
 
-export function railNavigationMock() {
-	return {
-		goto: vi.fn().mockResolvedValue(undefined),
-		afterNavigate: vi.fn()
-	};
-}
-
 export function railPathsMock() {
 	return { resolve: vi.fn((path: string) => path) };
 }

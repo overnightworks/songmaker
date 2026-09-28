@@ -6,7 +6,9 @@ import { lostNetwork } from '$lib/test-utils/network';
 import { addToast } from '$lib/stores/toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 vi.mock('$lib/api/client', () => ({
 	previewGenerationRetention: vi.fn(),
