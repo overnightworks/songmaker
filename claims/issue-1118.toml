@@ -1,8 +1,0 @@
-claim_id = "5ed551ad931043268abb85737b3d479e"
-agent = "claude-head"
-role = "builder"
-base = "cd623f62169538873f1fccbe210775e4a76ceee3"
-branch = "claude/issue-1118-offline-return"
-scope = ["frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/constants/auth.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/connectivity.ts", "frontend/src/lib/stores/libraryData.test.ts", "frontend/src/lib/stores/libraryData.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings/account"]
-opened_commit = "3d44044f41b50d9613fba9cf85ebc35de3a6503c"
-whole_reason = "offline reload-on-return for album songs and the session gate, plus the password refusal"
