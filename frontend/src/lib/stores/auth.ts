@@ -6,8 +6,10 @@ import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
 	AUTH_CHECK_SERVER_ERROR
 } from '$lib/constants/auth';
+import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
@@ -16,6 +18,11 @@ export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
 export const authError = writable('');
 export const authCheckError = writable<string | null>(null);
+// A session check the server did not answer (#1118): the offline strip says
+// it, and the gate that asked runs again until the server answers.
+export const authCheckUnreachable = writable(false);
+let sessionGate: () => void = () => {};
+let pendingSessionCheck: ReturnType<typeof setTimeout> | null = null;
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 type AuthNotice = 'unauthorized' | 'disabled';
@@ -45,28 +52,66 @@ function describeAuthCheckFailure(error: unknown): string {
 	return AUTH_CHECK_NETWORK_ERROR;
 }
 
-export async function checkAuth(): Promise<AuthUser | null> {
+/**
+ * `checkAgain` is the gate asking: while the server does not answer, the
+ * gate runs again until it does, so its routing follows too.
+ */
+export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null> {
+	sessionGate = checkAgain;
 	authLoading.set(true);
 	try {
 		const user = await fetchMe();
+		forgetUnreachableSessionCheck();
 		currentUser.set(user);
 		authCheckError.set(null);
 		authNotice.set(null);
 		return user;
 	} catch (err) {
+		authNotice.set(null);
+		authCheckError.set(null);
+		if (err instanceof NetworkError) {
+			rememberUnreachableSessionCheck();
+			return get(currentUser);
+		}
+		forgetUnreachableSessionCheck();
 		const failure = classifyAuthFailure(err);
 		if (failure === 'unauthorized' || failure === 'disabled') {
-			authCheckError.set(null);
 			authNotice.set(failure);
 			currentUser.set(null);
 			return null;
 		}
-		authNotice.set(null);
 		authCheckError.set(describeAuthCheckFailure(err));
 		return get(currentUser);
 	} finally {
 		authLoading.set(false);
 	}
+}
+
+function rememberUnreachableSessionCheck(): void {
+	stopPendingSessionCheck();
+	authCheckUnreachable.set(true);
+	reportSessionCheckReachable(false);
+	pendingSessionCheck = setTimeout(() => {
+		pendingSessionCheck = null;
+		sessionGate();
+	}, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS);
+}
+
+function forgetUnreachableSessionCheck(): void {
+	stopPendingSessionCheck();
+	authCheckUnreachable.set(false);
+	reportSessionCheckReachable(true);
+}
+
+function stopPendingSessionCheck(): void {
+	if (pendingSessionCheck === null) return;
+	clearTimeout(pendingSessionCheck);
+	pendingSessionCheck = null;
+}
+
+export function resetAuthForTests(): void {
+	forgetUnreachableSessionCheck();
+	sessionGate = () => {};
 }
 
 export async function login(username: string, password: string): Promise<AuthUser> {

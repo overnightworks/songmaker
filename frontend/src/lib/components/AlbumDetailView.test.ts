@@ -8,8 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { NetworkError } from '$lib/api/fetch';
-import { serverRefusal } from '$lib/test-utils/network';
+import { ApiError, NetworkError } from '$lib/api/fetch';
+import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
 	ALBUM_COVER_ALT_TYPE,
@@ -31,8 +31,18 @@ import {
 	px,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
-import { albumList, songList } from '$lib/stores/libraryData';
+import {
+	clearComponentStyles,
+	elementScopeClass,
+	injectComponentStyles
+} from '$lib/test-utils/component-styles';
+import {
+	albumList,
+	loadSongsForAlbum,
+	resetLibraryDataForTests,
+	songList
+} from '$lib/stores/libraryData';
+import { fetchSongs } from '$lib/api/songs';
 import {
 	curationActive,
 	nowPlayingSurface,
@@ -211,6 +221,7 @@ afterEach(async () => {
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetConnectivityForTests();
+	resetLibraryDataForTests();
 });
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -224,6 +235,64 @@ async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
 	await tick();
 	return requireElement<HTMLElement>(document.body, '.menu-panel');
 }
+
+describe('AlbumDetailView songs that could not load', () => {
+	const ALBUM_SONGS_FAILURE = 'Failed to load songs';
+
+	function songsPage(items: ReturnType<typeof song>[]) {
+		return { items, total: items.length, offset: 0, limit: 200, has_more: false };
+	}
+
+	function retryButton(target: HTMLElement): HTMLButtonElement | undefined {
+		return Array.from(target.querySelectorAll('button')).find(
+			(button) => button.textContent?.trim() === 'Retry'
+		);
+	}
+
+	beforeEach(() => {
+		songList.set([]);
+	});
+
+	it('offline names no failure and offers no Retry, then lists the songs once back online', async () => {
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSongs)
+			.mockRejectedValueOnce(lostNetwork())
+			.mockResolvedValueOnce(
+				songsPage([song({ id: 's-back', album_id: 'a-local', title: 'Back Online' })])
+			);
+		await loadSongsForAlbum('a-local');
+		const target = await renderDetail();
+
+		expect(target.textContent).not.toContain(ALBUM_SONGS_FAILURE);
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+		expect(retryButton(target)).toBeUndefined();
+
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Back Online'));
+		expect(fetchSongs).toHaveBeenLastCalledWith('a-local', 0, 200);
+	});
+
+	it('names a refusal once with a styled Retry that loads the songs again', async () => {
+		vi.mocked(fetchSongs)
+			.mockRejectedValueOnce(new ApiError(500, '', '/api/songs'))
+			.mockResolvedValueOnce(
+				songsPage([song({ id: 's-again', album_id: 'a-local', title: 'Loaded Again' })])
+			);
+		await loadSongsForAlbum('a-local');
+		const target = await renderDetail();
+
+		const alerts = Array.from(target.querySelectorAll('[role="alert"]'));
+		expect(alerts.map((alert) => alert.textContent?.trim())).toEqual([ALBUM_SONGS_FAILURE]);
+		const retry = retryButton(target);
+		expect(retry && elementScopeClass(retry)).toBeDefined();
+
+		retry?.click();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Loaded Again'));
+		expect(target.textContent).not.toContain(ALBUM_SONGS_FAILURE);
+	});
+});
 
 describe('AlbumDetailView header', () => {
 	it('renders the albumId prop instead of the selected album', async () => {

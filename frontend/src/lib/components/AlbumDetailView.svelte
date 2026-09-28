@@ -21,6 +21,7 @@
 	import {
 		albumList,
 		albumSongsLoad,
+		albumSongsLoadFailure,
 		songList,
 		loadSongsForAlbum,
 		addAlbumToList,
@@ -107,6 +108,7 @@
 	// nothing to start, so neither of its controls can reach the running queue.
 	const albumHasTakes = $derived(albumSongs.some((s) => s.generation_count > 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
+	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
 		selectedAlbum ? `${ALBUM_COVER_ALT_TYPE} ${selectedAlbum.title}` : ALBUM_COVER_ALT_TYPE
@@ -644,17 +646,19 @@
 		{/if}
 
 		<div class="item-list">
-			{#if albumLoad?.status === 'loading' && albumSongs.length === 0}
+			{#if albumLoad === 'loading' && albumSongs.length === 0}
 				<p class="empty-tab" role="status">{LIBRARY_ALBUMS_LOADING}</p>
-			{:else if albumLoad?.status === 'error' && albumSongs.length === 0}
-				<p class="empty-tab" role="alert">{albumLoad.error}</p>
+			{:else if $albumLoadFailure && albumSongs.length === 0}
+				<p class="empty-tab" role="alert">{$albumLoadFailure}</p>
 				<button
 					class="retry-btn"
 					onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
 					>{LIBRARY_RETRY_LABEL}</button
 				>
 			{:else if albumSongs.length === 0}
-				<p class="empty-tab">No songs in this album yet.</p>
+				{#if albumLoad !== 'unreachable'}
+					<p class="empty-tab">No songs in this album yet.</p>
+				{/if}
 			{:else}
 				{#each albumSongs as s (s.id)}
 					{@const current = isSongCurrent(s.id)}
@@ -940,6 +944,24 @@
 		padding: 0.8rem 1.5rem;
 	}
 
+	.retry-btn {
+		display: block;
+		margin: 0.4rem 1.5rem 0.8rem;
+		padding: 6px 12px;
+		background: none;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		color: var(--text-muted);
+		font-size: var(--label-font-size);
+		font-family: var(--font-body);
+		cursor: pointer;
+	}
+
+	.retry-btn:hover {
+		border-color: var(--primary);
+		color: var(--primary);
+	}
+
 	@media (max-width: 768px) {
 		.cover-suggestions {
 			margin: 0 0.8rem;
@@ -972,6 +994,10 @@
 
 		.empty-tab {
 			padding: 0.8rem;
+		}
+
+		.retry-btn {
+			margin-inline: 0.8rem;
 		}
 	}
 </style>
