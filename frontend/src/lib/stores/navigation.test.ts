@@ -3,7 +3,8 @@ import {
 	historyLength,
 	pressBack,
 	pressForward,
-	replaceHistoryEntry
+	replaceHistoryEntry,
+	watchBack
 } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
@@ -1142,10 +1143,10 @@ describe('goBack', () => {
 	it('defers to the browser history when a predecessor exists', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
-		const backSpy = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+		const back = watchBack();
 		goBack();
-		expect(backSpy).toHaveBeenCalledTimes(1);
-		backSpy.mockRestore();
+		expect(back.presses()).toBe(1);
+		back.stop();
 	});
 
 	it('returns to the wall and clears selection when there is no predecessor', async () => {
@@ -1165,13 +1166,13 @@ describe('goBack', () => {
 	it('keeps the create surface while the browser returns to its predecessor', () => {
 		replaceHistoryEntry('/', { ...libraryRootState(), index: 1, surface: 'create' });
 		librarySurface.set('create');
-		const backSpy = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+		const back = watchBack();
 
 		goBack();
 
-		expect(backSpy).toHaveBeenCalledTimes(1);
+		expect(back.presses()).toBe(1);
 		expect(get(librarySurface)).toBe('create');
-		backSpy.mockRestore();
+		back.stop();
 	});
 });
 

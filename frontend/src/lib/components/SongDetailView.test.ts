@@ -1,4 +1,4 @@
-import { historyEntry } from '$lib/test-utils/library-history';
+import { historyEntry, historyLength } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
@@ -1416,18 +1416,15 @@ describe('song header album rail', () => {
 		const cleanup = initNavigation();
 		selectSong('s1');
 		navigateToSongTab('takes');
-		const index = historyEntry().index;
-		const push = vi.spyOn(history, 'pushState');
+		const before = { length: historyLength(), index: historyEntry().index };
 		const target = await renderView();
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
 		if (!next) throw new Error('Expected next');
 		next.click();
 		await tick();
-		expect(push).not.toHaveBeenCalled();
-		expect(historyEntry().index).toBe(index);
+		expect({ length: historyLength(), index: historyEntry().index }).toEqual(before);
 		expect(get(selectedSongId)).toBe('s-last');
 		expect(get(detailTab)).toBe('takes');
-		push.mockRestore();
 		cleanup();
 	});
 

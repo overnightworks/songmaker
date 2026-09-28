@@ -39,6 +39,18 @@ export async function pressForward(): Promise<void> {
 	await traverseHistory(() => history.forward());
 }
 
+export interface BackWatch {
+	presses: () => number;
+	stop: () => void;
+}
+
+// Counts the Backs the app asks the browser for while holding each step back,
+// so a test sees the request without the library reacting to it.
+export function watchBack(): BackWatch {
+	const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+	return { presses: () => back.mock.calls.length, stop: () => back.mockRestore() };
+}
+
 async function traverseHistory(step: () => void): Promise<void> {
 	const landed = new Promise((resolve) =>
 		window.addEventListener('popstate', resolve, { once: true })
