@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 	import { loras, loadLoras, isLoraActive } from '$lib/stores/loras';
+	import { historyLayerState } from '$lib/stores/navigation';
 	import { recipeModel } from '$lib/stores/recipe';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
@@ -22,7 +23,7 @@
 	);
 	const selectedLora = $derived(($loras ?? []).find((lora) => lora.id === current) ?? null);
 	const targetModelMode = $derived($recipeModel ?? '');
-	let open = $state(false);
+	const open = historyLayerState('voice-picker', false);
 
 	function isSelectable(lora: UserLoraItem): boolean {
 		return (
@@ -54,7 +55,7 @@
 			rest.user_lora_id = next;
 		}
 		setDraftGenParams(Object.keys(rest).length > 0 ? rest : null);
-		open = false;
+		$open = false;
 	}
 
 	onMount(() => {
@@ -72,15 +73,15 @@
 			type="button"
 			class="picker"
 			aria-haspopup="listbox"
-			aria-expanded={open}
+			aria-expanded={$open}
 			aria-controls="voice-picker-options"
-			onclick={() => (open = !open)}
-			onkeydown={(event) => event.key === 'Escape' && (open = false)}
+			onclick={() => ($open = !$open)}
+			onkeydown={(event) => event.key === 'Escape' && ($open = false)}
 		>
 			<span>{selectedLabel}</span>
 			<span aria-hidden="true">⌄</span>
 		</button>
-		{#if open}
+		{#if $open}
 			<div class="options" id="voice-picker-options" role="listbox" aria-label={VOICE_PICKER_LABEL}>
 				<button
 					type="button"

@@ -12,6 +12,7 @@ import type { UserLoraItem } from '$lib/api/types';
 import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 import { loras } from '$lib/stores/loras';
 import { recipeModel } from '$lib/stores/recipe';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import VoicePicker from './VoicePicker.svelte';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -130,4 +131,29 @@ describe('VoicePicker', () => {
 		expect(options[1].querySelector('.mode-chip')?.textContent).toBe('sft');
 		expect(target.querySelector('.picker .mode-chip')).toBeNull();
 	});
+});
+
+function picker(target: HTMLElement): HTMLButtonElement | null {
+	return target.querySelector<HTMLButtonElement>('.picker');
+}
+
+describeBackClosesOverlay({
+	name: 'the voice picker list',
+	render,
+	open: (target) => picker(target)?.click(),
+	isShown: (target) => target.querySelector('.options') !== null,
+	closeWays: [
+		{ way: 'tapping the picker again', close: (target) => picker(target)?.click() },
+		{
+			way: 'Escape',
+			close: (target) =>
+				picker(target)?.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+				)
+		},
+		{
+			way: 'choosing a voice',
+			close: (target) => target.querySelector<HTMLButtonElement>('.option')?.click()
+		}
+	]
 });

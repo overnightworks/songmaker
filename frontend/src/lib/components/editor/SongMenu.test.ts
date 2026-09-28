@@ -1,6 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SONG_MENU_SAVE_LABEL } from '$lib/constants';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import SongMenu from './SongMenu.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -84,4 +85,42 @@ describe('SongMenu', () => {
 		await tick();
 		expect(target.querySelector('.menu-panel')).toBeNull();
 	});
+});
+
+function menuItem(target: HTMLElement, label: string): HTMLButtonElement | undefined {
+	return Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
+		(el) => el.textContent?.trim() === label
+	);
+}
+
+let renameSawHistoryAt: number | undefined;
+
+describeBackClosesOverlay({
+	name: 'the song menu',
+	render: async () =>
+		(
+			await renderMenu({
+				onrename: vi.fn(() => {
+					renameSawHistoryAt = plannedHistoryIndex();
+				})
+			})
+		).target,
+	open: (target) => target.querySelector<HTMLButtonElement>('.menu-trigger')?.click(),
+	isShown: (target) => target.querySelector('.menu-panel') !== null,
+	closeWays: [
+		{
+			way: 'a tap outside',
+			close: (target) => target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click()
+		},
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		},
+		{
+			way: 'choosing Rename',
+			close: (target) => menuItem(target, 'Rename')?.click(),
+			actionSawHistoryAt: () => renameSawHistoryAt
+		}
+	]
 });

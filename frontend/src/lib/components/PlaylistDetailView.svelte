@@ -34,7 +34,7 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import { selectSong } from '$lib/stores/navigation';
+	import { historyLayerState, selectSong } from '$lib/stores/navigation';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -83,7 +83,7 @@
 	const detailLoad = $derived($playlistDetailLoad);
 	let reorderBusy = $state(false);
 	let showDeleteConfirm = $state(false);
-	let overflowId = $state<string | null>(null);
+	const overflowId = historyLayerState<string | null>('playlist-entry-menu', null);
 	const initials = $derived(
 		playlistMeta ? titleInitials(playlistMeta.title) : ALBUM_ART_EMPTY_INITIALS
 	);
@@ -96,23 +96,23 @@
 
 	function toggleOverflow(entryId: string, e: MouseEvent): void {
 		e.stopPropagation();
-		overflowId = overflowId === entryId ? null : entryId;
+		$overflowId = $overflowId === entryId ? null : entryId;
 	}
 
 	function openSongInEditor(songId: string): void {
-		overflowId = null;
+		$overflowId = null;
 		selectSong(songId);
 	}
 
 	$effect(() => {
-		if (!overflowId) return;
+		if (!$overflowId) return;
 		function onClick(): void {
-			overflowId = null;
+			$overflowId = null;
 		}
 		function onKeydown(event: KeyboardEvent): void {
 			if (event.key !== 'Escape') return;
 			event.preventDefault();
-			overflowId = null;
+			$overflowId = null;
 		}
 		document.addEventListener('click', onClick);
 		document.addEventListener('keydown', onKeydown, true);
@@ -405,13 +405,13 @@
 										data-hitbox="frequent"
 										data-hitbox-face
 										aria-haspopup="menu"
-										aria-expanded={overflowId === entry.id}
+										aria-expanded={$overflowId === entry.id}
 										aria-label={playlistEntryOverflowLabel(entry.song_title)}
 										onclick={(e) => toggleOverflow(entry.id, e)}
 									>
 										<Icon name="more-horizontal" size={16} />
 									</button>
-									{#if overflowId === entry.id}
+									{#if $overflowId === entry.id}
 										<div
 											class="entry-overflow-menu"
 											role="menu"
@@ -437,7 +437,7 @@
 													data-hitbox="frequent"
 													disabled={reorderBusy}
 													onclick={() => {
-														overflowId = null;
+														$overflowId = null;
 														void onMoveEntry(entry.id, i - 1);
 													}}
 												>
@@ -452,7 +452,7 @@
 													data-hitbox="frequent"
 													disabled={reorderBusy}
 													onclick={() => {
-														overflowId = null;
+														$overflowId = null;
 														void onMoveEntry(entry.id, i + 1);
 													}}
 												>
@@ -465,7 +465,7 @@
 												class="entry-overflow-item"
 												data-hitbox="frequent"
 												onclick={() => {
-													overflowId = null;
+													$overflowId = null;
 													void onRemoveEntry(entry.id);
 												}}
 											>
