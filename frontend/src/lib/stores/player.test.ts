@@ -36,9 +36,9 @@ import {
 } from '$lib/constants';
 import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/api/fetch', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
 	return { ...actual, handleSessionLost: vi.fn() };

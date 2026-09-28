@@ -4,10 +4,11 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 const mockClearAuth = vi.fn();
-const mockGoto = vi.fn();
 
 vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClearAuth(...args) }));
-vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import {
 	listWorkers,
@@ -30,7 +31,6 @@ function mockOk(data: unknown) {
 beforeEach(() => {
 	mockFetch.mockReset();
 	mockClearAuth.mockReset();
-	mockGoto.mockReset();
 });
 
 describe('admin worker pool API', () => {

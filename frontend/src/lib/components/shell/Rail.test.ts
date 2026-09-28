@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -16,7 +17,9 @@ import {
 	requireElement
 } from './rail-test-fixtures';
 
-vi.mock('$app/navigation', async () => (await import('./rail-test-fixtures')).railNavigationMock());
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 vi.mock('$lib/api/library', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
@@ -113,7 +116,7 @@ beforeEach(() => {
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	albumList.set([]);
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 });
 
 afterEach(async () => {

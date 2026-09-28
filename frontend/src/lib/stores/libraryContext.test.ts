@@ -44,13 +44,9 @@ const fetchShares = vi.fn();
 // own target first, so its write is same-shape and never reaches this) --
 // mocked the same way navigation.test.ts does, so a crossing write's `goto`
 // call moves the URL like the real one does.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
