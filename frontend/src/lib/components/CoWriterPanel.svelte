@@ -148,6 +148,7 @@
 	let providerName = $state('claude');
 	let providerModel = $state('');
 	let unmounted = false;
+	let latestTurn: Promise<void> = Promise.resolve();
 
 	onDestroy(() => {
 		unmounted = true;
@@ -175,6 +176,7 @@
 	});
 
 	async function loadConversations(): Promise<void> {
+		const turnBeforeRead = latestTurn;
 		try {
 			const list = await fetchConversations();
 			historyError = '';
@@ -185,7 +187,7 @@
 				activeConversationId = newActiveId;
 				viewingConversationId = newActiveId;
 				if (newActiveId) {
-					await loadMessages(newActiveId);
+					await loadMessages(newActiveId, turnBeforeRead);
 				} else {
 					messages = [];
 				}
@@ -203,22 +205,70 @@
 		}));
 	}
 
-	async function loadMessages(conversationId: string): Promise<void> {
+	/**
+	 * `turnBeforeRead` is the latest turn when the history read began, which
+	 * for the first read is its conversation-list step (#1170).
+	 */
+	async function loadMessages(
+		conversationId: string,
+		turnBeforeRead: Promise<void> = latestTurn
+	): Promise<void> {
 		historyLoading = true;
 		historyError = '';
 		let conversation: ConversationMessagesResponse | null = null;
 		try {
 			conversation = await fetchConversationMessages(conversationId);
-			messages = toMessages(conversation.messages);
 		} catch {
-			messages = [];
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
-			followLatest();
 		}
+		if (latestTurn !== turnBeforeRead) {
+			await keepTurnSentDuringRead(conversationId, conversation);
+			return;
+		}
+		messages = conversation ? toMessages(conversation.messages) : [];
+		followLatest();
 		if (!conversation || conversationId !== activeConversationId || loading) return;
 		followOrSettleTurn(conversation);
+	}
+
+	/**
+	 * A message sent while the history was still being read owns the chat's
+	 * end: once its turn settles, the history the read found goes before it
+	 * rather than in its place, so the exchange keeps its answer, refusal or
+	 * failure (#1170).
+	 */
+	async function keepTurnSentDuringRead(
+		conversationId: string,
+		conversation: ConversationMessagesResponse | null
+	): Promise<void> {
+		await latestTurn;
+		if (!conversation || viewingConversationId !== conversationId) return;
+		const history = toMessages(conversation.messages);
+		const shown = withStoredIdOfSentMessage(messages, history.at(-1));
+		const shownIds = new Set(shown.map((message) => message.persistedId));
+		const unshownHistory = history.filter((message) => !shownIds.has(message.persistedId));
+		messages = [...unshownHistory, ...shown];
+		followLatest();
+	}
+
+	/**
+	 * The server stores a sent message when its turn starts, so a history read
+	 * that ends in it holds the sent bubble itself: a refused or failed turn
+	 * never learned that id, and without it the message would show twice.
+	 */
+	function withStoredIdOfSentMessage(
+		shown: Message[],
+		newestStored: Message | undefined
+	): Message[] {
+		return shown.map((message) =>
+			message.role === 'user' &&
+			!message.persistedId &&
+			isUnansweredResend(newestStored, message.text)
+				? { ...message, persistedId: newestStored.persistedId }
+				: message
+		);
 	}
 
 	function followOrSettleTurn(conversation: ConversationMessagesResponse): void {
@@ -364,6 +414,7 @@
 	}
 
 	async function openConversation(conv: ConversationItem): Promise<void> {
+		if (viewingConversationId !== conv.id) messages = [];
 		viewingConversationId = conv.id;
 		await loadMessages(conv.id);
 	}
@@ -433,7 +484,11 @@
 			addToast(cowriterUnavailableLabel(providerName), 'error');
 			return;
 		}
+		latestTurn = runTurn(msg);
+		await latestTurn;
+	}
 
+	async function runTurn(msg: string): Promise<void> {
 		input = '';
 		const lastKnownPersistedId = messages.findLast((message) => message.persistedId)?.persistedId;
 		const sentAgain = unansweredMessageSentAgain(msg);
@@ -528,7 +583,12 @@
 	 */
 	function unansweredMessageSentAgain(msg: string): Message | undefined {
 		const last = messages.at(-1);
-		return last?.role === 'user' && last.text === msg ? last : undefined;
+		return isUnansweredResend(last, msg) ? last : undefined;
+	}
+
+	/** The server's resend rule (#1014): an unanswered last message with the same text is that message. */
+	function isUnansweredResend(last: Message | undefined, text: string): last is Message {
+		return last?.role === 'user' && last.text === text;
 	}
 
 	/**
