@@ -43,8 +43,10 @@ from songmaker_cli.db.models import (
     User,
     UserLora,
     UserSession,
+    UserSongWork,
 )
 from songmaker_cli.db.queries import (
+    SongWork,
     create_generation_created_event,
     create_job,
     create_session,
@@ -55,6 +57,7 @@ from songmaker_cli.db.queries import (
     list_place_activity,
     list_resource_events_after,
     prune_overflow_sessions,
+    record_song_work,
     recover_stale_jobs_by_age_and_type,
     update_job_heartbeat,
     update_job_status,
@@ -198,7 +201,7 @@ def test_place_activity_ranks_nullable_terms_the_same_on_postgresql(pg_factory) 
         session.commit()
 
     with pg_factory() as session:
-        places = list_place_activity(session, user_id="u1", limit=None)
+        places = list_place_activity(session, viewer_id="u1", owner_id="u1", limit=None)
         ranking = [
             (place.place.id, place.activity_at, place.song.id if place.song else None)
             for place in places
@@ -212,6 +215,34 @@ def test_place_activity_ranks_nullable_terms_the_same_on_postgresql(pg_factory) 
         ("edited", at(20), "take-song"),
         ("empty", at(10), None),
     ]
+
+
+@SKIP_NO_PG
+def test_an_admins_own_work_on_a_foreign_song_round_trips_into_continue_on_postgresql(
+    pg_factory,
+) -> None:
+    with pg_factory() as session:
+        session.add_all([
+            User(id="owner", username="leonardo", password_hash="x", role="user"),
+            User(id="admin", username="felix", password_hash="x", role="admin"),
+        ])
+        session.flush()
+        session.add(Album(id="vernissage", title="Vernissage", artist="L", created_by="owner"))
+        session.add(Song(id="song", title="Song", album_id="vernissage", slug="song"))
+        session.commit()
+
+    for work in (SongWork.PLAYED, SongWork.EDITED, SongWork.PLAYED):
+        with pg_factory() as session:
+            record_song_work(session, user_id="admin", song_id="song", work=work)
+            session.commit()
+
+    with pg_factory() as session:
+        row = session.query(UserSongWork).one()
+        places = list_place_activity(session, viewer_id="admin", owner_id=None, limit=None)
+        ranking = [(place.place.id, place.activity_at, place.song.id) for place in places]
+
+    assert row.played_at > row.edited_at
+    assert ranking == [("vernissage", row.played_at, "song")]
 
 
 @SKIP_NO_PG

@@ -62,12 +62,14 @@ def _send(client: TestClient, request: tuple[str, str, dict | None]):
     return client.request(method.upper(), url, json=body)
 
 
-def _work_rows(db: sessionmaker[Session]) -> dict[str, tuple[bool, bool]]:
+def _work_rows(
+    db: sessionmaker[Session], song_id: str = SONG_ID,
+) -> dict[str, tuple[bool, bool]]:
     """Each person's row on the song as (has an edit, has a listen)."""
     with db() as session:
         return {
             row.user_id: (row.edited_at is not None, row.played_at is not None)
-            for row in session.query(UserSongWork).filter_by(song_id=SONG_ID)
+            for row in session.query(UserSongWork).filter_by(song_id=song_id)
         }
 
 
@@ -87,6 +89,37 @@ def test_saving_an_edit_records_the_editors_own_work(
 
     assert _work_rows(db) == {user_id: (True, False)}
     assert _song_last_played(db) is None
+
+
+@pytest.mark.parametrize(
+    "save",
+    [
+        ("put", f"/api/songs/{SONG_ID}", {}),
+        ("put", f"/api/songs/{SONG_ID}", {"lyrics": "boom"}),
+        ("put", f"/api/songs/{SONG_ID}/title", {"title": "Thunder"}),
+    ],
+    ids=["empty-update", "unchanged-lyrics", "unchanged-title"],
+)
+def test_a_save_that_changes_nothing_records_no_work(
+    tmp_path: Path, db, save: tuple[str, str, dict],
+) -> None:
+    client = _client(tmp_path, db, user_id=ADMIN_ID, role="admin")
+
+    assert _send(client, save).status_code == 200
+
+    assert _work_rows(db) == {}
+
+
+@pytest.mark.parametrize(("user_id", "role"), [(ADMIN_ID, "admin"), (OWNER_ID, "user")])
+def test_creating_a_song_records_the_creators_own_work(
+    tmp_path: Path, db, user_id: str, role: str,
+) -> None:
+    client = _client(tmp_path, db, user_id=user_id, role=role)
+
+    resp = client.post("/api/songs", json={"album_id": "alb", "title": "Fresh"})
+
+    assert resp.status_code == 200, resp.text
+    assert _work_rows(db, resp.json()["id"]) == {user_id: (True, False)}
 
 
 def test_an_admin_listen_on_a_foreign_song_records_only_the_admins_work(
