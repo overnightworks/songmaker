@@ -91,9 +91,11 @@ import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
 	applyLibraryHistory,
+	cancelLibraryHistoryApply,
 	captureLibraryScroll,
 	detailTab,
 	currentLibraryHistoryState,
+	holdLibraryRestoresUntil,
 	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
 	libraryHistoryStepsLanded,
@@ -324,6 +326,19 @@ describe('applyLibraryHistory', () => {
 		resolveFirst?.(playlistDetail({ slug: 'p', entry_count: 0, share_slug: null, title: 'First' }));
 		await first;
 		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
+	});
+
+	it('applies nothing once a write cancelled it while a Back saved the draft it left', async () => {
+		let settleSave: () => void = () => undefined;
+		void holdLibraryRestoresUntil(new Promise<void>((resolve) => (settleSave = resolve)));
+		const held = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's1' });
+
+		cancelLibraryHistoryApply();
+		settleSave();
+
+		expect(await held).toBe(false);
+		expect(get(librarySurface)).toBe('browse');
+		expect(get(selectedSongId)).toBeNull();
 	});
 
 	it('keeps a newer restore collection when an earlier album resolution finishes late', async () => {
