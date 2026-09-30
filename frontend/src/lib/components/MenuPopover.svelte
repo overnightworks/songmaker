@@ -32,9 +32,7 @@
 		return Math.max(VIEWPORT_MARGIN_PX, Math.min(start, last));
 	}
 
-	// Right-aligned under the trigger, flipped above it when only that fits,
-	// and always pulled inside the viewport so no row is ever cut off.
-	function place(): void {
+	function placeBelowOrAboveTrigger(): void {
 		if (!triggerButton || !panel) return;
 		const anchor = triggerButton.getBoundingClientRect();
 		const size = panel.getBoundingClientRect();
@@ -49,7 +47,7 @@
 	async function openMenu(): Promise<void> {
 		$open = true;
 		await tick();
-		place();
+		placeBelowOrAboveTrigger();
 		if (panel) focusFirstIn(panel);
 	}
 
@@ -70,7 +68,7 @@
 	}
 
 	function onWindowResize(): void {
-		if ($open) place();
+		if ($open) placeBelowOrAboveTrigger();
 	}
 </script>
 
