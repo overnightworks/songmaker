@@ -1,7 +1,13 @@
+<script module lang="ts">
+	// Kept per card kind rather than per instance: a failure said by a card
+	// that was closed since is just as false once that kind of place exists.
+	const failureToastsByCard: Record<string, number[]> = {};
+</script>
+
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { describeFailure } from '$lib/api/fetch';
-	import { addToast } from '$lib/stores/toast';
+	import { addToast, dismissToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
 	import Icon from './Icon.svelte';
 
@@ -45,18 +51,27 @@
 		try {
 			id = await create();
 		} catch (err) {
-			addToast(
-				describeFailure(err, failedMessage, {
-					offline: NEW_PLACE_OFFLINE,
-					withholdServerDetail: true
-				}),
-				'error'
-			);
+			sayCreateFailed(err);
 			creating = false;
 			return;
 		}
+		dismissEarlierFailures();
 		oncreated();
 		await open(id);
+	}
+
+	function sayCreateFailed(err: unknown): void {
+		const message = describeFailure(err, failedMessage, {
+			offline: NEW_PLACE_OFFLINE,
+			withholdServerDetail: true
+		});
+		const earlier = failureToastsByCard[label] ?? [];
+		failureToastsByCard[label] = [...earlier, addToast(message, 'error')];
+	}
+
+	function dismissEarlierFailures(): void {
+		for (const id of failureToastsByCard[label] ?? []) dismissToast(id);
+		failureToastsByCard[label] = [];
 	}
 </script>
 
