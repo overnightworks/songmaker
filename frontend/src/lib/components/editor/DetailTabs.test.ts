@@ -94,7 +94,14 @@ describe('DetailTabs', () => {
 	it.each([
 		[
 			'queued',
-			{ kind: 'queued', jobId: 'job1', label: 'Queued #3', reason: null, reconnecting: false },
+			{
+				kind: 'queued',
+				jobId: 'job1',
+				label: 'Queued #3',
+				reason: null,
+				reconnecting: false,
+				offline: false
+			},
 			true
 		],
 		[
@@ -107,7 +114,8 @@ describe('DetailTabs', () => {
 				progress: 36,
 				readout: '36%',
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			true
 		],
@@ -121,7 +129,8 @@ describe('DetailTabs', () => {
 				progress: 0,
 				readout: '0%',
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			true
 		],
@@ -148,6 +157,7 @@ describe('DetailTabs', () => {
 				progress: 40,
 				readout: '40%',
 				reconnecting,
+				offline: false,
 				ended: false
 			});
 			const tabs = await render();
