@@ -289,7 +289,7 @@ def tool_suggest_album_cover(
     return CoverSuggestionRequestResult(
         job_id=job.id,
         status=job.status,
-        message="Cover suggestions queued.",
+        message="Cover suggestion queued.",
     )
 
 
