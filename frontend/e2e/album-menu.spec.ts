@@ -63,10 +63,22 @@ async function expectActionRowUnderCoverAndTitle(
 	expect(playBox.y).toBeGreaterThanOrEqual(Math.max(bottomOf(cover), bottomOf(titleBox)));
 }
 
+function rightOf(box: RenderedBox): number {
+	return box.x + box.width;
+}
+
+async function expectMenuAtRowEnd(header: Locator): Promise<void> {
+	const [identity, menuTrigger] = await boundingBoxes(
+		header.locator('.header-identity'),
+		header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true })
+	);
+	expect(rightOf(menuTrigger)).toBeCloseTo(rightOf(identity), 0);
+}
+
 function expectInside(inner: RenderedBox, outer: RenderedBox): void {
 	expect(inner.x).toBeGreaterThanOrEqual(outer.x);
 	expect(inner.y).toBeGreaterThanOrEqual(outer.y);
-	expect(inner.x + inner.width).toBeLessThanOrEqual(outer.x + outer.width);
+	expect(rightOf(inner)).toBeLessThanOrEqual(rightOf(outer));
 	expect(bottomOf(inner)).toBeLessThanOrEqual(bottomOf(outer));
 }
 
@@ -94,6 +106,7 @@ test('the album ⋯ opens fully on screen, under its own row of actions', async 
 	const header = workspace(page).locator('.collection-header');
 
 	await expectActionRowUnderCoverAndTitle(header, 'album', library.albumTitle);
+	await expectMenuAtRowEnd(header);
 	await expectMenuFullyOnScreen(page, header);
 });
 
@@ -106,6 +119,7 @@ test('the playlist ⋯ opens fully on screen, under its own row of actions', asy
 	const header = workspace(page).locator('.collection-header');
 
 	await expectActionRowUnderCoverAndTitle(header, 'playlist', playlist.title);
+	await expectMenuAtRowEnd(header);
 	await expectMenuFullyOnScreen(page, header);
 });
 
