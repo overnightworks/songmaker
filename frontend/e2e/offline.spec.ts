@@ -39,6 +39,7 @@ import {
 	workspace
 } from './helpers';
 import {
+	advanceGenerationJobPhase,
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
 	runMarker,
@@ -63,6 +64,16 @@ const JOB_COMPLETED_TOAST = 'generate completed';
 // CI's stack runs no ACE-Step worker, so online the Generate bar names that
 // reason inside its own box (#1011).
 const GENERATE_WITHOUT_GPU = `${GENERATE_LABEL} — ${EDITOR_GPU_OFFLINE_TITLE}`;
+// The ride through three tunnels on #1039's final drive (#1141).
+const OUTAGES_IN_ONE_RIDE = 3;
+// What each outage past the first adds to the running-take flow's cost: the
+// job stream's refused retries while the network is gone and the streams that
+// reopen on its return.
+const API_REQUESTS_PER_FURTHER_OUTAGE = 6;
+const THREE_OUTAGES_FLOW_API_REQUEST_BUDGET =
+	OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET +
+	(OUTAGES_IN_ONE_RIDE - 1) * API_REQUESTS_PER_FURTHER_OUTAGE;
+const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
 
 function generateButton(page: Page): Locator {
 	return page.getByRole('tabpanel').getByRole('button', { name: nameStartingWith(GENERATE_LABEL) });
@@ -365,4 +376,67 @@ test.describe('losing the network while a take generates on the phone', () => {
 			guard.assertWithinBudget(OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET);
 		});
 	}
+
+	test('keeps the running card through three outages in one ride, with no red toast, and resumes it live', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const songTitle = `${OFFLINE_SONG_TITLE} Tunnels ${runMarker()}`;
+		const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
+		const jobId = await seedRunningGenerationJob(songId, {
+			progress: 0.4,
+			takeIndex: 1,
+			takeCount: 2,
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
+		});
+		const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+		const panel = page.getByRole('tabpanel');
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.click();
+		await page.getByRole('tab', { name: /Takes/ }).click();
+		await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
+		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
+
+		for (let outage = 0; outage < OUTAGES_IN_ONE_RIDE; outage++) {
+			const retryRefusedOffline = page.waitForEvent(
+				'requestfailed',
+				(request) =>
+					JOB_STREAM_PATH.test(new URL(request.url()).pathname) &&
+					(request.failure()?.errorText ?? '').includes('ERR_INTERNET_DISCONNECTED')
+			);
+			await loseNetwork(page, context);
+			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+				timeout: OFFLINE_NOTICE_MS
+			});
+			await retryRefusedOffline;
+			await expect(
+				panel.getByText(`${takeCounter}last seen at 40%`, { exact: true })
+			).toBeVisible();
+
+			await regainNetwork(page, context);
+
+			await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible({
+				timeout: BACK_ONLINE_MS
+			});
+			await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
+			await expect(page.getByRole('alert')).toHaveCount(0);
+		}
+
+		await advanceGenerationJobPhase(jobId, { progress: 0.7, phase: 'rendering' });
+		await expect(panel.getByText(new RegExp(`^${takeCounter}70%`))).toBeVisible();
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		await expect(offlineStrip(page)).toHaveCount(0);
+
+		console.log(`Three-outage running-take flow /api requests: ${guard.apiRequestCount}`);
+		guard.assertClean();
+		guard.assertWithinBudget(THREE_OUTAGES_FLOW_API_REQUEST_BUDGET);
+	});
 });
