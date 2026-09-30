@@ -136,23 +136,23 @@ describe('NewAlbumCard', () => {
 			refusal: new NetworkError('/api/albums', new TypeError('Failed to fetch')),
 			reason: "You're offline, so nothing was created. Try again once you're back online."
 		}
-	])('keeps the card and what was typed when $case, and says why readably', async ({
-		refusal,
-		reason
-	}) => {
-		createAlbum.mockRejectedValue(refusal);
-		const root = await render();
-		type(field(root, 'Title'), 'Night Drive');
+	])(
+		'keeps the card and what was typed when $case, and says why readably',
+		async ({ refusal, reason }) => {
+			createAlbum.mockRejectedValue(refusal);
+			const root = await render();
+			type(field(root, 'Title'), 'Night Drive');
 
-		createButton(root).click();
-		await createSettled();
+			createButton(root).click();
+			await createSettled();
 
-		expect(creates).toBe(0);
-		expect(field(root, 'Title').value).toBe('Night Drive');
-		expect(createButton(root).disabled).toBe(false);
-		expect(get(openCollection)).toBeNull();
-		expect(addToast).toHaveBeenCalledWith(reason, 'error');
-	});
+			expect(creates).toBe(0);
+			expect(field(root, 'Title').value).toBe('Night Drive');
+			expect(createButton(root).disabled).toBe(false);
+			expect(get(openCollection)).toBeNull();
+			expect(addToast).toHaveBeenCalledWith(reason, 'error');
+		}
+	);
 
 	it('keeps the created album listed and says nothing failed when only opening its page fails', async () => {
 		const openFailure = new Error('navigation aborted');
