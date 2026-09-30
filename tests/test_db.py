@@ -167,6 +167,13 @@ def seeded_session(db_session: Session) -> Session:
     return db_session
 
 
+@pytest.fixture
+def take_maker(seeded_session: Session) -> str:
+    maker = create_user(seeded_session, "maker", "h", role="user")
+    seeded_session.flush()
+    return maker.id
+
+
 def test_song_latest_version(seeded_session: Session) -> None:
     song = seeded_session.query(Song).filter_by(id="s1").one()
     assert song.latest_version is not None
@@ -279,7 +286,7 @@ def test_create_song_first_in_album_uses_initial_track_number(
 
 
 def test_create_generation_first_for_song_uses_initial_number(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     from songmaker_cli.db.queries import create_generation
     from songmaker_cli.db.queries.generations import INITIAL_GENERATION_NUMBER
@@ -294,6 +301,7 @@ def test_create_generation_first_for_song_uses_initial_number(
         mp3_path="x.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     assert gen.generation_number == INITIAL_GENERATION_NUMBER
@@ -363,7 +371,7 @@ def test_generation_version_lyrics_stay_on_the_producing_version(
 
 
 def test_generation_missing_version_lyrics_is_null(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     gen = create_generation(
         seeded_session,
@@ -372,6 +380,7 @@ def test_generation_missing_version_lyrics_is_null(
         mp3_path="test/no_version.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     loaded = get_generation(seeded_session, gen.id)
@@ -379,7 +388,7 @@ def test_generation_missing_version_lyrics_is_null(
 
 
 def test_generation_empty_version_lyrics_is_null(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     empty = Version(
         id="v-empty",
@@ -397,6 +406,7 @@ def test_generation_empty_version_lyrics_is_null(
         mp3_path="test/empty_lyrics.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     loaded = get_generation(seeded_session, gen.id)
@@ -985,7 +995,7 @@ def test_job_response_shows_the_phase_only_while_running(
 # ── Create generation + scores tests ─────────────────────────────────
 
 
-def test_create_generation(seeded_session: Session, tmp_path: Path) -> None:
+def test_create_generation(seeded_session: Session, take_maker: str, tmp_path: Path) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -995,15 +1005,17 @@ def test_create_generation(seeded_session: Session, tmp_path: Path) -> None:
         seed=123,
         generation_params={"bpm": 140},
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     assert gen.generation_number == 3
     assert gen.seed == 123
+    assert gen.created_by == take_maker
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
 def test_create_generation_canonicalizes_mp3_path(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     gen = create_generation(
         seeded_session,
@@ -1012,13 +1024,14 @@ def test_create_generation_canonicalizes_mp3_path(
         "test/../test/new_gen.mp3",
         model_mode="sft",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
 
     assert gen.mp3_path == "test/new_gen.mp3"
 
 
 def test_create_generation_preserves_empty_mp3_path_for_wav_only_take(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     gen = create_generation(
         seeded_session,
@@ -1028,13 +1041,14 @@ def test_create_generation_preserves_empty_mp3_path_for_wav_only_take(
         model_mode="sft",
         wav_path="test/new_gen.wav",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
 
     assert gen.mp3_path == ""
 
 
 def test_create_generation_rejects_an_mp3_path_outside_the_audio_directory(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="must stay within the audio directory"):
         create_generation(
@@ -1044,10 +1058,13 @@ def test_create_generation_rejects_an_mp3_path_outside_the_audio_directory(
             "../outside.mp3",
             model_mode="sft",
             audio_dir=tmp_path,
+            created_by=take_maker,
         )
 
 
-def test_create_generation_with_model_mode(seeded_session: Session, tmp_path: Path) -> None:
+def test_create_generation_with_model_mode(
+    seeded_session: Session, take_maker: str, tmp_path: Path,
+) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -1056,12 +1073,15 @@ def test_create_generation_with_model_mode(seeded_session: Session, tmp_path: Pa
         model_mode="turbo",
         seed=1,
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     assert gen.model_mode == "turbo"
 
 
-def test_create_generation_with_wav_path(seeded_session: Session, tmp_path: Path) -> None:
+def test_create_generation_with_wav_path(
+    seeded_session: Session, take_maker: str, tmp_path: Path,
+) -> None:
     gen = create_generation(
         seeded_session,
         "s1",
@@ -1071,13 +1091,14 @@ def test_create_generation_with_wav_path(seeded_session: Session, tmp_path: Path
         seed=1,
         wav_path="test/gen.wav",
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     assert gen.wav_path == "test/gen.wav"
 
 
 def test_create_generation_measures_duration_even_when_requested_zero(
-    seeded_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
+    seeded_session: Session, take_maker: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The take's own length is measured, not copied from the "auto" (0)
     request parameter it was generated with (#258)."""
@@ -1100,6 +1121,7 @@ def test_create_generation_measures_duration_even_when_requested_zero(
         seed=1,
         generation_params={"audio_duration": 0},
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
 
@@ -1109,7 +1131,7 @@ def test_create_generation_measures_duration_even_when_requested_zero(
 
 
 def test_create_generation_without_an_audio_file_leaves_duration_unmeasured(
-    seeded_session: Session, tmp_path: Path,
+    seeded_session: Session, take_maker: str, tmp_path: Path,
 ) -> None:
     gen = create_generation(
         seeded_session,
@@ -1119,6 +1141,7 @@ def test_create_generation_without_an_audio_file_leaves_duration_unmeasured(
         model_mode="sft",
         seed=1,
         audio_dir=tmp_path,
+        created_by=take_maker,
     )
     seeded_session.commit()
     assert gen.audio_duration_sec is None
@@ -3150,6 +3173,75 @@ def test_user_song_work_migration_adds_and_removes_the_table_around_existing_son
     assert "user_song_work" not in inspect(engine).get_table_names()
     with engine.begin() as connection:
         assert connection.execute(text("SELECT title FROM songs")).scalar_one() == "Thunder"
+    engine.dispose()
+
+
+def test_generation_created_by_migration_keeps_existing_takes_unattributed_both_ways(
+    tmp_path: Path,
+) -> None:
+    import importlib
+
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.e5a9c3d7b2f1_add_generation_created_by",
+    )
+    url = f"sqlite:///{tmp_path / 'generation-created-by.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO users (id, username, password_hash, role, is_active, "
+            "created_at, updated_at) "
+            "VALUES ('u1', 'felix', 'h', 'user', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+        ))
+        connection.execute(text(
+            "INSERT INTO songs "
+            "(id, title, album_id, vocal_language, track_number, created_at, updated_at, slug) "
+            "VALUES ('s1', 'Thunder', 'a1', '', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, "
+            "'thunder')"
+        ))
+        connection.execute(text(
+            "INSERT INTO generations "
+            "(id, song_id, generation_number, mp3_path, model_mode, status, is_archived, "
+            "is_picked, is_kept, is_shared, created_at) "
+            "VALUES ('g-old', 's1', 1, 'old.mp3', 'sft', 'completed', 0, 0, 0, 0, "
+            "CURRENT_TIMESTAMP)"
+        ))
+
+    command.upgrade(config, migration.revision)
+
+    inspector = inspect(engine)
+    columns = {column["name"]: column for column in inspector.get_columns("generations")}
+    assert columns["created_by"]["nullable"] is True
+    assert {
+        (fk["referred_table"], fk["options"]["ondelete"])
+        for fk in inspector.get_foreign_keys("generations")
+        if fk["constrained_columns"] == ["created_by"]
+    } == {("users", "SET NULL")}
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT created_by FROM generations WHERE id = 'g-old'"
+        )).scalar_one() is None
+        connection.execute(text(
+            "INSERT INTO generations "
+            "(id, song_id, generation_number, mp3_path, model_mode, status, is_archived, "
+            "is_picked, is_kept, is_shared, created_at, created_by) "
+            "VALUES ('g-new', 's1', 2, 'new.mp3', 'sft', 'completed', 0, 0, 0, 0, "
+            "CURRENT_TIMESTAMP, 'u1')"
+        ))
+
+    command.downgrade(config, migration.down_revision)
+
+    assert "created_by" not in {
+        column["name"] for column in inspect(engine).get_columns("generations")
+    }
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT id FROM generations ORDER BY generation_number"
+        )).scalars().all() == ["g-old", "g-new"]
     engine.dispose()
 
 
