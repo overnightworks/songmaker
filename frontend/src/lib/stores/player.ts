@@ -33,7 +33,7 @@ import {
 	upsertSongInList
 } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
-import { offline } from '$lib/stores/connectivity';
+import { offline, whenBackOnline } from '$lib/stores/connectivity';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -1515,6 +1515,25 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
 }
 
+/**
+ * Offline, a playback failure is the strip's to say; the take then plays on
+ * by itself once the connection is back, so no wordless Retry outlives the
+ * outage (#1161 R2).
+ */
+let stopWaitingForReturn: (() => void) | null = null;
+
+function leaveNetworkFailureToTheStrip(): boolean {
+	if (!get(offline)) return false;
+	stopWaitingForReturn ??= whenBackOnline(resumePlaybackOnReturn);
+	return true;
+}
+
+function resumePlaybackOnReturn(): void {
+	stopWaitingForReturn?.();
+	stopWaitingForReturn = null;
+	audioPlayer.resumeAfterNetworkReturn();
+}
+
 // The app's single callback set for the singleton audioPlayer, installed
 // once as one typed object (see AudioPlayerCallbacks) rather than five
 // scattered assignments — a share route swaps in its own set on mount and
@@ -1525,5 +1544,5 @@ audioPlayer.swapCallbacks({
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
-	networkFailureIsAnnounced: () => get(offline)
+	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
 });

@@ -262,6 +262,12 @@ class AudioPlayer {
 		// started every stream at track 1.
 	}
 
+	// Only a failure the lost network explains goes on by itself: a real
+	// failure keeps its words and its Retry (#1161 R2).
+	resumeAfterNetworkReturn(): void {
+		if (this.failure?.kind === 'unreachable') this.play();
+	}
+
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error') {

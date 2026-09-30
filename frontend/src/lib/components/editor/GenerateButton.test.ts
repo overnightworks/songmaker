@@ -44,14 +44,16 @@ const running: Extract<GenerateState, { kind: 'generating' }> = {
 	progress: 36,
 	readout: '36% · ~1:40',
 	ended: false,
-	reconnecting: false
+	reconnecting: false,
+	offline: false
 };
 const queued: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'job1',
 	label: 'Queued #3',
 	reason: 'Waiting for LoRA training on this GPU.',
-	reconnecting: false
+	reconnecting: false,
+	offline: false
 };
 let component: ReturnType<typeof mount>;
 
@@ -220,8 +222,8 @@ describe('GenerateButton', () => {
 	});
 
 	it.each([
-		{ state: 'running', presentation: { ...running, reconnecting: true }, fills: 1 },
-		{ state: 'queued', presentation: { ...queued, reconnecting: true }, fills: 0 }
+		{ state: 'running', presentation: { ...running, reconnecting: true, offline: true }, fills: 1 },
+		{ state: 'queued', presentation: { ...queued, reconnecting: true, offline: true }, fills: 0 }
 	])(
 		'greys the readout and the cancel of a $state take while the page is offline',
 		async ({ presentation, fills }) => {
@@ -245,4 +247,13 @@ describe('GenerateButton', () => {
 			expect(cancelGeneration).not.toHaveBeenCalled();
 		}
 	);
+
+	it('keeps the cancel of a take whose stream is refused while the page is online', async () => {
+		await render({ ...running, reconnecting: true, offline: false });
+
+		getByRoleButton(document.body, EDITOR_GENERATE_CANCEL_LABEL).click();
+		await tick();
+
+		expect(cancelGeneration).toHaveBeenCalledExactlyOnceWith('job1');
+	});
 });
