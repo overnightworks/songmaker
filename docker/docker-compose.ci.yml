@@ -35,6 +35,11 @@ services:
       IP_RATE_LIMIT: "2000"
       # The 2026-09-05 CI run opened 30 streams successfully; the 31st returned 429.
       RESOURCE_EVENT_STREAM_OPEN_LIMIT: "200"
+      # Every stream open of the whole suite (resource events and job streams,
+      # both projects) comes from the runner's one address: CI run 36716007334
+      # (2026-09-30) opened 45 in one minute and the next job stream open
+      # returned 429. Production remains at 45.
+      STREAM_RATE_LIMIT: "200"
       # `auth-flows.spec.ts` drives a real lockout, so these two are inverted
       # against production on purpose (see that spec's header and
       # `e2e/README.md`). The short-window budget counts failures per *IP*, and
