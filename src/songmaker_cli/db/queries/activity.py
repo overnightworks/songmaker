@@ -23,17 +23,12 @@ from sqlalchemy import ColumnElement, Select, Subquery, and_, case, exists, func
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session, aliased, selectinload
 
-from songmaker_cli.constants import (
-    LIBRARY_ITEM_ALBUM,
-    LIBRARY_ITEM_PLAYLIST,
-    JobType,
-)
+from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
     Conversation,
     Generation,
-    Job,
     Playlist,
     PlaylistEntry,
     Song,
@@ -249,25 +244,15 @@ def _newest_song_per_foreign_album(viewer_id: str) -> Subquery:
 
 
 def _newest_own_take_per_song(user_id: str) -> Select:
-    """The newest take saved on each song while one of the user's generate jobs on it ran.
+    """The newest take the user made on each song.
 
-    A take does not name its job, so the job's run attributes it: from its
-    start to its last stamp, ``completed_at`` or, for a running or partial
-    job that has none, ``heartbeat_at``. Whatever status the job ended in, a
-    take it saved counts and a job that saved none dates nothing.
+    A take made before its maker was recorded names no one and counts for
+    no one here.
     """
-    job_last_stamped_at = func.coalesce(Job.completed_at, Job.heartbeat_at)
     return (
-        select(Job.song_id, func.max(Generation.created_at).label("at"))
-        .join(
-            Generation,
-            and_(
-                Generation.song_id == Job.song_id,
-                Generation.created_at.between(Job.started_at, job_last_stamped_at),
-            ),
-        )
-        .where(Job.user_id == user_id, Job.type == JobType.GENERATE)
-        .group_by(Job.song_id)
+        select(Generation.song_id, func.max(Generation.created_at).label("at"))
+        .where(Generation.created_by == user_id)
+        .group_by(Generation.song_id)
     )
 
 
