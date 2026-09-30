@@ -368,9 +368,12 @@ test.describe('song page at phone width', () => {
 			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 			.click();
 
+		const accountHeading = page.getByRole('heading', { name: 'Account', level: 1 });
 		await expect(page).toHaveURL(/\/settings\/account$/);
+		await expect(accountHeading).toBeVisible();
 		await page.reload();
 		await expect(page).toHaveURL(/\/settings\/account$/);
+		await expect(accountHeading).toBeVisible();
 	});
 });
 
