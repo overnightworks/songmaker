@@ -28,10 +28,13 @@
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
 	EDITOR_GENERATE_FAILURE_EXPAND_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_UNSAVED_DISCARD_LABEL,
+	EDITOR_UNSAVED_TITLE,
 	GENERATION_PHASE_LABELS,
 	HITBOX_FREQUENT_PX,
 	NOW_PLAYING_CLOSE,
@@ -48,8 +51,10 @@ import {
 } from '../src/lib/constants/now-playing';
 import {
 	boundingBoxes,
+	containing,
 	FlowGuard,
 	nameStartingWith,
+	openRailNav,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -90,6 +95,7 @@ const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 ).replace('{count}', String(RUNNING_JOB_TAKE_COUNT));
 const REMAINING_TIME_PATTERN = /~\d+:\d{2}/;
 const FAILED_GENERATION_SENTENCE = 'ACE-Step worker: CUDA out of memory on device 0';
+const UNSAVED_DRAFT_LINE = 'a line nobody saved';
 
 function expectedSongSlug(title: string): string {
 	return title.toLowerCase().replace(/\s+/g, '-');
@@ -278,6 +284,52 @@ test.describe('song page at phone width', () => {
 		await page.reload();
 		await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
 		await expect(editTab).toHaveAttribute('aria-selected', 'true');
+	});
+
+	test('a drawer album tap with an unsaved draft asks first: Cancel keeps the draft, Discard leaves (#1143)', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		const library = readSeededLibrary();
+		const title = `${SONG_PHONE_SONG_TITLE} ${runMarker()} draft`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 1);
+		const songHeading = page.getByRole('heading', { name: title });
+		const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
+		const unsavedDraftDialog = page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+		const tapTheOtherAlbumInTheDrawer = async () => {
+			const rail = await openRailNav(page, 'mobile');
+			await rail.getByRole('button', { name: containing(library.secondAlbumTitle) }).click();
+			await expect(unsavedDraftDialog).toBeVisible();
+		};
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(title) })
+			.click();
+		await expect(songHeading).toBeVisible();
+		const savedLyrics = await lyrics.inputValue();
+		await lyrics.fill(`${savedLyrics}\n${UNSAVED_DRAFT_LINE}`);
+
+		await tapTheOtherAlbumInTheDrawer();
+		await unsavedDraftDialog
+			.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+			.click();
+		await expect(unsavedDraftDialog).toBeHidden();
+		await expect(songHeading).toBeVisible();
+		await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
+
+		await tapTheOtherAlbumInTheDrawer();
+		await unsavedDraftDialog
+			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+			.click();
+		await expect(
+			workspace(page).getByRole('heading', { name: library.secondAlbumTitle })
+		).toBeVisible();
+
+		await page.goBack();
+		await expect(songHeading).toBeVisible();
+		await expect(lyrics).toHaveValue(savedLyrics);
 	});
 });
 
