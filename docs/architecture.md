@@ -247,16 +247,16 @@ own failure — but not silently: dropping it without saying so would still
 hide a fact the surface knows, so the page toasts
 `LEGACY_TAKE_LINK_NOT_FOUND_TOAST` once the redirect has landed on the song
 address (never before — the bar must already read the new address when the
-toast explains why it isn't the take one). A tab whose `history.state`
+toast explains why it isn't the take one). A tab whose history entry
 already names this exact legacy entry (a song not yet in `songList` when its
 address was written keeps the query form as a same-shape fallback —
 `libraryHistoryUrl`'s own comment — so a later Back/Forward can return to
-one) has `onPopstate` apply that state instantly from `history.state`; the
+one) has `onPopstate` apply that state instantly from its history entry; the
 page checks for exactly this before resolving anything itself and, when it
 matches, skips its own network round trip and the overlay entirely rather
 than re-resolving the same address in parallel (issue #265's S7 closed the
 double-resolve this way, once removing the hand-built router guard below
-made writing this check the smaller fix — no other read of `history.state`
+made writing this check the smaller fix — no other read of the entry
 here needed it, so it stayed a known, self-healing race until then).
 `isLibraryWorkspacePath` still counts all five by pathname (it leans on
 `isAlbumRoutePath`, true for `/album/<slug>` and every segment deeper, plus
@@ -287,49 +287,47 @@ album/song listing carried along, so `openTakeAddress` runs
 `ensureGenerationsLoaded` (`stores/player.ts`) before it looks for the number;
 `openPlaylistAddress` has no such second lookup — playlists carry no
 pagination, so resolving the slug against the one list call either finds it
-or the address is unknown. Because an address can now change the route
-pattern, `writeLibraryHistory` in `stores/libraryContext.ts` is the single
-owner of every library history write: SvelteKit reconciles its mounted route
-tree only on a real navigation, so a write that crosses between any two of the
-five route files goes through `goto` (which keeps the router in step and,
-since `goto`'s own `state` lands in `page.state`, has the restore state
-written onto the entry afterwards), while the frequent same-*shape* churn —
-filter, sort, scroll, search cursor, moving to another song within the same
-open album since #275, moving to another take of the same open song since
-#281, and moving to another open playlist since #286 — keeps the cheap
-synchronous write; `libraryRouteShape` (root / album / album-song /
-album-song-take / playlist / external) is what the crossing check compares,
-not the plain `isAlbumRoutePath` boolean, since that boolean alone cannot
-tell an album address from a song or take address one or two segments under
-it — a song-to-song move across album boundaries, or a take-to-take move
-across song boundaries, stays the same shape and the cheap write, since only
-the route-file depth decides a crossing, never which resource the address
-names; a playlist-to-playlist move is the one pair the matrix never crosses
-for the same reason, since `/playlist/[slug]` is a single route file
-regardless of which playlist it names — every other pairing (album,
-album-song, album-song-take, root) crosses against a playlist address and
-vice versa, since it is a sibling route, not one of theirs. The sixth shape,
-`external`, is everything outside the five library addresses — Settings,
-login, a share page — and exists so that leaving one always crosses too: it
-is what let issue #265's S7 delete `ensureLibraryWorkspaceRoute` (#264's
-separate guard, which used to force the browser onto a library path *before*
-any history write ran, so `writeLibraryHistory` never had to consider a
-non-library `from` at all) without a silent regression on the one pairing
-that could not tell the difference on its own — a write landing on `/`
-(`openLibraryWall`, or `openPlaylist` before its slug is known) computed
-`root` for both a genuine `/` and a `/settings/...` `from` before `external`
-existed as its own shape, which would have taken the cheap same-shape branch
-and left the router mounted on Settings' route file while the bar already
-read `/`. Turning one of the crossing writes back into a bare
-`history.pushState` would leave the router mounting the route it last saw
-and let the next Back/Forward tear the workspace down mid-edit — collapsing
-`external` back into `root` is the same mistake one level up: still a raw
-write, just for a `from` no caller used to reach. Crossing writes are
-asynchronous and therefore serialized, and
+or the address is unknown. `writeLibraryHistory` in
+`stores/libraryContext.ts` is the single owner of every library history
+write, and every write goes through SvelteKit's router (issue #1165), so each
+entry carries the router's own place in history and Back or Forward between
+the library and any other page — Settings included — navigates instead of
+only moving the address bar. A write that crosses between two route files is
+a navigation: `goto`, carrying the library as its page state
+(`App.PageState.library`). The frequent same-*shape* churn — filter, sort,
+scroll, search cursor, another song of the open album (#275), another take of
+the open song (#281), another open playlist (#286), a history layer over the
+library — is shallow routing (`pushState`/`replaceState` from
+`$app/navigation`): synchronous, no route resolution. `libraryRouteShape`
+(root / album / album-song / album-song-take / playlist / external) is what
+the crossing check compares — only the route-file depth decides a crossing,
+never which resource the address names, and `/playlist/[slug]` is one route
+file whichever playlist it names. The sixth shape, `external`, is everything
+outside the five library addresses, so leaving Settings, login or a share
+page always crosses; it is what let issue #265's S7 delete
+`ensureLibraryWorkspaceRoute` (#264's separate guard). Shallow routing keeps
+the page's route and `page.url` where the last navigation left them, and an
+entry it writes remembers that page: Back onto it from another page loads
+that page's route, whose params can name a page the address bar does not
+show (a second album opened over the first, then Settings, then Back). The
+address resolvers (`openAlbumAddress` and its siblings) therefore let such an
+entry win and apply it as it stands (`entryOutranksStaleAddress`). Nothing
+reads the library from `page.state` or `page.url`: `onPopstate` unwraps the
+entry it lands on with `libraryHistoryEntry`, and every other reader asks
+`currentLibraryHistoryState()`. A 10-song Next sweep writes one
+`replaceState` per step and navigates never, so the layout and the address
+pages do not re-render for it. SvelteKit's start writes its own entry over
+the one a page loads onto, dropping the library a reload comes back to, and
+shallow routing may not run before that start is over: `libraryContext.ts`
+reads the entry's library once while the router loads it,
+`routes/+layout.svelte` holds every library write
+(`holdLibraryHistoryUntilRouterStarts`) until the router reports its first
+navigation, and the first write puts that library back onto its entry.
+Crossing writes are asynchronous and therefore serialized, and
 `currentLibraryHistoryState()` — not `history.state` — answers what the entry
-will be, so a caller that writes twice in a row (open a song, then pin its
-take — now itself a second crossing, queued behind the first) is not read
-against a stale entry. A rename changes a song's or a playlist's slug
+will be (the held reload state included), so a caller that writes twice in a
+row (open a song, then pin its take — itself a second crossing, queued behind
+the first) is not read against a stale entry. A rename changes a song's or a playlist's slug
 server-side (`unique_song_slug` / `unique_playlist_slug` in `api_helpers.py`);
 the song view's own rename call writes the renamed song back into `songList`
 like any other song edit, and a slug-only change on the currently open song is
@@ -491,8 +489,8 @@ capture/target/bubble dispatch of the one `Event` regardless of what the DOM
 looks like by the time bubble phase reaches `window`.
 
 Library context — the open collection, filter, search, sort, loaded page,
-scroll, selected song/generation — lives on `history.state`
-(`kind: 'songmaker'`) so browser-back and the rail's Library link restore the
+scroll, selected song/generation — lives on its history entry, as the
+router's page state (`App.PageState.library`, `kind: 'songmaker'`), so browser-back and the rail's Library link restore the
 same view; the Library link always pushes a fresh entry showing the wall
 while leaving the open collection in the rail (GitLab-style: it persists
 until another collection replaces it). Legacy history blobs from the old
