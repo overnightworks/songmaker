@@ -1,3 +1,4 @@
+import { historyEntry, historyLength } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
@@ -81,13 +82,9 @@ const listLoras = vi.fn();
 // own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: vi.fn()
 }));
@@ -803,7 +800,7 @@ describe('SongDetailView recipe and takes', () => {
 		persistLibraryHistory();
 		// The write crosses into the song's own address (issue #275) and is
 		// therefore asynchronous -- see the note on writeLibraryHistory.
-		await vi.waitFor(() => expect(history.state.generationId).toBe('g1'));
+		await vi.waitFor(() => expect(historyEntry().generationId).toBe('g1'));
 		const target = await renderView();
 		toggleSelection('g1');
 		await tick();
@@ -812,7 +809,7 @@ describe('SongDetailView recipe and takes', () => {
 		await Promise.resolve();
 		await tick();
 		expect(get(selectedGenerationId)).toBeNull();
-		expect(history.state.generationId).toBeNull();
+		expect(historyEntry().generationId).toBeNull();
 	});
 });
 
@@ -1419,18 +1416,15 @@ describe('song header album rail', () => {
 		const cleanup = initNavigation();
 		selectSong('s1');
 		navigateToSongTab('takes');
-		const index = history.state.index;
-		const push = vi.spyOn(history, 'pushState');
+		const before = { length: historyLength(), index: historyEntry().index };
 		const target = await renderView();
 		const next = target.querySelector<HTMLButtonElement>(`[aria-label="${SONG_NEXT_LABEL}"]`);
 		if (!next) throw new Error('Expected next');
 		next.click();
 		await tick();
-		expect(push).not.toHaveBeenCalled();
-		expect(history.state.index).toBe(index);
+		expect({ length: historyLength(), index: historyEntry().index }).toEqual(before);
 		expect(get(selectedSongId)).toBe('s-last');
 		expect(get(detailTab)).toBe('takes');
-		push.mockRestore();
 		cleanup();
 	});
 
