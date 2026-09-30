@@ -963,7 +963,7 @@ Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?
       CowriterSongMemory, CowriterAlbumMemory
 ```
 
-`UserSongWork` is keyed by (user, song) and upserted by `record_song_work()` in `db/queries/activity.py` when that person saves an edit (song update and rename endpoints, the co-writer's MCP write tools) or starts a listen. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled.
+`UserSongWork` is keyed by (user, song) and upserted by `record_song_work()` in `db/queries/activity.py` when that person saves an edit (song update and rename endpoints, the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song`) or starts a listen. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
