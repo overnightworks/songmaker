@@ -193,7 +193,13 @@ async function signIn(page: Page): Promise<void> {
 
 /** The account's own name, where the shell shows who is signed in. */
 async function expectSignedInAs(page: Page, testInfo: TestInfo): Promise<void> {
-	const rail = await openRailNav(page, shellOf(testInfo));
+	if (shellOf(testInfo) === 'mobile') {
+		await expect(
+			page.getByRole('button', { name: `${ACCOUNT_MENU_LABEL} · ${account.username}` })
+		).toBeVisible();
+		return;
+	}
+	const rail = await openRailNav(page, 'desktop');
 	await expect(rail.getByRole('link', { name: account.username })).toBeVisible();
 }
 
