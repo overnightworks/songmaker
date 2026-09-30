@@ -148,6 +148,7 @@
 	let providerName = $state('claude');
 	let providerModel = $state('');
 	let unmounted = false;
+	let latestTurn: Promise<void> = Promise.resolve();
 
 	onDestroy(() => {
 		unmounted = true;
@@ -206,19 +207,43 @@
 	async function loadMessages(conversationId: string): Promise<void> {
 		historyLoading = true;
 		historyError = '';
+		const turnBeforeRead = latestTurn;
 		let conversation: ConversationMessagesResponse | null = null;
 		try {
 			conversation = await fetchConversationMessages(conversationId);
-			messages = toMessages(conversation.messages);
 		} catch {
-			messages = [];
 			historyError = 'Conversation history unavailable';
 		} finally {
 			historyLoading = false;
-			followLatest();
 		}
+		if (latestTurn !== turnBeforeRead) {
+			await keepTurnSentDuringRead(conversationId, conversation);
+			return;
+		}
+		messages = conversation ? toMessages(conversation.messages) : [];
+		followLatest();
 		if (!conversation || conversationId !== activeConversationId || loading) return;
 		followOrSettleTurn(conversation);
+	}
+
+	/**
+	 * A message sent while the history was still being read owns the chat's
+	 * end: once its turn settles, the history the read found goes before it
+	 * rather than in its place, so the exchange keeps its answer, refusal or
+	 * failure (#1170).
+	 */
+	async function keepTurnSentDuringRead(
+		conversationId: string,
+		conversation: ConversationMessagesResponse | null
+	): Promise<void> {
+		await latestTurn;
+		if (!conversation || viewingConversationId !== conversationId) return;
+		const shownIds = new Set(messages.map((message) => message.persistedId));
+		const unshownHistory = toMessages(conversation.messages).filter(
+			(message) => !shownIds.has(message.persistedId)
+		);
+		messages = [...unshownHistory, ...messages];
+		followLatest();
 	}
 
 	function followOrSettleTurn(conversation: ConversationMessagesResponse): void {
@@ -433,7 +458,11 @@
 			addToast(cowriterUnavailableLabel(providerName), 'error');
 			return;
 		}
+		latestTurn = runTurn(msg);
+		await latestTurn;
+	}
 
+	async function runTurn(msg: string): Promise<void> {
 		input = '';
 		const lastKnownPersistedId = messages.findLast((message) => message.persistedId)?.persistedId;
 		const sentAgain = unansweredMessageSentAgain(msg);
