@@ -1,7 +1,7 @@
 import type { Attachment } from 'svelte/attachments';
 import { registerHistoryLayer } from '$lib/stores/navigation';
 
-export interface DialogHistoryLayer {
+interface DialogHistoryLayer {
 	hold: Attachment;
 	answer: <Args extends unknown[]>(action: (...args: Args) => void) => (...args: Args) => void;
 }
