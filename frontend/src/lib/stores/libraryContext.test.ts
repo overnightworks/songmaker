@@ -1,5 +1,6 @@
 import {
 	historyEntry,
+	historyLength,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry
@@ -707,18 +708,63 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		collection: { kind: 'album', id: 'a2' }
 	};
 
-	it('crosses through goto carrying the library, for a write that changes which route file is mounted', async () => {
+	// Issue #1165: the library already shows the page a crossing opens, so its
+	// entry stands before the router has loaded the route, which `goto` then
+	// mounts over that same entry.
+	it('installs a crossing push from a library page at once, and mounts its route through goto over it', async () => {
 		replaceHistoryEntry(albumRoutePath('a1'));
+		const lengthBefore = historyLength();
 
-		await writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
+		const written = writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
 
+		expect(location.pathname).toBe(songRoutePath('a1', 's1'));
+		expect(historyEntry()).toEqual(libraryRootState());
+		await written;
 		expect(goto).toHaveBeenCalledWith(songRoutePath('a1', 's1'), {
-			replaceState: false,
+			replaceState: true,
 			noScroll: true,
 			keepFocus: true,
 			state: { library: libraryRootState() }
 		});
+		expect(historyLength()).toBe(lengthBefore + 1);
 		expect(historyEntry()).toEqual(libraryRootState());
+	});
+
+	// A song tapped as soon as its album shows: the router may still be
+	// mounting the album's route, and the song's entry must not wait for it.
+	it('installs a crossing push at once while the route of the one before it still mounts', () => {
+		replaceHistoryEntry('/');
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+		const lengthBefore = historyLength();
+
+		void writeLibraryHistory(libraryRootState(), songRoutePath('a2', 's1'), 'push');
+
+		expect(location.pathname).toBe(songRoutePath('a2', 's1'));
+		expect(historyEntry()).toEqual(libraryRootState());
+		expect(historyLength()).toBe(lengthBefore + 1);
+	});
+
+	// A layer opening over the new album while its route still loads stands at
+	// once, and the router mounts the route over the layer's entry rather than
+	// writing the album's older library onto it.
+	it('mounts a route that still loads over the entry a same-shape push installs meanwhile', async () => {
+		replaceHistoryEntry('/');
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+		const lengthBefore = historyLength();
+		const layered = { ...albumState, index: albumState.index + 1, layer: 'menu' };
+
+		const written = writeLibraryHistory(layered, albumRoutePath('a2'), 'push');
+
+		expect(historyEntry()).toEqual(layered);
+		expect(historyLength()).toBe(lengthBefore + 1);
+		await written;
+		expect(vi.mocked(goto).mock.lastCall).toEqual([
+			albumRoutePath('a2'),
+			{ replaceState: true, noScroll: true, keepFocus: true, state: { library: layered } }
+		]);
+		expect(historyEntry()).toEqual(layered);
 	});
 
 	// A song-to-song move across album boundaries stays the 'album' shape on

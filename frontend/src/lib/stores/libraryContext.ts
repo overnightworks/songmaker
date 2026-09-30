@@ -93,6 +93,7 @@ const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
+let mountingRoute: Promise<void> | null = null;
 let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
 let restoredHistory: unknown = libraryHistoryEntry();
@@ -236,6 +237,23 @@ type HistoryWriteMode = 'push' | 'replace';
 // route resolution. Issue #276 measured what a `goto` costs per write against
 // how often that churn fires, which is why only a crossing navigates.
 //
+// The library shows a new page the moment its stores change, but `goto`
+// installs its entry only once the route has loaded, a task later. A Back
+// pressed in between would leave the entry under the one the page came from
+// (issue #1165: album, song, Back showed the wall). So a crossing that pushes
+// from a library page installs its entry at once by shallow routing, and a
+// `goto` then mounts the route by writing that entry over again. A mount is
+// no queued step: it only brings the router to the entry that already stands,
+// a newer navigation supersedes it and a Back aborts it, so a song tapped while
+// its album's route still loads installs its own entry at once too. A write
+// that keeps the route while a mount is loading re-issues the mount for the
+// entry now standing, or the older mount would land on it with the library it
+// started with. Such an entry keeps the navigation index of the library entry
+// under it, so Back or Forward between the two is shallow: the library applies
+// the entry and the mounted route stays, as it does for same-shape churn. From
+// any other page the library shows nothing before its route loads, so there
+// it is one `goto`.
+//
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
 // it from another page loads that page's route. The address routes therefore
@@ -258,23 +276,49 @@ export function writeLibraryHistory(
 	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
-	if (!crossesRoutes && queuedHistoryWrites === 0) {
-		writeShallowLibraryHistory(state, url, mode);
-		return Promise.resolve();
+	if (queuedHistoryWrites === 0 && !crossesRoutes) {
+		return writeLibraryHistoryKeepingRoute(state, url, mode);
+	}
+	if (queuedHistoryWrites === 0 && mode === 'push' && libraryRouteShape(from) !== 'external') {
+		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, 'push'));
 	}
 	return queueHistoryStep({ pathname, state }, async () => {
 		if (!crossesRoutes) {
-			writeShallowLibraryHistory(state, url, mode);
+			await writeLibraryHistoryKeepingRoute(state, url, mode);
 			return;
 		}
-		const written = mode === 'replace' ? keepEntryLayer(state) : state;
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-		await goto(url, {
-			replaceState: mode === 'replace',
-			noScroll: true,
-			keepFocus: true,
-			state: libraryPageState(written)
-		});
+		await navigateLibraryRoute(url, mode === 'replace' ? keepEntryLayer(state) : state, mode);
+	});
+}
+
+function writeLibraryHistoryKeepingRoute(
+	state: LibraryHistoryState,
+	url: string,
+	mode: HistoryWriteMode
+): Promise<void> {
+	const written = writeShallowLibraryHistory(state, url, mode);
+	return mountingRoute === null ? Promise.resolve() : mountRouteOfEntry(url, written);
+}
+
+function mountRouteOfEntry(url: string, entry: LibraryHistoryState): Promise<void> {
+	const mount = navigateLibraryRoute(url, entry, 'replace');
+	mountingRoute = mount;
+	return mount.finally(() => {
+		if (mountingRoute === mount) mountingRoute = null;
+	});
+}
+
+function navigateLibraryRoute(
+	url: string,
+	state: LibraryHistoryState,
+	mode: HistoryWriteMode
+): Promise<void> {
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+	return goto(url, {
+		replaceState: mode === 'replace',
+		noScroll: true,
+		keepFocus: true,
+		state: libraryPageState(state)
 	});
 }
 
@@ -393,14 +437,15 @@ function writeShallowLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,
 	mode: HistoryWriteMode
-): void {
-	const pageState = mode === 'push' ? state : keepEntryLayer(state);
+): LibraryHistoryState {
+	const entry = mode === 'push' ? state : keepEntryLayer(state);
 	untrack(() => {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-		if (mode === 'push') pushState(url, libraryPageState(pageState));
+		if (mode === 'push') pushState(url, libraryPageState(entry));
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- as above
-		else replaceState(url, libraryPageState(pageState));
+		else replaceState(url, libraryPageState(entry));
 	});
+	return entry;
 }
 
 // A replace rewrites the library an entry shows, never what the entry is: an
@@ -997,6 +1042,7 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
+	mountingRoute = null;
 	plannedHistory = null;
 	librarySnapshotTaken = false;
 	restoredHistory = null;

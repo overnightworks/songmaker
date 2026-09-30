@@ -296,7 +296,18 @@ only moving the address bar, provided the page was pushed onto a library
 entry rather than written over a history layer's (`openAppPage` steps the
 phone drawer back first; see "Back closes the open layer first"). A write that crosses between two route files is
 a navigation: `goto`, carrying the library as its page state
-(`App.PageState.library`). The frequent same-*shape* churn — filter, sort,
+(`App.PageState.library`). The library shows the new page the moment its
+stores change, while `goto` writes its entry only once the route has loaded, a
+task later, so a crossing pushed from a library page first installs its entry
+by shallow routing and its `goto` then mounts the route by writing that entry
+over again; otherwise a Back pressed in between skipped an entry (album, song,
+Back showed the wall). A mount is no queued step: a newer navigation
+supersedes it and a Back aborts it, so a song tapped while its album's route
+still loads installs its own entry at once too, and a write that keeps the
+route meanwhile re-issues the mount for the entry now standing. Such an entry
+shares the navigation index of the library entry under it, so Back and
+Forward between the two are shallow and keep the mounted route. The frequent
+same-*shape* churn — filter, sort,
 scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from

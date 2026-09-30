@@ -256,10 +256,12 @@ describe('isLibraryWorkspacePath', () => {
 // mounting the route it last saw, and the next Back/Forward or real
 // navigation that disagrees tears the workspace down mid-session. The
 // interaction with the router is the contract here, so it is asserted directly.
+// A crossing pushed from a library page stands in history at once, and the
+// router mounts its route by writing over that entry (issue #1165).
 describe('history writes across the route boundary (issue #269)', () => {
 	it('opens an album address through the router', async () => {
 		await openAlbum('a1');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', crossingWrite(false));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1');
 		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a1' });
 	});
@@ -268,7 +270,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		await openAlbum('a1');
 		vi.mocked(goto).mockClear();
 		await openLibraryWall();
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(false));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(true));
 		expect(window.location.pathname).toBe('/');
 		expect(historyEntry().surface).toBe('browse');
 	});
@@ -309,8 +311,22 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', crossingWrite(false));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	// Issue #1165: the song shows the moment it opens, a task before the router
+	// has loaded its route, and a Back pressed then must step once.
+	it('lands a Back pressed while the song route still loads on the album it was opened from', async () => {
+		await openAlbum('a1');
+		const album = historyEntry();
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+
+		void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+		await pressBack();
+
+		expect(window.location.pathname).toBe('/album/a1');
+		expect(historyEntry()).toEqual(album);
 	});
 
 	// Moving between two songs of the same open album stays the same route
@@ -405,7 +421,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await openPlaylist('p1');
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', crossingWrite(false));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', crossingWrite(true));
 		expect(window.location.pathname).toBe('/playlist/night-drive');
 	});
 
