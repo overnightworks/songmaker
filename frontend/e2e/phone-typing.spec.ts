@@ -42,6 +42,7 @@ const LONG_LYRICS = Array.from({ length: 60 }, (_, line) => `Line ${line + 1} of
 );
 const LYRICS_TYPED_ON = ' and on';
 const COWRITER_MESSAGE = 'Kürz den Refrain auf zwei Zeilen';
+const CONVERSATIONS_PATH = '/api/conversations';
 // The route error frame the server ends a turn with when the provider cannot
 // run; the panel names the provider in front of the library's reason.
 const COWRITER_TURN_REFUSAL_FRAME = {
@@ -117,6 +118,10 @@ async function openSeededSongFromItsAlbum(
 		.getByRole('button', { name: nameStartingWith(songTitle) })
 		.click();
 	await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
+	// The song shows before its route module has loaded, and only then does
+	// the address move to it: a Back taken earlier leaves the album page for
+	// whatever came before it (#1151).
+	await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 }
 
 test.describe('typing on the phone', () => {
@@ -256,11 +261,16 @@ test.describe('typing on the phone', () => {
 	// moved Send up before the tap landed, so only Enter sent. CI's stack
 	// configures no co-writer provider: the turn is answered here, and a
 	// refusal keeps the chat from reading a conversation the server never
-	// stored.
+	// stored. The musician starts without a conversation: the one earlier
+	// specs leave behind would otherwise be read in while the message is
+	// typed, and a read landing after Send replaces the sent exchange (#1151).
 	test('a tap on Send with the keyboard open sends the message and keeps the keyboard for the next one', async ({
 		page
 	}) => {
 		const guard = new FlowGuard(page);
+		await page.route(`**${CONVERSATIONS_PATH}`, (route: Route) =>
+			route.fulfill({ json: { conversations: [] } })
+		);
 		const sentMessages: string[] = [];
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
 			const { message } = route.request().postDataJSON() as { message: string };

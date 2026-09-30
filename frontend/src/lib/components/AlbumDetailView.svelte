@@ -87,7 +87,6 @@
 	);
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
-	let coverEditor: AlbumCoverEditor | undefined = $state();
 
 	async function onCoverFile(event: Event): Promise<void> {
 		const input = event.target as HTMLInputElement;
@@ -284,7 +283,6 @@
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
 			oncover={onCoverAction}
-			oncoversuggest={selectedAlbum.cover ? () => coverEditor?.suggestCover() : undefined}
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			onaddsong={openLibraryCreate}
@@ -298,8 +296,15 @@
 					onsaveyear={onSaveAlbumYear}
 				/>
 			{/snippet}
+			{#snippet coverEditor(close: () => void)}
+				<AlbumCoverEditor
+					album={selectedAlbum}
+					onclose={close}
+					onupload={onCoverAction}
+					onremove={onCoverRemove}
+				/>
+			{/snippet}
 		</CollectionHeader>
-		<AlbumCoverEditor bind:this={coverEditor} album={selectedAlbum} />
 		<input
 			bind:this={coverInput}
 			class="cover-file-input"
