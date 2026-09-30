@@ -173,9 +173,8 @@ def api_create_song(
         audio_duration=req.audio_duration, key_scale=req.key_scale,
         vocal_language=req.vocal_language,
         generation_params=gen_params_to_json(req.generation_params),
-        slug=slug,
+        slug=slug, created_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
     return SongResponse.from_orm(song)

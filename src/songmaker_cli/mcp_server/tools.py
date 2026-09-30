@@ -30,7 +30,6 @@ from songmaker_cli.cover_suggestions import (
     request_cover_suggestions,
 )
 from songmaker_cli.db.models import Song
-from songmaker_cli.db.queries.activity import SongWork, record_song_work
 from songmaker_cli.db.queries.albums import get_album, list_albums
 from songmaker_cli.db.queries.songs import (
     count_songs,
@@ -175,9 +174,8 @@ def tool_create_song(
     slug = unique_song_slug(session, album_id, title)
     song = db_create_song(
         session, title=title, album_id=album_id, lyrics=lyrics, prompt=prompt,
-        slug=slug,
+        slug=slug, created_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song.id)
     return WriteResult(
         song_id=song.id,
