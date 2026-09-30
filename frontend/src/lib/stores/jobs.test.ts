@@ -404,6 +404,32 @@ describe('jobs store', () => {
 				{ job: makeJob({ status: 'running', progress: 0.65 }), songId: 's1' }
 			]);
 		});
+
+		it('a stream that ends after speaking and reopens at once never reads stale', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			latestSource().simulateOpen();
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.6 }));
+
+			latestSource().simulateError();
+			expect(streamIsStale()).toBeFalsy();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource().simulateOpen();
+			expect(streamIsStale()).toBeFalsy();
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.65 }));
+
+			expect(streamIsStale()).toBeFalsy();
+		});
+
+		it('reads stale once the reopen after a spoken stream is refused', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.6 }));
+			latestSource().simulateError();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+
+			latestSource().simulateError();
+
+			expect(streamIsStale()).toBe(true);
+		});
 	});
 
 	it('tolerates errors below max threshold, reconnecting with backoff each time', async () => {
