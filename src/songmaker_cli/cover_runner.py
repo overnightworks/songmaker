@@ -42,6 +42,7 @@ from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provi
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,
+    delete_job_cover_suggestions,
     get_album,
     get_job,
     list_songs,
@@ -128,14 +129,9 @@ def recover_web_cover_jobs(
             for job_id, album_id in interrupted_jobs
             if album_id is not None
         ]
-        interrupted_suggestions = session.query(AlbumCoverSuggestion).filter(
-            AlbumCoverSuggestion.job_id.in_(interrupted_job_ids),
-        ).all()
-        interrupted_suggestion_paths = [
-            suggestion.png_path for suggestion in interrupted_suggestions
-        ]
-        for suggestion in interrupted_suggestions:
-            session.delete(suggestion)
+        interrupted_suggestion_paths = delete_job_cover_suggestions(
+            session, interrupted_job_ids,
+        )
         recovered = recover_stale_jobs_by_type(
             session,
             {JobType.COVER: frozenset({JobStatus.RUNNING})},
