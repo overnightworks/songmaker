@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import ConfirmDialog from './ConfirmDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -114,17 +114,21 @@ describe('ConfirmDialog', () => {
 function dirtyDraftUnderBack() {
 	const answers: string[] = [];
 	let shown: ReturnType<typeof mount> | null = null;
+	let answerSawHistoryAt: number | undefined;
 	function answer(choice: string): () => void {
 		return () => {
 			answers.push(choice);
+			answerSawHistoryAt = plannedHistoryIndex();
 			if (shown) void unmount(shown);
 			shown = null;
 		};
 	}
 	return {
 		answers,
+		answerSawHistoryAt: () => answerSawHistoryAt,
 		open(target: HTMLElement): void {
 			answers.length = 0;
+			answerSawHistoryAt = undefined;
 			shown = mount(ConfirmDialog, {
 				target,
 				props: {
@@ -164,11 +168,13 @@ describeBackClosesOverlay({
 		},
 		{
 			way: 'Save',
-			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
+			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click(),
+			actionSawHistoryAt: dirtyDraft.answerSawHistoryAt
 		},
 		{
 			way: 'Discard',
-			close: (target) => target.querySelector<HTMLButtonElement>('.secondary-btn')?.click()
+			close: (target) => target.querySelector<HTMLButtonElement>('.secondary-btn')?.click(),
+			actionSawHistoryAt: dirtyDraft.answerSawHistoryAt
 		},
 		{
 			way: 'Escape',
