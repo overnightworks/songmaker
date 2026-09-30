@@ -473,19 +473,13 @@ async function albumIsKnown(albumId: string): Promise<boolean> {
 }
 
 function albumAlreadyShown(albumId: string): boolean {
-	const collection = get(openCollection);
-	return (
-		get(librarySurface) === 'detail' && collection?.kind === 'album' && collection.id === albumId
-	);
+	return albumWhoseSongsShow(get(librarySurface), get(openCollection)) === albumId;
 }
 
 function historyAlreadyOpens(albumId: string): boolean {
 	const state = currentLibraryHistoryState();
 	return (
-		isLibraryHistoryState(state) &&
-		state.surface === 'detail' &&
-		state.collection?.kind === 'album' &&
-		state.collection.id === albumId
+		isLibraryHistoryState(state) && albumWhoseSongsShow(state.surface, state.collection) === albumId
 	);
 }
 
