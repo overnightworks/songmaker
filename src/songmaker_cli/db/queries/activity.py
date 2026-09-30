@@ -3,8 +3,10 @@
 Each person's own work on a song (an edit they saved, a listen they started)
 is recorded here too, whoever owns the song.
 
-A place is an album or a playlist. Its activity is the newest thing the
-musician did there, and it names the song they were on. Every nullable term is
+A place is an album or a playlist. Its activity is the newest thing done
+there, and it names the song that was. The musician's own places count
+anyone's work on them; an album of someone else's (only an admin opens one)
+counts the musician's own work alone. Every nullable term is
 folded with ``coalesce`` and ``case`` rather than ``greatest``: SQLite has no
 ``greatest``, and its multi-argument ``max()`` returns NULL on any NULL.
 """
@@ -17,16 +19,22 @@ from datetime import datetime, timezone
 from enum import StrEnum
 from typing import Final
 
-from sqlalchemy import ColumnElement, Subquery, and_, case, exists, func, select
+from sqlalchemy import ColumnElement, Select, Subquery, and_, case, exists, func, select, union_all
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session, aliased, selectinload
 
-from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST
+from songmaker_cli.constants import (
+    LIBRARY_ITEM_ALBUM,
+    LIBRARY_ITEM_PLAYLIST,
+    JobStatus,
+    JobType,
+)
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
     Conversation,
     Generation,
+    Job,
     Playlist,
     PlaylistEntry,
     Song,
@@ -37,6 +45,10 @@ from songmaker_cli.db.queries.playlists import playlist_holds_song_clause
 from songmaker_cli.timestamps import utcnow
 
 CONTINUE_MAX_PLACES: Final[int] = 6
+
+_TAKE_MAKING_JOB_STATUSES: Final[frozenset[JobStatus]] = frozenset({
+    JobStatus.COMPLETED, JobStatus.PARTIAL,
+})
 
 
 class SongWork(StrEnum):
@@ -65,7 +77,7 @@ def record_song_work(session: Session, *, user_id: str, song_id: str, work: Song
 
 @dataclass(frozen=True)
 class PlaceActivity:
-    """An owned album or playlist, when it was last worked in, and the song that was."""
+    """An album or playlist, when it was last worked in, and the song that was."""
 
     place: Album | Playlist
     activity_at: datetime
@@ -77,27 +89,33 @@ class PlaceActivity:
 
 
 def list_place_activity(
-    session: Session, *, user_id: str, limit: int | None,
+    session: Session, *, viewer_id: str, owner_id: str | None, limit: int | None,
 ) -> list[PlaceActivity]:
-    """Return the user's places, most recently worked in first.
+    """Return the viewer's places, most recently worked in first.
 
-    ``limit=None`` returns every place. Ties fall back to album before
-    playlist, then id. Reading the leading ``limit`` places of each kind is
-    enough before merging: a place behind that cutoff already has ``limit``
-    places of its own kind ahead of it.
+    ``owner_id`` is whose albums the viewer may open, ``None`` for every
+    album, as ``owner_filter`` decides. The viewer's own albums and playlists
+    are always places; someone else's album is one only while the viewer may
+    open it and has worked in it. ``limit=None`` returns every place. Ties
+    fall back to album before playlist, then id. Reading the leading
+    ``limit`` places of each kind is enough before merging: a place behind
+    that cutoff already has ``limit`` places of its own kind ahead of it.
     """
     places = [
-        *_album_activity(session, user_id=user_id, limit=limit),
-        *_playlist_activity(session, user_id=user_id, limit=limit),
+        *_owned_album_activity(session, user_id=viewer_id, limit=limit),
+        *_playlist_activity(session, user_id=viewer_id, limit=limit),
     ]
+    viewer_opens_every_album = owner_id is None
+    if viewer_opens_every_album:
+        places += _foreign_album_activity(session, viewer_id=viewer_id, limit=limit)
     places.sort(key=_newest_first)
     return places if limit is None else places[:limit]
 
 
-def _album_activity(
+def _owned_album_activity(
     session: Session, *, user_id: str, limit: int | None,
 ) -> list[PlaceActivity]:
-    newest_song = _newest_song_per_album(user_id)
+    newest_song = _newest_song_per_owned_album(user_id)
     activity_at = func.coalesce(newest_song.c.activity_at, Album.created_at)
     query = (
         session.query(Album, activity_at, Song)
@@ -112,6 +130,26 @@ def _album_activity(
             Album.deleted_at.is_(None),
         )
         .order_by(activity_at.desc(), Album.id.asc())
+    )
+    if limit is not None:
+        query = query.limit(limit)
+    return [_place(album, at, song) for album, at, song in query.all()]
+
+
+def _foreign_album_activity(
+    session: Session, *, viewer_id: str, limit: int | None,
+) -> list[PlaceActivity]:
+    """Other people's albums the viewer worked in, dated by that work alone."""
+    newest_song = _newest_song_per_foreign_album(viewer_id)
+    query = (
+        session.query(Album, newest_song.c.activity_at, Song)
+        .join(
+            newest_song,
+            and_(newest_song.c.album_id == Album.id, newest_song.c.rank == 1),
+        )
+        .join(Song, Song.id == newest_song.c.song_id)
+        .filter(Album.is_archived.is_(False), Album.deleted_at.is_(None))
+        .order_by(newest_song.c.activity_at.desc(), Album.id.asc())
     )
     if limit is not None:
         query = query.limit(limit)
@@ -153,20 +191,14 @@ def _playlist_activity(
     return [_place(playlist, at, song) for playlist, at, song in query.all()]
 
 
-def _newest_song_per_album(user_id: str) -> Subquery:
-    """Each live song of the user's albums with its activity, ranked newest first per album."""
+def _newest_song_per_owned_album(user_id: str) -> Subquery:
+    """Each live song of the user's albums with anyone's activity, ranked newest first."""
     newest_take = (
         select(Generation.song_id, func.max(Generation.created_at).label("at"))
         .group_by(Generation.song_id)
         .subquery()
     )
-    newest_own_message = (
-        select(ChatMessage.song_id, func.max(ChatMessage.created_at).label("at"))
-        .join(Conversation, ChatMessage.conversation_id == Conversation.id)
-        .where(Conversation.user_id == user_id, ChatMessage.song_id.is_not(None))
-        .group_by(ChatMessage.song_id)
-        .subquery()
-    )
+    newest_own_message = _newest_own_message_per_song(user_id).subquery()
     song_activity = (
         select(
             Song.id.label("song_id"),
@@ -184,6 +216,69 @@ def _newest_song_per_album(user_id: str) -> Subquery:
         .where(Album.created_by == user_id, Song.deleted_at.is_(None))
         .subquery()
     )
+    return _ranked_newest_first_per_album(song_activity)
+
+
+def _newest_song_per_foreign_album(viewer_id: str) -> Subquery:
+    """Each live song of someone else's album with the viewer's own newest work on it.
+
+    Every source is filtered by the viewer's indexed ``user_id`` before any
+    song or album is joined.
+    """
+    own_work = union_all(
+        select(UserSongWork.song_id, UserSongWork.edited_at.label("at"))
+        .where(UserSongWork.user_id == viewer_id),
+        select(UserSongWork.song_id, UserSongWork.played_at.label("at"))
+        .where(UserSongWork.user_id == viewer_id),
+        _newest_own_take_per_song(viewer_id),
+        _newest_own_message_per_song(viewer_id),
+    ).subquery()
+    newest_own_work = (
+        select(own_work.c.song_id, func.max(own_work.c.at).label("at"))
+        .where(own_work.c.at.is_not(None))
+        .group_by(own_work.c.song_id)
+        .subquery()
+    )
+    song_activity = (
+        select(
+            Song.id.label("song_id"),
+            Song.album_id.label("album_id"),
+            newest_own_work.c.at.label("activity_at"),
+        )
+        .select_from(newest_own_work)
+        .join(Song, Song.id == newest_own_work.c.song_id)
+        .join(Album, Song.album_id == Album.id)
+        .where(Album.created_by.is_distinct_from(viewer_id), Song.deleted_at.is_(None))
+        .subquery()
+    )
+    return _ranked_newest_first_per_album(song_activity)
+
+
+def _newest_own_take_per_song(user_id: str) -> Select:
+    """When the user's newest generate job on each song finished with a take."""
+    return (
+        select(Job.song_id, func.max(Job.completed_at).label("at"))
+        .where(
+            Job.user_id == user_id,
+            Job.type == JobType.GENERATE,
+            Job.status.in_(_TAKE_MAKING_JOB_STATUSES),
+            Job.song_id.is_not(None),
+        )
+        .group_by(Job.song_id)
+    )
+
+
+def _newest_own_message_per_song(user_id: str) -> Select:
+    """The newest message on each song in the user's own co-writer conversations."""
+    return (
+        select(ChatMessage.song_id, func.max(ChatMessage.created_at).label("at"))
+        .join(Conversation, ChatMessage.conversation_id == Conversation.id)
+        .where(Conversation.user_id == user_id, ChatMessage.song_id.is_not(None))
+        .group_by(ChatMessage.song_id)
+    )
+
+
+def _ranked_newest_first_per_album(song_activity: Subquery) -> Subquery:
     return select(
         song_activity,
         func.row_number().over(
