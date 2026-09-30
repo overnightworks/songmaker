@@ -7,6 +7,7 @@
 		playlistList,
 		playlistLoad
 	} from '$lib/stores/playlists';
+	import { registerHistoryLayer } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
@@ -32,15 +33,39 @@
 		void ensurePlaylistsLoaded();
 	});
 
+	// Back closes the picker and adds nothing (issue #1125): it holds one
+	// history entry while shown, and choosing a playlist or closing it any other
+	// way steps back off that entry first.
+	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
+
+	function holdHistoryLayer(): () => void {
+		historyLayer = registerHistoryLayer('playlist-picker', () => onclose());
+		return leaveHistoryLayer;
+	}
+
+	function leaveHistoryLayer(): void {
+		if (historyLayer?.layered) historyLayer.leave();
+	}
+
+	function close(): void {
+		leaveHistoryLayer();
+		onclose();
+	}
+
+	function select(playlistId: string): void {
+		leaveHistoryLayer();
+		onselect(playlistId);
+	}
+
 	function handleClickOutside(event: MouseEvent): void {
 		if (menuRef && !menuRef.contains(event.target as Node)) {
-			onclose();
+			close();
 		}
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
 		if (!menuRef) return;
-		handleFocusTrapKeydown(menuRef, event, onclose);
+		handleFocusTrapKeydown(menuRef, event, close);
 	}
 
 	$effect(() => {
@@ -58,7 +83,7 @@
 		try {
 			const playlist = await createNewPlaylist(newTitle.trim());
 			newTitle = '';
-			onselect(playlist.id);
+			select(playlist.id);
 		} catch {
 			addToast('Failed to create playlist', 'error');
 		} finally {
@@ -74,6 +99,7 @@
 	aria-modal="true"
 	aria-label="Add to Playlist"
 	tabindex="-1"
+	{@attach holdHistoryLayer}
 >
 	<div class="picker-header">Add to Playlist</div>
 	<div class="picker-list">
@@ -84,7 +110,7 @@
 			<button class="picker-retry" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
 		{:else}
 			{#each playlists as p (p.id)}
-				<button class="picker-item" onclick={() => onselect(p.id)}>
+				<button class="picker-item" onclick={() => select(p.id)}>
 					<span class="picker-title">{p.title}</span>
 					<span class="picker-count">{p.entry_count}</span>
 				</button>
