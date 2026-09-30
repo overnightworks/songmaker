@@ -693,14 +693,19 @@ def test_user_b_never_sees_user_a_titles(alice: TestClient, bob: TestClient) -> 
     assert "song-nacht" not in bob_songs
 
 
-def test_admin_browse_sees_all_search_stays_personal(admin: TestClient) -> None:
+def test_admin_search_finds_every_album_and_song_the_admin_can_open(admin: TestClient) -> None:
     albums = {a["id"] for a in admin.get("/api/albums").json()["items"]}
-    assert "admin-own" in albums
-    assert "nachtstrom" in albums
-    hits = admin.get("/api/library/search", params={"q": "nachtstrom"}).json()["items"]
-    assert hits == []
-    own = admin.get("/api/library/search", params={"q": "admin"}).json()["items"]
-    assert [(i["type"], _hit_id(i)) for i in own] == [(LIBRARY_ITEM_ALBUM, "admin-own")]
+    hits = {
+        (item["type"], _hit_id(item))
+        for item in admin.get("/api/library/search", params={"q": "nachtstrom"}).json()["items"]
+    }
+    assert {"nachtstrom", "bob-secret"} <= albums
+    assert hits == {
+        (LIBRARY_ITEM_ALBUM, "nachtstrom"),
+        (LIBRARY_ITEM_SONG, "song-nacht"),
+        (LIBRARY_ITEM_ALBUM, "bob-secret"),
+        (LIBRARY_ITEM_SONG, "song-bob"),
+    }
 
 
 def test_search_keyset_pages_without_dupes_or_gaps(tmp_path: Path) -> None:
