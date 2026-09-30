@@ -330,12 +330,6 @@ export function backToCollection(): void {
 	});
 }
 
-export async function openLibraryCreate(): Promise<void> {
-	setLibrarySurface('create');
-	closeSidebar();
-	await pushLibraryHistory();
-}
-
 // The rail's "Library" link: leaves the open song (if any) but keeps the
 // open collection in the rail context (GitLab-style — the context persists
 // until another collection replaces it), and always pushes a fresh history

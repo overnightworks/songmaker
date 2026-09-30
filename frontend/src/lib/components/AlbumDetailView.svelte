@@ -25,7 +25,7 @@
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
 	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
-	import { openLibraryCreate, selectSong } from '$lib/stores/navigation';
+	import { historyLayerState, selectSong } from '$lib/stores/navigation';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
@@ -33,10 +33,12 @@
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_NO_SONGS,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN,
 		LIBRARY_ALBUMS_LOADING,
-		LIBRARY_RETRY_LABEL
+		LIBRARY_RETRY_LABEL,
+		NEW_SONG_ROW_LABEL
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
@@ -47,6 +49,8 @@
 	import PlayingMark from './PlayingMark.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
+	import Icon from './Icon.svelte';
+	import NewSongCard from './NewSongCard.svelte';
 
 	interface Props {
 		albumId?: string;
@@ -85,6 +89,33 @@
 	const initials = $derived(
 		selectedAlbum ? titleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
 	);
+	// Holds the album the card adds to, so a card opened on one album never
+	// shows on the next one this view is reused for.
+	const newSongIn = historyLayerState<string | null>('album-new-song', null);
+	const newSongOpen = $derived(currentAlbumId !== undefined && $newSongIn === currentAlbumId);
+	let newSongRow: HTMLButtonElement | undefined = $state();
+	let newSongShown = false;
+	let focusRowOnFold = true;
+
+	$effect(() => {
+		if (newSongShown && !newSongOpen && focusRowOnFold) newSongRow?.focus();
+		focusRowOnFold = true;
+		newSongShown = newSongOpen;
+	});
+
+	function startNewSong(): void {
+		$newSongIn = currentAlbumId ?? null;
+	}
+
+	function cancelNewSong(): void {
+		$newSongIn = null;
+	}
+
+	function foldCreatedSong(): void {
+		focusRowOnFold = false;
+		$newSongIn = null;
+	}
+
 	let coverBusy = $state(false);
 	let coverInput: HTMLInputElement | null = $state(null);
 
@@ -285,7 +316,6 @@
 			oncover={onCoverAction}
 			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
-			onaddsong={openLibraryCreate}
 			oncurate={onCurate}
 		>
 			{#snippet metaEditor()}
@@ -330,11 +360,10 @@
 					onclick={() => currentAlbumId && loadSongsForAlbum(currentAlbumId)}
 					>{LIBRARY_RETRY_LABEL}</button
 				>
-			{:else if albumSongs.length === 0}
-				{#if albumLoad !== 'unreachable'}
-					<p class="empty-tab">No songs in this album yet.</p>
+			{:else if albumSongs.length > 0 || albumLoad !== 'unreachable'}
+				{#if albumSongs.length === 0}
+					<p class="empty-tab">{ALBUM_NO_SONGS}</p>
 				{/if}
-			{:else}
 				{#each albumSongs as s (s.id)}
 					{@const current = isSongCurrent(s.id)}
 					<div class="item-row" class:current>
@@ -347,6 +376,21 @@
 						</button>
 					</div>
 				{/each}
+				{#if newSongOpen}
+					<NewSongCard album={selectedAlbum} oncancel={cancelNewSong} oncreated={foldCreatedSong} />
+				{:else}
+					<div class="item-row new-song-row">
+						<button
+							bind:this={newSongRow}
+							class="item-body"
+							data-hitbox="text"
+							onclick={startNewSong}
+						>
+							<Icon name="plus" size={16} />
+							<span class="item-title">{NEW_SONG_ROW_LABEL}</span>
+						</button>
+					</div>
+				{/if}
 			{/if}
 		</div>
 	</div>
@@ -415,6 +459,20 @@
 	.item-row:hover {
 		border-color: var(--primary);
 		background: var(--surface-hover);
+	}
+
+	.new-song-row {
+		color: var(--text-muted);
+	}
+
+	.new-song-row,
+	.new-song-row:hover {
+		border-color: transparent;
+		background: none;
+	}
+
+	.new-song-row:hover {
+		color: var(--text);
 	}
 
 	.item-row.current {
