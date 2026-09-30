@@ -1,0 +1,7 @@
+claim_id = "79357f0818c24b4f9943406b81dce029"
+agent = "claude-head"
+role = "builder"
+base = "fa7207b1fa725719710840dd65a52e09fbd63fac"
+branch = "claude/issue-1129-freeze-pictures"
+scope = ["docs/design/album-browsing.html", "docs/design/navigation.html", "docs/design/vocabulary.html"]
+opened_commit = "c3e3d63d07e7deae2f3c03ef3041d343f816d34a"
