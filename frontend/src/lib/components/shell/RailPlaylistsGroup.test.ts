@@ -11,12 +11,16 @@ import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
+import { chooseLibraryWallOrder } from '$lib/stores/ui';
+import { fetchLibraryContinue } from '$lib/api/library';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
 	buildPlaylistEntry as entry,
 	createComponentMount,
 	findElementByRoleAndName,
+	recentWorkPage,
 	requireElement
 } from './rail-test-fixtures';
 
@@ -45,6 +49,8 @@ const { render, cleanup } = createComponentMount(RailPlaylistsGroup);
 
 beforeEach(() => {
 	localStorage.clear();
+	chooseLibraryWallOrder('title');
+	resetLibraryOrder();
 	resetLibraryContextForTests();
 	fetchPlaylists.mockClear().mockResolvedValue([]);
 	fetchPlaylist.mockReset();
@@ -114,6 +120,34 @@ describe('RailPlaylistsGroup', () => {
 		expect(get(librarySurface)).toBe('detail');
 	});
 
+	it('lists the playlists in the order the wall is switched to, A–Z by natural title first', async () => {
+		playlistList.set([
+			playlist({ id: 'mix-10', title: 'Mix 10', created_at: '2026-09-03T10:00:00Z' }),
+			playlist({ id: 'night', title: 'night drive', created_at: '2026-09-01T10:00:00Z' }),
+			playlist({ id: 'mix-2', title: 'Mix 2', created_at: '2026-07-01T10:00:00Z' })
+		]);
+		fetchPlaylists.mockResolvedValue(get(playlistList));
+		vi.mocked(fetchLibraryContinue).mockResolvedValue(
+			recentWorkPage('playlist', ['night', 'mix-10'])
+		);
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+		const playlistTitles = () =>
+			Array.from(target.querySelectorAll('.playlist-label .row-title')).map(
+				(row) => row.textContent
+			);
+
+		expect(playlistTitles()).toEqual(['Mix 2', 'Mix 10', 'night drive']);
+
+		chooseLibraryWallOrder('added');
+		await tick();
+		expect(playlistTitles()).toEqual(['Mix 10', 'night drive', 'Mix 2']);
+
+		chooseLibraryWallOrder('recent');
+		await vi.waitFor(() => expect(playlistTitles()).toEqual(['night drive', 'Mix 10', 'Mix 2']));
+	});
+
 	it('loads every playlist on mount regardless of the current route', async () => {
 		await render();
 		await vi.waitFor(() => expect(fetchPlaylists).toHaveBeenCalled());
@@ -128,9 +162,9 @@ describe('RailPlaylistsGroup', () => {
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
 		await tick();
 		const rows = target.querySelectorAll('.playlist-label .row-title');
-		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Night Drive', 'Favorites']);
+		expect(Array.from(rows).map((row) => row.textContent)).toEqual(['Favorites', 'Night Drive']);
 		const counts = target.querySelectorAll('.playlist-label .row-meta');
-		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '12']);
+		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['12', '2']);
 	});
 
 	it('shows each playlist mosaic while keeping the whole row as its navigation target', async () => {
@@ -221,13 +255,13 @@ describe('RailPlaylistsGroup', () => {
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
 		await tick();
 		const labels = target.querySelectorAll<HTMLButtonElement>('.playlist-label');
-		labels[1]?.click();
+		labels[0]?.click();
 		await tick();
 		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p2' }));
 		await tick();
 
 		const rows = target.querySelectorAll<HTMLButtonElement>('.playlist-label');
-		expect(rows[1]?.classList.contains('row-active')).toBe(true);
+		expect(rows[0]?.classList.contains('row-active')).toBe(true);
 	});
 
 	it('plays a clicked track and surfaces it in Now Playing', async () => {

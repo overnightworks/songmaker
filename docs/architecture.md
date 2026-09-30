@@ -160,7 +160,10 @@ reads numbers by value, so "Demo 2" precedes "Demo 10" (one
 `Intl.Collator` in `utils/recency.ts`); Recent is the rank the continue
 endpoint gives each place, read in pages of 200 until a short page, so every
 place is ranked and there is no second activity rule; Added is newest
-`created_at` first. Each tile's second line follows the order: the size, the
+`created_at` first. One owner, `stores/libraryOrder.ts`, holds these
+comparators and the Recent ranking; the wall and the rail's albums and
+playlists (desktop rail and phone drawer) all ask it, so the switch reorders
+both at once. Each tile's second line follows the order: the size, the
 last work, or "added 3 Aug", a playlist's line starting "Playlist ·". The
 wall sorts the complete set from the same route-independent loader the rail
 uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
