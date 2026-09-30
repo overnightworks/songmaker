@@ -160,7 +160,10 @@ COWRITER_TOOLS: tuple[CowriterTool, ...] = (
     ),
     CowriterTool(
         "suggest_album_cover",
-        "Request three album cover suggestions. Returns the queued job ID and status.",
+        (
+            "Request one more album cover suggestion; earlier suggestions stay "
+            "pending. Returns the queued job ID and status."
+        ),
         _object({"album_id": _STRING}, ["album_id"]),
         True,
         tool_suggest_album_cover,
