@@ -71,7 +71,9 @@ describe('library order', () => {
 
 	it('orders Recent by the last work read, unranked places last in title order', async () => {
 		chooseLibraryWallOrder('recent');
-		fetchLibraryContinue.mockResolvedValue({ items: [activity('kinetic'), activity('vernissage')] });
+		fetchLibraryContinue.mockResolvedValue({
+			items: [activity('kinetic'), activity('vernissage')]
+		});
 		const albums = ['Afterglow', 'Vernissage', 'Kinetic', 'Nightdrive'].map((title) =>
 			titled(title)
 		);

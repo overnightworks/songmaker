@@ -4,11 +4,11 @@ import { LIBRARY_WALL_RECENT_PAGE_SIZE, type LibraryWallOrder } from '$lib/const
 import { libraryWallOrder } from '$lib/stores/ui';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
-export type LibraryPlaceType = LibraryContinueItem['type'];
+type LibraryPlaceType = LibraryContinueItem['type'];
 type OrderedItem = { id: string; title: string; created_at?: string | null };
-export type LibraryPlace = { type: LibraryPlaceType; item: OrderedItem };
-export type LastWork = { rank: number; at: string };
-export type LibraryPlaceComparator = (a: LibraryPlace, b: LibraryPlace) => number;
+type LibraryPlace = { type: LibraryPlaceType; item: OrderedItem };
+type LastWork = { rank: number; at: string };
+type LibraryPlaceComparator = (a: LibraryPlace, b: LibraryPlace) => number;
 
 const recentWork = writable<ReadonlyMap<string, LastWork>>(new Map());
 let recentWorkRequest = 0;
