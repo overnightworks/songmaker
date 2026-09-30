@@ -829,7 +829,7 @@ export function holdLibraryRestoresUntil(save: Promise<void>): Promise<void> {
 
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
 	const generation = ++historyApplyGeneration;
-	if (outgoingDraftSave) await outgoingDraftSave;
+	if (outgoingDraftSave !== null) await outgoingDraftSave;
 	if (generation !== historyApplyGeneration) return false;
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
