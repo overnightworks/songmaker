@@ -92,10 +92,9 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 vi.mock('$lib/stores/toast', () => ({
 	addToast: vi.fn()
 }));
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn().mockResolvedValue(undefined),
-	afterNavigate: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/environment', () => ({
 	browser: true,
 	dev: true
