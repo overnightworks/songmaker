@@ -1,8 +1,13 @@
-import { pushHistoryEntry, replaceHistoryEntry } from '$lib/test-utils/library-history';
+import {
+	historyEntry,
+	pushHistoryEntry,
+	replaceHistoryEntry
+} from '$lib/test-utils/library-history';
+import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { createRawSnippet, mount, tick, unmount } from 'svelte';
+import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -52,8 +57,7 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/s
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
 
-const { pageState, liveStream } = vi.hoisted(() => ({
-	pageState: { url: new URL('https://songmaker.test/') },
+const { liveStream } = vi.hoisted(() => ({
 	liveStream: {
 		start: vi.fn(),
 		stop: vi.fn(),
@@ -61,9 +65,7 @@ const { pageState, liveStream } = vi.hoisted(() => ({
 	}
 }));
 
-vi.mock('$app/state', () => ({
-	page: pageState
-}));
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
@@ -179,23 +181,24 @@ function minUsedWidth(el: Element): number {
 }
 
 async function renderLayout(path: string): Promise<HTMLElement> {
-	pageState.url = new URL(`https://songmaker.test${path}`);
 	currentUser.set(USER);
 	authLoading.set(false);
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted = mount(Layout, { target, props: { children } });
+	const target = mountLayout(path);
 	await tick();
 	await Promise.resolve();
 	await tick();
 	return target;
 }
 
+// Mounts the layout the way the router starts a page: on `path`, reporting
+// the `enter` navigation once it is mounted.
 function mountLayout(path: string): HTMLElement {
-	pageState.url = new URL(`https://songmaker.test${path}`);
+	fakePage.url = new URL(`https://songmaker.test${path}`);
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(Layout, { target, props: { children } });
+	flushSync();
+	reportFakeRouterEnter();
 	return target;
 }
 
@@ -827,6 +830,29 @@ describe('auth check failure', () => {
 	});
 });
 
+// SvelteKit's start drops the library a reloaded entry carried, and shallow
+// routing waits for that start (issue #1165).
+describe('a reload on a library page', () => {
+	it('puts the library its entry carried back once the router reports the start', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		const playlist = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'playlist' as const, id: 'p1' },
+			scrollAnchor: 480
+		};
+		replaceHistoryEntry('/playlist/friday-night', playlist);
+		loadLibraryHistoryPageForTests();
+		startFakeRouter();
+
+		await renderLayout('/playlist/friday-night');
+
+		await vi.waitFor(() => expect(historyEntry()).toEqual(playlist));
+		expect(location.pathname).toBe('/playlist/friday-night');
+	});
+});
+
 // A phone tab reloaded over the full Now Playing comes back onto that layer's
 // entry; the history listener steps off it once the library starts -- but
 // only while the page still stands there (issue #1002).
@@ -843,13 +869,17 @@ describe('a reload over the phone Now Playing', () => {
 		pushHistoryEntry('/playlist/friday-night', playlist);
 		pushHistoryEntry('/playlist/friday-night', { ...playlist, index: 2, layer: 'now-playing' });
 		loadLibraryHistoryPageForTests();
+		startFakeRouter();
 		currentUser.set(null);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
 		mountLayout('/');
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
 
+		vi.mocked(checkAuth).mockImplementation(async () => {
+			currentUser.set(USER);
+			return USER;
+		});
 		await goto(resolve('/'));
-		currentUser.set(USER);
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });

@@ -28,7 +28,7 @@
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
-	import { leaveRestoredLibraryHistory } from '$lib/stores/libraryContext';
+	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
 		startLibraryResourceSync,
 		stopLibraryResourceSync,
@@ -72,10 +72,11 @@
 
 	// Whether the library session should be live. Three addresses share the
 	// library workspace (`/`, `/album/<slug>` and `/album/<slug>/<song-slug>`,
-	// issues #269, #275, #276) and a raw history write can move between them
-	// without a route change, so this is one boolean rather than a URL: it
-	// stays true across the whole workspace and only flips when the browser
-	// genuinely leaves it. Signed out, and on login, setup, share and
+	// issues #269, #275, #276) and shallow routing moves between addresses of
+	// one shape without a route change -- `page.url` keeps the last navigation's
+	// address, which is always one of them -- so this is one boolean rather
+	// than a URL: it stays true across the whole workspace and only flips when
+	// the browser genuinely leaves it. Signed out, and on login, setup, share and
 	// Settings, it is false — exactly the routes outside the `(library)` route
 	// group, which owns the workspace's own mount (issue #276); this layout
 	// keeps the stream and the history listener, which outlive a route swap
@@ -141,12 +142,10 @@
 		return () => delete root.dataset.offline;
 	});
 
-	// A navigation before the library starts -- the sign-in redirect, or
-	// leaving before the first snapshot -- moves the page off the entry it
-	// loaded onto, whose restored state must not steer `initNavigation` then.
-	afterNavigate(({ type }) => {
-		if (type !== 'enter') leaveRestoredLibraryHistory();
-	});
+	// Library history is shallow routing, which waits for the router: the first
+	// navigation it reports -- the page it started on -- lets the writes go.
+	const reportRouterStarted = holdLibraryHistoryUntilRouterStarts();
+	afterNavigate(reportRouterStarted);
 
 	// The live-sync stream and the history listener outlive a route swap
 	// between the library's three addresses, so this layout owns them rather

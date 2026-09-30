@@ -1,4 +1,5 @@
 import '@testing-library/jest-dom/vitest';
+import { vi } from 'vitest';
 
 // jsdom performs no layout, so it ships no ResizeObserver. Components that
 // re-measure when their box changes size must still be mountable here; a test
@@ -12,3 +13,10 @@ class InertResizeObserver implements ResizeObserver {
 if (!('ResizeObserver' in globalThis)) {
 	globalThis.ResizeObserver = InertResizeObserver;
 }
+
+// Library history is written through SvelteKit's router, which no test page
+// starts, so every test runs against the fake router unless it mocks
+// `$app/navigation` itself.
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);

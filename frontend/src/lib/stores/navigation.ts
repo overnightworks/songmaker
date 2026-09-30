@@ -51,7 +51,6 @@ import {
 	setLibrarySurface,
 	showSongTab,
 	snapshotLibraryHistory,
-	takeRestoredLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab,
 	type LibraryHistoryState
@@ -72,7 +71,7 @@ function currentHistoryIndex(): number {
 }
 
 // Every history write in this module goes through writeLibraryHistory, which
-// owns the choice between a raw write and a router navigation; see the note on
+// owns the choice between shallow routing and a navigation; see the note on
 // it in libraryContext.ts. The promise matters only to a caller that writes
 // again straight afterwards -- a crossing write is asynchronous.
 function replaceLibraryHistory(): Promise<void> {
@@ -812,10 +811,7 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
-	const restored = takeRestoredLibraryHistory();
-	const staleLanding = staleLayerEntryLanding(
-		isLibraryHistoryState(restored) ? restored : existing
-	);
+	const staleLanding = staleLayerEntryLanding(existing);
 	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {
