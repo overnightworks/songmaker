@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createAlbum } from '$lib/api/client';
+	import type { AlbumItem } from '$lib/api/types';
 	import { describeFailure } from '$lib/api/fetch';
 	import { addAlbumToList } from '$lib/stores/libraryData';
 	import { openAlbum } from '$lib/stores/navigation';
@@ -37,15 +38,17 @@
 		event.preventDefault();
 		if (!canCreate) return;
 		creating = true;
+		let album: AlbumItem;
 		try {
-			const album = await createAlbum(title.trim(), artist.trim());
-			addAlbumToList(album);
-			oncreated();
-			await openAlbum(album.id);
+			album = await createAlbum(title.trim(), artist.trim());
 		} catch (err) {
 			addToast(describeFailure(err, NEW_ALBUM_FAILED), 'error');
 			creating = false;
+			return;
 		}
+		addAlbumToList(album);
+		oncreated();
+		await openAlbum(album.id);
 	}
 </script>
 
