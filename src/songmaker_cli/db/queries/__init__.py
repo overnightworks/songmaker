@@ -104,6 +104,9 @@ from songmaker_cli.db.queries.cover_suggestions import (
     delete_album_cover_suggestions as delete_album_cover_suggestions,
 )
 from songmaker_cli.db.queries.cover_suggestions import (
+    delete_job_cover_suggestions as delete_job_cover_suggestions,
+)
+from songmaker_cli.db.queries.cover_suggestions import (
     get_album_cover_suggestion as get_album_cover_suggestion,
 )
 from songmaker_cli.db.queries.cover_suggestions import (

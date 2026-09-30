@@ -31,7 +31,23 @@ def get_album_cover_suggestion(
 def delete_album_cover_suggestions(
     session: Session, album_id: str,
 ) -> list[str]:
-    suggestions = list_album_cover_suggestions(session, album_id)
+    return _delete_cover_suggestions(session, list_album_cover_suggestions(session, album_id))
+
+
+def delete_job_cover_suggestions(
+    session: Session, job_ids: list[str],
+) -> list[str]:
+    suggestions = (
+        session.query(AlbumCoverSuggestion)
+        .filter(AlbumCoverSuggestion.job_id.in_(job_ids))
+        .all()
+    )
+    return _delete_cover_suggestions(session, suggestions)
+
+
+def _delete_cover_suggestions(
+    session: Session, suggestions: list[AlbumCoverSuggestion],
+) -> list[str]:
     paths = [suggestion.png_path for suggestion in suggestions]
     for suggestion in suggestions:
         session.delete(suggestion)

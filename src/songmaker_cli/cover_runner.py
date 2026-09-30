@@ -17,7 +17,6 @@ from agent_providers.codex.image import (
     CodexImageCliError,
     CodexImageError,
     CodexImageLoginError,
-    CodexImageTimeoutError,
     generate_codex_cover_image,
 )
 from agent_providers.errors import ProviderUnavailableError, SafeRouteReasonCode
@@ -43,7 +42,7 @@ from songmaker_cli.cowriter.routing import CoverImageDispatch, cover_image_provi
 from songmaker_cli.db.models import AlbumCoverSuggestion, Job
 from songmaker_cli.db.queries import (
     claim_next_cover_job,
-    delete_album_cover_suggestions,
+    delete_job_cover_suggestions,
     get_album,
     get_job,
     list_songs,
@@ -112,7 +111,10 @@ def recover_web_cover_jobs(
     audio_dir: Path,
     settings: Settings | None = None,
 ) -> int:
-    """Fail interrupted web covers, then remove only their unpublished group."""
+    """Fail interrupted web covers, then remove only their own suggestion.
+
+    Suggestions of earlier jobs stay pending; a restart must not discard them.
+    """
     settings = settings or get_settings()
     if settings.cover_executor is not CoverExecutor.WEB:
         return 0
@@ -121,25 +123,21 @@ def recover_web_cover_jobs(
             Job.type == JobType.COVER,
             Job.status == JobStatus.RUNNING,
         ).all()
-        interrupted_album_ids = {
-            album_id for _job_id, album_id in interrupted_jobs if album_id is not None
-        }
+        interrupted_job_ids = [job_id for job_id, _album_id in interrupted_jobs]
         staging_dirs = [
             _staging_path(audio_dir, album_id, job_id)
             for job_id, album_id in interrupted_jobs
             if album_id is not None
         ]
-        stale_suggestion_paths = [
-            path
-            for album_id in interrupted_album_ids
-            for path in delete_album_cover_suggestions(session, album_id)
-        ]
+        interrupted_suggestion_paths = delete_job_cover_suggestions(
+            session, interrupted_job_ids,
+        )
         recovered = recover_stale_jobs_by_type(
             session,
             {JobType.COVER: frozenset({JobStatus.RUNNING})},
         )
         session.commit()
-    remove_cover_suggestion_files(audio_dir, stale_suggestion_paths)
+    remove_cover_suggestion_files(audio_dir, interrupted_suggestion_paths)
     for staging_dir in staging_dirs:
         if staging_dir.exists():
             shutil.rmtree(staging_dir)
@@ -180,7 +178,7 @@ async def run_next_cover_job(
 
 
 async def cover_runner_loop(app) -> None:
-    """Poll the dark web cover queue and publish one completed group per tick."""
+    """Poll the dark web cover queue and publish one completed suggestion per tick."""
     from songmaker_cli.lifecycle import BackgroundLoopName, background_loop_registry
 
     settings = get_settings()
@@ -213,16 +211,16 @@ async def run_claimed_cover_suggestion_job(
     settings: Settings | None = None,
     abort_signal: Event | None = None,
 ) -> None:
-    """Produce and publish one already-running group of three suggestions.
+    """Produce and publish the one suggestion of an already-running cover job.
 
     This is deliberately shared by the arq worker and the web runner.  The
     caller alone owns claiming the queued job; this owner owns all subsequent
-    heartbeats, images, atomic publish, cleanup, and terminal status.
+    heartbeats, the image, atomic publish, cleanup, and terminal status.
     """
     settings = settings or get_settings()
     await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
     heartbeat_task = asyncio.create_task(_keep_heartbeats(db_factory, job_id))
-    created_paths: list[str] = []
+    created_path: str | None = None
     staging_dir: Path | None = None
     try:
         prompt, album_id = await asyncio.to_thread(_load_cover_prompt, db_factory, job_id)
@@ -234,32 +232,24 @@ async def run_claimed_cover_suggestion_job(
             "Cover job %s runs on %s %s with model %r",
             job_id, dispatch.provider, dispatch.route.value, dispatch.model,
         )
-        suggestion_ids = [str(uuid.uuid4()) for _ in range(3)]
+        suggestion_id = str(uuid.uuid4())
         staging_dir = await asyncio.to_thread(_staging_directory, audio_dir, album_id, job_id)
-        started = time.monotonic()
-        for position, suggestion_id in enumerate(suggestion_ids, start=1):
-            remaining = settings.cover_job_budget_seconds - (time.monotonic() - started)
-            if remaining <= 0:
-                raise CodexImageTimeoutError()
-            payload = await _generate_cover_image(
-                prompt,
-                deadline=time.monotonic() + min(settings.cover_cli_deadline_seconds, remaining),
-                abort_signal=abort_signal,
-                model=dispatch.model,
-            )
-            await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, payload)
-            await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
-            await asyncio.to_thread(
-                _update_job, db_factory, job_id, JobStatus.RUNNING, progress=position / 3,
-            )
+        payload = await _generate_cover_image(
+            prompt,
+            deadline=time.monotonic() + settings.cover_cli_deadline_seconds,
+            abort_signal=abort_signal,
+            model=dispatch.model,
+        )
+        await asyncio.to_thread(_write_staged_png, staging_dir, suggestion_id, payload)
+        await asyncio.to_thread(_touch_heartbeat, db_factory, job_id)
 
-        created_paths = await asyncio.to_thread(
-            _publish_suggestion_group,
+        created_path = await asyncio.to_thread(
+            _publish_suggestion,
             db_factory,
             audio_dir,
             album_id,
             job_id,
-            suggestion_ids,
+            suggestion_id,
             staging_dir,
         )
         await asyncio.to_thread(shutil.rmtree, staging_dir)
@@ -268,7 +258,7 @@ async def run_claimed_cover_suggestion_job(
     except asyncio.CancelledError:
         if abort_signal is not None:
             abort_signal.set()
-        await asyncio.to_thread(_remove_partial_suggestions, audio_dir, created_paths, staging_dir)
+        await asyncio.to_thread(_remove_partial_suggestion, audio_dir, created_path, staging_dir)
         if abort_signal is None:
             await asyncio.to_thread(
                 _update_job,
@@ -280,7 +270,7 @@ async def run_claimed_cover_suggestion_job(
             )
         raise
     except Exception as exc:
-        await asyncio.to_thread(_remove_partial_suggestions, audio_dir, created_paths, staging_dir)
+        await asyncio.to_thread(_remove_partial_suggestion, audio_dir, created_path, staging_dir)
         await asyncio.to_thread(
             _update_job,
             db_factory,
@@ -372,48 +362,43 @@ def _write_staged_png(staging_dir: Path, suggestion_id: str, payload: bytes) -> 
     (staging_dir / f"{suggestion_id}.png").write_bytes(payload)
 
 
-def _publish_suggestion_group(
+def _publish_suggestion(
     db_factory,
     audio_dir: Path,
     album_id: str,
     job_id: str,
-    suggestion_ids: list[str],
+    suggestion_id: str,
     staging_dir: Path,
-) -> list[str]:
-    paths: list[str] = []
+) -> str:
+    path = f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album_id}/{suggestion_id}.png"
+    target = suggestion_png_path(audio_dir, album_id, suggestion_id)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    (staging_dir / f"{suggestion_id}.png").replace(target)
     try:
-        for suggestion_id in suggestion_ids:
-            target = suggestion_png_path(audio_dir, album_id, suggestion_id)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            (staging_dir / f"{suggestion_id}.png").replace(target)
-            paths.append(f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/{album_id}/{suggestion_id}.png")
         with db_factory() as session:
             job = get_job(session, job_id)
             if job is None or job.status in {JobStatus.FAILED, JobStatus.CANCELLED}:
                 raise CoverSuggestionJobError()
-            session.add_all([
-                AlbumCoverSuggestion(
-                    id=suggestion_id,
-                    album_id=album_id,
-                    job_id=job_id,
-                    png_path=path,
-                )
-                for suggestion_id, path in zip(suggestion_ids, paths, strict=True)
-            ])
+            session.add(AlbumCoverSuggestion(
+                id=suggestion_id,
+                album_id=album_id,
+                job_id=job_id,
+                png_path=path,
+            ))
             session.commit()
     except Exception:
-        remove_cover_suggestion_files(audio_dir, paths)
+        remove_cover_suggestion_files(audio_dir, [path])
         raise
-    return paths
+    return path
 
 
-def _remove_partial_suggestions(
+def _remove_partial_suggestion(
     audio_dir: Path,
-    paths: list[str],
+    path: str | None,
     staging_dir: Path | None,
 ) -> None:
-    if paths:
-        remove_cover_suggestion_files(audio_dir, paths)
+    if path is not None:
+        remove_cover_suggestion_files(audio_dir, [path])
     if staging_dir is not None:
         shutil.rmtree(staging_dir, ignore_errors=True)
 
