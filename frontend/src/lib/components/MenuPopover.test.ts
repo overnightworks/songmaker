@@ -210,6 +210,7 @@ describeBackClosesOverlay({
 		await openIn(target);
 	},
 	isShown: (target) => target.querySelector('.menu-panel') !== null,
+	afterBack: () => expect(document.activeElement).toBe(triggerOf(document.body)),
 	closeWays: [
 		{ way: 'its trigger', close: (target) => triggerOf(target).click() },
 		{
