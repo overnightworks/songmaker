@@ -1537,6 +1537,17 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 		['a history that already stored it', [...earlier, sent]]
 	];
 
+	async function* endingWith(
+		turn: AsyncGenerator<CoWriterStreamEvent>,
+		onEnded: () => void
+	): AsyncGenerator<CoWriterStreamEvent> {
+		try {
+			yield* turn;
+		} finally {
+			onEnded();
+		}
+	}
+
 	const cases = outcomes.flatMap(([outcome, turn, exchange]) =>
 		lateReads.map(([read, lateHistory]) => [outcome, read, turn, exchange, lateHistory] as const)
 	);
@@ -1549,12 +1560,12 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			fetchConversationMessages
 				.mockReturnValueOnce(firstRead.promise)
 				.mockResolvedValueOnce(conversation(false, ...earlier, sent, reply));
-			streamCoWriterTurn.mockReturnValue(turn());
+			const turnEnded = Promise.withResolvers<undefined>();
+			streamCoWriterTurn.mockReturnValue(endingWith(turn(), () => turnEnded.resolve(undefined)));
 			const target = await render();
 
 			await sendTurn(target, 'write a chorus');
-			await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			await turnEnded.promise;
 			firstRead.resolve(conversation(false, ...lateHistory));
 
 			await vi.waitFor(() =>
