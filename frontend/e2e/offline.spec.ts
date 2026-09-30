@@ -5,8 +5,11 @@
 // by itself. A take generating meanwhile stops looking live (#1098): its card
 // reads "Reconnecting…" with the last progress it saw, in grey, its cancel and
 // the Takes ring grey too, and when the job ended while the network was gone
-// the card stays until its take is in the list. Mobile project only: the phone's Generate bar is compact-shell
-// UI, and the unit suite pins the desktop placement (PlayerBar.test.ts).
+// the card stays until its take is in the list. The card reads the same while
+// the browser is online but the job's stream stays refused, and a take tapped
+// offline plays by itself once the network is back (#1161). Mobile project
+// only: the phone's Generate bar is compact-shell UI, and the unit suite pins
+// the desktop placement (PlayerBar.test.ts).
 //
 // The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
 // already open event stream running, so the page's open loads are stopped
@@ -25,8 +28,11 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
 	RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS,
+	SSE_RECONNECT_JITTER_RATIO,
+	SSE_RECONNECT_MAX_DELAY_MS,
 	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -76,6 +82,12 @@ const THREE_OUTAGES_FLOW_API_REQUEST_BUDGET =
 	OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET +
 	(OUTAGES_IN_ONE_RIDE - 1) * API_REQUESTS_PER_FURTHER_OUTAGE;
 const JOB_STREAM_PATH = /^\/api\/jobs\/[^/]+\/stream$/;
+// The job stream's next reopen comes at most one jittered backoff ceiling
+// later, and its first message after the server's first poll.
+const NEXT_JOB_STREAM_REOPEN_MS =
+	SSE_RECONNECT_MAX_DELAY_MS * (1 + SSE_RECONNECT_JITTER_RATIO) + OFFLINE_NOTICE_MS;
+// Playwright's default 30 s, plus the refused reopens and the one that answers.
+const REFUSED_JOB_STREAM_TEST_TIMEOUT_MS = 30_000 + 2 * NEXT_JOB_STREAM_REOPEN_MS;
 
 function generateButton(page: Page): Locator {
 	return page.getByRole('tabpanel').getByRole('button', { name: nameStartingWith(GENERATE_LABEL) });
@@ -121,6 +133,20 @@ async function serverFailsAfterSessionCheck(
 		return answer(route);
 	});
 	return () => answeredChecks;
+}
+
+/** Answers a job stream once with where the job stands, then ends it the way a dropped connection does. */
+async function answerOnceAndDrop(route: Route): Promise<void> {
+	const jobRecord = route
+		.request()
+		.url()
+		.replace(/\/stream$/, '');
+	const job: unknown = await (await route.fetch({ url: jobRecord })).json();
+	await route.fulfill({
+		status: 200,
+		contentType: 'text/event-stream',
+		body: `data: ${JSON.stringify(job)}\n\n`
+	});
 }
 
 async function serverReturns(page: Page): Promise<void> {
@@ -257,6 +283,47 @@ test.describe('losing the network while a take plays on the phone', () => {
 		await page.unroute(RESOURCE_STREAM);
 		await context.setOffline(false);
 		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
+	});
+});
+
+test.describe('tapping Play while the network is gone on the phone', () => {
+	// The take must come over the network, not from the service worker's cache.
+	test.use({ serviceWorkers: 'block' });
+
+	test('plays the take by itself once the network is back, with no Retry left behind (#1161 R2)', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only mini player; see the file header.');
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const songTitle = `${OFFLINE_SONG_TITLE} Tapped ${runMarker()}`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
+		const miniPlayer = page.getByRole('contentinfo');
+		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+		const retry = miniPlayer.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.click();
+		await page.getByRole('tab', { name: /Takes/ }).click();
+		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
+
+		await loseNetwork(page, context);
+		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+		await page
+			.getByRole('tabpanel')
+			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
+			.click();
+		await expect(retry).toBeVisible();
+
+		await regainNetwork(page, context);
+
+		await expect(pause).toBeVisible({ timeout: BACK_ONLINE_MS });
+		await expect(retry).toHaveCount(0);
+		guard.assertClean();
 	});
 });
 
@@ -440,5 +507,57 @@ test.describe('losing the network while a take generates on the phone', () => {
 		console.log(`Three-outage running-take flow /api requests: ${guard.apiRequestCount}`);
 		guard.assertClean();
 		guard.assertWithinBudget(THREE_OUTAGES_FLOW_API_REQUEST_BUDGET);
+	});
+
+	test('reads "Reconnecting…" with its last progress while the online page cannot reopen the job stream, and goes live with its first fresh message (#1161 R1)', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		test.setTimeout(REFUSED_JOB_STREAM_TEST_TIMEOUT_MS);
+		const library = readSeededLibrary();
+		const songTitle = `${OFFLINE_SONG_TITLE} Refused ${runMarker()}`;
+		const songId = await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
+		const jobId = await seedRunningGenerationJob(songId, {
+			progress: 0.55,
+			takeIndex: 1,
+			takeCount: 2,
+			phase: 'rendering',
+			generationStartedOffsetSeconds: 30
+		});
+		const jobStream = `/api/jobs/${jobId}/stream`;
+		const takeCounter = `${EDITOR_GENERATE_TAKE_TEMPLATE.replace('{index}', '1').replace('{count}', '2')} · `;
+		const panel = page.getByRole('tabpanel');
+		// Every reopen after the first stream is refused until the server has room again.
+		let streamOpens = 0;
+		let refusing = true;
+		await page.route(`**${jobStream}`, async (route) => {
+			streamOpens += 1;
+			if (streamOpens === 1) return answerOnceAndDrop(route);
+			return refusing ? route.fulfill({ status: 429 }) : route.continue();
+		});
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.click();
+		await page.getByRole('tab', { name: /Takes/ }).click();
+
+		await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toBeVisible({
+			timeout: BACK_ONLINE_MS
+		});
+		await expect(panel.getByText(`${takeCounter}last seen at 55%`, { exact: true })).toBeVisible();
+		await expect(panel.getByText(/~\d/)).toHaveCount(0);
+		await expect(offlineStrip(page)).toHaveCount(0);
+		await advanceGenerationJobPhase(jobId, { progress: 0.65, phase: 'rendering' });
+		await expect.poll(() => streamOpens, { timeout: NEXT_JOB_STREAM_REOPEN_MS }).toBeGreaterThan(2);
+		await expect(panel.getByText(`${takeCounter}last seen at 55%`, { exact: true })).toBeVisible();
+
+		refusing = false;
+
+		await expect(panel.getByText(new RegExp(`^${takeCounter}65%`))).toBeVisible({
+			timeout: NEXT_JOB_STREAM_REOPEN_MS
+		});
+		await expect(panel.getByText(EDITOR_GENERATE_RECONNECTING_LABEL)).toHaveCount(0);
 	});
 });

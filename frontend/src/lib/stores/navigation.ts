@@ -278,7 +278,7 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // A rail page link (a Settings row, the account name, a search hit that
 // names a page) leaves the song for an app page, so it asks the same
 // dirty-draft question as every other way out before it navigates.
-export type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
+type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
 function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {

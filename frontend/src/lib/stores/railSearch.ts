@@ -1,9 +1,15 @@
+import type { Pathname } from '$app/types';
 import { get, writable } from 'svelte/store';
 
 import { describeFailure, NetworkError } from '$lib/api/fetch';
 import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
-import { LIBRARY_SEARCH_DEBOUNCE_MS } from '$lib/constants';
+import {
+	LIBRARY_SEARCH_DEBOUNCE_MS,
+	RAIL_LIBRARY_LABEL,
+	RAIL_SETTINGS_LABEL
+} from '$lib/constants';
+import { visibleSettingsSections } from '$lib/settingsSections';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
@@ -11,27 +17,16 @@ const RAIL_SEARCH_RESULT_LIMIT = 100;
 
 type RailSearchStatus = 'idle' | 'loading' | 'ready' | 'error' | 'unreachable';
 
-type RailSearchPageHref =
-	| '/'
-	| '/settings/generation'
-	| '/settings/playback'
-	| '/settings/voices'
-	| '/settings/account'
-	| '/settings/users'
-	| '/settings/cleanup'
-	| '/settings/legal';
-
 export type RailSearchTarget =
 	| { kind: 'album'; id: string }
 	| { kind: 'song'; id: string }
 	| { kind: 'playlist'; id: string }
-	| { kind: 'page'; href: RailSearchPageHref };
+	| { kind: 'page'; href: Pathname };
 
 interface RailSearchPage {
 	label: string;
-	href: RailSearchPageHref;
+	href: Pathname;
 	section: string | null;
-	adminOnly?: boolean;
 }
 
 type RailSearchKind = RailSearchTarget['kind'];
@@ -71,18 +66,7 @@ interface RailSearchState {
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 
-const SETTINGS_SECTION = 'Settings';
-
-const RAIL_SEARCH_PAGES: readonly RailSearchPage[] = [
-	{ label: 'Library', href: '/', section: null },
-	{ label: 'Generation', href: '/settings/generation', section: SETTINGS_SECTION },
-	{ label: 'Playback', href: '/settings/playback', section: SETTINGS_SECTION },
-	{ label: 'Voices', href: '/settings/voices', section: SETTINGS_SECTION },
-	{ label: 'Account', href: '/settings/account', section: SETTINGS_SECTION },
-	{ label: 'Admin', href: '/settings/users', section: SETTINGS_SECTION, adminOnly: true },
-	{ label: 'Cleanup', href: '/settings/cleanup', section: SETTINGS_SECTION, adminOnly: true },
-	{ label: 'Legal', href: '/settings/legal', section: SETTINGS_SECTION }
-];
+const LIBRARY_PAGE: RailSearchPage = { label: RAIL_LIBRARY_LABEL, href: '/', section: null };
 
 const RAIL_SEARCH_KINDS: Readonly<Record<RailSearchKind, { group: string; word: string }>> = {
 	album: { group: 'Albums', word: 'Album' },
@@ -141,7 +125,7 @@ function searchCurrentQueryAgain(): void {
 export function groupRailSearchResults(
 	state: RailSearchState,
 	playlists: PlaylistItem[],
-	pages: readonly RailSearchPage[] = RAIL_SEARCH_PAGES
+	pages: readonly RailSearchPage[] = visibleRailSearchPages(true)
 ): RailSearchGroup[] {
 	if (!state.query) return [];
 	const query = state.query.toLocaleLowerCase();
@@ -189,7 +173,12 @@ function railSearchTextParts(text: string, query: string): RailSearchTextPart[] 
 }
 
 export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[] {
-	return RAIL_SEARCH_PAGES.filter((page) => !page.adminOnly || admin);
+	const settingsPages = visibleSettingsSections(admin).map(({ label, href }) => ({
+		label,
+		href,
+		section: RAIL_SETTINGS_LABEL
+	}));
+	return [LIBRARY_PAGE, ...settingsPages];
 }
 
 export function resetRailSearchForTests(): void {

@@ -1,5 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+	accountInitial,
 	activityTimeLabel,
 	addedDayLabel,
 	formatTime,
@@ -62,6 +63,17 @@ describe('titleInitials', () => {
 		['🎵 Song', '🎵S']
 	])('turns %j into %j', (title, expected) => {
 		expect(titleInitials(title)).toBe(expected);
+	});
+});
+
+describe('accountInitial', () => {
+	it.each([
+		['felix', 'F'],
+		['élodie', 'É'],
+		['🎵beats', '🎵'],
+		['', '']
+	])('turns %j into %j', (username, expected) => {
+		expect(accountInitial(username)).toBe(expected);
 	});
 });
 
