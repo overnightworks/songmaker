@@ -136,7 +136,8 @@
 	const coverSuggestionsProgress = $derived(
 		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
 	);
-	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
+	const suggestionCount = $derived(coverSuggestions?.suggestions.length ?? 0);
+	const hasSuggestions = $derived(suggestionCount > 0);
 	const stageSlots = $derived<StageSlot[]>([
 		...(coverSuggestions?.suggestions ?? []).map((suggestion): StageSlot => ({
 			kind: 'suggestion',
@@ -149,8 +150,9 @@
 	);
 	const shownSlot = $derived(stageSlots[shownSlotIndex] ?? null);
 	const shownSuggestionId = $derived(shownSlot?.kind === 'suggestion' ? shownSlot.id : null);
+	const shownSuggestionNumber = $derived(Math.min(shownSlotIndex + 1, suggestionCount));
 	const stageLabel = $derived(
-		stageSlots.length > 0 ? albumCoverStageLabel(shownSlotIndex + 1, stageSlots.length) : undefined
+		hasSuggestions ? albumCoverStageLabel(shownSuggestionNumber, suggestionCount) : undefined
 	);
 
 	function stageStatusSlot(): StageSlot[] {
@@ -522,8 +524,8 @@
 				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
 			>
 		{:else if coverSuggestions}
-			{#if stageSlots.length > 0}
-				<b>{albumCoverSuggestionPosition(shownSlotIndex + 1, stageSlots.length)}</b>
+			{#if hasSuggestions}
+				<b>{albumCoverSuggestionPosition(shownSuggestionNumber, suggestionCount)}</b>
 				<span aria-hidden="true">·</span>
 			{/if}
 			<span
