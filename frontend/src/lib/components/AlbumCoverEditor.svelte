@@ -117,8 +117,11 @@
 		coverSuggestions !== null && coverSuggestions.used_today >= coverSuggestions.daily_limit
 	);
 	const dailyLimitNote = $derived(
-		(coverSuggestionsState?.albumId === currentAlbumId ? coverSuggestionsState.limitNote : null) ??
-			(dailySuggestionsSpent ? ALBUM_COVER_DAILY_LIMIT_REACHED : null)
+		dailySuggestionsSpent
+			? ((coverSuggestionsState?.albumId === currentAlbumId
+					? coverSuggestionsState.limitNote
+					: null) ?? ALBUM_COVER_DAILY_LIMIT_REACHED)
+			: null
 	);
 	const canSuggestCover = $derived(
 		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailyLimitNote
@@ -269,12 +272,6 @@
 		if (error instanceof ApiError && error.status === HTTP_CONFLICT) {
 			return { ...COVER_SUGGESTIONS_SETTLED, failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING };
 		}
-		if (error instanceof ApiError && error.status === HTTP_TOO_MANY_REQUESTS) {
-			return {
-				...COVER_SUGGESTIONS_SETTLED,
-				limitNote: describeFailure(error, ALBUM_COVER_DAILY_LIMIT_REACHED)
-			};
-		}
 		return {
 			...COVER_SUGGESTIONS_SETTLED,
 			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
@@ -306,25 +303,40 @@
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
-			const outcome = coverSuggestionsOutcomeOf(error);
-			if (outcome.limitNote) {
-				await recountAfterRefusal(albumId, outcome.limitNote);
+			if (error instanceof ApiError && error.status === HTTP_TOO_MANY_REQUESTS) {
+				await recountAfterRefusal(albumId, error);
 				return;
 			}
-			updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...outcome, isLoading: false }));
-			reloadCoverSuggestionsAfter(outcome);
+			showSuggestFailure(albumId, error);
 		}
 	}
 
+	function showSuggestFailure(albumId: string, error: unknown): void {
+		const outcome = coverSuggestionsOutcomeOf(error);
+		updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...outcome, isLoading: false }));
+		reloadCoverSuggestionsAfter(outcome);
+	}
+
 	// A refusal means the count the editor holds is stale -- another tab or a
-	// new day may have moved it -- so the count is read again and the
-	// server's words stay beside it.
-	async function recountAfterRefusal(albumId: string, limitNote: string): Promise<void> {
+	// new day may have moved it -- so the count is read again. Only a count
+	// that says today's suggestions are spent makes it the daily limit, with
+	// the server's words beside it; any other refusal (the request throttle)
+	// is an ordinary failure that the next Suggest another may retry.
+	async function recountAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await loadCoverSuggestions(albumId);
+		if (albumId !== currentAlbumId || coverSuggestions === null) return;
+		if (!dailySuggestionsSpent) {
+			showSuggestFailure(albumId, refusal);
+			return;
+		}
+		const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
 		updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
 	}
 
+	// A load still answering from before the stop would report the run as
+	// running and track the job being cancelled again, so it is dropped.
 	async function stopSuggestionRun(jobId: string): Promise<void> {
+		suggestionsRequest += 1;
 		runningSuggestionJobId = null;
 		try {
 			await cancelJob(jobId);
