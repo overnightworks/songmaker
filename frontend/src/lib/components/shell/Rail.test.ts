@@ -3,10 +3,13 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
+import { goto } from '$app/navigation';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
+import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
@@ -126,6 +129,9 @@ afterEach(async () => {
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
 	resetPlaylists();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
+	vi.mocked(goto).mockClear();
 	vi.unstubAllGlobals();
 });
 
@@ -152,6 +158,16 @@ describe('Rail', () => {
 		expect(searchFields).toHaveLength(1);
 		expect(searchFields[0]?.getAttribute('placeholder')).toBe('Search or go to…');
 		expect(target.querySelector('.rail-top + .rail-search-region .rail-search')).not.toBeNull();
+	});
+
+	it('holds the collapsed Account initial for the unsaved-changes dialog while the song has a dirty draft (issue #1143)', async () => {
+		setDraftLyrics('unsaved edit');
+		const target = await renderCollapsedRail();
+
+		requireElement<HTMLAnchorElement>(target, '.collapsed-account').click();
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('reduces the rail to labelled group icons when collapsed', async () => {

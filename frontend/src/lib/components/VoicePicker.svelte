@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 	import { loras, loadLoras, isLoraActive } from '$lib/stores/loras';
-	import { historyLayerState } from '$lib/stores/navigation';
+	import { followAppPageLink, historyLayerState } from '$lib/stores/navigation';
 	import { recipeModel } from '$lib/stores/recipe';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
@@ -120,7 +120,12 @@
 		{/if}
 	</div>
 	{#if $loras.length === 0}
-		<a class="hint" href="/settings/voices">{VOICE_PICKER_CREATE_LABEL}</a>
+		<a
+			class="hint"
+			href="/settings/voices"
+			onclick={(event) => followAppPageLink(event, '/settings/voices')}
+			>{VOICE_PICKER_CREATE_LABEL}</a
+		>
 	{/if}
 </div>
 

@@ -303,6 +303,15 @@ export function backLibraryHistory(landing: LibraryHistoryState, url: string): P
 	return queueHistoryStep(landing, pathnameOf(url), traverseBack);
 }
 
+// Resolves once every queued history step has landed. A navigation that
+// leaves the library (an app page) writes no LibraryHistoryState, so it
+// cannot join the queue; it waits here instead, or a step back still in
+// flight (the unsaved-changes dialog leaving its own entry) lands after its
+// push and takes the address back to the song (issue #1143).
+export function libraryHistoryStepsLanded(): Promise<void> {
+	return historyWrites;
+}
+
 function traverseBack(): Promise<void> {
 	return new Promise((resolve) => {
 		window.addEventListener('popstate', () => resolve(), { once: true });

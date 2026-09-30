@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
 	import { isAdmin } from '$lib/stores/auth';
+	import { followAppPageLink } from '$lib/stores/navigation';
 	import {
 		RAIL_SETTINGS_LABEL,
 		RAIL_SETTINGS_OPEN_STORAGE_KEY,
@@ -44,7 +45,12 @@
 		<ul>
 			{#each visibleSections as section (section.href)}
 				<li>
-					<a href={section.href} class="row row-sub" class:row-active={pathname === section.href}>
+					<a
+						href={section.href}
+						class="row row-sub"
+						class:row-active={pathname === section.href}
+						onclick={(event) => followAppPageLink(event, section.href)}
+					>
 						{section.label}
 					</a>
 				</li>
