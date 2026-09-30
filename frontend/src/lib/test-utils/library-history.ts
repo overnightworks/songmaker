@@ -119,6 +119,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 					await close(target);
 
 					expect(actionSawHistoryAt?.()).toBe(below);
+					await expectHistoryAt(below);
 				}
 			);
 		}

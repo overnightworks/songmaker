@@ -1,6 +1,6 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
@@ -144,9 +144,11 @@ describe('ConfirmDeleteDialog', () => {
 });
 
 const deletions: string[] = [];
+let deletionSawHistoryAt: number | undefined;
 
 function openDeleteConfirm(target: HTMLElement): void {
 	deletions.length = 0;
+	deletionSawHistoryAt = undefined;
 	openDialog = mount(ConfirmDeleteDialog, {
 		target,
 		props: {
@@ -154,6 +156,7 @@ function openDeleteConfirm(target: HTMLElement): void {
 			items: ['Night Drive'],
 			onconfirm: () => {
 				deletions.push('Night Drive');
+				deletionSawHistoryAt = plannedHistoryIndex();
 				closeDialog();
 			},
 			oncancel: closeDialog
@@ -173,7 +176,11 @@ describeBackClosesOverlay({
 	afterBack: () => expect(deletions).toEqual([]),
 	closeWays: [
 		{ way: 'Cancel', close: (target) => button(target, 'Cancel').click() },
-		{ way: 'Delete', close: (target) => button(target, 'Delete').click() },
+		{
+			way: 'Delete',
+			close: (target) => button(target, 'Delete').click(),
+			actionSawHistoryAt: () => deletionSawHistoryAt
+		},
 		{
 			way: 'the backdrop',
 			close: (target) => target.querySelector<HTMLElement>('.overlay')?.click()

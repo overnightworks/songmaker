@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, expect } from 'vitest';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
-import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import PlaylistPicker from './PlaylistPicker.svelte';
 
 const NIGHT_DRIVE = {
@@ -17,14 +17,17 @@ const NIGHT_DRIVE = {
 // The picker as a song page shows it: choosing a playlist or closing it hides it.
 const picker = {
 	added: [] as string[],
+	addSawHistoryAt: undefined as number | undefined,
 	shown: null as ReturnType<typeof mount> | null,
 	open(target: HTMLElement): void {
 		picker.added = [];
+		picker.addSawHistoryAt = undefined;
 		picker.shown = mount(PlaylistPicker, {
 			target,
 			props: {
 				onselect: (playlistId: string) => {
 					picker.added.push(playlistId);
+					picker.addSawHistoryAt = plannedHistoryIndex();
 					picker.hide();
 				},
 				onclose: picker.hide
@@ -62,7 +65,8 @@ describeBackClosesOverlay({
 	closeWays: [
 		{
 			way: 'choosing a playlist',
-			close: (target) => target.querySelector<HTMLButtonElement>('.picker-item')?.click()
+			close: (target) => target.querySelector<HTMLButtonElement>('.picker-item')?.click(),
+			actionSawHistoryAt: () => picker.addSawHistoryAt
 		},
 		{ way: 'a click outside it', close: () => document.body.click() },
 		{
