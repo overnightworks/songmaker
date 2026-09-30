@@ -16,6 +16,8 @@ import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { toasts } from '$lib/stores/toast';
+import { ApiError } from '$lib/api/fetch';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -43,7 +45,6 @@ vi.mock('$lib/api/client', () => ({
 	fetchSongs: vi.fn(),
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null })
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 import LibraryWall from './LibraryWall.svelte';
 
@@ -70,6 +71,7 @@ beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
+	toasts.set([]);
 	replaceHistoryEntry('/');
 });
 
@@ -583,6 +585,32 @@ describe('LibraryWall + New', () => {
 		expect(newCard(root, NEW_PLAYLIST)).toBeNull();
 		expect(tileTitles(root)).toContain('Road Trip');
 	});
+
+	it.each([
+		{ kind: NEW_ALBUM, create: () => createAlbum, name: 'Night Drive', opened: 'album' },
+		{ kind: NEW_PLAYLIST, create: () => createPlaylist, name: 'Road Trip', opened: 'playlist' }
+	])(
+		'the $kind.card card leaves no failure on screen once a create succeeds after refused tries',
+		async ({ kind, create, name, opened }) => {
+			const created = await create()();
+			create()
+				.mockReset()
+				.mockRejectedValueOnce(new ApiError(422, 'Validation error on: body.title', '/api'))
+				.mockRejectedValueOnce(new ApiError(500, 'Internal Server Error', '/api'))
+				.mockResolvedValue(created);
+			const root = await render();
+			const card = await chooseNew(root, kind);
+
+			await fillAndCreate(card, name);
+			await vi.waitFor(() => expect(get(toasts)).toHaveLength(1));
+			card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+			await vi.waitFor(() => expect(get(toasts)).toHaveLength(2));
+			card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+			await vi.waitFor(() => expect(get(openCollection)?.kind).toBe(opened));
+
+			expect(get(toasts)).toEqual([]);
+		}
+	);
 });
 
 describeBackClosesOverlay({

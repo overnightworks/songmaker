@@ -29,7 +29,7 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylist: vi.fn().mockResolvedValue({ ...ROAD_TRIP, entries: [] })
 }));
 vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
+vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
 
 import NewPlaylistCard from './NewPlaylistCard.svelte';
 
