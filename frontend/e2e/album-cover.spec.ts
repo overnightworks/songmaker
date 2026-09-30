@@ -63,8 +63,11 @@ test('Add cover makes one suggestion in place that ends in a named job failure a
 	await expect(editing.getByRole('progressbar')).toHaveCount(0);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
-	await editing.getByRole('button', { name: 'Close cover editing' }).click();
+	const albumAddress = page.url();
+	if (isMobile) await editing.getByRole('button', { name: 'Close cover editing' }).click();
+	else await page.keyboard.press('Escape');
 	await expect(editing).toHaveCount(0);
+	await expect(page).toHaveURL(albumAddress);
 	await expect(surface.getByRole('button', { name: 'Add cover' })).toBeVisible();
 });
 
