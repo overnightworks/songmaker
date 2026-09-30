@@ -634,6 +634,7 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		},
 		isShown: (target) => newCard(target, kind) !== null,
 		afterBack: () => {
+			expect(document.activeElement?.getAttribute('aria-label')).toBe(NEW_LABEL);
 			expect(createAlbum).not.toHaveBeenCalled();
 			expect(createPlaylist).not.toHaveBeenCalled();
 		},

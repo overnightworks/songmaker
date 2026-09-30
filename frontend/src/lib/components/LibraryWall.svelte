@@ -68,11 +68,20 @@
 	let browseEl = $state<HTMLElement | null>(null);
 	let newMenu: MenuPopover | undefined = $state();
 	const newCard = historyLayerState<NewPlaceKind | null>('library-new-card', null);
+	let shownCard: NewPlaceKind | null = null;
+	let focusNewOnFold = true;
 
 	onMount(() => {
 		initLibraryWallOrder();
 		catchUpWall();
 		return whenBackOnline(catchUpWall);
+	});
+
+	$effect(() => {
+		const card = $newCard;
+		if (shownCard && !card && focusNewOnFold) newMenu?.focusTrigger();
+		focusNewOnFold = true;
+		shownCard = card;
 	});
 
 	$effect(() => {
@@ -133,10 +142,10 @@
 
 	function cancelNew(): void {
 		$newCard = null;
-		newMenu?.focusTrigger();
 	}
 
 	function foldCreated(): void {
+		focusNewOnFold = false;
 		$newCard = null;
 	}
 
