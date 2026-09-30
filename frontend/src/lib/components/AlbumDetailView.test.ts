@@ -21,7 +21,7 @@ import {
 	collectionShuffleLabel
 } from '$lib/constants';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { findElementByRoleAndName } from './shell/rail-test-fixtures';
+import { findElementByRoleAndName, openCollectionMenu } from './shell/rail-test-fixtures';
 import {
 	clearHitboxStyles,
 	clearPointer,
@@ -175,12 +175,6 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	const element = root.querySelector<T>(selector);
 	if (!element) throw new Error(`Expected ${selector} to be rendered`);
 	return element;
-}
-
-async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
-	requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-	await tick();
-	return requireElement<HTMLElement>(document.body, '.menu-panel');
 }
 
 describe('AlbumDetailView songs that could not load', () => {
