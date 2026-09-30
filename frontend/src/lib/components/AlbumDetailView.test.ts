@@ -561,7 +561,7 @@ describe('AlbumDetailView cover suggestions', () => {
 		requireElement<HTMLButtonElement>(target, '.suggest-cover').click();
 
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
-		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your cover…'));
 	});
 
 	it('shows the API detail when suggesting a cover fails', async () => {
@@ -715,13 +715,40 @@ describe('AlbumDetailView cover suggestions', () => {
 		const target = await renderDetail();
 
 		await vi.waitFor(() => expect(FakeJobEventSource.sources).toHaveLength(1));
-		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your cover…'));
 		expect(get(activeJobs)).toHaveLength(1);
 
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
 
 		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion')).not.toBeNull());
 		expect(FakeJobEventSource.sources).toHaveLength(1);
+	});
+
+	it('promises one cover while a request is drawing', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({
+				job: coverJob({ status: 'running', progress: 0.5 }),
+				used_today: 2,
+				daily_limit: 10
+			})
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your cover…'));
+		expect(target.textContent).toContain('Creating one suggestion · 2 of 10 today');
+		expect(target.querySelectorAll('.suggestion-placeholder')).toHaveLength(1);
+	});
+
+	it('describes the pending suggestions without promising a count', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ suggestions: [{ id: 'one', url: '/suggestion-one.png' }] })
+		);
+		const target = await renderDetail();
+
+		await vi.waitFor(() => expect(target.querySelector('.cover-suggestion')).not.toBeNull());
+		expect(target.textContent).toContain('Made from this album’s metadata');
+		expect(target.textContent).not.toContain('Three suggestions');
 	});
 
 	it('shows three suggestions, selects one, and updates the shared album owner', async () => {
@@ -927,7 +954,7 @@ describe('AlbumDetailView cover suggestions', () => {
 
 		expect(fetchAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		suggestionJob.resolve(coverJob());
-		await vi.waitFor(() => expect(target.textContent).toContain('Making your covers…'));
+		await vi.waitFor(() => expect(target.textContent).toContain('Making your cover…'));
 	});
 
 	it('keeps replacement suggestions reachable when the album already has a cover', async () => {

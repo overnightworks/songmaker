@@ -100,12 +100,38 @@ def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, monkeyp
         assert session.get(Job, job_id).status == JobStatus.CANCELLED
 
 
-def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
+def _add_pending_suggestion(factory, audio_dir: Path) -> Path:
+    """Publish one earlier suggestion from a completed cover job."""
+    pending_png = audio_dir / "cover-suggestions" / "album" / "pending.png"
+    pending_png.parent.mkdir(parents=True, exist_ok=True)
+    pending_png.write_bytes(_png_bytes())
+    with factory() as session:
+        session.add(Job(
+            id="earlier",
+            type=JobType.COVER,
+            album_id="album",
+            user_id="u1",
+            status=JobStatus.COMPLETED,
+        ))
+        session.flush()
+        session.add(AlbumCoverSuggestion(
+            id="pending",
+            album_id="album",
+            job_id="earlier",
+            png_path="cover-suggestions/album/pending.png",
+        ))
+        session.commit()
+    return pending_png
+
+
+def test_web_runner_exclusively_claims_and_adds_one_suggestion_to_the_pending_ones(
     tmp_path: Path, monkeypatch,
 ) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
+    pending_png = _add_pending_suggestion(factory, audio_dir)
     image_started = threading.Event()
     allow_image_return = threading.Event()
+    image_calls: list[str] = []
 
     def fake_image_generator(
         _prompt: str,
@@ -116,6 +142,7 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
         model: str,
     ) -> bytes:
         assert deadline > 0
+        image_calls.append(_prompt)
         image_started.set()
         assert allow_image_return.wait(timeout=2)
         return _png_bytes()
@@ -143,19 +170,22 @@ def test_web_runner_exclusively_claims_and_publishes_three_suggestions(
         suggestions = list(job.album.cover_suggestions)
         assert job.status == JobStatus.COMPLETED
         assert job.progress == 1.0
-        assert len(suggestions) == 3
+        assert sorted(item.job_id for item in suggestions) == ["earlier", job_id]
         assert all((audio_dir / item.png_path).is_file() for item in suggestions)
+    assert len(image_calls) == 1
+    assert pending_png.is_file()
     assert winner is True
     assert loser is False
     assert not list(audio_dir.rglob(".*.staging"))
 
 
-def test_web_recovery_fails_interrupted_work_cleans_its_group_and_leaves_queue_for_runner(
+def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leaves_queue_for_runner(
     tmp_path: Path, monkeypatch,
 ) -> None:
     factory, audio_dir, running_job_id = _cover_job(tmp_path)
+    pending_png = _add_pending_suggestion(factory, audio_dir)
     interrupted_png = audio_dir / "cover-suggestions" / "album" / "interrupted.png"
-    interrupted_png.parent.mkdir(parents=True)
+    interrupted_png.parent.mkdir(parents=True, exist_ok=True)
     interrupted_png.write_bytes(_png_bytes())
     interrupted_staging_dir = cover_runner._staging_path(
         audio_dir, "album", running_job_id,
@@ -182,8 +212,9 @@ def test_web_recovery_fails_interrupted_work_cleans_its_group_and_leaves_queue_f
     with factory() as session:
         assert session.get(Job, running_job_id).error_type == "server_restart"
         assert session.get(Job, "queued").status == JobStatus.QUEUED
-        assert session.query(AlbumCoverSuggestion).count() == 0
+        assert [item.id for item in session.query(AlbumCoverSuggestion)] == ["pending"]
     assert not interrupted_png.exists()
+    assert pending_png.is_file()
     assert not interrupted_staging_dir.exists()
 
     def fake_image_generator(*_args, **_kwargs) -> bytes:
@@ -224,6 +255,7 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
     abort_signal = threading.Event() if aborted else None
     if abort_signal is not None:
         abort_signal.set()
+        pending_png = _add_pending_suggestion(factory, audio_dir)
 
     def generate_image(
         _prompt: str,
@@ -257,11 +289,11 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
             assert job.status == JobStatus.FAILED
             assert job.error == "Codex could not draw: Image generation cancelled."
             assert job.error_type == "cover_suggestion_error"
-            assert not job.album.cover_suggestions
-            assert not list(audio_dir.rglob("*.png"))
+            assert [item.id for item in job.album.cover_suggestions] == ["pending"]
+            assert list(audio_dir.rglob("*.png")) == [pending_png]
         else:
             assert job.status == JobStatus.COMPLETED
-            assert len(job.album.cover_suggestions) == 3
+            assert len(job.album.cover_suggestions) == 1
             assert all(
                 (audio_dir / item.png_path).is_file() for item in job.album.cover_suggestions
             )

@@ -419,12 +419,11 @@ async def api_create_cover_suggestions(
     album_id: str,
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-    ctx: AppContext = Depends(get_app_context),
 ) -> JobResponse:
     session.commit()
     settings = get_settings()
     try:
-        request = request_cover_suggestions(session, album_id, user)
+        job = request_cover_suggestions(session, album_id, user)
         if (
             settings.cover_executor is CoverExecutor.MUSIC
             and not await is_music_worker_healthy()
@@ -437,26 +436,25 @@ async def api_create_cover_suggestions(
     except HTTPException:
         session.rollback()
         raise
-    remove_cover_suggestion_files(ctx.audio_dir, request.stale_suggestion_paths)
     if settings.cover_executor is CoverExecutor.WEB:
-        return JobResponse.from_orm(request.job)
+        return JobResponse.from_orm(job)
     try:
         await get_arq_pool().enqueue_job(
             JobFunction.COVER,
-            request.job.id,
+            job.id,
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except (ConnectionError, RuntimeError):
         update_job_status(
             session,
-            request.job.id,
+            job.id,
             JobStatus.FAILED,
             error="Job queue unavailable",
             error_type="queue_unavailable",
         )
         session.commit()
         raise HTTPException(503, "Job queue unavailable")
-    return JobResponse.from_orm(request.job)
+    return JobResponse.from_orm(job)
 
 
 @router.get("/albums/{album_id}/cover-suggestions")
