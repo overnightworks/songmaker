@@ -1,9 +1,11 @@
+import type { Pathname } from '$app/types';
+
 type SettingsSectionId =
 	'generation' | 'playback' | 'voices' | 'account' | 'admin' | 'cleanup' | 'legal';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
-	readonly href: string;
+	readonly href: Pathname;
 	readonly label: string;
 	readonly icon: string;
 	readonly adminOnly: boolean;

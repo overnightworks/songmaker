@@ -1,7 +1,7 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SETTINGS_NAV_LABEL } from '$lib/constants';
+import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
 import { visibleSettingsSections } from '$lib/settingsSections';
 import { currentUser } from '$lib/stores/auth';
 import { clearPointer, setPointer } from '$lib/test-utils/hitbox';
@@ -77,6 +77,12 @@ describe('settings index on the phone', () => {
 		expect(rowLabels(target)).toEqual(['Generation', 'Playback', 'Voices', 'Account', 'Legal']);
 	});
 
+	it('names the tab after the Settings list', async () => {
+		await render();
+
+		expect(document.title).toBe(`${RAIL_SETTINGS_LABEL} — ${APP_NAME}`);
+	});
+
 	it('shows the signed-in username beside Account', async () => {
 		const target = await render();
 		const account = listRows(target).find(
@@ -91,13 +97,17 @@ describe('settings index on the desktop', () => {
 	beforeEach(() => setPointer('fine'));
 
 	it.each([
-		{ viewer: 'an admin', user: ADMIN, target: '/settings/generation' },
-		{ viewer: 'a non-admin', user: USER, target: '/settings/playback' }
-	])('redirects $viewer straight into $target and shows no list', async ({ user, target }) => {
-		currentUser.set(user);
-		const rendered = await render();
+		{ viewer: 'an admin', user: ADMIN, admin: true },
+		{ viewer: 'a non-admin', user: USER, admin: false }
+	])(
+		'redirects $viewer straight into the first section they can see and shows no list',
+		async ({ user, admin }) => {
+			currentUser.set(user);
+			const rendered = await render();
 
-		expect(navigation.goto).toHaveBeenCalledWith(target, { replaceState: true });
-		expect(listRows(rendered)).toHaveLength(0);
-	});
+			const [firstVisible] = visibleSettingsSections(admin);
+			expect(navigation.goto).toHaveBeenCalledWith(firstVisible?.href, { replaceState: true });
+			expect(listRows(rendered)).toHaveLength(0);
+		}
+	);
 });
