@@ -20,6 +20,7 @@
 
 	const presentation = $derived($generateAction);
 	const reconnecting = $derived(isGenerateJobActive(presentation) && presentation.reconnecting);
+	const cancelUnreachable = $derived(isGenerateJobActive(presentation) && presentation.offline);
 	const percent = $derived(presentation.kind === 'generating' ? presentation.progress : 0);
 	const statusLineText = $derived.by(() => {
 		if (presentation.kind !== 'generating') return null;
@@ -39,13 +40,14 @@
 				<button
 					type="button"
 					class="icon-button"
+					class:unreachable={cancelUnreachable}
 					data-hitbox="frequent"
-					aria-label={reconnecting
+					aria-label={cancelUnreachable
 						? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
 						: EDITOR_GENERATE_CANCEL_LABEL}
-					aria-disabled={reconnecting}
+					aria-disabled={cancelUnreachable}
 					onclick={() => {
-						if (!reconnecting) void cancelGeneration(presentation.jobId);
+						if (!cancelUnreachable) void cancelGeneration(presentation.jobId);
 					}}
 				>
 					<Icon name="x" />
@@ -140,8 +142,8 @@
 		color: var(--text-subtle);
 	}
 
-	/* Offline nothing about the take can arrive and a cancel cannot leave, so
-	   the card stops looking live: its last state, in grey. */
+	/* While nothing about the take can arrive the card stops looking live:
+	   its last state, in grey. Offline a cancel cannot leave, so it greys too. */
 	.reconnecting .status-title b {
 		color: var(--text-light);
 	}
@@ -154,7 +156,7 @@
 		color: var(--text-subtle);
 	}
 
-	.reconnecting .icon-button {
+	.icon-button.unreachable {
 		color: var(--text-disabled);
 		cursor: default;
 	}

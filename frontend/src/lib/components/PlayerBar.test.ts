@@ -966,7 +966,10 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 });
 
 describe('PlayerBar failure line', () => {
+	// A take the lost network stopped plays on once the connection is back
+	// (#1161 R2), so the player goes before the connection returns.
 	afterEach(() => {
+		audioPlayer.destroy();
 		resetConnectivityForTests();
 	});
 
