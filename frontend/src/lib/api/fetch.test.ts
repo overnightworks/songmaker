@@ -285,11 +285,12 @@ describe('429 throttle toast', () => {
 		expect(shown[0].id).not.toBe(first.id);
 	});
 
-	it('does not toast for a path auth.ts already surfaces its own 429 copy for', async () => {
+	it('does not toast for a path that already surfaces its own 429 in place', async () => {
 		mockFetch.mockResolvedValue(rateLimitedResponse());
 
 		await apiFetch('/api/auth/login', { method: 'POST' }).catch((e: unknown) => e);
 		await apiFetch('/api/auth/me').catch((e: unknown) => e);
+		await apiFetch('/api/albums/a1/cover-suggestions', { method: 'POST' }).catch((e: unknown) => e);
 
 		expect(get(toasts)).toHaveLength(0);
 	});

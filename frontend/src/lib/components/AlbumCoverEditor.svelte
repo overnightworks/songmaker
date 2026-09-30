@@ -15,6 +15,7 @@
 		albumCoverSuggestionsLeftToday,
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_COVER_DAILY_LIMIT_REACHED,
 		ALBUM_COVER_EDITING_CLOSE_LABEL,
 		ALBUM_COVER_EDITING_LABEL,
 		ALBUM_COVER_EDITING_REMOVE_LABEL,
@@ -49,10 +50,14 @@
 		data: CoverSuggestionsResponse | null;
 		failure: string | null;
 		unreachable: boolean;
+		limitNote: string | null;
 		isLoading: boolean;
 	}
 
-	type CoverSuggestionsOutcome = Pick<CoverSuggestionsState, 'failure' | 'unreachable'>;
+	type CoverSuggestionsOutcome = Pick<
+		CoverSuggestionsState,
+		'failure' | 'unreachable' | 'limitNote'
+	>;
 
 	type StageSlot =
 		| { kind: 'suggestion'; id: string; url: string }
@@ -60,8 +65,13 @@
 		| { kind: 'failed'; reason: string };
 
 	const HTTP_CONFLICT = 409;
+	const HTTP_TOO_MANY_REQUESTS = 429;
 
-	const COVER_SUGGESTIONS_SETTLED: CoverSuggestionsOutcome = { failure: null, unreachable: false };
+	const COVER_SUGGESTIONS_SETTLED: CoverSuggestionsOutcome = {
+		failure: null,
+		unreachable: false,
+		limitNote: null
+	};
 
 	let { album, onclose, onupload, onremove }: Props = $props();
 
@@ -105,8 +115,12 @@
 	const dailySuggestionsSpent = $derived(
 		coverSuggestions !== null && coverSuggestions.used_today >= coverSuggestions.daily_limit
 	);
+	const dailyLimitNote = $derived(
+		(coverSuggestionsState?.albumId === currentAlbumId ? coverSuggestionsState.limitNote : null) ??
+			(dailySuggestionsSpent ? ALBUM_COVER_DAILY_LIMIT_REACHED : null)
+	);
 	const canSuggestCover = $derived(
-		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailySuggestionsSpent
+		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailyLimitNote
 	);
 	const coverSuggestionFailure = $derived(
 		coverSuggestionsFailure ??
@@ -248,13 +262,21 @@
 	}
 
 	function coverSuggestionsOutcomeOf(error: unknown): CoverSuggestionsOutcome {
-		if (error instanceof NetworkError) return { failure: null, unreachable: true };
+		if (error instanceof NetworkError) {
+			return { ...COVER_SUGGESTIONS_SETTLED, unreachable: true };
+		}
 		if (error instanceof ApiError && error.status === HTTP_CONFLICT) {
-			return { failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING, unreachable: false };
+			return { ...COVER_SUGGESTIONS_SETTLED, failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING };
+		}
+		if (error instanceof ApiError && error.status === HTTP_TOO_MANY_REQUESTS) {
+			return {
+				...COVER_SUGGESTIONS_SETTLED,
+				limitNote: describeFailure(error, ALBUM_COVER_DAILY_LIMIT_REACHED)
+			};
 		}
 		return {
-			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK),
-			unreachable: false
+			...COVER_SUGGESTIONS_SETTLED,
+			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
 		};
 	}
 
@@ -284,9 +306,21 @@
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
 			const outcome = coverSuggestionsOutcomeOf(error);
+			if (outcome.limitNote) {
+				await recountAfterRefusal(albumId, outcome.limitNote);
+				return;
+			}
 			updateCoverSuggestionsState(albumId, (state) => ({ ...state, ...outcome, isLoading: false }));
 			reloadCoverSuggestionsAfter(outcome);
 		}
+	}
+
+	// A refusal means the count the editor holds is stale -- another tab or a
+	// new day may have moved it -- so the count is read again and the
+	// server's words stay beside it.
+	async function recountAfterRefusal(albumId: string, limitNote: string): Promise<void> {
+		await loadCoverSuggestions(albumId);
+		updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
 	}
 
 	async function stopSuggestionRun(jobId: string): Promise<void> {
@@ -459,6 +493,9 @@
 		{:else if coverSuggestionsLoading}
 			<span role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</span>
 		{/if}
+		{#if dailyLimitNote}
+			<span class="cover-limit">{dailyLimitNote}</span>
+		{/if}
 	</p>
 
 	<div class="cover-actions">
@@ -625,8 +662,9 @@
 	.cover-count {
 		grid-area: count;
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: center;
-		gap: 0.6rem;
+		gap: 0.2rem 0.6rem;
 		margin: 0;
 		color: var(--text-subtle);
 		font-size: 0.75rem;
@@ -635,6 +673,11 @@
 	.cover-count b {
 		color: var(--text);
 		font-weight: 600;
+	}
+
+	.cover-limit {
+		flex-basis: 100%;
+		text-align: center;
 	}
 
 	.cover-actions {
