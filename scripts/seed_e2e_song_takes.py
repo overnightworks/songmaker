@@ -99,6 +99,7 @@ def seed_song_takes(
             model_mode=MODEL_DEFAULT_MODE,
             generation_id=generation_id,
             audio_dir=audio_dir,
+            created_by=owner_id,
         )
         create_generation_created_event(
             session, user_id=owner_id, song_id=song.id, generation_id=gen.id,
