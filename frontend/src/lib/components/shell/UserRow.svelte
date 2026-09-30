@@ -1,14 +1,20 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { guardDirtyNavigation, openAppPage } from '$lib/stores/navigation';
 	import ThemeToggle from '../ThemeToggle.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
+
+	function openAccount(event: MouseEvent): void {
+		event.preventDefault();
+		void openAppPage('/settings/account');
+	}
 </script>
 
 <div class="user-row">
-	<a class="username" href="/settings/account">{username}</a>
+	<a class="username" href="/settings/account" onclick={openAccount}>{username}</a>
 	<ThemeToggle />
-	<button class="logout" onclick={onlogout}>Logout</button>
+	<button class="logout" onclick={() => void guardDirtyNavigation(onlogout)}>Logout</button>
 </div>
 
 <style>

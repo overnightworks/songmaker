@@ -129,6 +129,7 @@ import {
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
+	openAppPage,
 	openCollectionEntry,
 	openLibraryCreate,
 	openLibraryWall,
@@ -1150,6 +1151,39 @@ describe('a dirty draft guards song switch / leave', () => {
 			expect(get(selectedSongId)).toBe('s1');
 			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
 			expect(get(editLyrics)).toBe('unsaved edit');
+		});
+	});
+
+	describe.each([
+		['a Settings row', () => openAppPage('/settings/playback')],
+		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })]
+	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
+		async function leaveWithADirtyDraft(): Promise<void> {
+			await openAlbum('a1');
+			await selectSong('s1');
+			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+			setDraftLyrics('unsaved edit');
+			toggleSidebar();
+			vi.mocked(goto).mockClear();
+			await leave();
+		}
+
+		it('holds the leave for the unsaved-changes dialog and keeps the route', async () => {
+			await leaveWithADirtyDraft();
+
+			expect(get(pendingDirtyNavigation)).not.toBeNull();
+			expect(window.location.pathname).toBe('/album/a1/s1');
+			expect(vi.mocked(goto)).not.toHaveBeenCalled();
+			expect(get(sidebarOpen)).toBe(false);
+		});
+
+		it('leaves for the page on Discard', async () => {
+			await leaveWithADirtyDraft();
+			discardDraft();
+			await get(pendingDirtyNavigation)?.();
+			pendingDirtyNavigation.set(null);
+
+			expect(window.location.pathname).toBe('/settings/playback');
 		});
 	});
 

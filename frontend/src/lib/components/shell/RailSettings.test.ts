@@ -1,9 +1,18 @@
 import { tick } from 'svelte';
+import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { goto } from '$app/navigation';
 import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '$lib/constants';
 import { currentUser } from '$lib/stores/auth';
+import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { createComponentMount, requireElement } from './rail-test-fixtures';
+
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
+vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 
 // A genuine `$state` proxy, not a plain object: Rail.svelte (and the real
 // root layout) never remounts across a route change, so the fix this file
@@ -52,9 +61,39 @@ beforeEach(() => {
 afterEach(async () => {
 	await cleanup();
 	currentUser.set(null);
+	discardDraft();
+	pendingDirtyNavigation.set(null);
+	vi.mocked(goto).mockClear();
 });
 
+async function clickSection(label: string): Promise<void> {
+	const target = await render();
+	requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+	await tick();
+	const row = Array.from(target.querySelectorAll<HTMLAnchorElement>('.row-sub')).find(
+		(link) => link.textContent?.trim() === label
+	);
+	if (!row) throw new Error(`Expected a ${label} row`);
+	row.click();
+	await tick();
+}
+
 describe('RailSettings', () => {
+	it('opens the clicked section', async () => {
+		await clickSection('Playback');
+
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback', { replaceState: false });
+	});
+
+	it('holds a section for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
+		setDraftLyrics('unsaved edit');
+
+		await clickSection('Playback');
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+	});
+
 	it('starts collapsed off a settings route and expands on click', async () => {
 		const target = await render();
 		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
