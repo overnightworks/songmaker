@@ -1,5 +1,5 @@
 import { get, writable } from 'svelte/store';
-import { goto } from '$app/navigation';
+import { goto, pushState, replaceState } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
 import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
@@ -92,9 +92,9 @@ const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
-let plannedHistory: { pathname: string; state: LibraryHistoryState } | null = null;
+let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
-let restoredHistory: unknown = null;
+let restoredHistory: unknown = libraryHistoryEntry();
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -219,55 +219,36 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 
 type HistoryWriteMode = 'push' | 'replace';
 
-// The one place that decides how a library history entry reaches the browser.
+// The one place that decides how a library history entry reaches the browser
+// (issue #1165): always through SvelteKit's router, so every entry carries the
+// router's own place in history and Back or Forward from any page -- Settings
+// included -- lands where the router expects instead of on an entry it cannot
+// place.
 //
-// SvelteKit reconciles its mounted route tree only on a real navigation, so a
-// raw history write is invisible to the router. That was harmless while every
-// library address was `/` or `/?song=…` — always the same route. Since an open
-// album addresses `/album/<slug>` (issue #269), an open song addresses one
-// segment deeper, `/album/<slug>/<song>` (issue #275), and a selected take one
-// segment deeper still, `/album/<slug>/<song>/take/<n>` (issue #281), a write
-// can change which of the four route files (`/`, `/album/[slug]`,
-// `/album/[slug]/[song]`, `/album/[slug]/[song]/take/[n]`) the address names,
-// and a raw one would leave the router mounting the file it last saw while the
-// address names another: the next real navigation or Back/Forward that
-// disagrees tears the workspace down mid-session, with an unsaved draft still
-// in it. `libraryRouteShape` names which of the four a pathname is, and a
-// write that changes it goes through `goto`, which uses the same History API
-// but keeps the router in step, while the frequent same-shape churn (filter,
-// sort, scroll, search cursor, switching to another song within the same open
-// album since #275, and switching to another take of the same open song since
-// #281) keeps the cheap synchronous write.
+// A write that changes which route file the address names (`/`,
+// `/album/<slug>`, `/album/<slug>/<song>`, `/album/<slug>/<song>/take/<n>`,
+// `/playlist/<slug>`; `libraryRouteShape` names which) is a navigation:
+// `goto`, carrying the library as its page state. The frequent same-shape
+// churn -- filter, sort, scroll, search cursor, another song of the open
+// album, another take of the open song, a history layer over the library --
+// is shallow routing (`pushState`/`replaceState`), synchronous and without a
+// route resolution. Issue #276 measured what a `goto` costs per write against
+// how often that churn fires, which is why only a crossing navigates.
 //
-// `goto` puts its own `state` option in `page.state`, not in `history.state`,
-// which is where every reader of the library's restore state looks — so the
-// state is written onto the entry after the navigation lands, and `goto`'s
-// state option is deliberately unused.
+// Shallow routing keeps the page's route and `page.url` where the last
+// navigation left them, and an entry it writes remembers that page: Back onto
+// it from another page loads that page's route. The address routes therefore
+// yield to the entry whenever their params name a page the address bar does
+// not show (see `entryOutranksStaleAddress`), and nothing reads the library
+// from `page.state` or `page.url`: every reader asks
+// `currentLibraryHistoryState`, every popstate `libraryHistoryEntry`.
 //
 // Writes are serialized because a crossing one is asynchronous: a caller that
 // writes twice in a row (open a song, then pin its take) must not have its
 // second write overtake the first, and must see the entry the first one is
-// going to install rather than the stale one it would still read from
-// `history.state` — which is what `currentLibraryHistoryState` answers.
-//
-// The same-shape raw write is a permanent design choice, not scaffolding a
-// later cleanup should finish by routing everything through `goto`: issue
-// #276 measured what a `goto` costs per write (a real SvelteKit navigation,
-// its own route resolution and reactive re-run) against how often the
-// same-shape case actually fires — filter/sort/search-cursor/scroll on
-// nearly every interaction with the wall, a song-to-song or take-to-take
-// move on every list click and Previous/Next — and going through the router
-// for all of it would turn the library's most frequent writes into its most
-// expensive ones for a distinction (which route *file* is mounted) that
-// same-shape churn never changes. `libraryRouteShape` is what makes "does
-// this write cross" a real question instead of "is this a write" — treating
-// every write as a crossing would be simpler code, but wrong on the
-// frequency this store actually sees; see the `LibraryRouteShape` note above
-// for what a wrongly-collapsed shape does when a crossing goes undetected
-// instead. Issue #265's S7 (which removed `ensureLibraryWorkspaceRoute`,
-// #264's now-redundant separate guard, once this shape-based check alone was
-// proven to cover everything it did) confirmed the choice rather than
-// revisiting it.
+// going to install -- which is what `currentLibraryHistoryState` answers. A
+// page load holds every write until the router has started (see
+// `holdLibraryHistoryUntilRouterStarts`), since shallow routing needs it.
 export function writeLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,
@@ -277,18 +258,22 @@ export function writeLibraryHistory(
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
 	if (!crossesRoutes && queuedHistoryWrites === 0) {
-		applyHistoryWrite(state, url, mode);
+		writeShallowLibraryHistory(state, url, mode);
 		return Promise.resolve();
 	}
-	return queueHistoryStep(state, pathname, async () => {
-		if (crossesRoutes) {
-			const written = mode === 'replace' ? keepEntryLayer(state) : state;
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-			await goto(url, { replaceState: mode === 'replace', noScroll: true, keepFocus: true });
-			applyHistoryWrite(written, url, 'replace');
+	return queueHistoryStep({ pathname, state }, async () => {
+		if (!crossesRoutes) {
+			writeShallowLibraryHistory(state, url, mode);
 			return;
 		}
-		applyHistoryWrite(state, url, mode);
+		const written = mode === 'replace' ? keepEntryLayer(state) : state;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+		await goto(url, {
+			replaceState: mode === 'replace',
+			noScroll: true,
+			keepFocus: true,
+			state: libraryPageState(written)
+		});
 	});
 }
 
@@ -300,7 +285,7 @@ export function writeLibraryHistory(
 // the entry below instead of racing the traversal, and reads `landing` from
 // `currentLibraryHistoryState` meanwhile.
 export function backLibraryHistory(landing: LibraryHistoryState, url: string): Promise<void> {
-	return queueHistoryStep(landing, pathnameOf(url), traverseBack);
+	return queueHistoryStep({ pathname: pathnameOf(url), state: landing }, traverseBack);
 }
 
 // Resolves once every queued history step has landed. A navigation that
@@ -319,12 +304,16 @@ function traverseBack(): Promise<void> {
 	});
 }
 
+interface PlannedHistory {
+	pathname: string;
+	state: LibraryHistoryState;
+}
+
 function queueHistoryStep(
-	state: LibraryHistoryState,
-	pathname: string,
+	planned: PlannedHistory | null,
 	step: () => Promise<void>
 ): Promise<void> {
-	plannedHistory = { pathname, state };
+	if (planned) plannedHistory = planned;
 	queuedHistoryWrites += 1;
 	const write = historyWrites.then(step);
 	historyWrites = write
@@ -340,47 +329,36 @@ function pathnameOf(url: string): string {
 	return new URL(url, window.location.origin).pathname;
 }
 
-// The history.state the page loaded onto, handed out once: the first reader
-// after a load gets it, every later one null -- and so does a reader after
-// the page has navigated off that entry, where it no longer describes where
-// the page stands.
-export function takeRestoredLibraryHistory(): unknown {
+// SvelteKit's single-page start writes its own entry over the one a page
+// loads onto, dropping the library a reload or a restored tab comes back to,
+// and shallow routing may not run before that start is over. So the library
+// the entry carried is read once, while the router loads this module, and the
+// app layout holds every write from its first render until the router reports
+// the start; the first write then puts that library back onto its entry.
+// Meanwhile `currentLibraryHistoryState` already answers it, so an address
+// route resolving early keeps the richer entry rather than overwriting it.
+export function holdLibraryHistoryUntilRouterStarts(): () => void {
 	const restored = restoredHistory;
-	leaveRestoredLibraryHistory();
-	return restored;
-}
-
-// Back and Forward between two library entries carry no router state, so
-// SvelteKit reports no navigation for them: the first traversal after the
-// load is this module's own cue that the page left the entry it loaded onto.
-function holdRestoredLibraryHistory(): void {
-	restoredHistory = libraryHistoryEntry();
-	rememberRestoredSongTab(restoredHistory);
-	window.addEventListener('popstate', leaveRestoredLibraryHistory, { once: true });
-}
-
-// The song address resolves only after SvelteKit has replaced the loaded
-// entry, so the tab that entry was left on reaches it as that song's memory.
-function rememberRestoredSongTab(restored: unknown): void {
-	if (!isLibraryHistoryState(restored) || !restored.songId) return;
-	rememberSongTab(restored.songId, normalizeDetailTab(restored.detailTab));
-}
-
-export function leaveRestoredLibraryHistory(): void {
 	restoredHistory = null;
-	window.removeEventListener('popstate', leaveRestoredLibraryHistory);
+	let reportStart = (): void => undefined;
+	const started = new Promise<void>((resolve) => {
+		reportStart = resolve;
+	});
+	const planned = isLibraryHistoryState(restored)
+		? { pathname: window.location.pathname, state: restored }
+		: null;
+	void queueHistoryStep(planned, async () => {
+		await started;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the page loaded on, already resolved
+		if (planned) replaceState(window.location.href, libraryPageState(planned.state));
+	});
+	return reportStart;
 }
 
-// SvelteKit's single-page start replaces the entry's history.state with its
-// own router entry before any page runs, so the state a reload or a restored
-// tab comes back to survives only in this read, taken while the router loads
-// this module during that start.
-holdRestoredLibraryHistory();
-
-// A page load, as far as the restored entry goes: reads history.state the way
-// this module's own load does.
+// A page load, as far as the restored library goes: reads it the way this
+// module's own load does.
 export function loadLibraryHistoryPageForTests(): void {
-	holdRestoredLibraryHistory();
+	restoredHistory = libraryHistoryEntry();
 }
 
 // The library history entry as it will stand once every queued write has
@@ -391,19 +369,32 @@ export function currentLibraryHistoryState(): unknown {
 }
 
 // What a history entry says about the library, whichever way it was written:
-// SvelteKit's shallow routing keeps a page's state under its own key of the
-// entry, a raw History API write is that state itself. Every read of an entry
-// -- the current one or the one a popstate lands on -- goes through here.
+// the router keeps it under its page state, and an entry written raw before
+// the router did (a tab kept open across the change) is that state itself.
+// Every read of an entry -- the current one or the one a popstate lands on --
+// goes through here.
 export function libraryHistoryEntry(entry: unknown = history.state): unknown {
 	if (isHistoryRecord(entry) && SVELTEKIT_HISTORY_STATES_KEY in entry) {
-		return entry[SVELTEKIT_HISTORY_STATES_KEY];
+		const pageState = entry[SVELTEKIT_HISTORY_STATES_KEY];
+		return isHistoryRecord(pageState) ? (pageState.library ?? null) : null;
 	}
 	return entry;
 }
 
-function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: HistoryWriteMode): void {
-	if (mode === 'push') history.pushState(state, '', url);
-	else history.replaceState(keepEntryLayer(state), '', url);
+function libraryPageState(state: LibraryHistoryState): App.PageState {
+	return { library: state };
+}
+
+function writeShallowLibraryHistory(
+	state: LibraryHistoryState,
+	url: string,
+	mode: HistoryWriteMode
+): void {
+	const pageState = mode === 'push' ? state : keepEntryLayer(state);
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+	if (mode === 'push') pushState(url, libraryPageState(pageState));
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- as above
+	else replaceState(url, libraryPageState(pageState));
 }
 
 // A replace rewrites the library an entry shows, never what the entry is: an
@@ -415,6 +406,19 @@ function keepEntryLayer(state: LibraryHistoryState): LibraryHistoryState {
 		return state;
 	}
 	return { ...state, layer: entry.layer };
+}
+
+// Back from another page onto an entry shallow routing wrote loads the route
+// of the page that entry was written over (see writeLibraryHistory), so an
+// address route can mount with params naming a page the address bar does not
+// show. The entry names the library the person left there, so it wins: it is
+// applied as it stands and the stale params resolve nothing.
+async function entryOutranksStaleAddress(routePath: string): Promise<boolean> {
+	const entry = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(entry)) return false;
+	if (pathnameOf(routePath) === window.location.pathname) return false;
+	await applyLibraryHistory(entry);
+	return true;
 }
 
 type AlbumAddress = 'found' | 'unknown';
@@ -440,6 +444,7 @@ type AlbumAddress = 'found' | 'unknown';
 // address bar — see the note there before turning any of these back into a
 // bare history.replaceState.
 export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
+	if (await entryOutranksStaleAddress(albumRoutePath(albumId))) return 'found';
 	if (!(await albumIsKnown(albumId))) return 'unknown';
 	const opened = historyAlreadyOpens(albumId);
 	const state = opened
@@ -517,6 +522,7 @@ export async function openSongAddress(
 	songSlug: string,
 	generationId: string | null = null
 ): Promise<SongAddress> {
+	if (await entryOutranksStaleAddress(songRoutePath(albumId, songSlug))) return 'found';
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
@@ -554,6 +560,9 @@ export async function openTakeAddress(
 	songSlug: string,
 	takeNumber: number
 ): Promise<TakeAddress> {
+	if (await entryOutranksStaleAddress(takeRoutePath(albumId, songSlug, takeNumber))) {
+		return 'found';
+	}
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
@@ -583,6 +592,7 @@ type PlaylistAddress = 'found' | 'unknown';
 // album to nest inside, so unlike openSongAddress there is only the one
 // resolution, not two run concurrently.
 export async function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
+	if (await entryOutranksStaleAddress(playlistRoutePath(slug))) return 'found';
 	const playlist = await resolvePlaylistBySlug(slug);
 	if (!playlist) return 'unknown';
 	const opened = historyAlreadyOpensPlaylist(playlist.id);
@@ -961,7 +971,7 @@ export function resetLibraryContextForTests(): void {
 	queuedHistoryWrites = 0;
 	plannedHistory = null;
 	librarySnapshotTaken = false;
-	leaveRestoredLibraryHistory();
+	restoredHistory = null;
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	songTabs.clear();

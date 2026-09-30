@@ -41,7 +41,7 @@ export function isPlaylistRoutePath(pathname: string): boolean {
 	);
 }
 
-export type LibraryRouteShape =
+type LibraryRouteShape =
 	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist' | 'external';
 
 export function libraryRouteShape(pathname: string): LibraryRouteShape {
