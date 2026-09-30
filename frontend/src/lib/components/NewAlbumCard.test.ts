@@ -110,7 +110,7 @@ describe('NewAlbumCard', () => {
 		expect(creates).toBe(1);
 	});
 
-	it('creates on Enter in the title field', async () => {
+	it('creates on Enter in the title field with an empty artist', async () => {
 		const root = await render();
 		type(field(root, 'Title'), 'Night Drive');
 
