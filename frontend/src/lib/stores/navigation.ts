@@ -708,11 +708,21 @@ function popsHistoryLayers(state: unknown): boolean {
 // Layers stack (a menu over Now Playing), so the last of this module's own
 // step-backs off a stale layer entry -- after a reload on the top one -- can
 // land on the stale entry of the layer below, and steps on until it reaches
-// the library.
+// the library. A write already queued past that entry (an album row in the
+// drawer over the cover editor, which the new album closes) moves on from it
+// by itself; stepping off as well would land behind that write, on the
+// library it left.
 function stepOffStackedStaleLayerEntry(state: unknown): void {
-	if (ownLayerStepBacks > 0) return;
+	if (ownLayerStepBacks > 0 || historyMovesOnFrom(state)) return;
 	const staleLanding = staleLayerEntryLanding(state);
 	if (staleLanding) stepBackOnto(staleLanding);
+}
+
+function historyMovesOnFrom(state: unknown): boolean {
+	const planned = currentLibraryHistoryState();
+	return (
+		isLibraryHistoryState(state) && isLibraryHistoryState(planned) && planned.index !== state.index
+	);
 }
 
 // An entry marked as a layer that no open layer owns -- left behind by a
