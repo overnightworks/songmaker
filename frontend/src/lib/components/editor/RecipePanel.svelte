@@ -41,6 +41,7 @@
 	import { fetchGenerationDefaults, uploadReferenceAudio } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
 	import type { VersionGenerationParams } from '$lib/api/types';
+	import { followAppPageLink } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
 	import { nowPlayingTakeLabel } from '$lib/constants/now-playing';
 	import {
@@ -216,7 +217,12 @@
 				{RECIPE_SAVE_AS_PRESET_LABEL}
 			</button>
 		{/if}
-		<a class="preset-manage-link" href="/settings/generation">{RECIPE_MANAGE_PRESETS_LABEL}</a>
+		<a
+			class="preset-manage-link"
+			href="/settings/generation"
+			onclick={(event) => followAppPageLink(event, '/settings/generation')}
+			>{RECIPE_MANAGE_PRESETS_LABEL}</a
+		>
 	</div>
 
 	<div class="recipe-groups">

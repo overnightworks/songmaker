@@ -20,9 +20,21 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 	};
 });
 
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
-import { editBpm, loadSongData, pinnedSeed, setDraftBpm } from '$lib/stores/editor';
+import { goto } from '$app/navigation';
+import {
+	discardDraft,
+	editBpm,
+	loadSongData,
+	pinnedSeed,
+	setDraftBpm,
+	setDraftLyrics
+} from '$lib/stores/editor';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { activeModels } from '$lib/stores/presets';
 import {
 	clearSource,
@@ -69,6 +81,9 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
+	vi.mocked(goto).mockClear();
 });
 
 async function render() {
@@ -140,6 +155,16 @@ describe('RecipePanel', () => {
 		await tick();
 		target.querySelector<HTMLButtonElement>('.collapse-btn')?.click();
 		expect(onclose).toHaveBeenCalledTimes(1);
+	});
+
+	it('holds Manage presets for the unsaved-changes dialog while the song has a dirty draft (issue #1143)', async () => {
+		setDraftLyrics('unsaved edit');
+		const target = await render();
+
+		target.querySelector<HTMLAnchorElement>('.preset-manage-link')?.click();
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('resets the draft to the preset default when Default is selected', async () => {
