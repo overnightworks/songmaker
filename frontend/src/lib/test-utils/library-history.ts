@@ -2,11 +2,14 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	currentLibraryHistoryState,
+	holdLibraryHistoryUntilRouterStarts,
 	libraryHistoryEntry,
+	libraryHistoryStepsLanded,
+	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 import { initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
-import { writeHistoryEntry } from '$lib/test-utils/app-navigation';
+import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
 
 // The one place tests touch the browser history: they seed and read entries,
 // and press Back and Forward, through these helpers, so the shape an entry is
@@ -58,6 +61,22 @@ async function traverseHistory(step: () => void): Promise<void> {
 	step();
 	await landed;
 	await tick();
+}
+
+// A reload onto the entry history stands on, the way the app goes through
+// one: the library reads the entry while the router loads it, SvelteKit's
+// start writes its own entry over it, and the app layout holds library
+// history until the router reports the start -- which the returned function
+// does.
+export function reloadLibraryPageBeforeRouterStarts(): () => void {
+	loadLibraryHistoryPageForTests();
+	startFakeRouter();
+	return holdLibraryHistoryUntilRouterStarts();
+}
+
+export function reloadLibraryPage(): Promise<void> {
+	reloadLibraryPageBeforeRouterStarts()();
+	return libraryHistoryStepsLanded();
 }
 
 // The entry history will stand on once every queued step has landed.
@@ -166,7 +185,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 					await close(target);
 
-					expect(actionSawHistoryAt?.()).toBe(below);
+					await vi.waitFor(() => expect(actionSawHistoryAt?.()).toBe(below));
 					await expectHistoryAt(below);
 				}
 			);

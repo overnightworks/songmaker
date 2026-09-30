@@ -1,22 +1,27 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	ACCOUNT_MENU_LABEL,
 	COLLECTION_MENU_LABEL,
 	collectionPlayLabel,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
+	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
+	openNowPlayingLabel,
 	PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 	playlistEntryOverflowLabel,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
 	TAKE_DELETE_LABEL,
 	TAKE_DELETE_TITLE_TEMPLATE,
-	TAKE_OVERFLOW_LABEL
+	TAKE_OVERFLOW_LABEL,
+	TRANSPORT_PAUSE_LABEL
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_EXPAND_LABEL,
@@ -25,6 +30,7 @@ import {
 } from '../src/lib/constants/now-playing';
 import {
 	appBar,
+	containing,
 	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
@@ -288,11 +294,31 @@ function backReaches(reached: LibraryPage): OverlayRow['afterwards'] {
 	};
 }
 
-async function backThenForwardReturnsToSettings(page: Page): Promise<void> {
-	await page.goBack();
-	await page.goForward();
+function settingsHeading(page: Page): Locator {
+	return page.getByRole('heading', { name: SETTINGS_SECTION_HEADING });
+}
+
+async function expectSettingsStands(page: Page): Promise<void> {
 	await expect(page).toHaveURL(/\/settings\/voices$/);
-	await expect(page.getByRole('heading', { name: SETTINGS_SECTION_HEADING })).toBeVisible();
+	await expect(settingsHeading(page)).toBeVisible();
+}
+
+async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
+	await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
+	await expectSettingsStands(page);
+}
+
+// Issue #1165: Back leaves Settings for the playlist it was opened over, with
+// the playlist on screen, and Forward shows Settings again.
+async function backThenForwardReturnsToSettings(page: Page, pages: Pages): Promise<void> {
+	await page.goBack();
+	await expectPlaylistStands(page, pages);
+	await expect(settingsHeading(page)).toBeHidden();
+	await page.goForward();
+	await expectSettingsStands(page);
+	await expect(pages.playlist).toBeHidden();
 }
 
 const OVERLAY_ROWS: OverlayRow[] = [
@@ -331,7 +357,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
 		},
 		expectLeft: async (page) => {
-			await expect(page).toHaveURL(/\/settings\/voices$/);
+			await expectSettingsStands(page);
 			await expect(railDrawer(page)).toBeHidden();
 		},
 		afterwards: backThenForwardReturnsToSettings
@@ -421,25 +447,34 @@ const OVERLAY_ROWS: OverlayRow[] = [
 	}
 ];
 
+function wallTiles(page: Page): Locator {
+	return workspace(page).locator('.library-wall .tile-grid');
+}
+
+// A fresh playlist, opened from the wall the way a person does: one entry for
+// the wall, one for the playlist.
+async function openSeededPlaylist(
+	page: Page,
+	request: APIRequestContext
+): Promise<{ playlist: SeededPlaylist; pages: Pages }> {
+	const playlist = await seedPlaylist(request, readSeededLibrary());
+	const surface = workspace(page);
+	await page.goto('/');
+	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+	await expect(wall).toBeVisible();
+	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: playlist.title }).click();
+	const playlistHeading = surface.getByRole('heading', { name: playlist.title });
+	await expect(playlistHeading).toBeVisible();
+	await expect(page).toHaveURL(/\/playlist\//);
+	return { playlist, pages: { wall, playlist: playlistHeading, playlistAddress: page.url() } };
+}
+
 test.describe('Back closes the open overlay first', () => {
 	for (const row of OVERLAY_ROWS) {
 		test(row.name, async ({ page, request }, testInfo) => {
 			test.skip(shellOf(testInfo) !== row.shell, `The row belongs to the ${row.shell} shell.`);
 			const guard = new FlowGuard(page);
-			const playlist = await seedPlaylist(request, readSeededLibrary());
-			const surface = workspace(page);
-			await page.goto('/');
-			const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
-			await expect(wall).toBeVisible();
-			await surface
-				.locator('.library-wall .tile-grid')
-				.locator('.wall-tile-body')
-				.filter({ hasText: playlist.title })
-				.click();
-			const playlistHeading = surface.getByRole('heading', { name: playlist.title });
-			await expect(playlistHeading).toBeVisible();
-			await expect(page).toHaveURL(/\/playlist\//);
-			const pages: Pages = { wall, playlist: playlistHeading, playlistAddress: page.url() };
+			const { playlist, pages } = await openSeededPlaylist(page, request);
 
 			await row.open(page, playlist);
 			await row.leave(page, playlist);
@@ -449,6 +484,236 @@ test.describe('Back closes the open overlay first', () => {
 			guard.assertClean();
 		});
 	}
+});
+
+// Issue #1165: Settings is a page of its own, and Back and Forward move
+// between it and the library page it was opened over -- after a reload too.
+test.describe('Back and Forward between the library and Settings', () => {
+	test('Back from Settings returns to the playlist left, and Forward to Settings', async ({
+		page,
+		request
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		await backThenForwardReturnsToSettings(page, pages);
+		guard.assertClean();
+	});
+
+	// The phone's account menu is a history layer of its own, and choosing
+	// Settings in it steps off that layer before Settings opens.
+	test('Back from Settings opened in the phone account menu returns to the playlist, and Forward to Settings', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The account menu belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		const accountMenu = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
+		await appBar(page).getByRole('button', { name: accountMenu }).click();
+		await page
+			.getByRole('dialog', { name: accountMenu })
+			.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })
+			.click();
+		const settingsIndex = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, exact: true });
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsIndex).toBeVisible();
+
+		await page.goBack();
+
+		await expectPlaylistStands(page, pages);
+		await expect(settingsIndex).toBeHidden();
+
+		await page.goForward();
+
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsIndex).toBeVisible();
+		await expect(pages.playlist).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('after a reload on the playlist, Back from Settings returns to it', async ({
+		page,
+		request
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await page.reload();
+		await expectPlaylistStands(page, pages);
+
+		await openVoicesSettings(page, shellOf(testInfo));
+		await page.goBack();
+
+		await expectPlaylistStands(page, pages);
+		await expect(settingsHeading(page)).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('after a reload on the playlist, Back shows the wall it was opened from', async ({
+		page,
+		request
+	}) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await page.reload();
+		await expectPlaylistStands(page, pages);
+
+		await page.goBack();
+
+		await expectReached(page, pages, 'wall');
+		await expect(pages.playlist).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('Back from Settings onto the wall leaves focus out of its tiles', async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		await page.goto('/');
+		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		await expect(wall).toBeVisible();
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		await page.goBack();
+
+		await expect(wall).toBeVisible();
+		await expect(page).toHaveURL(/\/$/);
+		await expect(wallTiles(page).locator(':focus')).toHaveCount(0);
+		guard.assertClean();
+	});
+
+	test('the phone drawer left open over a reload is gone, and one Back reaches the wall', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await openRailDrawer(page);
+
+		await page.reload();
+
+		await expect(railDrawer(page)).toBeHidden();
+		await expectPlaylistStands(page, pages);
+		// The library steps off the drawer's own entry by itself once it runs.
+		await expect
+			.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
+			.toBe(false);
+		await page.goBack();
+		await expectReached(page, pages, 'wall');
+		guard.assertClean();
+	});
+});
+
+// Issue #1165: the library shows a song the moment it opens, before the
+// router has loaded the song's route. Back pressed then must still step once,
+// onto the album -- the race is one of milliseconds, so the song opens more
+// than once, each time pressed as soon as it shows.
+const SONG_OPENS = 4;
+
+test('one Back right after a song opens from its album returns to the album', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+	await page.goto('/');
+	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
+	const album = surface.getByRole('heading', { name: library.albumTitle });
+	await expect(album).toBeVisible();
+	const albumAddress = page.url();
+	const song = songBar(page, shellOf(testInfo)).getByRole('heading', {
+		name: library.pickedSongTitle
+	});
+	const songRow = surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
+
+	for (let open = 1; open <= SONG_OPENS; open += 1) {
+		await songRow.click();
+		await expect(song).toBeVisible();
+
+		await page.goBack();
+
+		await expect(album).toBeVisible();
+		expect(page.url()).toBe(albumAddress);
+	}
+	guard.assertClean();
+});
+
+// Issue #1165: a crossing the phone opens out of a history layer -- an album
+// tapped in the rail drawer, Go to song in Now Playing -- is written behind
+// the layer's step back. Back pressed as soon as the page shows must still
+// step once, onto the playlist underneath, and not past it -- the race is one
+// of milliseconds, so each crossing is opened and left many times.
+const QUEUED_CROSSINGS = 20;
+const PHONE_LAYERS_ONLY = 'The drawer and the full Now Playing are phone layers.';
+async function openAlbumFromRailDrawer(page: Page, albumTitle: string): Promise<void> {
+	const rail = await openRailNav(page, 'mobile');
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle })
+		.getByRole('button', { name: containing(albumTitle) })
+		.click();
+}
+
+async function goToPlayingSong(page: Page, title: string): Promise<void> {
+	await page
+		.getByRole('contentinfo')
+		.getByRole('button', { name: openNowPlayingLabel(title) })
+		.click();
+	const nowPlaying = page.getByRole('dialog', { name: title });
+	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
+}
+
+test.describe('one Back right after a crossing out of a phone layer', () => {
+	test('an album tapped in the rail drawer returns to the playlist', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		const library = readSeededLibrary();
+		const album = workspace(page).getByRole('heading', { name: library.albumTitle });
+
+		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+			await openAlbumFromRailDrawer(page, library.albumTitle);
+			await expect(album).toBeVisible();
+
+			await page.goBack();
+
+			await expectPlaylistStands(page, pages);
+		}
+		guard.assertClean();
+	});
+
+	test('Go to song in Now Playing returns to the playlist', async ({ page, request }, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
+		const guard = new FlowGuard(page);
+		const { playlist, pages } = await openSeededPlaylist(page, request);
+		await workspace(page)
+			.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
+			.click();
+		// Paused, so the seeded three-second take stays the playing song.
+		await page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+			.click();
+
+		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+			await goToPlayingSong(page, firstSong(playlist));
+			await expectSongStands(page, 'mobile', firstSong(playlist));
+
+			await page.goBack();
+
+			await expectPlaylistStands(page, pages);
+		}
+		guard.assertClean();
+	});
 });
 
 interface CreatedAlbum {
