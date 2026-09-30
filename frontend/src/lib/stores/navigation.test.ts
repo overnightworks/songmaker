@@ -30,6 +30,7 @@ import {
 	libraryScrollAnchor,
 	librarySurface,
 	openPlaylistAddress,
+	openSongAddress,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -1471,6 +1472,38 @@ describe('initNavigation', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
 		expect(updateSong).toHaveBeenCalledTimes(1);
+		cleanup();
+	});
+
+	// After a reload, Back onto the song opened before the one shown is a
+	// router navigation, which resolves that song's address while the draft
+	// left behind is still saving.
+	it('the address route of the song Back lands on waits for the draft left to save', async () => {
+		const tide = song({ ...navigableSongDefaults(), slug: 's1' });
+		const other = song({ ...navigableSongDefaults(), id: 's2', slug: 's2', album_id: 'a2' });
+		songList.set([tide, other]);
+		fetchSong.mockResolvedValue(tide);
+		await selectSong('s1');
+		await selectSong('s2', other);
+		await reloadLibraryPage();
+		const cleanup = initNavigation();
+		loadSongData(other);
+		setDraftLyrics('unsaved edit');
+		let resolveSave: (value: SongItem) => void = () => undefined;
+		vi.mocked(updateSong).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+
+		await pressBack();
+		const routed = openSongAddress('a1', 's1');
+		await new Promise((everyQueuedMicrotaskRan) => setTimeout(everyQueuedMicrotaskRan));
+
+		expect(get(selectedSongId)).toBe('s2');
+		resolveSave({ ...other, lyrics: 'unsaved edit' });
+		await expect(routed).resolves.toBe('found');
+		expect(get(selectedSongId)).toBe('s1');
 		cleanup();
 	});
 
