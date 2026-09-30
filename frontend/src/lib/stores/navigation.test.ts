@@ -124,6 +124,7 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
+	followAppPageLink,
 	goBack,
 	historyLayerState,
 	initNavigation,
@@ -153,6 +154,7 @@ import {
 	setDraftLyrics
 } from '$lib/stores/editor';
 import { updateSong } from '$lib/api/client';
+import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
 
@@ -1109,6 +1111,110 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBeNull();
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	describe.each([
+		['an album', () => openAlbum('a2'), { kind: 'album', id: 'a2' }],
+		['a playlist', () => openPlaylist('p1'), { kind: 'playlist', id: 'p1' }]
+	] as const)('opening %s from the phone drawer (issue #1143)', (_name, open, opened) => {
+		async function openFromTheDrawerWithADirtyDraft(): Promise<void> {
+			await openAlbum('a1');
+			await selectSong('s1');
+			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+			setDraftLyrics('unsaved edit');
+			toggleSidebar();
+			await open();
+		}
+
+		it('holds the leave for the unsaved-changes dialog and closes the drawer over it', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+
+			expect(get(pendingDirtyNavigation)).not.toBeNull();
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+			expect(get(sidebarOpen)).toBe(false);
+		});
+
+		it('leaves on Discard', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+			discardDraft();
+			await get(pendingDirtyNavigation)?.();
+			pendingDirtyNavigation.set(null);
+
+			expect(get(selectedSongId)).toBeNull();
+			expect(get(openCollection)).toEqual(opened);
+		});
+
+		it('stays with the draft on Keep editing', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+			pendingDirtyNavigation.set(null);
+
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+			expect(get(editLyrics)).toBe('unsaved edit');
+		});
+	});
+
+	describe.each([
+		[
+			'a Settings row',
+			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/playback')
+		],
+		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })]
+	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
+		async function leaveWithADirtyDraft(): Promise<void> {
+			await openAlbum('a1');
+			await selectSong('s1');
+			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+			setDraftLyrics('unsaved edit');
+			toggleSidebar();
+			vi.mocked(goto).mockClear();
+			await leave();
+		}
+
+		it('holds the leave for the unsaved-changes dialog and keeps the route', async () => {
+			await leaveWithADirtyDraft();
+
+			expect(get(pendingDirtyNavigation)).not.toBeNull();
+			expect(window.location.pathname).toBe('/album/a1/s1');
+			expect(vi.mocked(goto)).not.toHaveBeenCalled();
+			expect(get(sidebarOpen)).toBe(false);
+		});
+
+		it('leaves for the page on Discard', async () => {
+			await leaveWithADirtyDraft();
+			discardDraft();
+			await get(pendingDirtyNavigation)?.();
+			pendingDirtyNavigation.set(null);
+
+			expect(window.location.pathname).toBe('/settings/playback');
+		});
+
+		it('keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
+			const stopNavigation = initNavigation();
+			try {
+				await leaveWithADirtyDraft();
+				const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
+				dialog.hold(document.createElement('div'));
+				await vi.waitFor(() => expect(historyEntry().layer).toBe('confirm-dialog'));
+				const leave = get(pendingDirtyNavigation);
+				pendingDirtyNavigation.set(null);
+				const dialogEntryLeft = new Promise((landed) =>
+					window.addEventListener('popstate', landed, { once: true })
+				);
+				let leaving: void | Promise<void> = undefined;
+
+				dialog.answer(() => {
+					discardDraft();
+					leaving = leave?.();
+				})();
+				await Promise.all([dialogEntryLeft, leaving]);
+
+				expect(window.location.pathname).toBe('/settings/playback');
+			} finally {
+				stopNavigation();
+			}
+		});
 	});
 
 	it('never prompts when the draft is clean', async () => {

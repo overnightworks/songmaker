@@ -107,6 +107,7 @@ def add_take(
         model_mode=MODEL_DEFAULT_MODE,
         generation_id=generation_id,
         audio_dir=audio_dir,
+        created_by=owner_id,
     )
 
 
