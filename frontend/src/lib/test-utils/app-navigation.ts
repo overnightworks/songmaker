@@ -1,5 +1,5 @@
 import type { AfterNavigate, NavigationTarget } from '@sveltejs/kit';
-import { onMount } from 'svelte';
+import { flushSync, onMount } from 'svelte';
 import { vi } from 'vitest';
 import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 
@@ -159,7 +159,17 @@ function withoutHash(url: URL | Location): string {
 // page state and address follow; onto another navigation's entry -- or onto
 // any entry before anything has navigated since the start, see above -- the
 // router navigates to the page that entry was written over.
+//
+// A browser drains its microtasks between the listeners of a real popstate,
+// so Svelte runs the effects that read the page this listener moved before
+// the app's own popstate listener hears the step; flushing here keeps that
+// order, which jsdom's single call stack would otherwise hide.
 function followTraversal(event: PopStateEvent): void {
+	moveWithTraversal(event);
+	flushSync();
+}
+
+function moveWithTraversal(event: PopStateEvent): void {
 	const landing = routerEntry(event.state);
 	const historyIndex = routerIndex(landing, ROUTER_HISTORY_INDEX);
 	if (landing === null || historyIndex === undefined) {
