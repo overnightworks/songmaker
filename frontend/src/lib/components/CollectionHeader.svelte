@@ -9,10 +9,12 @@
 	import {
 		ALBUM_ADD_SONG_GLYPH,
 		ALBUM_ADD_SONG_LABEL,
+		ALBUM_COVER_ADD_LABEL,
+		ALBUM_COVER_EDIT_LABEL,
 		RAIL_LIBRARY_LABEL,
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { historyLayerState, openLibraryWall } from '$lib/stores/navigation';
 	import { playbackSource, setShuffle, type CollectionStart } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 
@@ -37,7 +39,6 @@
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
-		oncoversuggest?: () => void;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		onaddsong?: () => void;
@@ -50,6 +51,11 @@
 		playlistCover?: AlbumCoverUrls | null;
 		/** Album-only metadata editor (subtitle/year) rendered under the title. */
 		metaEditor?: Snippet;
+		/**
+		 * Album-only: edits the cover in place of the cover itself, and ends
+		 * editing through the close it is handed.
+		 */
+		coverEditor?: Snippet<[close: () => void]>;
 	}
 
 	let {
@@ -69,7 +75,6 @@
 		ondelete,
 		onarchive,
 		oncover,
-		oncoversuggest,
 		onremovecover,
 		onaddtoplaylist,
 		onaddsong,
@@ -80,18 +85,40 @@
 		offlineProgressLabel = null,
 		playlistCovers,
 		playlistCover,
-		metaEditor
+		metaEditor,
+		coverEditor
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
 	let coverFailed = $state(false);
+	const editingCover = historyLayerState('cover-editing', false);
 
+	// Cover editing belongs to the collection and the cover it opened on: a new
+	// cover -- used, uploaded or removed -- or another collection ends it.
 	$effect(() => {
+		void collectionId;
 		void coverUrl;
 		coverFailed = false;
+		editingCover.set(false);
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
+	const coverOpening = $derived(
+		coverEditor
+			? {
+					label: showCover ? ALBUM_COVER_EDIT_LABEL : ALBUM_COVER_ADD_LABEL,
+					onopen: openCoverEditing
+				}
+			: undefined
+	);
+
+	function openCoverEditing(): void {
+		editingCover.set(true);
+	}
+
+	function closeCoverEditing(): void {
+		editingCover.set(false);
+	}
 	const breadcrumbItems = $derived([
 		{
 			label: kind === 'playlist' ? RAIL_PLAYLISTS_LABEL : RAIL_LIBRARY_LABEL,
@@ -173,7 +200,7 @@
 		{ondelete}
 		{onarchive}
 		{oncover}
-		{oncoversuggest}
+		oncoversuggest={coverEditor && showCover ? openCoverEditing : undefined}
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}
@@ -184,6 +211,10 @@
 		{offlineProgressLabel}
 		onrename={triggerRename}
 	/>
+{/snippet}
+
+{#snippet coverEditing()}
+	{@render coverEditor?.(closeCoverEditing)}
 {/snippet}
 
 {#snippet coverFallback()}
@@ -206,6 +237,8 @@
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
+	{coverOpening}
+	coverEditing={$editingCover ? coverEditing : undefined}
 />
 
 <style>

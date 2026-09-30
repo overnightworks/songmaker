@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { describeFailure, NetworkError } from '$lib/api/fetch';
+	import { ApiError, describeFailure, NetworkError } from '$lib/api/fetch';
 	import {
 		createAlbumCoverSuggestions,
 		discardAlbumCoverSuggestions,
@@ -8,26 +8,39 @@
 	} from '$lib/api/albums';
 	import type { AlbumItem, CoverSuggestionsResponse } from '$lib/api/types';
 	import {
+		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
-		ALBUM_COVER_SUGGESTIONS_DETAIL,
-		ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL,
-		ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK,
-		ALBUM_COVER_SUGGESTIONS_FAILED_TITLE,
-		ALBUM_COVER_SUGGESTIONS_LOADING,
-		ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE,
-		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
-		ALBUM_COVER_SUGGESTIONS_TITLE,
+		albumCoverSuggestionPosition,
+		albumCoverSuggestionsLeftToday,
+		ALBUM_COVER_ADD_LABEL,
+		ALBUM_COVER_ALT_TYPE,
+		ALBUM_COVER_EDITING_CLOSE_LABEL,
+		ALBUM_COVER_EDITING_LABEL,
+		ALBUM_COVER_EDITING_REMOVE_LABEL,
+		ALBUM_COVER_EDITING_UPLOAD_LABEL,
+		ALBUM_COVER_NEXT_SUGGESTION_LABEL,
+		ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL,
+		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
 		ALBUM_COVER_SUGGESTING_LABEL,
+		ALBUM_COVER_SUGGESTION_ALREADY_RUNNING,
+		ALBUM_COVER_SUGGESTION_FAILED_FALLBACK,
+		ALBUM_COVER_SUGGESTION_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTION_USE_LABEL,
-		ALBUM_COVER_SUGGEST_LABEL
+		ALBUM_COVER_SUGGESTIONS_LOADING,
+		ALBUM_COVER_SUGGESTIONS_RETRY_LABEL,
+		ALBUM_COVER_SWIPE_TRAVEL_PX
 	} from '$lib/constants';
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
 	import { activeJobs, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
+	import Icon from './Icon.svelte';
 
 	interface Props {
 		album: AlbumItem;
+		onclose: () => void;
+		onupload: () => void;
+		onremove: () => void;
 	}
 
 	interface CoverSuggestionsState {
@@ -40,9 +53,18 @@
 
 	type CoverSuggestionsOutcome = Pick<CoverSuggestionsState, 'failure' | 'unreachable'>;
 
+	// What the grown cover can show: each suggestion made so far, then the one
+	// being made or the named failure of the last attempt.
+	type StageSlot =
+		| { kind: 'suggestion'; id: string; url: string }
+		| { kind: 'making'; progress: number }
+		| { kind: 'failed'; reason: string };
+
+	const HTTP_CONFLICT = 409;
+
 	const COVER_SUGGESTIONS_SETTLED: CoverSuggestionsOutcome = { failure: null, unreachable: false };
 
-	let { album }: Props = $props();
+	let { album, onclose, onupload, onremove }: Props = $props();
 
 	const currentAlbumId = $derived(album.id);
 
@@ -51,6 +73,8 @@
 	let suggestionsRequest = 0;
 	let coverSuggestionsBackoffSpent = $state(false);
 	let completedCoverJobId: string | null = null;
+	let chosenSlot = $state<number | null>(null);
+	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
 	const activeCoverJob = $derived(
 		$activeJobs.find((active) => active.albumId === currentAlbumId) ?? null
@@ -80,32 +104,36 @@
 	const coverSuggestionFailure = $derived(
 		coverSuggestionsFailure ??
 			(latestCoverJob?.status === 'failed'
-				? (latestCoverJob.error ?? ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK)
+				? (latestCoverJob.error ?? ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
 				: null)
 	);
 	const coverSuggestionsProgress = $derived(
 		activeCoverJob?.job.progress ?? latestCoverJob?.progress ?? 0
 	);
 	const hasSuggestions = $derived((coverSuggestions?.suggestions.length ?? 0) > 0);
-	// A card that cannot reach the server is absent rather than an error of its
-	// own: the one offline strip already says it, and it reloads once online.
-	// Without the strip it reloads on a bounded backoff, then offers Try again.
-	const showCoverSuggestionsPanel = $derived(
-		coverSuggestionsReloadsExhausted ||
-			(!coverSuggestionsUnreachable &&
-				Boolean(
-					coverSuggestionsLoading ||
-					isCoverSuggestionGenerating ||
-					hasSuggestions ||
-					coverSuggestionFailure ||
-					!album.cover
-				))
+	const stageSlots = $derived<StageSlot[]>([
+		...(coverSuggestions?.suggestions ?? []).map((suggestion): StageSlot => ({
+			kind: 'suggestion',
+			...suggestion
+		})),
+		...stageStatusSlot()
+	]);
+	const shownSlotIndex = $derived(
+		Math.min(chosenSlot ?? stageSlots.length - 1, stageSlots.length - 1)
 	);
-	const coverSuggestionsProgressMessage = $derived(
-		coverSuggestions
-			? formatCoverSuggestionProgress(coverSuggestions.used_today, coverSuggestions.daily_limit)
-			: null
+	const shownSlot = $derived(stageSlots[shownSlotIndex] ?? null);
+	const shownSuggestionId = $derived(shownSlot?.kind === 'suggestion' ? shownSlot.id : null);
+	const stageLabel = $derived(
+		stageSlots.length > 0 ? albumCoverStageLabel(shownSlotIndex + 1, stageSlots.length) : undefined
 	);
+
+	function stageStatusSlot(): StageSlot[] {
+		if (isCoverSuggestionGenerating) {
+			return [{ kind: 'making', progress: coverSuggestionsProgress }];
+		}
+		if (coverSuggestionFailure) return [{ kind: 'failed', reason: coverSuggestionFailure }];
+		return [];
+	}
 
 	const coverSuggestionsReloads = reloadWhileUnreachable(reloadCoverSuggestions);
 	$effect(() => () => coverSuggestionsReloads.stop());
@@ -119,8 +147,17 @@
 			isLoading: true
 		};
 		coverSuggestionsReloads.stop();
-		queueMicrotask(() => void loadCoverSuggestions(albumId));
+		queueMicrotask(() => void openOnAlbum(albumId));
 	});
+
+	// Opening an album that has neither a cover nor anything suggested is the
+	// deliberate ask for its first suggestion.
+	async function openOnAlbum(albumId: string): Promise<void> {
+		await loadCoverSuggestions(albumId);
+		const nothingToShow =
+			coverSuggestions !== null && !hasSuggestions && !isCoverSuggestionGenerating;
+		if (albumId === currentAlbumId && !album.cover && nothingToShow) await suggestCover();
+	}
 
 	function reloadCoverSuggestions(): void {
 		void loadCoverSuggestions(currentAlbumId);
@@ -191,22 +228,19 @@
 
 	function coverSuggestionsOutcomeOf(error: unknown): CoverSuggestionsOutcome {
 		if (error instanceof NetworkError) return { failure: null, unreachable: true };
+		if (error instanceof ApiError && error.status === HTTP_CONFLICT) {
+			return { failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING, unreachable: false };
+		}
 		return {
-			failure: describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK),
+			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK),
 			unreachable: false
 		};
 	}
 
-	function formatCoverSuggestionProgress(used: number, limit: number): string {
-		return ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE.replace('{used}', String(used)).replace(
-			'{limit}',
-			String(limit)
-		);
-	}
-
-	export async function suggestCover(): Promise<void> {
+	async function suggestCover(): Promise<void> {
 		if (isCoverSuggestionGenerating || coverSuggestionsLoading) return;
 		const albumId = currentAlbumId;
+		chosenSlot = null;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
 		suggestionsRequest += 1;
@@ -217,10 +251,6 @@
 			isLoading: true
 		}));
 		try {
-			if (hasSuggestions) {
-				await discardAlbumCoverSuggestions(albumId);
-				updateCoverSuggestionsState(albumId, (state) => ({ ...state, data: null }));
-			}
 			const job = await createAlbumCoverSuggestions(albumId);
 			if (albumId !== currentAlbumId) return;
 			trackJob(job, { albumId });
@@ -233,18 +263,18 @@
 		}
 	}
 
-	async function discardCoverSuggestions(): Promise<void> {
+	async function discardAndClose(): Promise<void> {
+		if (!hasSuggestions) {
+			onclose();
+			return;
+		}
 		const albumId = currentAlbumId;
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
 			await discardAlbumCoverSuggestions(albumId);
-			updateCoverSuggestionsState(albumId, (state) => ({
-				...state,
-				data: null,
-				...COVER_SUGGESTIONS_SETTLED
-			}));
+			onclose();
 		} catch (error) {
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
@@ -260,192 +290,263 @@
 			try {
 				await discardAlbumCoverSuggestions(albumId);
 			} catch (error) {
-				addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+				addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
 			}
 			updateAlbumInList(albumId, () => updated);
-			updateCoverSuggestionsState(albumId, (state) => ({
-				...state,
-				data: null,
-				...COVER_SUGGESTIONS_SETTLED
-			}));
 			addToast('Cover saved', 'success');
 		} catch (error) {
-			addToast(describeFailure(error, ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK), 'error');
+			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error');
 		} finally {
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
 	}
+
+	function showSlot(index: number): void {
+		if (index < 0 || index >= stageSlots.length) return;
+		chosenSlot = index;
+	}
+
+	function startSwipe(event: PointerEvent): void {
+		swipeStart = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+	}
+
+	function endSwipe(event: PointerEvent): void {
+		if (swipeStart?.pointerId !== event.pointerId) return;
+		const travel = event.clientX - swipeStart.x;
+		const drift = Math.abs(event.clientY - swipeStart.y);
+		swipeStart = null;
+		if (Math.abs(travel) < ALBUM_COVER_SWIPE_TRAVEL_PX || Math.abs(travel) <= drift) return;
+		showSlot(shownSlotIndex + (travel < 0 ? 1 : -1));
+	}
+
+	function cancelSwipe(): void {
+		swipeStart = null;
+	}
 </script>
 
-{#if showCoverSuggestionsPanel}
-	<section class="cover-suggestions" aria-live="polite">
+<div class="cover-editor" role="group" aria-label={ALBUM_COVER_EDITING_LABEL}>
+	<div
+		class="cover-stage"
+		role="group"
+		aria-label={stageLabel}
+		onpointerdown={startSwipe}
+		onpointerup={endSwipe}
+		onpointercancel={cancelSwipe}
+	>
+		{#if stageSlots.length > 1}
+			<button
+				type="button"
+				class="stage-nav"
+				aria-label={ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL}
+				disabled={shownSlotIndex === 0}
+				onclick={() => showSlot(shownSlotIndex - 1)}>‹</button
+			>
+		{:else}
+			<span class="stage-nav-gap"></span>
+		{/if}
+		<div class="stage-art" class:stage-art-empty={!shownSlot && !album.cover}>
+			{#if shownSlot?.kind === 'suggestion'}
+				<img src={shownSlot.url} alt={albumCoverSuggestionAlt(album.title)} draggable="false" />
+			{:else if shownSlot?.kind === 'making'}
+				<div class="stage-making">
+					<span>{ALBUM_COVER_SUGGESTING_LABEL}</span>
+					<div
+						class="stage-progress"
+						role="progressbar"
+						aria-label={ALBUM_COVER_SUGGESTING_LABEL}
+						aria-valuemin={0}
+						aria-valuemax={100}
+						aria-valuenow={Math.round(shownSlot.progress * 100)}
+					>
+						<span style:width={`${Math.max(4, shownSlot.progress * 100)}%`}></span>
+					</div>
+				</div>
+			{:else if shownSlot?.kind === 'failed'}
+				<div class="stage-failed" role="alert">
+					<strong>{ALBUM_COVER_SUGGESTION_FAILED_TITLE}</strong>
+					<p>{shownSlot.reason}</p>
+				</div>
+			{:else if album.cover}
+				<img
+					src={album.cover.detail}
+					alt={`${ALBUM_COVER_ALT_TYPE} ${album.title}`}
+					draggable="false"
+				/>
+			{:else}
+				<span class="stage-empty">{ALBUM_COVER_ADD_LABEL}</span>
+			{/if}
+		</div>
+		{#if stageSlots.length > 1}
+			<button
+				type="button"
+				class="stage-nav"
+				aria-label={ALBUM_COVER_NEXT_SUGGESTION_LABEL}
+				disabled={shownSlotIndex === stageSlots.length - 1}
+				onclick={() => showSlot(shownSlotIndex + 1)}>›</button
+			>
+		{:else}
+			<span class="stage-nav-gap"></span>
+		{/if}
+	</div>
+
+	<p class="cover-count" aria-live="polite">
 		{#if coverSuggestionsReloadsExhausted}
 			<button class="cover-suggestions-retry" type="button" onclick={retryCoverSuggestions}
 				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
 			>
-		{:else if coverSuggestionsLoading && !isCoverSuggestionGenerating}
-			<p class="cover-suggestions-loading" role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</p>
-		{:else if isCoverSuggestionGenerating}
-			<h3>{ALBUM_COVER_SUGGESTING_LABEL}</h3>
-			{#if coverSuggestionsProgressMessage}
-				<p>{coverSuggestionsProgressMessage}</p>
+		{:else if coverSuggestions}
+			{#if stageSlots.length > 0}
+				<b>{albumCoverSuggestionPosition(shownSlotIndex + 1, stageSlots.length)}</b>
+				<span aria-hidden="true">·</span>
 			{/if}
-			<div class="suggestion-placeholders" aria-label={ALBUM_COVER_SUGGESTING_LABEL}>
-				<span class="suggestion-placeholder"></span>
-			</div>
-			<div
-				class="suggestion-progress"
-				aria-label={`${Math.round(coverSuggestionsProgress * 100)}%`}
+			<span
+				>{albumCoverSuggestionsLeftToday(
+					coverSuggestions.used_today,
+					coverSuggestions.daily_limit
+				)}</span
 			>
-				<span style:width={`${Math.max(4, coverSuggestionsProgress * 100)}%`}></span>
-			</div>
-		{:else if coverSuggestionFailure}
-			<div class="cover-suggestion-failure" role="alert">
-				<strong>{ALBUM_COVER_SUGGESTIONS_FAILED_TITLE}</strong>
-				<p>{coverSuggestionFailure}</p>
-				<button type="button" onclick={suggestCover}>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button>
-			</div>
-		{:else if hasSuggestions}
-			<h3>{ALBUM_COVER_SUGGESTIONS_TITLE}</h3>
-			<p>{ALBUM_COVER_SUGGESTIONS_DETAIL}</p>
-			<div class="suggestion-grid">
-				{#each coverSuggestions?.suggestions ?? [] as suggestion (suggestion.id)}
-					<article class="cover-suggestion">
-						<img src={suggestion.url} alt={albumCoverSuggestionAlt(album.title)} />
-						<button
-							type="button"
-							disabled={coverSuggestionsBusy}
-							onclick={() => selectCoverSuggestion(suggestion.id)}
-						>
-							{ALBUM_COVER_SUGGESTION_USE_LABEL}
-						</button>
-					</article>
-				{/each}
-			</div>
+		{:else if coverSuggestionsLoading}
+			<span role="status">{ALBUM_COVER_SUGGESTIONS_LOADING}</span>
+		{/if}
+	</p>
+
+	<div class="cover-actions">
+		<button type="button" class="cover-action" data-hitbox="frequent" onclick={onupload}
+			>{ALBUM_COVER_EDITING_UPLOAD_LABEL}</button
+		>
+		<button
+			type="button"
+			class="cover-action"
+			data-hitbox="frequent"
+			disabled={isCoverSuggestionGenerating || coverSuggestionsLoading}
+			onclick={suggestCover}>{ALBUM_COVER_SUGGEST_ANOTHER_LABEL}</button
+		>
+		<button
+			type="button"
+			class="cover-action cover-use"
+			data-hitbox="frequent"
+			disabled={!shownSuggestionId || coverSuggestionsBusy}
+			onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
+			>{ALBUM_COVER_SUGGESTION_USE_LABEL}</button
+		>
+		{#if album.cover}
 			<button
-				class="suggestion-discard"
 				type="button"
-				disabled={coverSuggestionsBusy}
-				onclick={discardCoverSuggestions}>{ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL}</button
-			>
-		{:else if !album.cover}
-			<button class="suggest-cover" type="button" onclick={suggestCover}
-				>{ALBUM_COVER_SUGGEST_LABEL}</button
+				class="cover-action cover-remove"
+				data-hitbox="frequent"
+				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
 			>
 		{/if}
-	</section>
-{/if}
+		<button
+			type="button"
+			class="cover-close"
+			data-hitbox="frequent"
+			aria-label={ALBUM_COVER_EDITING_CLOSE_LABEL}
+			title={ALBUM_COVER_EDITING_CLOSE_LABEL}
+			disabled={coverSuggestionsBusy}
+			onclick={discardAndClose}
+		>
+			<Icon name="x" size={20} />
+		</button>
+	</div>
+</div>
 
 <style>
-	.cover-suggestions {
+	/* The editor's parts sit in the header's own grid areas (stage, count,
+	   tryrow), so the header can lay them out beside or above its titles. */
+	.cover-editor {
+		display: contents;
+	}
+
+	.cover-stage {
+		grid-area: stage;
 		display: flex;
-		flex-direction: column;
-		gap: 0.65rem;
-		margin: 0 1.5rem;
-		padding: 1rem;
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		background: var(--surface);
+		align-items: center;
+		justify-content: center;
+		gap: 0.6rem;
+		touch-action: pan-y;
 	}
 
-	.cover-suggestions h3,
-	.cover-suggestions p {
-		margin: 0;
-	}
-
-	.cover-suggestions h3 {
-		font-family: var(--font-display);
-		font-size: 1rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-	}
-
-	.cover-suggestions p {
-		color: var(--text-subtle);
-		font-size: 0.83rem;
-	}
-
-	.cover-suggestions-loading {
-		font-style: italic;
-	}
-
-	.suggest-cover,
-	.cover-suggestion button,
-	.suggestion-discard,
-	.cover-suggestion-failure button {
-		align-self: flex-start;
-		padding: 0.45rem 0.8rem;
-		border: 1px solid var(--accent);
-		border-radius: var(--btn-radius-sm);
-		background: var(--accent);
-		color: #fff;
-		font-family: var(--font-display);
-		font-size: 0.78rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		cursor: pointer;
-	}
-
-	.cover-suggestions-retry {
-		align-self: flex-start;
-		padding: 0.45rem 0.8rem;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: transparent;
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.78rem;
-		letter-spacing: 0.04em;
-		text-transform: uppercase;
-		cursor: pointer;
-	}
-
-	.suggestion-grid,
-	.suggestion-placeholders {
-		display: grid;
-		grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 0.75rem;
-	}
-
-	.cover-suggestion {
+	.stage-art {
 		display: flex;
-		flex-direction: column;
-		gap: 0.45rem;
-		min-width: 0;
-		padding: 0.45rem;
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
+		align-items: center;
+		justify-content: center;
+		width: 200px;
+		height: 200px;
+		flex: none;
+		overflow: hidden;
+		border-radius: 4px;
+		outline: 2px solid var(--accent);
+		outline-offset: 3px;
 		background: var(--surface-hover);
 	}
 
-	.cover-suggestion img,
-	.suggestion-placeholder {
+	.stage-art-empty {
+		outline-style: dashed;
+		outline-color: var(--text-subtle);
+	}
+
+	.stage-art img {
 		display: block;
 		width: 100%;
-		aspect-ratio: 1;
-		border-radius: calc(var(--card-radius) / 2);
+		height: 100%;
 		object-fit: cover;
+		user-select: none;
 	}
 
-	.suggestion-placeholder {
-		background: linear-gradient(
-			110deg,
-			var(--surface-hover) 20%,
-			var(--border) 45%,
-			var(--surface-hover) 70%
-		);
-		background-size: 220% 100%;
-		animation: cover-suggestion-loading 1.2s linear infinite;
+	.stage-nav,
+	.stage-nav-gap {
+		width: var(--hitbox-frequent);
+		height: var(--hitbox-frequent);
+		flex: none;
 	}
 
-	.suggestion-progress {
+	.stage-nav {
+		border: 1px solid var(--border);
+		border-radius: 50%;
+		background: var(--surface);
+		color: var(--text);
+		font-size: 1.4rem;
+		line-height: 1;
+	}
+
+	.stage-nav:disabled {
+		border-color: transparent;
+		background: none;
+		color: var(--text-disabled);
+	}
+
+	.stage-empty {
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+	}
+
+	.stage-making,
+	.stage-failed {
+		display: flex;
+		flex-direction: column;
+		gap: 0.6rem;
+		width: 100%;
+		padding: 1rem;
+		text-align: center;
+	}
+
+	.stage-making {
+		color: var(--text-muted);
+		font-size: 0.83rem;
+	}
+
+	.stage-progress {
 		height: 0.25rem;
 		overflow: hidden;
 		border-radius: 999px;
 		background: var(--border);
 	}
 
-	.suggestion-progress span {
+	.stage-progress span {
 		display: block;
 		height: 100%;
 		border-radius: inherit;
@@ -453,61 +554,100 @@
 		transition: width 180ms ease-out;
 	}
 
-	.suggestion-discard {
-		border-color: var(--border);
-		background: transparent;
+	.stage-failed {
+		height: 100%;
+		justify-content: center;
+		border-top: 3px solid var(--score-bad);
+	}
+
+	.stage-failed strong {
+		color: var(--text);
+		font-size: 0.85rem;
+	}
+
+	.stage-failed p {
+		margin: 0;
+		color: var(--text-subtle);
+		font-size: 0.78rem;
+	}
+
+	.cover-count {
+		grid-area: count;
+		display: flex;
+		justify-content: center;
+		gap: 0.6rem;
+		margin: 0;
+		color: var(--text-subtle);
+		font-size: 0.75rem;
+	}
+
+	.cover-count b {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.cover-actions {
+		grid-area: tryrow;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.cover-action,
+	.cover-suggestions-retry {
+		height: var(--hitbox-frequent);
+		padding: 0 0.7rem;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text-light);
+		font-family: var(--font-display);
+		font-size: 0.8rem;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		white-space: nowrap;
+	}
+
+	.cover-suggestions-retry {
+		height: auto;
+		padding: 0.3rem 0.7rem;
 		color: var(--text-muted);
 	}
 
-	.cover-suggestion-failure {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		padding: 0.85rem;
-		border: 1px solid var(--danger);
-		border-left-width: 4px;
-		border-radius: var(--card-radius);
-		background: color-mix(in srgb, var(--danger) 12%, var(--surface));
+	.cover-action.cover-use {
+		padding: 0 1rem;
+		border-color: var(--primary);
+		background: var(--primary);
+		color: #fff;
 	}
 
-	.cover-suggestion-failure strong {
-		color: var(--text);
+	.cover-action.cover-use:disabled {
+		border-color: var(--border);
+		background: none;
+		color: var(--text-disabled);
 	}
 
-	@keyframes cover-suggestion-loading {
-		to {
-			background-position: -220% 0;
-		}
+	.cover-action.cover-remove {
+		border-color: transparent;
+		color: var(--text-muted);
+	}
+
+	.cover-action:disabled {
+		opacity: 0.5;
+	}
+
+	.cover-close {
+		width: var(--hitbox-frequent);
+		height: var(--hitbox-frequent);
+		border: none;
+		background: none;
+		color: var(--text-muted);
 	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.suggestion-placeholder {
-			animation: none;
-		}
-
-		.suggestion-progress span {
+		.stage-progress span {
 			transition: none;
-		}
-	}
-
-	@media (max-width: 768px) {
-		.cover-suggestions {
-			margin: 0 0.8rem;
-		}
-
-		.suggestion-grid,
-		.suggestion-placeholders {
-			grid-template-columns: 1fr;
-		}
-
-		.cover-suggestion {
-			display: grid;
-			grid-template-columns: 4.4rem minmax(0, 1fr);
-			align-items: center;
-		}
-
-		.cover-suggestion img {
-			width: 4.4rem;
 		}
 	}
 </style>
