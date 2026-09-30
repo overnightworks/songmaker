@@ -1,0 +1,8 @@
+claim_id = "73361021159541da8b95a7148945e99a"
+agent = "claude-head"
+role = "builder"
+base = "fa7207b1fa725719710840dd65a52e09fbd63fac"
+branch = "claude/issue-1135-menu-popover"
+scope = ["frontend/e2e/album-menu.spec.ts", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/MenuPopover.test.ts", "frontend/src/lib/share/SharedCollection.svelte"]
+opened_commit = "6781433cedc9d0c3c5a6d3210980b919c5fda21f"
+whole_reason = "one clamped menu popover and the album header action row"
