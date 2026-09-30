@@ -102,6 +102,12 @@
 			latestCoverJob?.status === 'queued' ||
 			latestCoverJob?.status === 'running'
 	);
+	const dailySuggestionsSpent = $derived(
+		coverSuggestions !== null && coverSuggestions.used_today >= coverSuggestions.daily_limit
+	);
+	const canSuggestCover = $derived(
+		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailySuggestionsSpent
+	);
 	const coverSuggestionFailure = $derived(
 		coverSuggestionsFailure ??
 			(latestCoverJob?.status === 'failed'
@@ -253,7 +259,7 @@
 	}
 
 	async function suggestCover(): Promise<void> {
-		if (isCoverSuggestionGenerating || coverSuggestionsLoading) return;
+		if (!canSuggestCover) return;
 		const albumId = currentAlbumId;
 		const left = albumVisit.signal;
 		chosenSlot = null;
@@ -463,7 +469,7 @@
 			type="button"
 			class="cover-action"
 			data-hitbox="frequent"
-			disabled={isCoverSuggestionGenerating || coverSuggestionsLoading}
+			disabled={!canSuggestCover}
 			onclick={suggestCover}>{ALBUM_COVER_SUGGEST_ANOTHER_LABEL}</button
 		>
 		<button
