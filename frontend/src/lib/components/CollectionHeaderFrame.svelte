@@ -93,7 +93,7 @@
 				<Icon name="shuffle" size={20} />
 			</button>
 		{/if}
-		{#if actions}{@render actions()}{/if}
+		{#if actions}<span class="header-actions-end">{@render actions()}</span>{/if}
 	</div>
 </div>
 
@@ -145,10 +145,15 @@
 		flex: 1;
 	}
 
-	.header-actions {
+	.header-actions,
+	.header-actions-end {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
+		gap: 0.3rem;
+	}
+
+	.header-actions-end {
+		margin-left: auto;
 	}
 
 	.play-circle {
@@ -158,6 +163,7 @@
 		border: none;
 		background: var(--primary);
 		color: #fff;
+		margin-right: 0.2rem;
 	}
 
 	.play-circle:hover:not(:disabled) {
