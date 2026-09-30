@@ -147,10 +147,6 @@ async function renderPage(): Promise<HTMLElement> {
 	return target;
 }
 
-function press(target: HTMLElement, selector: string): void {
-	target.querySelector<HTMLButtonElement>(selector)?.click();
-}
-
 describeBackClosesOverlay({
 	name: 'the unsaved-draft dialog',
 	render: renderPage,
@@ -158,10 +154,22 @@ describeBackClosesOverlay({
 	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
 	afterBack: () => expect(dirtyDraft.answers).toEqual(['keep editing']),
 	closeWays: [
-		{ way: 'Cancel', close: (target) => press(target, '.cancel-btn') },
-		{ way: 'the backdrop', close: (target) => press(target, '.overlay-backdrop') },
-		{ way: 'Save', close: (target) => press(target, '.confirm-btn') },
-		{ way: 'Discard', close: (target) => press(target, '.secondary-btn') },
+		{
+			way: 'Cancel',
+			close: (target) => target.querySelector<HTMLButtonElement>('.cancel-btn')?.click()
+		},
+		{
+			way: 'the backdrop',
+			close: (target) => target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click()
+		},
+		{
+			way: 'Save',
+			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
+		},
+		{
+			way: 'Discard',
+			close: (target) => target.querySelector<HTMLButtonElement>('.secondary-btn')?.click()
+		},
 		{
 			way: 'Escape',
 			close: () =>
