@@ -554,6 +554,7 @@ def _persist_generation_row(
                 model_mode=ctx.model_name,
                 src_generation_id=ctx.src_generation_id,
                 audio_dir=ctx.audio_dir,
+                created_by=ctx.user_id,
             )
             persisted_id = generation.id
             create_generation_created_event(
