@@ -101,6 +101,11 @@ afterEach(async () => {
 	vi.useRealTimers();
 });
 
+function showAlbumDetail(albumId: string): void {
+	openCollection.set({ kind: 'album', id: albumId });
+	librarySurface.set('detail');
+}
+
 describe('RailLibraryGroup', () => {
 	it('shows the LIBRARY group with its icon and the current album count, collapsed with no album open', async () => {
 		const target = await render();
@@ -177,7 +182,7 @@ describe('RailLibraryGroup', () => {
 			song({ id: 's-open', album_id: 'a-open', title: 'Tide', track_number: 1 }),
 			song({ id: 's-match', album_id: 'a-match', title: 'Stadion', track_number: 1 })
 		]);
-		openCollection.set({ kind: 'album', id: 'a-open' });
+		showAlbumDetail('a-open');
 		railTreeQuery.set('stadion');
 
 		const target = await render();
@@ -265,7 +270,7 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it('pre-expands the open album and marks its selected track, in track order', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		selectedSongId.set('s2');
 		const target = await render();
 		const albumRow = requireElement<HTMLButtonElement>(target, '.album-label');
@@ -278,7 +283,7 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it('shows a take/pick summary per track', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		songList.set([
 			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 0, generations: [] }),
 			song({
@@ -297,7 +302,7 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it('selects a track when its row is clicked', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		songList.set([
 			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 0 }),
 			song({ id: 's2', title: 'Ebb', track_number: 2, generation_count: 0 })
@@ -334,12 +339,32 @@ describe('RailLibraryGroup', () => {
 		await vi.waitFor(() => expect(target.textContent).toContain('Kickoff'));
 	});
 
+	it('loads no songs of the album the wall keeps open, and expands and loads it once its detail opens', async () => {
+		albumList.set([album({ id: 'a2', title: 'Nachtstrom' })]);
+		songList.set([]);
+		fetchSongs.mockResolvedValue(
+			songsPage({ items: [song({ id: 's9', title: 'Kickoff', album_id: 'a2' })] })
+		);
+		const target = await render();
+
+		openCollection.set({ kind: 'album', id: 'a2' });
+		await tick();
+		expect(fetchSongs).not.toHaveBeenCalled();
+
+		librarySurface.set('detail');
+		await tick();
+		expect(
+			requireElement<HTMLButtonElement>(target, '.album-label').getAttribute('aria-expanded')
+		).toBe('true');
+		await vi.waitFor(() => expect(target.textContent).toContain('Kickoff'));
+	});
+
 	it('holds an album row for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
 		albumList.set([
 			album({ id: 'a1', title: 'Anfield' }),
 			album({ id: 'a2', title: 'Nachtstrom' })
 		]);
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		selectedSongId.set('s1');
 		loadSongData(song({ id: 's1', title: 'Tide' }));
 		setDraftLyrics('unsaved edit');
@@ -402,7 +427,7 @@ describe('RailLibraryGroup', () => {
 	});
 
 	it('keeps an already open album expanded when its row is opened again', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		const target = await render();
 		const albumRow = requireElement<HTMLButtonElement>(target, '.album-label');
 		expect(albumRow.getAttribute('aria-expanded')).toBe('true');
@@ -419,7 +444,7 @@ describe('RailLibraryGroup', () => {
 	])(
 		'shows a playing marker only for the current track while it plays or is paused',
 		async ({ currentSongId, status, markedTrack }) => {
-			openCollection.set({ kind: 'album', id: 'a1' });
+			showAlbumDetail('a1');
 			songList.set([
 				song({ id: 's1', title: 'Tide', track_number: 1 }),
 				song({ id: 's2', title: 'Ebb', track_number: 2 })
@@ -439,7 +464,7 @@ describe('RailLibraryGroup', () => {
 	);
 
 	it('summarizes a single take in the singular, with no pick suffix', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
+		showAlbumDetail('a1');
 		songList.set([
 			song({ id: 's1', title: 'Tide', track_number: 1, generation_count: 1, generations: [] })
 		]);

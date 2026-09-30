@@ -854,19 +854,23 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	if (generation !== historyApplyGeneration) return false;
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
-	const shownAlbum = albumWhoseSongsShow(state);
+	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
 	if (shownAlbum) await loadSongsForAlbum(shownAlbum);
 	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
 }
 
-// The wall keeps the album that was open last as its collection but shows
-// none of its songs, so landing on it -- a Back, or a reload that restores it
-// -- pays no round trip for them; opening the album loads them.
-function albumWhoseSongsShow(state: LibraryHistoryState): string | null {
-	if (state.collection?.kind !== 'album' || state.surface === 'browse') return null;
-	return state.collection.id;
+// Only an album's own detail shows its songs. The wall keeps the album that
+// was open last as its collection and the create form keeps it too, yet
+// neither shows a song of it, so landing on either -- a Back, or a reload that
+// restores it -- pays no round trip for them; opening the album loads them.
+export function albumWhoseSongsShow(
+	surface: LibrarySurface,
+	collection: CollectionSnapshot
+): string | null {
+	if (surface !== 'detail' || collection?.kind !== 'album') return null;
+	return collection.id;
 }
 
 export function cancelLibraryHistoryApply(): void {
