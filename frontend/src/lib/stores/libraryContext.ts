@@ -246,7 +246,9 @@ type HistoryWriteMode = 'push' | 'replace';
 // writing that entry over again. A mount is
 // no queued step: it only brings the router to the entry that already stands,
 // a newer navigation supersedes it and a Back aborts it, so a song tapped while
-// its album's route still loads installs its own entry at once too. A write
+// its album's route still loads installs its own entry at once too, and a
+// crossing queued behind a step back (the phone drawer closing, Go to song out
+// of a history layer) installs its entry the moment that step lands. A write
 // that keeps the route while a mount is loading re-issues the mount for the
 // entry now standing, or the older mount would land on it with the library it
 // started with. Such an entry keeps the navigation index of the library entry
@@ -279,21 +281,36 @@ export function writeLibraryHistory(
 	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
-	const leavesLibraryPage =
-		libraryRouteShape(from) !== 'external' && isLibraryHistoryState(libraryHistoryEntry());
 	if (queuedHistoryWrites === 0 && !crossesRoutes) {
 		return writeLibraryHistoryKeepingRoute(state, url, mode);
 	}
-	if (queuedHistoryWrites === 0 && mode === 'push' && leavesLibraryPage) {
-		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, 'push'));
+	if (queuedHistoryWrites === 0 && mode === 'push' && historyStandsOnLibraryPage()) {
+		return pushEntryAndMountItsRoute(state, url);
 	}
-	return queueHistoryStep({ pathname, state }, async () => {
+	let mounted: Promise<void> = Promise.resolve();
+	const landed = queueHistoryStep({ pathname, state }, async () => {
 		if (!crossesRoutes) {
 			await writeLibraryHistoryKeepingRoute(state, url, mode);
 			return;
 		}
+		if (mode === 'push' && historyStandsOnLibraryPage()) {
+			mounted = pushEntryAndMountItsRoute(state, url);
+			return;
+		}
 		await navigateLibraryRoute(url, mode === 'replace' ? keepEntryLayer(state) : state, mode);
 	});
+	return landed.then(() => mounted);
+}
+
+function historyStandsOnLibraryPage(): boolean {
+	return (
+		libraryRouteShape(window.location.pathname) !== 'external' &&
+		isLibraryHistoryState(libraryHistoryEntry())
+	);
+}
+
+function pushEntryAndMountItsRoute(state: LibraryHistoryState, url: string): Promise<void> {
+	return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, 'push'));
 }
 
 function writeLibraryHistoryKeepingRoute(

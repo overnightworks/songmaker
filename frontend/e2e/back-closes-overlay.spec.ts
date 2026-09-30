@@ -6,18 +6,22 @@ import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
+	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
+	openNowPlayingLabel,
 	PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 	playlistEntryOverflowLabel,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
 	TAKE_DELETE_LABEL,
 	TAKE_DELETE_TITLE_TEMPLATE,
-	TAKE_OVERFLOW_LABEL
+	TAKE_OVERFLOW_LABEL,
+	TRANSPORT_PAUSE_LABEL
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_EXPAND_LABEL,
@@ -26,6 +30,7 @@ import {
 } from '../src/lib/constants/now-playing';
 import {
 	appBar,
+	containing,
 	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
@@ -634,6 +639,81 @@ test('one Back right after a song opens from its album returns to the album', as
 		expect(page.url()).toBe(albumAddress);
 	}
 	guard.assertClean();
+});
+
+// Issue #1165: a crossing the phone opens out of a history layer -- an album
+// tapped in the rail drawer, Go to song in Now Playing -- is written behind
+// the layer's step back. Back pressed as soon as the page shows must still
+// step once, onto the playlist underneath, and not past it -- the race is one
+// of milliseconds, so each crossing is opened and left many times.
+const QUEUED_CROSSINGS = 20;
+const PHONE_LAYERS_ONLY = 'The drawer and the full Now Playing are phone layers.';
+async function openAlbumFromRailDrawer(page: Page, albumTitle: string): Promise<void> {
+	const rail = await openRailNav(page, 'mobile');
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: albumTitle })
+		.getByRole('button', { name: containing(albumTitle) })
+		.click();
+}
+
+async function goToPlayingSong(page: Page, title: string): Promise<void> {
+	await page
+		.getByRole('contentinfo')
+		.getByRole('button', { name: openNowPlayingLabel(title) })
+		.click();
+	const nowPlaying = page.getByRole('dialog', { name: title });
+	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
+}
+
+test.describe('one Back right after a crossing out of a phone layer', () => {
+	test('an album tapped in the rail drawer returns to the playlist', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		const library = readSeededLibrary();
+		const album = workspace(page).getByRole('heading', { name: library.albumTitle });
+
+		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+			await openAlbumFromRailDrawer(page, library.albumTitle);
+			await expect(album).toBeVisible();
+
+			await page.goBack();
+
+			await expectPlaylistStands(page, pages);
+		}
+		guard.assertClean();
+	});
+
+	test('Go to song in Now Playing returns to the playlist', async ({ page, request }, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
+		const guard = new FlowGuard(page);
+		const { playlist, pages } = await openSeededPlaylist(page, request);
+		await workspace(page)
+			.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
+			.click();
+		// Paused, so the seeded three-second take stays the playing song.
+		await page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+			.click();
+
+		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+			await goToPlayingSong(page, firstSong(playlist));
+			await expectSongStands(page, 'mobile', firstSong(playlist));
+
+			await page.goBack();
+
+			await expectPlaylistStands(page, pages);
+		}
+		guard.assertClean();
+	});
 });
 
 interface CreatedAlbum {
