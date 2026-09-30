@@ -23,6 +23,8 @@ import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
 import { fetchLibraryContinue } from '$lib/api/library';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
@@ -90,6 +92,8 @@ afterEach(async () => {
 	setShuffle(false);
 	closeNowPlaying();
 	await cleanup();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
 	openCollection.set(null);
 	resetLibraryContextForTests();
 	resetConnectivityForTests();
@@ -328,6 +332,25 @@ describe('RailLibraryGroup', () => {
 		expect(albumRows[1]?.getAttribute('aria-expanded')).toBe('true');
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' });
 		await vi.waitFor(() => expect(target.textContent).toContain('Kickoff'));
+	});
+
+	it('holds an album row for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
+		albumList.set([
+			album({ id: 'a1', title: 'Anfield' }),
+			album({ id: 'a2', title: 'Nachtstrom' })
+		]);
+		openCollection.set({ kind: 'album', id: 'a1' });
+		selectedSongId.set('s1');
+		loadSongData(song({ id: 's1', title: 'Tide' }));
+		setDraftLyrics('unsaved edit');
+		const target = await render();
+
+		target.querySelectorAll<HTMLButtonElement>('.album-label')[1]?.click();
+		await tick();
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		expect(get(selectedSongId)).toBe('s1');
 	});
 
 	it('navigates into the album and expands it when its label is clicked', async () => {
