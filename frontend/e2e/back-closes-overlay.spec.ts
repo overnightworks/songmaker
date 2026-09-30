@@ -1,6 +1,10 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+	COLLECTION_MENU_LABEL,
 	collectionPlayLabel,
+	DIALOG_CANCEL_LABEL,
+	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_UNSAVED_TITLE,
 	NOW_PLAYING_LABEL,
 	PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 	playlistEntryOverflowLabel,
@@ -8,7 +12,10 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_SETTINGS_LABEL,
+	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
+	TAKE_DELETE_LABEL,
+	TAKE_DELETE_TITLE_TEMPLATE,
 	TAKE_OVERFLOW_LABEL
 } from '../src/lib/constants';
 import {
@@ -18,21 +25,26 @@ import {
 } from '../src/lib/constants/now-playing';
 import {
 	appBar,
+	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
 	openLibraryWall,
 	openRailNav,
+	playlistEntryRows,
 	shellOf,
 	workspace,
 	type Shell
 } from './helpers';
-import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
+import { readSeededLibrary, runMarker, seedPlaylist, type SeededPlaylist } from './seed';
 
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_HEADING = 'My Voices';
 const SONG_ADDRESS = /\/album\/[^/]+\/[^/]+/;
 // The base library's songs each carry one reimported take, their first.
 const SEEDED_TAKE_NUMBER = 1;
+const PLAYLIST_PICKER_LABEL = 'Add to Playlist';
+const SHARE_WARNING_LABEL = 'Missing from the share page';
+const DRAFT_LINE = 'a line nobody saved';
 
 interface Pages {
 	wall: Locator;
@@ -114,6 +126,126 @@ function takeSheet(page: Page): Locator {
 async function goBack(page: Page): Promise<void> {
 	await page.goBack();
 }
+
+async function openSong(page: Page, shell: Shell, playlist: SeededPlaylist): Promise<void> {
+	await openEntryMenu(page, playlist);
+	await openSongFromEntryMenu(page);
+	await expectSongStands(page, shell, firstSong(playlist));
+}
+
+// The phone lists takes under their tab; the desktop shows them beside the lyrics.
+async function songsTakes(page: Page, shell: Shell): Promise<Locator> {
+	if (shell === 'desktop') return workspace(page);
+	await page.getByRole('tab', { name: /Takes/ }).click();
+	return page.getByRole('tabpanel');
+}
+
+function seededTakeRow(takes: Locator): Locator {
+	return takes.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) });
+}
+
+function deleteConfirm(page: Page): Locator {
+	return page.getByRole('dialog', {
+		name: TAKE_DELETE_TITLE_TEMPLATE.replace('{number}', String(SEEDED_TAKE_NUMBER))
+	});
+}
+
+async function openDeleteConfirm(
+	page: Page,
+	shell: Shell,
+	playlist: SeededPlaylist
+): Promise<void> {
+	await openSong(page, shell, playlist);
+	const takes = await songsTakes(page, shell);
+	await takes.getByRole('button', { name: TAKE_OVERFLOW_LABEL, exact: true }).first().click();
+	await page.getByRole('menuitem', { name: TAKE_DELETE_LABEL, exact: true }).click();
+	await expect(deleteConfirm(page)).toBeVisible();
+}
+
+function deleteConfirmRow(shell: Shell): OverlayRow {
+	return {
+		name: `Back cancels the delete confirmation ${shell === 'mobile' ? 'on the phone' : 'on the desktop'}: the take stays`,
+		shell,
+		open: (page, playlist) => openDeleteConfirm(page, shell, playlist),
+		leave: goBack,
+		expectLeft: async (page, _pages, playlist) => {
+			await expect(deleteConfirm(page)).toBeHidden();
+			await expectSongStands(page, shell, firstSong(playlist));
+			await expect(seededTakeRow(await songsTakes(page, shell))).toBeVisible();
+		},
+		afterwards: backReaches('playlist')
+	};
+}
+
+function lyricsField(page: Page): Locator {
+	return page.getByRole('textbox', { name: /^Lyrics/ });
+}
+
+function unsavedDraftDialog(page: Page): Locator {
+	return page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE });
+}
+
+// Escape takes the song one level up to its collection, which a dirty draft
+// holds back with the unsaved-draft dialog.
+async function leaveWithADirtyDraft(page: Page, playlist: SeededPlaylist): Promise<string> {
+	await openSong(page, 'mobile', playlist);
+	await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true }).click();
+	const lyrics = lyricsField(page);
+	const saved = await lyrics.inputValue();
+	await lyrics.fill(`${saved}\n${DRAFT_LINE}`);
+	await lyrics.blur();
+	await page.keyboard.press('Escape');
+	await expect(unsavedDraftDialog(page)).toBeVisible();
+	return saved;
+}
+
+function unsavedDraftRow(): OverlayRow {
+	let savedLyrics = '';
+	return {
+		name: 'Back on the unsaved-draft dialog keeps editing: the song stays with its draft',
+		shell: 'mobile',
+		open: async (page, playlist) => {
+			savedLyrics = await leaveWithADirtyDraft(page, playlist);
+		},
+		leave: goBack,
+		expectLeft: async (page, _pages, playlist) => {
+			await expect(unsavedDraftDialog(page)).toBeHidden();
+			await expectSongStands(page, 'mobile', firstSong(playlist));
+			await expect(lyricsField(page)).toHaveValue(new RegExp(`${DRAFT_LINE}$`));
+		},
+		afterwards: async (page, pages, playlist) => {
+			await lyricsField(page).fill(savedLyrics);
+			await backReaches('playlist')(page, pages, playlist);
+		}
+	};
+}
+
+function playlistPicker(page: Page): Locator {
+	return page.getByRole('dialog', { name: PLAYLIST_PICKER_LABEL });
+}
+
+const PLAYLIST_PICKER_ROW: OverlayRow = {
+	name: 'Back closes the playlist picker from the song menu and adds nothing',
+	shell: 'mobile',
+	open: async (page, playlist) => {
+		await openSong(page, 'mobile', playlist);
+		await appBar(page).getByRole('button', { name: SONG_MENU_LABEL }).click();
+		await page
+			.getByRole('dialog', { name: SONG_MENU_LABEL })
+			.getByRole('button', { name: SONG_MENU_ADD_TO_PLAYLIST_LABEL })
+			.click();
+		await expect(playlistPicker(page)).toBeVisible();
+	},
+	leave: goBack,
+	expectLeft: async (page, _pages, playlist) => {
+		await expect(playlistPicker(page)).toBeHidden();
+		await expectSongStands(page, 'mobile', firstSong(playlist));
+	},
+	afterwards: async (page, pages, playlist) => {
+		await backReaches('playlist')(page, pages, playlist);
+		await expect(playlistEntryRows(page)).toHaveCount(playlist.songTitles.length);
+	}
+};
 
 function songMenuRow(shell: Shell): OverlayRow {
 	return {
@@ -246,6 +378,25 @@ const OVERLAY_ROWS: OverlayRow[] = [
 	},
 	songMenuRow('mobile'),
 	songMenuRow('desktop'),
+	deleteConfirmRow('mobile'),
+	deleteConfirmRow('desktop'),
+	{
+		name: 'Cancel on the delete confirmation leaves one Back to the playlist',
+		shell: 'mobile',
+		open: (page, playlist) => openDeleteConfirm(page, 'mobile', playlist),
+		leave: async (page) => {
+			await deleteConfirm(page)
+				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+				.click();
+		},
+		expectLeft: async (page, _pages, playlist) => {
+			await expect(deleteConfirm(page)).toBeHidden();
+			await expectSongStands(page, 'mobile', firstSong(playlist));
+		},
+		afterwards: backReaches('playlist')
+	},
+	unsavedDraftRow(),
+	PLAYLIST_PICKER_ROW,
 	{
 		name: 'Back over Now Playing closes the This take sheet first, and the next Back closes Now Playing',
 		shell: 'mobile',
@@ -297,5 +448,70 @@ test.describe('Back closes the open overlay first', () => {
 			await row.afterwards(page, pages, playlist);
 			guard.assertClean();
 		});
+	}
+});
+
+interface CreatedAlbum {
+	id: string;
+}
+
+async function postAsSession<T>(page: Page, url: string, data: unknown): Promise<T> {
+	const response = await page.request.post(url, { data, headers: await csrfHeaders(page) });
+	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
+	return (await response.json()) as T;
+}
+
+// Sharing marks the album shared, so each attempt shares an album of its own
+// whose one song has no take -- the case the share warning names.
+async function seedAlbumWithoutTakes(page: Page): Promise<{ id: string; title: string }> {
+	const title = `E2E Share Warning Album ${runMarker()}`;
+	const album = await postAsSession<CreatedAlbum>(page, '/api/albums', { title });
+	await postAsSession(page, '/api/songs', {
+		title: `E2E Song Without A Take ${runMarker()}`,
+		album_id: album.id,
+		lyrics: 'No take was ever made of this.',
+		prompt: 'calm test tone'
+	});
+	return { id: album.id, title };
+}
+
+async function deleteAlbum(page: Page, albumId: string): Promise<void> {
+	const response = await page.request.delete(`/api/albums/${albumId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(
+		response.ok(),
+		`DELETE /api/albums/${albumId} failed: ${await response.text()}`
+	).toBeTruthy();
+}
+
+test('Back closes the share warning on the phone and keeps the album', async ({
+	page
+}, testInfo) => {
+	test.skip(shellOf(testInfo) !== 'mobile', 'The row belongs to the mobile shell.');
+	const guard = new FlowGuard(page);
+	await page.goto('/');
+	const album = await seedAlbumWithoutTakes(page);
+	try {
+		await page.goto(`/album/${album.id}`);
+		const albumHeading = workspace(page).getByRole('heading', { name: album.title });
+		await expect(albumHeading).toBeVisible();
+		const albumAddress = page.url();
+
+		await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await page.getByRole('dialog', { name: COLLECTION_MENU_LABEL }).locator('.share-btn').click();
+		const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
+		await expect(warning).toBeVisible();
+
+		await page.goBack();
+		await expect(warning).toBeHidden();
+		await expect(albumHeading).toBeVisible();
+		expect(page.url()).toBe(albumAddress);
+
+		await page.goBack();
+		await expect(page).not.toHaveURL(albumAddress);
+		guard.assertClean();
+	} finally {
+		await deleteAlbum(page, album.id);
 	}
 });

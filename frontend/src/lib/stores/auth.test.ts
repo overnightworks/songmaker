@@ -5,6 +5,7 @@ const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
 const mockStopLibraryResourceSync = vi.fn();
+const mockFetchLibraryContinue = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
 	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
@@ -15,6 +16,10 @@ vi.mock('$lib/api/client', async () => {
 		logout: (...args: unknown[]) => mockApiLogout(...args)
 	};
 });
+
+vi.mock('$lib/api/library', () => ({
+	fetchLibraryContinue: (...args: unknown[]) => mockFetchLibraryContinue(...args)
+}));
 
 vi.mock('$lib/stores/resourceSync', () => ({
 	stopLibraryResourceSync: (...args: unknown[]) => mockStopLibraryResourceSync(...args)
@@ -42,6 +47,7 @@ import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { shareCount } from '$lib/stores/shares';
 import { generationFailures } from '$lib/stores/jobs';
+import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
@@ -51,6 +57,8 @@ beforeEach(() => {
 	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
 	mockStopLibraryResourceSync.mockReset();
+	mockFetchLibraryContinue.mockReset();
+	resetLibraryOrder();
 	currentUser.set(null);
 	authLoading.set(true);
 	authError.set('');
@@ -274,6 +282,41 @@ describe('clearAuth', () => {
 		expect(get(playlistList)).toEqual([]);
 		expect(get(selectedPlaylistDetail)).toBeNull();
 		expect(get(shareCount)).toMatchObject({ status: 'idle', total: null });
+	});
+
+	it("forgets the previous musician's Recent ranking and reads the next one's afresh", async () => {
+		const workedOn = (id: string) => ({
+			items: [
+				{ type: 'album', id, title: id, album_covers: [], activity_at: '2026-09-27T03:47:00Z' }
+			]
+		});
+		mockFetchLibraryContinue.mockResolvedValueOnce(workedOn('alices-album'));
+		await ensureRecentWorkRead();
+
+		clearAuth();
+		expect(get(lastWorkByPlace).size).toBe(0);
+
+		mockFetchLibraryContinue.mockResolvedValueOnce(workedOn('bobs-album'));
+		await ensureRecentWorkRead();
+		expect([...get(lastWorkByPlace).keys()]).toEqual(['album:bobs-album']);
+	});
+
+	it("drops the previous musician's Recent ranking that arrives after the session ended", async () => {
+		let answerAlicesRead: (page: unknown) => void = () => {};
+		mockFetchLibraryContinue.mockReturnValueOnce(
+			new Promise((resolve) => {
+				answerAlicesRead = resolve;
+			})
+		);
+		const alicesRead = ensureRecentWorkRead();
+
+		clearAuth();
+		answerAlicesRead({
+			items: [{ type: 'album', id: 'alices-album', title: 'A', album_covers: [], activity_at: '' }]
+		});
+		await alicesRead;
+
+		expect(get(lastWorkByPlace).size).toBe(0);
 	});
 });
 

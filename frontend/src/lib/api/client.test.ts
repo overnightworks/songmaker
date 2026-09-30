@@ -5,7 +5,6 @@ const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
 const mockClearAuth = vi.fn();
-const mockGoto = vi.fn();
 
 vi.mock('$lib/stores/auth', () => {
 	let user: { id: string } | null = null;
@@ -29,8 +28,11 @@ vi.mock('$lib/stores/auth', () => {
 		currentUser
 	};
 });
-vi.mock('$app/navigation', () => ({ goto: (...args: unknown[]) => mockGoto(...args) }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
+import { goto } from '$app/navigation';
 import { currentUser } from '$lib/stores/auth';
 import type { AuthUser } from './types';
 import {
@@ -92,7 +94,7 @@ function mockError(status: number, detail: string = '') {
 beforeEach(() => {
 	mockFetch.mockReset();
 	mockClearAuth.mockReset();
-	mockGoto.mockReset();
+	vi.mocked(goto).mockClear();
 	currentUser.set(null);
 });
 
@@ -357,7 +359,7 @@ describe('401 session expiry handler', () => {
 		mockError(401, 'Session expired');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
 		expect(mockClearAuth).toHaveBeenCalledOnce();
-		expect(mockGoto).toHaveBeenCalledOnce();
+		expect(goto).toHaveBeenCalledOnce();
 	});
 
 	it('does not redirect on 401 from login endpoint', async () => {
@@ -365,7 +367,7 @@ describe('401 session expiry handler', () => {
 		mockError(401, 'Invalid credentials');
 		await expect(login('alice', 'wrong')).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(mockGoto).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
 	});
 
 	it('does not redirect on 401 from setup endpoint', async () => {
@@ -373,7 +375,7 @@ describe('401 session expiry handler', () => {
 		mockError(401, 'Bad request');
 		await expect(setupAdmin('admin', 'pass')).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(mockGoto).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
 	});
 
 	it('does not redirect on non-401 errors', async () => {
@@ -381,7 +383,7 @@ describe('401 session expiry handler', () => {
 		mockError(500, 'Internal error');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
 		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(mockGoto).not.toHaveBeenCalled();
+		expect(goto).not.toHaveBeenCalled();
 	});
 });
 

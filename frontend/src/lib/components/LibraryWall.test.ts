@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,6 +10,7 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/s
 import { openCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 
 const fetchPlaylists = vi.fn();
@@ -16,7 +18,9 @@ const fetchPlaylist = vi.fn();
 const fetchLibraryContinue = vi.fn();
 const fetchAlbums = vi.fn();
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
 	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
@@ -47,13 +51,14 @@ beforeEach(() => {
 	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
 	localStorage.clear();
 	libraryWallOrder.set('title');
+	resetLibraryOrder();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 });
 
 async function unmountAll(): Promise<void> {

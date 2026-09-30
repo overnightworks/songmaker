@@ -20,6 +20,7 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
+	PLACE_KIND_PLAYLIST_LABEL,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
@@ -910,4 +911,57 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	await expect(choice('added')).toHaveAttribute('aria-pressed', 'true');
 	await expect(firstLine).toHaveText(/^Playlist · added /);
 	await expect(continueTiles).toHaveText(continueOrder);
+});
+
+test('the rail lists albums and playlists in the order the wall is switched to', async ({
+	page
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	const surface = workspace(page);
+	const choice = (order: LibraryWallOrder) =>
+		surface
+			.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL })
+			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
+	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
+	type PlaceOrder = { albums: string[]; playlists: string[] };
+
+	async function wallOrder(): Promise<PlaceOrder> {
+		const places = await tiles.evaluateAll((bodies) =>
+			bodies.map((body) => ({
+				title: body.querySelector('.tile-title')?.textContent ?? '',
+				line: body.querySelector('.tile-subtitle')?.textContent ?? ''
+			}))
+		);
+		const isPlaylist = (line: string) => line.startsWith(PLACE_KIND_PLAYLIST_LABEL);
+		return {
+			albums: places.filter((place) => !isPlaylist(place.line)).map((place) => place.title),
+			playlists: places.filter((place) => isPlaylist(place.line)).map((place) => place.title)
+		};
+	}
+
+	async function railOrderMatchingWall(): Promise<PlaceOrder> {
+		await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
+		const rail = await openRailNav(page, shell);
+		const railOrder = async (): Promise<PlaceOrder> => ({
+			albums: await rail.locator('.album-label .row-title').allTextContents(),
+			playlists: await rail.locator('.playlist-label .row-title').allTextContents()
+		});
+		await expect.poll(async () => (await railOrder()).albums.length).toBeGreaterThan(1);
+		await expect
+			.poll(async () => JSON.stringify(await railOrder()) === JSON.stringify(await wallOrder()))
+			.toBe(true);
+		return railOrder();
+	}
+
+	await page.goto('/');
+	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
+	const alphabetical = await railOrderMatchingWall();
+	expect(alphabetical.albums).toEqual([...alphabetical.albums].sort(compareTitles));
+	expect(alphabetical.playlists).toEqual([...alphabetical.playlists].sort(compareTitles));
+
+	await page.reload();
+	await choice('added').click();
+	const added = await railOrderMatchingWall();
+	expect(added.albums).not.toEqual(alphabetical.albums);
+	expect(added.playlists[0]).toBe(playlist.title);
 });

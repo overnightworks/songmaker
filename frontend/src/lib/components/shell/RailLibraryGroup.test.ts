@@ -19,6 +19,9 @@ import {
 	songList
 } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
+import { chooseLibraryWallOrder } from '$lib/stores/ui';
+import { fetchLibraryContinue } from '$lib/api/library';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
@@ -30,11 +33,14 @@ import {
 	createComponentMount,
 	findElementByRoleAndName,
 	requireButtonContainingText,
+	recentWorkPage,
 	requireElement,
 	songsPage
 } from './rail-test-fixtures';
 
-vi.mock('$app/navigation', async () => (await import('./rail-test-fixtures')).railNavigationMock());
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', async () => (await import('./rail-test-fixtures')).railPathsMock());
 vi.mock('$lib/api/library', async () =>
 	(await import('./rail-test-fixtures')).railLibraryApiMock()
@@ -58,6 +64,8 @@ const { render, cleanup } = createComponentMount(RailLibraryGroup);
 
 beforeEach(() => {
 	localStorage.clear();
+	chooseLibraryWallOrder('title');
+	resetLibraryOrder();
 	resetLibraryContextForTests();
 	fetchAlbums.mockClear().mockResolvedValue(albumsPage());
 	fetchSongs.mockClear().mockResolvedValue(songsPage());
@@ -122,9 +130,37 @@ describe('RailLibraryGroup', () => {
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
 		await tick();
 		const albumRows = target.querySelectorAll('.album-label .row-title');
-		expect(Array.from(albumRows).map((row) => row.textContent)).toEqual(['Nachtstrom', 'Anfield']);
+		expect(Array.from(albumRows).map((row) => row.textContent)).toEqual(['Anfield', 'Nachtstrom']);
 		const counts = target.querySelectorAll('.album-label .row-meta');
-		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['2', '5']);
+		expect(Array.from(counts).map((row) => row.textContent)).toEqual(['5', '2']);
+	});
+
+	it('lists the albums in the order the wall is switched to, A–Z by natural title first', async () => {
+		albumList.set([
+			album({ id: 'filler-10', title: 'Filler 10', created_at: '2026-09-03T10:00:00Z' }),
+			album({ id: 'vernissage', title: 'Vernissage', created_at: '2026-09-01T10:00:00Z' }),
+			album({ id: 'filler-2', title: 'Filler 2', created_at: '2026-07-01T10:00:00Z' }),
+			album({ id: 'afterglow', title: 'Afterglow', created_at: '2026-08-01T10:00:00Z' })
+		]);
+		vi.mocked(fetchLibraryContinue).mockResolvedValue(
+			recentWorkPage('album', ['vernissage', 'filler-2'])
+		);
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+		const albumTitles = () =>
+			Array.from(target.querySelectorAll('.album-label .row-title')).map((row) => row.textContent);
+
+		expect(albumTitles()).toEqual(['Afterglow', 'Filler 2', 'Filler 10', 'Vernissage']);
+
+		chooseLibraryWallOrder('added');
+		await tick();
+		expect(albumTitles()).toEqual(['Filler 10', 'Vernissage', 'Afterglow', 'Filler 2']);
+
+		chooseLibraryWallOrder('recent');
+		await vi.waitFor(() =>
+			expect(albumTitles()).toEqual(['Vernissage', 'Filler 2', 'Afterglow', 'Filler 10'])
+		);
 	});
 
 	it('narrows known albums and songs, while keeping the open album visible', async () => {
@@ -271,8 +307,8 @@ describe('RailLibraryGroup', () => {
 
 	it('opens an album and loads its songs on demand with its one row target', async () => {
 		albumList.set([
-			album({ id: 'a1', title: 'Nachtstrom' }),
-			album({ id: 'a2', title: 'Anfield' })
+			album({ id: 'a1', title: 'Anfield' }),
+			album({ id: 'a2', title: 'Nachtstrom' })
 		]);
 		songList.set([]);
 		fetchSongs.mockImplementation((albumId: string) =>
@@ -296,8 +332,8 @@ describe('RailLibraryGroup', () => {
 
 	it('navigates into the album and expands it when its label is clicked', async () => {
 		albumList.set([
-			album({ id: 'a1', title: 'Nachtstrom' }),
-			album({ id: 'a2', title: 'Anfield' })
+			album({ id: 'a1', title: 'Anfield' }),
+			album({ id: 'a2', title: 'Nachtstrom' })
 		]);
 		const target = await render();
 		const labels = target.querySelectorAll<HTMLButtonElement>('.album-label');

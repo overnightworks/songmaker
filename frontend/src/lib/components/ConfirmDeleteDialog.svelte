@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
 	let {
@@ -36,16 +37,19 @@
 		};
 	});
 
+	const historyLayer = dialogHistoryLayer('confirm-delete-dialog', () => oncancel());
+	const cancel = historyLayer.answer(() => oncancel());
+
 	// The trap claims Escape with preventDefault before closing, so the page's
 	// global Escape (escape-level-up.ts) still yields once the dialog is gone.
 	function trapKeys(event: KeyboardEvent): void {
-		handleFocusTrapKeydown(dialog, event, oncancel);
+		handleFocusTrapKeydown(dialog, event, cancel);
 	}
 </script>
 
 <svelte:window onkeydown={trapKeys} />
 
-<div class="overlay" onclick={oncancel} role="presentation">
+<div class="overlay" onclick={cancel} role="presentation" {@attach historyLayer.hold}>
 	<div
 		class="dialog"
 		bind:this={dialog}
@@ -64,8 +68,8 @@
 		</ul>
 		<p class="warning">{warning}</p>
 		<div class="actions">
-			<button class="cancel-btn" bind:this={cancelButton} onclick={oncancel}>Cancel</button>
-			<button class="confirm-btn" onclick={onconfirm}>{confirmLabel}</button>
+			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}>Cancel</button>
+			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>
 </div>

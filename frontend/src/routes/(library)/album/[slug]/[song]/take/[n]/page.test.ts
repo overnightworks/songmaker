@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
@@ -45,14 +46,9 @@ vi.mock('$app/state', () => ({
 }));
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	}),
-	afterNavigate: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
@@ -158,7 +154,7 @@ function coldTabAt(pathname: string): void {
 	routeParams.song = songSlug ?? '';
 	routeParams.n = takeNumber ?? '';
 	routeSearch.forEach((_, key) => routeSearch.delete(key));
-	history.replaceState(null, '', pathname);
+	replaceHistoryEntry(pathname);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);

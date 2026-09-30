@@ -1,3 +1,4 @@
+import { pushHistoryEntry, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -56,10 +57,9 @@ const { pageState, liveStream } = vi.hoisted(() => ({
 vi.mock('$app/state', () => ({
 	page: pageState
 }));
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn(),
-	afterNavigate: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/environment', () => ({
 	browser: true,
 	dev: true
@@ -112,7 +112,8 @@ vi.mock('$lib/api/songs', () => ({
 
 import Layout from './+layout.svelte';
 import layoutSource from './+layout.svelte?raw';
-import { afterNavigate, goto } from '$app/navigation';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 
 // `?raw` yields an empty string for a stylesheet under this vitest config
 // (CSS processing is off), so app.css is read from disk instead.
@@ -824,22 +825,15 @@ describe('a reload over the phone Now Playing', () => {
 			surface: 'detail' as const,
 			collection: { kind: 'playlist' as const, id: 'p1' }
 		};
-		history.pushState(playlist, '', '/playlist/friday-night');
-		history.pushState(
-			{ ...playlist, index: 2, layer: 'now-playing' },
-			'',
-			'/playlist/friday-night'
-		);
+		pushHistoryEntry('/playlist/friday-night', playlist);
+		pushHistoryEntry('/playlist/friday-night', { ...playlist, index: 2, layer: 'now-playing' });
 		loadLibraryHistoryPageForTests();
 		currentUser.set(null);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
 		mountLayout('/');
-		await tick();
-		const onNavigated = vi.mocked(afterNavigate).mock.calls.at(-1)?.[0];
-		if (!onNavigated) throw new Error('Expected the layout to follow navigations');
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
 
-		history.replaceState({ 'sveltekit:history': 1 }, '', '/');
-		onNavigated({ type: 'goto' } as Parameters<typeof onNavigated>[0]);
+		await goto(resolve('/'));
 		currentUser.set(USER);
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
@@ -852,7 +846,7 @@ describe('signing out from the phone rail drawer', () => {
 	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 		const target = await renderLayout('/');
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		sidebarOpen.set(true);
