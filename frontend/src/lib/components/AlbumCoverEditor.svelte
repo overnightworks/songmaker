@@ -53,8 +53,6 @@
 
 	type CoverSuggestionsOutcome = Pick<CoverSuggestionsState, 'failure' | 'unreachable'>;
 
-	// What the grown cover can show: each suggestion made so far, then the one
-	// being made or the named failure of the last attempt.
 	type StageSlot =
 		| { kind: 'suggestion'; id: string; url: string }
 		| { kind: 'making'; progress: number }
