@@ -246,6 +246,7 @@ export function railClientApiMock(overrides: Record<string, (...args: unknown[])
 		fetchPlaylists: vi.fn().mockResolvedValue([]),
 		fetchPlaylist: vi.fn(),
 		fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null }),
+		fetchVersions: vi.fn().mockResolvedValue([]),
 		...overrides
 	};
 }
