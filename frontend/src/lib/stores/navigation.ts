@@ -129,12 +129,14 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 }
 
 // A dirty editor draft blocks a song switch or leave (rail row, prev/next,
-// breadcrumb, Escape, Library, a collection opened anywhere) until the owner
-// resolves it: the deferred
-// navigation is parked here, and SongDetailView — the only surface where a
-// draft can be dirty — renders the Save / Discard / Cancel confirm and
-// either runs the parked action (Discard, or Save then run it) or drops it
-// (Cancel).
+// breadcrumb, Escape, Library, a collection opened anywhere, a rail page
+// link, Logout) until the owner resolves it: the deferred navigation is
+// parked here, and SongDetailView renders the Save / Discard / Cancel
+// confirm and either runs the parked action (Discard, or Save then run it)
+// or drops it (Cancel). Only the song's own surface can dirty a draft, and
+// a way out that skips this guard unmounts that confirm while the draft
+// stays dirty, so a later guarded tap would park with no one to ask
+// (issue #1143).
 export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
 
 // The single gatekeeper for every navigation that would drop the current
