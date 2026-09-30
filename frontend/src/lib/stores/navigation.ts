@@ -146,7 +146,7 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // — never re-implement the if/else inline. The phone drawer closes over a
 // parked navigation: the question now belongs to the song behind it, and
 // Keep editing must land on that draft, not on the drawer (issue #1143).
-export async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
+async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
 	if (get(isDirty)) {
 		closeSidebar();
 		pendingDirtyNavigation.set(action);
@@ -284,6 +284,23 @@ export function openAppPage(href: AppPageHref): Promise<void> {
 		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
 		closeSidebar();
 	});
+}
+
+// An app-page `<a href>` inside the shell or the song surface: a plain click
+// goes through `openAppPage`, while a modified or non-primary click (a new
+// tab or window) keeps the browser default, because it never leaves the song.
+export function followAppPageLink(event: MouseEvent, href: AppPageHref): void {
+	const opensElsewhere =
+		event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+	if (opensElsewhere) return;
+	event.preventDefault();
+	void openAppPage(href);
+}
+
+// Logout drops the session and with it the draft, so it asks the same
+// dirty-draft question first.
+export function leaveForLogout(logout: () => void | Promise<void>): Promise<void> {
+	return guardDirtyNavigation(logout);
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb
