@@ -12,6 +12,7 @@ import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
 	captureUnhandledRejections,
 	createButton,
+	createSettled,
 	field,
 	type
 } from '$lib/test-utils/new-place-card';
@@ -78,12 +79,6 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-async function createSettled(): Promise<void> {
-	await vi.waitFor(() => expect(createPlaylist).toHaveBeenCalled());
-	await tick();
-	await tick();
-}
-
 function listedIds(): string[] {
 	return get(playlistList).map((listed) => listed.id);
 }
@@ -111,7 +106,7 @@ describe('NewPlaylistCard', () => {
 		type(field(root, 'Name'), '  Road Trip ');
 
 		createButton(root).click();
-		await createSettled();
+		await createSettled(createPlaylist);
 
 		expect(createPlaylist).toHaveBeenCalledWith('Road Trip');
 		expect(listedIds()).toEqual(['p-road']);
@@ -127,7 +122,7 @@ describe('NewPlaylistCard', () => {
 		type(field(root, 'Name'), 'Road Trip');
 
 		createButton(root).click();
-		await createSettled();
+		await createSettled(createPlaylist);
 
 		expect(creates).toBe(0);
 		expect(field(root, 'Name').value).toBe('Road Trip');
@@ -145,7 +140,7 @@ describe('NewPlaylistCard', () => {
 		type(field(root, 'Name'), 'Road Trip');
 
 		createButton(root).click();
-		await createSettled();
+		await createSettled(createPlaylist);
 
 		await vi.waitFor(() => expect(escaped).toContain(openFailure));
 		expect(listedIds()).toEqual(['p-road']);

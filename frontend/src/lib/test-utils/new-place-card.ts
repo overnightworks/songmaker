@@ -1,4 +1,5 @@
-import { flushSync } from 'svelte';
+import { flushSync, tick } from 'svelte';
+import { expect, vi, type Mock } from 'vitest';
 
 export function field(root: ParentNode, label: string): HTMLInputElement {
 	const input = [...root.querySelectorAll('label')]
@@ -12,6 +13,12 @@ export function type(input: HTMLInputElement, value: string): void {
 	input.value = value;
 	input.dispatchEvent(new Event('input', { bubbles: true }));
 	flushSync();
+}
+
+export async function createSettled(create: Mock): Promise<void> {
+	await vi.waitFor(() => expect(create).toHaveBeenCalled());
+	await tick();
+	await tick();
 }
 
 export function createButton(root: ParentNode): HTMLButtonElement {
