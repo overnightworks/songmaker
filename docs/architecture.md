@@ -306,7 +306,11 @@ supersedes it and a Back aborts it, so a song tapped while its album's route
 still loads installs its own entry at once too, and a write that keeps the
 route meanwhile re-issues the mount for the entry now standing. Such an entry
 shares the navigation index of the library entry under it, so Back and
-Forward between the two are shallow and keep the mounted route. The frequent
+Forward between the two are shallow and keep the mounted route. An address
+its route states as unknown or unreachable, or one still loading, has written
+no library entry, so a crossing from it stays one `goto` push with its own
+navigation index, and Back onto it loads its route again and states the
+address once more instead of showing the wall. The frequent
 same-*shape* churn — filter, sort,
 scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the

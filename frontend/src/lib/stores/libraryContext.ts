@@ -241,8 +241,9 @@ type HistoryWriteMode = 'push' | 'replace';
 // installs its entry only once the route has loaded, a task later. A Back
 // pressed in between would leave the entry under the one the page came from
 // (issue #1165: album, song, Back showed the wall). So a crossing that pushes
-// from a library page installs its entry at once by shallow routing, and a
-// `goto` then mounts the route by writing that entry over again. A mount is
+// from a library page -- an entry carrying a library state -- installs its
+// entry at once by shallow routing, and a `goto` then mounts the route by
+// writing that entry over again. A mount is
 // no queued step: it only brings the router to the entry that already stands,
 // a newer navigation supersedes it and a Back aborts it, so a song tapped while
 // its album's route still loads installs its own entry at once too. A write
@@ -251,8 +252,10 @@ type HistoryWriteMode = 'push' | 'replace';
 // started with. Such an entry keeps the navigation index of the library entry
 // under it, so Back or Forward between the two is shallow: the library applies
 // the entry and the mounted route stays, as it does for same-shape churn. From
-// any other page the library shows nothing before its route loads, so there
-// it is one `goto`.
+// any other page -- an app page, or an address its route states as unknown,
+// unreachable or still loading, which writes no library state -- the library
+// shows nothing before its route loads, so there it is one `goto`, and Back
+// onto that page navigates and loads its route again.
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
@@ -276,10 +279,12 @@ export function writeLibraryHistory(
 	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
+	const leavesLibraryPage =
+		libraryRouteShape(from) !== 'external' && isLibraryHistoryState(libraryHistoryEntry());
 	if (queuedHistoryWrites === 0 && !crossesRoutes) {
 		return writeLibraryHistoryKeepingRoute(state, url, mode);
 	}
-	if (queuedHistoryWrites === 0 && mode === 'push' && libraryRouteShape(from) !== 'external') {
+	if (queuedHistoryWrites === 0 && mode === 'push' && leavesLibraryPage) {
 		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, 'push'));
 	}
 	return queueHistoryStep({ pathname, state }, async () => {
