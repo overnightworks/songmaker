@@ -28,7 +28,8 @@ import NewAlbumCard from './NewAlbumCard.svelte';
 const NIGHT_DRIVE = album({ id: 'a-night', title: 'Night Drive', artist: '' });
 
 let mounted: ReturnType<typeof mount> | undefined;
-let closes: number;
+let cancels: number;
+let creates: number;
 
 beforeEach(() => {
 	createAlbum.mockReset().mockResolvedValue(NIGHT_DRIVE);
@@ -36,7 +37,8 @@ beforeEach(() => {
 	albumList.set([]);
 	resetCollectionForTests();
 	replaceHistoryEntry('/');
-	closes = 0;
+	cancels = 0;
+	creates = 0;
 });
 
 afterEach(async () => {
@@ -48,7 +50,10 @@ afterEach(async () => {
 async function render(): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted = mount(NewAlbumCard, { target, props: { onclose: () => (closes += 1) } });
+	mounted = mount(NewAlbumCard, {
+		target,
+		props: { oncancel: () => (cancels += 1), oncreated: () => (creates += 1) }
+	});
 	await tick();
 	return target;
 }
@@ -112,7 +117,7 @@ describe('NewAlbumCard', () => {
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', 'Lichtwechsel');
 		expect(get(albumList).map((listed) => listed.id)).toEqual(['a-night']);
 		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-night' });
-		expect(closes).toBe(1);
+		expect(creates).toBe(1);
 	});
 
 	it('creates on Enter in the title field', async () => {
@@ -133,7 +138,7 @@ describe('NewAlbumCard', () => {
 		createButton(root).click();
 		await settle();
 
-		expect(closes).toBe(0);
+		expect(creates).toBe(0);
 		expect(field(root, 'Title').value).toBe('Night Drive');
 		expect(createButton(root).disabled).toBe(false);
 		expect(get(openCollection)).toBeNull();
@@ -147,7 +152,7 @@ describe('NewAlbumCard', () => {
 		root.querySelector<HTMLButtonElement>('[aria-label="Close new album"]')?.click();
 		await tick();
 
-		expect(closes).toBe(1);
+		expect(cancels).toBe(1);
 		expect(createAlbum).not.toHaveBeenCalled();
 	});
 });

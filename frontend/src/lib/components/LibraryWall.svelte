@@ -127,9 +127,13 @@
 		$newAlbumOpen = true;
 	}
 
-	function closeNewAlbum(): void {
+	function cancelNewAlbum(): void {
 		$newAlbumOpen = false;
 		newMenu?.focusTrigger();
+	}
+
+	function foldCreatedAlbum(): void {
+		$newAlbumOpen = false;
 	}
 
 	function retryLoad(): void {
@@ -180,7 +184,7 @@
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
 		{#if $newAlbumOpen}
-			<NewAlbumCard onclose={closeNewAlbum} />
+			<NewAlbumCard oncancel={cancelNewAlbum} oncreated={foldCreatedAlbum} />
 		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>

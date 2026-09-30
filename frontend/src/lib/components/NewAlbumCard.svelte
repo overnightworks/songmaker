@@ -18,10 +18,11 @@
 	import Icon from './Icon.svelte';
 
 	interface Props {
-		onclose: () => void;
+		oncancel: () => void;
+		oncreated: () => void;
 	}
 
-	let { onclose }: Props = $props();
+	let { oncancel, oncreated }: Props = $props();
 
 	let title = $state('');
 	let artist = $state('');
@@ -39,7 +40,7 @@
 		try {
 			const album = await createAlbum(title.trim(), artist.trim());
 			addAlbumToList(album);
-			onclose();
+			oncreated();
 			await openAlbum(album.id);
 		} catch (err) {
 			addToast(describeFailure(err, NEW_ALBUM_FAILED), 'error');
@@ -51,7 +52,7 @@
 <form class="new-album" aria-label={NEW_ALBUM_CARD_LABEL} onsubmit={create}>
 	<div class="card-head">
 		<span class="card-title">{NEW_ALBUM_CARD_LABEL}</span>
-		<button type="button" class="close-btn" aria-label={NEW_ALBUM_CLOSE_LABEL} onclick={onclose}>
+		<button type="button" class="close-btn" aria-label={NEW_ALBUM_CLOSE_LABEL} onclick={oncancel}>
 			<Icon name="x" size={18} />
 		</button>
 	</div>
