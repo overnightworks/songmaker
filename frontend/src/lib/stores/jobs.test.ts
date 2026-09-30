@@ -12,9 +12,11 @@ vi.mock('$lib/stores/resourceSync', () => ({
 
 const mockFetchLastFailedGeneration = vi.fn();
 const mockFetchActiveGeneration = vi.fn();
+const mockFetchJob = vi.fn();
 
 vi.mock('$lib/api/client', () => ({
 	fetchActiveGeneration: (...args: unknown[]) => mockFetchActiveGeneration(...args),
+	fetchJob: (...args: unknown[]) => mockFetchJob(...args),
 	fetchLastFailedGeneration: (...args: unknown[]) => mockFetchLastFailedGeneration(...args)
 }));
 
@@ -31,6 +33,7 @@ import {
 import { toasts } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import type { JobStatus } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -54,6 +57,7 @@ class MockEventSource {
 	static instances: MockEventSource[] = [];
 	url: string;
 	withCredentials: boolean;
+	onopen: ErrorHandler = null;
 	onmessage: EventSourceHandler = null;
 	onerror: ErrorHandler = null;
 	closed = false;
@@ -66,6 +70,12 @@ class MockEventSource {
 
 	close(): void {
 		this.closed = true;
+	}
+
+	simulateOpen(): void {
+		if (this.onopen) {
+			this.onopen();
+		}
 	}
 
 	simulateMessage(data: JobStatus): void {
@@ -108,6 +118,7 @@ beforeEach(() => {
 	mockRequestSongRefresh.mockResolvedValue(undefined);
 	mockFetchLastFailedGeneration.mockReset();
 	mockFetchActiveGeneration.mockReset();
+	mockFetchJob.mockReset();
 	MockEventSource.instances = [];
 	vi.stubGlobal('EventSource', MockEventSource);
 	vi.useFakeTimers();
@@ -255,22 +266,121 @@ describe('jobs store', () => {
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
-	it('removes job after max connection errors', async () => {
-		trackJob(makeJob(), {});
-		// One error per connection: each error before the limit closes the
-		// failing connection and reopens a new one after its backoff delay;
-		// the error at the limit gives up instead of reopening.
-		for (let i = 0; i < JOB_STREAM_MAX_CONNECTION_ERRORS - 1; i++) {
-			const source = latestSource();
-			source.simulateError();
-			expect(source.closed).toBe(true);
+	async function failEveryReopen(times: number): Promise<void> {
+		for (let i = 0; i < times; i++) {
+			latestSource().simulateError();
 			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		}
-		expect(MockEventSource.instances).toHaveLength(JOB_STREAM_MAX_CONNECTION_ERRORS);
-		const last = latestSource();
-		last.simulateError();
-		expect(last.closed).toBe(true);
-		expect(get(activeJobs)).toHaveLength(0);
+	}
+
+	async function spendTheBudgetOnline(): Promise<void> {
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS - 1);
+		latestSource().simulateError();
+		await vi.advanceTimersByTimeAsync(0);
+	}
+
+	function lostConnectionToasts(): string[] {
+		return get(toasts)
+			.map((toast) => toast.message)
+			.filter((message) => message === 'Lost connection to server');
+	}
+
+	it('keeps a running job through three outages with no message in between', async () => {
+		toasts.set([]);
+		trackJob(makeJob({ status: 'running', progress: 0.3 }), { songId: 'song-1' });
+		for (let outage = 0; outage < 3; outage++) {
+			reportResourceStreamReachable(false);
+			await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS);
+			reportResourceStreamReachable(true);
+			window.dispatchEvent(new Event('online'));
+			latestSource().simulateOpen();
+		}
+
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.3]);
+		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.6 }));
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.6]);
+		expect(mockFetchJob).not.toHaveBeenCalled();
+		expect(lostConnectionToasts()).toEqual([]);
+	});
+
+	it('never spends the give-up budget on failures while offline', async () => {
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS - 1);
+		reportResourceStreamReachable(false);
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS * 2);
+
+		expect(get(activeJobs)).toHaveLength(1);
+		expect(mockFetchJob).not.toHaveBeenCalled();
+	});
+
+	it('resets the give-up budget when a stream opens, even without a message', async () => {
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS - 1);
+		latestSource().simulateOpen();
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS - 1);
+
+		expect(get(activeJobs)).toHaveLength(1);
+		expect(mockFetchJob).not.toHaveBeenCalled();
+	});
+
+	it('re-reads a job whose budget runs out online and finishes it as the server reports', async () => {
+		toasts.set([]);
+		mockFetchJob.mockResolvedValue(makeJob({ status: 'completed' }));
+		mockRequestSongRefresh.mockReturnValue(new Promise<void>(() => {}));
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		await spendTheBudgetOnline();
+
+		expect(mockFetchJob).toHaveBeenCalledWith('j1');
+		expect(get(activeJobs)).toEqual([
+			{ job: makeJob({ status: 'completed' }), songId: 'song-1', awaitingTakes: true }
+		]);
+		expect(mockRequestSongRefresh).toHaveBeenCalledWith('song-1');
+		expect(lostConnectionToasts()).toEqual([]);
+	});
+
+	it('keeps following a job the server still runs after the budget runs out online', async () => {
+		toasts.set([]);
+		mockFetchJob.mockResolvedValue(makeJob({ status: 'running', progress: 0.7 }));
+		trackJob(makeJob({ status: 'running', progress: 0.2 }), { songId: 'song-1' });
+		await spendTheBudgetOnline();
+
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.7]);
+		const opensAfterTheReread = MockEventSource.instances.length;
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(opensAfterTheReread + 1);
+		await failEveryReopen(JOB_STREAM_MAX_CONNECTION_ERRORS - 1);
+		expect(get(activeJobs)).toHaveLength(1);
+		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.8 }));
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.8]);
+		expect(lostConnectionToasts()).toEqual([]);
+	});
+
+	it.each([
+		['the network swallowed', new NetworkError('/api/jobs/j1', new TypeError('offline'))],
+		['the server answered 503', new ApiError(503, 'Service Unavailable', '/api/jobs/j1')]
+	])('keeps following a job whose re-read %s', async (_reason, rereadFailure) => {
+		mockFetchJob.mockRejectedValue(rereadFailure);
+		trackJob(makeJob({ status: 'running', progress: 0.2 }), { songId: 'song-1' });
+		await spendTheBudgetOnline();
+
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.2]);
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.5 }));
+		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.5]);
+	});
+
+	it('lets a job the server no longer knows go quietly and refreshes its song', async () => {
+		toasts.set([]);
+		mockFetchJob.mockRejectedValue(new ApiError(404, 'Job not found', '/api/jobs/j1'));
+		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
+		await spendTheBudgetOnline();
+
+		expect(get(activeJobs)).toEqual([]);
+		expect(mockRequestSongRefresh).toHaveBeenCalledWith('song-1');
+		expect(get(toasts)).toEqual([]);
+		const opens = MockEventSource.instances.length;
+		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+		expect(MockEventSource.instances).toHaveLength(opens);
 	});
 
 	it('tolerates errors below max threshold, reconnecting with backoff each time', async () => {

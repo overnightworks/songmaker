@@ -1,4 +1,6 @@
-import { writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+
+import { offline, whenBackOnline } from '$lib/stores/connectivity';
 
 const TOAST_DURATION_MS = 5000;
 const UNDO_TOAST_DURATION_MS = 30000;
@@ -21,10 +23,33 @@ let nextId = 0;
 
 export const toasts = writable<Toast[]>([]);
 
+/**
+ * Failures raised while the page could not reach the server name the lost
+ * connection, which the offline strip already says; they go by themselves
+ * once it is back, so the page is calm again without a tap (#1141).
+ */
+const failuresRaisedOffline = new Set<number>();
+let stopWaitingForReturn: (() => void) | null = null;
+
+function clearOnReturn(id: number): void {
+	failuresRaisedOffline.add(id);
+	stopWaitingForReturn ??= whenBackOnline(clearFailuresRaisedOffline);
+}
+
+function clearFailuresRaisedOffline(): void {
+	toasts.update((t) => t.filter((toast) => !failuresRaisedOffline.has(toast.id)));
+	failuresRaisedOffline.clear();
+	stopWaitingForReturn?.();
+	stopWaitingForReturn = null;
+}
+
 export function addToast(message: string, type: ToastType = 'info'): void {
 	const id = nextId++;
 	toasts.update((t) => [...t, { id, message, type }]);
-	if (type === 'error') return;
+	if (type === 'error') {
+		if (get(offline)) clearOnReturn(id);
+		return;
+	}
 	setTimeout(() => {
 		toasts.update((t) => t.filter((toast) => toast.id !== id));
 	}, TOAST_DURATION_MS);
