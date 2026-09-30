@@ -2,6 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
 	import { isAdmin } from '$lib/stores/auth';
+	import { openAppPage, type AppPageHref } from '$lib/stores/navigation';
 	import {
 		RAIL_SETTINGS_LABEL,
 		RAIL_SETTINGS_OPEN_STORAGE_KEY,
@@ -10,7 +11,7 @@
 	import RailGroup from './RailGroup.svelte';
 
 	interface SettingsSection {
-		href: string;
+		href: AppPageHref;
 		label: string;
 		adminOnly: boolean;
 	}
@@ -29,6 +30,11 @@
 	const visibleSections = $derived(SETTINGS_SECTIONS.filter((item) => !item.adminOnly || admin));
 	const pathname = $derived(page.url.pathname);
 	const onSettingsRoute = $derived(pathname.startsWith('/settings'));
+
+	function openSection(event: MouseEvent, href: AppPageHref): void {
+		event.preventDefault();
+		void openAppPage(href);
+	}
 </script>
 
 <RailGroup
@@ -59,7 +65,12 @@
 		<ul>
 			{#each visibleSections as section (section.href)}
 				<li>
-					<a href={section.href} class="row row-sub" class:row-active={pathname === section.href}>
+					<a
+						href={section.href}
+						class="row row-sub"
+						class:row-active={pathname === section.href}
+						onclick={(event) => openSection(event, section.href)}
+					>
 						{section.label}
 					</a>
 				</li>

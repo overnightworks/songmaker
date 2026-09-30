@@ -144,7 +144,7 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // — never re-implement the if/else inline. The phone drawer closes over a
 // parked navigation: the question now belongs to the song behind it, and
 // Keep editing must land on that draft, not on the drawer (issue #1143).
-async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
+export async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
 	if (get(isDirty)) {
 		closeSidebar();
 		pendingDirtyNavigation.set(action);
@@ -269,8 +269,19 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openLibraryWall();
 		return;
 	}
-	await goto(resolve(target.href), { replaceState: get(railDrawerLayered) });
-	closeSidebar();
+	await openAppPage(target.href);
+}
+
+// A rail page link (a Settings row, the account name, a search hit that
+// names a page) leaves the song for an app page, so it asks the same
+// dirty-draft question as every other way out before it navigates.
+export type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
+
+export function openAppPage(href: AppPageHref): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
+		closeSidebar();
+	});
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb
