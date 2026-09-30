@@ -1,6 +1,7 @@
 import {
 	historyEntry,
 	historyLength,
+	pressBack,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry
@@ -92,6 +93,7 @@ import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
 	applyLibraryHistory,
+	backLibraryHistory,
 	cancelLibraryHistoryApply,
 	captureLibraryScroll,
 	detailTab,
@@ -746,6 +748,28 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(location.pathname).toBe(songRoutePath('a2', 's1'));
 		expect(historyEntry()).toEqual(libraryRootState());
 		expect(historyLength()).toBe(lengthBefore + 1);
+	});
+
+	// The phone drawer closing, or Go to song leaving a history layer, steps
+	// back before the crossing it opens: once that step lands, the crossing's
+	// entry stands, so a Back pressed while its route still loads returns to
+	// the page underneath instead of stepping past it.
+	it('installs a crossing push queued behind a step back the moment that step lands', async () => {
+		replaceHistoryEntry('/', libraryRootState());
+		const layered = { ...libraryRootState(), index: 1, layer: 'menu' };
+		await writeLibraryHistory(layered, '/', 'push');
+		const lengthBefore = historyLength();
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+
+		void backLibraryHistory(libraryRootState(), '/');
+		void writeLibraryHistory({ ...albumState, index: 1 }, albumRoutePath('a2'), 'push');
+
+		await vi.waitFor(() => expect(location.pathname).toBe(albumRoutePath('a2')));
+		expect(historyEntry()).toEqual({ ...albumState, index: 1 });
+		expect(historyLength()).toBe(lengthBefore);
+		await pressBack();
+		expect(location.pathname).toBe('/');
+		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
 	// A layer opening over the new album while its route still loads stands at

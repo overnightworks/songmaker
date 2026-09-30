@@ -303,7 +303,9 @@ by shallow routing and its `goto` then mounts the route by writing that entry
 over again; otherwise a Back pressed in between skipped an entry (album, song,
 Back showed the wall). A mount is no queued step: a newer navigation
 supersedes it and a Back aborts it, so a song tapped while its album's route
-still loads installs its own entry at once too, and a write that keeps the
+still loads installs its own entry at once too, a crossing queued behind a
+step back (the phone drawer closing, Go to song leaving a history layer)
+installs its entry the moment that step lands, and a write that keeps the
 route meanwhile re-issues the mount for the entry now standing. Such an entry
 shares the navigation index of the library entry under it, so Back and
 Forward between the two are shallow and keep the mounted route. An address
