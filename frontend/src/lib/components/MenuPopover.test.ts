@@ -81,7 +81,7 @@ async function openPopover(items = ONE_ITEM): Promise<HTMLElement> {
 	return openIn(await renderClosed(items));
 }
 
-function press(key: string, shiftKey = false): void {
+function pressOnWindow(key: string, shiftKey = false): void {
 	window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
 }
 
@@ -179,7 +179,7 @@ describe('MenuPopover keyboard', () => {
 		const panel = await openPopover(TWO_ITEMS);
 		[...panel.querySelectorAll('button')].find((item) => item.textContent === from)?.focus();
 
-		press('Tab', shift);
+		pressOnWindow('Tab', shift);
 
 		expect(document.activeElement?.textContent).toBe(to);
 	});
@@ -188,7 +188,7 @@ describe('MenuPopover keyboard', () => {
 		const target = await renderClosed();
 		await openIn(target);
 
-		press('Escape');
+		pressOnWindow('Escape');
 		await focusReturned();
 
 		expect(target.querySelector('.menu-panel')).toBeNull();
@@ -210,6 +210,6 @@ describeBackClosesOverlay({
 			way: 'a tap outside it',
 			close: (target) => target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click()
 		},
-		{ way: 'Escape', close: () => press('Escape') }
+		{ way: 'Escape', close: () => pressOnWindow('Escape') }
 	]
 });
