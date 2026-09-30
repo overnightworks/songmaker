@@ -18,10 +18,10 @@
 		})
 	);
 
-	// The desktop rail already lists the sections, so there the index has
-	// nothing of its own to show and opens the viewer's first section instead.
+	const railListsSections = $derived(compact === false);
+
 	$effect(() => {
-		if (compact !== false) return;
+		if (!railListsSections) return;
 		const target = admin ? '/settings/generation' : '/settings/playback';
 		goto(target, { replaceState: true });
 	});
