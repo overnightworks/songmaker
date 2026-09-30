@@ -124,7 +124,8 @@ const RUNNING: GenerateState = {
 	progress: 40,
 	readout: '40%',
 	ended: false,
-	reconnecting: false
+	reconnecting: false,
+	offline: false
 };
 const SUBMITTING: GenerateState = {
 	kind: 'generating',
@@ -134,14 +135,16 @@ const SUBMITTING: GenerateState = {
 	progress: 0,
 	readout: '0%',
 	ended: false,
-	reconnecting: false
+	reconnecting: false,
+	offline: false
 };
 const QUEUED: Extract<GenerateState, { kind: 'queued' }> = {
 	kind: 'queued',
 	jobId: 'j1',
 	label: 'Queued #2',
 	reason: null,
-	reconnecting: false
+	reconnecting: false,
+	offline: false
 };
 
 const playlist = {

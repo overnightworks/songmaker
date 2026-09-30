@@ -26,6 +26,7 @@
 
 	const presentation: GenerateState = $derived($generateAction);
 	const reconnecting: boolean = $derived(isGenerateBusy(presentation) && presentation.reconnecting);
+	const cancelUnreachable: boolean = $derived(isGenerateBusy(presentation) && presentation.offline);
 	const progressLabel: string | null = $derived(
 		presentation.kind === 'generating'
 			? [presentation.takeCounter, presentation.phase, presentation.readout]
@@ -64,13 +65,14 @@
 			<button
 				type="button"
 				class="icon-button"
+				class:unreachable={cancelUnreachable}
 				data-hitbox="frequent"
-				aria-label={reconnecting
+				aria-label={cancelUnreachable
 					? EDITOR_GENERATE_CANCEL_OFFLINE_LABEL
 					: EDITOR_GENERATE_CANCEL_LABEL}
-				aria-disabled={reconnecting}
+				aria-disabled={cancelUnreachable}
 				onclick={() => {
-					if (!reconnecting) void cancelGeneration(jobId);
+					if (!cancelUnreachable) void cancelGeneration(jobId);
 				}}
 			>
 				<Icon name="x" />
@@ -181,8 +183,8 @@
 		background: color-mix(in srgb, var(--score-ok) 20%, transparent);
 	}
 
-	/* Offline nothing about the take can arrive and a cancel cannot leave, so
-	   the readout stops looking live: its last state, in grey. */
+	/* While nothing about the take can arrive the readout stops looking live:
+	   its last state, in grey. Offline a cancel cannot leave, so it greys too. */
 	.progress-button.reconnecting {
 		border-color: var(--border);
 		color: var(--text-subtle);
@@ -192,7 +194,7 @@
 		background: color-mix(in srgb, var(--text-disabled) 20%, transparent);
 	}
 
-	.reconnecting + .icon-button {
+	.icon-button.unreachable {
 		color: var(--text-disabled);
 		cursor: default;
 	}

@@ -345,6 +345,7 @@ describe('jobs store', () => {
 		await spendTheBudgetOnline();
 
 		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.7]);
+		expect(get(activeJobs)[0].streamStale).toBe(true);
 		const opensAfterTheReread = MockEventSource.instances.length;
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(MockEventSource.instances).toHaveLength(opensAfterTheReread + 1);
@@ -381,6 +382,54 @@ describe('jobs store', () => {
 		const opens = MockEventSource.instances.length;
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(MockEventSource.instances).toHaveLength(opens);
+	});
+
+	describe("while the page is online but the job's stream is down", () => {
+		const streamIsStale = (): boolean | undefined => get(activeJobs)[0].streamStale;
+
+		it('marks the job stale from its first stream failure, through refused reopens', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			expect(streamIsStale()).toBeFalsy();
+			await failEveryReopen(3);
+			expect(streamIsStale()).toBe(true);
+			latestSource().simulateOpen();
+			expect(streamIsStale()).toBe(true);
+		});
+
+		it('is fresh again with the first message after the return', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			await failEveryReopen(6);
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.65 }));
+			expect(get(activeJobs)).toEqual([
+				{ job: makeJob({ status: 'running', progress: 0.65 }), songId: 's1' }
+			]);
+		});
+
+		it('a stream that ends after speaking and reopens at once never reads stale', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			latestSource().simulateOpen();
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.6 }));
+
+			latestSource().simulateError();
+			expect(streamIsStale()).toBeFalsy();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+			latestSource().simulateOpen();
+			expect(streamIsStale()).toBeFalsy();
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.65 }));
+
+			expect(streamIsStale()).toBeFalsy();
+		});
+
+		it('reads stale once the reopen after a spoken stream is refused', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.6 }));
+			latestSource().simulateError();
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+
+			latestSource().simulateError();
+
+			expect(streamIsStale()).toBe(true);
+		});
 	});
 
 	it('tolerates errors below max threshold, reconnecting with backoff each time', async () => {
