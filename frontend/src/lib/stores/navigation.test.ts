@@ -124,12 +124,12 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
+	followAppPageLink,
 	goBack,
 	historyLayerState,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
-	openAppPage,
 	openCollectionEntry,
 	openLibraryCreate,
 	openLibraryWall,
@@ -1155,7 +1155,10 @@ describe('a dirty draft guards song switch / leave', () => {
 	});
 
 	describe.each([
-		['a Settings row', () => openAppPage('/settings/playback')],
+		[
+			'a Settings row',
+			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/playback')
+		],
 		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })]
 	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
 		async function leaveWithADirtyDraft(): Promise<void> {

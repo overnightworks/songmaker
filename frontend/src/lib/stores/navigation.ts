@@ -279,7 +279,7 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // dirty-draft question as every other way out before it navigates.
 export type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
-export function openAppPage(href: AppPageHref): Promise<void> {
+function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
 		closeSidebar();
