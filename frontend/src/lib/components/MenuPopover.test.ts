@@ -1,5 +1,6 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import MenuPopover from './MenuPopover.svelte';
 
 const PANEL_WIDTH = 220;
@@ -41,7 +42,10 @@ function layOut(trigger: Placement, panelHeight = PANEL_HEIGHT): void {
 	});
 }
 
-async function openPopover(): Promise<HTMLElement> {
+const ONE_ITEM = '<button>Rename</button>';
+const TWO_ITEMS = '<div><button>Rename</button><button>Delete</button></div>';
+
+async function renderClosed(items = ONE_ITEM): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(MenuPopover, {
@@ -51,16 +55,39 @@ async function openPopover(): Promise<HTMLElement> {
 			label: 'More',
 			closeLabel: 'Close menu',
 			trigger: createRawSnippet(() => ({ render: () => '<span>⋯</span>' })),
-			children: createRawSnippet(() => ({ render: () => '<button>Rename</button>' }))
+			children: createRawSnippet(() => ({ render: () => items }))
 		}
 	});
 	await tick();
-	target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+	return target;
+}
+
+function triggerOf(target: ParentNode): HTMLButtonElement {
+	const trigger = target.querySelector<HTMLButtonElement>('.menu-trigger');
+	if (!trigger) throw new Error('Expected the popover trigger');
+	return trigger;
+}
+
+async function openIn(target: HTMLElement): Promise<HTMLElement> {
+	triggerOf(target).click();
 	await tick();
 	await tick();
 	const panel = target.querySelector<HTMLElement>('.menu-panel');
 	if (!panel) throw new Error('Expected the popover panel to open');
 	return panel;
+}
+
+async function openPopover(items = ONE_ITEM): Promise<HTMLElement> {
+	return openIn(await renderClosed(items));
+}
+
+function pressOnWindow(key: string, shiftKey = false): void {
+	window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+}
+
+async function focusReturned(): Promise<void> {
+	await Promise.resolve();
+	await tick();
 }
 
 function placementOf(panel: HTMLElement): Placement {
@@ -129,4 +156,60 @@ describe('MenuPopover placement', () => {
 
 		expect(placementOf(panel)).toEqual({ left: 8, top: 162 });
 	});
+});
+
+describe('MenuPopover keyboard', () => {
+	it('shows pressed while open and moves focus to its first item', async () => {
+		const panel = await openPopover(TWO_ITEMS);
+
+		expect(triggerOf(document).getAttribute('aria-expanded')).toBe('true');
+		expect(document.activeElement?.textContent).toBe('Rename');
+		expect(panel.contains(document.activeElement)).toBe(true);
+	});
+
+	it.each([
+		{ case: 'Tab on the last item wraps to the first', from: 'Delete', shift: false, to: 'Rename' },
+		{
+			case: 'Shift+Tab on the first item wraps to the last',
+			from: 'Rename',
+			shift: true,
+			to: 'Delete'
+		}
+	])('keeps focus inside: $case', async ({ from, shift, to }) => {
+		const panel = await openPopover(TWO_ITEMS);
+		[...panel.querySelectorAll('button')].find((item) => item.textContent === from)?.focus();
+
+		pressOnWindow('Tab', shift);
+
+		expect(document.activeElement?.textContent).toBe(to);
+	});
+
+	it('Escape closes it and hands focus back to its trigger', async () => {
+		const target = await renderClosed();
+		await openIn(target);
+
+		pressOnWindow('Escape');
+		await focusReturned();
+
+		expect(target.querySelector('.menu-panel')).toBeNull();
+		expect(triggerOf(target).getAttribute('aria-expanded')).toBe('false');
+		expect(document.activeElement).toBe(triggerOf(target));
+	});
+});
+
+describeBackClosesOverlay({
+	name: 'the menu popover',
+	render: () => renderClosed(),
+	open: async (target) => {
+		await openIn(target);
+	},
+	isShown: (target) => target.querySelector('.menu-panel') !== null,
+	closeWays: [
+		{ way: 'its trigger', close: (target) => triggerOf(target).click() },
+		{
+			way: 'a tap outside it',
+			close: (target) => target.querySelector<HTMLButtonElement>('.menu-backdrop')?.click()
+		},
+		{ way: 'Escape', close: () => pressOnWindow('Escape') }
+	]
 });
