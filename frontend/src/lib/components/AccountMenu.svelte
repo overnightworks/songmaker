@@ -1,6 +1,4 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
-	import { resolve } from '$app/paths';
 	import {
 		ACCOUNT_MENU_CLOSE_LABEL,
 		ACCOUNT_MENU_LABEL,
@@ -10,6 +8,7 @@
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
+	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
@@ -24,7 +23,7 @@
 
 	function openSettings(): void {
 		popover?.close();
-		void goto(resolve('/settings'));
+		void openAppPage('/settings');
 	}
 </script>
 

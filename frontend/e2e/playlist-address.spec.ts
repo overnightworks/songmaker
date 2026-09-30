@@ -13,8 +13,13 @@
 // which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
-import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
-import { FlowGuard, workspace } from './helpers';
+import {
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_NAV_LABEL,
+	RESOURCE_SYNC_ERROR
+} from '../src/lib/constants';
+import { FlowGuard, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
 /**
@@ -82,4 +87,37 @@ test('an unknown playlist slug states the address names nothing, without a redir
 
 	await expect(page.getByRole('alert')).toContainText('No such playlist');
 	await expect(page).toHaveURL(/\/playlist\/no-such-playlist-here$/);
+});
+
+// Issue #1165: an address stated as unknown wrote no library entry, so Back
+// onto it from the album the rail opened -- a crossing to another route --
+// must load its route again and state the address once more, never show the
+// wall under it.
+test('Back onto an unknown playlist slug states it again, not the wall', async ({
+	page,
+	isMobile
+}) => {
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
+
+	const library = readSeededLibrary();
+	const unknownAddress = '/playlist/no-such-playlist-here';
+	await page.goto(unknownAddress);
+	await expect(page.getByRole('alert')).toContainText('No such playlist');
+
+	const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: library.albumTitle })
+		.getByRole('button', { name: containing(library.albumTitle) })
+		.click();
+	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
+	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
+
+	await page.goBack();
+
+	await expect(page).toHaveURL(new RegExp(`${unknownAddress}$`));
+	await expect(page.getByRole('alert')).toContainText('No such playlist');
 });

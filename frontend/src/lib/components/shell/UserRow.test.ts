@@ -62,9 +62,7 @@ describe('UserRow', () => {
 		expect(link.getAttribute('href')).toBe('/settings/account');
 
 		link.click();
-		await vi.waitFor(() =>
-			expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/account', { replaceState: false })
-		);
+		await vi.waitFor(() => expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/account'));
 	});
 
 	it.each([
