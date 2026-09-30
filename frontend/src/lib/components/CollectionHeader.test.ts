@@ -20,6 +20,7 @@ import { openLibraryWall } from '$lib/stores/navigation';
 import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
 import CollectionHeader from './CollectionHeader.svelte';
+import { openCollectionMenu } from './shell/rail-test-fixtures';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
 let mounted: ReturnType<typeof mount> | undefined;
@@ -65,12 +66,6 @@ async function render(props: CollectionHeaderProps): Promise<HTMLElement> {
 	mounted = mount(CollectionHeader, { target, props });
 	await tick();
 	return target;
-}
-
-async function openMenu(target: HTMLElement): Promise<HTMLElement> {
-	requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-	await tick();
-	return requireElement<HTMLElement>(document.body, '.menu-panel');
 }
 
 beforeEach(() => {
@@ -307,7 +302,7 @@ describe('CollectionHeader', () => {
 
 	it('names the object first in the menu and lists album entries in order, without Remove cover when there is no cover', async () => {
 		const target = await render(baseProps());
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
@@ -318,7 +313,7 @@ describe('CollectionHeader', () => {
 	it('adds Remove cover once a cover exists and wires it to onremovecover', async () => {
 		const props = { ...baseProps(), coverUrl: 'https://x/cover.jpg' };
 		const target = await render(props);
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
@@ -333,7 +328,7 @@ describe('CollectionHeader', () => {
 	it('lists playlist cover actions alongside its existing actions', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
 		const target = await render(props);
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share playlist');
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
@@ -344,7 +339,7 @@ describe('CollectionHeader', () => {
 	it('shares via the embedded ShareButton and copies the link, without duplicating the logic', async () => {
 		const props = baseProps();
 		const target = await render(props);
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		requireElement<HTMLButtonElement>(menu, '.share-btn').click();
 		await vi.waitFor(() => expect(props.onshare).toHaveBeenCalledTimes(1));
 		await vi.waitFor(() =>
@@ -355,7 +350,7 @@ describe('CollectionHeader', () => {
 	it('calls ondelete for the destructive entry and closes the menu', async () => {
 		const props = baseProps();
 		const target = await render(props);
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		requireElement<HTMLButtonElement>(menu, '.menu-item.destructive').click();
 		await tick();
 		expect(props.ondelete).toHaveBeenCalledTimes(1);
@@ -427,7 +422,7 @@ describe('CollectionHeader', () => {
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {
 		const target = await render(baseProps());
-		const menu = await openMenu(target);
+		const menu = await openCollectionMenu(target);
 		const renameItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
 			(el) => el.textContent?.trim() === 'Rename'
 		);
