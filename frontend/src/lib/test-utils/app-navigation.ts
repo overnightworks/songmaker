@@ -54,8 +54,8 @@ let hasNavigated = false;
 
 const afterNavigateCallbacks = new Set<(navigation: AfterNavigate) => void>();
 
-// Every navigation the fake router reported, in order, with the address of
-// the page it navigated to.
+// Every navigation the fake router reported since it last started, in order,
+// with the address of the page it navigated to.
 export const reportedNavigations: { type: AfterNavigate['type']; pathname: string }[] = [];
 
 function routerEntry(entry: unknown): RouterEntry | null {
@@ -88,6 +88,7 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 // keeping the place and dropping whatever state the entry carried.
 export function startFakeRouter(): void {
 	hasNavigated = false;
+	reportedNavigations.length = 0;
 	const loaded = routerEntry(history.state);
 	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? 1;
 	currentNavigationIndex = routerIndex(loaded, ROUTER_NAVIGATION_INDEX) ?? currentHistoryIndex;
