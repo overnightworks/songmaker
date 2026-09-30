@@ -268,7 +268,8 @@ describe('applyLibraryHistory', () => {
 
 	it.each([
 		{ surface: 'detail' as const, songsLoaded: true },
-		{ surface: 'browse' as const, songsLoaded: false }
+		{ surface: 'browse' as const, songsLoaded: false },
+		{ surface: 'create' as const, songsLoaded: false }
 	])(
 		'loads the open album songs only where the landing surface shows them ($surface)',
 		async ({ surface, songsLoaded }) => {
