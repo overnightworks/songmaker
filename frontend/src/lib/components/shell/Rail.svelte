@@ -20,15 +20,20 @@
 		toggleRailCollapsed
 	} from '$lib/stores/ui';
 
+	interface RailAccount {
+		username: string;
+		onlogout: () => void;
+	}
+
+	// Without an account the rail is navigation only: the phone drawer leaves
+	// Settings and the user row to the account circle's menu.
 	let {
-		username,
-		onlogout,
+		account,
 		collapsed = false,
 		showCollapseControl = true,
 		showResizeHandle = true
 	}: {
-		username: string;
-		onlogout: () => void;
+		account?: RailAccount;
 		collapsed?: boolean;
 		showCollapseControl?: boolean;
 		showResizeHandle?: boolean;
@@ -116,25 +121,27 @@
 		<RailPlaylistsGroup />
 	</div>
 
-	<div class="rail-settings-pin">
-		<RailSettings />
-	</div>
+	{#if account}
+		<div class="rail-settings-pin">
+			<RailSettings />
+		</div>
 
-	<div class="rail-bottom">
-		{#if collapsed}
-			<a
-				class="collapsed-account"
-				href="/settings/account"
-				aria-label="Account"
-				title="Account"
-				onclick={(event) => followAppPageLink(event, '/settings/account')}
-			>
-				{accountInitial(username)}
-			</a>
-		{:else}
-			<UserRow {username} {onlogout} />
-		{/if}
-	</div>
+		<div class="rail-bottom">
+			{#if collapsed}
+				<a
+					class="collapsed-account"
+					href="/settings/account"
+					aria-label="Account"
+					title="Account"
+					onclick={(event) => followAppPageLink(event, '/settings/account')}
+				>
+					{accountInitial(account.username)}
+				</a>
+			{:else}
+				<UserRow username={account.username} onlogout={account.onlogout} />
+			{/if}
+		</div>
+	{/if}
 
 	{#if showCollapseControl}
 		<button
