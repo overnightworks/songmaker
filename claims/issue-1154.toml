@@ -1,0 +1,8 @@
+claim_id = "f0baed9ed3504a77935d6d2cd1c8b495"
+agent = "claude-head"
+role = "builder"
+base = "2b0be451c574a70351a4228475398097bd18a5ae"
+branch = "claude/issue-1154-cover-in-place"
+scope = ["docs/design/album-cover.html", "frontend/e2e/album-cover.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionHeaderFrame.svelte", "frontend/src/lib/constants.ts"]
+opened_commit = "725491e5d17fa1e7490b91677d78980fe10be307"
+whole_reason = "cover editing in place on the album header with its copy, tests and the superseded old picture"
