@@ -13,7 +13,12 @@
 // which costs the stack nothing.
 
 import { expect, test, type Page } from '@playwright/test';
-import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
+import {
+	RAIL_NAV_LABEL,
+	RAIL_PLAYLISTS_LABEL,
+	RAIL_PLAYLISTS_NAV_LABEL,
+	RESOURCE_SYNC_ERROR
+} from '../src/lib/constants';
 import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
@@ -82,4 +87,38 @@ test('an unknown playlist slug states the address names nothing, without a redir
 
 	await expect(page.getByRole('alert')).toContainText('No such playlist');
 	await expect(page).toHaveURL(/\/playlist\/no-such-playlist-here$/);
+});
+
+// Issue #1165: an address stated as unknown wrote no library entry, so Back
+// onto it from the playlist the rail opened must load its route again and
+// state the address once more, never show the wall under it.
+test('Back onto an unknown playlist slug states it again, not the wall', async ({
+	page,
+	request,
+	isMobile
+}) => {
+	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
+
+	const playlist = await seedPlaylist(request, readSeededLibrary());
+	const unknownAddress = '/playlist/no-such-playlist-here';
+	await page.goto(unknownAddress);
+	await expect(page.getByRole('alert')).toContainText('No such playlist');
+
+	const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+	const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
+	if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
+		await playlistsGroup.click();
+	await rail
+		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+		.getByRole('listitem')
+		.filter({ hasText: playlist.title })
+		.getByRole('button', { name: new RegExp(`^${playlist.title}`) })
+		.click();
+	await expect(page).toHaveURL(new RegExp(`/playlist/${playlist.slug}$`));
+	await expect(workspace(page).getByRole('heading', { name: playlist.title })).toBeVisible();
+
+	await page.goBack();
+
+	await expect(page).toHaveURL(new RegExp(`${unknownAddress}$`));
+	await expect(page.getByRole('alert')).toContainText('No such playlist');
 });

@@ -712,7 +712,10 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// entry stands before the router has loaded the route, which `goto` then
 	// mounts over that same entry.
 	it('installs a crossing push from a library page at once, and mounts its route through goto over it', async () => {
-		replaceHistoryEntry(albumRoutePath('a1'));
+		replaceHistoryEntry(albumRoutePath('a1'), {
+			...albumState,
+			collection: { kind: 'album', id: 'a1' }
+		});
 		const lengthBefore = historyLength();
 
 		const written = writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
@@ -733,7 +736,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// A song tapped as soon as its album shows: the router may still be
 	// mounting the album's route, and the song's entry must not wait for it.
 	it('installs a crossing push at once while the route of the one before it still mounts', () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry('/', libraryRootState());
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
 		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
 		const lengthBefore = historyLength();
@@ -749,7 +752,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// once, and the router mounts the route over the layer's entry rather than
 	// writing the album's older library onto it.
 	it('mounts a route that still loads over the entry a same-shape push installs meanwhile', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry('/', libraryRootState());
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
 		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
 		const lengthBefore = historyLength();

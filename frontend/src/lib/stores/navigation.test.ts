@@ -260,6 +260,7 @@ describe('isLibraryWorkspacePath', () => {
 // router mounts its route by writing over that entry (issue #1165).
 describe('history writes across the route boundary (issue #269)', () => {
 	it('opens an album address through the router', async () => {
+		replaceHistoryEntry('/', libraryRootState());
 		await openAlbum('a1');
 		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1');
@@ -327,6 +328,21 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		expect(window.location.pathname).toBe('/album/a1');
 		expect(historyEntry()).toEqual(album);
+	});
+
+	// An address its route stated as unknown or unreachable wrote no library
+	// state, so Back onto it must load that route again to state it once more
+	// instead of applying the wall under its address.
+	it('crosses from an address without a library entry by one navigation Back loads again', async () => {
+		replaceHistoryEntry('/album/a1');
+		startFakeRouter();
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
+
+		await openPlaylist('p1');
+		await pressBack();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/a1' });
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', crossingWrite(false));
 	});
 
 	// Moving between two songs of the same open album stays the same route
