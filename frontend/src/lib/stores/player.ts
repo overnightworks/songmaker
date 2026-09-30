@@ -33,7 +33,7 @@ import {
 	upsertSongInList
 } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
-import { offline } from '$lib/stores/connectivity';
+import { offline, whenBackOnline } from '$lib/stores/connectivity';
 import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
@@ -1527,3 +1527,5 @@ audioPlayer.swapCallbacks({
 	onCurrentChange: handleCurrentChange,
 	networkFailureIsAnnounced: () => get(offline)
 });
+
+whenBackOnline(() => audioPlayer.resumeAfterNetworkReturn());
