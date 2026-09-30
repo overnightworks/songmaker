@@ -80,7 +80,7 @@ function createButton(root: ParentNode): HTMLButtonElement {
 	return button;
 }
 
-async function settle(): Promise<void> {
+async function createSettled(): Promise<void> {
 	await vi.waitFor(() => expect(createAlbum).toHaveBeenCalled());
 	await tick();
 	await tick();
@@ -112,7 +112,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Artist'), ' Lichtwechsel ');
 
 		createButton(root).click();
-		await settle();
+		await createSettled();
 
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', 'Lichtwechsel');
 		expect(get(albumList).map((listed) => listed.id)).toEqual(['a-night']);
@@ -125,7 +125,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Title'), 'Night Drive');
 
 		field(root, 'Title').form?.requestSubmit();
-		await settle();
+		await createSettled();
 
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
 	});
@@ -136,7 +136,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Title'), 'Night Drive');
 
 		createButton(root).click();
-		await settle();
+		await createSettled();
 
 		expect(creates).toBe(0);
 		expect(field(root, 'Title').value).toBe('Night Drive');
