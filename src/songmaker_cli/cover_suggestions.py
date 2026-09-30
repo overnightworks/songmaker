@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import shutil
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
 from typing import Final, Protocol
@@ -17,7 +16,6 @@ from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     count_cover_jobs_since,
     create_job,
-    delete_album_cover_suggestions,
     get_album,
     has_active_cover_job,
 )
@@ -65,18 +63,12 @@ class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
         super().__init__(DAILY_COVER_SUGGESTION_LIMIT_REACHED)
 
 
-@dataclass(frozen=True)
-class CoverSuggestionRequest:
-    """The durable work created by one accepted cover-suggestion request."""
-
-    job: Job
-    stale_suggestion_paths: list[str]
-
-
 def request_cover_suggestions(
     session: Session, album_id: str, actor: CoverSuggestionActor,
-) -> CoverSuggestionRequest:
-    """Prepare one cover job after enforcing the album's request contract.
+) -> Job:
+    """Prepare one single-image cover job after enforcing the album's request contract.
+
+    Earlier suggestions stay pending: each request adds one image beside them.
 
     The caller owns the transaction boundary and any delivery side effects.
     This keeps HTTP and future co-writer surfaces from reimplementing access,
@@ -97,9 +89,7 @@ def request_cover_suggestions(
     if used_today >= settings.cover_suggestions_daily_limit:
         raise CoverSuggestionDailyLimitReachedError()
 
-    stale_suggestion_paths = delete_album_cover_suggestions(session, album.id)
-    job = create_job(session, JobType.COVER, user_id=actor.id, album_id=album.id)
-    return CoverSuggestionRequest(job=job, stale_suggestion_paths=stale_suggestion_paths)
+    return create_job(session, JobType.COVER, user_id=actor.id, album_id=album.id)
 
 
 def utc_day_start() -> datetime:

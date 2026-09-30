@@ -84,14 +84,24 @@ def _add_cover_job(
         return job.id
 
 
-def _add_suggestion(factory, audio_dir: Path, *, album_id: str = "alice-album") -> str:
-    suggestion_id = "a" * 36
+def _add_suggestion(
+    factory,
+    audio_dir: Path,
+    *,
+    album_id: str = "alice-album",
+    suggestion_id: str = "a" * 36,
+) -> str:
     path = audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / album_id / f"{suggestion_id}.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(_png_bytes())
     with factory() as session:
         album = session.query(Album).filter_by(id=album_id).one()
-        job = Job(type=JobType.COVER, user_id=album.created_by, album_id=album.id)
+        job = Job(
+            type=JobType.COVER,
+            user_id=album.created_by,
+            album_id=album.id,
+            status=JobStatus.COMPLETED,
+        )
         session.add(job)
         session.flush()
         session.add(AlbumCoverSuggestion(
@@ -126,26 +136,32 @@ def test_cover_suggestion_request_owner_rejects_missing_and_foreign_albums(tmp_p
             request_cover_suggestions(session, "bob-album", alice)
 
 
-def test_cover_suggestion_request_owner_creates_one_job_and_replaces_stale_suggestions(
+def _add_two_pending_suggestions(factory, audio_dir: Path) -> list[str]:
+    return [
+        _add_suggestion(factory, audio_dir, suggestion_id=suggestion_id)
+        for suggestion_id in ("a" * 36, "b" * 36)
+    ]
+
+
+def _suggestion_file(audio_dir: Path, suggestion_id: str) -> Path:
+    return audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album" / f"{suggestion_id}.png"
+
+
+def test_cover_suggestion_request_owner_creates_one_job_and_keeps_pending_suggestions(
     tmp_path: Path,
 ) -> None:
     _client, factory = make_test_app(tmp_path, seed_db=_seed_albums)
-    suggestion_id = _add_suggestion(factory, tmp_path / "audio")
-    with factory() as session:
-        stale_job = session.query(Job).filter_by(album_id="alice-album").one()
-        stale_job.status = JobStatus.COMPLETED
-        session.commit()
+    pending_ids = _add_two_pending_suggestions(factory, tmp_path / "audio")
 
     with factory() as session:
-        result = request_cover_suggestions(session, "alice-album", _album_owner(session))
+        job = request_cover_suggestions(session, "alice-album", _album_owner(session))
 
-        assert result.job.type == JobType.COVER
-        assert result.job.album_id == "alice-album"
-        assert result.stale_suggestion_paths == [
-            f"{ALBUM_COVER_SUGGESTIONS_DIRNAME}/alice-album/{suggestion_id}.png",
-        ]
-        assert session.query(AlbumCoverSuggestion).count() == 0
-        assert session.query(Job).filter_by(album_id="alice-album").count() == 2
+        assert job.type == JobType.COVER
+        assert job.album_id == "alice-album"
+        assert sorted(
+            suggestion.id for suggestion in session.query(AlbumCoverSuggestion)
+        ) == pending_ids
+        assert session.query(Job).filter_by(album_id="alice-album").count() == 3
 
 
 def test_cover_suggestion_request_owner_rejects_active_and_daily_limited_jobs(
@@ -249,7 +265,7 @@ def test_web_cover_executor_leaves_the_job_for_the_web_runner(
         assert job.status == JobStatus.QUEUED
 
 
-def test_create_cover_suggestions_replaces_stale_suggestions(
+def test_create_cover_suggestions_keeps_the_pending_suggestions_and_their_files(
     alice_app: tuple[TestClient, object],
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -257,11 +273,8 @@ def test_create_cover_suggestions_replaces_stale_suggestions(
     client, factory = alice_app
     monkeypatch.setenv("COVER_EXECUTOR", CoverExecutor.MUSIC)
     get_settings.cache_clear()
-    _add_suggestion(factory, tmp_path / "audio")
-    with factory() as session:
-        stale_job = session.query(Job).filter_by(album_id="alice-album").one()
-        stale_job.status = JobStatus.COMPLETED
-        session.commit()
+    audio_dir = tmp_path / "audio"
+    pending_ids = _add_two_pending_suggestions(factory, audio_dir)
 
     class Pool:
         async def enqueue_job(self, *_args, **_kwargs) -> None:
@@ -276,8 +289,9 @@ def test_create_cover_suggestions_replaces_stale_suggestions(
     response = client.post("/api/albums/alice-album/cover-suggestions")
 
     assert response.status_code == 200
-    assert client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"] == []
-    assert not (tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
+    listed = client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"]
+    assert sorted(suggestion["id"] for suggestion in listed) == pending_ids
+    assert all(_suggestion_file(audio_dir, pending_id).is_file() for pending_id in pending_ids)
 
 
 def test_create_cover_suggestions_marks_a_queue_failure_terminal(
@@ -345,10 +359,12 @@ def test_discard_suggestions_keeps_the_selected_cover(
     alice_app: tuple[TestClient, object], tmp_path: Path,
 ) -> None:
     client, factory = alice_app
-    suggestion_id = _add_suggestion(factory, tmp_path / "audio")
+    audio_dir = tmp_path / "audio"
+    suggestion_id, other_id = _add_two_pending_suggestions(factory, audio_dir)
     assert client.put(
         "/api/albums/alice-album/cover", json={"suggestion_id": suggestion_id},
     ).status_code == 200
+    assert _suggestion_file(audio_dir, other_id).is_file()
     cover_dir = tmp_path / "audio" / "covers" / "alice-album"
     assert cover_dir.is_dir()
 
@@ -357,9 +373,8 @@ def test_discard_suggestions_keeps_the_selected_cover(
     assert discarded.status_code == 200
     assert client.get("/api/albums/alice-album").json()["cover"] is not None
     assert cover_dir.is_dir()
-    assert not (
-        tmp_path / "audio" / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album"
-    ).exists()
+    assert client.get("/api/albums/alice-album/cover-suggestions").json()["suggestions"] == []
+    assert not (audio_dir / ALBUM_COVER_SUGGESTIONS_DIRNAME / "alice-album").exists()
 
 
 def test_delete_selected_cover_keeps_suggestions(
