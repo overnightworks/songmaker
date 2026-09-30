@@ -126,7 +126,7 @@ function editorActions(target: HTMLElement): string[] {
 	return Array.from(target.querySelectorAll('.cover-actions button')).map(accessibleName);
 }
 
-function press(target: HTMLElement, name: string): void {
+function pressEditorButton(target: HTMLElement, name: string): void {
 	getByRoleButton(requireElement(target, '.cover-editor'), name).click();
 }
 
@@ -281,7 +281,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			'Cover suggestion 3 of 3'
 		);
 
-		press(target, 'Previous suggestion');
+		pressEditorButton(target, 'Previous suggestion');
 		await tick();
 		expect(countLine(target)).toBe('2 / 3 · 6 of 10 left today');
 		expect(shownImage(target)).toBe('/suggestion-two.png');
@@ -299,7 +299,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		swipe(target, -60);
 		await tick();
-		press(target, 'Next suggestion');
+		pressEditorButton(target, 'Next suggestion');
 		await tick();
 		expect(countLine(target)).toBe('3 / 3 · 6 of 10 left today');
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
@@ -319,7 +319,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(countLine(target)).toBe('2 / 2 · 8 of 10 left today'));
 
-		press(target, 'Suggest another');
+		pressEditorButton(target, 'Suggest another');
 
 		await vi.waitFor(() => expect(countLine(target)).toBe('3 / 3 · 7 of 10 left today'));
 		expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull();
@@ -327,7 +327,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
 
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
-		press(target, 'Previous suggestion');
+		pressEditorButton(target, 'Previous suggestion');
 		await tick();
 		expect(shownImage(target)).toBe('/suggestion-two.png');
 	});
@@ -338,10 +338,10 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
-		press(target, 'Previous suggestion');
+		pressEditorButton(target, 'Previous suggestion');
 		await tick();
 
-		press(target, 'Use');
+		pressEditorButton(target, 'Use');
 
 		await editingClosed(target);
 		expect(selectAlbumCoverSuggestion).toHaveBeenCalledWith('a-local', { suggestion_id: 'two' });
@@ -357,7 +357,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
 
-		press(target, 'Close cover editing');
+		pressEditorButton(target, 'Close cover editing');
 
 		await editingClosed(target);
 		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
@@ -369,7 +369,7 @@ describe('AlbumCoverEditor in the album header', () => {
 	it.each([
 		{
 			way: '×',
-			leave: (target: HTMLElement) => press(target, 'Close cover editing')
+			leave: (target: HTMLElement) => pressEditorButton(target, 'Close cover editing')
 		},
 		{
 			way: 'Upload',
@@ -377,7 +377,7 @@ describe('AlbumCoverEditor in the album header', () => {
 				uploadAlbumCover.mockResolvedValue(coveredAlbum(UPLOADED));
 				const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 				vi.spyOn(input, 'click').mockImplementation(() => undefined);
-				press(target, 'Upload');
+				pressEditorButton(target, 'Upload');
 				const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
 				Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 				input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -420,7 +420,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
 		);
 
-		press(target, 'Close cover editing');
+		pressEditorButton(target, 'Close cover editing');
 
 		await editingClosed(target);
 		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
@@ -435,7 +435,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 
-		press(target, 'Close cover editing');
+		pressEditorButton(target, 'Close cover editing');
 		await editingClosed(target);
 		expect(cancelJob).not.toHaveBeenCalled();
 		suggestionJob.resolve(coverJob());
@@ -451,7 +451,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(1);
 
-		press(target, 'Close cover editing');
+		pressEditorButton(target, 'Close cover editing');
 		await editingClosed(target);
 		firstLoad.resolve(coverSuggestions());
 		await new Promise((settled) => setTimeout(settled, 0));
@@ -492,7 +492,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			await openCoverEditing(target);
 			await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-one.png'));
 
-			press(target, action);
+			pressEditorButton(target, action);
 
 			await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
 			expect(editor(target)).not.toBeNull();
@@ -507,7 +507,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		const target = await renderDetail();
 		await openCoverEditing(target);
 
-		press(target, 'Remove');
+		pressEditorButton(target, 'Remove');
 
 		await editingClosed(target);
 		expect(deleteAlbumCover).toHaveBeenCalledWith('a-local');
@@ -522,7 +522,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
 		const picker = vi.spyOn(input, 'click').mockImplementation(() => undefined);
 
-		press(target, 'Upload');
+		pressEditorButton(target, 'Upload');
 		expect(picker).toHaveBeenCalledTimes(1);
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
@@ -735,7 +735,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		await openCoverEditing(target);
 		await reachSuggestionsLoads(1);
 
-		press(target, 'Suggest another');
+		pressEditorButton(target, 'Suggest another');
 		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
 		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
 
@@ -770,7 +770,7 @@ describeBackClosesOverlay({
 		{
 			way: '×',
 			close: async (target) => {
-				press(target, 'Close cover editing');
+				pressEditorButton(target, 'Close cover editing');
 				await editingClosed(target);
 			}
 		}
