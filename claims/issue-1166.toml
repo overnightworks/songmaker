@@ -1,8 +1,0 @@
-claim_id = "db53850d7f524300b334aad02bc0d811"
-agent = "claude-head"
-role = "builder"
-base = "08ec56538a8fa68ad807842d13112896365ff0b1"
-branch = "claude/issue-1166-new-playlist"
-scope = ["frontend/e2e/library-create.spec.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/MenuPopover.test.ts", "frontend/src/lib/components/NewAlbumCard.svelte", "frontend/src/lib/components/NewAlbumCard.test.ts", "frontend/src/lib/components/NewPlaceCard.svelte", "frontend/src/lib/components/NewPlaylistCard.svelte", "frontend/src/lib/components/NewPlaylistCard.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/toast.test.ts", "frontend/src/lib/stores/toast.ts", "frontend/src/lib/test-utils/new-place-card.ts", "src/songmaker_cli/album_api.py", "src/songmaker_cli/api_models/albums.py"]
-opened_commit = "e1ffac246c0f51fabc789ea12694aed40ee2bfe7"
-whole_reason = "+ NEW → Playlist and the Library-head polish to the frozen frames"
