@@ -60,6 +60,17 @@ function baseProps(): CollectionHeaderProps {
 	};
 }
 
+// A stand-in for the album's cover editor: its one button hands back the
+// close the header passed in, so a test sees the header's side of the seam.
+function fakeCoverEditor(): NonNullable<CollectionHeaderProps['coverEditor']> {
+	return createRawSnippet((close: () => () => void) => ({
+		render: () => '<div class="fake-cover-editor"><button type="button">Done</button></div>',
+		setup: (element: Element) => {
+			element.querySelector('button')?.addEventListener('click', () => close()());
+		}
+	}));
+}
+
 async function render(props: CollectionHeaderProps): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
@@ -323,6 +334,62 @@ describe('CollectionHeader', () => {
 		);
 		removeItem?.click();
 		expect(props.onremovecover).toHaveBeenCalledTimes(1);
+	});
+
+	it.each([
+		{ coverUrl: null, place: 'Add cover' },
+		{ coverUrl: 'https://x/cover.jpg', place: 'Edit cover' }
+	])(
+		'makes the album cover place, $place, open cover editing in place above Play',
+		async ({ coverUrl, place }) => {
+			const target = await render({ ...baseProps(), coverUrl, coverEditor: fakeCoverEditor() });
+
+			getByRoleButton(target, place).click();
+			await tick();
+
+			const identity = requireElement(target, '.header-identity');
+			expect(identity.querySelector('.fake-cover-editor')).not.toBeNull();
+			expect(target.querySelector('button.header-cover')).toBeNull();
+			expect(identity.querySelector('.header-title')).not.toBeNull();
+			expect(target.querySelector('.play-circle')).not.toBeNull();
+
+			getByRoleButton(target, 'Done').click();
+			await tick();
+
+			expect(target.querySelector('.fake-cover-editor')).toBeNull();
+			expect(getByRoleButton(target, place)).not.toBeNull();
+		}
+	);
+
+	it('keeps the cover a plain picture where no cover editor is given', async () => {
+		const target = await render({ ...baseProps(), kind: 'playlist' as const });
+
+		expect(target.querySelector('.header-cover')).not.toBeNull();
+		expect(target.querySelector('button.header-cover')).toBeNull();
+		expect(target.textContent).not.toContain('Add cover');
+	});
+
+	it('opens cover editing from Replace… in the menu once a cover exists', async () => {
+		const target = await render({
+			...baseProps(),
+			coverUrl: 'https://x/cover.jpg',
+			coverEditor: fakeCoverEditor()
+		});
+		const menu = await openCollectionMenu(target);
+		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
+		expect(items.map((el) => el.textContent?.trim())).toEqual([
+			'Upload…',
+			'Replace…',
+			'Remove cover',
+			'Rename',
+			'Add to playlist',
+			'Delete album'
+		]);
+
+		items.find((el) => el.textContent?.trim() === 'Replace…')?.click();
+		await tick();
+
+		expect(target.querySelector('.fake-cover-editor')).not.toBeNull();
 	});
 
 	it('lists playlist cover actions alongside its existing actions', async () => {
