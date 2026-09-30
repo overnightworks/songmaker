@@ -10,6 +10,7 @@ import { getByRoleButton, accessibleName } from '$lib/test-utils/accessible-name
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
+import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 import {
 	createComponentMount,
 	openCollectionMenu,
@@ -406,6 +407,20 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(selectAlbumCoverSuggestion).not.toHaveBeenCalled();
 		expect(cancelJob).not.toHaveBeenCalled();
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
+	});
+
+	it('Escape closes the editor like × and leaves the global one level up alone', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
+		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+		document.body.dispatchEvent(escape);
+
+		await editingClosed(target);
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
+		expect(shouldHandleGlobalEscape(escape, document)).toBe(false);
 	});
 
 	it.each([
