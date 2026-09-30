@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
@@ -15,7 +14,12 @@
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
-	import { compareByCreatedAt } from '$lib/utils/recency';
+	import {
+		lastWorkByPlace,
+		lastWorkOf,
+		libraryPlaceOrder,
+		readRecentWork
+	} from '$lib/stores/libraryOrder';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { activityTimeLabel, addedDayLabel, placeLine, songCountLabel } from '$lib/utils/format';
 	import {
@@ -25,14 +29,12 @@
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
-		LIBRARY_WALL_RECENT_PAGE_SIZE,
 		type LibraryWallOrder
 	} from '$lib/constants';
 	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
-	type LastWork = { rank: number; at: string };
 
 	const albums = $derived($albumList);
 	const playlists = $derived($playlistList);
@@ -42,31 +44,14 @@
 	const playlistStatus = $derived($playlistLoad);
 	const restoredScroll = $derived($libraryScrollAnchor);
 
-	let recentWork = $state<LibraryContinueItem[]>([]);
 	let labelledAt = $state(new Date());
-	let recentWorkRequest = 0;
-
-	const lastWorkByPlace = $derived(
-		new Map<string, LastWork>(
-			recentWork.map((place, rank) => [
-				placeKey(place.type, place.id),
-				{ rank, at: place.activity_at }
-			])
-		)
-	);
-
-	const ORDER_COMPARATORS: Record<LibraryWallOrder, (a: WallItem, b: WallItem) => number> = {
-		title: compareTitles,
-		recent: compareByLastWork,
-		added: (a, b) => compareByCreatedAt(a.item, b.item, 'newest')
-	};
 
 	const wallItems = $derived.by(() => {
 		const items: WallItem[] = [
 			...albums.map((item) => ({ type: 'album' as const, item })),
 			...playlists.map((item) => ({ type: 'playlist' as const, item }))
 		];
-		return items.sort(ORDER_COMPARATORS[order]);
+		return items.sort($libraryPlaceOrder);
 	});
 
 	let browseEl = $state<HTMLElement | null>(null);
@@ -78,30 +63,14 @@
 	});
 
 	$effect(() => {
+		void $lastWorkByPlace;
+		labelledAt = new Date();
+	});
+
+	$effect(() => {
 		void wallItems.length;
 		if (browseEl) browseEl.scrollTop = restoredScroll;
 	});
-
-	function placeKey(type: WallItem['type'], id: string): string {
-		return `${type}:${id}`;
-	}
-
-	function lastWorkOf(wallItem: WallItem): LastWork | undefined {
-		return lastWorkByPlace.get(placeKey(wallItem.type, wallItem.item.id));
-	}
-
-	function compareTitles(a: WallItem, b: WallItem): number {
-		return compareByCreatedAt(a.item, b.item, 'title');
-	}
-
-	// A place newer than the last read of Recent has no rank yet; it waits at
-	// the end in title order until the next read ranks it.
-	function compareByLastWork(a: WallItem, b: WallItem): number {
-		const aRank = lastWorkOf(a)?.rank ?? Number.POSITIVE_INFINITY;
-		const bRank = lastWorkOf(b)?.rank ?? Number.POSITIVE_INFINITY;
-		if (aRank === bRank) return compareTitles(a, b);
-		return aRank < bRank ? -1 : 1;
-	}
 
 	function sizeLabel(wallItem: WallItem): string {
 		return songCountLabel(
@@ -111,7 +80,7 @@
 
 	function tileDetail(wallItem: WallItem): string {
 		if (order === 'added') return addedDayLabel(wallItem.item.created_at, labelledAt);
-		const lastWork = order === 'recent' ? lastWorkOf(wallItem) : undefined;
+		const lastWork = order === 'recent' ? lastWorkOf($lastWorkByPlace, wallItem) : undefined;
 		return lastWork ? activityTimeLabel(lastWork.at, labelledAt) : sizeLabel(wallItem);
 	}
 
@@ -125,37 +94,13 @@
 	function catchUpWall(): void {
 		void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'recent') void loadRecentWork();
-	}
-
-	async function loadRecentWork(): Promise<void> {
-		const request = ++recentWorkRequest;
-		const ranking = await readRecentWork();
-		if (ranking === null || request !== recentWorkRequest) return;
-		recentWork = ranking;
-		labelledAt = new Date();
-	}
-
-	async function readRecentWork(): Promise<LibraryContinueItem[] | null> {
-		const places: LibraryContinueItem[] = [];
-		try {
-			for (;;) {
-				const page = await fetchLibraryContinue({
-					offset: places.length,
-					limit: LIBRARY_WALL_RECENT_PAGE_SIZE
-				});
-				places.push(...page.items);
-				if (page.items.length < LIBRARY_WALL_RECENT_PAGE_SIZE) return places;
-			}
-		} catch {
-			return null;
-		}
+		if ($libraryWallOrder === 'recent') void readRecentWork();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
 		chooseLibraryWallOrder(next);
 		labelledAt = new Date();
-		if (next === 'recent') void loadRecentWork();
+		if (next === 'recent') void readRecentWork();
 	}
 
 	function catchUpOnReturnToForeground(): void {

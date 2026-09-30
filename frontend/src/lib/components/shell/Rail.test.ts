@@ -364,8 +364,8 @@ describe('Rail', () => {
 			album({ id: 'a2', title: 'Sonnwendfeuer' })
 		]);
 		playlistList.set([
-			playlist({ id: 'p1', title: 'Night Drive', entry_count: 0 }),
-			playlist({ id: 'p2', title: 'Morning Run', entry_count: 0 })
+			playlist({ id: 'p1', title: 'Morning Run', entry_count: 0 }),
+			playlist({ id: 'p2', title: 'Night Drive', entry_count: 0 })
 		]);
 		setOpenCollection({ kind: 'album', id: 'a1' });
 		selectedPlaylistDetail.set(null);

@@ -13,6 +13,12 @@
 	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
 	import {
+		ensureRecentWorkRead,
+		inLibraryOrder,
+		libraryPlaceOrder
+	} from '$lib/stores/libraryOrder';
+	import { libraryWallOrder } from '$lib/stores/ui';
+	import {
 		compareAlbumTracks,
 		openAlbum,
 		openLibraryWall,
@@ -63,13 +69,17 @@
 		albums.length > 0 || loadStatus === 'ready' ? albums.length : undefined
 	);
 	const visibleAlbums = $derived.by(() =>
-		albums.filter((album) => {
-			if (!filtering || album.id === openAlbumId) return true;
-			if (album.title.toLowerCase().includes(query)) return true;
-			return (songsByAlbum.get(album.id) ?? []).some((song) =>
-				song.title.toLowerCase().includes(query)
-			);
-		})
+		inLibraryOrder(
+			'album',
+			albums.filter((album) => {
+				if (!filtering || album.id === openAlbumId) return true;
+				if (album.title.toLowerCase().includes(query)) return true;
+				return (songsByAlbum.get(album.id) ?? []).some((song) =>
+					song.title.toLowerCase().includes(query)
+				);
+			}),
+			$libraryPlaceOrder
+		)
 	);
 
 	// ensureAllAlbumsLoaded is route-independent (#304) -- the rail needs the
@@ -77,6 +87,10 @@
 	// route (e.g. Settings), is currently open.
 	$effect(() => {
 		void ensureAllAlbumsLoaded();
+	});
+
+	$effect(() => {
+		if ($libraryWallOrder === 'recent') void ensureRecentWorkRead();
 	});
 
 	function retryLibraryLoad(): void {
