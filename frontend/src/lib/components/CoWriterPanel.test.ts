@@ -1573,6 +1573,42 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			);
 		}
 	);
+
+	it('keeps an archived conversation out of the active one sent to while it still loads', async () => {
+		const [, refused, refusedExchange] = outcomes[1];
+		const archived = { ...activeConversation('c0'), archived_at: '2026-09-22T10:00:00' };
+		const activeRead = Promise.withResolvers<ReturnType<typeof conversation>>();
+		fetchConversations.mockResolvedValue([activeConversation('c1'), archived]);
+		fetchConversationMessages
+			.mockResolvedValueOnce(conversation(false, ...earlier))
+			.mockResolvedValueOnce({
+				...conversation(false, chatMessage('u9', 'user', 'archived question')),
+				conversation_id: 'c0',
+				archived_at: archived.archived_at
+			})
+			.mockReturnValueOnce(activeRead.promise);
+		const turnEnded = Promise.withResolvers<undefined>();
+		streamCoWriterTurn.mockReturnValue(endingWith(refused(), () => turnEnded.resolve(undefined)));
+		const target = await render();
+		await vi.waitFor(() => expect(chatView(target)).toEqual(['earlier', 'earlier reply']));
+
+		(await openConversationMenu(target))
+			.querySelectorAll<HTMLButtonElement>('.conv-pick')[1]
+			.click();
+		await vi.waitFor(() => expect(chatView(target)).toEqual(['archived question']));
+		(await openConversationMenu(target))
+			.querySelectorAll<HTMLButtonElement>('.conv-pick')[0]
+			.click();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(3));
+
+		await sendTurn(target, 'write a chorus');
+		await turnEnded.promise;
+		activeRead.resolve(conversation(false, ...earlier));
+
+		await vi.waitFor(() =>
+			expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...refusedExchange])
+		);
+	});
 });
 
 describe('CoWriterPanel proposal target (#238)', () => {

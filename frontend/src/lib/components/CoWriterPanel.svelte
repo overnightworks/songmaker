@@ -259,7 +259,7 @@
 			message.role === 'user' &&
 			!message.persistedId &&
 			isUnansweredResend(newestStored, message.text)
-				? { ...message, persistedId: newestStored?.persistedId }
+				? { ...message, persistedId: newestStored.persistedId }
 				: message
 		);
 	}
@@ -407,6 +407,7 @@
 	}
 
 	async function openConversation(conv: ConversationItem): Promise<void> {
+		if (viewingConversationId !== conv.id) messages = [];
 		viewingConversationId = conv.id;
 		await loadMessages(conv.id);
 	}
@@ -579,7 +580,7 @@
 	}
 
 	/** The server's resend rule (#1014): an unanswered last message with the same text is that message. */
-	function isUnansweredResend(last: Message | undefined, text: string): boolean {
+	function isUnansweredResend(last: Message | undefined, text: string): last is Message {
 		return last?.role === 'user' && last.text === text;
 	}
 
