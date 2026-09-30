@@ -476,16 +476,19 @@ def test_write_tools_block_other_users(db_session: Session):
     ],
     ids=["lyrics", "prompt", "style", "rename"],
 )
-def test_co_writer_edits_record_the_editors_own_work(db_session: Session, tool, arguments):
+@pytest.mark.parametrize("editor_id", ["u-admin", "u1"], ids=["admin-on-foreign-song", "owner"])
+def test_co_writer_edits_record_the_editors_own_work(
+    db_session: Session, tool, arguments, editor_id,
+):
     _, _, _, song_id, _ = _seed(db_session)
     db_session.add(User(id="u-admin", username="felix", password_hash="x", role="admin"))
     db_session.commit()
-    admin = _owner(db_session, "u-admin")
+    editor = _owner(db_session, editor_id)
 
-    tool(db_session, admin, song_id=song_id, **arguments)
+    tool(db_session, editor, song_id=song_id, **arguments)
 
     work = db_session.query(UserSongWork).one()
-    assert (work.user_id, work.song_id) == ("u-admin", song_id)
+    assert (work.user_id, work.song_id) == (editor_id, song_id)
     assert work.edited_at is not None
     assert work.played_at is None
 
