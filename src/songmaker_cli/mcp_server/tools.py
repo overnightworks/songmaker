@@ -281,14 +281,14 @@ def tool_rename_song(
 def tool_suggest_album_cover(
     session: Session, user: AuthenticatedUser, album_id: str,
 ) -> CoverSuggestionRequestResult:
-    """Queue three cover suggestions through the album admission owner."""
+    """Queue one more cover suggestion through the album admission owner."""
     try:
-        request = request_cover_suggestions(session, album_id, user)
+        job = request_cover_suggestions(session, album_id, user)
     except CoverSuggestionRequestError as exc:
         raise MCPToolError(str(exc)) from exc
     return CoverSuggestionRequestResult(
-        job_id=request.job.id,
-        status=request.job.status,
+        job_id=job.id,
+        status=job.status,
         message="Cover suggestions queued.",
     )
 
