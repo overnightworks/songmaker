@@ -854,12 +854,19 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	if (generation !== historyApplyGeneration) return false;
 	await hydrateSelectedResources(state, generation);
 	if (generation !== historyApplyGeneration) return false;
-	if (state.collection?.kind === 'album') {
-		await loadSongsForAlbum(state.collection.id);
-	}
+	const shownAlbum = albumWhoseSongsShow(state);
+	if (shownAlbum) await loadSongsForAlbum(shownAlbum);
 	if (generation !== historyApplyGeneration) return false;
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
+}
+
+// The wall keeps the album that was open last as its collection but shows
+// none of its songs, so landing on it -- a Back, or a reload that restores it
+// -- pays no round trip for them; opening the album loads them.
+function albumWhoseSongsShow(state: LibraryHistoryState): string | null {
+	if (state.collection?.kind !== 'album' || state.surface === 'browse') return null;
+	return state.collection.id;
 }
 
 export function cancelLibraryHistoryApply(): void {

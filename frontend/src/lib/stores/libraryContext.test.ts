@@ -266,6 +266,27 @@ describe('applyLibraryHistory', () => {
 		expect(get(albumList).some((a) => a.id === 'a9')).toBe(true);
 	});
 
+	it.each([
+		{ surface: 'detail' as const, songsLoaded: true },
+		{ surface: 'browse' as const, songsLoaded: false }
+	])(
+		'loads the open album songs only where the landing surface shows them ($surface)',
+		async ({ surface, songsLoaded }) => {
+			fetchSongs.mockImplementation(async (albumId?: string) => ({
+				...emptyPage(albumId === 'a9' ? [song({ id: 's9', album_id: 'a9' })] : []),
+				limit: 200
+			}));
+
+			await applyLibraryHistory({
+				...libraryRootState(),
+				surface,
+				collection: { kind: 'album', id: 'a9' }
+			});
+
+			expect(get(songList).some((item) => item.album_id === 'a9')).toBe(songsLoaded);
+		}
+	);
+
 	it('restores browse pages even when a search query is replayed', async () => {
 		fetchAlbums.mockResolvedValue(emptyPage([album()]));
 		searchLibrary.mockResolvedValue({
