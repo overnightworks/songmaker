@@ -1,14 +1,13 @@
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
-import { mount, tick, unmount } from 'svelte';
+import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
-import { NetworkError } from '$lib/api/fetch';
-import { serverRefusal } from '$lib/test-utils/network';
+import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { requireElement } from './shell/rail-test-fixtures';
+import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
 import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
@@ -38,7 +37,7 @@ vi.mock('$lib/stores/toast', () => ({
 import AlbumDetailView from './AlbumDetailView.svelte';
 import { addToast } from '$lib/stores/toast';
 
-const mounted: Array<ReturnType<typeof mount>> = [];
+const { render: renderDetail, cleanup } = createComponentMount(AlbumDetailView);
 
 class FakeJobEventSource {
 	static sources: FakeJobEventSource[] = [];
@@ -66,12 +65,6 @@ function coverJob(overrides: Partial<JobItem> = {}): JobItem {
 	return { id: 'cover-job', type: 'cover', status: 'queued', progress: 0, ...overrides };
 }
 
-const SUGGESTIONS_PATH = '/api/albums/a-local/cover-suggestions';
-
-function networkFailure(): NetworkError {
-	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));
-}
-
 const ONE_SUGGESTION = { suggestions: [{ id: 'one', url: '/suggestion-one.png' }] };
 const RELOAD_ATTEMPTS = UNREACHABLE_RELOAD_DELAYS_MS.length;
 const PAST_EVERY_RELOAD_MS = UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0) * 2;
@@ -84,14 +77,6 @@ async function reachSuggestionsLoads(count: number): Promise<void> {
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
 	let resolve!: (value: T) => void;
 	return { promise: new Promise<T>((done) => (resolve = done)), resolve };
-}
-
-async function renderDetail(): Promise<HTMLElement> {
-	const target = document.createElement('div');
-	document.body.append(target);
-	mounted.push(mount(AlbumDetailView, { target }));
-	await tick();
-	return target;
 }
 
 beforeEach(() => {
@@ -110,8 +95,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
-	for (const component of mounted.splice(0)) await unmount(component);
-	document.body.replaceChildren();
+	await cleanup();
 	selectedAlbumId.set(null);
 	albumList.set([]);
 	songList.set([]);
@@ -165,12 +149,12 @@ describe('AlbumCoverEditor on the album page', () => {
 	it.each([
 		{
 			moment: 'loading the card',
-			arrange: () => fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			arrange: () => fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork()),
 			act: async () => {}
 		},
 		{
 			moment: 'a deliberate Suggest cover',
-			arrange: () => createAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			arrange: () => createAlbumCoverSuggestions.mockRejectedValue(lostNetwork()),
 			act: async (target: HTMLElement) => {
 				await vi.waitFor(() => expect(target.querySelector('.suggest-cover')).not.toBeNull());
 				requireElement<HTMLButtonElement>(target, '.suggest-cover').click();
@@ -196,7 +180,7 @@ describe('AlbumCoverEditor on the album page', () => {
 	it('keeps the suggestions card hidden while offline and reloads it once the connection is back', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 		reportResourceStreamReachable(false);
-		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
+		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
 		const target = await renderDetail();
 		await reachSuggestionsLoads(1);
 		await vi.advanceTimersByTimeAsync(PAST_EVERY_RELOAD_MS);
@@ -213,7 +197,7 @@ describe('AlbumCoverEditor on the album page', () => {
 	it('reloads a card that found no network while online and shows it once the server answers', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
 		fetchAlbumCoverSuggestions
-			.mockRejectedValueOnce(networkFailure())
+			.mockRejectedValueOnce(lostNetwork())
 			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 		const target = await renderDetail();
 		await reachSuggestionsLoads(1);
@@ -227,7 +211,7 @@ describe('AlbumCoverEditor on the album page', () => {
 
 	it('offers a quiet Try again once the bounded reloads still find no network while online', async () => {
 		vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
-		fetchAlbumCoverSuggestions.mockRejectedValue(networkFailure());
+		fetchAlbumCoverSuggestions.mockRejectedValue(lostNetwork());
 		const target = await renderDetail();
 		await reachSuggestionsLoads(1);
 		for (const [attempt, delay] of UNREACHABLE_RELOAD_DELAYS_MS.entries()) {
@@ -409,12 +393,12 @@ describe('AlbumCoverEditor on the album page', () => {
 	it.each([
 		{
 			action: 'discarding suggestions',
-			arrange: () => discardAlbumCoverSuggestions.mockRejectedValue(networkFailure()),
+			arrange: () => discardAlbumCoverSuggestions.mockRejectedValue(lostNetwork()),
 			button: '.suggestion-discard'
 		},
 		{
 			action: 'choosing a suggestion',
-			arrange: () => selectAlbumCoverSuggestion.mockRejectedValue(networkFailure()),
+			arrange: () => selectAlbumCoverSuggestion.mockRejectedValue(lostNetwork()),
 			button: '.cover-suggestion button'
 		}
 	])(
@@ -516,7 +500,7 @@ describe('AlbumCoverEditor on the album page', () => {
 			})
 		]);
 		fetchAlbumCoverSuggestions
-			.mockRejectedValueOnce(networkFailure())
+			.mockRejectedValueOnce(lostNetwork())
 			.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
 		const suggestionJob = deferred<JobItem>();
 		createAlbumCoverSuggestions.mockImplementation(() => suggestionJob.promise);
