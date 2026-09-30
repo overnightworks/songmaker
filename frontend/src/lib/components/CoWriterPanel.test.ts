@@ -1495,6 +1495,65 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 	});
 });
 
+describe('CoWriterPanel sending before the first history read arrives (#1170)', () => {
+	const earlier = [
+		chatMessage('u0', 'user', 'earlier'),
+		chatMessage('a0', 'assistant', 'earlier reply')
+	];
+	const sent = chatMessage('u1', 'user', 'write a chorus');
+	const reply = chatMessage('a1', 'assistant', 'Here is a chorus');
+
+	it.each([
+		[
+			'its answer',
+			() =>
+				turnEvents([
+					{
+						type: 'final',
+						conversation_id: 'c1',
+						user_message: sent,
+						assistant_message: reply
+					} as CoWriterStreamEvent
+				]),
+			['write a chorus', 'Here is a chorus']
+		],
+		[
+			'its refusal',
+			async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(503, 'Codex CLI is temporarily unavailable', '/api/chat/turn');
+			},
+			[expect.stringMatching(/^write a chorus.*Codex CLI is temporarily unavailable/)]
+		],
+		[
+			'its failed stream',
+			() =>
+				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent]),
+			[expect.stringMatching(/^write a chorus.*Selected route failed\./)]
+		]
+	] as Array<[string, () => AsyncGenerator<CoWriterStreamEvent>, unknown[]]>)(
+		'keeps the sent message with %s after the history before it',
+		async (_outcome, turn, exchange) => {
+			const firstRead = Promise.withResolvers<ReturnType<typeof conversation>>();
+			fetchConversations.mockResolvedValue([activeConversation('c1')]);
+			fetchConversationMessages
+				.mockReturnValueOnce(firstRead.promise)
+				.mockResolvedValueOnce(conversation(false, ...earlier, sent, reply));
+			streamCoWriterTurn.mockReturnValue(turn());
+			const target = await render();
+
+			await sendTurn(target, 'write a chorus');
+			await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			firstRead.resolve(conversation(false, ...earlier));
+
+			await vi.waitFor(() =>
+				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+			);
+		}
+	);
+});
+
 describe('CoWriterPanel proposal target (#238)', () => {
 	beforeEach(() => {
 		conversationPages(
