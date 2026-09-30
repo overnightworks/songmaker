@@ -1184,6 +1184,42 @@ describe('error handling', () => {
 		}
 	);
 
+	describe('once the network is back', () => {
+		async function loseNetworkAt(seconds: number, announced: boolean): Promise<void> {
+			audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => announced }));
+			fakeAudio.fire('play');
+			fakeAudio.currentTime = seconds;
+			fakeAudio.fire('timeupdate');
+			fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+			fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+			while (audioPlayer.status !== 'error') fakeAudio.fire('error');
+			await new Promise((r) => setTimeout(r, 0));
+		}
+
+		it('plays a take that failed only because the network was gone, from where it was', async () => {
+			await loseNetworkAt(30, true);
+			fakeAudio.error = null;
+			fakeAudio.playMock.mockClear();
+
+			audioPlayer.resumeAfterNetworkReturn();
+
+			expect(audioPlayer.status).toBe('loading');
+			expect(audioPlayer.error).toBeNull();
+			expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
+			fakeAudio.fire('loadedmetadata');
+			fakeAudio.fire('canplay');
+			expect(fakeAudio.currentTime).toBe(29.25);
+			expect(fakeAudio.playMock).toHaveBeenCalled();
+		});
+
+		it('keeps a real playback failure with its words and its Retry', async () => {
+			await loseNetworkAt(30, false);
+			audioPlayer.resumeAfterNetworkReturn();
+			expect(audioPlayer.status).toBe('error');
+			expect(audioPlayer.error).toBe('Playback failed. Press Retry.');
+		});
+	});
+
 	it('names a failure no strip explains and offers the Retry', async () => {
 		fetchMock.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 		fakeAudio.fire('error');
