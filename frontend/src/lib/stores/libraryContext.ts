@@ -87,6 +87,7 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 // history entry, and every other song lands on Edit again.
 const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
+const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
 
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
@@ -344,7 +345,7 @@ export function takeRestoredLibraryHistory(): unknown {
 // SvelteKit reports no navigation for them: the first traversal after the
 // load is this module's own cue that the page left the entry it loaded onto.
 function holdRestoredLibraryHistory(): void {
-	restoredHistory = history.state;
+	restoredHistory = libraryHistoryEntry();
 	rememberRestoredSongTab(restoredHistory);
 	window.addEventListener('popstate', leaveRestoredLibraryHistory, { once: true });
 }
@@ -377,7 +378,18 @@ export function loadLibraryHistoryPageForTests(): void {
 // landed. Every reader of the restore state goes through this instead of
 // `history.state`, which lags while a crossing write navigates.
 export function currentLibraryHistoryState(): unknown {
-	return plannedHistory ? plannedHistory.state : history.state;
+	return plannedHistory ? plannedHistory.state : libraryHistoryEntry();
+}
+
+// What a history entry says about the library, whichever way it was written:
+// SvelteKit's shallow routing keeps a page's state under its own key of the
+// entry, a raw History API write is that state itself. Every read of an entry
+// -- the current one or the one a popstate lands on -- goes through here.
+export function libraryHistoryEntry(entry: unknown = history.state): unknown {
+	if (isHistoryRecord(entry) && SVELTEKIT_HISTORY_STATES_KEY in entry) {
+		return entry[SVELTEKIT_HISTORY_STATES_KEY];
+	}
+	return entry;
 }
 
 function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: HistoryWriteMode): void {
@@ -389,7 +401,7 @@ function applyHistoryWrite(state: LibraryHistoryState, url: string, mode: Histor
 // entry a history layer owns stays marked as that layer, whichever writer
 // snapshots the library onto it.
 function keepEntryLayer(state: LibraryHistoryState): LibraryHistoryState {
-	const entry: unknown = history.state;
+	const entry = libraryHistoryEntry();
 	if (state.layer !== undefined || !isLibraryHistoryState(entry) || entry.layer === undefined) {
 		return state;
 	}
