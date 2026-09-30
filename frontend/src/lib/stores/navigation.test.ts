@@ -154,6 +154,7 @@ import {
 	setDraftLyrics
 } from '$lib/stores/editor';
 import { updateSong } from '$lib/api/client';
+import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
 
@@ -1187,6 +1188,32 @@ describe('a dirty draft guards song switch / leave', () => {
 			pendingDirtyNavigation.set(null);
 
 			expect(window.location.pathname).toBe('/settings/playback');
+		});
+
+		it('keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
+			const stopNavigation = initNavigation();
+			try {
+				await leaveWithADirtyDraft();
+				const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
+				dialog.hold(document.createElement('div'));
+				await vi.waitFor(() => expect(historyEntry().layer).toBe('confirm-dialog'));
+				const leave = get(pendingDirtyNavigation);
+				pendingDirtyNavigation.set(null);
+				const dialogEntryLeft = new Promise((landed) =>
+					window.addEventListener('popstate', landed, { once: true })
+				);
+				let leaving: void | Promise<void> = undefined;
+
+				dialog.answer(() => {
+					discardDraft();
+					leaving = leave?.();
+				})();
+				await Promise.all([dialogEntryLeft, leaving]);
+
+				expect(window.location.pathname).toBe('/settings/playback');
+			} finally {
+				stopNavigation();
+			}
 		});
 	});
 

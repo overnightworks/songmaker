@@ -42,6 +42,7 @@ import {
 	detailTab,
 	isLibraryHistoryState,
 	libraryHistoryEntry,
+	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	librarySurface,
 	libraryRootState,
@@ -281,6 +282,7 @@ export type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
 function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
+		await libraryHistoryStepsLanded();
 		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
 		closeSidebar();
 	});
