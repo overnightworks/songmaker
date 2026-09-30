@@ -5,7 +5,7 @@ import {
 	fetchLastFailedGeneration,
 	type JobStatus
 } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import { isNotFound } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -341,7 +341,8 @@ function streamJob(
  * The job stream failed its whole budget while the page was online, so the
  * job's own record answers instead: an ended job finishes as if its stream had
  * said so, a running one keeps its card and its stream starts a fresh budget,
- * and a lost network keeps following it. A job the server no longer knows goes
+ * and a re-read that fails for any other reason than a 404 (a lost network, a
+ * 5xx, a 429) keeps following it. A job the server no longer knows goes
  * without a word of its own; its song refresh shows what is really there.
  */
 async function rereadAfterSpentBudget(
@@ -354,8 +355,8 @@ async function rereadAfterSpentBudget(
 		job = await fetchJob(jobId);
 	} catch (err) {
 		if (!isTracked(jobId)) return;
-		if (err instanceof NetworkError) scheduleReconnect(jobId, attempt, 0, reopenGap);
-		else letUnknownJobGo(jobId);
+		if (isNotFound(err)) letUnknownJobGo(jobId);
+		else scheduleReconnect(jobId, attempt, 0, reopenGap);
 		return;
 	}
 	if (!isTracked(jobId)) return;

@@ -33,7 +33,7 @@ import {
 import { toasts } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import type { JobStatus } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -355,8 +355,11 @@ describe('jobs store', () => {
 		expect(lostConnectionToasts()).toEqual([]);
 	});
 
-	it('keeps following a job whose re-read the network swallowed', async () => {
-		mockFetchJob.mockRejectedValue(new NetworkError('/api/jobs/j1', new TypeError('offline')));
+	it.each([
+		['the network swallowed', new NetworkError('/api/jobs/j1', new TypeError('offline'))],
+		['the server answered 503', new ApiError(503, 'Service Unavailable', '/api/jobs/j1')]
+	])('keeps following a job whose re-read %s', async (_reason, rereadFailure) => {
+		mockFetchJob.mockRejectedValue(rereadFailure);
 		trackJob(makeJob({ status: 'running', progress: 0.2 }), { songId: 'song-1' });
 		await spendTheBudgetOnline();
 
@@ -368,7 +371,7 @@ describe('jobs store', () => {
 
 	it('lets a job the server no longer knows go quietly and refreshes its song', async () => {
 		toasts.set([]);
-		mockFetchJob.mockRejectedValue(new Error('Job not found'));
+		mockFetchJob.mockRejectedValue(new ApiError(404, 'Job not found', '/api/jobs/j1'));
 		trackJob(makeJob({ status: 'running' }), { songId: 'song-1' });
 		await spendTheBudgetOnline();
 
