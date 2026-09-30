@@ -3380,4 +3380,17 @@ describe('audioPlayer offline announcement wiring', () => {
 
 		expect(audioPlayer.currentCallbacks.networkFailureIsAnnounced()).toBe(announced);
 	});
+
+	it('lets playback the lost network stopped go on once the connection is back', () => {
+		const resume = vi.spyOn(audioPlayer, 'resumeAfterNetworkReturn').mockImplementation(() => {});
+		reportResourceStreamReachable(false);
+		expect(audioPlayer.currentCallbacks.networkFailureIsAnnounced()).toBe(true);
+		expect(resume).not.toHaveBeenCalled();
+
+		reportResourceStreamReachable(true);
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(true);
+
+		expect(resume).toHaveBeenCalledOnce();
+	});
 });
