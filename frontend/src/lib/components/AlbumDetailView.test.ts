@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse } from '$lib/api/types';
-import { ApiError, NetworkError } from '$lib/api/fetch';
+import { ApiError } from '$lib/api/fetch';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
@@ -118,17 +118,12 @@ import { addToast } from '$lib/stores/toast';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function coverSuggestions(
-	overrides: Partial<CoverSuggestionsResponse> = {}
-): CoverSuggestionsResponse {
-	return { job: null, suggestions: [], used_today: 0, daily_limit: 10, ...overrides };
-}
-
-const SUGGESTIONS_PATH = '/api/albums/a-local/cover-suggestions';
-
-function networkFailure(): NetworkError {
-	return new NetworkError(SUGGESTIONS_PATH, new TypeError('Failed to fetch'));
-}
+const NO_COVER_SUGGESTIONS: CoverSuggestionsResponse = {
+	job: null,
+	suggestions: [],
+	used_today: 0,
+	daily_limit: 10
+};
 
 async function renderDetail(): Promise<HTMLElement> {
 	const target = document.createElement('div');
@@ -148,7 +143,7 @@ beforeEach(() => {
 	updateAlbum.mockReset();
 	archiveAlbum.mockReset();
 	unarchiveAlbum.mockReset();
-	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(coverSuggestions());
+	fetchAlbumCoverSuggestions.mockReset().mockResolvedValue(NO_COVER_SUGGESTIONS);
 	vi.mocked(addToast).mockReset();
 	vi.mocked(selectSong).mockReset();
 	vi.mocked(playAlbum).mockReset();
@@ -439,7 +434,7 @@ describe('AlbumDetailView header', () => {
 	});
 
 	it.each([
-		{ failure: networkFailure(), toast: 'Cover upload failed' },
+		{ failure: lostNetwork(), toast: 'Cover upload failed' },
 		{ failure: serverRefusal('Cover must be an image'), toast: 'Cover must be an image' }
 	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
 		uploadAlbumCover.mockRejectedValue(failure);
