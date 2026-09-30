@@ -266,12 +266,7 @@
 	{#if compact}
 		<PhoneAppBar username={me.username} onlogout={handleLogout} />
 		<RailDrawer>
-			<Rail
-				username={me.username}
-				onlogout={handleLogout}
-				showCollapseControl={false}
-				showResizeHandle={false}
-			/>
+			<Rail showCollapseControl={false} showResizeHandle={false} />
 		</RailDrawer>
 		<div class="app-shell mobile" class:has-player={hasPrivatePlayer}>
 			{@render children()}
@@ -284,7 +279,10 @@
 			class:rail-collapsed={$railCollapsed}
 			style:--rail-expanded-width={`${$railWidth}px`}
 		>
-			<Rail username={me.username} onlogout={handleLogout} collapsed={$railCollapsed} />
+			<Rail
+				account={{ username: me.username, onlogout: handleLogout }}
+				collapsed={$railCollapsed}
+			/>
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>
