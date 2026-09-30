@@ -392,7 +392,7 @@ def test_suggest_album_cover_queues_a_cover_job(db_session: Session):
     result = tools.tool_suggest_album_cover(db_session, owner, album_id=album_id)
 
     assert result.status == JobStatus.QUEUED
-    assert result.message == "Cover suggestions queued."
+    assert result.message == "Cover suggestion queued."
     job = db_session.query(Job).filter_by(id=result.job_id).one()
     assert job.type == JobType.COVER
     assert job.album_id == album_id

@@ -8,6 +8,7 @@
 		playlistLoad
 	} from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		LIBRARY_PLAYLISTS_ERROR,
@@ -32,15 +33,19 @@
 		void ensurePlaylistsLoaded();
 	});
 
+	const historyLayer = dialogHistoryLayer('playlist-picker', () => onclose());
+	const close = historyLayer.answer(() => onclose());
+	const select = historyLayer.answer((playlistId: string) => onselect(playlistId));
+
 	function handleClickOutside(event: MouseEvent): void {
 		if (menuRef && !menuRef.contains(event.target as Node)) {
-			onclose();
+			close();
 		}
 	}
 
 	function handleKeydown(event: KeyboardEvent): void {
 		if (!menuRef) return;
-		handleFocusTrapKeydown(menuRef, event, onclose);
+		handleFocusTrapKeydown(menuRef, event, close);
 	}
 
 	$effect(() => {
@@ -58,7 +63,7 @@
 		try {
 			const playlist = await createNewPlaylist(newTitle.trim());
 			newTitle = '';
-			onselect(playlist.id);
+			select(playlist.id);
 		} catch {
 			addToast('Failed to create playlist', 'error');
 		} finally {
@@ -74,6 +79,7 @@
 	aria-modal="true"
 	aria-label="Add to Playlist"
 	tabindex="-1"
+	{@attach historyLayer.hold}
 >
 	<div class="picker-header">Add to Playlist</div>
 	<div class="picker-list">
@@ -84,7 +90,7 @@
 			<button class="picker-retry" onclick={() => loadPlaylists()}>{LIBRARY_RETRY_LABEL}</button>
 		{:else}
 			{#each playlists as p (p.id)}
-				<button class="picker-item" onclick={() => onselect(p.id)}>
+				<button class="picker-item" onclick={() => select(p.id)}>
 					<span class="picker-title">{p.title}</span>
 					<span class="picker-count">{p.entry_count}</span>
 				</button>

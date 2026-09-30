@@ -7,14 +7,11 @@ case from the stored title.
 
 Also pins issue #236 — a QA exploration reported that searching an admin
 account for "Thomas"/"für"/"42" found nothing for the album "42 — Für
-Thomas", while other titles matched. Root cause: that album belongs to a
-different (non-admin) user, and search is intentionally scoped to the
-searcher's own titles even for admins (commit 7a05e1e, "keep search
-personal") — album/song *browse* lists are the only surfaces where admins
-see everyone's content. There is no tokenization, em-dash, or number-token
-defect in `like_contains_pattern`/`title_matches`: the tests below prove
-each of those three query shapes matches correctly for the title's owner,
-and stays empty for a same-titled admin who does not own it.
+Thomas", while other titles matched. That album belongs to a different
+(non-admin) user; there is no tokenization, em-dash, or number-token defect
+in `like_contains_pattern`/`title_matches`. Since #1128 an admin's search
+covers every album the admin can open, so the tests below prove each of
+those three query shapes matches for the title's owner and for an admin.
 """
 
 from __future__ import annotations
@@ -133,14 +130,7 @@ def test_search_finds_owners_em_dash_and_number_title(tmp_path: Path, query: str
 
 
 @pytest.mark.parametrize("query", ["Thomas", "Für", "42"])
-def test_admin_search_stays_empty_for_another_users_title(tmp_path: Path, query: str) -> None:
-    """Issue #236 root cause, pinned: this is ownership scoping, not a query bug.
-
-    The reported "0 Treffer" came from an admin account searching for a
-    title owned by a different user. Search is intentionally scoped to the
-    searcher's own titles even for admins (commit 7a05e1e) — admins only see
-    other users' content in the browse/list endpoints, never in search.
-    """
+def test_admin_search_finds_another_users_album(tmp_path: Path, query: str) -> None:
     admin = make_authenticated_user(ADMIN_ID, role=ROLE_ADMIN, username="admin")
     client = _client_with_title(
         tmp_path, album_title=ALBUM_236, song_title=SONG_236, searcher=admin,
@@ -149,4 +139,4 @@ def test_admin_search_stays_empty_for_another_users_title(tmp_path: Path, query:
     resp = client.get("/api/library/search", params={"q": query})
 
     assert resp.status_code == 200
-    assert resp.json()["items"] == []
+    assert LIBRARY_ITEM_ALBUM in _hit_types(resp.json()["items"])
