@@ -40,6 +40,11 @@
 			'<path d="m18 14 4 4-4 4"/><path d="m18 2 4 4-4 4"/><path d="M2 18h1.97a4 4 0 0 0 3.3-1.73l5.46-8.54A4 4 0 0 1 16.03 6H22"/><path d="M2 6h1.97a4 4 0 0 1 3.6 2.2"/><path d="M22 18h-6.04a4 4 0 0 1-3.3-1.73l-.54-.84"/>',
 		pin: '<line x1="12" x2="12" y1="17" y2="22"/><path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V6h1a2 2 0 0 0 0-4H8a2 2 0 0 0 0 4h1v4.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24Z"/>',
 		x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+		plus: '<path d="M12 5v14"/><path d="M5 12h14"/>',
+		album:
+			'<rect x="3.5" y="3.5" width="17" height="17" rx="2"/><circle cx="12" cy="12" r="4.5"/><circle cx="12" cy="12" r="1" fill="currentColor"/>',
+		playlist:
+			'<path d="M4 6.5h11M4 11.5h11M4 16.5h6"/><circle cx="16.5" cy="17" r="2.2"/><path d="M18.7 17V8.5l2.3 1"/>',
 		'check-square': '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="m9 12 2 2 4-4"/>',
 		square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
 		'chevron-up': '<path d="m18 15-6-6-6 6"/>',
