@@ -67,9 +67,11 @@ const GENERATE_WITHOUT_GPU = `${GENERATE_LABEL} — ${EDITOR_GPU_OFFLINE_TITLE}`
 // The ride through three tunnels on #1039's final drive (#1141).
 const OUTAGES_IN_ONE_RIDE = 3;
 // What each outage past the first adds to the running-take flow's cost: the
-// job stream's refused retries while the network is gone and the streams that
-// reopen on its return.
-const API_REQUESTS_PER_FURTHER_OUTAGE = 6;
+// session check's once-a-second probe and the job stream's and song refresh's
+// refused retries while the network is gone, and the streams that reopen on
+// its return. The probe count follows how long each outage lasts; CI run
+// 36716007334 (30.09.2026) measured 48 and 50 for the whole three-outage flow.
+const API_REQUESTS_PER_FURTHER_OUTAGE = 10;
 const THREE_OUTAGES_FLOW_API_REQUEST_BUDGET =
 	OFFLINE_RUNNING_TAKE_FLOW_API_REQUEST_BUDGET +
 	(OUTAGES_IN_ONE_RIDE - 1) * API_REQUESTS_PER_FURTHER_OUTAGE;
