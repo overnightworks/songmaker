@@ -276,8 +276,11 @@ def create_song(
     key_scale: str = "",
     vocal_language: str = "",
     generation_params: dict | None = None,
+    created_by: str | None = None,
 ) -> Song:
     """Create a song and its first version.
+
+    Creating the song counts as ``created_by``'s own work on it.
 
     ``slug`` must already be reserved (e.g. via unique_song_slug()) and is
     set on the row before its first flush, not after — the row's default
@@ -305,6 +308,8 @@ def create_song(
     )
     session.add(song)
     session.flush()
+    if created_by is not None:
+        record_song_work(session, user_id=created_by, song_id=song.id, work=SongWork.EDITED)
 
     version = Version(
         song_id=song.id, version_number=1,
