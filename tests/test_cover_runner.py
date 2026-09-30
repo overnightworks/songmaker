@@ -255,6 +255,7 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
     abort_signal = threading.Event() if aborted else None
     if abort_signal is not None:
         abort_signal.set()
+        pending_png = _add_pending_suggestion(factory, audio_dir)
 
     def generate_image(
         _prompt: str,
@@ -288,8 +289,8 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
             assert job.status == JobStatus.FAILED
             assert job.error == "Codex could not draw: Image generation cancelled."
             assert job.error_type == "cover_suggestion_error"
-            assert not job.album.cover_suggestions
-            assert not list(audio_dir.rglob("*.png"))
+            assert [item.id for item in job.album.cover_suggestions] == ["pending"]
+            assert list(audio_dir.rglob("*.png")) == [pending_png]
         else:
             assert job.status == JobStatus.COMPLETED
             assert len(job.album.cover_suggestions) == 1
