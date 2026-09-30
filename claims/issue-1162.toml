@@ -1,0 +1,8 @@
+claim_id = "3b32b77db38e4a7b882244cd49377617"
+agent = "claude-head"
+role = "builder"
+base = "45888a68eb726b4ba15d65fed27556f67c701292"
+branch = "claude/issue-1162-take-maker"
+scope = ["docs/architecture.md", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/jobs/generation.py", "src/songmaker_cli/reimport.py", "tests/test_db.py", "tests/test_jobs.py", "tests/test_reimport.py"]
+opened_commit = "f5b5d4b9e1744a2dfc1b6102b50022a613c1cc43"
+whole_reason = "each take records its maker: model, migration, every creation path, tests"
