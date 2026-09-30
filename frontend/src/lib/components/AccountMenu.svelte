@@ -11,12 +11,13 @@
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { theme, toggleTheme } from '$lib/stores/ui';
+	import { accountInitial } from '$lib/utils/format';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
-	const initial = $derived([...username][0]?.toLocaleUpperCase() ?? '');
+	const initial = $derived(accountInitial(username));
 	const offersLight = $derived($theme === 'dark');
 
 	let popover: MenuPopover | undefined = $state();
