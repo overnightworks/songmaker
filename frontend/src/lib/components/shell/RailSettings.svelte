@@ -2,32 +2,17 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { page } from '$app/state';
 	import { isAdmin } from '$lib/stores/auth';
-	import { followAppPageLink, type AppPageHref } from '$lib/stores/navigation';
+	import { followAppPageLink } from '$lib/stores/navigation';
 	import {
 		RAIL_SETTINGS_LABEL,
 		RAIL_SETTINGS_OPEN_STORAGE_KEY,
 		SETTINGS_NAV_LABEL
 	} from '$lib/constants';
+	import { visibleSettingsSections } from '$lib/settingsSections';
 	import RailGroup from './RailGroup.svelte';
 
-	interface SettingsSection {
-		href: AppPageHref;
-		label: string;
-		adminOnly: boolean;
-	}
-
-	const SETTINGS_SECTIONS: SettingsSection[] = [
-		{ href: '/settings/generation', label: 'Generation', adminOnly: false },
-		{ href: '/settings/playback', label: 'Playback', adminOnly: false },
-		{ href: '/settings/voices', label: 'Voices', adminOnly: false },
-		{ href: '/settings/account', label: 'Account', adminOnly: false },
-		{ href: '/settings/users', label: 'Admin', adminOnly: true },
-		{ href: '/settings/cleanup', label: 'Cleanup', adminOnly: true },
-		{ href: '/settings/legal', label: 'Legal', adminOnly: false }
-	];
-
 	const admin = $derived($isAdmin);
-	const visibleSections = $derived(SETTINGS_SECTIONS.filter((item) => !item.adminOnly || admin));
+	const visibleSections = $derived(visibleSettingsSections(admin));
 	const pathname = $derived(page.url.pathname);
 	const onSettingsRoute = $derived(pathname.startsWith('/settings'));
 </script>
