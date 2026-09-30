@@ -1,8 +1,0 @@
-claim_id = "ace551e5ed104a98bb24152d21fb4129"
-agent = "claude-head"
-role = "builder"
-base = "14eff530b7fe579f0b3a14741b85488141b85cfd"
-branch = "claude/issue-1143-drawer-dirty-draft"
-scope = ["frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/VoicePicker.svelte", "frontend/src/lib/components/VoicePicker.test.ts", "frontend/src/lib/components/editor/RecipePanel.svelte", "frontend/src/lib/components/editor/RecipePanel.test.ts", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailDrawer.svelte", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/components/shell/RailSettings.svelte", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/components/shell/UserRow.svelte", "frontend/src/lib/components/shell/UserRow.test.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
-opened_commit = "a7fba82ae340c3dc994916c818e6c46dd23b5df9"
-whole_reason = "the phone drawer's navigations go through the one dirty-draft guard"
