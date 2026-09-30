@@ -786,9 +786,11 @@ describeBackClosesOverlay({
 		await vi.waitFor(() => expect(get(activeJobs)).toHaveLength(1));
 	},
 	isShown: (target) => editor(target) !== null,
-	afterBack: () => {
-		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
-		expect(cancelJob).toHaveBeenCalledWith('cover-job');
+	afterBack: async () => {
+		await vi.waitFor(() => expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
+			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
+		);
 	},
 	closeWays: [
 		{

@@ -96,7 +96,7 @@ export interface OverlayUnderBack {
 	isShown: (target: HTMLElement) => boolean;
 	closeWays: CloseWay[];
 	/** What Back must leave undone, checked once it closed the overlay: a dialog it cancels never confirms. */
-	afterBack?: () => void;
+	afterBack?: () => void | Promise<void>;
 	/** A layer the overlay opens over, which the next Back closes in turn. */
 	over?: { name: string; isShown: () => boolean };
 }
@@ -132,7 +132,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 			expect(overlay.isShown(target)).toBe(false);
 			expect(overlay.over?.isShown() ?? true).toBe(true);
-			overlay.afterBack?.();
+			await overlay.afterBack?.();
 			await expectHistoryAt(below);
 		});
 
