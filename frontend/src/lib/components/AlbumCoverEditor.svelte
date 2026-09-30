@@ -44,8 +44,6 @@
 
 	let { album }: Props = $props();
 
-	// A fresh album object with the same id (after a rename or a saved cover)
-	// must not restart the suggestions; only a different album does.
 	const currentAlbumId = $derived(album.id);
 
 	let coverSuggestionsState = $state<CoverSuggestionsState | null>(null);
