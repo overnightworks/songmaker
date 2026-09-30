@@ -97,16 +97,17 @@ describe('settings index on the desktop', () => {
 	beforeEach(() => setPointer('fine'));
 
 	it.each([
-		{ viewer: 'an admin', user: ADMIN, admin: true },
-		{ viewer: 'a non-admin', user: USER, admin: false }
+		{ viewer: 'an admin', user: ADMIN },
+		{ viewer: 'a non-admin', user: USER }
 	])(
-		'redirects $viewer straight into the first section they can see and shows no list',
-		async ({ user, admin }) => {
+		'redirects $viewer straight into Generation, the first section they can see, and shows no list',
+		async ({ user }) => {
 			currentUser.set(user);
 			const rendered = await render();
 
-			const [firstVisible] = visibleSettingsSections(admin);
-			expect(navigation.goto).toHaveBeenCalledWith(firstVisible?.href, { replaceState: true });
+			expect(navigation.goto).toHaveBeenCalledWith('/settings/generation', {
+				replaceState: true
+			});
 			expect(listRows(rendered)).toHaveLength(0);
 		}
 	);
