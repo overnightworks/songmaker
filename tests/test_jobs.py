@@ -1492,10 +1492,16 @@ def test_generation_job_cancelled_after_setup_does_not_dispatch_or_persist(
         assert session.query(ResourceEvent).count() == 0
 
 
-def test_generation_job_cancel_after_first_variant_skips_rest(
+def test_generation_job_cancel_after_first_variant_keeps_the_saved_take_and_its_maker(
     seeded_db,
     tmp_path: Path,
 ) -> None:
+    with seeded_db() as session:
+        session.add(User(id="admin", username="admin", password_hash="hash", role="admin"))
+        session.flush()
+        get_job(session, "j1").user_id = "admin"
+        session.commit()
+
     def persist_then_cancel(*, ctx, generation_id, db_factory, **kwargs):
         result = _persist_via_post_process(
             ctx=ctx,
@@ -1522,7 +1528,7 @@ def test_generation_job_cancel_after_first_variant_skips_rest(
                 "s1",
                 "v1",
                 3,
-                "u1",
+                "admin",
                 db_factory=seeded_db,
                 audio_dir=tmp_path / "audio",
                 data_dir=tmp_path / "data",
@@ -1539,6 +1545,7 @@ def test_generation_job_cancel_after_first_variant_skips_rest(
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
         assert gens[0].seed == 100
+        assert gens[0].created_by == "admin"
         assert session.query(ResourceEvent).count() == 1
 
 
