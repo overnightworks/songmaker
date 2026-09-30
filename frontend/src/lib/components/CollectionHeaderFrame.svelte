@@ -50,19 +50,23 @@
 </script>
 
 <div class="collection-header">
-	<span class="header-cover">
-		{#if showCover && coverUrl}
-			<img src={coverUrl} alt={coverAlt} onerror={onCoverError} />
-		{:else if coverFallback}
-			{@render coverFallback()}
-		{:else if artFill}
-			<span class="header-cover-fallback" style:background={artFill} aria-hidden="true"></span>
-		{:else}
-			<span class="header-cover-fallback header-cover-initials" aria-hidden="true">{initials}</span>
-		{/if}
-	</span>
-	<div class="header-titles">
-		{@render titleArea()}
+	<div class="header-identity">
+		<span class="header-cover">
+			{#if showCover && coverUrl}
+				<img src={coverUrl} alt={coverAlt} onerror={onCoverError} />
+			{:else if coverFallback}
+				{@render coverFallback()}
+			{:else if artFill}
+				<span class="header-cover-fallback" style:background={artFill} aria-hidden="true"></span>
+			{:else}
+				<span class="header-cover-fallback header-cover-initials" aria-hidden="true"
+					>{initials}</span
+				>
+			{/if}
+		</span>
+		<div class="header-titles">
+			{@render titleArea()}
+		</div>
 	</div>
 	<div class="header-actions">
 		<button
@@ -89,7 +93,7 @@
 				<Icon name="shuffle" size={20} />
 			</button>
 		{/if}
-		{#if actions}{@render actions()}{/if}
+		{#if actions}<span class="header-actions-end">{@render actions()}</span>{/if}
 	</div>
 </div>
 
@@ -97,10 +101,16 @@
 	.collection-header {
 		--collection-play-circle: 48px;
 		display: flex;
+		flex-direction: column;
+		gap: 0.8rem;
+		padding: 1.2rem 1.5rem 0.8rem;
+	}
+
+	.header-identity {
+		display: flex;
 		align-items: center;
 		gap: 1rem;
-		flex-wrap: wrap;
-		padding: 1.2rem 1.5rem 0.8rem;
+		min-width: 0;
 	}
 
 	.header-cover {
@@ -130,20 +140,20 @@
 		user-select: none;
 	}
 
-	/* The title keeps a readable width instead of collapsing to a letter: the
-	   header wraps its action cluster onto a second row rather than shrinking
-	   the title past this floor. `overflow: hidden` on the title itself still
-	   ellipsises whatever does not fit. */
 	.header-titles {
-		min-width: 10rem;
+		min-width: 0;
 		flex: 1;
 	}
 
-	.header-actions {
+	.header-actions,
+	.header-actions-end {
 		display: flex;
 		align-items: center;
-		gap: 0.6rem;
-		flex-shrink: 0;
+		gap: 0.3rem;
+	}
+
+	.header-actions-end {
+		margin-left: auto;
 	}
 
 	.play-circle {
@@ -153,6 +163,7 @@
 		border: none;
 		background: var(--primary);
 		color: #fff;
+		margin-right: 0.2rem;
 	}
 
 	.play-circle:hover:not(:disabled) {

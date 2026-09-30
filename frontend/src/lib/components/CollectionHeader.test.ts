@@ -279,6 +279,24 @@ describe('CollectionHeader', () => {
 		expect(openLibraryWall).toHaveBeenCalledTimes(1);
 	});
 
+	it.each(['album', 'playlist'] as const)(
+		'puts Play, Shuffle and ⋯ of the %s on their own row under cover and title',
+		async (kind) => {
+			const target = await render({ ...baseProps(), kind });
+			const identity = requireElement(target, '.header-identity');
+			const actionRow = requireElement(target, '.header-actions');
+
+			expect(identity.querySelector('.header-cover')).not.toBeNull();
+			expect(identity.querySelector('.header-title')).not.toBeNull();
+			expect(identity.contains(actionRow)).toBe(false);
+			expect(identity.compareDocumentPosition(actionRow)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+			const actions = Array.from(
+				actionRow.querySelectorAll('.play-circle, .shuffle-btn, .collection-menu')
+			).map((element) => element.className.split(' ')[0]);
+			expect(actions).toEqual(['play-circle', 'shuffle-btn', 'collection-menu']);
+		}
+	);
+
 	it('renders only play, shuffle and the … menu, no separate visible share icon', async () => {
 		const target = await render(baseProps());
 		expect(target.querySelector('.play-circle')).not.toBeNull();
