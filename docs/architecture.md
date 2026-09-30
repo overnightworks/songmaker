@@ -946,7 +946,7 @@ User (username, role: admin|user, bcrypt hash)
   │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)
   │           ├── Version (lyrics, prompt, BPM, key, duration, generation_params)
-  │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, share_slug?, is_shared)
+  │           ├── Generation (MP3, seed, status, whisper_text, whisper_cues?, model_mode, created_by?, share_slug?, is_shared)
   │           │     ├── Score (scorer, value JSON)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
@@ -964,6 +964,8 @@ Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?
 ```
 
 `UserSongWork` is keyed by (user, song) and upserted by `record_song_work()` in `db/queries/activity.py` when that person saves an edit (song update and rename endpoints, the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song`) or starts a listen. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled.
+
+A take's `created_by` names the user who made it — the job's user for a generated take, the acting user for a reimported one — set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
