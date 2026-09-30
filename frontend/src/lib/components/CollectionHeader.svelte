@@ -7,8 +7,6 @@
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 	import {
-		ALBUM_ADD_SONG_GLYPH,
-		ALBUM_ADD_SONG_LABEL,
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_EDIT_LABEL,
 		RAIL_LIBRARY_LABEL,
@@ -41,7 +39,6 @@
 		oncover?: () => void;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
-		onaddsong?: () => void;
 		oncurate?: () => void;
 		onsaveoffline?: () => void;
 		offlineSaved?: boolean;
@@ -77,7 +74,6 @@
 		oncover,
 		onremovecover,
 		onaddtoplaylist,
-		onaddsong,
 		oncurate,
 		onsaveoffline,
 		offlineSaved = false,
@@ -177,19 +173,6 @@
 {/snippet}
 
 {#snippet actions()}
-	{#if onaddsong}
-		<button
-			type="button"
-			class="add-song-btn"
-			data-hitbox="frequent"
-			onclick={onaddsong}
-			aria-label={ALBUM_ADD_SONG_LABEL}
-			title={ALBUM_ADD_SONG_LABEL}
-		>
-			<span class="add-song-full">{ALBUM_ADD_SONG_LABEL}</span>
-			<span class="add-song-glyph" aria-hidden="true">{ALBUM_ADD_SONG_GLYPH}</span>
-		</button>
-	{/if}
 	<CollectionMenu
 		{kind}
 		{title}
@@ -200,7 +183,7 @@
 		{ondelete}
 		{onarchive}
 		{oncover}
-		oncoversuggest={coverEditor && showCover ? openCoverEditing : undefined}
+		oncoveredit={coverEditor && showCover ? openCoverEditing : undefined}
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}
@@ -254,45 +237,9 @@
 		white-space: nowrap;
 	}
 
-	.add-song-btn {
-		padding: 0 0.7rem;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-pill);
-		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
-		white-space: nowrap;
-	}
-
-	.add-song-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.add-song-glyph {
-		display: none;
-	}
-
 	@media (max-width: 768px) {
 		.header-title {
 			font-size: 1.2rem;
-		}
-
-		.add-song-btn {
-			padding: 0;
-		}
-
-		.add-song-full {
-			display: none;
-		}
-
-		.add-song-glyph {
-			display: inline;
-			font-size: 1.1rem;
-			line-height: 1;
 		}
 	}
 </style>
