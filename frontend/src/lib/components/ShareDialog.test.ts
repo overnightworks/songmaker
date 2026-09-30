@@ -85,10 +85,6 @@ const shareWarning = {
 	}
 };
 
-function press(target: HTMLElement, selector: string): void {
-	target.querySelector<HTMLButtonElement>(selector)?.click();
-}
-
 describeBackClosesOverlay({
 	name: 'the share warning',
 	render: async () => {
@@ -100,8 +96,14 @@ describeBackClosesOverlay({
 	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
 	afterBack: () => expect(shareWarning.closes).toBe(1),
 	closeWays: [
-		{ way: 'Got it', close: (target) => press(target, '.confirm-btn') },
-		{ way: 'the backdrop', close: (target) => press(target, '.overlay-backdrop') },
+		{
+			way: 'Got it',
+			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
+		},
+		{
+			way: 'the backdrop',
+			close: (target) => target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click()
+		},
 		{
 			way: 'Escape',
 			close: () =>
