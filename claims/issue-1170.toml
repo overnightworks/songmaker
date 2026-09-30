@@ -1,0 +1,7 @@
+claim_id = "bd8028b2f7484fcf8b5ab32d80aff1b3"
+agent = "claude-head"
+role = "builder"
+base = "5a3f68d45f8d0e3bdcbc0fbbf416d265550500fc"
+branch = "claude/issue-1170-cowriter-history"
+scope = ["frontend/src/lib/components/CoWriterPanel.svelte", "frontend/src/lib/components/CoWriterPanel.test.ts"]
+opened_commit = "7e54ce68818b1d512f83e5e284528d568cc09af6"
