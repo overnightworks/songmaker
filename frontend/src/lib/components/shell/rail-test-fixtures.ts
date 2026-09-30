@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type Component } from 'svelte';
 import { vi } from 'vitest';
 
-import type { LibrarySearchHit } from '$lib/api/library';
+import type { LibraryContinueItem, LibrarySearchHit } from '$lib/api/library';
 import type {
 	AlbumItem,
 	GenerationItem,
@@ -200,7 +200,20 @@ export function railPathsMock() {
 
 export function railLibraryApiMock() {
 	return {
-		searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
+		searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
+		fetchLibraryContinue: vi.fn().mockResolvedValue({ items: [] })
+	};
+}
+
+export function recentWorkPage(type: LibraryContinueItem['type'], idsByLastWork: string[]) {
+	return {
+		items: idsByLastWork.map((id) => ({
+			type,
+			id,
+			title: id,
+			album_covers: [],
+			activity_at: '2026-09-27T03:47:00Z'
+		}))
 	};
 }
 

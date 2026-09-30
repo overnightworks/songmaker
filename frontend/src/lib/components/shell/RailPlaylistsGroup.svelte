@@ -14,6 +14,12 @@
 	} from '$lib/stores/player';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { railTreeQuery } from '$lib/stores/librarySearch';
+	import {
+		ensureRecentWorkRead,
+		inLibraryOrder,
+		libraryPlaceOrder
+	} from '$lib/stores/libraryOrder';
+	import { libraryWallOrder } from '$lib/stores/ui';
 	import { RAIL_PLAYLISTS_LABEL, RAIL_PLAYLISTS_NAV_LABEL } from '$lib/constants';
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
@@ -38,9 +44,15 @@
 	const query = $derived($railTreeQuery.trim().toLowerCase());
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
-		playlists.filter(
-			(playlist) =>
-				!filtering || playlist.id === openPlaylistId || playlist.title.toLowerCase().includes(query)
+		inLibraryOrder(
+			'playlist',
+			playlists.filter(
+				(playlist) =>
+					!filtering ||
+					playlist.id === openPlaylistId ||
+					playlist.title.toLowerCase().includes(query)
+			),
+			$libraryPlaceOrder
 		)
 	);
 
@@ -52,6 +64,10 @@
 	});
 
 	$effect(() => whenBackOnline(() => void ensurePlaylistsLoaded()));
+
+	$effect(() => {
+		if ($libraryWallOrder === 'recent') void ensureRecentWorkRead();
+	});
 
 	function onPlaylistLabelClick(playlistId: string): void {
 		void openPlaylist(playlistId);
