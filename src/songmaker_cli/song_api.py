@@ -175,6 +175,7 @@ def api_create_song(
         generation_params=gen_params_to_json(req.generation_params),
         slug=slug,
     )
+    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.CREATE, ResourceType.SONG, song.id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -203,10 +204,9 @@ def api_update_song(
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_json(req.generation_params)
     try:
-        version = update_song(session, song_id, **kwargs)
+        version = update_song(session, song_id, edited_by=user.id, **kwargs)
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
@@ -233,11 +233,10 @@ def api_rename_song(
     )
     try:
         song = rename_song(
-            session, song_id, title, slug=slug, force_new_version=True,
+            session, song_id, title, slug=slug, force_new_version=True, edited_by=user.id,
         )
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(song)

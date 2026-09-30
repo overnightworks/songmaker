@@ -493,6 +493,43 @@ def test_co_writer_edits_record_the_editors_own_work(
     assert work.played_at is None
 
 
+@pytest.mark.parametrize(
+    ("tool", "arguments"),
+    [
+        (tools.tool_update_song_lyrics, {"lyrics": "verse one"}),
+        (tools.tool_update_song_prompt, {"prompt": "rock"}),
+        (tools.tool_update_song_style, {"bpm": 120, "key_scale": "Am"}),
+        (tools.tool_rename_song, {"title": "First Song"}),
+    ],
+    ids=["lyrics", "prompt", "style", "rename"],
+)
+def test_co_writer_writes_that_change_nothing_record_no_work(
+    db_session: Session, tool, arguments,
+):
+    owner_id, _, _, song_id, _ = _seed(db_session)
+
+    tool(db_session, _owner(db_session, owner_id), song_id=song_id, **arguments)
+
+    assert db_session.query(UserSongWork).count() == 0
+
+
+@pytest.mark.parametrize("creator_id", ["u-admin", "u1"], ids=["admin-in-foreign-album", "owner"])
+def test_co_writer_song_creation_records_the_creators_own_work(
+    db_session: Session, creator_id,
+):
+    _, _, album_id, _, _ = _seed(db_session)
+    db_session.add(User(id="u-admin", username="felix", password_hash="x", role="admin"))
+    db_session.commit()
+
+    result = tools.tool_create_song(
+        db_session, _owner(db_session, creator_id), album_id=album_id, title="Fresh",
+    )
+
+    work = db_session.query(UserSongWork).one()
+    assert (work.user_id, work.song_id) == (creator_id, result.song_id)
+    assert work.edited_at is not None
+
+
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────
 
 
