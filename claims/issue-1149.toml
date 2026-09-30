@@ -1,0 +1,8 @@
+claim_id = "653c5ea17437484da492faf98a6fccef"
+agent = "claude-head"
+role = "builder"
+base = "30c7cc789fc0f6588735b1f0e597022deaf5ffef"
+branch = "claude/issue-1149-new-album"
+scope = ["frontend/e2e/library-create.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/MenuPopover.svelte", "frontend/src/lib/components/MenuPopover.test.ts", "frontend/src/lib/components/NewAlbumCard.svelte", "frontend/src/lib/components/NewAlbumCard.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "6e4410fb0363aca418e9bb3500230a62034c7a12"
+whole_reason = "+ NEW on the Library head and the inline New album card"
