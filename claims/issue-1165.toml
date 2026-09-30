@@ -1,0 +1,8 @@
+claim_id = "769795d09a0e4b58983be6abff4d020f"
+agent = "claude-head"
+role = "builder"
+base = "300c0719f164fe1337ff7290bbb689281d61a1d7"
+branch = "claude/issue-1165-shallow-routing"
+scope = ["docs/architecture.md", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/src/app.d.ts", "frontend/src/lib/components/shell/RailSettings.svelte", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/app-navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/(library)", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
+opened_commit = "2e2c1d3bbc026b2a6661eb762526961c4e8a04d6"
+whole_reason = "library history written through SvelteKit shallow routing, with reload restore, readers, fake router, e2e and docs"
