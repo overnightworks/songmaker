@@ -1503,7 +1503,14 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 	const sent = chatMessage('u1', 'user', 'write a chorus');
 	const reply = chatMessage('a1', 'assistant', 'Here is a chorus');
 
-	const outcomes: Array<[string, () => AsyncGenerator<CoWriterStreamEvent>, unknown[]]> = [
+	const outcomes: Array<
+		[
+			string,
+			() => AsyncGenerator<CoWriterStreamEvent>,
+			unknown[],
+			(lateHistory: ChatMessageItem[]) => ChatMessageItem[]
+		]
+	> = [
 		[
 			'its answer',
 			() =>
@@ -1515,7 +1522,8 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 						assistant_message: reply
 					} as CoWriterStreamEvent
 				]),
-			['write a chorus', 'Here is a chorus']
+			['write a chorus', 'Here is a chorus'],
+			() => [...earlier, sent, reply]
 		],
 		[
 			'its refusal',
@@ -1523,13 +1531,15 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 				yield* [] as CoWriterStreamEvent[];
 				throw new ApiError(503, 'Codex CLI is temporarily unavailable', '/api/chat/turn');
 			},
-			[expect.stringMatching(/^write a chorus.*Codex CLI is temporarily unavailable/)]
+			[expect.stringMatching(/^write a chorus.*Codex CLI is temporarily unavailable/)],
+			(lateHistory) => lateHistory
 		],
 		[
 			'its failed stream',
 			() =>
 				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent]),
-			[expect.stringMatching(/^write a chorus.*Selected route failed\./)]
+			[expect.stringMatching(/^write a chorus.*Selected route failed\./)],
+			(lateHistory) => lateHistory
 		]
 	];
 	const lateReads: Array<[string, ChatMessageItem[]]> = [
@@ -1548,12 +1558,15 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 		}
 	}
 
-	const cases = outcomes.flatMap(([outcome, turn, exchange]) =>
-		lateReads.map(([read, lateHistory]) => [outcome, read, turn, exchange, lateHistory] as const)
+	const cases = outcomes.flatMap(([outcome, turn, exchange, storedAfterTurn]) =>
+		lateReads.map(
+			([read, lateHistory]) =>
+				[outcome, read, turn, exchange, lateHistory, storedAfterTurn(lateHistory)] as const
+		)
 	);
 
 	it.each(cases)(
-		'keeps the sent message with %s once when the late read holds %s',
+		'keeps the sent message with %s once when the late history step holds %s',
 		async (_outcome, _read, turn, exchange, lateHistory) => {
 			const firstRead = Promise.withResolvers<ReturnType<typeof conversation>>();
 			fetchConversations.mockResolvedValue([activeConversation('c1')]);
@@ -1567,6 +1580,28 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			await sendTurn(target, 'write a chorus');
 			await turnEnded.promise;
 			firstRead.resolve(conversation(false, ...lateHistory));
+
+			await vi.waitFor(() =>
+				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+			);
+		}
+	);
+
+	it.each(cases)(
+		'keeps the sent message with %s once when the late list step leads to %s',
+		async (_outcome, _read, turn, exchange, _lateHistory, storedAfterTurn) => {
+			const listRead = Promise.withResolvers<ReturnType<typeof activeConversation>[]>();
+			fetchConversations
+				.mockReturnValueOnce(listRead.promise)
+				.mockResolvedValue([activeConversation('c1')]);
+			fetchConversationMessages.mockResolvedValue(conversation(false, ...storedAfterTurn));
+			const turnEnded = Promise.withResolvers<undefined>();
+			streamCoWriterTurn.mockReturnValue(endingWith(turn(), () => turnEnded.resolve(undefined)));
+			const target = await render();
+
+			await sendTurn(target, 'write a chorus');
+			await turnEnded.promise;
+			listRead.resolve([activeConversation('c1')]);
 
 			await vi.waitFor(() =>
 				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])

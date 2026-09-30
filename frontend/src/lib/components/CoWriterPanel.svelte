@@ -176,6 +176,7 @@
 	});
 
 	async function loadConversations(): Promise<void> {
+		const turnBeforeRead = latestTurn;
 		try {
 			const list = await fetchConversations();
 			historyError = '';
@@ -186,7 +187,7 @@
 				activeConversationId = newActiveId;
 				viewingConversationId = newActiveId;
 				if (newActiveId) {
-					await loadMessages(newActiveId);
+					await loadMessages(newActiveId, turnBeforeRead);
 				} else {
 					messages = [];
 				}
@@ -204,10 +205,16 @@
 		}));
 	}
 
-	async function loadMessages(conversationId: string): Promise<void> {
+	/**
+	 * `turnBeforeRead` is the latest turn when the history read began, which
+	 * for the first read is its conversation-list step (#1170).
+	 */
+	async function loadMessages(
+		conversationId: string,
+		turnBeforeRead: Promise<void> = latestTurn
+	): Promise<void> {
 		historyLoading = true;
 		historyError = '';
-		const turnBeforeRead = latestTurn;
 		let conversation: ConversationMessagesResponse | null = null;
 		try {
 			conversation = await fetchConversationMessages(conversationId);
