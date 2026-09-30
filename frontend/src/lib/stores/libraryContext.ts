@@ -349,8 +349,7 @@ export function holdLibraryHistoryUntilRouterStarts(): () => void {
 		: null;
 	void queueHistoryStep(planned, async () => {
 		await started;
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the page loaded on, already resolved
-		if (planned) replaceState(window.location.href, libraryPageState(planned.state));
+		if (planned) writeShallowLibraryHistory(planned.state, window.location.href, 'replace');
 	});
 	return reportStart;
 }
