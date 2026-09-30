@@ -1,8 +1,0 @@
-claim_id = "8b464ad555d84ca4a90ef2c32e288ae4"
-agent = "claude-head"
-role = "builder"
-base = "5a3f68d45f8d0e3bdcbc0fbbf416d265550500fc"
-branch = "claude/issue-1151-e2e-flakes"
-scope = ["frontend/e2e/auth-flows.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/phone-typing.spec.ts", "frontend/e2e/seed.ts", "frontend/playwright.config.ts"]
-opened_commit = "9f720651e2d26b1f6d85b0de4ebb9d44dbd142b0"
-whole_reason = "the named mobile E2E flakes: their specs, helpers and any product cause"
