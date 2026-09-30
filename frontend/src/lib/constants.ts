@@ -466,22 +466,41 @@ export const ALBUM_ART_INITIAL_COUNT = 2;
 export const ALBUM_COVER_ACCEPT = 'image/jpeg,image/png';
 export const ALBUM_COVER_ALT_TYPE = 'Album';
 export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
-export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest cover';
+export const ALBUM_COVER_ADD_LABEL = 'Add cover';
+export const ALBUM_COVER_EDIT_LABEL = 'Edit cover';
+export const ALBUM_COVER_EDITING_LABEL = 'Cover editing';
+export const ALBUM_COVER_EDITING_CLOSE_LABEL = 'Close cover editing';
+export const ALBUM_COVER_EDITING_UPLOAD_LABEL = 'Upload';
+export const ALBUM_COVER_SUGGEST_ANOTHER_LABEL = 'Suggest another';
+export const ALBUM_COVER_SUGGESTION_USE_LABEL = 'Use';
+export const ALBUM_COVER_EDITING_REMOVE_LABEL = 'Remove';
+export const ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL = 'Previous suggestion';
+export const ALBUM_COVER_NEXT_SUGGESTION_LABEL = 'Next suggestion';
 export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestions…';
 export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your cover…';
-export const ALBUM_COVER_SUGGESTIONS_TITLE = 'Choose a cover';
-export const ALBUM_COVER_SUGGESTIONS_DETAIL = 'Made from this album’s metadata';
-export const ALBUM_COVER_SUGGESTION_USE_LABEL = 'Use this';
-export const ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL = 'Discard all';
-export const ALBUM_COVER_SUGGESTIONS_FAILED_TITLE = 'Couldn’t make cover suggestions';
-export const ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK = 'Cover suggestions failed. Try again.';
-export const ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE =
-	'Creating one suggestion · {used} of {limit} today';
+export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
+export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
+export const ALBUM_COVER_SUGGESTION_ALREADY_RUNNING = 'A cover suggestion is already being made.';
 export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace…';
 export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
+// A sideways drag on the cover this far, and more sideways than up or down,
+// shows the neighbouring suggestion; anything less is a tap or a scroll.
+export const ALBUM_COVER_SWIPE_TRAVEL_PX = 40;
 
 export function albumCoverSuggestionAlt(title: string): string {
 	return `Cover suggestion for ${title}`;
+}
+
+export function albumCoverSuggestionPosition(shown: number, count: number): string {
+	return `${shown} / ${count}`;
+}
+
+export function albumCoverStageLabel(shown: number, count: number): string {
+	return `Cover suggestion ${shown} of ${count}`;
+}
+
+export function albumCoverSuggestionsLeftToday(used: number, limit: number): string {
+	return `${Math.max(0, limit - used)} of ${limit} left today`;
 }
 export const SONG_COVER_ALT_TYPE = 'Song';
 export const SONG_COVER_UPLOAD_LABEL = 'Upload song cover';
