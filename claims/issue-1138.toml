@@ -1,0 +1,8 @@
+claim_id = "5f0db6c08f7a4eb697095a65c83a20c6"
+agent = "claude-head"
+role = "builder"
+base = "73bd2e0068b65c17433f15b3275bcc81354164c5"
+branch = "claude/issue-1138-rail-order"
+scope = ["frontend/e2e/library.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/lib/utils/recency.test.ts", "frontend/src/lib/utils/recency.ts"]
+opened_commit = "e8a904f8dfbfec6a98b126eac4715099ec9a0912"
+whole_reason = "the rail's albums and playlists follow the wall's order switch through one ordering owner"
