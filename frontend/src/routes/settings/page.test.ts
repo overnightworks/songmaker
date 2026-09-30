@@ -2,7 +2,6 @@ import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
-import { visibleSettingsSections } from '$lib/settingsSections';
 import { currentUser } from '$lib/stores/auth';
 import { clearPointer, setPointer } from '$lib/test-utils/hitbox';
 
@@ -64,9 +63,15 @@ describe('settings index on the phone', () => {
 			'Cleanup',
 			'Legal'
 		]);
-		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual(
-			visibleSettingsSections(true).map((section) => section.href)
-		);
+		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
+			'/settings/generation',
+			'/settings/playback',
+			'/settings/voices',
+			'/settings/account',
+			'/settings/users',
+			'/settings/cleanup',
+			'/settings/legal'
+		]);
 		expect(navigation.goto).not.toHaveBeenCalled();
 	});
 
