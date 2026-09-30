@@ -108,8 +108,10 @@ export function ensureRecentWorkRead(): Promise<boolean> {
 	return recentWorkPresent;
 }
 
-export function resetLibraryOrderForTests(): void {
-	recentWorkRequest = 0;
+// Bumping the request number rather than zeroing it also discards a read
+// still in flight for the session that ended.
+export function resetLibraryOrder(): void {
+	recentWorkRequest++;
 	recentWorkPresent = null;
 	recentWork.set(new Map());
 }

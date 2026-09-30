@@ -12,7 +12,7 @@ import {
 	inLibraryOrder,
 	libraryPlaceOrder,
 	readRecentWork,
-	resetLibraryOrderForTests
+	resetLibraryOrder
 } from './libraryOrder';
 
 type Titled = { id: string; title: string; created_at: string };
@@ -36,7 +36,7 @@ const activity = (id: string) => ({
 beforeEach(() => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
-	resetLibraryOrderForTests();
+	resetLibraryOrder();
 	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
 });
 

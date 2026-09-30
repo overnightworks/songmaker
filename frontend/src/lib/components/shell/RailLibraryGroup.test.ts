@@ -19,7 +19,7 @@ import {
 	songList
 } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
-import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
 import { fetchLibraryContinue } from '$lib/api/library';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
@@ -65,7 +65,7 @@ const { render, cleanup } = createComponentMount(RailLibraryGroup);
 beforeEach(() => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
-	resetLibraryOrderForTests();
+	resetLibraryOrder();
 	resetLibraryContextForTests();
 	fetchAlbums.mockClear().mockResolvedValue(albumsPage());
 	fetchSongs.mockClear().mockResolvedValue(songsPage());

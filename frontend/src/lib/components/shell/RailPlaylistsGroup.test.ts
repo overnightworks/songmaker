@@ -11,7 +11,7 @@ import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
-import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
 import { fetchLibraryContinue } from '$lib/api/library';
 import {
@@ -50,7 +50,7 @@ const { render, cleanup } = createComponentMount(RailPlaylistsGroup);
 beforeEach(() => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
-	resetLibraryOrderForTests();
+	resetLibraryOrder();
 	resetLibraryContextForTests();
 	fetchPlaylists.mockClear().mockResolvedValue([]);
 	fetchPlaylist.mockReset();
