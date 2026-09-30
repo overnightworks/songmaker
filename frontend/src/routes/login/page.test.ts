@@ -24,7 +24,9 @@ function store<T>(initial: T) {
 	};
 }
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/stores/auth', () => ({ authError, authNotice, login: mockLogin }));
 
 import Page from './+page.svelte';

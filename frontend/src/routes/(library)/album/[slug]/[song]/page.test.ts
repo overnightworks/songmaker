@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,14 +47,9 @@ vi.mock('$app/state', () => ({
 }));
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	}),
-	afterNavigate: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
@@ -148,7 +144,7 @@ function coldTabAt(pathname: string, search = ''): void {
 	routeParams.song = songSlug ?? '';
 	routeSearch.forEach((_, key) => routeSearch.delete(key));
 	new URLSearchParams(search).forEach((value, key) => routeSearch.set(key, value));
-	history.replaceState(null, '', pathname + search);
+	replaceHistoryEntry(pathname + search);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);
@@ -217,17 +213,13 @@ describe('/album/<slug>/<song-slug> opened cold', () => {
 		['generations', 'takes']
 	] as const)('restores a reload of an old %s history entry on %s', async (legacy, restored) => {
 		coldTabAt(`/album/${ALBUM_SLUG}/${SONG_SLUG}`);
-		history.replaceState(
-			{
-				...libraryRootState(),
-				surface: 'detail',
-				collection: { kind: 'album', id: ALBUM_SLUG },
-				songId: 'song-1',
-				detailTab: legacy as never
-			},
-			'',
-			`/album/${ALBUM_SLUG}/${SONG_SLUG}`
-		);
+		replaceHistoryEntry(`/album/${ALBUM_SLUG}/${SONG_SLUG}`, {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: ALBUM_SLUG },
+			songId: 'song-1',
+			detailTab: legacy as never
+		});
 
 		const target = openAddress();
 

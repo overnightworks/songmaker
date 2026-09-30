@@ -66,13 +66,9 @@ import {
 // own `/album/<slug>/<song-slug>` address, which writeLibraryHistory sends
 // through `goto` -- unmocked, that call needs a live SvelteKit router this
 // harness never mounts.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/takeActions')>()),
