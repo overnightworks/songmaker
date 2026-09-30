@@ -1,14 +1,19 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { followAppPageLink, leaveForLogout } from '$lib/stores/navigation';
 	import ThemeToggle from '../ThemeToggle.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 </script>
 
 <div class="user-row">
-	<a class="username" href="/settings/account">{username}</a>
+	<a
+		class="username"
+		href="/settings/account"
+		onclick={(event) => followAppPageLink(event, '/settings/account')}>{username}</a
+	>
 	<ThemeToggle />
-	<button class="logout" onclick={onlogout}>Logout</button>
+	<button class="logout" onclick={() => void leaveForLogout(onlogout)}>Logout</button>
 </div>
 
 <style>

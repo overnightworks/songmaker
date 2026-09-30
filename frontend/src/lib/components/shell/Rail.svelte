@@ -1,6 +1,6 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { followAppPageLink, openLibraryWall } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
 	import { accountInitial } from '$lib/utils/format';
@@ -122,7 +122,13 @@
 
 	<div class="rail-bottom">
 		{#if collapsed}
-			<a class="collapsed-account" href="/settings/account" aria-label="Account" title="Account">
+			<a
+				class="collapsed-account"
+				href="/settings/account"
+				aria-label="Account"
+				title="Account"
+				onclick={(event) => followAppPageLink(event, '/settings/account')}
+			>
 				{accountInitial(username)}
 			</a>
 		{:else}

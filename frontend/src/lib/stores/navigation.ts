@@ -42,6 +42,7 @@ import {
 	detailTab,
 	isLibraryHistoryState,
 	libraryHistoryEntry,
+	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	librarySurface,
 	libraryRootState,
@@ -129,20 +130,26 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 }
 
 // A dirty editor draft blocks a song switch or leave (rail row, prev/next,
-// breadcrumb, Escape, Library) until the owner resolves it: the deferred
-// navigation is parked here, and SongDetailView — the only surface where a
-// draft can be dirty — renders the Save / Discard / Cancel confirm and
-// either runs the parked action (Discard, or Save then run it) or drops it
-// (Cancel).
+// breadcrumb, Escape, Library, a collection opened anywhere, a rail page
+// link, Logout) until the owner resolves it: the deferred navigation is
+// parked here, and SongDetailView renders the Save / Discard / Cancel
+// confirm and either runs the parked action (Discard, or Save then run it)
+// or drops it (Cancel). Only the song's own surface can dirty a draft, and
+// a way out that skips this guard unmounts that confirm while the draft
+// stays dirty, so a later guarded tap would park with no one to ask
+// (issue #1143).
 export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
 
 // The single gatekeeper for every navigation that would drop the current
 // editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
 // instead of running it (see the comment above), a clean draft runs it
 // immediately. Every song-switch/leave entry point must route through this
-// — never re-implement the if/else inline.
+// — never re-implement the if/else inline. The phone drawer closes over a
+// parked navigation: the question now belongs to the song behind it, and
+// Keep editing must land on that draft, not on the drawer (issue #1143).
 async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
 	if (get(isDirty)) {
+		closeSidebar();
 		pendingDirtyNavigation.set(action);
 		return;
 	}
@@ -212,33 +219,37 @@ selectedPlaylist.subscribe((playlist) => {
 	syncPlaylistAddressToRename(playlist);
 });
 
-export async function openAlbum(albumId: string): Promise<void> {
-	storeDeselectPlaylist();
-	setOpenCollection({ kind: 'album', id: albumId });
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	void loadSongsForAlbum(albumId);
-	setLibrarySurface('detail');
-	closeSidebar();
-	await pushLibraryHistory();
+export function openAlbum(albumId: string): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		storeDeselectPlaylist();
+		setOpenCollection({ kind: 'album', id: albumId });
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		void loadSongsForAlbum(albumId);
+		setLibrarySurface('detail');
+		closeSidebar();
+		await pushLibraryHistory();
+	});
 }
 
-export async function openPlaylist(playlistId: string): Promise<void> {
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	void loadPlaylistDetail(playlistId);
-	// A playlist can be opened before playlistList is populated (Shares
-	// inventory, a deep link, mobile without the Rail mounted) --
-	// PlaylistDetailView falls back to the detail fetch for its header
-	// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
-	// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
-	// to build the /playlist/<slug> address — without it, the write would
-	// fall back to '/' for exactly the callers that need it most (issue
-	// #286).
-	await ensurePlaylistsLoaded();
-	setLibrarySurface('detail');
-	closeSidebar();
-	await pushLibraryHistory();
+export function openPlaylist(playlistId: string): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		void loadPlaylistDetail(playlistId);
+		// A playlist can be opened before playlistList is populated (Shares
+		// inventory, a deep link, mobile without the Rail mounted) --
+		// PlaylistDetailView falls back to the detail fetch for its header
+		// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
+		// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
+		// to build the /playlist/<slug> address — without it, the write would
+		// fall back to '/' for exactly the callers that need it most (issue
+		// #286).
+		await ensurePlaylistsLoaded();
+		setLibrarySurface('detail');
+		closeSidebar();
+		await pushLibraryHistory();
+	});
 }
 
 // The rail search has one selected result and therefore one destination. Its
@@ -261,8 +272,37 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openLibraryWall();
 		return;
 	}
-	await goto(resolve(target.href), { replaceState: get(railDrawerLayered) });
-	closeSidebar();
+	await openAppPage(target.href);
+}
+
+// A rail page link (a Settings row, the account name, a search hit that
+// names a page) leaves the song for an app page, so it asks the same
+// dirty-draft question as every other way out before it navigates.
+export type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
+
+function openAppPage(href: AppPageHref): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		await libraryHistoryStepsLanded();
+		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
+		closeSidebar();
+	});
+}
+
+// An app-page `<a href>` inside the shell or the song surface: a plain click
+// goes through `openAppPage`, while a modified or non-primary click (a new
+// tab or window) keeps the browser default, because it never leaves the song.
+export function followAppPageLink(event: MouseEvent, href: AppPageHref): void {
+	const opensElsewhere =
+		event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+	if (opensElsewhere) return;
+	event.preventDefault();
+	void openAppPage(href);
+}
+
+// Logout drops the session and with it the draft, so it asks the same
+// dirty-draft question first.
+export function leaveForLogout(logout: () => void | Promise<void>): Promise<void> {
+	return guardDirtyNavigation(logout);
 }
 
 // The rail context's header and the collection crumb in a song's breadcrumb

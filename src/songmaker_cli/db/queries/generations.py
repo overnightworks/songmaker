@@ -106,8 +106,10 @@ def create_generation(
     wav_path: str | None = None,
     src_generation_id: str | None = None,
     generation_id: str | None = None,
+    *,
+    created_by: str,
 ) -> Generation:
-    """Create the row for a completed generation.
+    """Create the row for a completed generation, naming the user who made it.
 
     The stored MP3 filename is canonicalized against ``audio_dir`` before the
     row is added. Its measured duration is stored on ``audio_duration_sec`` —
@@ -136,6 +138,7 @@ def create_generation(
         generation_params=generation_params,
         model_mode=model_mode,
         src_generation_id=src_generation_id,
+        created_by=created_by,
         status=JobStatus.COMPLETED,
     )
     if generation_id is not None:
