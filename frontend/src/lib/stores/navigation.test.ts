@@ -3,6 +3,7 @@ import {
 	historyLength,
 	pressBack,
 	pressForward,
+	reloadLibraryPage,
 	replaceHistoryEntry,
 	watchBack
 } from '$lib/test-utils/library-history';
@@ -16,6 +17,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import { fakePage, reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
@@ -26,7 +29,8 @@ import {
 	isLibraryHistoryState,
 	libraryScrollAnchor,
 	librarySurface,
-	loadLibraryHistoryPageForTests,
+	openPlaylistAddress,
+	openSongAddress,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
@@ -56,6 +60,7 @@ import {
 	API_ERROR_GENERIC_MESSAGE,
 	EDITOR_SAVE_FAILED,
 	SONG_LINK_NOT_FOUND_TOAST,
+	LIBRARY_HISTORY_KIND,
 	TAKES_ERROR,
 	TAKES_RETRY_LABEL
 } from '$lib/constants';
@@ -201,6 +206,7 @@ beforeEach(() => {
 	// selectedSong subscription in navigation.ts before this line clears it.
 	resetCollectionForTests();
 	replaceHistoryEntry('/');
+	startFakeRouter();
 	vi.mocked(goto).mockClear();
 });
 
@@ -212,6 +218,17 @@ afterEach(() => {
 	resetPlaylists();
 	resetCollectionForTests();
 });
+
+// The options a library write that crosses a route boundary navigates with:
+// the library travels as the page state of the entry (issue #1165).
+function crossingWrite(replaceState: boolean) {
+	return {
+		replaceState,
+		noScroll: true,
+		keepFocus: true,
+		state: { library: expect.objectContaining({ kind: LIBRARY_HISTORY_KIND }) }
+	};
+}
 
 describe('isLibraryWorkspacePath', () => {
 	it('is the home path and every album, song, and playlist address', () => {
@@ -234,18 +251,17 @@ describe('isLibraryWorkspacePath', () => {
 });
 
 // A history write that changes the route pattern (/ <-> /album/<slug>) must
-// reach SvelteKit's router, not just the address bar: a raw write leaves the
-// router mounting the route it last saw, and the next Back/Forward or real
+// navigate, not just move the address bar: shallow routing leaves the router
+// mounting the route it last saw, and the next Back/Forward or real
 // navigation that disagrees tears the workspace down mid-session. The
 // interaction with the router is the contract here, so it is asserted directly.
+// A crossing pushed from a library page stands in history at once, and the
+// router mounts its route by writing over that entry (issue #1165).
 describe('history writes across the route boundary (issue #269)', () => {
 	it('opens an album address through the router', async () => {
+		replaceHistoryEntry('/', libraryRootState());
 		await openAlbum('a1');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1');
 		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a1' });
 	});
@@ -254,11 +270,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		await openAlbum('a1');
 		vi.mocked(goto).mockClear();
 		await openLibraryWall();
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(true));
 		expect(window.location.pathname).toBe('/');
 		expect(historyEntry().surface).toBe('browse');
 	});
@@ -299,12 +311,37 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	// Issue #1165: the song shows the moment it opens, a task before the router
+	// has loaded its route, and a Back pressed then must step once.
+	it('lands a Back pressed while the song route still loads on the album it was opened from', async () => {
+		await openAlbum('a1');
+		const album = historyEntry();
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+
+		void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+		await pressBack();
+
+		expect(window.location.pathname).toBe('/album/a1');
+		expect(historyEntry()).toEqual(album);
+	});
+
+	// An address its route stated as unknown or unreachable wrote no library
+	// state, so Back onto it must load that route again to state it once more
+	// instead of applying the wall under its address.
+	it('crosses from an address without a library entry by one navigation Back loads again', async () => {
+		replaceHistoryEntry('/album/a1');
+		startFakeRouter();
+		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
+
+		await openPlaylist('p1');
+		await pressBack();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/a1' });
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', crossingWrite(false));
 	});
 
 	// Moving between two songs of the same open album stays the same route
@@ -328,7 +365,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// #275-review bycatch, pinned here as issue #281 promised: a song-to-song
 	// move across album boundaries is still the same route file
 	// (/album/[slug]/[song]/+page.svelte matches both, whichever album the
-	// slug names), so it stays the frequent-churn raw write too -- only the
+	// slug names), so it stays frequent-churn shallow routing too -- only the
 	// route.id shape decides a crossing, never which resource it names.
 	it('writes a song-to-song move across album boundaries straight to history too', async () => {
 		songList.set([
@@ -360,11 +397,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		persistLibraryHistory();
 
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1/take/1'));
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1/take/1', {
-			replaceState: true,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1/s1/take/1', crossingWrite(true));
 	});
 
 	// Moving between two takes of the same open song stays the same route
@@ -403,11 +436,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 
 		await openPlaylist('p1');
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/playlist/night-drive', crossingWrite(true));
 		expect(window.location.pathname).toBe('/playlist/night-drive');
 	});
 
@@ -617,16 +646,100 @@ describe('opening a collection from off the library route', () => {
 	// would have taken the cheap same-shape branch -- a raw `history.
 	// pushState` that changes the address bar to '/' while SvelteKit's router
 	// stays mounted on Settings' route file underneath it.
-	it('openLibraryWall leaves settings for the wall through the router, not a raw history write', async () => {
+	it('openLibraryWall leaves settings for the wall through a navigation, not shallow routing', async () => {
 		replaceHistoryEntry('/settings/voices');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
 		expect(get(librarySurface)).toBe('browse');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', {
-			replaceState: false,
-			noScroll: true,
-			keepFocus: true
-		});
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(false));
+	});
+});
+
+// Back and Forward between the library and an app page (issue #1165): every
+// library entry is the router's own, so the router navigates between the two
+// pages instead of only moving the address.
+describe('Back and Forward across an app page', () => {
+	const SETTINGS = '/settings/voices' as const;
+
+	function lastNavigation(): { type: string; pathname: string } | undefined {
+		return reportedNavigations.at(-1);
+	}
+
+	beforeEach(() => {
+		fetchPlaylists.mockResolvedValue([
+			playlistItem({ share_slug: null }),
+			playlistItem({ share_slug: null, id: 'p2', slug: 'morning-run', title: 'Morning Run' })
+		]);
+	});
+
+	it('Back from Settings returns to the playlist left, and Forward to Settings', async () => {
+		await openPlaylist('p1');
+		captureLibraryScroll(320);
+		persistLibraryHistory();
+		const left = historyEntry();
+		await goto(resolve(SETTINGS));
+
+		await pressBack();
+
+		expect(lastNavigation()).toEqual({ type: 'popstate', pathname: '/playlist/night-drive' });
+		expect(location.pathname).toBe('/playlist/night-drive');
+		expect(historyEntry()).toEqual(left);
+
+		await pressForward();
+
+		expect(lastNavigation()).toEqual({ type: 'popstate', pathname: SETTINGS });
+		expect(location.pathname).toBe(SETTINGS);
+	});
+
+	// The second playlist is shallow routing over the first one's page, so Back
+	// loads that page's route; its address route yields to the entry.
+	it('Back from Settings onto a playlist opened over another shows the one left', async () => {
+		await openPlaylist('p1');
+		await openPlaylist('p2');
+		await goto(resolve(SETTINGS));
+
+		await pressBack();
+
+		expect(fakePage.url.pathname).toBe('/playlist/night-drive');
+		expect(location.pathname).toBe('/playlist/morning-run');
+		await expect(openPlaylistAddress('night-drive')).resolves.toBe('found');
+		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p2' });
+		expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p2' });
+	});
+
+	// SvelteKit cannot tell two entries of one navigation apart after a reload,
+	// so Back between them is a navigation of its own there, and shallow
+	// otherwise.
+	it.each([
+		{ reloaded: false, navigation: { type: 'goto', pathname: '/playlist/night-drive' } },
+		{ reloaded: true, navigation: { type: 'popstate', pathname: '/playlist/night-drive' } }
+	])(
+		'Back onto a playlist another was opened over reports $navigation.type (reloaded: $reloaded)',
+		async ({ reloaded, navigation }) => {
+			await openPlaylist('p1');
+			await openPlaylist('p2');
+			if (reloaded) await reloadLibraryPage();
+
+			await pressBack();
+
+			expect(lastNavigation()).toEqual(navigation);
+			expect(location.pathname).toBe('/playlist/night-drive');
+			expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p1' });
+		}
+	);
+
+	it('Back from Settings after a reload returns to the playlist with what it showed', async () => {
+		await openPlaylist('p1');
+		captureLibraryScroll(480);
+		persistLibraryHistory();
+		const left = historyEntry();
+		await reloadLibraryPage();
+		await goto(resolve(SETTINGS));
+
+		await pressBack();
+
+		expect(lastNavigation()).toEqual({ type: 'popstate', pathname: '/playlist/night-drive' });
+		expect(historyEntry()).toEqual(left);
 	});
 });
 
@@ -1323,6 +1436,29 @@ describe('revealPlayingSong', () => {
 // the id -> slug/number lookup and its unknown-song 404, and
 // e2e/album-address.spec.ts covers the redirect landing on the real router.
 describe('initNavigation', () => {
+	it('applies the library a popstate lands on from its router entry', async () => {
+		const cleanup = initNavigation();
+		const album = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a2' }
+		};
+
+		window.dispatchEvent(
+			new PopStateEvent('popstate', {
+				state: {
+					'sveltekit:history': 7,
+					'sveltekit:navigation': 3,
+					'sveltekit:states': { library: album }
+				}
+			})
+		);
+
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' }));
+		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
 	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
 		replaceHistoryEntry('/');
 		await openAlbum('a1');
@@ -1366,6 +1502,38 @@ describe('initNavigation', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 
 		expect(updateSong).toHaveBeenCalledTimes(1);
+		cleanup();
+	});
+
+	// After a reload, Back onto the song opened before the one shown is a
+	// router navigation, which resolves that song's address while the draft
+	// left behind is still saving.
+	it('the address route of the song Back lands on waits for the draft left to save', async () => {
+		const tide = song({ ...navigableSongDefaults(), slug: 's1' });
+		const other = song({ ...navigableSongDefaults(), id: 's2', slug: 's2', album_id: 'a2' });
+		songList.set([tide, other]);
+		fetchSong.mockResolvedValue(tide);
+		await selectSong('s1');
+		await selectSong('s2', other);
+		await reloadLibraryPage();
+		const cleanup = initNavigation();
+		loadSongData(other);
+		setDraftLyrics('unsaved edit');
+		let resolveSave: (value: SongItem) => void = () => undefined;
+		vi.mocked(updateSong).mockReturnValue(
+			new Promise((resolve) => {
+				resolveSave = resolve;
+			})
+		);
+
+		await pressBack();
+		const routed = openSongAddress('a1', 's1');
+		await new Promise((everyQueuedMicrotaskRan) => setTimeout(everyQueuedMicrotaskRan));
+
+		expect(get(selectedSongId)).toBe('s2');
+		resolveSave({ ...other, lyrics: 'unsaved edit' });
+		await expect(routed).resolves.toBe('found');
+		expect(get(selectedSongId)).toBe('s1');
 		cleanup();
 	});
 
@@ -1453,13 +1621,6 @@ describe('full Now Playing owns one history entry', () => {
 		}
 	];
 
-	// What SvelteKit's single-page start writes over the entry a page loads onto.
-	const SVELTEKIT_START_ENTRY = {
-		'sveltekit:history': 1,
-		'sveltekit:navigation': 1,
-		'sveltekit:states': {}
-	};
-
 	let stopNavigation: () => void = () => undefined;
 
 	beforeEach(() => {
@@ -1529,20 +1690,19 @@ describe('full Now Playing owns one history entry', () => {
 		discardDraft();
 	});
 
-	function reloadBeforeNavigationStarts(): void {
+	async function reloadBeforeNavigationStarts(): Promise<void> {
 		persistLibraryHistory();
 		stopNavigation();
 		resetNavigationForTests();
 		closeNowPlaying();
-		loadLibraryHistoryPageForTests();
-		replaceHistoryEntry(location.href, SVELTEKIT_START_ENTRY);
+		await reloadLibraryPage();
 	}
 
 	it.each([
 		{
 			way: 'a reload',
-			reach: () => {
-				reloadBeforeNavigationStarts();
+			reach: async () => {
+				await reloadBeforeNavigationStarts();
 				stopNavigation = initNavigation();
 			}
 		},
@@ -1580,7 +1740,7 @@ describe('full Now Playing owns one history entry', () => {
 		sheet.set(true);
 		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
 
-		reloadBeforeNavigationStarts();
+		await reloadBeforeNavigationStarts();
 		stopNavigation = initNavigation();
 
 		await vi.waitFor(() => {
@@ -1602,7 +1762,7 @@ describe('full Now Playing owns one history entry', () => {
 		const playlistPath = location.pathname;
 		openNowPlaying('take');
 		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
-		reloadBeforeNavigationStarts();
+		await reloadBeforeNavigationStarts();
 		await pressBack();
 
 		stopNavigation = initNavigation();
@@ -1824,11 +1984,8 @@ describe('the phone rail drawer owns one history entry', () => {
 			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })
 		},
 		{
-			way: 'a Settings link, which replaces the drawer entry before the drawer closes',
-			go: async () => {
-				replaceHistoryEntry('/settings/voices');
-				closeSidebar();
-			}
+			way: 'a Settings link',
+			go: () => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
 		}
 	])(
 		'leaving the drawer by $way leaves no entry behind: one Back lands on the playlist entry',
@@ -1847,6 +2004,27 @@ describe('the phone rail drawer owns one history entry', () => {
 			});
 		}
 	);
+
+	// Issue #1165: a page written over the drawer's entry would keep that
+	// entry's place among the router's navigations, and Back onto the playlist
+	// would then move the address without loading the playlist's page.
+	it('a Settings link pushes Settings over the playlist: Back navigates to the playlist, Forward to Settings', async () => {
+		const { below, path } = await openDrawer();
+
+		followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices');
+		await vi.waitFor(() => expect(location.pathname).toBe('/settings/voices'));
+		await pressBack();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: path });
+		expect(historyEntry()).toMatchObject({
+			index: below,
+			collection: { kind: 'playlist', id: 'p1' }
+		});
+
+		await pressForward();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/settings/voices' });
+	});
 
 	it('marks the drawer as a layer so a link inside it replaces the entry', async () => {
 		await openDrawer();
@@ -2085,7 +2263,7 @@ describe('openRailSearchTarget', () => {
 
 		expect(get(sidebarOpen)).toBe(false);
 		expect(window.location.pathname).toBe('/settings/playback');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback', { replaceState: false });
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
 	});
 });
 

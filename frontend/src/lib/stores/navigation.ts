@@ -40,6 +40,7 @@ import {
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
+	holdLibraryRestoresUntil,
 	isLibraryHistoryState,
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
@@ -51,7 +52,6 @@ import {
 	setLibrarySurface,
 	showSongTab,
 	snapshotLibraryHistory,
-	takeRestoredLibraryHistory,
 	writeLibraryHistory,
 	type DetailTab,
 	type LibraryHistoryState
@@ -72,7 +72,7 @@ function currentHistoryIndex(): number {
 }
 
 // Every history write in this module goes through writeLibraryHistory, which
-// owns the choice between a raw write and a router navigation; see the note on
+// owns the choice between shallow routing and a navigation; see the note on
 // it in libraryContext.ts. The promise matters only to a caller that writes
 // again straight afterwards -- a crossing write is asynchronous.
 function replaceLibraryHistory(): Promise<void> {
@@ -275,16 +275,22 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 	await openAppPage(target.href);
 }
 
-// A rail page link (a Settings row, the account name, a search hit that
-// names a page) leaves the song for an app page, so it asks the same
-// dirty-draft question as every other way out before it navigates.
+// An app-page link (a Settings row, the account name or its menu, a search hit
+// that names a page) leaves the song for an app page, so it asks the same
+// dirty-draft question as every other way out before it navigates. The phone
+// drawer closes first and its entry steps back, and the page is pushed only
+// once that step has landed: SvelteKit keeps a replaced entry's navigation
+// index, so a page written over the drawer's shallow entry would share its
+// index with the library entry below, and Back onto it would move the address
+// without loading the library (issue #1165). A step still in flight when the
+// page starts loading would abort it, which is why the push waits.
 type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
-function openAppPage(href: AppPageHref): Promise<void> {
+export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
-		await libraryHistoryStepsLanded();
-		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
 		closeSidebar();
+		await libraryHistoryStepsLanded();
+		await goto(resolve(href));
 	});
 }
 
@@ -816,17 +822,14 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
-	const restored = takeRestoredLibraryHistory();
-	const staleLanding = staleLayerEntryLanding(
-		isLibraryHistoryState(restored) ? restored : existing
-	);
+	const staleLanding = staleLayerEntryLanding(existing);
 	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {
 		const state = libraryHistoryEntry(e.state);
 		if (popsHistoryLayers(state)) return;
 		void (async () => {
-			await saveDirtyDraftBeforePopstate();
+			await holdLibraryRestoresUntil(saveDirtyDraftBeforePopstate());
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {
