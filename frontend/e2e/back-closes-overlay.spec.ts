@@ -602,6 +602,40 @@ test.describe('Back and Forward between the library and Settings', () => {
 	});
 });
 
+// Issue #1165: the library shows a song the moment it opens, before the
+// router has loaded the song's route. Back pressed then must still step once,
+// onto the album -- the race is one of milliseconds, so the song opens more
+// than once, each time pressed as soon as it shows.
+const SONG_OPENS = 4;
+
+test('one Back right after a song opens from its album returns to the album', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const surface = workspace(page);
+	await page.goto('/');
+	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
+	const album = surface.getByRole('heading', { name: library.albumTitle });
+	await expect(album).toBeVisible();
+	const albumAddress = page.url();
+	const song = songBar(page, shellOf(testInfo)).getByRole('heading', {
+		name: library.pickedSongTitle
+	});
+	const songRow = surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
+
+	for (let open = 1; open <= SONG_OPENS; open += 1) {
+		await songRow.click();
+		await expect(song).toBeVisible();
+
+		await page.goBack();
+
+		await expect(album).toBeVisible();
+		expect(page.url()).toBe(albumAddress);
+	}
+	guard.assertClean();
+});
+
 interface CreatedAlbum {
 	id: string;
 }
