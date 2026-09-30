@@ -1,8 +1,0 @@
-claim_id = "cca0a849d7cd4c22a6e1fba447d51528"
-agent = "claude-head"
-role = "builder"
-base = "14960d322c1a5c8c200be173d2bfb8fd6eed58f0"
-branch = "claude/issue-1141-job-outages"
-scope = ["frontend/e2e/offline.spec.ts", "frontend/src/lib/stores/connectivity.test.ts", "frontend/src/lib/stores/connectivity.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/toast.test.ts", "frontend/src/lib/stores/toast.ts"]
-opened_commit = "e79f6d1ab745633fd44549bba0578aa7a50e5ef0"
-whole_reason = "the job stream keeps a running take through repeated outages and offline action failures clear on return"
