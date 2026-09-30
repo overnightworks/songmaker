@@ -287,9 +287,40 @@ describe('AlbumCoverEditor in the album header', () => {
 			)
 		);
 
-		expect(countLine(target)).toBe('1 / 1 · 7 of 10 left today');
+		expect(countLine(target)).toBe('7 of 10 left today');
 		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(false);
 	});
+
+	it.each([
+		{ before: 'no suggestion', made: [], counted: '9 of 10 left today' },
+		{
+			before: 'two suggestions',
+			made: THREE_SUGGESTIONS.suggestions.slice(0, 2),
+			counted: '2 / 2 · 7 of 10 left today'
+		}
+	])(
+		'a failed suggestion after $before shows its failure but counts only the suggestions that exist',
+		async ({ made, counted }) => {
+			albumList.set([coveredAlbum()]);
+			fetchAlbumCoverSuggestions.mockResolvedValue(
+				coverSuggestions({
+					suggestions: made,
+					job: coverJob({ status: 'failed', error: 'Cover suggestion could not be generated' }),
+					used_today: made.length + 1
+				})
+			);
+			const target = await renderDetail();
+
+			await openCoverEditing(target);
+			await vi.waitFor(() =>
+				expect(target.querySelector('.cover-stage [role="alert"]')?.textContent).toContain(
+					'Couldn’t make a cover suggestion'
+				)
+			);
+
+			expect(countLine(target)).toBe(counted);
+		}
+	);
 
 	it('opens a cover already set with a quiet Remove and makes nothing by itself', async () => {
 		albumList.set([coveredAlbum()]);
@@ -364,7 +395,7 @@ describe('AlbumCoverEditor in the album header', () => {
 
 		pressEditorButton(target, 'Suggest another');
 
-		await vi.waitFor(() => expect(countLine(target)).toBe('3 / 3 · 7 of 10 left today'));
+		await vi.waitFor(() => expect(countLine(target)).toBe('2 / 2 · 7 of 10 left today'));
 		expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull();
 		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
 		FakeJobEventSource.sources[0].emit(coverJob({ status: 'completed', progress: 1 }));
