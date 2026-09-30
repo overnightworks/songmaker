@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "2b0be451c574a70351a4228475398097bd18a5ae"
 branch = "claude/issue-1155-continue-my-work"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/test_library_api.py", "tests/test_mcp_server.py", "tests/test_postgresql.py", "tests/test_song_api.py", "tests/test_song_work.py"]
+scope = ["docs/architecture.md", "frontend/src/lib/stores/libraryOrder.ts", "src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/test_library_api.py", "tests/test_mcp_server.py", "tests/test_postgresql.py", "tests/test_song_api.py", "tests/test_song_work.py"]
 opened_commit = "1d3220261c82ff1cc42cc41affb9c62889938c3d"
 whole_reason = "Continue ranks foreign places by the viewer's own work, owned places unchanged, with create/no-op rules and PostgreSQL proof"
