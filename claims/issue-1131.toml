@@ -1,7 +1,0 @@
-claim_id = "b697164d298f4e6680e190a66895e3e4"
-agent = "claude-head"
-role = "builder"
-base = "fa7207b1fa725719710840dd65a52e09fbd63fac"
-branch = "claude/issue-1131-pyjwt"
-scope = [".github/workflows/security.yml", "uv.lock"]
-opened_commit = "0716e66315a45c191c126b2c7778bd9b80bd7cd3"
