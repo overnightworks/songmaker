@@ -345,6 +345,7 @@ describe('jobs store', () => {
 		await spendTheBudgetOnline();
 
 		expect(get(activeJobs).map((active) => active.job.progress)).toEqual([0.7]);
+		expect(get(activeJobs)[0].streamStale).toBe(true);
 		const opensAfterTheReread = MockEventSource.instances.length;
 		await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
 		expect(MockEventSource.instances).toHaveLength(opensAfterTheReread + 1);
