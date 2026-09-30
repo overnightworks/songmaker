@@ -1,4 +1,4 @@
-import { expect, test, type Locator, type Page } from '@playwright/test';
+import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
 	COLLECTION_MENU_LABEL,
 	collectionPlayLabel,
@@ -288,11 +288,31 @@ function backReaches(reached: LibraryPage): OverlayRow['afterwards'] {
 	};
 }
 
-async function backThenForwardReturnsToSettings(page: Page): Promise<void> {
-	await page.goBack();
-	await page.goForward();
+function settingsHeading(page: Page): Locator {
+	return page.getByRole('heading', { name: SETTINGS_SECTION_HEADING });
+}
+
+async function expectSettingsStands(page: Page): Promise<void> {
 	await expect(page).toHaveURL(/\/settings\/voices$/);
-	await expect(page.getByRole('heading', { name: SETTINGS_SECTION_HEADING })).toBeVisible();
+	await expect(settingsHeading(page)).toBeVisible();
+}
+
+async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
+	const rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
+	await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
+	await expectSettingsStands(page);
+}
+
+// Issue #1165: Back leaves Settings for the playlist it was opened over, with
+// the playlist on screen, and Forward shows Settings again.
+async function backThenForwardReturnsToSettings(page: Page, pages: Pages): Promise<void> {
+	await page.goBack();
+	await expectPlaylistStands(page, pages);
+	await expect(settingsHeading(page)).toBeHidden();
+	await page.goForward();
+	await expectSettingsStands(page);
+	await expect(pages.playlist).toBeHidden();
 }
 
 const OVERLAY_ROWS: OverlayRow[] = [
@@ -331,7 +351,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
 		},
 		expectLeft: async (page) => {
-			await expect(page).toHaveURL(/\/settings\/voices$/);
+			await expectSettingsStands(page);
 			await expect(railDrawer(page)).toBeHidden();
 		},
 		afterwards: backThenForwardReturnsToSettings
@@ -421,25 +441,34 @@ const OVERLAY_ROWS: OverlayRow[] = [
 	}
 ];
 
+function wallTiles(page: Page): Locator {
+	return workspace(page).locator('.library-wall .tile-grid');
+}
+
+// A fresh playlist, opened from the wall the way a person does: one entry for
+// the wall, one for the playlist.
+async function openSeededPlaylist(
+	page: Page,
+	request: APIRequestContext
+): Promise<{ playlist: SeededPlaylist; pages: Pages }> {
+	const playlist = await seedPlaylist(request, readSeededLibrary());
+	const surface = workspace(page);
+	await page.goto('/');
+	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+	await expect(wall).toBeVisible();
+	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: playlist.title }).click();
+	const playlistHeading = surface.getByRole('heading', { name: playlist.title });
+	await expect(playlistHeading).toBeVisible();
+	await expect(page).toHaveURL(/\/playlist\//);
+	return { playlist, pages: { wall, playlist: playlistHeading, playlistAddress: page.url() } };
+}
+
 test.describe('Back closes the open overlay first', () => {
 	for (const row of OVERLAY_ROWS) {
 		test(row.name, async ({ page, request }, testInfo) => {
 			test.skip(shellOf(testInfo) !== row.shell, `The row belongs to the ${row.shell} shell.`);
 			const guard = new FlowGuard(page);
-			const playlist = await seedPlaylist(request, readSeededLibrary());
-			const surface = workspace(page);
-			await page.goto('/');
-			const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
-			await expect(wall).toBeVisible();
-			await surface
-				.locator('.library-wall .tile-grid')
-				.locator('.wall-tile-body')
-				.filter({ hasText: playlist.title })
-				.click();
-			const playlistHeading = surface.getByRole('heading', { name: playlist.title });
-			await expect(playlistHeading).toBeVisible();
-			await expect(page).toHaveURL(/\/playlist\//);
-			const pages: Pages = { wall, playlist: playlistHeading, playlistAddress: page.url() };
+			const { playlist, pages } = await openSeededPlaylist(page, request);
 
 			await row.open(page, playlist);
 			await row.leave(page, playlist);
@@ -449,6 +478,95 @@ test.describe('Back closes the open overlay first', () => {
 			guard.assertClean();
 		});
 	}
+});
+
+// Issue #1165: Settings is a page of its own, and Back and Forward move
+// between it and the library page it was opened over -- after a reload too.
+test.describe('Back and Forward between the library and Settings', () => {
+	test('Back from Settings returns to the playlist left, and Forward to Settings', async ({
+		page,
+		request
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		await backThenForwardReturnsToSettings(page, pages);
+		guard.assertClean();
+	});
+
+	test('after a reload on the playlist, Back from Settings returns to it', async ({
+		page,
+		request
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await page.reload();
+		await expectPlaylistStands(page, pages);
+
+		await openVoicesSettings(page, shellOf(testInfo));
+		await page.goBack();
+
+		await expectPlaylistStands(page, pages);
+		await expect(settingsHeading(page)).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('after a reload on the playlist, Back shows the wall it was opened from', async ({
+		page,
+		request
+	}) => {
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await page.reload();
+		await expectPlaylistStands(page, pages);
+
+		await page.goBack();
+
+		await expectReached(page, pages, 'wall');
+		await expect(pages.playlist).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('Back from Settings onto the wall leaves focus out of its tiles', async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		await page.goto('/');
+		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		await expect(wall).toBeVisible();
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		await page.goBack();
+
+		await expect(wall).toBeVisible();
+		await expect(page).toHaveURL(/\/$/);
+		await expect(wallTiles(page).locator(':focus')).toHaveCount(0);
+		guard.assertClean();
+	});
+
+	test('the phone drawer left open over a reload is gone, and one Back reaches the wall', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		await openRailDrawer(page);
+
+		await page.reload();
+
+		await expect(railDrawer(page)).toBeHidden();
+		await expectPlaylistStands(page, pages);
+		// The library steps off the drawer's own entry by itself once it runs.
+		await expect
+			.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
+			.toBe(false);
+		await page.goBack();
+		await expectReached(page, pages, 'wall');
+		guard.assertClean();
+	});
 });
 
 interface CreatedAlbum {
