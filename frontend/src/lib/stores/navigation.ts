@@ -129,7 +129,8 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 }
 
 // A dirty editor draft blocks a song switch or leave (rail row, prev/next,
-// breadcrumb, Escape, Library) until the owner resolves it: the deferred
+// breadcrumb, Escape, Library, a collection opened anywhere) until the owner
+// resolves it: the deferred
 // navigation is parked here, and SongDetailView — the only surface where a
 // draft can be dirty — renders the Save / Discard / Cancel confirm and
 // either runs the parked action (Discard, or Save then run it) or drops it
@@ -140,9 +141,12 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
 // instead of running it (see the comment above), a clean draft runs it
 // immediately. Every song-switch/leave entry point must route through this
-// — never re-implement the if/else inline.
+// — never re-implement the if/else inline. The phone drawer closes over a
+// parked navigation: the question now belongs to the song behind it, and
+// Keep editing must land on that draft, not on the drawer (issue #1143).
 async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
 	if (get(isDirty)) {
+		closeSidebar();
 		pendingDirtyNavigation.set(action);
 		return;
 	}
@@ -212,33 +216,37 @@ selectedPlaylist.subscribe((playlist) => {
 	syncPlaylistAddressToRename(playlist);
 });
 
-export async function openAlbum(albumId: string): Promise<void> {
-	storeDeselectPlaylist();
-	setOpenCollection({ kind: 'album', id: albumId });
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	void loadSongsForAlbum(albumId);
-	setLibrarySurface('detail');
-	closeSidebar();
-	await pushLibraryHistory();
+export function openAlbum(albumId: string): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		storeDeselectPlaylist();
+		setOpenCollection({ kind: 'album', id: albumId });
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		void loadSongsForAlbum(albumId);
+		setLibrarySurface('detail');
+		closeSidebar();
+		await pushLibraryHistory();
+	});
 }
 
-export async function openPlaylist(playlistId: string): Promise<void> {
-	selectedSongId.set(null);
-	selectedGenerationId.set(null);
-	void loadPlaylistDetail(playlistId);
-	// A playlist can be opened before playlistList is populated (Shares
-	// inventory, a deep link, mobile without the Rail mounted) --
-	// PlaylistDetailView falls back to the detail fetch for its header
-	// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
-	// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
-	// to build the /playlist/<slug> address — without it, the write would
-	// fall back to '/' for exactly the callers that need it most (issue
-	// #286).
-	await ensurePlaylistsLoaded();
-	setLibrarySurface('detail');
-	closeSidebar();
-	await pushLibraryHistory();
+export function openPlaylist(playlistId: string): Promise<void> {
+	return guardDirtyNavigation(async () => {
+		selectedSongId.set(null);
+		selectedGenerationId.set(null);
+		void loadPlaylistDetail(playlistId);
+		// A playlist can be opened before playlistList is populated (Shares
+		// inventory, a deep link, mobile without the Rail mounted) --
+		// PlaylistDetailView falls back to the detail fetch for its header
+		// meanwhile, but this is awaited (not fire-and-forget) so the playlist's
+		// slug is in hand before pushLibraryHistory below asks libraryHistoryUrl
+		// to build the /playlist/<slug> address — without it, the write would
+		// fall back to '/' for exactly the callers that need it most (issue
+		// #286).
+		await ensurePlaylistsLoaded();
+		setLibrarySurface('detail');
+		closeSidebar();
+		await pushLibraryHistory();
+	});
 }
 
 // The rail search has one selected result and therefore one destination. Its

@@ -1111,6 +1111,48 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
+	describe.each([
+		['an album', () => openAlbum('a2'), { kind: 'album', id: 'a2' }],
+		['a playlist', () => openPlaylist('p1'), { kind: 'playlist', id: 'p1' }]
+	] as const)('opening %s from the phone drawer (issue #1143)', (_name, open, opened) => {
+		async function openFromTheDrawerWithADirtyDraft(): Promise<void> {
+			await openAlbum('a1');
+			await selectSong('s1');
+			loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+			setDraftLyrics('unsaved edit');
+			toggleSidebar();
+			await open();
+		}
+
+		it('holds the leave for the unsaved-changes dialog and closes the drawer over it', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+
+			expect(get(pendingDirtyNavigation)).not.toBeNull();
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+			expect(get(sidebarOpen)).toBe(false);
+		});
+
+		it('leaves on Discard', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+			discardDraft();
+			await get(pendingDirtyNavigation)?.();
+			pendingDirtyNavigation.set(null);
+
+			expect(get(selectedSongId)).toBeNull();
+			expect(get(openCollection)).toEqual(opened);
+		});
+
+		it('stays with the draft on Keep editing', async () => {
+			await openFromTheDrawerWithADirtyDraft();
+			pendingDirtyNavigation.set(null);
+
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+			expect(get(editLyrics)).toBe('unsaved edit');
+		});
+	});
+
 	it('never prompts when the draft is clean', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
