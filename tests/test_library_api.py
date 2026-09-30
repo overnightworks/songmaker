@@ -22,6 +22,8 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_OLDEST,
     LIBRARY_SORT_TITLE,
     PAGE_MAX_LIMIT,
+    JobStatus,
+    JobType,
 )
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -29,12 +31,15 @@ from songmaker_cli.db.models import (
     ChatMessage,
     Conversation,
     Generation,
+    Job,
     Playlist,
     PlaylistEntry,
     Song,
     User,
+    UserSongWork,
     Version,
 )
+from songmaker_cli.db.queries import SongWork
 from songmaker_cli.library_api import CONTINUE_MAX_OFFSET
 
 USER_A = "user-a"
@@ -236,6 +241,22 @@ def _add_cowriter_message(
     session.add(ChatMessage(
         conversation_id=conversation.id, song_id=song_id, role="user",
         content="Tighten the chorus", created_at=created_at,
+    ))
+
+
+def _add_own_work(
+    session, *, user_id: str, song_id: str, work: SongWork, at: datetime,
+) -> None:
+    session.add(UserSongWork(user_id=user_id, song_id=song_id, **{work.value: at}))
+
+
+def _add_generate_job(
+    session, *, author: str, song_id: str, completed_at: datetime,
+    status: JobStatus = JobStatus.COMPLETED,
+) -> None:
+    session.add(Job(
+        type=JobType.GENERATE, status=status, user_id=author, song_id=song_id,
+        started_at=completed_at, completed_at=completed_at,
     ))
 
 
@@ -452,6 +473,174 @@ def test_continue_dates_a_place_by_its_newest_activity_and_names_its_song(
     assert (tile["song_title"] is None) == (song_id is None)
 
 
+FOREIGN_ALBUM = "foreign-album"
+
+
+def _foreign_album_its_owner_works_in(session) -> None:
+    """USER_B's album, created and worked in by USER_B after anything the admin does."""
+    _add_album(
+        session, album_id=FOREIGN_ALBUM, title="Vernissage", owner=USER_B,
+        created_at=_later(500),
+    )
+    for track, song_id in enumerate(("foreign-a", "foreign-b"), start=1):
+        _add_song(
+            session, song_id=song_id, title=song_id.replace("-", " ").title(),
+            album_id=FOREIGN_ALBUM, created_at=_later(500), updated_at=_later(510),
+            last_played_at=_later(520), track_number=track,
+        )
+        _add_take(session, generation_id=f"take-{song_id}", song_id=song_id, created_at=_later(530))
+        _add_cowriter_message(session, song_id=song_id, author=USER_B, created_at=_later(540))
+        _add_generate_job(session, author=USER_B, song_id=song_id, completed_at=_later(550))
+    session.flush()
+
+
+def _seed_foreign_album_the_admin_edited(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+    _add_own_work(
+        session, user_id=ADMIN_ID, song_id="foreign-a", work=SongWork.EDITED, at=_later(30),
+    )
+
+
+def _seed_foreign_album_the_admin_listened_to(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+    _add_own_work(
+        session, user_id=ADMIN_ID, song_id="foreign-a", work=SongWork.PLAYED, at=_later(35),
+    )
+
+
+def _seed_foreign_album_the_admin_made_a_take_in(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+    _add_generate_job(session, author=ADMIN_ID, song_id="foreign-a", completed_at=_later(40))
+
+
+def _seed_foreign_album_the_admin_wrote_with_the_co_writer_in(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+    _add_cowriter_message(session, song_id="foreign-a", author=ADMIN_ID, created_at=_later(45))
+
+
+def _seed_foreign_album_naming_the_admins_newest_song(session) -> None:
+    _seed_foreign_album_the_admin_edited(session)
+    _add_own_work(
+        session, user_id=ADMIN_ID, song_id="foreign-b", work=SongWork.PLAYED, at=_later(60),
+    )
+
+
+def _seed_foreign_album_worked_in_by_its_owner_only(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+
+
+def _seed_foreign_album_whose_admin_song_is_deleted(session) -> None:
+    _seed_foreign_album_the_admin_edited(session)
+    session.get(Song, "foreign-a").deleted_at = _later(31)
+
+
+def _seed_foreign_album_with_a_failed_admin_take(session) -> None:
+    _foreign_album_its_owner_works_in(session)
+    _add_generate_job(
+        session, author=ADMIN_ID, song_id="foreign-a", completed_at=_later(40),
+        status=JobStatus.FAILED,
+    )
+
+
+def _seed_archived_foreign_album_the_admin_edited(session) -> None:
+    _seed_foreign_album_the_admin_edited(session)
+    session.get(Album, FOREIGN_ALBUM).is_archived = True
+
+
+@pytest.mark.parametrize(
+    ("seed", "expected"),
+    [
+        (_seed_foreign_album_the_admin_edited, [(30, "foreign-a")]),
+        (_seed_foreign_album_the_admin_listened_to, [(35, "foreign-a")]),
+        (_seed_foreign_album_the_admin_made_a_take_in, [(40, "foreign-a")]),
+        (_seed_foreign_album_the_admin_wrote_with_the_co_writer_in, [(45, "foreign-a")]),
+        (_seed_foreign_album_naming_the_admins_newest_song, [(60, "foreign-b")]),
+        (_seed_foreign_album_worked_in_by_its_owner_only, []),
+        (_seed_foreign_album_whose_admin_song_is_deleted, []),
+        (_seed_foreign_album_with_a_failed_admin_take, []),
+        (_seed_archived_foreign_album_the_admin_edited, []),
+    ],
+    ids=[
+        "admin-edit",
+        "admin-listen",
+        "admin-take",
+        "admin-co-writer-message",
+        "names-the-admins-newest-song",
+        "owner-work-only-is-left-out",
+        "admin-work-on-a-deleted-song-is-left-out",
+        "failed-admin-take-is-left-out",
+        "archived-album-is-left-out",
+    ],
+)
+def test_an_admins_continue_ranks_a_foreign_album_by_the_admins_own_work_alone(
+    tmp_path: Path, seed: Callable, expected: list[tuple[int, str]],
+) -> None:
+    client, factory = _make_client(tmp_path, ADMIN_ID, role="admin")
+    with factory() as session:
+        seed(session)
+        session.commit()
+
+    items = _continue_items(client, limit=PAGE_MAX_LIMIT)
+
+    foreign = [
+        (item["id"], item["activity_at"], item["song_id"])
+        for item in items if item["id"] != "admin-own"
+    ]
+    assert foreign == [
+        (FOREIGN_ALBUM, _later(offset).isoformat(), song_id) for offset, song_id in expected
+    ]
+    assert items[-1]["id"] == "admin-own"
+
+
+def test_an_admins_edit_moves_both_continues_while_the_owners_edit_leaves_the_admins_alone(
+    library_ctx: tuple[object, object],
+) -> None:
+    factory, ctx = library_ctx
+    with factory() as session:
+        _add_album(
+            session, album_id="bob-other", title="Bob Other", owner=USER_B, created_at=_later(0),
+        )
+        _add_song(
+            session, song_id="song-bob-other", title="Other", album_id="bob-other",
+            created_at=_later(0),
+        )
+        session.commit()
+    admin = _client_for(ctx, ADMIN_ID, role="admin")
+    bob = _client_for(ctx, USER_B)
+    assert _continue_items(bob)[0]["id"] == "bob-other"
+    assert [item["id"] for item in _continue_items(admin)] == ["admin-own"]
+
+    assert admin.put("/api/songs/song-bob", json={"lyrics": "felix was here"}).status_code == 200
+
+    assert _continue_items(admin)[0]["id"] == "bob-secret"
+    assert _continue_items(bob)[0]["id"] == "bob-secret"
+
+    admin_continue = admin.get("/api/library/continue").content
+    for song_id in ("song-bob", "song-bob-other"):
+        assert bob.put(f"/api/songs/{song_id}", json={"lyrics": "leonardo"}).status_code == 200
+
+    assert admin.get("/api/library/continue").content == admin_continue
+
+
+def test_a_musicians_continue_ignores_their_own_work_on_albums_they_cannot_open(
+    library_ctx: tuple[object, object],
+) -> None:
+    factory, ctx = library_ctx
+    alice = _client_for(ctx, USER_A)
+    window = {"limit": PAGE_MAX_LIMIT}
+    before = alice.get("/api/library/continue", params=window).content
+
+    with factory() as session:
+        _add_own_work(
+            session, user_id=USER_A, song_id="song-bob", work=SongWork.EDITED, at=_later(10),
+        )
+        _add_generate_job(session, author=USER_A, song_id="song-bob", completed_at=_later(20))
+        _add_cowriter_message(session, song_id="song-bob", author=USER_A, created_at=_later(30))
+        session.commit()
+
+    assert alice.get("/api/library/continue", params=window).content == before
+
+
 def test_continue_shows_six_places_once_each_newest_first_ties_by_type_then_id(
     tmp_path: Path,
 ) -> None:
@@ -539,8 +728,15 @@ def test_continue_tiles_carry_the_cover_the_place_page_shows(tmp_path: Path) -> 
     )
 
 
-def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Path) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+@pytest.mark.parametrize(
+    ("viewer_id", "role", "statements"),
+    [(USER_A, "user", 3), (ADMIN_ID, "admin", 4)],
+    ids=["musician", "admin-reading-foreign-albums-too"],
+)
+def test_continue_reads_every_place_in_a_fixed_number_of_statements(
+    tmp_path: Path, viewer_id: str, role: str, statements: int,
+) -> None:
+    client, factory = _make_client(tmp_path, viewer_id, role)
     with factory() as session:
         for index in range(8):
             album_id = f"busy-{index}"
@@ -558,8 +754,12 @@ def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Pa
             _add_cowriter_message(
                 session, song_id=f"{album_id}-song", author=USER_A, created_at=_later(index),
             )
+            _add_own_work(
+                session, user_id=ADMIN_ID, song_id=f"{album_id}-song", work=SongWork.EDITED,
+                at=_later(index),
+            )
             _add_playlist(
-                session, playlist_id=f"list-{index}", owner=USER_A, created_at=_later(index),
+                session, playlist_id=f"list-{index}", owner=viewer_id, created_at=_later(index),
             )
             session.flush()
             _add_entry(
@@ -577,9 +777,40 @@ def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Pa
 
     assert resp.status_code == 200
     assert len(resp.json()["items"]) == 6
-    assert len(queries) == 3, f"expected three Continue statements, got {len(queries)}: {queries}"
+    assert len(queries) == statements, f"expected {statements} statements, got {queries}"
 
 
+def _add_album_the_viewer_owns(session, *, viewer_id: str, index: int) -> None:
+    _add_album(
+        session, album_id=f"album-{index}", title=f"Album {index}", owner=viewer_id,
+        created_at=_later(index),
+    )
+
+
+def _add_foreign_album_the_viewer_edited(session, *, viewer_id: str, index: int) -> None:
+    _add_album(
+        session, album_id=f"album-{index}", title=f"Album {index}", owner=USER_B,
+        created_at=_later(100),
+    )
+    _add_song(
+        session, song_id=f"song-{index}", title=f"Song {index}", album_id=f"album-{index}",
+        created_at=_later(100), updated_at=_later(100),
+    )
+    session.flush()
+    _add_own_work(
+        session, user_id=viewer_id, song_id=f"song-{index}", work=SongWork.EDITED,
+        at=_later(index),
+    )
+
+
+@pytest.mark.parametrize(
+    ("viewer_id", "role", "odd_album"),
+    [
+        (USER_A, "user", _add_album_the_viewer_owns),
+        (ADMIN_ID, "admin", _add_foreign_album_the_viewer_edited),
+    ],
+    ids=["musician", "admin-with-foreign-albums-between-its-own"],
+)
 @pytest.mark.parametrize(
     ("window", "expected_indexes"),
     [
@@ -589,15 +820,14 @@ def test_continue_reads_every_place_in_a_fixed_number_of_statements(tmp_path: Pa
     ],
 )
 def test_continue_returns_the_window_of_places_the_caller_asks_for(
-    tmp_path: Path, window: dict[str, int], expected_indexes: list[int],
+    tmp_path: Path, viewer_id: str, role: str, odd_album: Callable,
+    window: dict[str, int], expected_indexes: list[int],
 ) -> None:
-    client, factory = _make_client(tmp_path, USER_A)
+    client, factory = _make_client(tmp_path, viewer_id, role)
     with factory() as session:
         for index in range(8):
-            _add_album(
-                session, album_id=f"album-{index}", title=f"Album {index}", owner=USER_A,
-                created_at=_later(index),
-            )
+            add_album = odd_album if index % 2 else _add_album_the_viewer_owns
+            add_album(session, viewer_id=viewer_id, index=index)
         session.commit()
 
     items = _continue_items(client, **window)
