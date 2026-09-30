@@ -1,0 +1,8 @@
+claim_id = "d8d3b4991b1145a2a7d78060717c6220"
+agent = "claude-head"
+role = "builder"
+base = "1461eb191078a1097ca5838b52ae15fbbda6beb4"
+branch = "claude/issue-1147-song-work"
+scope = ["docs/architecture.md", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/mcp_server/tools.py", "src/songmaker_cli/song_api.py", "tests/test_db.py", "tests/test_mcp_server.py", "tests/test_song_api.py", "tests/test_song_work.py"]
+opened_commit = "002c2fb883c19f1b92c0d2dbd60c717d926b01ea"
+whole_reason = "the per-user song work record: model, migration, writes and tests"
