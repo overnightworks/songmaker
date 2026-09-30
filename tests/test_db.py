@@ -2624,6 +2624,7 @@ def test_init_db_fresh_creates_all_tables(tmp_path: Path) -> None:
         "user_lora_samples",
         "resource_event_cursors",
         "resource_events",
+        "user_song_work",
         "alembic_version",
     }
     assert tables == expected
@@ -3098,6 +3099,57 @@ def test_playlist_last_played_migration_keeps_existing_playlists_both_ways(
         assert connection.execute(text("SELECT title FROM playlists")).scalar_one() == (
             "Night Drive"
         )
+    engine.dispose()
+
+
+def test_user_song_work_migration_adds_and_removes_the_table_around_existing_songs(
+    tmp_path: Path,
+) -> None:
+    import importlib
+
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions.d4f8b2c6a1e7_add_user_song_work",
+    )
+    url = f"sqlite:///{tmp_path / 'user-song-work.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO songs "
+            "(id, title, album_id, vocal_language, track_number, created_at, updated_at, slug) "
+            "VALUES ('s1', 'Thunder', 'a1', '', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, "
+            "'thunder')"
+        ))
+
+    command.upgrade(config, migration.revision)
+
+    inspector = inspect(engine)
+    assert inspector.get_pk_constraint("user_song_work")["constrained_columns"] == [
+        "user_id", "song_id",
+    ]
+    columns = {column["name"]: column for column in inspector.get_columns("user_song_work")}
+    assert columns["edited_at"]["nullable"] is True
+    assert columns["played_at"]["nullable"] is True
+    assert {
+        (fk["referred_table"], fk["options"]["ondelete"])
+        for fk in inspector.get_foreign_keys("user_song_work")
+    } == {("users", "CASCADE"), ("songs", "CASCADE")}
+    with engine.begin() as connection:
+        assert connection.execute(text("SELECT count(*) FROM user_song_work")).scalar_one() == 0
+        connection.execute(text(
+            "INSERT INTO user_song_work (user_id, song_id, played_at) "
+            "VALUES ('u1', 's1', CURRENT_TIMESTAMP)"
+        ))
+
+    command.downgrade(config, migration.down_revision)
+
+    assert "user_song_work" not in inspect(engine).get_table_names()
+    with engine.begin() as connection:
+        assert connection.execute(text("SELECT title FROM songs")).scalar_one() == "Thunder"
     engine.dispose()
 
 
