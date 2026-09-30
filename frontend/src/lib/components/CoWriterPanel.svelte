@@ -238,12 +238,29 @@
 	): Promise<void> {
 		await latestTurn;
 		if (!conversation || viewingConversationId !== conversationId) return;
-		const shownIds = new Set(messages.map((message) => message.persistedId));
-		const unshownHistory = toMessages(conversation.messages).filter(
-			(message) => !shownIds.has(message.persistedId)
-		);
-		messages = [...unshownHistory, ...messages];
+		const history = toMessages(conversation.messages);
+		const shown = withStoredIdOfSentMessage(messages, history.at(-1));
+		const shownIds = new Set(shown.map((message) => message.persistedId));
+		const unshownHistory = history.filter((message) => !shownIds.has(message.persistedId));
+		messages = [...unshownHistory, ...shown];
 		followLatest();
+	}
+
+	/**
+	 * The server stores a sent message when its turn starts, so a history read
+	 * that ends in it holds the sent bubble itself: a refused or failed turn
+	 * never learned that id, and without it the message would show twice.
+	 */
+	function withStoredIdOfSentMessage(
+		shown: Message[],
+		newestStored: Message | undefined
+	): Message[] {
+		if (newestStored?.role !== 'user') return shown;
+		return shown.map((message) =>
+			message.role === 'user' && !message.persistedId && message.text === newestStored.text
+				? { ...message, persistedId: newestStored.persistedId }
+				: message
+		);
 	}
 
 	function followOrSettleTurn(conversation: ConversationMessagesResponse): void {

@@ -1503,7 +1503,7 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 	const sent = chatMessage('u1', 'user', 'write a chorus');
 	const reply = chatMessage('a1', 'assistant', 'Here is a chorus');
 
-	it.each([
+	const outcomes: Array<[string, () => AsyncGenerator<CoWriterStreamEvent>, unknown[]]> = [
 		[
 			'its answer',
 			() =>
@@ -1531,9 +1531,19 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent]),
 			[expect.stringMatching(/^write a chorus.*Selected route failed\./)]
 		]
-	] as Array<[string, () => AsyncGenerator<CoWriterStreamEvent>, unknown[]]>)(
-		'keeps the sent message with %s after the history before it',
-		async (_outcome, turn, exchange) => {
+	];
+	const lateReads: Array<[string, ChatMessageItem[]]> = [
+		['the history before it', earlier],
+		['a history that already stored it', [...earlier, sent]]
+	];
+
+	const cases = outcomes.flatMap(([outcome, turn, exchange]) =>
+		lateReads.map(([read, lateHistory]) => [outcome, read, turn, exchange, lateHistory] as const)
+	);
+
+	it.each(cases)(
+		'keeps the sent message with %s once when the late read holds %s',
+		async (_outcome, _read, turn, exchange, lateHistory) => {
 			const firstRead = Promise.withResolvers<ReturnType<typeof conversation>>();
 			fetchConversations.mockResolvedValue([activeConversation('c1')]);
 			fetchConversationMessages
@@ -1545,7 +1555,7 @@ describe('CoWriterPanel sending before the first history read arrives (#1170)', 
 			await sendTurn(target, 'write a chorus');
 			await vi.waitFor(() => expect(streamCoWriterTurn).toHaveBeenCalledTimes(1));
 			await new Promise((resolve) => setTimeout(resolve, 0));
-			firstRead.resolve(conversation(false, ...earlier));
+			firstRead.resolve(conversation(false, ...lateHistory));
 
 			await vi.waitFor(() =>
 				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
