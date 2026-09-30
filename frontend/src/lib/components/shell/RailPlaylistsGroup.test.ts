@@ -7,7 +7,15 @@ import { PLAYING_MARK_LABEL } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { openCollection, setOpenCollection } from '$lib/stores/collection';
 import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
-import { closeNowPlaying, nowPlayingOpen, nowPlayingPanel, queueContext } from '$lib/stores/player';
+import {
+	closeNowPlaying,
+	nowPlayingOpen,
+	nowPlayingPanel,
+	queueContext,
+	selectedSongId
+} from '$lib/stores/player';
+import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
@@ -18,6 +26,7 @@ import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
 	buildPlaylistEntry as entry,
+	buildSong as song,
 	createComponentMount,
 	findElementByRoleAndName,
 	recentWorkPage,
@@ -70,6 +79,9 @@ afterEach(async () => {
 	queueContext.set({ type: 'library' });
 	closeNowPlaying();
 	await cleanup();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
+	selectedSongId.set(null);
 	resetPlaylists();
 	resetLibraryContextForTests();
 	resetConnectivityForTests();
@@ -262,6 +274,23 @@ describe('RailPlaylistsGroup', () => {
 
 		const rows = target.querySelectorAll<HTMLButtonElement>('.playlist-label');
 		expect(rows[0]?.classList.contains('row-active')).toBe(true);
+	});
+
+	it('holds a playlist row for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
+		playlistList.set([playlist({ id: 'p2', title: 'Favorites' })]);
+		selectedSongId.set('s1');
+		loadSongData(song({ id: 's1', title: 'Tide' }));
+		setDraftLyrics('unsaved edit');
+		const target = await render();
+		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
+		await tick();
+
+		requireElement<HTMLButtonElement>(target, '.playlist-label').click();
+		await tick();
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(get(openCollection)).not.toEqual({ kind: 'playlist', id: 'p2' });
+		expect(get(selectedSongId)).toBe('s1');
 	});
 
 	it('plays a clicked track and surfaces it in Now Playing', async () => {
