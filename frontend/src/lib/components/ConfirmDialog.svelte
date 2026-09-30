@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { registerHistoryLayer } from '$lib/stores/navigation';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '$lib/constants';
 
@@ -30,28 +30,8 @@
 		});
 	});
 
-	// Back cancels the dialog, never confirms it (issue #1125): it holds one
-	// history entry while shown, and each of its own answers steps back off that
-	// entry before acting, so a navigation the answer starts lands after it.
-	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
-
-	function holdHistoryLayer(): () => void {
-		historyLayer = registerHistoryLayer('confirm-dialog', () => oncancel());
-		return leaveHistoryLayer;
-	}
-
-	function leaveHistoryLayer(): void {
-		if (historyLayer?.layered) historyLayer.leave();
-	}
-
-	function answer(action: () => void): () => void {
-		return () => {
-			leaveHistoryLayer();
-			action();
-		};
-	}
-
-	const cancel = answer(() => oncancel());
+	const historyLayer = dialogHistoryLayer('confirm-dialog', () => oncancel());
+	const cancel = historyLayer.answer(() => oncancel());
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
@@ -61,7 +41,7 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<div class="overlay" {@attach holdHistoryLayer}>
+<div class="overlay" {@attach historyLayer.hold}>
 	<button class="overlay-backdrop" tabindex="-1" onclick={cancel} aria-label={DIALOG_CANCEL_LABEL}
 	></button>
 	<div
@@ -77,9 +57,11 @@
 		<div class="actions">
 			<button class="cancel-btn" onclick={cancel}>{DIALOG_CANCEL_LABEL}</button>
 			{#if secondaryLabel && onsecondary}
-				<button class="secondary-btn" onclick={answer(onsecondary)}>{secondaryLabel}</button>
+				<button class="secondary-btn" onclick={historyLayer.answer(onsecondary)}
+					>{secondaryLabel}</button
+				>
 			{/if}
-			<button class="confirm-btn" onclick={answer(onconfirm)}>{confirmLabel}</button>
+			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>
 </div>
