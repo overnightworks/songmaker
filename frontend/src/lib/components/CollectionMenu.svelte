@@ -1,8 +1,5 @@
 <script lang="ts">
-	import { tick } from 'svelte';
 	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
-	import { historyLayerState } from '$lib/stores/navigation';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL,
 		ALBUM_COVER_UPLOAD_LABEL,
@@ -20,6 +17,7 @@
 		COLLECTION_MENU_SHARE_PREFIX
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
+	import MenuPopover from './MenuPopover.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import ShareDialog from './ShareDialog.svelte';
 
@@ -71,9 +69,7 @@
 	const shareLabel = $derived(`${COLLECTION_MENU_SHARE_PREFIX} ${kind}`);
 	const deleteLabel = $derived(`${COLLECTION_MENU_DELETE_PREFIX} ${kind}`);
 
-	const menuOpen = historyLayerState('collection-menu', false);
-	let triggerButton: HTMLButtonElement | undefined = $state();
-	let menu: HTMLDivElement | undefined = $state();
+	let popover: MenuPopover | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
 
 	async function shareAndWarnIfIncomplete(): Promise<ShareResult> {
@@ -83,7 +79,7 @@
 			// Close the menu so its own focus-trapped dialog doesn't stack with
 			// ShareDialog's -- two independent window keydown handlers would
 			// otherwise both react to a single Escape press.
-			closeMenu(false);
+			popover?.close(false);
 		}
 		return result;
 	}
@@ -92,179 +88,78 @@
 		missingTakeSongs = [];
 	}
 
-	async function openMenu(): Promise<void> {
-		$menuOpen = true;
-		await tick();
-		if (menu) focusFirstIn(menu);
-	}
-
-	function closeMenu(restoreFocus = true): void {
-		if (!$menuOpen) return;
-		$menuOpen = false;
-		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
-	}
-
-	function toggleMenu(): void {
-		if ($menuOpen) closeMenu();
-		else void openMenu();
-	}
-
-	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!$menuOpen || !menu) return;
-		handleFocusTrapKeydown(menu, event, () => closeMenu());
-	}
-
 	function runAndClose(action: () => void): void {
-		closeMenu();
+		popover?.close();
 		action();
 	}
 </script>
 
-<svelte:window onkeydown={onWindowKeydown} />
-
 <div class="collection-menu">
-	<button
-		bind:this={triggerButton}
-		class="menu-trigger"
-		data-hitbox="frequent"
-		aria-haspopup="dialog"
-		aria-expanded={$menuOpen}
-		aria-label={COLLECTION_MENU_LABEL}
-		onclick={toggleMenu}
+	<MenuPopover
+		bind:this={popover}
+		layer="collection-menu"
+		label={COLLECTION_MENU_LABEL}
+		closeLabel={COLLECTION_MENU_CLOSE_LABEL}
 	>
-		<Icon name="more-horizontal" size={18} />
-	</button>
-	{#if $menuOpen}
-		<div class="menu-backdrop-layer">
-			<button
-				class="menu-backdrop"
-				tabindex="-1"
-				onclick={() => closeMenu()}
-				aria-label={COLLECTION_MENU_CLOSE_LABEL}
-			></button>
+		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
+		<p class="menu-heading">{kindLabel} · {title}</p>
+		<div class="menu-row">
+			<span class="menu-row-label">{shareLabel}</span>
+			<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
 		</div>
-		<div
-			bind:this={menu}
-			class="menu-panel"
-			role="dialog"
-			aria-modal="true"
-			aria-label={COLLECTION_MENU_LABEL}
-			tabindex="-1"
-		>
-			<p class="menu-heading">{kindLabel} · {title}</p>
-			<div class="menu-row">
-				<span class="menu-row-label">{shareLabel}</span>
-				<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
-			</div>
-			{#if oncover}
-				<button class="menu-item" onclick={() => runAndClose(oncover)}
-					>{ALBUM_COVER_UPLOAD_LABEL}</button
-				>
-			{/if}
-			{#if kind === 'album' && oncoversuggest}
-				<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
-					>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
-				>
-			{/if}
-			{#if hasCover && onremovecover}
-				<button class="menu-item" onclick={() => runAndClose(onremovecover)}
-					>{COLLECTION_MENU_COVER_REMOVE_LABEL}</button
-				>
-			{/if}
-			{#if kind === 'playlist' && onsaveoffline}
-				<button
-					class="menu-item"
-					onclick={() => runAndClose(onsaveoffline)}
-					disabled={offlineSaving}
-				>
-					{#if offlineSaved}
-						{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
-					{:else if offlineSaving}
-						{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
-					{:else}
-						{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
-					{/if}
-				</button>
-			{/if}
-			<button class="menu-item" onclick={() => runAndClose(onrename)}
-				>{COLLECTION_MENU_RENAME_LABEL}</button
+		{#if oncover}
+			<button class="menu-item" onclick={() => runAndClose(oncover)}
+				>{ALBUM_COVER_UPLOAD_LABEL}</button
 			>
-			{#if kind === 'album' && onaddtoplaylist}
-				<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
-					>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button
-				>
-			{/if}
-			{#if kind === 'album' && oncurate}
-				<button class="menu-item" onclick={() => runAndClose(oncurate)}
-					>{COLLECTION_MENU_CURATE_LABEL}</button
-				>
-			{/if}
-			{#if kind === 'album' && onarchive}
-				<button class="menu-item" onclick={() => runAndClose(onarchive)}
-					>{COLLECTION_MENU_ARCHIVE_LABEL}</button
-				>
-			{/if}
-			<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
-				<Icon name="trash" size={14} />
-				{deleteLabel}
+		{/if}
+		{#if kind === 'album' && oncoversuggest}
+			<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
+				>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
+			>
+		{/if}
+		{#if hasCover && onremovecover}
+			<button class="menu-item" onclick={() => runAndClose(onremovecover)}
+				>{COLLECTION_MENU_COVER_REMOVE_LABEL}</button
+			>
+		{/if}
+		{#if kind === 'playlist' && onsaveoffline}
+			<button class="menu-item" onclick={() => runAndClose(onsaveoffline)} disabled={offlineSaving}>
+				{#if offlineSaved}
+					{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
+				{:else if offlineSaving}
+					{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
+				{:else}
+					{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
+				{/if}
 			</button>
-		</div>
-	{/if}
+		{/if}
+		<button class="menu-item" onclick={() => runAndClose(onrename)}
+			>{COLLECTION_MENU_RENAME_LABEL}</button
+		>
+		{#if kind === 'album' && onaddtoplaylist}
+			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
+				>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button
+			>
+		{/if}
+		{#if kind === 'album' && oncurate}
+			<button class="menu-item" onclick={() => runAndClose(oncurate)}
+				>{COLLECTION_MENU_CURATE_LABEL}</button
+			>
+		{/if}
+		{#if kind === 'album' && onarchive}
+			<button class="menu-item" onclick={() => runAndClose(onarchive)}
+				>{COLLECTION_MENU_ARCHIVE_LABEL}</button
+			>
+		{/if}
+		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
+			<Icon name="trash" size={14} />
+			{deleteLabel}
+		</button>
+	</MenuPopover>
 	<ShareDialog songs={missingTakeSongs} onclose={closeShareWarning} />
 </div>
 
 <style>
-	.collection-menu {
-		position: relative;
-	}
-
-	.menu-trigger {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		color: var(--text-muted);
-		padding: 0.4rem;
-	}
-
-	.menu-trigger:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.menu-backdrop-layer {
-		position: fixed;
-		inset: 0;
-		z-index: 300;
-	}
-
-	.menu-backdrop {
-		position: absolute;
-		inset: 0;
-		width: 100%;
-		border: 0;
-		background: color-mix(in srgb, #000 42%, transparent);
-		cursor: default;
-	}
-
-	.menu-panel {
-		position: absolute;
-		top: calc(100% + 0.5rem);
-		right: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		min-width: 220px;
-		max-width: calc(100vw - 32px);
-		padding: 0.5rem;
-		background: var(--header-bg);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		z-index: 301;
-	}
-
 	.menu-heading {
 		margin: 0;
 		padding: 0.3rem 0.6rem 0.5rem;
