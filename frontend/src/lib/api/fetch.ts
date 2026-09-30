@@ -114,7 +114,7 @@ function getCsrfToken(): string {
 const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth/password']);
 
 // A path whose own 429 is already visible some other way, so the generic
-// toast below would only repeat it. Kept as its own literal list, not
+// toast below would only repeat it. Kept as its own list, not
 // derived from `AUTH_ENDPOINTS` above (that one exists for the unrelated
 // 401-redirect suppression) -- a future path added there for its 401 reason
 // should not silently also lose this toast.
@@ -124,11 +124,16 @@ const AUTH_ENDPOINTS = new Set(['/api/auth/login', '/api/auth/setup', '/api/auth
 //     full-page session-check retry banner.
 //   - '/api/auth/setup': not auth.ts -- `routes/setup/+page.svelte`'s own
 //     catch block shows the error inline via `err.message`.
-const RATE_LIMIT_TOAST_EXEMPT_PATHS = new Set([
-	'/api/auth/login',
-	'/api/auth/me',
-	'/api/auth/setup'
-]);
+//   - '/api/albums/<id>/cover-suggestions': `AlbumCoverEditor.svelte` shows
+//     every refusal there itself -- the spent daily limit under the cover,
+//     any other as its failure or error toast; nothing retries it, so
+//     "it will continue in a moment" would be untrue there.
+const RATE_LIMIT_TOAST_EXEMPT_PATHS: readonly RegExp[] = [
+	/^\/api\/auth\/login$/,
+	/^\/api\/auth\/me$/,
+	/^\/api\/auth\/setup$/,
+	/^\/api\/albums\/[^/]+\/cover-suggestions$/
+];
 
 /**
  * Never more than one throttle toast on screen at once, not one per
@@ -140,7 +145,7 @@ const RATE_LIMIT_TOAST_EXEMPT_PATHS = new Set([
  * throttled", not as a bug.
  */
 function notifyIfRateLimited(status: number, path: string): void {
-	if (status !== 429 || RATE_LIMIT_TOAST_EXEMPT_PATHS.has(path)) return;
+	if (status !== 429 || RATE_LIMIT_TOAST_EXEMPT_PATHS.some((exempt) => exempt.test(path))) return;
 	const alreadyShown = get(toasts).some((toast) => toast.message === RATE_LIMITED_TOAST_MESSAGE);
 	if (alreadyShown) return;
 	addToast(RATE_LIMITED_TOAST_MESSAGE, 'info');
