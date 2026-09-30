@@ -7,7 +7,11 @@ import type { CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { createComponentMount, requireElement } from './shell/rail-test-fixtures';
+import {
+	createComponentMount,
+	openCollectionMenu,
+	requireElement
+} from './shell/rail-test-fixtures';
 import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
 import { selectedAlbumId } from '$lib/stores/player';
 import { activeJobs } from '$lib/stores/jobs';
@@ -105,12 +109,6 @@ afterEach(async () => {
 	resetConnectivityForTests();
 	resetLibraryDataForTests();
 });
-
-async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
-	requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
-	await tick();
-	return requireElement<HTMLElement>(document.body, '.menu-panel');
-}
 
 describe('AlbumCoverEditor on the album page', () => {
 	it('waits for a deliberate Suggest cover click before creating a job', async () => {
