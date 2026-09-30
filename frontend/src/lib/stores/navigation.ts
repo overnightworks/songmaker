@@ -41,6 +41,7 @@ import {
 	currentLibraryHistoryState,
 	detailTab,
 	isLibraryHistoryState,
+	libraryHistoryEntry,
 	libraryHistoryUrl,
 	librarySurface,
 	libraryRootState,
@@ -743,7 +744,7 @@ const RAIL_DRAWER_LAYER = 'rail-drawer';
 const railDrawerLayered = writable(false);
 export const railDrawerIsLayer = readonly(railDrawerLayered);
 
-// A cold tab's history.state carries no LibraryHistoryState until something
+// A cold tab's history entry carries no LibraryHistoryState until something
 // writes one -- this seeds a fresh root entry for that case, but only on a
 // plain `/` visit, which is the one library workspace path with no address
 // route of its own to resolve one instead. Every other library path
@@ -778,7 +779,7 @@ export function initNavigation(): () => void {
 	if (staleLanding) stepBackOnto(staleLanding);
 
 	function onPopstate(e: PopStateEvent): void {
-		const state = e.state;
+		const state = libraryHistoryEntry(e.state);
 		if (popsHistoryLayers(state)) return;
 		void (async () => {
 			await saveDirtyDraftBeforePopstate();

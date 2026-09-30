@@ -1,3 +1,4 @@
+import { historyEntry, replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
@@ -44,13 +45,9 @@ const fetchShares = vi.fn();
 // own target first, so its write is same-shape and never reaches this) --
 // mocked the same way navigation.test.ts does, so a crossing write's `goto`
 // call moves the URL like the real one does.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	})
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
@@ -153,7 +150,7 @@ beforeEach(() => {
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 	vi.mocked(goto).mockClear();
 });
 
@@ -464,19 +461,15 @@ describe('applyLibraryHistory', () => {
 describe('hydrateLibraryFromHistory', () => {
 	it('replaces history after hydrate so a deleted playlist is not replayed', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
-		history.replaceState(
-			{
-				...libraryRootState(),
-				surface: 'detail',
-				collection: { kind: 'playlist', id: 'p-gone' }
-			},
-			'',
-			'/'
-		);
+		replaceHistoryEntry('/', {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'playlist', id: 'p-gone' }
+		});
 		fetchPlaylist.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/playlists/p-gone'));
 		await hydrateLibraryFromHistory();
-		expect(history.state.collection).toBeNull();
-		expect(history.state.surface).toBe('browse');
+		expect(historyEntry().collection).toBeNull();
+		expect(historyEntry().surface).toBe('browse');
 	});
 
 	// Regression for issue #281: on a cold tab with no LibraryHistoryState yet,
@@ -663,7 +656,7 @@ describe('libraryHistoryUrl', () => {
 // regardless of which of the five library shapes the write lands on.
 describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
 	it('crosses through goto for a write that changes which route file is mounted', async () => {
-		history.replaceState(null, '', albumRoutePath('a1'));
+		replaceHistoryEntry(albumRoutePath('a1'));
 
 		await writeLibraryHistory(libraryRootState(), songRoutePath('a1', 's1'), 'push');
 
@@ -678,12 +671,12 @@ describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
 	// both sides -- only the route-file depth decides a crossing, never which
 	// album or song the address names.
 	it('stays a raw write for same-shape churn, never touching the router', async () => {
-		history.replaceState(null, '', albumRoutePath('a1'));
+		replaceHistoryEntry(albumRoutePath('a1'));
 
 		await writeLibraryHistory(libraryRootState(), albumRoutePath('a2'), 'replace');
 
 		expect(goto).not.toHaveBeenCalled();
-		expect(history.state).toEqual(libraryRootState());
+		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
 	// The one pairing that used to fail silently before 'external' became its
@@ -691,14 +684,14 @@ describe('writeLibraryHistory route-shape crossing (issue #265 S7)', () => {
 	// openPlaylist's own '/' fallback before a playlist's slug is known) from
 	// a non-library route both satisfied `!isAlbumRoutePath &&
 	// !isPlaylistRoutePath`, so the two were indistinguishable and the write
-	// took the cheap same-shape branch -- a raw `history.pushState` that
+	// took the cheap same-shape branch -- a raw History API push that
 	// changes the address bar to '/' while the router stays mounted on
 	// whichever route file it last saw. The next Back/Forward or real
 	// navigation that disagrees with that stale belief tears the workspace
 	// down mid-session. This is the pairing #265's S7 had to get right for
 	// removing ensureLibraryWorkspaceRoute to be safe.
 	it('crosses through goto when the target is "/" and the write starts from a non-library route', async () => {
-		history.replaceState(null, '', '/settings/voices');
+		replaceHistoryEntry('/settings/voices');
 
 		await writeLibraryHistory(libraryRootState(), '/', 'push');
 
@@ -725,12 +718,12 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/tide');
+		replaceHistoryEntry('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
-		expect(history.state.songId).toBe('s9');
-		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(historyEntry().songId).toBe('s9');
+		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
 		expect(get(selectedSongId)).toBe('s9');
 	});
 
@@ -768,7 +761,7 @@ describe('openSongAddress', () => {
 				limit: 200,
 				has_more: false
 			});
-		history.replaceState(null, '', '/album/a9/tide');
+		replaceHistoryEntry('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
@@ -791,18 +784,18 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/ghost-song');
+		replaceHistoryEntry('/album/a9/ghost-song');
 
 		await expect(openSongAddress('a9', 'ghost-song')).resolves.toBe('unknown-song');
 
 		expect(get(selectedSongId)).toBeNull();
-		expect(history.state).toBeNull();
+		expect(historyEntry()).toBeNull();
 	});
 
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		history.replaceState(null, '', '/album/ghost/tide');
+		replaceHistoryEntry('/album/ghost/tide');
 
 		await expect(openSongAddress('ghost', 'tide')).resolves.toBe('unknown-album');
 
@@ -830,11 +823,11 @@ describe('openSongAddress', () => {
 			songId: 's9',
 			scrollAnchor: 320
 		};
-		history.replaceState(restored, '', '/album/a9/tide');
+		replaceHistoryEntry('/album/a9/tide', restored);
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
-		expect(history.state.scrollAnchor).toBe(320);
+		expect(historyEntry().scrollAnchor).toBe(320);
 	});
 
 	it('opens a song address on the tab last shown for that song', async () => {
@@ -853,11 +846,11 @@ describe('openSongAddress', () => {
 		});
 		showSongTab('s9', 'takes');
 		detailTab.set('edit');
-		history.replaceState(null, '', '/album/a9/tide');
+		replaceHistoryEntry('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
-		expect(history.state.detailTab).toBe('takes');
+		expect(historyEntry().detailTab).toBe('takes');
 		expect(get(detailTab)).toBe('takes');
 	});
 
@@ -882,23 +875,19 @@ describe('openSongAddress', () => {
 				]),
 				limit: 200
 			});
-			history.replaceState(
-				{
-					...libraryRootState(),
-					surface: 'detail',
-					collection: { kind: 'album', id: 'a9' },
-					songId: 's9',
-					detailTab: leftOn as never
-				},
-				'',
-				'/album/a9/tide'
-			);
+			replaceHistoryEntry('/album/a9/tide', {
+				...libraryRootState(),
+				surface: 'detail',
+				collection: { kind: 'album', id: 'a9' },
+				songId: 's9',
+				detailTab: leftOn as never
+			});
 			loadLibraryHistoryPageForTests();
-			history.replaceState(null, '', '/album/a9/tide');
+			replaceHistoryEntry('/album/a9/tide');
 
 			await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
-			expect(history.state.detailTab).toBe(restored);
+			expect(historyEntry().detailTab).toBe(restored);
 			expect(get(detailTab)).toBe(restored);
 			expect(rememberedSongTab('s8')).toBe('edit');
 		}
@@ -918,7 +907,7 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/tide?gen=g1');
+		replaceHistoryEntry('/album/a9/tide?gen=g1');
 
 		await expect(openSongAddress('a9', 'tide', 'g1')).resolves.toBe('found');
 
@@ -945,13 +934,13 @@ describe('openTakeAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/tide/take/3');
+		replaceHistoryEntry('/album/a9/tide/take/3');
 
 		await expect(openTakeAddress('a9', 'tide', 3)).resolves.toBe('found');
 
-		expect(history.state.songId).toBe('s9');
-		expect(history.state.generationId).toBe('g1');
-		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(historyEntry().songId).toBe('s9');
+		expect(historyEntry().generationId).toBe('g1');
+		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
 		expect(get(selectedSongId)).toBe('s9');
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(get(detailTab)).toBe('takes');
@@ -992,7 +981,7 @@ describe('openTakeAddress', () => {
 				]
 			})
 		);
-		history.replaceState(null, '', '/album/a9/tide/take/2');
+		replaceHistoryEntry('/album/a9/tide/take/2');
 
 		await expect(openTakeAddress('a9', 'tide', 2)).resolves.toBe('found');
 
@@ -1015,12 +1004,12 @@ describe('openTakeAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/tide/take/9');
+		replaceHistoryEntry('/album/a9/tide/take/9');
 
 		await expect(openTakeAddress('a9', 'tide', 9)).resolves.toBe('unknown-take');
 
 		expect(get(selectedSongId)).toBeNull();
-		expect(history.state).toBeNull();
+		expect(historyEntry()).toBeNull();
 	});
 
 	it('reports an unknown song slug within a known album, without opening anything', async () => {
@@ -1037,7 +1026,7 @@ describe('openTakeAddress', () => {
 			]),
 			limit: 200
 		});
-		history.replaceState(null, '', '/album/a9/ghost-song/take/1');
+		replaceHistoryEntry('/album/a9/ghost-song/take/1');
 
 		await expect(openTakeAddress('a9', 'ghost-song', 1)).resolves.toBe('unknown-song');
 
@@ -1047,7 +1036,7 @@ describe('openTakeAddress', () => {
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		history.replaceState(null, '', '/album/ghost/tide/take/1');
+		replaceHistoryEntry('/album/ghost/tide/take/1');
 
 		await expect(openTakeAddress('ghost', 'tide', 1)).resolves.toBe('unknown-album');
 
@@ -1153,23 +1142,23 @@ describe('resolveLegacySongQueryAddress', () => {
 
 describe('openAlbumAddress', () => {
 	it('makes the library restore the addressed album on a tab that knows nothing else', async () => {
-		history.replaceState(null, '', '/album/a9');
+		replaceHistoryEntry('/album/a9');
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
-		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
-		expect(history.state.surface).toBe('detail');
+		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(historyEntry().surface).toBe('detail');
 	});
 
 	it('reports an unknown slug without opening anything', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		history.replaceState(null, '', '/album/ghost');
+		replaceHistoryEntry('/album/ghost');
 
 		await expect(openAlbumAddress('ghost')).resolves.toBe('unknown');
 
 		expect(get(openCollection)).toBeNull();
-		expect(history.state).toBeNull();
+		expect(historyEntry()).toBeNull();
 	});
 
 	it('keeps a richer restore state that already opens the addressed album', async () => {
@@ -1179,23 +1168,23 @@ describe('openAlbumAddress', () => {
 			collection: { kind: 'album' as const, id: 'a9' },
 			scrollAnchor: 320
 		};
-		history.replaceState(restored, '', '/album/a9');
+		replaceHistoryEntry('/album/a9', restored);
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
-		expect(history.state.scrollAnchor).toBe(320);
+		expect(historyEntry().scrollAnchor).toBe(320);
 	});
 
 	it('lets the address overrule a restore state that opens a different album', async () => {
-		history.replaceState(
-			{ ...libraryRootState(), surface: 'detail', collection: { kind: 'album', id: 'other' } },
-			'',
-			'/album/a9'
-		);
+		replaceHistoryEntry('/album/a9', {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: 'other' }
+		});
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
-		expect(history.state.collection).toEqual({ kind: 'album', id: 'a9' });
+		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
 	});
 
 	it('propagates a failure that is not a missing album instead of calling it unknown', async () => {
@@ -1220,23 +1209,23 @@ describe('openPlaylistAddress', () => {
 				title: 'Friday Night'
 			})
 		);
-		history.replaceState(null, '', '/playlist/friday-night');
+		replaceHistoryEntry('/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 
-		expect(history.state.collection).toEqual({ kind: 'playlist', id: 'p9' });
-		expect(history.state.surface).toBe('detail');
+		expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p9' });
+		expect(historyEntry().surface).toBe('detail');
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p9' });
 	});
 
 	it('reports an unknown slug without opening anything', async () => {
 		fetchPlaylists.mockResolvedValueOnce([]);
-		history.replaceState(null, '', '/playlist/ghost');
+		replaceHistoryEntry('/playlist/ghost');
 
 		await expect(openPlaylistAddress('ghost')).resolves.toBe('unknown');
 
 		expect(get(openCollection)).toBeNull();
-		expect(history.state).toBeNull();
+		expect(historyEntry()).toBeNull();
 	});
 
 	it('keeps a richer restore state that already opens the addressed playlist', async () => {
@@ -1249,30 +1238,26 @@ describe('openPlaylistAddress', () => {
 			collection: { kind: 'playlist' as const, id: 'p9' },
 			scrollAnchor: 320
 		};
-		history.replaceState(restored, '', '/playlist/friday-night');
+		replaceHistoryEntry('/playlist/friday-night', restored);
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 
-		expect(history.state.scrollAnchor).toBe(320);
+		expect(historyEntry().scrollAnchor).toBe(320);
 	});
 
 	it('lets the address overrule a restore state that opens a different playlist', async () => {
 		fetchPlaylists.mockResolvedValueOnce([
 			playlistItem({ title: 'P', share_slug: null, id: 'p9', slug: 'friday-night' })
 		]);
-		history.replaceState(
-			{
-				...libraryRootState(),
-				surface: 'detail',
-				collection: { kind: 'playlist', id: 'other' }
-			},
-			'',
-			'/playlist/friday-night'
-		);
+		replaceHistoryEntry('/playlist/friday-night', {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'playlist', id: 'other' }
+		});
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 
-		expect(history.state.collection).toEqual({ kind: 'playlist', id: 'p9' });
+		expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p9' });
 	});
 
 	it('propagates a failure that is not a missing playlist instead of calling it unknown', async () => {
@@ -1295,7 +1280,7 @@ describe('openPlaylistAddress', () => {
 				title: 'Friday Night'
 			})
 		);
-		history.replaceState(null, '', '/playlist/friday-night');
+		replaceHistoryEntry('/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 

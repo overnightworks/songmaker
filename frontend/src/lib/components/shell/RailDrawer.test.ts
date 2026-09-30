@@ -2,19 +2,17 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
 
-let afterNavigateCb: (() => void) | undefined;
-
-vi.mock('$app/navigation', () => ({
-	afterNavigate: (cb: () => void) => {
-		afterNavigateCb = cb;
-	}
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 vi.mock('$lib/stores/navigation', async () => {
 	const { writable } = await import('svelte/store');
 	return { railDrawerIsLayer: writable(false) };
 });
 
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
 import { railDrawerIsLayer as railDrawerIsLayerStore } from '$lib/stores/navigation';
 import { closeSidebar, railWidth, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
@@ -44,7 +42,6 @@ afterEach(async () => {
 	railDrawerIsLayer.set(false);
 	railWidth.set(264);
 	localStorage.removeItem('songmaker.rail-width');
-	afterNavigateCb = undefined;
 });
 
 describe('RailDrawer', () => {
@@ -169,7 +166,7 @@ describe('RailDrawer', () => {
 		mounted = mount(RailDrawer, { target, props: { children } });
 		toggleSidebar();
 		await tick();
-		afterNavigateCb?.();
+		await goto(resolve('/settings'));
 		await tick();
 		expect(document.body.querySelector('.drawer-panel')).toBeNull();
 	});
