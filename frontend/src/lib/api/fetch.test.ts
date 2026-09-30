@@ -394,6 +394,20 @@ describe('describeFailure', () => {
 			'Nothing to save yet'
 		);
 	});
+
+	it("gives the caller's offline wording when the request got no answer", () => {
+		const unanswered = new NetworkError('/api/x', new TypeError('Failed to fetch'));
+
+		expect(describeFailure(unanswered, fallback, { offline: 'You are offline' })).toBe(
+			'You are offline'
+		);
+	});
+
+	it("gives the fallback instead of the server's words when the caller withholds them", () => {
+		const refusal = new ApiError(422, 'Validation error on: body.title', '/api/x');
+
+		expect(describeFailure(refusal, fallback, { withholdServerDetail: true })).toBe(fallback);
+	});
 });
 
 describe('apiFetch abort signal', () => {
