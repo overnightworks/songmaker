@@ -812,7 +812,23 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	};
 }
 
+let outgoingDraftSave: Promise<void> | null = null;
+
+// A Back or Forward saves the song it leaves before the library it lands on is
+// applied (navigation.ts), and the router may load the landing page's address
+// route meanwhile -- after a reload every traversal is a navigation of its
+// own. No library is applied while that save runs: an editor loaded for the
+// landing song before it settles would be marked saved by it.
+export function holdLibraryRestoresUntil(save: Promise<void>): Promise<void> {
+	const settled = save.finally(() => {
+		if (outgoingDraftSave === settled) outgoingDraftSave = null;
+	});
+	outgoingDraftSave = settled;
+	return settled;
+}
+
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
+	if (outgoingDraftSave) await outgoingDraftSave;
 	const generation = ++historyApplyGeneration;
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
@@ -972,6 +988,7 @@ export function resetLibraryContextForTests(): void {
 	plannedHistory = null;
 	librarySnapshotTaken = false;
 	restoredHistory = null;
+	outgoingDraftSave = null;
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	songTabs.clear();

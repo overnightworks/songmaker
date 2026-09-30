@@ -40,6 +40,7 @@ import {
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
+	holdLibraryRestoresUntil,
 	isLibraryHistoryState,
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
@@ -824,7 +825,7 @@ export function initNavigation(): () => void {
 		const state = libraryHistoryEntry(e.state);
 		if (popsHistoryLayers(state)) return;
 		void (async () => {
-			await saveDirtyDraftBeforePopstate();
+			await holdLibraryRestoresUntil(saveDirtyDraftBeforePopstate());
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {
