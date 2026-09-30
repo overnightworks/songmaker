@@ -63,6 +63,7 @@ def test_reimport_mp3(seeded_db, tmp_path: Path) -> None:
         gen = get_generation(session, gen_id)
         assert gen is not None
         assert gen.song_id == SONG_ID
+        assert gen.created_by == USER_ID
         assert gen.id in gen.mp3_path
         assert gen.mp3_path.startswith(f"{USER_ID}/")
         assert gen.mp3_path.endswith(".mp3")
@@ -224,6 +225,7 @@ def test_reimport_api_mp3(reimport_client: TestClient) -> None:
     with reimport_client.app.state.ctx.db() as session:
         event = session.query(ResourceEvent).one()
         assert event.generation_id == data["id"]
+        assert session.get(Generation, data["id"]).created_by == USER_ID
 
 
 def test_reimport_api_no_files(reimport_client: TestClient) -> None:
