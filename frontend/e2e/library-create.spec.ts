@@ -124,6 +124,13 @@ test('+ New makes a named playlist from the Library head and opens it', async ({
 
 	await newButton(page).click();
 	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_PLAYLIST_LABEL }).click();
+	await expect(card).toBeVisible();
+	await page.goBack();
+	await expect(card).toBeHidden();
+	await expect(newButton(page)).toBeFocused();
+
+	await newButton(page).click();
+	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_PLAYLIST_LABEL }).click();
 	await card.getByLabel(NEW_PLAYLIST_NAME_LABEL).fill(name);
 	await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
 
