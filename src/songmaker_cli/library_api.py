@@ -8,7 +8,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.api_helpers import Pagination, page_has_more, parse_required_search_query
+from songmaker_cli.api_helpers import (
+    Pagination,
+    owner_filter,
+    page_has_more,
+    parse_required_search_query,
+)
 from songmaker_cli.api_models import (
     DEFAULT_LIBRARY_TAKE_POOL,
     LibraryContinueResponse,
@@ -94,7 +99,7 @@ def api_library_search(
             raise HTTPException(422, LIBRARY_CURSOR_MISMATCH)
     page = search_library(
         session,
-        user_id=user.id,
+        owner_id=owner_filter(user),
         q=query,
         sort=sort,
         limit=limit,
