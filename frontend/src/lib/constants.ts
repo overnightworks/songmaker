@@ -468,7 +468,8 @@ export const LIBRARY_NEW_PLAYLIST_LABEL = 'Playlist';
 // The server's own ceiling on an album or playlist title (and an album's artist).
 export const NEW_PLACE_TEXT_MAX_LENGTH = 200;
 export const NEW_PLACE_CREATE_LABEL = 'Create';
-export const NEW_PLACE_OFFLINE = "You're offline, so nothing was created. Try again once you're back online.";
+export const NEW_PLACE_OFFLINE =
+	"You're offline, so nothing was created. Try again once you're back online.";
 export const NEW_ALBUM_CARD_LABEL = 'New album';
 export const NEW_ALBUM_CLOSE_LABEL = 'Close new album';
 export const NEW_ALBUM_TITLE_LABEL = 'Title';
