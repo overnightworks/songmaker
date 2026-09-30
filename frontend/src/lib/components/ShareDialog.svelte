@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { registerHistoryLayer } from '$lib/stores/navigation';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import type { UnplayableSongSummary } from '$lib/api/types';
 
@@ -18,23 +18,8 @@
 		});
 	});
 
-	// Back closes the warning (issue #1125): it holds one history entry while
-	// shown, and closing it any other way steps back off that entry first.
-	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
-
-	function holdHistoryLayer(): () => void {
-		historyLayer = registerHistoryLayer('share-warning', () => onclose());
-		return leaveHistoryLayer;
-	}
-
-	function leaveHistoryLayer(): void {
-		if (historyLayer?.layered) historyLayer.leave();
-	}
-
-	function close(): void {
-		leaveHistoryLayer();
-		onclose();
-	}
+	const historyLayer = dialogHistoryLayer('share-warning', () => onclose());
+	const close = historyLayer.answer(() => onclose());
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
@@ -45,7 +30,7 @@
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#if songs.length > 0}
-	<div class="overlay" {@attach holdHistoryLayer}>
+	<div class="overlay" {@attach historyLayer.hold}>
 		<button
 			class="overlay-backdrop"
 			tabindex="-1"

@@ -7,8 +7,8 @@
 		playlistList,
 		playlistLoad
 	} from '$lib/stores/playlists';
-	import { registerHistoryLayer } from '$lib/stores/navigation';
 	import { addToast } from '$lib/stores/toast';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		LIBRARY_PLAYLISTS_ERROR,
@@ -33,29 +33,9 @@
 		void ensurePlaylistsLoaded();
 	});
 
-	// Back closes the picker and adds nothing (issue #1125): it holds one
-	// history entry while shown, and choosing a playlist or closing it any other
-	// way steps back off that entry first.
-	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
-
-	function holdHistoryLayer(): () => void {
-		historyLayer = registerHistoryLayer('playlist-picker', () => onclose());
-		return leaveHistoryLayer;
-	}
-
-	function leaveHistoryLayer(): void {
-		if (historyLayer?.layered) historyLayer.leave();
-	}
-
-	function close(): void {
-		leaveHistoryLayer();
-		onclose();
-	}
-
-	function select(playlistId: string): void {
-		leaveHistoryLayer();
-		onselect(playlistId);
-	}
+	const historyLayer = dialogHistoryLayer('playlist-picker', () => onclose());
+	const close = historyLayer.answer(() => onclose());
+	const select = historyLayer.answer((playlistId: string) => onselect(playlistId));
 
 	function handleClickOutside(event: MouseEvent): void {
 		if (menuRef && !menuRef.contains(event.target as Node)) {
@@ -99,7 +79,7 @@
 	aria-modal="true"
 	aria-label="Add to Playlist"
 	tabindex="-1"
-	{@attach holdHistoryLayer}
+	{@attach historyLayer.hold}
 >
 	<div class="picker-header">Add to Playlist</div>
 	<div class="picker-list">
