@@ -28,6 +28,13 @@
 		titleArea: Snippet;
 		actions?: Snippet;
 		coverFallback?: Snippet;
+		/**
+		 * Makes the cover a button named `label` that opens cover editing; with
+		 * no cover to show, the place itself reads `label` on a dashed edge.
+		 */
+		coverOpening?: { label: string; onopen: () => void };
+		/** While given, the header edits its cover in place: this takes the cover's spot. */
+		coverEditing?: Snippet;
 	}
 
 	let {
@@ -43,27 +50,47 @@
 		onshuffle,
 		titleArea,
 		actions,
-		coverFallback
+		coverFallback,
+		coverOpening,
+		coverEditing
 	}: Props = $props();
 
+	const coverShown = $derived(showCover && Boolean(coverUrl));
 	const playLabel = $derived(playing ? collectionPauseLabel(kind) : collectionPlayLabel(kind));
 </script>
 
+{#snippet coverArt()}
+	{#if coverShown}
+		<img src={coverUrl} alt={coverAlt} onerror={onCoverError} />
+	{:else if coverOpening}
+		<span class="header-cover-add">{coverOpening.label}</span>
+	{:else if coverFallback}
+		{@render coverFallback()}
+	{:else if artFill}
+		<span class="header-cover-fallback" style:background={artFill} aria-hidden="true"></span>
+	{:else}
+		<span class="header-cover-fallback header-cover-initials" aria-hidden="true">{initials}</span>
+	{/if}
+{/snippet}
+
 <div class="collection-header">
-	<div class="header-identity">
-		<span class="header-cover">
-			{#if showCover && coverUrl}
-				<img src={coverUrl} alt={coverAlt} onerror={onCoverError} />
-			{:else if coverFallback}
-				{@render coverFallback()}
-			{:else if artFill}
-				<span class="header-cover-fallback" style:background={artFill} aria-hidden="true"></span>
-			{:else}
-				<span class="header-cover-fallback header-cover-initials" aria-hidden="true"
-					>{initials}</span
-				>
-			{/if}
-		</span>
+	<div class="header-identity" class:cover-editing={Boolean(coverEditing)}>
+		{#if coverEditing}
+			{@render coverEditing()}
+		{:else if coverOpening}
+			<button
+				type="button"
+				class="header-cover"
+				class:header-cover-empty={!coverShown}
+				aria-label={coverOpening.label}
+				title={coverOpening.label}
+				onclick={coverOpening.onopen}
+			>
+				{@render coverArt()}
+			</button>
+		{:else}
+			<span class="header-cover">{@render coverArt()}</span>
+		{/if}
 		<div class="header-titles">
 			{@render titleArea()}
 		</div>
@@ -119,7 +146,59 @@
 		height: 56px;
 		flex-shrink: 0;
 		overflow: hidden;
+		padding: 0;
+		border: none;
 		background: var(--surface-hover);
+		color: inherit;
+	}
+
+	button.header-cover {
+		cursor: pointer;
+	}
+
+	button.header-cover:hover,
+	button.header-cover:focus-visible {
+		outline: 2px solid var(--primary);
+		outline-offset: 2px;
+	}
+
+	.header-cover-empty {
+		border: 1px dashed var(--text-subtle);
+	}
+
+	.header-cover-add {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		padding: 0.2rem;
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 0.62rem;
+		letter-spacing: 0.04em;
+		line-height: 1.1;
+		text-align: center;
+		text-transform: uppercase;
+	}
+
+	/* The cover editor places its stage, count and action row into these
+	   areas itself; the titles keep their own. */
+	.header-identity.cover-editing {
+		display: grid;
+		grid-template-columns: auto minmax(0, 1fr);
+		grid-template-areas:
+			'stage titles'
+			'stage tryrow'
+			'count .';
+		grid-template-rows: auto 1fr auto;
+		align-items: start;
+		column-gap: 1.5rem;
+		row-gap: 0.6rem;
+	}
+
+	.cover-editing .header-titles {
+		grid-area: titles;
 	}
 
 	.header-cover img,
@@ -191,6 +270,16 @@
 	@media (max-width: 768px) {
 		.collection-header {
 			padding: 0.8rem 0.8rem 0.6rem;
+		}
+
+		.header-identity.cover-editing {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-areas:
+				'stage'
+				'count'
+				'tryrow'
+				'titles';
+			grid-template-rows: none;
 		}
 	}
 </style>

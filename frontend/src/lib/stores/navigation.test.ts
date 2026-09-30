@@ -1932,6 +1932,25 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		playlistStands(below);
 	});
 
+	it('an album row in the drawer over an open menu, which closes that menu, lands on the album and one Back leaves it', async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+		toggleSidebar();
+		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+
+		const going = openAlbum('a1');
+		menu.set(false);
+		await going;
+		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
+
+		expect(location.pathname).toBe('/album/a1');
+		expect(historyEntry()).toMatchObject({ collection: { kind: 'album', id: 'a1' } });
+		await pressBack();
+
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' }));
+		playlistStands(below);
+	});
+
 	it('open, close and open again in quick succession end on one entry that Back closes', async () => {
 		const menu = ownedMenu();
 		const below = historyEntry().index;
