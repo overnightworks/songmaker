@@ -84,6 +84,7 @@ function coverJob(overrides: Partial<JobItem> = {}): JobItem {
 	return { id: 'cover-job', type: 'cover', status: 'queued', progress: 0, ...overrides };
 }
 
+const SPENT_TODAY = coverSuggestions({ used_today: 10 });
 const ONE_SUGGESTION = { suggestions: [{ id: 'one', url: '/suggestion-one.png' }] };
 const THREE_SUGGESTIONS = {
 	suggestions: [
@@ -234,19 +235,42 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(target.querySelector('.item-row')).not.toBeNull();
 	});
 
-	it('opens with no suggestion left today without asking for one or counting one', async () => {
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ used_today: 10 }));
-		const target = await renderDetail();
+	it.each([
+		{
+			when: 'known before asking',
+			arrange: () => fetchAlbumCoverSuggestions.mockResolvedValue(SPENT_TODAY),
+			asks: 0
+		},
+		{
+			when: 'refused while asking',
+			arrange: () => {
+				fetchAlbumCoverSuggestions
+					.mockResolvedValueOnce(coverSuggestions({ used_today: 9 }))
+					.mockResolvedValue(SPENT_TODAY);
+				createAlbumCoverSuggestions.mockRejectedValue(
+					new ApiError(429, 'Daily cover suggestion limit reached', '/api/albums/a-local')
+				);
+			},
+			asks: 1
+		}
+	])(
+		'with no suggestion left today ($when) says so once and counts no suggestion',
+		async ({ arrange, asks }) => {
+			arrange();
+			const target = await renderDetail();
 
-		await openCoverEditing(target);
-		await vi.waitFor(() => expect(countLine(target)).toBe('0 of 10 left today'));
-		await tick();
+			await openCoverEditing(target);
+			await vi.waitFor(() =>
+				expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached')
+			);
+			await tick();
 
-		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
-		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(true);
-		expect(target.querySelector('.cover-stage [role="alert"]')).toBeNull();
-		expect(addToast).not.toHaveBeenCalled();
-	});
+			expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(asks);
+			expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(true);
+			expect(target.querySelector('.cover-stage [role="alert"]')).toBeNull();
+			expect(addToast).not.toHaveBeenCalled();
+		}
+	);
 
 	it('opens a cover already set with a quiet Remove and makes nothing by itself', async () => {
 		albumList.set([coveredAlbum()]);
