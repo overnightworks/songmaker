@@ -429,14 +429,6 @@
 			onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
 			>{ALBUM_COVER_SUGGESTION_USE_LABEL}</button
 		>
-		{#if album.cover}
-			<button
-				type="button"
-				class="cover-action cover-remove"
-				data-hitbox="frequent"
-				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
-			>
-		{/if}
 		<button
 			type="button"
 			class="cover-close"
@@ -448,6 +440,14 @@
 		>
 			<Icon name="x" size={20} />
 		</button>
+		{#if album.cover}
+			<button
+				type="button"
+				class="cover-action cover-remove"
+				data-hitbox="frequent"
+				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
+			>
+		{/if}
 	</div>
 </div>
 
@@ -643,6 +643,12 @@
 		border: none;
 		background: none;
 		color: var(--text-muted);
+	}
+
+	@media (max-width: 768px) {
+		.cover-action.cover-use {
+			margin-left: auto;
+		}
 	}
 
 	@media (prefers-reduced-motion: reduce) {

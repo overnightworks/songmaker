@@ -241,8 +241,8 @@ describe('AlbumCoverEditor in the album header', () => {
 			'Upload',
 			'Suggest another',
 			'Use',
-			'Remove',
-			'Close cover editing'
+			'Close cover editing',
+			'Remove'
 		]);
 		expect(getByRoleButton(requireElement(target, '.cover-editor'), 'Use').disabled).toBe(true);
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
