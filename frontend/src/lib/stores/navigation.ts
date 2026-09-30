@@ -274,16 +274,22 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 	await openAppPage(target.href);
 }
 
-// A rail page link (a Settings row, the account name, a search hit that
-// names a page) leaves the song for an app page, so it asks the same
-// dirty-draft question as every other way out before it navigates.
+// An app-page link (a Settings row, the account name or its menu, a search hit
+// that names a page) leaves the song for an app page, so it asks the same
+// dirty-draft question as every other way out before it navigates. The phone
+// drawer closes first and its entry steps back, and the page is pushed only
+// once that step has landed: SvelteKit keeps a replaced entry's navigation
+// index, so a page written over the drawer's shallow entry would share its
+// index with the library entry below, and Back onto it would move the address
+// without loading the library (issue #1165). A step still in flight when the
+// page starts loading would abort it, which is why the push waits.
 type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
 function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
-		await libraryHistoryStepsLanded();
-		await goto(resolve(href), { replaceState: get(railDrawerLayered) });
 		closeSidebar();
+		await libraryHistoryStepsLanded();
+		await goto(resolve(href));
 	});
 }
 

@@ -1921,11 +1921,8 @@ describe('the phone rail drawer owns one history entry', () => {
 			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })
 		},
 		{
-			way: 'a Settings link, which replaces the drawer entry before the drawer closes',
-			go: async () => {
-				replaceHistoryEntry('/settings/voices');
-				closeSidebar();
-			}
+			way: 'a Settings link',
+			go: () => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
 		}
 	])(
 		'leaving the drawer by $way leaves no entry behind: one Back lands on the playlist entry',
@@ -1944,6 +1941,27 @@ describe('the phone rail drawer owns one history entry', () => {
 			});
 		}
 	);
+
+	// Issue #1165: a page written over the drawer's entry would keep that
+	// entry's place among the router's navigations, and Back onto the playlist
+	// would then move the address without loading the playlist's page.
+	it('a Settings link pushes Settings over the playlist: Back navigates to the playlist, Forward to Settings', async () => {
+		const { below, path } = await openDrawer();
+
+		followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices');
+		await vi.waitFor(() => expect(location.pathname).toBe('/settings/voices'));
+		await pressBack();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: path });
+		expect(historyEntry()).toMatchObject({
+			index: below,
+			collection: { kind: 'playlist', id: 'p1' }
+		});
+
+		await pressForward();
+
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/settings/voices' });
+	});
 
 	it('marks the drawer as a layer so a link inside it replaces the entry', async () => {
 		await openDrawer();
@@ -2163,7 +2181,7 @@ describe('openRailSearchTarget', () => {
 
 		expect(get(sidebarOpen)).toBe(false);
 		expect(window.location.pathname).toBe('/settings/playback');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback', { replaceState: false });
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
 	});
 });
 
