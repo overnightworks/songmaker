@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "fa7207b1fa725719710840dd65a52e09fbd63fac"
 branch = "claude/issue-1134-cover-one-suggestion"
-scope = ["docs/architecture.md", "src/songmaker_cli/album_api.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/mcp_server/server.py", "src/songmaker_cli/mcp_server/tools.py", "tests/test_album_cover_suggestions.py", "tests/test_cover_runner.py", "tests/test_cover_suggestion_job.py"]
+scope = ["docs/architecture.md", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/constants.ts", "src/songmaker_cli/album_api.py", "src/songmaker_cli/cover_runner.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/cowriter/tools.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/cover_suggestions.py", "src/songmaker_cli/mcp_server/server.py", "src/songmaker_cli/mcp_server/tools.py", "tests/fixtures/cowriter_tool_catalog_prompt.txt", "tests/test_album_cover_suggestions.py", "tests/test_cover_runner.py", "tests/test_cover_suggestion_job.py", "tests/test_mcp_server.py"]
 opened_commit = "9e6b64d524f03413afe29503367bc7aedbe51abe"
 whole_reason = "one cover suggestion per request, accumulating, with its tests and docs"
