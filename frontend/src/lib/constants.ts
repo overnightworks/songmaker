@@ -699,12 +699,13 @@ export const SSE_RECONNECT_BACKOFF_FACTOR = 2;
 export const SSE_RECONNECT_MAX_DELAY_MS = 8000;
 export const SSE_RECONNECT_JITTER_RATIO = 0.2;
 export const SSE_IMMEDIATE_REOPEN_MIN_GAP_MS = 2000;
-// A job stream gives up -- drops the job and says "Lost connection to
-// server" -- on this many consecutive connection errors. Twenty-four retries
-// at the delays above (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three
-// minutes the former 30s ceiling gave ten attempts. Only those timed
-// retries count: a reopen on returning to the app re-records the attempt it
-// interrupted, so frequent returns never shorten the three minutes (#1032).
+// A job stream stops trusting its stream and reads the job over REST on this
+// many consecutive connection errors. Twenty-four retries at the delays above
+// (2 + 4 + 8 + 21 * 8s = 182s) keep the roughly three minutes the former 30s
+// ceiling gave ten attempts. Only timed retries that fail while the page is
+// online count: a reopen on returning to the app never spends one, so
+// frequent returns never shorten the three minutes (#1032), nor does a
+// failure while offline, so no number of outages drops a running take (#1141).
 export const JOB_STREAM_MAX_CONNECTION_ERRORS = 25;
 // How long a finished generate job keeps its card, counted only while the page
 // is online, when the song refresh its end asked for has not run (#1039 O3):
