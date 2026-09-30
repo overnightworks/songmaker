@@ -367,11 +367,12 @@ describe('app shell', () => {
 		expect(privateTarget.querySelector('.app-shell')).toBeNull();
 	});
 
-	it('keeps the mobile strip trigger and brand inside 320px', async () => {
+	it('keeps the mobile strip trigger, brand and account circle inside 320px', async () => {
 		const target = await renderLayout('/');
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
 		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
 		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
+		const accountCircle = requireElement<HTMLButtonElement>(strip, '.account-menu .menu-trigger');
 
 		expect(target.querySelector('.rail')).toBeNull();
 		expect(brand.textContent).toBeTruthy();
@@ -380,7 +381,14 @@ describe('app shell', () => {
 		const pad = px(stripStyle.paddingLeft) + px(stripStyle.paddingRight);
 		const gap = px(stripStyle.gap);
 		expect(minUsedWidth(trigger)).toBe(HITBOX_FREQUENT_PX);
-		const used = pad + minUsedWidth(trigger) + gap + px(getComputedStyle(brand).minWidth || '0');
+		expect(minUsedWidth(accountCircle)).toBe(HITBOX_FREQUENT_PX);
+		const used =
+			pad +
+			minUsedWidth(trigger) +
+			gap +
+			px(getComputedStyle(brand).minWidth || '0') +
+			gap +
+			minUsedWidth(accountCircle);
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
