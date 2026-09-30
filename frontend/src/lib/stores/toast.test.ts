@@ -1,10 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { get } from 'svelte/store';
 import { toasts, addToast, dismissToast } from './toast';
+import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 
 beforeEach(() => {
 	toasts.set([]);
 	vi.useFakeTimers();
+});
+
+afterEach(() => {
+	resetConnectivityForTests();
 });
 
 describe('toast store', () => {
@@ -70,5 +75,26 @@ describe('toast store', () => {
 		const remaining = get(toasts);
 		expect(remaining).toHaveLength(1);
 		expect(remaining[0].message).toBe('late');
+	});
+
+	it('clears the failures raised offline once the connection is back', () => {
+		addToast('Rating failed', 'error');
+		reportResourceStreamReachable(false);
+		addToast('Pick failed', 'error');
+		addToast('Keep failed', 'error');
+		expect(get(toasts)).toHaveLength(3);
+
+		reportResourceStreamReachable(true);
+
+		expect(get(toasts).map((toast) => toast.message)).toEqual(['Rating failed']);
+	});
+
+	it('clears the failures of every outage, not only the first', () => {
+		for (let outage = 0; outage < 3; outage++) {
+			reportResourceStreamReachable(false);
+			addToast('Pick failed', 'error');
+			reportResourceStreamReachable(true);
+		}
+		expect(get(toasts)).toEqual([]);
 	});
 });
