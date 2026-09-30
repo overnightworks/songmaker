@@ -2,6 +2,7 @@ import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { RAIL_SETTINGS_OPEN_STORAGE_KEY } from '$lib/constants';
+import { visibleSettingsSections } from '$lib/settingsSections';
 import { currentUser } from '$lib/stores/auth';
 import { createComponentMount, requireElement } from './rail-test-fixtures';
 
@@ -72,6 +73,14 @@ describe('RailSettings', () => {
 			'Cleanup',
 			'Legal'
 		]);
+	});
+
+	it('links exactly the sections the shared settings list owns', async () => {
+		const target = await render();
+		const hrefs = Array.from(target.querySelectorAll<HTMLAnchorElement>('.row-sub')).map((link) =>
+			link.getAttribute('href')
+		);
+		expect(hrefs).toEqual(visibleSettingsSections(true).map((section) => section.href));
 	});
 
 	it('opens automatically and marks the active section when landing on a settings route', async () => {
