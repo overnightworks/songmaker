@@ -14,7 +14,9 @@ import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
 const retryResourceSync = vi.hoisted(() => vi.fn(async () => true));
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn(), afterNavigate: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/stores/resourceSync')>()),

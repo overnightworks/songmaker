@@ -1,12 +1,74 @@
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { currentLibraryHistoryState } from '$lib/stores/libraryContext';
+import {
+	currentLibraryHistoryState,
+	libraryHistoryEntry,
+	type LibraryHistoryState
+} from '$lib/stores/libraryContext';
 import { initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+import { writeHistoryEntry } from '$lib/test-utils/app-navigation';
+
+// The one place tests touch the browser history: they seed and read entries,
+// and press Back and Forward, through these helpers, so the shape an entry is
+// written in stays the business of the seam in libraryContext.ts.
+
+export function replaceHistoryEntry(url: string, entry: unknown = null): void {
+	writeHistoryEntry(entry, url, 'replace');
+}
+
+export function pushHistoryEntry(url: string, entry: unknown = null): void {
+	writeHistoryEntry(entry, url, 'push');
+}
+
+// The entry history stands on, as the library reads it. Tests that expect no
+// library entry at all compare it with what they seeded.
+export function historyEntry(): LibraryHistoryState {
+	return libraryHistoryEntry() as LibraryHistoryState;
+}
+
+export function historyLength(): number {
+	return history.length;
+}
+
+// Resolves once the step has landed and the library has reacted to it.
+export async function pressBack(): Promise<void> {
+	await traverseHistory(() => history.back());
+}
+
+export async function pressForward(): Promise<void> {
+	await traverseHistory(() => history.forward());
+}
+
+export interface BackWatch {
+	presses: () => number;
+	stop: () => void;
+}
+
+// Counts the Backs the app asks the browser for while holding each step back,
+// so a test sees the request without the library reacting to it.
+export function watchBack(): BackWatch {
+	const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+	return { presses: () => back.mock.calls.length, stop: () => back.mockRestore() };
+}
+
+async function traverseHistory(step: () => void): Promise<void> {
+	const landed = new Promise((resolve) =>
+		window.addEventListener('popstate', resolve, { once: true })
+	);
+	step();
+	await landed;
+	await tick();
+}
+
+// The entry history will stand on once every queued step has landed.
+export function plannedHistoryIndex(): number {
+	return (currentLibraryHistoryState() as { index: number }).index;
+}
 
 // A library page with the history layer stack running, the way the app layout
 // starts it; the returned function stops it.
 function startLibraryHistory(): () => void {
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 	const stopNavigation = initNavigation();
 	return () => {
 		stopNavigation();
@@ -14,23 +76,9 @@ function startLibraryHistory(): () => void {
 	};
 }
 
-async function pressBack(): Promise<void> {
-	const landed = new Promise((resolve) =>
-		window.addEventListener('popstate', resolve, { once: true })
-	);
-	history.back();
-	await landed;
-	await tick();
-}
-
 async function expectHistoryAt(index: number): Promise<void> {
-	await vi.waitFor(() => expect(history.state.index).toBe(index));
+	await vi.waitFor(() => expect(historyEntry().index).toBe(index));
 	expect(location.pathname).toBe('/');
-}
-
-// The entry history will stand on once every queued step has landed.
-export function plannedHistoryIndex(): number {
-	return (currentLibraryHistoryState() as { index: number }).index;
 }
 
 export interface CloseWay {
@@ -47,6 +95,8 @@ export interface OverlayUnderBack {
 	open: (target: HTMLElement) => void | Promise<void>;
 	isShown: (target: HTMLElement) => boolean;
 	closeWays: CloseWay[];
+	/** What Back must leave undone, checked once it closed the overlay: a dialog it cancels never confirms. */
+	afterBack?: () => void;
 	/** A layer the overlay opens over, which the next Back closes in turn. */
 	over?: { name: string; isShown: () => boolean };
 }
@@ -67,7 +117,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 		async function renderOpen(): Promise<HTMLElement> {
 			const target = await overlay.render();
-			below = history.state.index;
+			below = historyEntry().index;
 			await overlay.open(target);
 			await tick();
 			expect(overlay.isShown(target)).toBe(true);
@@ -82,6 +132,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 			expect(overlay.isShown(target)).toBe(false);
 			expect(overlay.over?.isShown() ?? true).toBe(true);
+			overlay.afterBack?.();
 			await expectHistoryAt(below);
 		});
 
@@ -116,6 +167,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 					await close(target);
 
 					expect(actionSawHistoryAt?.()).toBe(below);
+					await expectHistoryAt(below);
 				}
 			);
 		}

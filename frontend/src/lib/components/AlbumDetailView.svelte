@@ -582,9 +582,7 @@
 						<p>{coverSuggestionsProgressMessage}</p>
 					{/if}
 					<div class="suggestion-placeholders" aria-label={ALBUM_COVER_SUGGESTING_LABEL}>
-						{#each [1, 2, 3] as placeholder (placeholder)}
-							<span class="suggestion-placeholder"></span>
-						{/each}
+						<span class="suggestion-placeholder"></span>
 					</div>
 					<div
 						class="suggestion-progress"

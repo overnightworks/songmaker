@@ -175,7 +175,7 @@ def _install_fake_codex_cli(
     return calls
 
 
-def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
+def test_cover_job_generates_one_normalized_png_through_isolated_fake_cli(
     cover_job, tmp_path: Path, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     factory, audio_dir, job_id = cover_job
@@ -192,9 +192,9 @@ def test_cover_job_generates_three_normalized_pngs_through_isolated_fake_cli(
         suggestions = sorted(job.album.cover_suggestions, key=lambda item: item.id)
         assert job.status == JobStatus.COMPLETED
         assert job.progress == 1.0
-        assert len(suggestions) == 3
+        assert len(suggestions) == 1
         paths = [item.png_path for item in suggestions]
-    assert len(calls) == 3
+    assert len(calls) == 1
     assert all(
         call["command"] == codex_image._build_codex_image_command("") for call in calls
     )
@@ -253,7 +253,7 @@ def test_a_saved_codex_model_reaches_the_image_cli_as_its_model_flag(
 
     with factory() as session:
         assert session.get(Job, job_id).status == JobStatus.COMPLETED
-    assert len(calls) == 3
+    assert len(calls) == 1
     assert all(
         call["command"][call["command"].index("--model") + 1] == "gpt-5.4" for call in calls
     )

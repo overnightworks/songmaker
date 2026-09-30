@@ -206,8 +206,8 @@ def build_server(
 
     @mcp.tool(
         description=(
-            "Request three album cover suggestions. Returns the queued job ID "
-            "and status."
+            "Request one more album cover suggestion; earlier suggestions stay "
+            "pending. Returns the queued job ID and status."
         ),
     )
     def suggest_album_cover(album_id: str) -> CoverSuggestionRequestResult:

@@ -11,6 +11,7 @@ import {
 } from '$lib/constants/auth';
 import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
+import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
 
@@ -138,7 +139,7 @@ export async function login(username: string, password: string): Promise<AuthUse
 }
 
 // Every per-user cache (playlist detail cache, share count/inventory
-// cache) lives in module state, not the session -- without this, a
+// cache, Recent ranking) lives in module state, not the session -- without this, a
 // logout/401 followed by a different user's login on the same tab could
 // briefly serve the previous user's cached playlist or share data.
 export function clearAuth(): void {
@@ -146,6 +147,7 @@ export function clearAuth(): void {
 	resetGenerationFailures();
 	resetPlaylists();
 	resetShares();
+	resetLibraryOrder();
 }
 
 export async function logout(): Promise<void> {

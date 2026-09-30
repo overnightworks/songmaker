@@ -24,7 +24,9 @@ vi.mock('$lib/stores/auth', () => {
 		currentUser
 	};
 });
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { clearAuth, currentUser } from '$lib/stores/auth';

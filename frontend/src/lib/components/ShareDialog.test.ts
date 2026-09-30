@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import ShareDialog from './ShareDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -63,4 +64,50 @@ describe('ShareDialog', () => {
 		await tick();
 		expect(document.activeElement).toBe(target.querySelector('.confirm-btn'));
 	});
+});
+
+// CollectionMenu empties the missing songs on close, which hides the warning.
+const shareWarning = {
+	closes: 0,
+	shown: null as ReturnType<typeof mount> | null,
+	open(target: HTMLElement): void {
+		shareWarning.closes = 0;
+		shareWarning.shown = mount(ShareDialog, {
+			target,
+			props: { songs: defaultProps().songs, onclose: shareWarning.close }
+		});
+		mounted.push(shareWarning.shown);
+	},
+	close(): void {
+		shareWarning.closes += 1;
+		if (shareWarning.shown) void unmount(shareWarning.shown);
+		shareWarning.shown = null;
+	}
+};
+
+describeBackClosesOverlay({
+	name: 'the share warning',
+	render: async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		return target;
+	},
+	open: shareWarning.open,
+	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
+	afterBack: () => expect(shareWarning.closes).toBe(1),
+	closeWays: [
+		{
+			way: 'Got it',
+			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
+		},
+		{
+			way: 'the backdrop',
+			close: (target) => target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click()
+		},
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	]
 });
