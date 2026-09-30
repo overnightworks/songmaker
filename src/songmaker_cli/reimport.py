@@ -81,6 +81,7 @@ def reimport_files(
             wav_path=wav_rel,
             generation_id=generation_id,
             audio_dir=audio_dir,
+            created_by=user_id,
         )
         create_generation_created_event(
             session,
