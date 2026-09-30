@@ -118,6 +118,10 @@ async function openSeededSongFromItsAlbum(
 		.getByRole('button', { name: nameStartingWith(songTitle) })
 		.click();
 	await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
+	// The song shows before its route module has loaded, and only then does
+	// the address move to it: a Back taken earlier leaves the album page for
+	// whatever came before it (#1151).
+	await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 }
 
 test.describe('typing on the phone', () => {
