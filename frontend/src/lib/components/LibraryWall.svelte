@@ -63,6 +63,11 @@
 	});
 
 	$effect(() => {
+		void $lastWorkByPlace;
+		labelledAt = new Date();
+	});
+
+	$effect(() => {
 		void wallItems.length;
 		if (browseEl) browseEl.scrollTop = restoredScroll;
 	});
@@ -89,17 +94,13 @@
 	function catchUpWall(): void {
 		void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'recent') void loadRecentWork();
-	}
-
-	async function loadRecentWork(): Promise<void> {
-		if (await readRecentWork()) labelledAt = new Date();
+		if ($libraryWallOrder === 'recent') void readRecentWork();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
 		chooseLibraryWallOrder(next);
 		labelledAt = new Date();
-		if (next === 'recent') void loadRecentWork();
+		if (next === 'recent') void readRecentWork();
 	}
 
 	function catchUpOnReturnToForeground(): void {

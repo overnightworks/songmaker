@@ -87,7 +87,7 @@ async function readEveryRecentPlace(): Promise<LibraryContinueItem[] | null> {
 }
 
 // A failed read keeps the ranking already known; only the newest read may
-// replace it. Resolves true when this read became the ranking.
+// replace it.
 export async function readRecentWork(): Promise<boolean> {
 	const request = ++recentWorkRequest;
 	const places = await readEveryRecentPlace();
