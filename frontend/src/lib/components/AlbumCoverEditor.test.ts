@@ -272,6 +272,24 @@ describe('AlbumCoverEditor in the album header', () => {
 		}
 	);
 
+	it('names a throttled ask as a failure and keeps Suggest another open while suggestions are left', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ used_today: 3 }));
+		createAlbumCoverSuggestions.mockRejectedValue(
+			new ApiError(429, 'Too many requests, slow down', '/api/albums/a-local')
+		);
+		const target = await renderDetail();
+
+		await openCoverEditing(target);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-stage [role="alert"]')?.textContent).toContain(
+				'Too many requests, slow down'
+			)
+		);
+
+		expect(countLine(target)).toBe('1 / 1 · 7 of 10 left today');
+		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(false);
+	});
+
 	it('opens a cover already set with a quiet Remove and makes nothing by itself', async () => {
 		albumList.set([coveredAlbum()]);
 		const target = await renderDetail();
@@ -450,6 +468,33 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
 			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
 		);
+	});
+
+	it('× stops the run once when the suggestions still load as it stops', async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		const loadAfterAsking = deferred<CoverSuggestionsResponse>();
+		fetchAlbumCoverSuggestions
+			.mockResolvedValueOnce(coverSuggestions())
+			.mockReturnValueOnce(loadAfterAsking.promise)
+			.mockReturnValue(deferred<CoverSuggestionsResponse>().promise);
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
+		const stopping = deferred<JobItem>();
+		cancelJob.mockReturnValue(stopping.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(2);
+
+		pressEditorButton(target, 'Close cover editing');
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		loadAfterAsking.resolve(coverSuggestions({ job: coverJob({ status: 'running' }) }));
+		await tick();
+		stopping.resolve(coverJob({ status: 'cancelled' }));
+
+		await editingClosed(target);
+		await new Promise((settled) => setTimeout(settled, 0));
+		expect(cancelJob).toHaveBeenCalledTimes(1);
+		expect(discardAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
+		expect(get(activeJobs)).toEqual([]);
 	});
 
 	it('× while the first suggestion is still being asked for stops the run it starts', async () => {
