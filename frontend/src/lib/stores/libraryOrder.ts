@@ -37,8 +37,10 @@ function compareAdded(a: LibraryPlace, b: LibraryPlace): number {
 	return compareByCreatedAt(a.item, b.item, 'newest');
 }
 
-// A place newer than the last read of Recent has no rank yet; it waits at
-// the end in title order until the next read ranks it.
+// A place without a rank waits at the end in title order: one newer than
+// the last read of Recent until the next read ranks it, and an album of
+// someone else's the viewer never worked in (only an admin sees one), which
+// Recent never ranks.
 function compareByLastWork(lastWork: ReadonlyMap<string, LastWork>): LibraryPlaceComparator {
 	return (a, b) => {
 		const aRank = lastWorkOf(lastWork, a)?.rank ?? Number.POSITIVE_INFINITY;

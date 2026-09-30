@@ -69,7 +69,9 @@ def api_library_continue(
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
 ) -> LibraryContinueResponse:
-    places = list_place_activity(session, user_id=user.id, limit=offset + limit)
+    places = list_place_activity(
+        session, viewer_id=user.id, owner_id=owner_filter(user), limit=offset + limit,
+    )
     return LibraryContinueResponse.from_orm(places[offset:])
 
 
