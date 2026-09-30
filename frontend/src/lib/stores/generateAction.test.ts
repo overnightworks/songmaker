@@ -334,6 +334,11 @@ describe('generate action presentation', () => {
 			{
 				cause: 'the server is unreachable',
 				loseConnection: () => reportResourceStreamReachable(false)
+			},
+			{
+				cause: "the job's stream is down while the page is online",
+				loseConnection: () =>
+					activeJobs.update((jobs) => jobs.map((active) => ({ ...active, streamStale: true })))
 			}
 		])(
 			'a running take reads "Reconnecting…" with its last seen progress when $cause',

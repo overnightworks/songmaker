@@ -383,6 +383,28 @@ describe('jobs store', () => {
 		expect(MockEventSource.instances).toHaveLength(opens);
 	});
 
+	describe("while the page is online but the job's stream is down", () => {
+		const streamIsStale = (): boolean | undefined => get(activeJobs)[0].streamStale;
+
+		it('marks the job stale from its first stream failure, through refused reopens', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			expect(streamIsStale()).toBeFalsy();
+			await failEveryReopen(3);
+			expect(streamIsStale()).toBe(true);
+			latestSource().simulateOpen();
+			expect(streamIsStale()).toBe(true);
+		});
+
+		it('is fresh again with the first message after the return', async () => {
+			trackJob(makeJob({ status: 'running', progress: 0.55 }), { songId: 's1' });
+			await failEveryReopen(6);
+			latestSource().simulateMessage(makeJob({ status: 'running', progress: 0.65 }));
+			expect(get(activeJobs)).toEqual([
+				{ job: makeJob({ status: 'running', progress: 0.65 }), songId: 's1' }
+			]);
+		});
+	});
+
 	it('tolerates errors below max threshold, reconnecting with backoff each time', async () => {
 		trackJob(makeJob(), {});
 		for (let i = 0; i < 5; i++) {

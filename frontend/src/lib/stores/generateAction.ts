@@ -76,7 +76,7 @@ function progressReadout(job: JobItem | null): string | null {
 	return parts.join(' · ');
 }
 
-/** The progress the job last reported, offline; loading a model reports none (see `progressReadout`). */
+/** The progress the job last reported, while reconnecting; loading a model reports none (see `progressReadout`). */
 function lastSeenReadout(job: JobItem | null): string | null {
 	if (job?.phase === 'loading_model') return null;
 	return EDITOR_GENERATE_LAST_SEEN_TEMPLATE.replace('{percent}', String(progressPercent(job)));
@@ -123,7 +123,7 @@ function isStillWorking(job: JobItem): boolean {
 	return job.status === 'queued' || job.status === 'running';
 }
 
-function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem | null {
+function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): ActiveJob | null {
 	const active = jobs.find(
 		({ songId, job, awaitingTakes }) =>
 			songId === song.id &&
@@ -131,13 +131,14 @@ function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): JobItem
 			(isStillWorking(job) || awaitingTakes === true) &&
 			!jobTakesHaveLanded(job, song)
 	);
-	return active?.job ?? null;
+	return active ?? null;
 }
 
 /**
- * A busy state is `reconnecting` while the page is offline: nothing the
- * server says about the job can arrive, and a cancel cannot reach it, so the
- * surfaces grey out instead of looking live (#1039 O2). A generating state is
+ * A busy state is `reconnecting` while the page is offline or the job's own
+ * stream is down: nothing the server says about the job can arrive, and a
+ * cancel may not reach it, so the surfaces grey out instead of looking live
+ * (#1039 O2, #1161 R1). A generating state is
  * `ended` while a finished job waits for its take to reach the list: its
  * card stays, but there is nothing left to cancel (#1039 O3).
  */
@@ -208,7 +209,9 @@ export const generateAction = derived(
 		failures,
 		isOffline
 	]): GenerateState => {
-		const job = song ? pendingGenerateJob(song, jobs) : null;
+		const tracked = song ? pendingGenerateJob(song, jobs) : null;
+		const job = tracked?.job ?? null;
+		const reconnecting = isOffline || tracked?.streamStale === true;
 		const pending = inFlight || job !== null;
 		const gpuOffline = health?.acestep_workers_online === 0;
 		let disabledReason = '';
@@ -226,18 +229,18 @@ export const generateAction = derived(
 				jobId: job.id,
 				label: queuedLabel(job.queue_position ?? null),
 				reason: job.queue_reason ?? null,
-				reconnecting: isOffline
+				reconnecting
 			};
 		}
 		if (pending) {
 			return {
 				kind: 'generating',
 				jobId: job?.id ?? null,
-				phase: isOffline ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
+				phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
 				takeCounter: takeCounterLabel(job),
 				progress: progressPercent(job),
-				readout: isOffline ? lastSeenReadout(job) : progressReadout(job),
-				reconnecting: isOffline,
+				readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
+				reconnecting,
 				ended: job !== null && !isStillWorking(job)
 			};
 		}
