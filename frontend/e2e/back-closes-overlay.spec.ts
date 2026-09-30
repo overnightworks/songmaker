@@ -1,6 +1,5 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
-	ACCOUNT_MENU_LABEL,
 	COLLECTION_MENU_LABEL,
 	collectionPlayLabel,
 	DIALOG_CANCEL_LABEL,
@@ -15,6 +14,7 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -36,6 +36,7 @@ import {
 	nameStartingWith,
 	openLibraryWall,
 	openRailNav,
+	openSettingsFromAccountMenu,
 	playlistEntryRows,
 	shellOf,
 	workspace,
@@ -303,10 +304,25 @@ async function expectSettingsStands(page: Page): Promise<void> {
 	await expect(settingsHeading(page)).toBeVisible();
 }
 
+// The phone drawer carries no Settings group (#1174); its search still goes
+// to a Settings page in one step.
+async function openVoicesFromDrawerSearch(page: Page): Promise<void> {
+	const rail = await openRailNav(page, 'mobile');
+	await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(SETTINGS_SECTION);
+	await rail
+		.getByRole('group', { name: 'Pages' })
+		.getByRole('option', { name: nameStartingWith(SETTINGS_SECTION) })
+		.click();
+}
+
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
-	const rail = await openRailNav(page, shell);
-	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
-	await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
+	if (shell === 'mobile') {
+		await openVoicesFromDrawerSearch(page);
+	} else {
+		const rail = await openRailNav(page, shell);
+		await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
+		await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
+	}
 	await expectSettingsStands(page);
 }
 
@@ -348,14 +364,10 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		afterwards: backReaches('playlist')
 	},
 	{
-		name: 'a Settings link in the phone rail drawer closes it, and Back then Forward return to Settings',
+		name: 'a Settings page found in the phone rail drawer closes it, and Back then Forward return to Settings',
 		shell: 'mobile',
 		open: openRailDrawer,
-		leave: async (page) => {
-			const rail = await openRailNav(page, 'mobile');
-			await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
-			await rail.getByRole('link', { name: SETTINGS_SECTION, exact: true }).click();
-		},
+		leave: openVoicesFromDrawerSearch,
 		expectLeft: async (page) => {
 			await expectSettingsStands(page);
 			await expect(railDrawer(page)).toBeHidden();
@@ -511,12 +523,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 		test.skip(shellOf(testInfo) !== 'mobile', 'The account menu belongs to the mobile shell.');
 		const guard = new FlowGuard(page);
 		const { pages } = await openSeededPlaylist(page, request);
-		const accountMenu = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
-		await appBar(page).getByRole('button', { name: accountMenu }).click();
-		await page
-			.getByRole('dialog', { name: accountMenu })
-			.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })
-			.click();
+		await openSettingsFromAccountMenu(page);
 		const settingsIndex = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, exact: true });
 		await expect(page).toHaveURL(/\/settings$/);
 		await expect(settingsIndex).toBeVisible();

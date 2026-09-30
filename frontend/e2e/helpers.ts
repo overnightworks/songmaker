@@ -8,13 +8,16 @@ import {
 	type TestInfo
 } from '@playwright/test';
 import {
+	ACCOUNT_MENU_LABEL,
 	COWRITER_TURN_PATH,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
-	RESOURCE_EVENT_STREAM_PATH
+	RAIL_SETTINGS_LABEL,
+	RESOURCE_EVENT_STREAM_PATH,
+	SETTINGS_NAV_LABEL
 } from '../src/lib/constants';
 import { BASE_URL } from './seed';
 
@@ -241,6 +244,46 @@ export async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 		}
 	}
 	return page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+}
+
+const ACCOUNT_MENU_NAME = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
+
+/** The phone's account circle and, once it is tapped, its menu (#1158). */
+export function accountCircle(page: Page): Locator {
+	return page.getByRole('button', { name: ACCOUNT_MENU_NAME });
+}
+
+export function accountMenu(page: Page): Locator {
+	return page.getByRole('dialog', { name: ACCOUNT_MENU_NAME });
+}
+
+/** Settings from the phone's account menu: the Settings list on the phone. */
+export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
+	await accountCircle(page).click();
+	await accountMenu(page).getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
+}
+
+/**
+ * A Settings section the way each shell reaches it: the desktop rail's Settings
+ * group, or on the phone the account menu and then the Settings list, since
+ * the phone drawer carries navigation only (#1174).
+ */
+export async function openSettingsSection(
+	page: Page,
+	shell: Shell,
+	section: string
+): Promise<void> {
+	if (shell === 'mobile') {
+		await openSettingsFromAccountMenu(page);
+		await page
+			.getByRole('navigation', { name: SETTINGS_NAV_LABEL })
+			.getByRole('link', { name: section, exact: true })
+			.click();
+		return;
+	}
+	const rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
+	await rail.getByRole('link', { name: section, exact: true }).click();
 }
 
 /**

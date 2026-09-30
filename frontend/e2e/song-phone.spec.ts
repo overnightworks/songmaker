@@ -56,6 +56,7 @@ import {
 	FlowGuard,
 	nameStartingWith,
 	openRailNav,
+	openSettingsFromAccountMenu,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -352,7 +353,7 @@ test.describe('song page at phone width', () => {
 		await expect(lyrics).toHaveValue(savedLyrics);
 	});
 
-	test('Discard on a drawer Settings link lands on its address, which a reload keeps (#1143)', async ({
+	test('Discard on the account menu Settings lands on its address, which a reload keeps (#1143)', async ({
 		page,
 		isMobile
 	}) => {
@@ -360,20 +361,18 @@ test.describe('song page at phone width', () => {
 		const library = readSeededLibrary();
 		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
 
-		const rail = await openRailNav(page, 'mobile');
-		await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
-		await rail.getByRole('link', { name: 'Account', exact: true }).click();
+		await openSettingsFromAccountMenu(page);
 		await expect(unsavedDraftDialog).toBeVisible();
 		await unsavedDraftDialog
 			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 			.click();
 
-		const accountHeading = page.getByRole('heading', { name: 'Account', level: 1 });
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(accountHeading).toBeVisible();
+		const settingsHeading = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, level: 1 });
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsHeading).toBeVisible();
 		await page.reload();
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(accountHeading).toBeVisible();
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsHeading).toBeVisible();
 	});
 });
 
