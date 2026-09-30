@@ -465,7 +465,7 @@ export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
 export const LIBRARY_NEW_ALBUM_LABEL = 'Album';
 export const LIBRARY_NEW_PLAYLIST_LABEL = 'Playlist';
-// The server's own ceiling on an album or playlist title (and an album's artist).
+// The server's own ceiling on an album, playlist or song title (and an album's artist).
 export const NEW_PLACE_TEXT_MAX_LENGTH = 200;
 export const NEW_PLACE_CREATE_LABEL = 'Create';
 export const NEW_PLACE_OFFLINE =
@@ -482,6 +482,16 @@ export const NEW_PLAYLIST_CLOSE_LABEL = 'Close new playlist';
 export const NEW_PLAYLIST_NAME_LABEL = 'Name';
 export const NEW_PLAYLIST_HINT = 'Opens the playlist; add songs from any album.';
 export const NEW_PLAYLIST_FAILED = 'The playlist could not be created. Try again.';
+export const NEW_SONG_ROW_LABEL = 'New song';
+export const NEW_SONG_CLOSE_LABEL = 'Close new song';
+export const NEW_SONG_TITLE_LABEL = 'Title';
+export const NEW_SONG_HINT = 'Opens the song on Write.';
+export const NEW_SONG_FAILED = 'The song could not be created. Try again.';
+export const ALBUM_NO_SONGS = 'No songs yet.';
+
+export function newSongCardLabel(albumTitle: string): string {
+	return `New song in ${albumTitle}`;
+}
 // The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
 export const LIBRARY_WALL_RECENT_PAGE_SIZE = 200;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
@@ -558,11 +568,6 @@ export const COLLECTION_MENU_CURATE_LABEL = 'Curate album';
 export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
 export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
-// The album header's create action. On a narrow header the glyph stands
-// alone — the word would otherwise squeeze the album title out of the row.
-export const ALBUM_ADD_SONG_LABEL = '+ Song';
-export const ALBUM_ADD_SONG_GLYPH = '+';
-
 export const ALBUM_SUBTITLE_LABEL = 'Album subtitle';
 export const ALBUM_SUBTITLE_PLACEHOLDER = 'Add subtitle';
 export const ALBUM_SUBTITLE_MAX_LENGTH = 400;
