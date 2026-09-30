@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { DIALOG_CANCEL_LABEL, DIALOG_CONFIRM_LABEL } from '$lib/constants';
 
@@ -29,16 +30,19 @@
 		});
 	});
 
+	const historyLayer = dialogHistoryLayer('confirm-dialog', () => oncancel());
+	const cancel = historyLayer.answer(() => oncancel());
+
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
-		handleFocusTrapKeydown(dialog, event, oncancel);
+		handleFocusTrapKeydown(dialog, event, cancel);
 	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<div class="overlay">
-	<button class="overlay-backdrop" tabindex="-1" onclick={oncancel} aria-label={DIALOG_CANCEL_LABEL}
+<div class="overlay" {@attach historyLayer.hold}>
+	<button class="overlay-backdrop" tabindex="-1" onclick={cancel} aria-label={DIALOG_CANCEL_LABEL}
 	></button>
 	<div
 		bind:this={dialog}
@@ -51,11 +55,13 @@
 		<h3>{title}</h3>
 		<p class="message">{message}</p>
 		<div class="actions">
-			<button class="cancel-btn" onclick={oncancel}>{DIALOG_CANCEL_LABEL}</button>
+			<button class="cancel-btn" onclick={cancel}>{DIALOG_CANCEL_LABEL}</button>
 			{#if secondaryLabel && onsecondary}
-				<button class="secondary-btn" onclick={onsecondary}>{secondaryLabel}</button>
+				<button class="secondary-btn" onclick={historyLayer.answer(onsecondary)}
+					>{secondaryLabel}</button
+				>
 			{/if}
-			<button class="confirm-btn" onclick={onconfirm}>{confirmLabel}</button>
+			<button class="confirm-btn" onclick={historyLayer.answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>
 </div>

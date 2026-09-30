@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import ConfirmDialog from './ConfirmDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -107,4 +108,78 @@ describe('ConfirmDialog', () => {
 		target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click();
 		expect(props.oncancel).toHaveBeenCalledTimes(1);
 	});
+});
+
+// The dirty-draft dialog as SongDetailView shows it: every answer closes it.
+function dirtyDraftUnderBack() {
+	const answers: string[] = [];
+	let shown: ReturnType<typeof mount> | null = null;
+	let answerSawHistoryAt: number | undefined;
+	function answer(choice: string): () => void {
+		return () => {
+			answers.push(choice);
+			answerSawHistoryAt = plannedHistoryIndex();
+			if (shown) void unmount(shown);
+			shown = null;
+		};
+	}
+	return {
+		answers,
+		answerSawHistoryAt: () => answerSawHistoryAt,
+		open(target: HTMLElement): void {
+			answers.length = 0;
+			answerSawHistoryAt = undefined;
+			shown = mount(ConfirmDialog, {
+				target,
+				props: {
+					...defaultProps(),
+					onconfirm: answer('save'),
+					onsecondary: answer('discard'),
+					oncancel: answer('keep editing')
+				}
+			});
+			mounted.push(shown);
+		}
+	};
+}
+
+const dirtyDraft = dirtyDraftUnderBack();
+
+async function renderPage(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	return target;
+}
+
+describeBackClosesOverlay({
+	name: 'the unsaved-draft dialog',
+	render: renderPage,
+	open: (target) => dirtyDraft.open(target),
+	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
+	afterBack: () => expect(dirtyDraft.answers).toEqual(['keep editing']),
+	closeWays: [
+		{
+			way: 'Cancel',
+			close: (target) => target.querySelector<HTMLButtonElement>('.cancel-btn')?.click()
+		},
+		{
+			way: 'the backdrop',
+			close: (target) => target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click()
+		},
+		{
+			way: 'Save',
+			close: (target) => target.querySelector<HTMLButtonElement>('.confirm-btn')?.click(),
+			actionSawHistoryAt: dirtyDraft.answerSawHistoryAt
+		},
+		{
+			way: 'Discard',
+			close: (target) => target.querySelector<HTMLButtonElement>('.secondary-btn')?.click(),
+			actionSawHistoryAt: dirtyDraft.answerSawHistoryAt
+		},
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	]
 });

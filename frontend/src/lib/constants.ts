@@ -468,15 +468,15 @@ export const ALBUM_COVER_ALT_TYPE = 'Album';
 export const ALBUM_COVER_UPLOAD_LABEL = 'Upload…';
 export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest cover';
 export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestions…';
-export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your covers…';
+export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your cover…';
 export const ALBUM_COVER_SUGGESTIONS_TITLE = 'Choose a cover';
-export const ALBUM_COVER_SUGGESTIONS_DETAIL = 'Three suggestions from this album’s metadata';
+export const ALBUM_COVER_SUGGESTIONS_DETAIL = 'Made from this album’s metadata';
 export const ALBUM_COVER_SUGGESTION_USE_LABEL = 'Use this';
 export const ALBUM_COVER_SUGGESTIONS_DISCARD_LABEL = 'Discard all';
 export const ALBUM_COVER_SUGGESTIONS_FAILED_TITLE = 'Couldn’t make cover suggestions';
 export const ALBUM_COVER_SUGGESTIONS_FAILED_FALLBACK = 'Cover suggestions failed. Try again.';
 export const ALBUM_COVER_SUGGESTIONS_PROGRESS_TEMPLATE =
-	'Creating 3 suggestions · {used} of {limit} today';
+	'Creating one suggestion · {used} of {limit} today';
 export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace…';
 export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
 

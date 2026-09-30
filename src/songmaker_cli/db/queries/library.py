@@ -60,7 +60,7 @@ def apply_library_sort(query, model, sort: str | None):
 def search_library(
     session: Session,
     *,
-    user_id: str,
+    owner_id: str | None,
     q: str,
     sort: str,
     limit: int,
@@ -68,10 +68,10 @@ def search_library(
 ) -> LibrarySearchPage:
     fetch_limit = limit + 1
     albums = _matching_albums(
-        session, user_id=user_id, q=q, sort=sort, after=after, limit=fetch_limit,
+        session, owner_id=owner_id, q=q, sort=sort, after=after, limit=fetch_limit,
     )
     songs = _matching_songs(
-        session, user_id=user_id, q=q, sort=sort, after=after, limit=fetch_limit,
+        session, owner_id=owner_id, q=q, sort=sort, after=after, limit=fetch_limit,
     )
     merged = _merge_hits(albums, songs, sort)
     unique = _dedupe_hits(merged)
@@ -82,17 +82,14 @@ def search_library(
 def _matching_albums(
     session: Session,
     *,
-    user_id: str,
+    owner_id: str | None,
     q: str,
     sort: str,
     after: LibraryCursor | None,
     limit: int,
 ) -> list[Album]:
-    query = (
-        session.query(Album)
-        .filter(Album.created_by == user_id)
-        .filter(Album.is_archived.is_(False))
-        .filter(title_matches(Album.title, q))
+    query = _visible_albums(
+        session.query(Album).filter(title_matches(Album.title, q)), owner_id,
     )
     keyset = _keyset_clause(Album, sort, after, LIBRARY_ITEM_ALBUM)
     if keyset is not None:
@@ -104,25 +101,31 @@ def _matching_albums(
 def _matching_songs(
     session: Session,
     *,
-    user_id: str,
+    owner_id: str | None,
     q: str,
     sort: str,
     after: LibraryCursor | None,
     limit: int,
 ) -> list[Song]:
-    query = (
+    query = _visible_albums(
         session.query(Song)
         .options(*_SONG_LIST_OPTIONS)
         .join(Album)
-        .filter(Album.created_by == user_id)
-        .filter(Album.is_archived.is_(False))
-        .filter(title_matches(Song.title, q))
+        .filter(title_matches(Song.title, q)),
+        owner_id,
     )
     keyset = _keyset_clause(Song, sort, after, LIBRARY_ITEM_SONG)
     if keyset is not None:
         query = query.filter(keyset)
     query = apply_library_sort(query, Song, sort)
     return query.limit(limit).all()
+
+
+def _visible_albums(query, owner_id: str | None):
+    query = query.filter(Album.is_archived.is_(False))
+    if owner_id is None:
+        return query
+    return query.filter(Album.created_by == owner_id)
 
 
 def _keyset_clause(model, sort: str, cursor: LibraryCursor | None, item_type: str):

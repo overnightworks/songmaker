@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import type { UnplayableSongSummary } from '$lib/api/types';
 
@@ -17,20 +18,23 @@
 		});
 	});
 
+	const historyLayer = dialogHistoryLayer('share-warning', () => onclose());
+	const close = historyLayer.answer(() => onclose());
+
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
-		handleFocusTrapKeydown(dialog, event, onclose);
+		handleFocusTrapKeydown(dialog, event, close);
 	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#if songs.length > 0}
-	<div class="overlay">
+	<div class="overlay" {@attach historyLayer.hold}>
 		<button
 			class="overlay-backdrop"
 			tabindex="-1"
-			onclick={onclose}
+			onclick={close}
 			aria-label={SHARE_DIALOG_CLOSE_LABEL}
 		></button>
 		<div
@@ -49,7 +53,7 @@
 				{/each}
 			</ul>
 			<div class="actions">
-				<button class="confirm-btn" onclick={onclose}>{SHARE_DIALOG_CLOSE_LABEL}</button>
+				<button class="confirm-btn" onclick={close}>{SHARE_DIALOG_CLOSE_LABEL}</button>
 			</div>
 		</div>
 	</div>
