@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
-	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
+	import { historyLayerState, openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
@@ -25,6 +25,11 @@
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
+		LIBRARY_NEW_ALBUM_LABEL,
+		LIBRARY_NEW_FACE,
+		LIBRARY_NEW_MENU_CLOSE_LABEL,
+		LIBRARY_NEW_MENU_LABEL,
+		LIBRARY_WALL_EMPTY,
 		LIBRARY_WALL_HEADING,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
@@ -33,6 +38,8 @@
 	} from '$lib/constants';
 	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
+	import MenuPopover from './MenuPopover.svelte';
+	import NewAlbumCard from './NewAlbumCard.svelte';
 
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
 
@@ -55,6 +62,8 @@
 	});
 
 	let browseEl = $state<HTMLElement | null>(null);
+	let newMenu: MenuPopover | undefined = $state();
+	const newAlbumOpen = historyLayerState('library-new-album', false);
 
 	onMount(() => {
 		initLibraryWallOrder();
@@ -113,6 +122,16 @@
 		captureLibraryScroll(target.scrollTop);
 	}
 
+	function startNewAlbum(): void {
+		newMenu?.close(false);
+		$newAlbumOpen = true;
+	}
+
+	function closeNewAlbum(): void {
+		$newAlbumOpen = false;
+		newMenu?.focusTrigger();
+	}
+
 	function retryLoad(): void {
 		void loadLibraryBrowse({ reset: true });
 		void loadPlaylists();
@@ -122,7 +141,23 @@
 <svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
 
 <div class="library-wall">
-	<h1 class="wall-title">Library</h1>
+	<div class="wall-titlebar">
+		<h1 class="wall-title">Library</h1>
+		<MenuPopover
+			bind:this={newMenu}
+			layer="library-new"
+			label={LIBRARY_NEW_MENU_LABEL}
+			closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
+		>
+			{#snippet trigger()}<span class="new-face"
+					><span aria-hidden="true">+</span>{LIBRARY_NEW_FACE}</span
+				>{/snippet}
+			<p class="new-menu-heading">New in <b>Library</b></p>
+			<button type="button" class="new-menu-item" onclick={startNewAlbum}
+				>{LIBRARY_NEW_ALBUM_LABEL}</button
+			>
+		</MenuPopover>
+	</div>
 	<LibraryContinue />
 
 	<div class="wall-head">
@@ -144,6 +179,9 @@
 	</div>
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
+		{#if $newAlbumOpen}
+			<NewAlbumCard onclose={closeNewAlbum} />
+		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each wallItems as wallItem (wallItem.type + wallItem.item.id)}
@@ -188,7 +226,7 @@
 			<p class="empty" role="alert">Could not load library.</p>
 			<button class="retry-btn" onclick={retryLoad}>Retry</button>
 		{:else}
-			<p class="empty">No albums or playlists yet.</p>
+			<p class="empty">{LIBRARY_WALL_EMPTY}</p>
 		{/if}
 	</div>
 </div>
@@ -202,13 +240,65 @@
 		min-height: 0;
 	}
 
-	.wall-title {
+	.wall-titlebar {
+		display: flex;
+		flex-shrink: 0;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
 		padding: 16px 20px 8px;
+	}
+
+	.wall-title {
 		color: var(--text);
 		font-family: var(--font-display);
 		font-size: 1.4rem;
 		letter-spacing: 1px;
 		text-transform: uppercase;
+	}
+
+	.new-face {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 18px;
+		padding: 0 0.4rem;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		font-weight: 500;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+	}
+
+	.new-menu-heading {
+		padding: 0.2rem 0.6rem 0.5rem;
+		border-bottom: 1px solid var(--border);
+		color: var(--text-subtle);
+		font-size: 13px;
+	}
+
+	.new-menu-heading b {
+		color: var(--text);
+		font-weight: 600;
+	}
+
+	.new-menu-item {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		min-height: 34px;
+		padding: 0 0.6rem;
+		border: 0;
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text);
+		font-family: var(--font-body);
+		font-size: 0.87rem;
+		text-align: left;
+	}
+
+	.new-menu-item:hover {
+		background: var(--surface-hover);
 	}
 
 	.wall-head {
@@ -367,8 +457,16 @@
 	}
 
 	@media (max-width: 768px) {
-		.wall-title {
-			padding: 12px 12px 6px;
+		.wall-titlebar {
+			padding: 10px 12px 6px;
+		}
+
+		.new-face {
+			height: 30px;
+		}
+
+		.new-menu-item {
+			min-height: 44px;
 		}
 
 		.wall-head {
