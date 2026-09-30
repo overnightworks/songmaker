@@ -6,7 +6,13 @@ import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import { COMPACT_LAYOUT_MEDIA, HITBOX_FREQUENT_PX, OFFLINE_STRIP_MESSAGE } from '$lib/constants';
+import {
+	ACCOUNT_MENU_LABEL,
+	ACCOUNT_MENU_LOGOUT_LABEL,
+	COMPACT_LAYOUT_MEDIA,
+	HITBOX_FREQUENT_PX,
+	OFFLINE_STRIP_MESSAGE
+} from '$lib/constants';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -41,6 +47,7 @@ import {
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { openOnScreenKeyboard } from '$lib/test-utils/on-screen-keyboard';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { closeSidebar, phoneAppBar, railCollapsed, railWidth, sidebarOpen } from '$lib/stores/ui';
 import { HITBOX_STYLE as hitboxCss } from '$lib/styles/hitbox';
@@ -360,11 +367,12 @@ describe('app shell', () => {
 		expect(privateTarget.querySelector('.app-shell')).toBeNull();
 	});
 
-	it('keeps the mobile strip trigger and brand inside 320px', async () => {
+	it('keeps the mobile strip trigger, brand and account circle inside 320px', async () => {
 		const target = await renderLayout('/');
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
 		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
 		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
+		const accountCircle = requireElement<HTMLButtonElement>(strip, '.account-menu .menu-trigger');
 
 		expect(target.querySelector('.rail')).toBeNull();
 		expect(brand.textContent).toBeTruthy();
@@ -373,7 +381,14 @@ describe('app shell', () => {
 		const pad = px(stripStyle.paddingLeft) + px(stripStyle.paddingRight);
 		const gap = px(stripStyle.gap);
 		expect(minUsedWidth(trigger)).toBe(HITBOX_FREQUENT_PX);
-		const used = pad + minUsedWidth(trigger) + gap + px(getComputedStyle(brand).minWidth || '0');
+		expect(minUsedWidth(accountCircle)).toBe(HITBOX_FREQUENT_PX);
+		const used =
+			pad +
+			minUsedWidth(trigger) +
+			gap +
+			px(getComputedStyle(brand).minWidth || '0') +
+			gap +
+			minUsedWidth(accountCircle);
 		expect(used).toBeLessThanOrEqual(VIEWPORT_PX);
 	});
 
@@ -842,23 +857,41 @@ describe('a reload over the phone Now Playing', () => {
 	});
 });
 
-describe('signing out from the phone rail drawer', () => {
-	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
-		resetLibraryContextForTests();
-		resetNavigationForTests();
-		replaceHistoryEntry('/');
-		const target = await renderLayout('/');
-		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
-		sidebarOpen.set(true);
-		await vi.waitFor(() =>
-			expect(currentLibraryHistoryState()).toMatchObject({ layer: 'rail-drawer' })
-		);
+describe('signing out on the phone', () => {
+	it.each([
+		{
+			way: 'the rail drawer',
+			layer: 'rail-drawer',
+			open: () => sidebarOpen.set(true),
+			logout: (target: HTMLElement) =>
+				requireElement<HTMLButtonElement>(target, '[role="dialog"] button.logout').click()
+		},
+		{
+			way: 'the account menu',
+			layer: 'account-menu',
+			open: (target: HTMLElement) =>
+				getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click(),
+			logout: (target: HTMLElement) => getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click()
+		}
+	])(
+		'from $way leaves history where it stands, so nothing interrupts the way to the sign-in page',
+		async ({ layer, open, logout }) => {
+			resetLibraryContextForTests();
+			resetNavigationForTests();
+			replaceHistoryEntry('/');
+			const target = await renderLayout('/');
+			await vi.waitFor(() =>
+				expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true)
+			);
+			open(target);
+			await vi.waitFor(() => expect(currentLibraryHistoryState()).toMatchObject({ layer }));
 
-		requireElement<HTMLButtonElement>(target, '[role="dialog"] button.logout').click();
+			logout(target);
 
-		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
-		expect(currentLibraryHistoryState()).toMatchObject({ layer: 'rail-drawer' });
-	});
+			await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
+			expect(currentLibraryHistoryState()).toMatchObject({ layer });
+		}
+	);
 });
 
 // The live library stream and the history listener used to belong to the

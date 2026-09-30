@@ -74,6 +74,8 @@ import SongDetailView from './SongDetailView.svelte';
 import PhoneAppBar from './PhoneAppBar.svelte';
 import SettingsLayout from '../../routes/settings/+layout.svelte';
 
+const PHONE_APP_BAR_PROPS = { username: 'felix', onlogout: () => undefined };
+
 function detailSongDefaults(): Partial<SongItem> {
 	return { album_id: 'a-local', album_title: 'Local Album', generations: [generation()] };
 }
@@ -181,7 +183,7 @@ describe('SongDetailView phone Co-writer is a tab, not a history step', () => {
 		const target = await renderView((target) => mount(SongDetailView, { target }));
 		const bar = document.createElement('div');
 		document.body.append(bar);
-		mounted.push(mount(PhoneAppBar, { target: bar }));
+		mounted.push(mount(PhoneAppBar, { target: bar, props: PHONE_APP_BAR_PROPS }));
 		await tick();
 		const historyLengthBeforeSwitching = historyLength();
 
