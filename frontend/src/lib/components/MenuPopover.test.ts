@@ -41,7 +41,9 @@ function layOut(trigger: Placement, panelHeight = PANEL_HEIGHT): void {
 	});
 }
 
-async function openPopover(): Promise<HTMLElement> {
+const MENU_ITEMS = '<div><button>Rename</button><button>Delete</button></div>';
+
+async function openPopover(items = MENU_ITEMS): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted = mount(MenuPopover, {
@@ -51,7 +53,7 @@ async function openPopover(): Promise<HTMLElement> {
 			label: 'More',
 			closeLabel: 'Close menu',
 			trigger: createRawSnippet(() => ({ render: () => '<span>⋯</span>' })),
-			children: createRawSnippet(() => ({ render: () => '<button>Rename</button>' }))
+			children: createRawSnippet(() => ({ render: () => items }))
 		}
 	});
 	await tick();
@@ -128,5 +130,60 @@ describe('MenuPopover placement', () => {
 		await tick();
 
 		expect(placementOf(panel)).toEqual({ left: 8, top: 162 });
+	});
+});
+
+describe('MenuPopover focus', () => {
+	function button(name: string): HTMLButtonElement {
+		const found = Array.from(document.querySelectorAll('button')).find(
+			(candidate) => (candidate.getAttribute('aria-label') ?? candidate.textContent) === name
+		);
+		if (!found) throw new Error(`Expected a button named ${name}`);
+		return found;
+	}
+
+	function press(key: string, shiftKey = false): void {
+		window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+	}
+
+	function isOpen(): boolean {
+		return document.querySelector('.menu-panel') !== null;
+	}
+
+	async function focusSettles(): Promise<void> {
+		await Promise.resolve();
+		await tick();
+	}
+
+	it('moves focus to the first item when it opens', async () => {
+		await openPopover();
+
+		expect(document.activeElement).toBe(button('Rename'));
+	});
+
+	it.each([
+		{ from: 'Delete', shiftKey: false, to: 'Rename', way: 'Tab past the last item' },
+		{ from: 'Rename', shiftKey: true, to: 'Delete', way: 'Shift+Tab before the first item' }
+	])('keeps focus inside: $way wraps to $to', async ({ from, shiftKey, to }) => {
+		await openPopover();
+		button(from).focus();
+
+		press('Tab', shiftKey);
+
+		expect(document.activeElement).toBe(button(to));
+	});
+
+	it.each([
+		{ way: 'Escape', close: () => press('Escape') },
+		{ way: 'a tap outside', close: () => button('Close menu').click() },
+		{ way: 'the trigger again', close: () => button('More').click() }
+	])('closing it by $way hands focus back to the trigger', async ({ close }) => {
+		await openPopover();
+
+		close();
+		await focusSettles();
+
+		expect(isOpen()).toBe(false);
+		expect(document.activeElement).toBe(button('More'));
 	});
 });
