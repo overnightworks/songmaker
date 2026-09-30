@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { NetworkError } from '$lib/api/fetch';
+	import { describeFailure } from '$lib/api/fetch';
 	import { addToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -37,10 +37,6 @@
 
 	const canCreate = $derived(ready && !creating);
 
-	function refusalReason(err: unknown): string {
-		return err instanceof NetworkError ? NEW_PLACE_OFFLINE : failedMessage;
-	}
-
 	async function submit(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
 		if (!canCreate) return;
@@ -49,7 +45,13 @@
 		try {
 			id = await create();
 		} catch (err) {
-			addToast(refusalReason(err), 'error');
+			addToast(
+				describeFailure(err, failedMessage, {
+					offline: NEW_PLACE_OFFLINE,
+					withholdServerDetail: true
+				}),
+				'error'
+			);
 			creating = false;
 			return;
 		}

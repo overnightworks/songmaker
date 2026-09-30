@@ -45,13 +45,28 @@ export class NetworkError extends Error {
 	}
 }
 
+/** How a caller's own rulings shape the words `describeFailure` chooses. */
+export interface FailureWording {
+	/** Said instead of the fallback when the request got no answer at all. */
+	offline?: string;
+	/** For a caller ruled never to show the server's own detail. */
+	withholdServerDetail?: boolean;
+}
+
 /**
- * The one place a failure becomes user-facing text: the server's own words
- * when it answered with a reason, a module's own worded failure, otherwise
- * the caller's named fallback -- never a browser error's text.
+ * The one place a failure becomes user-facing text: the caller's offline
+ * wording when the request got no answer, the server's own words when it
+ * answered with a reason (unless the caller withholds them), a module's own
+ * worded failure, otherwise the caller's named fallback -- never a browser
+ * error's text.
  */
-export function describeFailure(err: unknown, fallback: string): string {
-	if (err instanceof ApiError && err.detail) return err.detail;
+export function describeFailure(
+	err: unknown,
+	fallback: string,
+	wording: FailureWording = {}
+): string {
+	if (err instanceof NetworkError && wording.offline) return wording.offline;
+	if (err instanceof ApiError && err.detail && !wording.withholdServerDetail) return err.detail;
 	if (err instanceof UserFacingError) return err.message;
 	return fallback;
 }
