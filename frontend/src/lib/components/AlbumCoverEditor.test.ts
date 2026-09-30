@@ -234,6 +234,20 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(target.querySelector('.item-row')).not.toBeNull();
 	});
 
+	it('opens with no suggestion left today without asking for one or counting one', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ used_today: 10 }));
+		const target = await renderDetail();
+
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(countLine(target)).toBe('0 of 10 left today'));
+		await tick();
+
+		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
+		expect(getByRoleButton(editor(target) as HTMLElement, 'Suggest another').disabled).toBe(true);
+		expect(target.querySelector('.cover-stage [role="alert"]')).toBeNull();
+		expect(addToast).not.toHaveBeenCalled();
+	});
+
 	it('opens a cover already set with a quiet Remove and makes nothing by itself', async () => {
 		albumList.set([coveredAlbum()]);
 		const target = await renderDetail();
