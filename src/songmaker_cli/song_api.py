@@ -61,6 +61,7 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.queries import (
     RestoreWindowExpiredError,
+    SongWork,
     cleanup_song,
     count_generations_by_song,
     count_songs,
@@ -74,6 +75,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     record_playlist_listen,
     record_song_listen,
+    record_song_work,
     rename_song,
     restore_song,
     set_song_cover_key,
@@ -204,6 +206,7 @@ def api_update_song(
         version = update_song(session, song_id, **kwargs)
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(version.song)
@@ -234,6 +237,7 @@ def api_rename_song(
         )
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)
     session.commit()
     return SongResponse.from_orm(song)
@@ -334,6 +338,7 @@ def api_record_song_listen(
         record_song_listen(session, song, playlist=playlist)
     elif playlist is not None:
         record_playlist_listen(session, playlist, song=song)
+    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.PLAYED)
     session.commit()
     return StatusResponse()
 
