@@ -304,6 +304,10 @@ function isTracked(jobId: string): boolean {
  * (`rereadAfterSpentBudget`) rather than dropped. `reopenGap` travels with the
  * job across every reopen, so the page's chances reopen it at most once per
  * gap however often the musician switches apps (#1099).
+ *
+ * The card reads stale only when a connection fails before it has said
+ * anything: the server ends every healthy stream on a timer, and the reopen
+ * that follows is not an outage (#1161 R1).
  */
 function streamJob(
 	jobId: string,
@@ -311,6 +315,7 @@ function streamJob(
 	reopenGap = new ImmediateReopenGap()
 ): void {
 	let current = retry;
+	let spoke = false;
 
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
 	eventSources.set(jobId, source);
@@ -321,6 +326,7 @@ function streamJob(
 
 	source.onmessage = (event: MessageEvent) => {
 		current = FRESH_STREAM;
+		spoke = true;
 		const updated: JobStatus = JSON.parse(event.data);
 
 		activeJobs.update((jobs) =>
@@ -334,7 +340,7 @@ function streamJob(
 
 	source.onerror = () => {
 		closeStream(jobId);
-		markStreamStale(jobId);
+		if (!spoke) markStreamStale(jobId);
 		const spendsBudget = current.spendsOnFailure && !get(offline);
 		const spentFailures = current.spentFailures + (spendsBudget ? 1 : 0);
 		if (spentFailures >= JOB_STREAM_MAX_CONNECTION_ERRORS) {
