@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "45888a68eb726b4ba15d65fed27556f67c701292"
 branch = "claude/issue-1161-tunnel-return"
-scope = ["frontend/e2e/offline.spec.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+scope = ["frontend/e2e/offline.spec.ts", "frontend/src/lib/components/editor/GenerationStatusSlot.svelte", "frontend/src/lib/components/editor/GenerationStatusSlot.test.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
 opened_commit = "c253a5d0c1391e6a24e8137739dce0ed9172e602"
 whole_reason = "stale running card says Reconnecting and offline-failed playback resumes on return"
