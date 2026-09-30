@@ -3,6 +3,7 @@
 	import { followAppPageLink, openLibraryWall } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
+	import { accountInitial } from '$lib/utils/format';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSearch from './RailSearch.svelte';
@@ -128,7 +129,7 @@
 				title="Account"
 				onclick={(event) => followAppPageLink(event, '/settings/account')}
 			>
-				{username.slice(0, 1).toUpperCase()}
+				{accountInitial(username)}
 			</a>
 		{:else}
 			<UserRow {username} {onlogout} />

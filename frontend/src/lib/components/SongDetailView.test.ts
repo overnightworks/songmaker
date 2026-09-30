@@ -181,6 +181,8 @@ import { addToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
+const PHONE_APP_BAR_PROPS = { username: 'felix', onlogout: () => undefined };
+
 function sourceRecipeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { inference_steps: 8, guidance_scale: 1.5 } };
 }
@@ -414,7 +416,7 @@ describe('SongDetailView desktop vs compact layout', () => {
 		const target = await renderView({ widthPx: 390 });
 		const bar = document.createElement('div');
 		document.body.append(bar);
-		mounted.push(mount(PhoneAppBar, { target: bar }));
+		mounted.push(mount(PhoneAppBar, { target: bar, props: PHONE_APP_BAR_PROPS }));
 		await tick();
 		expect(bar.querySelector('h1')?.textContent?.trim()).toBe(get(songList)[0].title);
 		expect(target.querySelector('.detail-header')).toBeNull();
@@ -1162,7 +1164,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(target.querySelector('.menu-panel')).toBeNull();
 		if (phone) {
-			mounted.push(mount(PhoneAppBar, { target }));
+			mounted.push(mount(PhoneAppBar, { target, props: PHONE_APP_BAR_PROPS }));
 			await tick();
 			target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 			await tick();
@@ -1303,7 +1305,7 @@ describe('SongDetailView phone Co-writer is a tab', () => {
 		const target = await renderView();
 		const bar = document.createElement('div');
 		document.body.append(bar);
-		mounted.push(mount(PhoneAppBar, { target: bar }));
+		mounted.push(mount(PhoneAppBar, { target: bar, props: PHONE_APP_BAR_PROPS }));
 		await tick();
 		const songTitle = get(songList)[0].title;
 		expect(target.querySelector('.cowriter')).toBeNull();

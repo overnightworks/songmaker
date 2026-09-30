@@ -2,9 +2,12 @@
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import SongMenu from './editor/SongMenu.svelte';
+
+	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
 	let titleEditor: { startEdit: () => void } | undefined = $state();
 </script>
@@ -50,6 +53,7 @@
 		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
 			>{APP_NAME}</button
 		>
+		<AccountMenu {username} {onlogout} />
 	{/if}
 </header>
 
@@ -100,6 +104,7 @@
 	}
 
 	.brand {
+		margin-right: auto;
 		background: none;
 		border: none;
 		padding: 0;
