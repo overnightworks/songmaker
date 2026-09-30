@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -49,14 +50,9 @@ vi.mock('$app/state', () => ({
 // e2e/album-address.spec.ts for the real router). What this file can and
 // does pin is that `goto` is called with the right path and options, and
 // what the page renders while it waits or fails.
-vi.mock('$app/navigation', () => ({
-	goto: vi.fn((url: string, options?: { replaceState?: boolean }) => {
-		if (options?.replaceState) history.replaceState(null, '', url);
-		else history.pushState(null, '', url);
-		return Promise.resolve();
-	}),
-	afterNavigate: vi.fn()
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/songs', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/songs')>()),
@@ -148,7 +144,7 @@ function openAddress(): HTMLElement {
 function coldTabAt(search: string): void {
 	routeSearch.forEach((_, key) => routeSearch.delete(key));
 	new URLSearchParams(search).forEach((value, key) => routeSearch.set(key, value));
-	history.replaceState(null, '', '/' + search);
+	replaceHistoryEntry('/' + search);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);
@@ -311,22 +307,18 @@ describe('a legacy /?song= address redirects', () => {
 // written keeps the legacy query form as writeLibraryHistory's own
 // same-shape fallback (libraryHistoryUrl's comment on the songId branch), so
 // a later Back/Forward can land back on it. onPopstate (navigation.ts)
-// applies that restore state instantly from history.state -- this page used
+// applies that restore state instantly from its history entry -- this page used
 // to re-resolve the same address over the network in parallel every time,
 // a redundant round trip and a brief overlay flash this check now skips.
-describe('a legacy /?song= address whose history.state already carries the answer', () => {
+describe('a legacy /?song= address whose history entry already carries the answer', () => {
 	it('skips the network resolution once a matching restore state is already applied', async () => {
-		history.replaceState(
-			{
-				...libraryRootState(),
-				surface: 'detail',
-				collection: { kind: 'album', id: ALBUM_SLUG },
-				songId: SONG_ID,
-				generationId: null
-			},
-			'',
-			`/?song=${SONG_ID}`
-		);
+		replaceHistoryEntry(`/?song=${SONG_ID}`, {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: ALBUM_SLUG },
+			songId: SONG_ID,
+			generationId: null
+		});
 
 		const target = openAddress();
 		await Promise.resolve();
@@ -338,17 +330,13 @@ describe('a legacy /?song= address whose history.state already carries the answe
 	});
 
 	it('still resolves over the network when the restore state names a different song', async () => {
-		history.replaceState(
-			{
-				...libraryRootState(),
-				surface: 'detail',
-				collection: { kind: 'album', id: ALBUM_SLUG },
-				songId: 'some-other-song',
-				generationId: null
-			},
-			'',
-			`/?song=${SONG_ID}`
-		);
+		replaceHistoryEntry(`/?song=${SONG_ID}`, {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: ALBUM_SLUG },
+			songId: 'some-other-song',
+			generationId: null
+		});
 		api.fetchSong.mockResolvedValue(
 			song({
 				album_title: 'Anfield',
@@ -511,7 +499,7 @@ describe('a legacy /?song=&gen= address whose take is gone', () => {
 		let releaseGoto: (() => void) | undefined;
 		vi.mocked(goto).mockImplementationOnce((url, options) => {
 			if ((options as { replaceState?: boolean } | undefined)?.replaceState) {
-				history.replaceState(null, '', url as string);
+				replaceHistoryEntry(url as string);
 			}
 			return new Promise<void>((res) => {
 				releaseGoto = () => res(undefined);

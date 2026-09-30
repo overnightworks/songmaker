@@ -5,7 +5,9 @@ import { ApiError, NetworkError } from '$lib/api/fetch';
 
 const api = vi.hoisted(() => ({ setupAdmin: vi.fn() }));
 vi.mock('$lib/api/client', () => api);
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import SetupPage from './+page.svelte';
 

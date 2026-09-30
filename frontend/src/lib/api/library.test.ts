@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 vi.mock('$lib/stores/auth', () => ({ clearAuth: vi.fn() }));
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
 import { fetchLibraryContinue, fetchLibraryPoolQueue, searchLibrary } from './library';

@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
@@ -22,7 +23,9 @@ vi.mock('$lib/stores/auth', () => {
 	};
 	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
 });
-vi.mock('$app/navigation', () => ({ goto: vi.fn() }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import {
 	apiFetch,
@@ -477,12 +480,12 @@ describe('session lost (401)', () => {
 		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
 		vi.mocked(goto).mockClear();
 		currentUser.set(null);
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 	});
 
 	it('clears auth and redirects to /login, carrying the current page, when a session existed', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		history.replaceState(null, '', '/album/a1/song-1');
+		replaceHistoryEntry('/album/a1/song-1');
 		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
 
 		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
@@ -564,7 +567,7 @@ describe('session lost (401)', () => {
 
 describe('session-lost redirect target', () => {
 	afterEach(() => {
-		history.replaceState(null, '', '/');
+		replaceHistoryEntry('/');
 	});
 
 	it.each([
@@ -577,7 +580,7 @@ describe('session-lost redirect target', () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
 		vi.mocked(goto).mockClear();
-		history.replaceState(null, '', `${window.location.origin}${path}`);
+		replaceHistoryEntry(`${window.location.origin}${path}`);
 
 		await handleSessionLost();
 
