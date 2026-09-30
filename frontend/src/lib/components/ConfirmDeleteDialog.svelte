@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte';
+	import { registerHistoryLayer } from '$lib/stores/navigation';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
 	let {
@@ -36,16 +37,39 @@
 		};
 	});
 
+	// Back cancels the dialog, never confirms it (issue #1125): it holds one
+	// history entry while shown, and each of its own answers steps back off that
+	// entry before acting, so a navigation the answer starts lands after it.
+	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
+
+	function holdHistoryLayer(): () => void {
+		historyLayer = registerHistoryLayer('confirm-delete-dialog', () => oncancel());
+		return leaveHistoryLayer;
+	}
+
+	function leaveHistoryLayer(): void {
+		if (historyLayer?.layered) historyLayer.leave();
+	}
+
+	function answer(action: () => void): () => void {
+		return () => {
+			leaveHistoryLayer();
+			action();
+		};
+	}
+
+	const cancel = answer(() => oncancel());
+
 	// The trap claims Escape with preventDefault before closing, so the page's
 	// global Escape (escape-level-up.ts) still yields once the dialog is gone.
 	function trapKeys(event: KeyboardEvent): void {
-		handleFocusTrapKeydown(dialog, event, oncancel);
+		handleFocusTrapKeydown(dialog, event, cancel);
 	}
 </script>
 
 <svelte:window onkeydown={trapKeys} />
 
-<div class="overlay" onclick={oncancel} role="presentation">
+<div class="overlay" onclick={cancel} role="presentation" {@attach holdHistoryLayer}>
 	<div
 		class="dialog"
 		bind:this={dialog}
@@ -64,8 +88,8 @@
 		</ul>
 		<p class="warning">{warning}</p>
 		<div class="actions">
-			<button class="cancel-btn" bind:this={cancelButton} onclick={oncancel}>Cancel</button>
-			<button class="confirm-btn" onclick={onconfirm}>{confirmLabel}</button>
+			<button class="cancel-btn" bind:this={cancelButton} onclick={cancel}>Cancel</button>
+			<button class="confirm-btn" onclick={answer(onconfirm)}>{confirmLabel}</button>
 		</div>
 	</div>
 </div>

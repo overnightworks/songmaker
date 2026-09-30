@@ -1,5 +1,6 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
@@ -140,4 +141,43 @@ describe('ConfirmDeleteDialog', () => {
 		const labelId = dialog.getAttribute('aria-labelledby');
 		expect(labelId && document.getElementById(labelId)?.textContent).toBe(TITLE);
 	});
+});
+
+const deletions: string[] = [];
+
+function openDeleteConfirm(target: HTMLElement): void {
+	deletions.length = 0;
+	openDialog = mount(ConfirmDeleteDialog, {
+		target,
+		props: {
+			title: TITLE,
+			items: ['Night Drive'],
+			onconfirm: () => {
+				deletions.push('Night Drive');
+				closeDialog();
+			},
+			oncancel: closeDialog
+		}
+	});
+}
+
+describeBackClosesOverlay({
+	name: 'the delete confirmation',
+	render: async () => {
+		const target = document.createElement('div');
+		document.body.append(target);
+		return target;
+	},
+	open: openDeleteConfirm,
+	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
+	afterBack: () => expect(deletions).toEqual([]),
+	closeWays: [
+		{ way: 'Cancel', close: (target) => button(target, 'Cancel').click() },
+		{ way: 'Delete', close: (target) => button(target, 'Delete').click() },
+		{
+			way: 'the backdrop',
+			close: (target) => target.querySelector<HTMLElement>('.overlay')?.click()
+		},
+		{ way: 'Escape', close: (target) => pressKey(button(target, 'Cancel'), 'Escape') }
+	]
 });
