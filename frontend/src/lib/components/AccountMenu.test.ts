@@ -108,6 +108,66 @@ describe('AccountMenu', () => {
 	});
 });
 
+describe('AccountMenu focus', () => {
+	function press(key: string, shiftKey = false): void {
+		window.dispatchEvent(new KeyboardEvent('keydown', { key, shiftKey, bubbles: true }));
+	}
+
+	async function focusSettles(): Promise<void> {
+		await Promise.resolve();
+		await tick();
+	}
+
+	it('moves focus to Settings, its first item, when it opens', async () => {
+		const panel = await openMenu(await renderMenu());
+
+		expect(document.activeElement).toBe(getByRoleButton(panel, RAIL_SETTINGS_LABEL));
+	});
+
+	it.each([
+		{
+			from: ACCOUNT_MENU_LOGOUT_LABEL,
+			shiftKey: false,
+			to: RAIL_SETTINGS_LABEL,
+			way: 'Tab past Log out'
+		},
+		{
+			from: RAIL_SETTINGS_LABEL,
+			shiftKey: true,
+			to: ACCOUNT_MENU_LOGOUT_LABEL,
+			way: 'Shift+Tab before Settings'
+		}
+	])('keeps focus inside: $way wraps to $to', async ({ from, shiftKey, to }) => {
+		const panel = await openMenu(await renderMenu());
+		getByRoleButton(panel, from).focus();
+
+		press('Tab', shiftKey);
+
+		expect(document.activeElement).toBe(getByRoleButton(panel, to));
+	});
+
+	it.each([
+		{ way: 'Escape', close: () => press('Escape') },
+		{
+			way: 'a tap outside',
+			close: (target: HTMLElement) => getByRoleButton(target, ACCOUNT_MENU_CLOSE_LABEL).click()
+		},
+		{
+			way: 'the circle again',
+			close: (target: HTMLElement) => getByRoleButton(target, TRIGGER_NAME).click()
+		}
+	])('closing it by $way hands focus back to the circle', async ({ close }) => {
+		const target = await renderMenu();
+		await openMenu(target);
+
+		close(target);
+		await focusSettles();
+
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
+		expect(document.activeElement).toBe(getByRoleButton(target, TRIGGER_NAME));
+	});
+});
+
 let settingsSawHistoryAt: number | undefined;
 
 describeBackClosesOverlay({
