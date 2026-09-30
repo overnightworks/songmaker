@@ -10,6 +10,7 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/s
 import { openCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
+import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
 
 const fetchPlaylists = vi.fn();
@@ -50,6 +51,7 @@ beforeEach(() => {
 	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
 	localStorage.clear();
 	libraryWallOrder.set('title');
+	resetLibraryOrderForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
