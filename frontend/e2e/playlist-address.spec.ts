@@ -14,12 +14,12 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import {
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
-	RAIL_PLAYLISTS_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL,
 	RESOURCE_SYNC_ERROR
 } from '../src/lib/constants';
-import { FlowGuard, workspace } from './helpers';
+import { FlowGuard, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
 /**
@@ -90,32 +90,31 @@ test('an unknown playlist slug states the address names nothing, without a redir
 });
 
 // Issue #1165: an address stated as unknown wrote no library entry, so Back
-// onto it from the playlist the rail opened must load its route again and
-// state the address once more, never show the wall under it.
+// onto it from the album the rail opened -- a crossing to another route --
+// must load its route again and state the address once more, never show the
+// wall under it.
 test('Back onto an unknown playlist slug states it again, not the wall', async ({
 	page,
-	request,
 	isMobile
 }) => {
 	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
 
-	const playlist = await seedPlaylist(request, readSeededLibrary());
+	const library = readSeededLibrary();
 	const unknownAddress = '/playlist/no-such-playlist-here';
 	await page.goto(unknownAddress);
 	await expect(page.getByRole('alert')).toContainText('No such playlist');
 
 	const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-	const playlistsGroup = rail.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true });
-	if ((await playlistsGroup.getAttribute('aria-expanded')) === 'false')
-		await playlistsGroup.click();
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
 	await rail
-		.getByRole('navigation', { name: RAIL_PLAYLISTS_NAV_LABEL })
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
 		.getByRole('listitem')
-		.filter({ hasText: playlist.title })
-		.getByRole('button', { name: new RegExp(`^${playlist.title}`) })
+		.filter({ hasText: library.albumTitle })
+		.getByRole('button', { name: containing(library.albumTitle) })
 		.click();
-	await expect(page).toHaveURL(new RegExp(`/playlist/${playlist.slug}$`));
-	await expect(workspace(page).getByRole('heading', { name: playlist.title })).toBeVisible();
+	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
+	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
 	await page.goBack();
 
