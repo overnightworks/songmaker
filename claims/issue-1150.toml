@@ -1,8 +1,0 @@
-claim_id = "a5ef3112e5fb465084d73e58ad50964d"
-agent = "claude-head"
-role = "builder"
-base = "30c7cc789fc0f6588735b1f0e597022deaf5ffef"
-branch = "claude/issue-1150-settings-list"
-scope = ["frontend/e2e/settings-phone.spec.ts", "frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/shell/RailSettings.svelte", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/routes/settings/+page.svelte", "frontend/src/routes/settings/page.test.ts"]
-opened_commit = "b510eb8118a5290336b5161d6c7ffd6ffac8dc2c"
-whole_reason = "the phone Settings list page and one owner for the settings sections"
