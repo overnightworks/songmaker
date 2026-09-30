@@ -3,6 +3,7 @@ import { flushSync, mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { goto } from '$app/navigation';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList } from '$lib/stores/libraryData';
@@ -30,6 +31,7 @@ const NIGHT_DRIVE = album({ id: 'a-night', title: 'Night Drive', artist: '' });
 let mounted: ReturnType<typeof mount> | undefined;
 let cancels: number;
 let creates: number;
+let restoreUnhandledRejections: (() => void) | undefined;
 
 beforeEach(() => {
 	createAlbum.mockReset().mockResolvedValue(NIGHT_DRIVE);
@@ -42,6 +44,8 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+	restoreUnhandledRejections?.();
+	restoreUnhandledRejections = undefined;
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
@@ -78,6 +82,21 @@ function createButton(root: ParentNode): HTMLButtonElement {
 	);
 	if (!button) throw new Error('no Create button');
 	return button;
+}
+
+// The submit handler's promise has no caller to reject into, so a failure it
+// lets escape surfaces as an unhandled rejection; the test collects those
+// instead of letting the runner report them as a crash.
+function captureUnhandledRejections(): unknown[] {
+	const escaped: unknown[] = [];
+	const runnerListeners = process.listeners('unhandledRejection');
+	process.removeAllListeners('unhandledRejection');
+	process.on('unhandledRejection', (reason) => escaped.push(reason));
+	restoreUnhandledRejections = () => {
+		process.removeAllListeners('unhandledRejection');
+		for (const listener of runnerListeners) process.on('unhandledRejection', listener);
+	};
+	return escaped;
 }
 
 async function createSettled(): Promise<void> {
@@ -143,6 +162,21 @@ describe('NewAlbumCard', () => {
 		expect(createButton(root).disabled).toBe(false);
 		expect(get(openCollection)).toBeNull();
 		expect(addToast).toHaveBeenCalledWith(expect.stringContaining('Title too long'), 'error');
+	});
+
+	it('keeps the created album listed and says nothing failed when only opening its page fails', async () => {
+		const openFailure = new Error('navigation aborted');
+		vi.mocked(goto).mockRejectedValueOnce(openFailure);
+		const escaped = captureUnhandledRejections();
+		const root = await render();
+		type(field(root, 'Title'), 'Night Drive');
+
+		createButton(root).click();
+		await createSettled();
+
+		await vi.waitFor(() => expect(escaped).toContain(openFailure));
+		expect(get(albumList).map((listed) => listed.id)).toEqual(['a-night']);
+		expect(addToast).not.toHaveBeenCalled();
 	});
 
 	it('× closes it and creates nothing', async () => {
