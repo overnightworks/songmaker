@@ -65,6 +65,29 @@ describe('UserRow', () => {
 		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/account', { replaceState: false });
 	});
 
+	it.each([
+		['a Ctrl-click', { ctrlKey: true }],
+		['a Cmd-click', { metaKey: true }],
+		['a Shift-click', { shiftKey: true }],
+		['a middle click', { button: 1 }]
+	] as const)('leaves %s on the username to the browser, for a new tab', async (_name, init) => {
+		const target = await renderRow();
+		let browserDefaultKept = false;
+		const recordBrowserDefault = (event: Event): void => {
+			browserDefaultKept = !event.defaultPrevented;
+			event.preventDefault();
+		};
+		window.addEventListener('click', recordBrowserDefault);
+
+		requireElement<HTMLAnchorElement>(target, 'a.username').dispatchEvent(
+			new MouseEvent('click', { bubbles: true, cancelable: true, ...init })
+		);
+		window.removeEventListener('click', recordBrowserDefault);
+
+		expect(browserDefaultKept).toBe(true);
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
+	});
+
 	it('calls onlogout when Logout is clicked', async () => {
 		const target = await renderRow();
 		logoutButton(target).click();
