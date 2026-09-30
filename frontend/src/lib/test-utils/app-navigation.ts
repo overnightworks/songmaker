@@ -15,7 +15,10 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // address of the page it was written over beside it. Like SvelteKit, it keeps
 // its place in history in memory and reads it back from an entry only when it
 // starts or a Back or Forward lands, and a landing on the entry of another
-// navigation is a navigation of its own.
+// navigation is a navigation of its own -- and so is a landing on an entry of
+// the same navigation while nothing has navigated or pushed since the start,
+// unless it only changes the hash: after a reload the router cannot tell that
+// entry's page from the one it started on.
 //
 // It also owns every raw write into the test browser's history, which tests
 // reach through library-history.ts. It imports no store: the stores import
@@ -47,6 +50,7 @@ export const fakePage = stateProxy<{ url: URL; state: App.PageState }>({
 
 let currentHistoryIndex = 0;
 let currentNavigationIndex = 0;
+let hasNavigated = false;
 
 const afterNavigateCallbacks = new Set<(navigation: AfterNavigate) => void>();
 
@@ -83,6 +87,7 @@ function reportNavigation(type: 'enter' | 'goto' | 'popstate', from: URL | null)
 // loads onto (or starts counting), and writes its own entry over that one,
 // keeping the place and dropping whatever state the entry carried.
 export function startFakeRouter(): void {
+	hasNavigated = false;
 	const loaded = routerEntry(history.state);
 	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? 1;
 	currentNavigationIndex = routerIndex(loaded, ROUTER_NAVIGATION_INDEX) ?? currentHistoryIndex;
@@ -123,11 +128,15 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 	const from = fakePage.url;
 	fakePage.url = new URL(location.href);
 	fakePage.state = state;
+	hasNavigated = true;
 	reportNavigation('goto', from);
 }
 
 function writeShallowEntry(url: string | URL, state: App.PageState, mode: HistoryWriteMode): void {
-	if (mode === 'push') currentHistoryIndex += 1;
+	if (mode === 'push') {
+		currentHistoryIndex += 1;
+		hasNavigated = true;
+	}
 	writeHistoryEntry(
 		{
 			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
@@ -141,9 +150,14 @@ function writeShallowEntry(url: string | URL, state: App.PageState, mode: Histor
 	fakePage.state = state;
 }
 
+function withoutHash(url: URL | Location): string {
+	return url.href.split('#')[0];
+}
+
 // A Back or Forward: onto an entry of the navigation the page shows, only the
-// page state and address follow; onto another navigation's entry, the router
-// navigates to the page that entry was written over.
+// page state and address follow; onto another navigation's entry -- or onto
+// any entry before anything has navigated since the start, see above -- the
+// router navigates to the page that entry was written over.
 function followTraversal(event: PopStateEvent): void {
 	const landing = routerEntry(event.state);
 	const historyIndex = routerIndex(landing, ROUTER_HISTORY_INDEX);
@@ -153,12 +167,15 @@ function followTraversal(event: PopStateEvent): void {
 	}
 	const from = fakePage.url;
 	const pageUrl = landing[ROUTER_PAGE_URL];
+	const navigationIndex = routerIndex(landing, ROUTER_NAVIGATION_INDEX);
+	const onlyHashChanges = withoutHash(location) === withoutHash(from);
+	const shallow = navigationIndex === currentNavigationIndex && (hasNavigated || onlyHashChanges);
 	currentHistoryIndex = historyIndex;
 	fakePage.url = new URL(typeof pageUrl === 'string' ? pageUrl : location.href);
 	fakePage.state = (landing[ROUTER_STATES] ?? {}) as App.PageState;
-	const navigationIndex = routerIndex(landing, ROUTER_NAVIGATION_INDEX);
-	if (navigationIndex === undefined || navigationIndex === currentNavigationIndex) return;
+	if (shallow || navigationIndex === undefined) return;
 	currentNavigationIndex = navigationIndex;
+	hasNavigated = true;
 	reportNavigation('popstate', from);
 }
 

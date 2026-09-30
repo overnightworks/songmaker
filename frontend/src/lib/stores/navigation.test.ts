@@ -18,7 +18,7 @@ import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { fakePage, reportedNavigations } from '$lib/test-utils/app-navigation';
+import { fakePage, reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
@@ -206,6 +206,7 @@ beforeEach(() => {
 	// selectedSong subscription in navigation.ts before this line clears it.
 	resetCollectionForTests();
 	replaceHistoryEntry('/');
+	startFakeRouter();
 	vi.mocked(goto).mockClear();
 });
 
@@ -673,6 +674,27 @@ describe('Back and Forward across an app page', () => {
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p2' });
 		expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p2' });
 	});
+
+	// SvelteKit cannot tell two entries of one navigation apart after a reload,
+	// so Back between them is a navigation of its own there, and shallow
+	// otherwise.
+	it.each([
+		{ reloaded: false, navigation: { type: 'goto', pathname: '/playlist/night-drive' } },
+		{ reloaded: true, navigation: { type: 'popstate', pathname: '/playlist/night-drive' } }
+	])(
+		'Back onto a playlist another was opened over reports $navigation.type (reloaded: $reloaded)',
+		async ({ reloaded, navigation }) => {
+			await openPlaylist('p1');
+			await openPlaylist('p2');
+			if (reloaded) await reloadLibraryPage();
+
+			await pressBack();
+
+			expect(lastNavigation()).toEqual(navigation);
+			expect(location.pathname).toBe('/playlist/night-drive');
+			expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p1' });
+		}
+	);
 
 	it('Back from Settings after a reload returns to the playlist with what it showed', async () => {
 		await openPlaylist('p1');
