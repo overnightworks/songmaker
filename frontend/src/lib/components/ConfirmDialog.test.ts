@@ -1,5 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import ConfirmDialog from './ConfirmDialog.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -107,4 +108,64 @@ describe('ConfirmDialog', () => {
 		target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click();
 		expect(props.oncancel).toHaveBeenCalledTimes(1);
 	});
+});
+
+// The dirty-draft dialog as SongDetailView shows it: every answer closes it.
+function dirtyDraftUnderBack() {
+	const answers: string[] = [];
+	let shown: ReturnType<typeof mount> | null = null;
+	function answer(choice: string): () => void {
+		return () => {
+			answers.push(choice);
+			if (shown) void unmount(shown);
+			shown = null;
+		};
+	}
+	return {
+		answers,
+		open(target: HTMLElement): void {
+			answers.length = 0;
+			shown = mount(ConfirmDialog, {
+				target,
+				props: {
+					...defaultProps(),
+					onconfirm: answer('save'),
+					onsecondary: answer('discard'),
+					oncancel: answer('keep editing')
+				}
+			});
+			mounted.push(shown);
+		}
+	};
+}
+
+const dirtyDraft = dirtyDraftUnderBack();
+
+async function renderPage(): Promise<HTMLElement> {
+	const target = document.createElement('div');
+	document.body.append(target);
+	return target;
+}
+
+function press(target: HTMLElement, selector: string): void {
+	target.querySelector<HTMLButtonElement>(selector)?.click();
+}
+
+describeBackClosesOverlay({
+	name: 'the unsaved-draft dialog',
+	render: renderPage,
+	open: (target) => dirtyDraft.open(target),
+	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
+	afterBack: () => expect(dirtyDraft.answers).toEqual(['keep editing']),
+	closeWays: [
+		{ way: 'Cancel', close: (target) => press(target, '.cancel-btn') },
+		{ way: 'the backdrop', close: (target) => press(target, '.overlay-backdrop') },
+		{ way: 'Save', close: (target) => press(target, '.confirm-btn') },
+		{ way: 'Discard', close: (target) => press(target, '.secondary-btn') },
+		{
+			way: 'Escape',
+			close: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	]
 });
