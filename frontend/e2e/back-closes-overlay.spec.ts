@@ -1,5 +1,6 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	ACCOUNT_MENU_LABEL,
 	COLLECTION_MENU_LABEL,
 	collectionPlayLabel,
 	DIALOG_CANCEL_LABEL,
@@ -493,6 +494,38 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await openVoicesSettings(page, shellOf(testInfo));
 
 		await backThenForwardReturnsToSettings(page, pages);
+		guard.assertClean();
+	});
+
+	// The phone's account menu is a history layer of its own, and choosing
+	// Settings in it steps off that layer before Settings opens.
+	test('Back from Settings opened in the phone account menu returns to the playlist, and Forward to Settings', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The account menu belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		const accountMenu = new RegExp(`^${ACCOUNT_MENU_LABEL} · `);
+		await appBar(page).getByRole('button', { name: accountMenu }).click();
+		await page
+			.getByRole('dialog', { name: accountMenu })
+			.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })
+			.click();
+		const settingsIndex = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, exact: true });
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsIndex).toBeVisible();
+
+		await page.goBack();
+
+		await expectPlaylistStands(page, pages);
+		await expect(settingsIndex).toBeHidden();
+
+		await page.goForward();
+
+		await expect(page).toHaveURL(/\/settings$/);
+		await expect(settingsIndex).toBeVisible();
+		await expect(pages.playlist).toBeHidden();
 		guard.assertClean();
 	});
 

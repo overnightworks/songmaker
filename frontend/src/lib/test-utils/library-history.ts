@@ -185,7 +185,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 					await close(target);
 
-					expect(actionSawHistoryAt?.()).toBe(below);
+					await vi.waitFor(() => expect(actionSawHistoryAt?.()).toBe(below));
 					await expectHistoryAt(below);
 				}
 			);
