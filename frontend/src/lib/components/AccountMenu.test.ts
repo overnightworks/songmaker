@@ -36,7 +36,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 });
 
-async function renderMenu(onlogout = vi.fn()): Promise<HTMLElement> {
+async function renderAccountMenu(onlogout = vi.fn()): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	mounted.push(mount(AccountMenu, { target, props: { username: USERNAME, onlogout } }));
@@ -61,13 +61,13 @@ function rowTexts(panel: HTMLElement): string[] {
 
 describe('AccountMenu', () => {
 	it("shows the viewer's initial on a circle named after the account", async () => {
-		const target = await renderMenu();
+		const target = await renderAccountMenu();
 
 		expect(getByRoleButton(target, TRIGGER_NAME).textContent?.trim()).toBe('F');
 	});
 
 	it('names who is signed in, then Settings, the theme switch, and Log out last', async () => {
-		const panel = await openMenu(await renderMenu());
+		const panel = await openMenu(await renderAccountMenu());
 
 		expect(rowTexts(panel)).toEqual([
 			`${ACCOUNT_MENU_SIGNED_IN_PREFIX} ${USERNAME}`,
@@ -78,7 +78,7 @@ describe('AccountMenu', () => {
 	});
 
 	it('switches the theme and then offers the way back', async () => {
-		const panel = await openMenu(await renderMenu());
+		const panel = await openMenu(await renderAccountMenu());
 
 		getByRoleButton(panel, THEME_SWITCH_TO_LIGHT_LABEL).click();
 		await tick();
@@ -88,7 +88,7 @@ describe('AccountMenu', () => {
 	});
 
 	it('opens the Settings list and closes', async () => {
-		const target = await renderMenu();
+		const target = await renderAccountMenu();
 		const panel = await openMenu(target);
 
 		getByRoleButton(panel, RAIL_SETTINGS_LABEL).click();
@@ -100,7 +100,7 @@ describe('AccountMenu', () => {
 
 	it('logs out through the shell', async () => {
 		const onlogout = vi.fn();
-		const panel = await openMenu(await renderMenu(onlogout));
+		const panel = await openMenu(await renderAccountMenu(onlogout));
 
 		getByRoleButton(panel, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
@@ -119,7 +119,7 @@ describe('AccountMenu focus', () => {
 	}
 
 	it('moves focus to Settings, its first item, when it opens', async () => {
-		const panel = await openMenu(await renderMenu());
+		const panel = await openMenu(await renderAccountMenu());
 
 		expect(document.activeElement).toBe(getByRoleButton(panel, RAIL_SETTINGS_LABEL));
 	});
@@ -138,7 +138,7 @@ describe('AccountMenu focus', () => {
 			way: 'Shift+Tab before Settings'
 		}
 	])('keeps focus inside: $way wraps to $to', async ({ from, shiftKey, to }) => {
-		const panel = await openMenu(await renderMenu());
+		const panel = await openMenu(await renderAccountMenu());
 		getByRoleButton(panel, from).focus();
 
 		press('Tab', shiftKey);
@@ -157,7 +157,7 @@ describe('AccountMenu focus', () => {
 			close: (target: HTMLElement) => getByRoleButton(target, TRIGGER_NAME).click()
 		}
 	])('closing it by $way hands focus back to the circle', async ({ close }) => {
-		const target = await renderMenu();
+		const target = await renderAccountMenu();
 		await openMenu(target);
 
 		close(target);
@@ -176,7 +176,7 @@ describeBackClosesOverlay({
 		vi.mocked(goto).mockImplementation(async () => {
 			settingsSawHistoryAt = plannedHistoryIndex();
 		});
-		return renderMenu();
+		return renderAccountMenu();
 	},
 	open: (target) => getByRoleButton(target, TRIGGER_NAME).click(),
 	isShown: (target) => target.querySelector('[role="dialog"]') !== null,
