@@ -47,6 +47,11 @@ export function titleInitials(title: string): string {
 	return `${first}${second ?? ''}`.toUpperCase();
 }
 
+/** The one letter that stands for a person: the first character of their name, by code point, upper-cased. */
+export function accountInitial(username: string): string {
+	return Array.from(username)[0]?.toUpperCase() ?? '';
+}
+
 function startOfLocalDay(moment: Date): number {
 	return new Date(moment.getFullYear(), moment.getMonth(), moment.getDate()).getTime();
 }

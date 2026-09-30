@@ -3,6 +3,7 @@
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { APP_NAME, RAIL_NAV_LABEL } from '$lib/constants';
 	import { kineticScroll } from '$lib/actions/kineticScroll';
+	import { accountInitial } from '$lib/utils/format';
 	import RailLibraryGroup from './RailLibraryGroup.svelte';
 	import RailPlaylistsGroup from './RailPlaylistsGroup.svelte';
 	import RailSearch from './RailSearch.svelte';
@@ -122,7 +123,7 @@
 	<div class="rail-bottom">
 		{#if collapsed}
 			<a class="collapsed-account" href="/settings/account" aria-label="Account" title="Account">
-				{username.slice(0, 1).toUpperCase()}
+				{accountInitial(username)}
 			</a>
 		{:else}
 			<UserRow {username} {onlogout} />
