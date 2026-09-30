@@ -1,9 +1,11 @@
+import type { AppPageHref } from '$lib/stores/navigation';
+
 type SettingsSectionId =
 	'generation' | 'playback' | 'voices' | 'account' | 'admin' | 'cleanup' | 'legal';
 
 interface SettingsSection {
 	readonly id: SettingsSectionId;
-	readonly href: string;
+	readonly href: AppPageHref;
 	readonly label: string;
 	readonly icon: string;
 	readonly adminOnly: boolean;
