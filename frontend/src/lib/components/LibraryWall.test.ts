@@ -1,4 +1,8 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import {
+	describeBackClosesOverlay,
+	historyEntry,
+	replaceHistoryEntry
+} from '$lib/test-utils/library-history';
 import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -17,6 +21,7 @@ const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
 const fetchLibraryContinue = vi.fn();
 const fetchAlbums = vi.fn();
+const createAlbum = vi.fn();
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -31,6 +36,7 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylists: (...args: unknown[]) => fetchPlaylists(...args),
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
+	createAlbum: (...args: unknown[]) => createAlbum(...args),
 	fetchSong: vi.fn(),
 	fetchSongs: vi.fn(),
 	fetchLastFailedGeneration: vi.fn().mockResolvedValue({ job: null })
@@ -49,6 +55,7 @@ beforeEach(() => {
 	});
 	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
 	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
+	createAlbum.mockReset().mockResolvedValue(album({ id: 'a-night', title: 'Night Drive' }));
 	localStorage.clear();
 	libraryWallOrder.set('title');
 	resetLibraryOrder();
@@ -424,4 +431,125 @@ describe('LibraryWall', () => {
 		await tick();
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p-local' });
 	});
+});
+
+function newButton(root: ParentNode): HTMLButtonElement {
+	const button = root.querySelector<HTMLButtonElement>(
+		'.wall-titlebar [aria-label="New in Library"]'
+	);
+	if (!button) throw new Error('no + New on the Library title line');
+	return button;
+}
+
+function newMenu(): HTMLElement | null {
+	return document.querySelector<HTMLElement>('[role="dialog"][aria-label="New in Library"]');
+}
+
+function newAlbumCard(root: ParentNode): HTMLElement | null {
+	return root.querySelector<HTMLElement>('.wall-body [aria-label="New album"]');
+}
+
+async function openNewMenu(root: HTMLElement): Promise<HTMLElement> {
+	newButton(root).click();
+	await tick();
+	await tick();
+	const menu = newMenu();
+	if (!menu) throw new Error('+ New opened no menu');
+	return menu;
+}
+
+async function chooseNewAlbum(root: HTMLElement): Promise<HTMLElement> {
+	const menu = await openNewMenu(root);
+	[...menu.querySelectorAll('button')]
+		.find((item) => item.textContent?.trim() === 'Album')
+		?.click();
+	await tick();
+	const card = newAlbumCard(root);
+	if (!card) throw new Error('Album unfolded no card');
+	return card;
+}
+
+function emptyLibrary(): void {
+	albumList.set([]);
+	playlistList.set([]);
+	libraryBrowse.update((state) => ({ ...state, status: 'ready' }));
+	allAlbumsLoad.set({ status: 'ready', error: null });
+}
+
+describe('LibraryWall + New', () => {
+	it('stands on the Library title line even with no album yet, over an empty wall that says so', async () => {
+		emptyLibrary();
+		const root = await render();
+
+		expect(newButton(root).textContent).toContain('New');
+		expect(root.querySelector('.wall-body')?.textContent).toContain('No albums yet.');
+	});
+
+	it('opens New in Library offering Album, and no Playlist until that card exists', async () => {
+		const root = await render();
+
+		const menu = await openNewMenu(root);
+
+		expect(newButton(root).getAttribute('aria-expanded')).toBe('true');
+		expect(menu.textContent).toContain('New in Library');
+		expect([...menu.querySelectorAll('button')].map((item) => item.textContent?.trim())).toEqual([
+			'Album'
+		]);
+	});
+
+	it('Album closes the menu and unfolds the New album card at the top of the wall', async () => {
+		const root = await render();
+
+		const card = await chooseNewAlbum(root);
+
+		expect(newMenu()).toBeNull();
+		expect(root.querySelector('.wall-body')?.firstElementChild).toBe(card);
+		expect(tileTitles(root)).toEqual(['Local Album']);
+	});
+
+	it('× folds the card and hands focus back to + New', async () => {
+		const root = await render();
+		const card = await chooseNewAlbum(root);
+
+		card.querySelector<HTMLButtonElement>('[aria-label="Close new album"]')?.click();
+		await vi.waitFor(() => expect(document.activeElement).toBe(newButton(root)));
+
+		expect(newAlbumCard(root)).toBeNull();
+		expect(createAlbum).not.toHaveBeenCalled();
+	});
+
+	it('an empty library makes its first album there and opens its page', async () => {
+		emptyLibrary();
+		const root = await render();
+		const card = await chooseNewAlbum(root);
+		const title = card.querySelector<HTMLInputElement>('input');
+		if (!title) throw new Error('no Title field');
+		title.value = 'Night Drive';
+		title.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		card.querySelector<HTMLButtonElement>('button[type="submit"]')?.click();
+		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a-night' }));
+
+		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
+		expect(newAlbumCard(root)).toBeNull();
+	});
+});
+
+describeBackClosesOverlay({
+	name: 'the New album card',
+	render,
+	open: async (target) => {
+		await chooseNewAlbum(target);
+		await vi.waitFor(() => expect(historyEntry().layer).toBe('library-new-album'));
+	},
+	isShown: (target) => newAlbumCard(target) !== null,
+	afterBack: () => expect(createAlbum).not.toHaveBeenCalled(),
+	closeWays: [
+		{
+			way: '×',
+			close: (target) =>
+				target.querySelector<HTMLButtonElement>('[aria-label="Close new album"]')?.click()
+		}
+	]
 });
