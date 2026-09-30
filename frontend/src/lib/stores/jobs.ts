@@ -31,6 +31,11 @@ export interface ActiveJob {
 	mode?: string;
 	/** A generate job that ended with takes, held until they are in its song's list. */
 	awaitingTakes?: boolean;
+	/**
+	 * The job's stream failed and no fresh status has come since, so `job` is
+	 * only what it last said -- online as much as offline (#1161 R1).
+	 */
+	streamStale?: boolean;
 }
 
 export const activeJobs = writable<ActiveJob[]>([]);
@@ -318,7 +323,9 @@ function streamJob(
 		current = FRESH_STREAM;
 		const updated: JobStatus = JSON.parse(event.data);
 
-		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
+		activeJobs.update((jobs) =>
+			jobs.map((active) => (active.job.id === jobId ? withFreshStatus(active, updated) : active))
+		);
 
 		if (isTerminalJobStatus(updated.status)) {
 			completeTrackedJob(jobId, updated);
@@ -327,6 +334,7 @@ function streamJob(
 
 	source.onerror = () => {
 		closeStream(jobId);
+		markStreamStale(jobId);
 		const spendsBudget = current.spendsOnFailure && !get(offline);
 		const spentFailures = current.spentFailures + (spendsBudget ? 1 : 0);
 		if (spentFailures >= JOB_STREAM_MAX_CONNECTION_ERRORS) {
@@ -335,6 +343,19 @@ function streamJob(
 		}
 		scheduleReconnect(jobId, current.attempt, spentFailures, reopenGap);
 	};
+}
+
+function withFreshStatus(active: ActiveJob, job: JobStatus): ActiveJob {
+	const { streamStale: _wasStale, ...tracked } = active;
+	return { ...tracked, job };
+}
+
+function markStreamStale(jobId: string): void {
+	activeJobs.update((jobs) =>
+		jobs.map((active) =>
+			active.job.id === jobId && !active.streamStale ? { ...active, streamStale: true } : active
+		)
+	);
 }
 
 /**
@@ -360,7 +381,9 @@ async function rereadAfterSpentBudget(
 		return;
 	}
 	if (!isTracked(jobId)) return;
-	activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job } : j)));
+	activeJobs.update((jobs) =>
+		jobs.map((active) => (active.job.id === jobId ? withFreshStatus(active, job) : active))
+	);
 	if (isTerminalJobStatus(job.status)) completeTrackedJob(jobId, job);
 	else scheduleReconnect(jobId, attempt, 0, reopenGap);
 }
