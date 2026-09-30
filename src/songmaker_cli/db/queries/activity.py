@@ -1,5 +1,8 @@
 """Where a musician last worked: one activity time per album and playlist.
 
+Each person's own work on a song (an edit they saved, a listen they started)
+is recorded here too, whoever owns the song.
+
 A place is an album or a playlist. Its activity is the newest thing the
 musician did there, and it names the song they were on. Every nullable term is
 folded with ``coalesce`` and ``case`` rather than ``greatest``: SQLite has no
@@ -8,11 +11,14 @@ folded with ``coalesce`` and ``case`` rather than ``greatest``: SQLite has no
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import StrEnum
 from typing import Final
 
 from sqlalchemy import ColumnElement, Subquery, and_, case, exists, func, select
+from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session, aliased, selectinload
 
 from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST
@@ -24,11 +30,37 @@ from songmaker_cli.db.models import (
     Playlist,
     PlaylistEntry,
     Song,
+    UserSongWork,
     aware_timestamp,
 )
 from songmaker_cli.db.queries.playlists import playlist_holds_song_clause
+from songmaker_cli.timestamps import utcnow
 
 CONTINUE_MAX_PLACES: Final[int] = 6
+
+
+class SongWork(StrEnum):
+    """What a person did on a song; each value names its time column."""
+
+    EDITED = "edited_at"
+    PLAYED = "played_at"
+
+
+_UPSERT_INSERT_BY_DIALECT: Final[dict[str, Callable]] = {
+    "postgresql": postgresql.insert,
+    "sqlite": sqlite.insert,
+}
+
+
+def record_song_work(session: Session, *, user_id: str, song_id: str, work: SongWork) -> None:
+    """Stamp the person's own latest ``work`` on the song, keeping their other kind."""
+    insert = _UPSERT_INSERT_BY_DIALECT[session.bind.dialect.name]
+    stamp = {work.value: utcnow()}
+    session.execute(
+        insert(UserSongWork)
+        .values(user_id=user_id, song_id=song_id, **stamp)
+        .on_conflict_do_update(index_elements=["user_id", "song_id"], set_=stamp),
+    )
 
 
 @dataclass(frozen=True)
