@@ -44,6 +44,13 @@
 		square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
 		'chevron-up': '<path d="m18 15-6-6-6 6"/>',
 		'chevron-down': '<path d="m6 9 6 6 6-6"/>',
+		'chevron-right': '<path d="m9 18 6-6-6-6"/>',
+		'audio-lines': '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 11v2"/>',
+		mic: '<rect x="9" y="3.5" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v2.5"/>',
+		user: '<circle cx="12" cy="8.5" r="3.5"/><path d="M5 20c1.2-3.6 4-5 7-5s5.8 1.4 7 5"/>',
+		shield: '<path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/>',
+		broom: '<path d="M14 4l-4 9M6 13h8l2 7H4z"/>',
+		'file-text': '<path d="M6 3.5h8l4 4V20.5H6z"/><path d="M14 3.5v4h4M9 12h6M9 16h6"/>',
 		'more-horizontal':
 			'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
 		wand: '<path d="m15 4-1.17 2.83L11 8l2.83 1.17L15 12l1.17-2.83L19 8l-2.83-1.17Z"/><path d="m2 21 9.5-9.5"/><path d="m6.4 11 1.3 2.3L10 14.6l-2.3 1.3L6.4 18.2l-1.3-2.3L2.8 14.6l2.3-1.3Z"/>',
