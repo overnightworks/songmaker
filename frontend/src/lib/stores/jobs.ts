@@ -1,5 +1,11 @@
 import { writable, get } from 'svelte/store';
-import { fetchActiveGeneration, fetchLastFailedGeneration, type JobStatus } from '$lib/api/client';
+import {
+	fetchActiveGeneration,
+	fetchJob,
+	fetchLastFailedGeneration,
+	type JobStatus
+} from '$lib/api/client';
+import { isNotFound } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
@@ -94,9 +100,23 @@ export async function hydrateGenerationFailure(songId: string): Promise<void> {
 	);
 }
 
+/**
+ * Where a job stream stands in its reconnection: `attempt` paces the backoff,
+ * `spentFailures` counts what the give-up budget has used, and
+ * `spendsOnFailure` says whether this connection's failure may use it.
+ */
+interface StreamRetry {
+	attempt: number;
+	spentFailures: number;
+	spendsOnFailure: boolean;
+}
+
+const FRESH_STREAM: StreamRetry = { attempt: 1, spentFailures: 0, spendsOnFailure: true };
+
 interface PendingReconnect {
 	timer: ReturnType<typeof setTimeout>;
 	attempt: number;
+	spentFailures: number;
 	reopenGap: ImmediateReopenGap;
 }
 
@@ -204,9 +224,8 @@ function backOnline(): Promise<void> {
 // would then stay missing until the next navigation (#1020). Both triggers are
 // idempotent: the resource-sync owner refetches the song and skips a take it
 // already has.
-function completeTrackedJob(jobId: string, job: JobStatus, source: EventSource): void {
-	source.close();
-	eventSources.delete(jobId);
+function completeTrackedJob(jobId: string, job: JobStatus): void {
+	closeStream(jobId);
 	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
 	if (songId && endedWithTakes(job)) {
 		const songRefresh = requestSongRefresh(songId);
@@ -249,11 +268,16 @@ function stopTracking(jobId: string): void {
 	cancelPendingReconnect(jobId);
 	takeArrivalWaits.get(jobId)?.();
 	takeArrivalWaits.delete(jobId);
-	const source = eventSources.get(jobId);
-	if (source) {
-		source.close();
-		eventSources.delete(jobId);
-	}
+	closeStream(jobId);
+}
+
+function closeStream(jobId: string): void {
+	eventSources.get(jobId)?.close();
+	eventSources.delete(jobId);
+}
+
+function isTracked(jobId: string): boolean {
+	return get(activeJobs).some((active) => active.job.id === jobId);
 }
 
 /**
@@ -264,65 +288,121 @@ function stopTracking(jobId: string): void {
  * issue #257) and reopens after `nextReconnectDelayMs`, or at once when the
  * page gets a fresh chance to reach the server (`watchReconnectOpportunities`).
  *
- * `attemptOnFailure` is the consecutive-error count this connection's failure
- * records. A reopen the backoff timer scheduled is the next attempt; a reopen
- * the page asked for (visible again, focus, back online) re-records the
- * attempt it interrupted, so returning to the app during an outage never
- * spends the give-up budget -- otherwise every return dropped a running job
- * sooner (#1032). Any message resets the count, so a connection that recovers
- * goes back to the short delay on its next drop. `reopenGap` travels with the
+ * The give-up budget counts only failures of timed retries while the page can
+ * reach the server: a failure while `offline` says the connection is lost
+ * never spends it, however many outages a take runs through (#1141), and a
+ * reopen the page asked for (visible again, focus, back online) never spends
+ * it either, so returning to the app during an outage cannot drop a running
+ * job sooner (#1032). A connection that opens gives the budget back; a
+ * message also puts the backoff back to its short first delay. When the
+ * budget does run out online, the job is read again over REST
+ * (`rereadAfterSpentBudget`) rather than dropped. `reopenGap` travels with the
  * job across every reopen, so the page's chances reopen it at most once per
  * gap however often the musician switches apps (#1099).
  */
 function streamJob(
 	jobId: string,
-	attemptOnFailure = 1,
+	retry: StreamRetry = FRESH_STREAM,
 	reopenGap = new ImmediateReopenGap()
 ): void {
-	let failedAttempt = attemptOnFailure;
+	let current = retry;
 
 	const source = new EventSource(`/api/jobs/${jobId}/stream`, { withCredentials: true });
 	eventSources.set(jobId, source);
 
+	source.onopen = () => {
+		current = { ...current, spentFailures: 0, spendsOnFailure: true };
+	};
+
 	source.onmessage = (event: MessageEvent) => {
-		failedAttempt = 1;
+		current = FRESH_STREAM;
 		const updated: JobStatus = JSON.parse(event.data);
 
 		activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job: updated } : j)));
 
 		if (isTerminalJobStatus(updated.status)) {
-			completeTrackedJob(jobId, updated, source);
+			completeTrackedJob(jobId, updated);
 		}
 	};
 
 	source.onerror = () => {
-		source.close();
-		eventSources.delete(jobId);
-		if (failedAttempt >= JOB_STREAM_MAX_CONNECTION_ERRORS) {
-			activeJobs.update((jobs) => jobs.filter((j) => j.job.id !== jobId));
-			addToast('Lost connection to server', 'error');
+		closeStream(jobId);
+		const spendsBudget = current.spendsOnFailure && !get(offline);
+		const spentFailures = current.spentFailures + (spendsBudget ? 1 : 0);
+		if (spentFailures >= JOB_STREAM_MAX_CONNECTION_ERRORS) {
+			void rereadAfterSpentBudget(jobId, current.attempt, reopenGap);
 			return;
 		}
-		scheduleReconnect(jobId, failedAttempt, reopenGap);
+		scheduleReconnect(jobId, current.attempt, spentFailures, reopenGap);
 	};
 }
 
-function scheduleReconnect(jobId: string, attempt: number, reopenGap: ImmediateReopenGap): void {
+/**
+ * The job stream failed its whole budget while the page was online, so the
+ * job's own record answers instead: an ended job finishes as if its stream had
+ * said so, a running one keeps its card and its stream starts a fresh budget,
+ * and a re-read that fails for any other reason than a 404 (a lost network, a
+ * 5xx, a 429) keeps following it. A job the server no longer knows goes
+ * without a word of its own; its song refresh shows what is really there.
+ */
+async function rereadAfterSpentBudget(
+	jobId: string,
+	attempt: number,
+	reopenGap: ImmediateReopenGap
+): Promise<void> {
+	let job: JobStatus;
+	try {
+		job = await fetchJob(jobId);
+	} catch (err) {
+		if (!isTracked(jobId)) return;
+		if (isNotFound(err)) letUnknownJobGo(jobId);
+		else scheduleReconnect(jobId, attempt, 0, reopenGap);
+		return;
+	}
+	if (!isTracked(jobId)) return;
+	activeJobs.update((jobs) => jobs.map((j) => (j.job.id === jobId ? { ...j, job } : j)));
+	if (isTerminalJobStatus(job.status)) completeTrackedJob(jobId, job);
+	else scheduleReconnect(jobId, attempt, 0, reopenGap);
+}
+
+function letUnknownJobGo(jobId: string): void {
+	const songId = get(activeJobs).find((active) => active.job.id === jobId)?.songId;
+	removeJob(jobId);
+	if (songId) void requestSongRefresh(songId);
+}
+
+function scheduleReconnect(
+	jobId: string,
+	attempt: number,
+	spentFailures: number,
+	reopenGap: ImmediateReopenGap
+): void {
 	const timer = setTimeout(() => retryAfterBackoff(jobId), nextReconnectDelayMs(attempt));
-	pendingReconnects.set(jobId, { timer, attempt, reopenGap });
+	pendingReconnects.set(jobId, { timer, attempt, spentFailures, reopenGap });
 	stopWatchingReconnectOpportunities ??= watchReconnectOpportunities(reconnectAllWaitingJobs);
 }
 
 function retryAfterBackoff(jobId: string): void {
 	const pending = takePendingReconnect(jobId);
-	if (pending !== undefined) streamJob(jobId, pending.attempt + 1, pending.reopenGap);
+	if (pending === undefined) return;
+	const retry = {
+		attempt: pending.attempt + 1,
+		spentFailures: pending.spentFailures,
+		spendsOnFailure: true
+	};
+	streamJob(jobId, retry, pending.reopenGap);
 }
 
 function reconnectNow(jobId: string): void {
 	const pending = pendingReconnects.get(jobId);
 	pending?.reopenGap.run(() => {
 		cancelPendingReconnect(jobId);
-		streamJob(jobId, pending.attempt, pending.reopenGap);
+		const retry = {
+			attempt: pending.attempt,
+			spentFailures: pending.spentFailures,
+			spendsOnFailure: false
+		};
+		streamJob(jobId, retry, pending.reopenGap);
 	});
 }
 
