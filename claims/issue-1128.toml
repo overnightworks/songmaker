@@ -1,8 +1,0 @@
-claim_id = "2e6d16e7eec847f3af0147ea5d3cb72a"
-agent = "claude-head"
-role = "builder"
-base = "fa7207b1fa725719710840dd65a52e09fbd63fac"
-branch = "claude/issue-1128-admin-search"
-scope = ["docs/architecture.md", "src/songmaker_cli/db/queries/library.py", "src/songmaker_cli/library_api.py", "tests"]
-opened_commit = "c495ad6750393bd7759b2d694abe2eba0ca0c29b"
-whole_reason = "admin search scope in the library search query and endpoint with its tests"
