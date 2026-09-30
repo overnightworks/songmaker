@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
+	import { registerHistoryLayer } from '$lib/stores/navigation';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import type { UnplayableSongSummary } from '$lib/api/types';
 
@@ -17,20 +18,38 @@
 		});
 	});
 
+	// Back closes the warning (issue #1125): it holds one history entry while
+	// shown, and closing it any other way steps back off that entry first.
+	let historyLayer: ReturnType<typeof registerHistoryLayer> | undefined;
+
+	function holdHistoryLayer(): () => void {
+		historyLayer = registerHistoryLayer('share-warning', () => onclose());
+		return leaveHistoryLayer;
+	}
+
+	function leaveHistoryLayer(): void {
+		if (historyLayer?.layered) historyLayer.leave();
+	}
+
+	function close(): void {
+		leaveHistoryLayer();
+		onclose();
+	}
+
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
-		handleFocusTrapKeydown(dialog, event, onclose);
+		handleFocusTrapKeydown(dialog, event, close);
 	}
 </script>
 
 <svelte:window onkeydown={onWindowKeydown} />
 
 {#if songs.length > 0}
-	<div class="overlay">
+	<div class="overlay" {@attach holdHistoryLayer}>
 		<button
 			class="overlay-backdrop"
 			tabindex="-1"
-			onclick={onclose}
+			onclick={close}
 			aria-label={SHARE_DIALOG_CLOSE_LABEL}
 		></button>
 		<div
@@ -49,7 +68,7 @@
 				{/each}
 			</ul>
 			<div class="actions">
-				<button class="confirm-btn" onclick={onclose}>{SHARE_DIALOG_CLOSE_LABEL}</button>
+				<button class="confirm-btn" onclick={close}>{SHARE_DIALOG_CLOSE_LABEL}</button>
 			</div>
 		</div>
 	</div>
