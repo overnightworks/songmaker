@@ -12,6 +12,7 @@ import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
 	captureUnhandledRejections,
 	createButton,
+	createSettled,
 	field,
 	type
 } from '$lib/test-utils/new-place-card';
@@ -68,12 +69,6 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-async function createSettled(): Promise<void> {
-	await vi.waitFor(() => expect(createAlbum).toHaveBeenCalled());
-	await tick();
-	await tick();
-}
-
 describe('NewAlbumCard', () => {
 	it('names itself New album and puts the cursor in Title', async () => {
 		const root = await render();
@@ -107,7 +102,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Artist'), ' Lichtwechsel ');
 
 		createButton(root).click();
-		await createSettled();
+		await createSettled(createAlbum);
 
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', 'Lichtwechsel');
 		expect(get(albumList).map((listed) => listed.id)).toEqual(['a-night']);
@@ -120,7 +115,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Title'), 'Night Drive');
 
 		field(root, 'Title').form?.requestSubmit();
-		await createSettled();
+		await createSettled(createAlbum);
 
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
 	});
@@ -144,7 +139,7 @@ describe('NewAlbumCard', () => {
 			type(field(root, 'Title'), 'Night Drive');
 
 			createButton(root).click();
-			await createSettled();
+			await createSettled(createAlbum);
 
 			expect(creates).toBe(0);
 			expect(field(root, 'Title').value).toBe('Night Drive');
@@ -163,7 +158,7 @@ describe('NewAlbumCard', () => {
 		type(field(root, 'Title'), 'Night Drive');
 
 		createButton(root).click();
-		await createSettled();
+		await createSettled(createAlbum);
 
 		await vi.waitFor(() => expect(escaped).toContain(openFailure));
 		expect(get(albumList).map((listed) => listed.id)).toEqual(['a-night']);
