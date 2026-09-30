@@ -4,13 +4,18 @@ import { get } from 'svelte/store';
 
 const listLoras = vi.fn();
 
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$lib/api/loras', () => ({
 	listLoras: (...args: unknown[]) => listLoras(...args)
 }));
 
+import { goto } from '$app/navigation';
 import type { UserLoraItem } from '$lib/api/types';
-import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
+import { discardDraft, editGenParams, setDraftGenParams, setDraftLyrics } from '$lib/stores/editor';
 import { loras } from '$lib/stores/loras';
+import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { recipeModel } from '$lib/stores/recipe';
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import VoicePicker from './VoicePicker.svelte';
@@ -28,6 +33,9 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	discardDraft();
+	pendingDirtyNavigation.set(null);
+	vi.mocked(goto).mockClear();
 });
 
 async function render(): Promise<HTMLElement> {
@@ -66,6 +74,16 @@ describe('VoicePicker', () => {
 		const target = await render();
 		const hint = target.querySelector<HTMLAnchorElement>('.hint');
 		expect(hint?.getAttribute('href')).toBe('/settings/voices');
+	});
+
+	it('holds "Create a voice" for the unsaved-changes dialog while the song has a dirty draft (issue #1143)', async () => {
+		setDraftLyrics('unsaved edit');
+		const target = await render();
+
+		target.querySelector<HTMLAnchorElement>('.hint')?.click();
+
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('selects ready voices only when their mode exactly matches the sft model', async () => {
