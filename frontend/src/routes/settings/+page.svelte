@@ -2,7 +2,7 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { goto } from '$app/navigation';
 	import Icon from '$lib/components/Icon.svelte';
-	import { RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
+	import { APP_NAME, RAIL_SETTINGS_LABEL, SETTINGS_NAV_LABEL } from '$lib/constants';
 	import { visibleSettingsSections } from '$lib/settingsSections';
 	import { currentUser, isAdmin } from '$lib/stores/auth';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
@@ -22,10 +22,14 @@
 
 	$effect(() => {
 		if (!railListsSections) return;
-		const target = admin ? '/settings/generation' : '/settings/playback';
-		goto(target, { replaceState: true });
+		const [firstVisible] = sections;
+		goto(firstVisible.href, { replaceState: true });
 	});
 </script>
+
+<svelte:head>
+	<title>{RAIL_SETTINGS_LABEL} — {APP_NAME}</title>
+</svelte:head>
 
 {#if compact}
 	<h1 class="settings-index-title">{RAIL_SETTINGS_LABEL}</h1>
