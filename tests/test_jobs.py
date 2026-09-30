@@ -776,6 +776,7 @@ def test_generation_job_partial_failure(seeded_db, tmp_path: Path) -> None:
 
         gens = session.query(Generation).filter_by(song_id="s1").all()
         assert len(gens) == 1
+        assert gens[0].created_by == "u1"
         assert session.query(ResourceEvent).count() == 1
 
 
