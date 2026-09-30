@@ -55,7 +55,7 @@ async function answerTheLibraryEmpty(page: Page): Promise<void> {
 }
 
 function newButton(page: Page) {
-	return workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL });
+	return workspace(page).getByRole('button', { name: LIBRARY_NEW_MENU_LABEL, exact: true });
 }
 
 function newMenu(page: Page) {
