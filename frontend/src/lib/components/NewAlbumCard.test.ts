@@ -1,14 +1,20 @@
 import { makeAlbum as album } from '$lib/test-utils/factories';
-import { flushSync, mount, tick, unmount } from 'svelte';
+import { mount, tick, unmount } from 'svelte';
 import { get } from 'svelte/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { ApiError } from '$lib/api/fetch';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
 import { albumList } from '$lib/stores/libraryData';
 import { addToast } from '$lib/stores/toast';
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import {
+	captureUnhandledRejections,
+	createButton,
+	field,
+	type
+} from '$lib/test-utils/new-place-card';
 
 const createAlbum = vi.fn();
 
@@ -62,43 +68,6 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-function field(root: ParentNode, label: string): HTMLInputElement {
-	const input = [...root.querySelectorAll('label')]
-		.find((candidate) => candidate.textContent?.trim().startsWith(label))
-		?.querySelector('input');
-	if (!input) throw new Error(`no ${label} field`);
-	return input;
-}
-
-function type(input: HTMLInputElement, value: string): void {
-	input.value = value;
-	input.dispatchEvent(new Event('input', { bubbles: true }));
-	flushSync();
-}
-
-function createButton(root: ParentNode): HTMLButtonElement {
-	const button = [...root.querySelectorAll('button')].find(
-		(candidate) => candidate.textContent?.trim() === 'Create'
-	);
-	if (!button) throw new Error('no Create button');
-	return button;
-}
-
-// The submit handler's promise has no caller to reject into, so a failure it
-// lets escape surfaces as an unhandled rejection; the test collects those
-// instead of letting the runner report them as a crash.
-function captureUnhandledRejections(): unknown[] {
-	const escaped: unknown[] = [];
-	const runnerListeners = process.listeners('unhandledRejection');
-	process.removeAllListeners('unhandledRejection');
-	process.on('unhandledRejection', (reason) => escaped.push(reason));
-	restoreUnhandledRejections = () => {
-		process.removeAllListeners('unhandledRejection');
-		for (const listener of runnerListeners) process.on('unhandledRejection', listener);
-	};
-	return escaped;
-}
-
 async function createSettled(): Promise<void> {
 	await vi.waitFor(() => expect(createAlbum).toHaveBeenCalled());
 	await tick();
@@ -112,6 +81,13 @@ describe('NewAlbumCard', () => {
 		expect(root.querySelector('[aria-label="New album"]')).not.toBeNull();
 		expect(document.activeElement).toBe(field(root, 'Title'));
 		expect(field(root, 'Artist').required).toBe(false);
+		expect(field(root, 'Artist').placeholder).toBe('Artist');
+	});
+
+	it.each(['Title', 'Artist'])('%s takes no more than the server keeps', async (label) => {
+		const root = await render();
+
+		expect(field(root, label).maxLength).toBe(200);
 	});
 
 	it.each([
@@ -149,8 +125,22 @@ describe('NewAlbumCard', () => {
 		expect(createAlbum).toHaveBeenCalledWith('Night Drive', '');
 	});
 
-	it('keeps the card and what was typed when the server refuses, and says why', async () => {
-		createAlbum.mockRejectedValue(new ApiError(422, 'Title too long', '/api/albums'));
+	it.each([
+		{
+			case: 'the server refuses it',
+			refusal: new ApiError(422, 'Validation error on: body.title', '/api/albums'),
+			reason: 'The album could not be created. Try again.'
+		},
+		{
+			case: 'the network is gone',
+			refusal: new NetworkError('/api/albums', new TypeError('Failed to fetch')),
+			reason: "You're offline, so nothing was created. Try again once you're back online."
+		}
+	])('keeps the card and what was typed when $case, and says why readably', async ({
+		refusal,
+		reason
+	}) => {
+		createAlbum.mockRejectedValue(refusal);
 		const root = await render();
 		type(field(root, 'Title'), 'Night Drive');
 
@@ -161,13 +151,14 @@ describe('NewAlbumCard', () => {
 		expect(field(root, 'Title').value).toBe('Night Drive');
 		expect(createButton(root).disabled).toBe(false);
 		expect(get(openCollection)).toBeNull();
-		expect(addToast).toHaveBeenCalledWith(expect.stringContaining('Title too long'), 'error');
+		expect(addToast).toHaveBeenCalledWith(reason, 'error');
 	});
 
 	it('keeps the created album listed and says nothing failed when only opening its page fails', async () => {
 		const openFailure = new Error('navigation aborted');
 		vi.mocked(goto).mockRejectedValueOnce(openFailure);
-		const escaped = captureUnhandledRejections();
+		const { escaped, restore } = captureUnhandledRejections();
+		restoreUnhandledRejections = restore;
 		const root = await render();
 		type(field(root, 'Title'), 'Night Drive');
 
