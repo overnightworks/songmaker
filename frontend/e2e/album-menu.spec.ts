@@ -15,9 +15,11 @@ const PHONE_WIDTH_PX = 390;
 const VIEWPORT_HEIGHT_PX = 844;
 
 /**
- * Sized from the neighbouring cold opens rather than measured: a playlist's
- * cold open costs 11 (playlist-address.spec.ts), and opening the ⋯ asks the
- * API nothing. The first green CI run logs the real count below.
+ * Measured in CI on PR #1136: the album cold open costs 14 on desktop and 11
+ * on mobile, the playlist cold open 12 on desktop and 8 on mobile, and the
+ * logged-out public album page 0 on both, since opening the ⋯ asks the API
+ * nothing. Shared budget, sized from the costliest flow the same way
+ * playlist-address.spec.ts's is.
  */
 const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 15;
 
