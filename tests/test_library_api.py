@@ -39,7 +39,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.db.queries import SongWork
+from songmaker_cli.db.queries import SongWork, update_job_status
 from songmaker_cli.library_api import CONTINUE_MAX_OFFSET
 
 USER_A = "user-a"
@@ -223,9 +223,10 @@ def _later(offset_seconds: int) -> datetime:
 
 def _add_take(
     session, *, generation_id: str, song_id: str, created_at: datetime,
+    generation_number: int = 1,
 ) -> Generation:
     take = Generation(
-        id=generation_id, song_id=song_id, generation_number=1,
+        id=generation_id, song_id=song_id, generation_number=generation_number,
         mp3_path=f"takes/{generation_id}.mp3", created_at=created_at,
     )
     session.add(take)
@@ -250,14 +251,26 @@ def _add_own_work(
     session.add(UserSongWork(user_id=user_id, song_id=song_id, **{work.value: at}))
 
 
-def _add_generate_job(
-    session, *, author: str, song_id: str, completed_at: datetime,
+def _run_generate_job(
+    session, *, author: str, song_id: str, started_at: datetime, ended_at: datetime,
     status: JobStatus = JobStatus.COMPLETED,
 ) -> None:
-    session.add(Job(
-        type=JobType.GENERATE, status=status, user_id=author, song_id=song_id,
-        started_at=completed_at, completed_at=completed_at,
-    ))
+    """A generate job that ran from ``started_at`` and ended in ``status`` at ``ended_at``.
+
+    The real status transition decides which of the job's timestamps it
+    stamps; that stamp is then moved from the wall clock back to ``ended_at``.
+    """
+    job = Job(
+        type=JobType.GENERATE, status=JobStatus.RUNNING, user_id=author, song_id=song_id,
+        started_at=started_at, heartbeat_at=started_at,
+    )
+    session.add(job)
+    session.flush()
+    assert update_job_status(session, job.id, status)
+    for stamp in ("heartbeat_at", "completed_at"):
+        stamped_at = getattr(job, stamp)
+        if stamped_at is not None and stamped_at > ended_at:
+            setattr(job, stamp, ended_at)
 
 
 def _add_playlist(
@@ -490,7 +503,10 @@ def _foreign_album_its_owner_works_in(session) -> None:
         )
         _add_take(session, generation_id=f"take-{song_id}", song_id=song_id, created_at=_later(530))
         _add_cowriter_message(session, song_id=song_id, author=USER_B, created_at=_later(540))
-        _add_generate_job(session, author=USER_B, song_id=song_id, completed_at=_later(550))
+        _run_generate_job(
+            session, author=USER_B, song_id=song_id, started_at=_later(525),
+            ended_at=_later(550),
+        )
     session.flush()
 
 
@@ -508,9 +524,37 @@ def _seed_foreign_album_the_admin_listened_to(session) -> None:
     )
 
 
-def _seed_foreign_album_the_admin_made_a_take_in(session) -> None:
+def _foreign_album_with_an_admin_generate_job(
+    session, *, status: JobStatus, saved_a_take: bool,
+) -> None:
     _foreign_album_its_owner_works_in(session)
-    _add_generate_job(session, author=ADMIN_ID, song_id="foreign-a", completed_at=_later(40))
+    if saved_a_take:
+        _add_take(
+            session, generation_id="take-admin", song_id="foreign-a", created_at=_later(40),
+            generation_number=2,
+        )
+    _run_generate_job(
+        session, author=ADMIN_ID, song_id="foreign-a", started_at=_later(38),
+        ended_at=_later(42), status=status,
+    )
+
+
+def _seed_foreign_album_the_admin_made_a_take_in(session) -> None:
+    _foreign_album_with_an_admin_generate_job(
+        session, status=JobStatus.COMPLETED, saved_a_take=True,
+    )
+
+
+def _seed_foreign_album_the_admins_partial_batch_made_a_take_in(session) -> None:
+    _foreign_album_with_an_admin_generate_job(
+        session, status=JobStatus.PARTIAL, saved_a_take=True,
+    )
+
+
+def _seed_foreign_album_the_admins_cancelled_batch_made_a_take_in(session) -> None:
+    _foreign_album_with_an_admin_generate_job(
+        session, status=JobStatus.CANCELLED, saved_a_take=True,
+    )
 
 
 def _seed_foreign_album_the_admin_wrote_with_the_co_writer_in(session) -> None:
@@ -535,10 +579,14 @@ def _seed_foreign_album_whose_admin_song_is_deleted(session) -> None:
 
 
 def _seed_foreign_album_with_a_failed_admin_take(session) -> None:
-    _foreign_album_its_owner_works_in(session)
-    _add_generate_job(
-        session, author=ADMIN_ID, song_id="foreign-a", completed_at=_later(40),
-        status=JobStatus.FAILED,
+    _foreign_album_with_an_admin_generate_job(
+        session, status=JobStatus.FAILED, saved_a_take=False,
+    )
+
+
+def _seed_foreign_album_with_an_admin_batch_cancelled_before_any_take(session) -> None:
+    _foreign_album_with_an_admin_generate_job(
+        session, status=JobStatus.CANCELLED, saved_a_take=False,
     )
 
 
@@ -553,22 +601,28 @@ def _seed_archived_foreign_album_the_admin_edited(session) -> None:
         (_seed_foreign_album_the_admin_edited, [(30, "foreign-a")]),
         (_seed_foreign_album_the_admin_listened_to, [(35, "foreign-a")]),
         (_seed_foreign_album_the_admin_made_a_take_in, [(40, "foreign-a")]),
+        (_seed_foreign_album_the_admins_partial_batch_made_a_take_in, [(40, "foreign-a")]),
+        (_seed_foreign_album_the_admins_cancelled_batch_made_a_take_in, [(40, "foreign-a")]),
         (_seed_foreign_album_the_admin_wrote_with_the_co_writer_in, [(45, "foreign-a")]),
         (_seed_foreign_album_naming_the_admins_newest_song, [(60, "foreign-b")]),
         (_seed_foreign_album_worked_in_by_its_owner_only, []),
         (_seed_foreign_album_whose_admin_song_is_deleted, []),
         (_seed_foreign_album_with_a_failed_admin_take, []),
+        (_seed_foreign_album_with_an_admin_batch_cancelled_before_any_take, []),
         (_seed_archived_foreign_album_the_admin_edited, []),
     ],
     ids=[
         "admin-edit",
         "admin-listen",
         "admin-take",
+        "admin-partial-batch-take",
+        "admin-cancelled-batch-take",
         "admin-co-writer-message",
         "names-the-admins-newest-song",
         "owner-work-only-is-left-out",
         "admin-work-on-a-deleted-song-is-left-out",
         "failed-admin-take-is-left-out",
+        "admin-batch-cancelled-before-any-take-is-left-out",
         "archived-album-is-left-out",
     ],
 )
@@ -634,7 +688,11 @@ def test_a_musicians_continue_ignores_their_own_work_on_albums_they_cannot_open(
         _add_own_work(
             session, user_id=USER_A, song_id="song-bob", work=SongWork.EDITED, at=_later(10),
         )
-        _add_generate_job(session, author=USER_A, song_id="song-bob", completed_at=_later(20))
+        _add_take(session, generation_id="take-alice", song_id="song-bob", created_at=_later(20))
+        _run_generate_job(
+            session, author=USER_A, song_id="song-bob", started_at=_later(19),
+            ended_at=_later(21),
+        )
         _add_cowriter_message(session, song_id="song-bob", author=USER_A, created_at=_later(30))
         session.commit()
 
