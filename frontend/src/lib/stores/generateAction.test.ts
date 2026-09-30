@@ -188,7 +188,8 @@ describe('generate action presentation', () => {
 				jobId: 'job1',
 				label: 'Queued #2',
 				reason: queuedJob.queue_reason,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: queuedJob }])
 		},
@@ -199,7 +200,8 @@ describe('generate action presentation', () => {
 				jobId: 'job1',
 				label: 'Queued',
 				reason: queuedJob.queue_reason,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, queue_position: null } }])
 		},
@@ -213,7 +215,8 @@ describe('generate action presentation', () => {
 				progress: 0,
 				readout: '0%',
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			setup: () => activeJobs.set([{ songId: 's1', job: { ...queuedJob, status: 'running' } }])
 		},
@@ -227,7 +230,8 @@ describe('generate action presentation', () => {
 				progress: 0,
 				readout: '0%',
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			},
 			setup: () =>
 				activeJobs.set([
@@ -272,7 +276,8 @@ describe('generate action presentation', () => {
 				progress: 36,
 				readout,
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			});
 		}
 	);
@@ -330,19 +335,25 @@ describe('generate action presentation', () => {
 		};
 
 		it.each([
-			{ cause: 'the browser is offline', loseConnection: () => browserReportsOnline(false) },
+			{
+				cause: 'the browser is offline',
+				loseConnection: () => browserReportsOnline(false),
+				offline: true
+			},
 			{
 				cause: 'the server is unreachable',
-				loseConnection: () => reportResourceStreamReachable(false)
+				loseConnection: () => reportResourceStreamReachable(false),
+				offline: true
 			},
 			{
 				cause: "the job's stream is down while the page is online",
 				loseConnection: () =>
-					activeJobs.update((jobs) => jobs.map((active) => ({ ...active, streamStale: true })))
+					activeJobs.update((jobs) => jobs.map((active) => ({ ...active, streamStale: true }))),
+				offline: false
 			}
 		])(
-			'a running take reads "Reconnecting…" with its last seen progress when $cause',
-			({ loseConnection }) => {
+			'a running take reads "Reconnecting…" with its last seen progress when $cause, its cancel unreachable only offline',
+			({ loseConnection, offline }) => {
 				activeJobs.set([{ songId: 's1', job: runningAt40 }]);
 				loseConnection();
 				expect(get(generateAction)).toEqual({
@@ -353,7 +364,8 @@ describe('generate action presentation', () => {
 					progress: 40,
 					readout: 'last seen at 40%',
 					ended: false,
-					reconnecting: true
+					reconnecting: true,
+					offline
 				});
 			}
 		);
@@ -376,7 +388,8 @@ describe('generate action presentation', () => {
 				progress: 40,
 				readout: '40% · ~0:32',
 				ended: false,
-				reconnecting: false
+				reconnecting: false,
+				offline: false
 			});
 		});
 
@@ -388,7 +401,8 @@ describe('generate action presentation', () => {
 				jobId: 'job1',
 				label: 'Queued #2',
 				reason: queuedJob.queue_reason,
-				reconnecting: true
+				reconnecting: true,
+				offline: true
 			});
 		});
 	});

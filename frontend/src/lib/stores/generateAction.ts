@@ -136,9 +136,11 @@ function pendingGenerateJob(song: SongItem, jobs: readonly ActiveJob[]): ActiveJ
 
 /**
  * A busy state is `reconnecting` while the page is offline or the job's own
- * stream is down: nothing the server says about the job can arrive, and a
- * cancel may not reach it, so the surfaces grey out instead of looking live
- * (#1039 O2, #1161 R1). A generating state is
+ * stream is down: nothing the server says about the job can arrive, so the
+ * readout greys out instead of looking live (#1039 O2, #1161 R1). It is
+ * `offline` only while the page cannot reach the server at all: then a cancel
+ * cannot leave either, so the cancel greys out too; a refused job stream
+ * leaves the cancel's own request free. A generating state is
  * `ended` while a finished job waits for its take to reach the list: its
  * card stays, but there is nothing left to cancel (#1039 O3).
  */
@@ -150,6 +152,7 @@ export type GenerateState =
 			label: string;
 			reason: string | null;
 			reconnecting: boolean;
+			offline: boolean;
 	  }
 	| {
 			kind: 'generating';
@@ -159,6 +162,7 @@ export type GenerateState =
 			progress: number;
 			readout: string | null;
 			reconnecting: boolean;
+			offline: boolean;
 			ended: boolean;
 	  }
 	| { kind: 'failed'; mode: GenerateMode; cause: string }
@@ -229,7 +233,8 @@ export const generateAction = derived(
 				jobId: job.id,
 				label: queuedLabel(job.queue_position ?? null),
 				reason: job.queue_reason ?? null,
-				reconnecting
+				reconnecting,
+				offline: isOffline
 			};
 		}
 		if (pending) {
@@ -241,6 +246,7 @@ export const generateAction = derived(
 				progress: progressPercent(job),
 				readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
 				reconnecting,
+				offline: isOffline,
 				ended: job !== null && !isStillWorking(job)
 			};
 		}
