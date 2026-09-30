@@ -459,6 +459,19 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 };
 export const LIBRARY_WALL_HEADING = 'Albums & playlists';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums and playlists';
+export const LIBRARY_WALL_EMPTY = 'No albums yet.';
+export const LIBRARY_NEW_FACE = 'New';
+export const LIBRARY_NEW_MENU_LABEL = 'New in Library';
+export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';
+export const LIBRARY_NEW_ALBUM_LABEL = 'Album';
+export const NEW_ALBUM_CARD_LABEL = 'New album';
+export const NEW_ALBUM_CLOSE_LABEL = 'Close new album';
+export const NEW_ALBUM_TITLE_LABEL = 'Title';
+export const NEW_ALBUM_ARTIST_LABEL = 'Artist';
+export const NEW_ALBUM_ARTIST_OPTIONAL = 'optional';
+export const NEW_ALBUM_CREATE_LABEL = 'Create';
+export const NEW_ALBUM_HINT = 'Opens the album; add songs there.';
+export const NEW_ALBUM_FAILED = 'Album creation failed';
 // The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
 export const LIBRARY_WALL_RECENT_PAGE_SIZE = 200;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
