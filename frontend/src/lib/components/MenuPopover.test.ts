@@ -115,6 +115,12 @@ describe('MenuPopover placement', () => {
 			expected: { left: 390 - 8 - PANEL_WIDTH, top: 162 }
 		},
 		{
+			case: 'at the right screen edge, 8 px inside, under a trigger at the right of a phone',
+			viewport: { width: 390, height: 844 },
+			trigger: { left: 390 - 12 - TRIGGER_SIZE, top: 120 },
+			expected: { left: 390 - 8 - PANEL_WIDTH, top: 162 }
+		},
+		{
 			case: 'above the trigger when there is no room below',
 			viewport: { width: 1280, height: 800 },
 			trigger: { left: 900, top: 700 },
@@ -204,6 +210,7 @@ describeBackClosesOverlay({
 		await openIn(target);
 	},
 	isShown: (target) => target.querySelector('.menu-panel') !== null,
+	afterBack: () => expect(document.activeElement).toBe(triggerOf(document.body)),
 	closeWays: [
 		{ way: 'its trigger', close: (target) => triggerOf(target).click() },
 		{

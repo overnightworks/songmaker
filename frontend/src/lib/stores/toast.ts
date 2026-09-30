@@ -43,16 +43,18 @@ function clearFailuresRaisedOffline(): void {
 	stopWaitingForReturn = null;
 }
 
-export function addToast(message: string, type: ToastType = 'info'): void {
+/** Answers the toast's id, so its raiser can dismiss it once it no longer holds. */
+export function addToast(message: string, type: ToastType = 'info'): number {
 	const id = nextId++;
 	toasts.update((t) => [...t, { id, message, type }]);
 	if (type === 'error') {
 		if (get(offline)) clearOnReturn(id);
-		return;
+		return id;
 	}
 	setTimeout(() => {
 		toasts.update((t) => t.filter((toast) => toast.id !== id));
 	}, TOAST_DURATION_MS);
+	return id;
 }
 
 export function addUndoToast(message: string, action: ToastAction): void {

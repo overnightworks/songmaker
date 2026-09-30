@@ -29,6 +29,7 @@
 		LIBRARY_NEW_FACE,
 		LIBRARY_NEW_MENU_CLOSE_LABEL,
 		LIBRARY_NEW_MENU_LABEL,
+		LIBRARY_NEW_PLAYLIST_LABEL,
 		LIBRARY_WALL_EMPTY,
 		LIBRARY_WALL_HEADING,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
@@ -36,11 +37,14 @@
 		LIBRARY_WALL_ORDERS,
 		type LibraryWallOrder
 	} from '$lib/constants';
+	import Icon from './Icon.svelte';
 	import LibraryContinue from './LibraryContinue.svelte';
 	import LibraryTileContent from './LibraryTileContent.svelte';
 	import MenuPopover from './MenuPopover.svelte';
 	import NewAlbumCard from './NewAlbumCard.svelte';
+	import NewPlaylistCard from './NewPlaylistCard.svelte';
 
+	type NewPlaceKind = 'album' | 'playlist';
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
 
 	const albums = $derived($albumList);
@@ -63,12 +67,21 @@
 
 	let browseEl = $state<HTMLElement | null>(null);
 	let newMenu: MenuPopover | undefined = $state();
-	const newAlbumOpen = historyLayerState('library-new-album', false);
+	const newCard = historyLayerState<NewPlaceKind | null>('library-new-card', null);
+	let shownCard: NewPlaceKind | null = null;
+	let focusNewOnFold = true;
 
 	onMount(() => {
 		initLibraryWallOrder();
 		catchUpWall();
 		return whenBackOnline(catchUpWall);
+	});
+
+	$effect(() => {
+		const card = $newCard;
+		if (shownCard && !card && focusNewOnFold) newMenu?.focusTrigger();
+		focusNewOnFold = true;
+		shownCard = card;
 	});
 
 	$effect(() => {
@@ -122,18 +135,18 @@
 		captureLibraryScroll(target.scrollTop);
 	}
 
-	function startNewAlbum(): void {
+	function startNew(kind: NewPlaceKind): void {
 		newMenu?.close(false);
-		$newAlbumOpen = true;
+		$newCard = kind;
 	}
 
-	function cancelNewAlbum(): void {
-		$newAlbumOpen = false;
-		newMenu?.focusTrigger();
+	function cancelNew(): void {
+		$newCard = null;
 	}
 
-	function foldCreatedAlbum(): void {
-		$newAlbumOpen = false;
+	function foldCreated(): void {
+		focusNewOnFold = false;
+		$newCard = null;
 	}
 
 	function retryLoad(): void {
@@ -152,13 +165,17 @@
 			layer="library-new"
 			label={LIBRARY_NEW_MENU_LABEL}
 			closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
+			pressed={$newCard !== null}
 		>
 			{#snippet trigger()}<span class="new-face"
-					><span aria-hidden="true">+</span>{LIBRARY_NEW_FACE}</span
+					><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
 				>{/snippet}
 			<p class="new-menu-heading">New in <b>Library</b></p>
-			<button type="button" class="new-menu-item" onclick={startNewAlbum}
-				>{LIBRARY_NEW_ALBUM_LABEL}</button
+			<button type="button" class="new-menu-item" onclick={() => startNew('album')}
+				><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
+			>
+			<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
+				><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
 			>
 		</MenuPopover>
 	</div>
@@ -183,8 +200,10 @@
 	</div>
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
-		{#if $newAlbumOpen}
-			<NewAlbumCard oncancel={cancelNewAlbum} oncreated={foldCreatedAlbum} />
+		{#if $newCard === 'album'}
+			<NewAlbumCard oncancel={cancelNew} oncreated={foldCreated} />
+		{:else if $newCard === 'playlist'}
+			<NewPlaylistCard oncancel={cancelNew} oncreated={foldCreated} />
 		{/if}
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
@@ -261,12 +280,16 @@
 		text-transform: uppercase;
 	}
 
+	.wall-titlebar :global(.menu-trigger) {
+		padding: 0;
+	}
+
 	.new-face {
 		display: inline-flex;
 		align-items: center;
 		gap: 6px;
-		height: 18px;
-		padding: 0 0.4rem;
+		height: 42px;
+		padding: 0 14px;
 		font-family: var(--font-display);
 		font-size: 0.78rem;
 		font-weight: 500;
@@ -289,6 +312,7 @@
 	.new-menu-item {
 		display: flex;
 		align-items: center;
+		gap: 10px;
 		width: 100%;
 		min-height: 34px;
 		padding: 0 0.6rem;
@@ -299,6 +323,11 @@
 		font-family: var(--font-body);
 		font-size: 0.87rem;
 		text-align: left;
+	}
+
+	.new-menu-item :global(svg) {
+		flex: none;
+		color: var(--text-muted);
 	}
 
 	.new-menu-item:hover {
@@ -463,10 +492,6 @@
 	@media (max-width: 768px) {
 		.wall-titlebar {
 			padding: 10px 12px 6px;
-		}
-
-		.new-face {
-			height: 30px;
 		}
 
 		.new-menu-item {
