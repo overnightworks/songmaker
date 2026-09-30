@@ -107,8 +107,8 @@ describe('AccountMenu', () => {
 	});
 
 	it('only closes when Settings is already the page on screen, adding no history entry', async () => {
-		await goto('/settings');
-		vi.mocked(goto).mockClear();
+		replaceHistoryEntry('/settings');
+		startFakeRouter();
 		const target = await renderAccountMenu();
 		const panel = await openMenu(target);
 

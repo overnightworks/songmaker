@@ -76,9 +76,7 @@ describe('generation settings', () => {
 		const { target } = await openPageAs(ADMIN, new Set([ADMIN_ONLY_DEFAULTS_PATH]));
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('.error')?.textContent).toBe(
-				'Failed to load generation defaults'
-			)
+			expect(target.querySelector('.error')?.textContent).toBe('Failed to load generation defaults')
 		);
 	});
 });

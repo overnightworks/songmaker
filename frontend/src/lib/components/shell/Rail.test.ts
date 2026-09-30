@@ -34,7 +34,9 @@ vi.mock('$lib/api/client', async () => (await import('./rail-test-fixtures')).ra
 import Rail from './Rail.svelte';
 
 const onlogout = vi.fn();
-const { render, cleanup } = createComponentMount(Rail, { account: { username: 'felix', onlogout } });
+const { render, cleanup } = createComponentMount(Rail, {
+	account: { username: 'felix', onlogout }
+});
 const navigationOnly = createComponentMount(Rail, {
 	showCollapseControl: false,
 	showResizeHandle: false
