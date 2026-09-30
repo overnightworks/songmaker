@@ -328,12 +328,15 @@ test('the admin page is refused for a non-admin, with nothing of it rendered', a
 }, testInfo) => {
 	await signIn(page);
 
+	const isAdminRead = (response: Response): boolean =>
+		new URL(response.url()).pathname.startsWith(ADMIN_API_PREFIX);
 	const adminAnswers: number[] = [];
 	page.on('response', (response) => {
-		if (new URL(response.url()).pathname.startsWith(ADMIN_API_PREFIX)) {
-			adminAnswers.push(response.status());
-		}
+		if (isAdminRead(response)) adminAnswers.push(response.status());
 	});
+	// The refusal renders from the session the page already holds, before the
+	// reads the page starts on mount have been answered.
+	const firstAdminAnswer = page.waitForResponse(isAdminRead);
 
 	await page.goto(ADMIN_PAGE_PATH);
 
@@ -346,7 +349,7 @@ test('the admin page is refused for a non-admin, with nothing of it rendered', a
 
 	// And the server refused it too -- the page is not merely hiding what it was
 	// handed.
-	expect(adminAnswers.length).toBeGreaterThan(0);
+	await firstAdminAnswer;
 	expect(adminAnswers.filter((status) => status !== 403)).toEqual([]);
 	await attachShot(page, testInfo, 'auth-admin-refused');
 });
