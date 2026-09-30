@@ -1,3 +1,4 @@
+import { untrack } from 'svelte';
 import { get, writable } from 'svelte/store';
 import { goto, pushState, replaceState } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
@@ -384,16 +385,22 @@ function libraryPageState(state: LibraryHistoryState): App.PageState {
 	return { library: state };
 }
 
+// SvelteKit's shallow writers read `page.url`, so a write from inside an
+// effect -- a dialog's history layer registering as it mounts -- would make
+// that effect re-run on the next Back, which moves `page.url` before the layer
+// stack hears the step, and the re-run would push a layer entry nobody owns.
 function writeShallowLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,
 	mode: HistoryWriteMode
 ): void {
 	const pageState = mode === 'push' ? state : keepEntryLayer(state);
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-	if (mode === 'push') pushState(url, libraryPageState(pageState));
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- as above
-	else replaceState(url, libraryPageState(pageState));
+	untrack(() => {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
+		if (mode === 'push') pushState(url, libraryPageState(pageState));
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- as above
+		else replaceState(url, libraryPageState(pageState));
+	});
 }
 
 // A replace rewrites the library an entry shows, never what the entry is: an
