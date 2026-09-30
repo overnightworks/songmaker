@@ -18,6 +18,7 @@ from songmaker_cli.db.models import (
     Version,
     aware_timestamp,
 )
+from songmaker_cli.db.queries.activity import SongWork, record_song_work
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
@@ -327,12 +328,15 @@ def update_song(
     key_scale: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
     force_new_version: bool = False,
+    edited_by: str | None = None,
 ) -> Version:
     """Apply song content changes, creating a version when required.
 
     Editors keep a generation-free draft in place. Co-writer writes pass
     ``force_new_version`` so each tool invocation leaves an immutable
-    snapshot for existing and future takes.
+    snapshot for existing and future takes. A save that changes the content
+    counts as ``edited_by``'s own work on the song; one that changes nothing
+    does not.
     """
     song = get_song(session, song_id)
     if not song:
@@ -362,6 +366,9 @@ def update_song(
         or new_audio_duration != prev.audio_duration
         or new_key_scale != prev.key_scale
     )
+    content_changed = creative_changed or new_gen_params != prev.generation_params
+    if edited_by is not None and content_changed:
+        record_song_work(session, user_id=edited_by, song_id=song_id, work=SongWork.EDITED)
 
     if prev and not force_new_version and (not prev.generations or not creative_changed):
         prev.lyrics = new_lyrics
@@ -473,6 +480,7 @@ def rename_song(
     slug: str,
     *,
     force_new_version: bool = False,
+    edited_by: str | None = None,
 ) -> Song:
     """Rename a song, moving its slug along in the same flush.
 
@@ -481,11 +489,14 @@ def rename_song(
     a later, separate flush would briefly leave the row on its old slug,
     next to whatever sibling has just claimed it. Co-writer and editor title
     writes pass ``force_new_version`` to route their snapshot through
-    ``update_song`` too.
+    ``update_song`` too. A new title counts as ``edited_by``'s own work on
+    the song; the same title again does not.
     """
     song = session.query(Song).filter_by(id=song_id).first()
     if not song:
         raise ValueError(f"Song not found: {song_id}")
+    if edited_by is not None and title != song.title:
+        record_song_work(session, user_id=edited_by, song_id=song_id, work=SongWork.EDITED)
     song.title = title
     song.slug = slug
     if force_new_version:

@@ -177,6 +177,7 @@ def tool_create_song(
         session, title=title, album_id=album_id, lyrics=lyrics, prompt=prompt,
         slug=slug,
     )
+    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song.id)
     return WriteResult(
         song_id=song.id,
@@ -193,9 +194,8 @@ def tool_update_song_lyrics(
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = db_update_song(
-        session, song_id=song_id, lyrics=lyrics, force_new_version=True,
+        session, song_id=song_id, lyrics=lyrics, force_new_version=True, edited_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
@@ -212,9 +212,8 @@ def tool_update_song_prompt(
     except HTTPException as exc:
         raise _to_tool_error(exc) from exc
     version = db_update_song(
-        session, song_id=song_id, prompt=prompt, force_new_version=True,
+        session, song_id=song_id, prompt=prompt, force_new_version=True, edited_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
@@ -241,9 +240,8 @@ def tool_update_song_style(
         raise _to_tool_error(exc) from exc
     version = db_update_song(
         session, song_id=song_id, bpm=bpm, key_scale=key_scale,
-        audio_duration=audio_duration, force_new_version=True,
+        audio_duration=audio_duration, force_new_version=True, edited_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song_id)
     parts = []
     if bpm is not None:
@@ -271,8 +269,8 @@ def tool_rename_song(
     slug = unique_song_slug(session, song.album_id, title, exclude_song_id=song_id)
     db_rename_song(
         session, song_id=song_id, title=title, slug=slug, force_new_version=True,
+        edited_by=user.id,
     )
-    record_song_work(session, user_id=user.id, song_id=song_id, work=SongWork.EDITED)
     refreshed = _reload_song(session, song_id)
     return WriteResult(
         song_id=song_id,
