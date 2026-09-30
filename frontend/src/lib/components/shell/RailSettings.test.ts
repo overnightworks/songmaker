@@ -83,7 +83,7 @@ describe('RailSettings', () => {
 	it('opens the clicked section', async () => {
 		await clickSection('Playback');
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback', { replaceState: false });
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
 	});
 
 	it('holds a section for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
