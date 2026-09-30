@@ -285,7 +285,7 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // page starts loading would abort it, which is why the push waits.
 type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
-function openAppPage(href: AppPageHref): Promise<void> {
+export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		closeSidebar();
 		await libraryHistoryStepsLanded();

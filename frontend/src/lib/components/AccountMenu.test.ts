@@ -94,7 +94,7 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, RAIL_SETTINGS_LABEL).click();
 		await tick();
 
-		expect(goto).toHaveBeenCalledWith('/settings');
+		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/settings'));
 		expect(target.querySelector('[role="dialog"]')).toBeNull();
 	});
 
@@ -173,6 +173,7 @@ let settingsSawHistoryAt: number | undefined;
 describeBackClosesOverlay({
 	name: 'the account menu',
 	render: async () => {
+		settingsSawHistoryAt = undefined;
 		vi.mocked(goto).mockImplementation(async () => {
 			settingsSawHistoryAt = plannedHistoryIndex();
 		});
