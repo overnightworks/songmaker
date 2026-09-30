@@ -25,6 +25,7 @@ const selectAlbumCoverSuggestion = vi.fn();
 const discardAlbumCoverSuggestions = vi.fn();
 const deleteAlbumCover = vi.fn();
 const uploadAlbumCover = vi.fn();
+const cancelJob = vi.fn();
 
 vi.mock('$lib/api/songs', () => ({
 	fetchSongs: vi
@@ -37,6 +38,10 @@ vi.mock('$lib/api/albums', async (importOriginal) => ({
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args),
 	selectAlbumCoverSuggestion: (...args: unknown[]) => selectAlbumCoverSuggestion(...args),
 	discardAlbumCoverSuggestions: (...args: unknown[]) => discardAlbumCoverSuggestions(...args)
+}));
+vi.mock('$lib/api/jobs', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/jobs')>()),
+	cancelJob: (...args: unknown[]) => cancelJob(...args)
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),
@@ -164,6 +169,7 @@ beforeEach(() => {
 	discardAlbumCoverSuggestions.mockReset().mockResolvedValue(undefined);
 	deleteAlbumCover.mockReset();
 	uploadAlbumCover.mockReset();
+	cancelJob.mockReset().mockResolvedValue(coverJob({ status: 'cancelled' }));
 	vi.mocked(addToast).mockReset();
 	activeJobs.set([]);
 	FakeJobEventSource.sources = [];
@@ -342,7 +348,86 @@ describe('AlbumCoverEditor in the album header', () => {
 		await editingClosed(target);
 		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
 		expect(selectAlbumCoverSuggestion).not.toHaveBeenCalled();
+		expect(cancelJob).not.toHaveBeenCalled();
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
+	});
+
+	it.each([
+		{
+			way: '×',
+			leave: (target: HTMLElement) => press(target, 'Close cover editing')
+		},
+		{
+			way: 'Upload',
+			leave: (target: HTMLElement) => {
+				uploadAlbumCover.mockResolvedValue(coveredAlbum(UPLOADED));
+				const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+				vi.spyOn(input, 'click').mockImplementation(() => undefined);
+				press(target, 'Upload');
+				const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
+				Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+				input.dispatchEvent(new Event('change', { bubbles: true }));
+			}
+		},
+		{ way: 'another album', leave: () => selectedAlbumId.set('a-other') }
+	])('leaving by $way stops the suggestion still running', async ({ leave }) => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
+		albumList.set([
+			album({ id: 'a-local', title: 'Night Drive' }),
+			album({ id: 'a-other', title: 'Other Night' })
+		]);
+		const running = coverSuggestions({ job: coverJob({ status: 'running' }), used_today: 1 });
+		fetchAlbumCoverSuggestions
+			.mockResolvedValueOnce(coverSuggestions())
+			.mockImplementation(async (albumId: string) =>
+				albumId === 'a-local' ? running : coverSuggestions()
+			);
+		createAlbumCoverSuggestions.mockResolvedValue(coverJob());
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+		);
+
+		await leave(target);
+
+		await editingClosed(target);
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		expect(get(activeJobs)).toEqual([]);
+	});
+
+	it('× stops the running suggestion before it discards, so nothing lands afterwards', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ ...ONE_SUGGESTION, job: coverJob({ status: 'running' }) })
+		);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() =>
+			expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+		);
+
+		press(target, 'Close cover editing');
+
+		await editingClosed(target);
+		expect(cancelJob.mock.invocationCallOrder[0]).toBeLessThan(
+			discardAlbumCoverSuggestions.mock.invocationCallOrder[0]
+		);
+	});
+
+	it('× while the first suggestion is still being asked for stops the run it starts', async () => {
+		const suggestionJob = deferred<JobItem>();
+		createAlbumCoverSuggestions.mockReturnValue(suggestionJob.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(createAlbumCoverSuggestions).toHaveBeenCalledWith('a-local'));
+
+		press(target, 'Close cover editing');
+		await editingClosed(target);
+		expect(cancelJob).not.toHaveBeenCalled();
+		suggestionJob.resolve(coverJob());
+
+		await vi.waitFor(() => expect(cancelJob).toHaveBeenCalledWith('cover-job'));
+		expect(get(activeJobs)).toEqual([]);
 	});
 
 	it('× while the suggestions still load closes the editor without making a suggestion', async () => {
@@ -651,15 +736,22 @@ describe('AlbumCoverEditor in the album header', () => {
 describeBackClosesOverlay({
 	name: 'the cover editing',
 	render: async () => {
+		vi.stubGlobal('EventSource', FakeJobEventSource);
 		albumList.set([coveredAlbum()]);
-		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(ONE_SUGGESTION));
+		fetchAlbumCoverSuggestions.mockResolvedValue(
+			coverSuggestions({ ...ONE_SUGGESTION, job: coverJob({ status: 'running' }) })
+		);
 		return renderDetail();
 	},
 	open: async (target) => {
 		await openCoverEditing(target);
+		await vi.waitFor(() => expect(get(activeJobs)).toHaveLength(1));
 	},
 	isShown: (target) => editor(target) !== null,
-	afterBack: () => expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled(),
+	afterBack: () => {
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+		expect(cancelJob).toHaveBeenCalledWith('cover-job');
+	},
 	closeWays: [
 		{
 			way: '×',

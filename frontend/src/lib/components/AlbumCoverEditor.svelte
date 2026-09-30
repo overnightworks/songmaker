@@ -6,6 +6,7 @@
 		fetchAlbumCoverSuggestions,
 		selectAlbumCoverSuggestion
 	} from '$lib/api/albums';
+	import { cancelJob } from '$lib/api/jobs';
 	import type { AlbumItem, CoverSuggestionsResponse } from '$lib/api/types';
 	import {
 		albumCoverStageLabel,
@@ -32,7 +33,7 @@
 	} from '$lib/constants';
 	import { updateAlbumInList } from '$lib/stores/libraryData';
 	import { addToast } from '$lib/stores/toast';
-	import { activeJobs, trackJob } from '$lib/stores/jobs';
+	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import Icon from './Icon.svelte';
 
@@ -72,6 +73,8 @@
 	let coverSuggestionsBackoffSpent = $state(false);
 	let completedCoverJobId: string | null = null;
 	let chosenSlot = $state<number | null>(null);
+	let runningSuggestionJobId: string | null = null;
+	let albumVisit = new AbortController();
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
 
 	const activeCoverJob = $derived(
@@ -145,18 +148,24 @@
 			isLoading: true
 		};
 		coverSuggestionsReloads.stop();
-		const opening = new AbortController();
-		queueMicrotask(() => void openOnAlbum(albumId, opening.signal));
-		return () => opening.abort();
+		const visit = new AbortController();
+		albumVisit = visit;
+		queueMicrotask(() => void openOnAlbum(albumId, visit.signal));
+		return () => {
+			visit.abort();
+			if (runningSuggestionJobId) stopSuggestionRunOnLeave(runningSuggestionJobId);
+		};
 	});
 
 	// Opening an album that has neither a cover nor anything suggested is the
 	// deliberate ask for its first suggestion. A suggestion spends quota, so an
 	// editor closed or moved to another album while the first load runs must
-	// never make one.
-	async function openOnAlbum(albumId: string, opening: AbortSignal): Promise<void> {
+	// never make one. However the editor leaves an album -- ×, Back, Upload,
+	// Use or another album -- a suggestion still running would land after the
+	// unused ones were discarded, so the leaving stops it.
+	async function openOnAlbum(albumId: string, visit: AbortSignal): Promise<void> {
 		await loadCoverSuggestions(albumId);
-		if (opening.aborted) return;
+		if (visit.aborted) return;
 		const nothingToShow =
 			coverSuggestions !== null && !hasSuggestions && !isCoverSuggestionGenerating;
 		if (!album.cover && nothingToShow) await suggestCover();
@@ -200,9 +209,12 @@
 				isLoading: false
 			};
 			coverSuggestionsReloads.stop();
-			if (response.job?.status === 'queued' || response.job?.status === 'running') {
-				trackJob(response.job, { albumId });
-			}
+			const runningJob =
+				response.job?.status === 'queued' || response.job?.status === 'running'
+					? response.job
+					: null;
+			runningSuggestionJobId = runningJob?.id ?? null;
+			if (runningJob) trackJob(runningJob, { albumId });
 		} catch (error) {
 			if (request !== suggestionsRequest || albumId !== currentAlbumId) return;
 			const outcome = coverSuggestionsOutcomeOf(error);
@@ -243,6 +255,7 @@
 	async function suggestCover(): Promise<void> {
 		if (isCoverSuggestionGenerating || coverSuggestionsLoading) return;
 		const albumId = currentAlbumId;
+		const left = albumVisit.signal;
 		chosenSlot = null;
 		// A page-load GET can resolve after this deliberate POST. Its older
 		// snapshot must not erase the just-created job and make progress vanish.
@@ -255,7 +268,11 @@
 		}));
 		try {
 			const job = await createAlbumCoverSuggestions(albumId);
-			if (albumId !== currentAlbumId) return;
+			if (left.aborted) {
+				stopSuggestionRunOnLeave(job.id);
+				return;
+			}
+			runningSuggestionJobId = job.id;
 			trackJob(job, { albumId });
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
@@ -266,14 +283,39 @@
 		}
 	}
 
+	async function stopSuggestionRun(jobId: string): Promise<void> {
+		runningSuggestionJobId = null;
+		try {
+			await cancelJob(jobId);
+		} catch (error) {
+			const alreadyEnded = error instanceof ApiError && error.status === HTTP_CONFLICT;
+			if (!alreadyEnded) {
+				runningSuggestionJobId = jobId;
+				throw error;
+			}
+		}
+		removeJob(jobId);
+	}
+
+	function stopSuggestionRunOnLeave(jobId: string): void {
+		stopSuggestionRun(jobId).catch((error: unknown) =>
+			addToast(describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK), 'error')
+		);
+	}
+
+	// The run stops before the discard, and a run that ended just before
+	// its stop may already have landed its suggestion, so the discard
+	// follows every stopped run.
 	async function discardAndClose(): Promise<void> {
-		if (!hasSuggestions) {
+		const runToStop = runningSuggestionJobId;
+		if (!hasSuggestions && !runToStop) {
 			onclose();
 			return;
 		}
 		const albumId = currentAlbumId;
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
+			if (runToStop) await stopSuggestionRun(runToStop);
 			await discardAlbumCoverSuggestions(albumId);
 			onclose();
 		} catch (error) {
