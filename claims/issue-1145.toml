@@ -1,0 +1,8 @@
+claim_id = "697e87164f284eff8231e84bd75fd123"
+agent = "claude-head"
+role = "builder"
+base = "fb638b2a46b02b9e2e63d4ab353bcb30909b9f65"
+branch = "claude/issue-1145-cover-editor"
+scope = ["frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts"]
+opened_commit = "be65da952af1a8795b4d45b2b3e9a5ab12085cc0"
+whole_reason = "the cover-suggestion component split with its moved tests"
