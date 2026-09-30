@@ -250,8 +250,8 @@ describe('isLibraryWorkspacePath', () => {
 });
 
 // A history write that changes the route pattern (/ <-> /album/<slug>) must
-// reach SvelteKit's router, not just the address bar: a raw write leaves the
-// router mounting the route it last saw, and the next Back/Forward or real
+// navigate, not just move the address bar: shallow routing leaves the router
+// mounting the route it last saw, and the next Back/Forward or real
 // navigation that disagrees tears the workspace down mid-session. The
 // interaction with the router is the contract here, so it is asserted directly.
 describe('history writes across the route boundary (issue #269)', () => {
@@ -332,7 +332,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 	// #275-review bycatch, pinned here as issue #281 promised: a song-to-song
 	// move across album boundaries is still the same route file
 	// (/album/[slug]/[song]/+page.svelte matches both, whichever album the
-	// slug names), so it stays the frequent-churn raw write too -- only the
+	// slug names), so it stays frequent-churn shallow routing too -- only the
 	// route.id shape decides a crossing, never which resource it names.
 	it('writes a song-to-song move across album boundaries straight to history too', async () => {
 		songList.set([
@@ -613,7 +613,7 @@ describe('opening a collection from off the library route', () => {
 	// would have taken the cheap same-shape branch -- a raw `history.
 	// pushState` that changes the address bar to '/' while SvelteKit's router
 	// stays mounted on Settings' route file underneath it.
-	it('openLibraryWall leaves settings for the wall through the router, not a raw history write', async () => {
+	it('openLibraryWall leaves settings for the wall through a navigation, not shallow routing', async () => {
 		replaceHistoryEntry('/settings/voices');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
