@@ -345,6 +345,21 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
 	});
 
+	it('× while the suggestions still load closes the editor without making a suggestion', async () => {
+		const firstLoad = deferred<CoverSuggestionsResponse>();
+		fetchAlbumCoverSuggestions.mockReturnValueOnce(firstLoad.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(1);
+
+		press(target, 'Close cover editing');
+		await editingClosed(target);
+		firstLoad.resolve(coverSuggestions());
+		await new Promise((settled) => setTimeout(settled, 0));
+
+		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
+	});
+
 	it.each([
 		{
 			action: 'Close cover editing',

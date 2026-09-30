@@ -145,16 +145,21 @@
 			isLoading: true
 		};
 		coverSuggestionsReloads.stop();
-		queueMicrotask(() => void openOnAlbum(albumId));
+		const opening = new AbortController();
+		queueMicrotask(() => void openOnAlbum(albumId, opening.signal));
+		return () => opening.abort();
 	});
 
 	// Opening an album that has neither a cover nor anything suggested is the
-	// deliberate ask for its first suggestion.
-	async function openOnAlbum(albumId: string): Promise<void> {
+	// deliberate ask for its first suggestion. A suggestion spends quota, so an
+	// editor closed or moved to another album while the first load runs must
+	// never make one.
+	async function openOnAlbum(albumId: string, opening: AbortSignal): Promise<void> {
 		await loadCoverSuggestions(albumId);
+		if (opening.aborted) return;
 		const nothingToShow =
 			coverSuggestions !== null && !hasSuggestions && !isCoverSuggestionGenerating;
-		if (albumId === currentAlbumId && !album.cover && nothingToShow) await suggestCover();
+		if (!album.cover && nothingToShow) await suggestCover();
 	}
 
 	function reloadCoverSuggestions(): void {
