@@ -255,10 +255,11 @@
 		shown: Message[],
 		newestStored: Message | undefined
 	): Message[] {
-		if (newestStored?.role !== 'user') return shown;
 		return shown.map((message) =>
-			message.role === 'user' && !message.persistedId && message.text === newestStored.text
-				? { ...message, persistedId: newestStored.persistedId }
+			message.role === 'user' &&
+			!message.persistedId &&
+			isUnansweredResend(newestStored, message.text)
+				? { ...message, persistedId: newestStored?.persistedId }
 				: message
 		);
 	}
@@ -574,7 +575,12 @@
 	 */
 	function unansweredMessageSentAgain(msg: string): Message | undefined {
 		const last = messages.at(-1);
-		return last?.role === 'user' && last.text === msg ? last : undefined;
+		return isUnansweredResend(last, msg) ? last : undefined;
+	}
+
+	/** The server's resend rule (#1014): an unanswered last message with the same text is that message. */
+	function isUnansweredResend(last: Message | undefined, text: string): boolean {
+		return last?.role === 'user' && last.text === text;
 	}
 
 	/**
