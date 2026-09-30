@@ -21,7 +21,8 @@
 // spec's own throwaway user.
 //
 // Both shells drive all six flows: the compact one at 375px, which is where the
-// rail is a drawer and Logout is reached through it.
+// rail is a drawer and Log out is reached through the account circle in the
+// app bar (issue #1158).
 
 import {
 	expect,
@@ -36,8 +37,13 @@ import {
 } from '@playwright/test';
 
 import { AUTH_SESSION_EXPIRED_MESSAGE } from '../src/lib/constants/auth';
-import { ADMIN_TABS_LABEL, HITBOX_FREQUENT_PX } from '../src/lib/constants';
-import { FlowGuard, MOBILE_VIEWPORT, openRailNav, shellOf, workspace } from './helpers';
+import {
+	ACCOUNT_MENU_LABEL,
+	ACCOUNT_MENU_LOGOUT_LABEL,
+	ADMIN_TABS_LABEL,
+	HITBOX_FREQUENT_PX
+} from '../src/lib/constants';
+import { FlowGuard, MOBILE_VIEWPORT, openRailNav, shellOf, workspace, type Shell } from './helpers';
 import {
 	BASE_URL,
 	STORAGE_STATE_FILE,
@@ -191,6 +197,20 @@ async function expectSignedInAs(page: Page, testInfo: TestInfo): Promise<void> {
 	await expect(rail.getByRole('link', { name: account.username })).toBeVisible();
 }
 
+async function signOut(page: Page, shell: Shell): Promise<void> {
+	if (shell === 'mobile') {
+		const accountMenu = `${ACCOUNT_MENU_LABEL} · ${account.username}`;
+		await page.getByRole('button', { name: accountMenu }).click();
+		await page
+			.getByRole('dialog', { name: accountMenu })
+			.getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL })
+			.click();
+		return;
+	}
+	const rail = await openRailNav(page, shell);
+	await rail.getByRole('button', { name: LOGOUT_LABEL }).click();
+}
+
 async function sessionCookie(context: BrowserContext): Promise<Cookie | undefined> {
 	const cookies = await context.cookies();
 	return cookies.find((cookie) => cookie.name === SESSION_COOKIE);
@@ -287,8 +307,7 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	const signedIn = await sessionCookie(page.context());
 	expect(signedIn).toBeDefined();
 
-	const rail = await openRailNav(page, shellOf(testInfo));
-	await rail.getByRole('button', { name: LOGOUT_LABEL }).click();
+	await signOut(page, shellOf(testInfo));
 
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	expect(await sessionCookie(page.context())).toBeUndefined();

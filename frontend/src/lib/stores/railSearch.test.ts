@@ -190,13 +190,44 @@ describe('groupRailSearchResults', () => {
 	};
 	const picks = buildPlaylist({ id: 'p1', title: 'Vernissage picks', entry_count: 9 });
 
-	it('excludes admin-only pages for non-administrators', () => {
-		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Admin');
-		expect(visibleRailSearchPages(false).map((page) => page.label)).not.toContain('Cleanup');
-		expect(visibleRailSearchPages(true).map((page) => page.label)).toEqual(
-			expect.arrayContaining(['Admin', 'Cleanup'])
-		);
-	});
+	function settingsPage(label: string, href: string) {
+		return { label, href, section: 'Settings' };
+	}
+
+	it.each([
+		{
+			viewer: 'an administrator',
+			admin: true,
+			settingsPages: [
+				settingsPage('Generation', '/settings/generation'),
+				settingsPage('Playback', '/settings/playback'),
+				settingsPage('Voices', '/settings/voices'),
+				settingsPage('Account', '/settings/account'),
+				settingsPage('Admin', '/settings/users'),
+				settingsPage('Cleanup', '/settings/cleanup'),
+				settingsPage('Legal', '/settings/legal')
+			]
+		},
+		{
+			viewer: 'a non-administrator',
+			admin: false,
+			settingsPages: [
+				settingsPage('Generation', '/settings/generation'),
+				settingsPage('Playback', '/settings/playback'),
+				settingsPage('Voices', '/settings/voices'),
+				settingsPage('Account', '/settings/account'),
+				settingsPage('Legal', '/settings/legal')
+			]
+		}
+	])(
+		'offers $viewer the Library and every Settings section they can see',
+		({ admin, settingsPages }) => {
+			expect(visibleRailSearchPages(admin)).toEqual([
+				{ label: 'Library', href: '/', section: null },
+				...settingsPages
+			]);
+		}
+	);
 
 	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
 		const pages = [

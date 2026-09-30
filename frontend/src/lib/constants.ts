@@ -516,6 +516,14 @@ export const SONG_NEXT_LABEL = 'Next song';
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 
+// The phone's account circle and the menu it opens (issue #1158).
+export const ACCOUNT_MENU_LABEL = 'Account';
+export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
+export const ACCOUNT_MENU_SIGNED_IN_PREFIX = 'Signed in as';
+export const ACCOUNT_MENU_LOGOUT_LABEL = 'Log out';
+export const THEME_SWITCH_TO_LIGHT_LABEL = 'Light theme';
+export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';
+
 export const COLLECTION_MENU_LABEL = 'More';
 export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
 export const COLLECTION_MENU_SHARE_PREFIX = 'Share';
