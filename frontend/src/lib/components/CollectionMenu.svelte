@@ -32,7 +32,7 @@
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
-		oncoversuggest?: () => void;
+		oncoveredit?: () => void;
 		hasCover?: boolean;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
@@ -54,7 +54,7 @@
 		ondelete,
 		onarchive,
 		oncover,
-		oncoversuggest,
+		oncoveredit,
 		hasCover = false,
 		onremovecover,
 		onaddtoplaylist,
@@ -112,8 +112,8 @@
 				>{ALBUM_COVER_UPLOAD_LABEL}</button
 			>
 		{/if}
-		{#if kind === 'album' && oncoversuggest}
-			<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
+		{#if kind === 'album' && oncoveredit}
+			<button class="menu-item" onclick={() => runAndClose(oncoveredit)}
 				>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
 			>
 		{/if}

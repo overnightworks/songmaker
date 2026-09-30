@@ -136,7 +136,6 @@ import {
 	isLibraryWorkspacePath,
 	openAlbum,
 	openCollectionEntry,
-	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
 	openRailSearchTarget,
@@ -747,8 +746,7 @@ describe('Back and Forward across an app page', () => {
 describe.each([
 	['openAlbum', () => openAlbum('a1')],
 	['openPlaylist', () => openPlaylist('p1')],
-	['openLibraryWall', () => openLibraryWall()],
-	['openLibraryCreate', () => openLibraryCreate()]
+	['openLibraryWall', () => openLibraryWall()]
 ])('%s closes the rail drawer', (_name, action) => {
 	it('closes an open drawer instead of leaving it over the new surface', async () => {
 		toggleSidebar();

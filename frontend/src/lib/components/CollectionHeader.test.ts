@@ -9,7 +9,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 
 import { get } from 'svelte/store';
 import {
-	ALBUM_ADD_SONG_LABEL,
+	COLLECTION_MENU_LABEL,
 	collectionPauseLabel,
 	collectionPlayLabel,
 	collectionShuffleLabel
@@ -424,26 +424,15 @@ describe('CollectionHeader', () => {
 		expect(document.body.querySelector('.menu-panel')).toBeNull();
 	});
 
-	it('offers Add song next to the collection menu only when the surface can create one', async () => {
-		// #141/6: the rail is navigation — creating a song is a header action.
-		const withoutCreate = await render(baseProps());
-		expect(withoutCreate.querySelector('.add-song-btn')).toBeNull();
-		if (mounted) await unmount(mounted);
+	it('keeps its action row to Play, Shuffle and the menu: a new song is made from the track list', async () => {
+		const target = await render(baseProps());
 
-		const onaddsong = vi.fn();
-		const target = await render({ ...baseProps(), onaddsong });
-		const addSong = requireElement<HTMLButtonElement>(target, '.add-song-btn');
-		expect(addSong.getAttribute('aria-label')).toBe(ALBUM_ADD_SONG_LABEL);
-		expect(requireElement(addSong, '.add-song-full').textContent?.trim()).toBe(
-			ALBUM_ADD_SONG_LABEL
-		);
-
-		// Sizing itself is pinned once for the shared mechanism in
-		// frequent-hitbox.test.ts; here the contract is that this control opts in.
-		expect(addSong.dataset.hitbox).toBe('frequent');
-
-		addSong.click();
-		expect(onaddsong).toHaveBeenCalledTimes(1);
+		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
+		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
+			collectionPlayLabel('album'),
+			collectionShuffleLabel('album'),
+			COLLECTION_MENU_LABEL
+		]);
 	});
 
 	it('announces the album title as the heading name, with a separately named edit button', async () => {
