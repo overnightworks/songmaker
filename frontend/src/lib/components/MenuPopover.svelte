@@ -51,10 +51,14 @@
 		if (panel) focusFirstIn(panel);
 	}
 
+	export function focusTrigger(): void {
+		queueMicrotask(() => triggerButton?.focus());
+	}
+
 	export function close(restoreFocus = true): void {
 		if (!$open) return;
 		$open = false;
-		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
+		if (restoreFocus) focusTrigger();
 	}
 
 	function toggle(): void {
@@ -119,6 +123,12 @@
 	.menu-trigger:hover {
 		border-color: var(--primary);
 		color: var(--primary);
+	}
+
+	.menu-trigger[aria-expanded='true'] {
+		border-color: var(--accent);
+		background: color-mix(in srgb, var(--accent) 12%, transparent);
+		color: var(--accent);
 	}
 
 	.menu-backdrop-layer {
