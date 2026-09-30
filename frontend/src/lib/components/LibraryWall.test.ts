@@ -1,3 +1,4 @@
+import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -16,7 +17,9 @@ const fetchPlaylist = vi.fn();
 const fetchLibraryContinue = vi.fn();
 const fetchAlbums = vi.fn();
 
-vi.mock('$app/navigation', () => ({ goto: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
 	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
@@ -53,7 +56,7 @@ beforeEach(() => {
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
-	history.replaceState(null, '', '/');
+	replaceHistoryEntry('/');
 });
 
 async function unmountAll(): Promise<void> {

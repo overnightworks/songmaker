@@ -51,12 +51,12 @@
 
 	// A tab that already carries a LibraryHistoryState naming this exact
 	// legacy `?song=` entry has `onPopstate` (navigation.ts) apply it
-	// instantly from `history.state` on Back/Forward -- this happens whenever
+	// instantly from its history entry on Back/Forward -- this happens whenever
 	// a song not yet in `songList` gets its own history entry written in this
 	// query form (`libraryHistoryUrl`'s own fallback, still a same-shape write
 	// against '/' per `libraryRouteShape`, so it never crosses a route on its
 	// own) and the person later returns to it. Re-resolving over the network
-	// would be redundant in that case -- `history.state` already carries the
+	// would be redundant in that case -- the history entry already carries the
 	// answer onPopstate just applied -- so this checks it first and skips
 	// straight to idle, with no overlay flash, whenever the entry already
 	// names this exact id/generation pair; issue #265's S7 closed this rather
