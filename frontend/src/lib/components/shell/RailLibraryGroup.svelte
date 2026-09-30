@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { openCollection } from '$lib/stores/collection';
-	import { librarySurface } from '$lib/stores/libraryContext';
+	import { albumWhoseSongsShow, librarySurface } from '$lib/stores/libraryContext';
 	import {
 		albumList,
 		allAlbumsLoad,
@@ -61,7 +61,8 @@
 	const openAlbumId = $derived(collection?.kind === 'album' ? collection.id : null);
 	const query = $derived($railTreeQuery.trim().toLowerCase());
 	const filtering = $derived(query.length > 0);
-	const isAlbumDetail = $derived(surface === 'detail' && openAlbumId !== null);
+	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
+	const isAlbumDetail = $derived(shownAlbumId !== null);
 	const loadStatus = $derived($allAlbumsLoad.status);
 	const loadFailure = $derived($allAlbumsLoadFailure);
 	// A list that has not loaded yet shows no count rather than claiming zero.
@@ -127,15 +128,16 @@
 	});
 
 	// Edge-triggered like RailGroup's own expandTrigger idiom (see its comment):
-	// previousOpenAlbumId is a plain variable, not $state, so this effect only
-	// force-expands an album the moment it *becomes* the open one, never on
-	// every rerun while it stays open -- otherwise a viewer could never
-	// manually collapse the open album's row.
-	let previousOpenAlbumId: string | null = null;
+	// previousShownAlbumId is a plain variable, not $state, so this effect only
+	// force-expands an album the moment its detail *starts* showing, never on
+	// every rerun while it stays shown -- otherwise a viewer could never
+	// manually collapse the open album's row. The wall keeps an album open
+	// without showing it, so landing there loads none of its songs.
+	let previousShownAlbumId: string | null = null;
 	$effect(() => {
-		const enteredAlbum = openAlbumId !== null && openAlbumId !== previousOpenAlbumId;
-		previousOpenAlbumId = openAlbumId;
-		if (enteredAlbum) expandAlbum(openAlbumId as string);
+		const enteredAlbum = shownAlbumId !== null && shownAlbumId !== previousShownAlbumId;
+		previousShownAlbumId = shownAlbumId;
+		if (enteredAlbum) expandAlbum(shownAlbumId as string);
 	});
 
 	function isAlbumExpanded(albumId: string): boolean {
