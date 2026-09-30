@@ -265,7 +265,7 @@
 	</div>
 {:else if me}
 	{#if compact}
-		<PhoneAppBar />
+		<PhoneAppBar username={me.username} onlogout={handleLogout} />
 		<RailDrawer>
 			<Rail
 				username={me.username}
