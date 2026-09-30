@@ -1495,6 +1495,157 @@ describe('CoWriterPanel returning while a turn runs (#1014)', () => {
 	});
 });
 
+describe('CoWriterPanel sending before the first history read arrives (#1170)', () => {
+	const earlier = [
+		chatMessage('u0', 'user', 'earlier'),
+		chatMessage('a0', 'assistant', 'earlier reply')
+	];
+	const sent = chatMessage('u1', 'user', 'write a chorus');
+	const reply = chatMessage('a1', 'assistant', 'Here is a chorus');
+
+	const outcomes: Array<
+		[
+			string,
+			() => AsyncGenerator<CoWriterStreamEvent>,
+			unknown[],
+			(lateHistory: ChatMessageItem[]) => ChatMessageItem[]
+		]
+	> = [
+		[
+			'its answer',
+			() =>
+				turnEvents([
+					{
+						type: 'final',
+						conversation_id: 'c1',
+						user_message: sent,
+						assistant_message: reply
+					} as CoWriterStreamEvent
+				]),
+			['write a chorus', 'Here is a chorus'],
+			() => [...earlier, sent, reply]
+		],
+		[
+			'its refusal',
+			async function* () {
+				yield* [] as CoWriterStreamEvent[];
+				throw new ApiError(503, 'Codex CLI is temporarily unavailable', '/api/chat/turn');
+			},
+			[expect.stringMatching(/^write a chorus.*Codex CLI is temporarily unavailable/)],
+			(lateHistory) => lateHistory
+		],
+		[
+			'its failed stream',
+			() =>
+				turnEvents([{ type: 'error', message: 'Selected route failed.' } as CoWriterStreamEvent]),
+			[expect.stringMatching(/^write a chorus.*Selected route failed\./)],
+			(lateHistory) => lateHistory
+		]
+	];
+	const lateReads: Array<[string, ChatMessageItem[]]> = [
+		['the history before it', earlier],
+		['a history that already stored it', [...earlier, sent]]
+	];
+
+	async function* endingWith(
+		turn: AsyncGenerator<CoWriterStreamEvent>,
+		onEnded: () => void
+	): AsyncGenerator<CoWriterStreamEvent> {
+		try {
+			yield* turn;
+		} finally {
+			onEnded();
+		}
+	}
+
+	const cases = outcomes.flatMap(([outcome, turn, exchange, storedAfterTurn]) =>
+		lateReads.map(
+			([read, lateHistory]) =>
+				[outcome, read, turn, exchange, lateHistory, storedAfterTurn(lateHistory)] as const
+		)
+	);
+
+	it.each(cases)(
+		'keeps the sent message with %s once when the late history step holds %s',
+		async (_outcome, _read, turn, exchange, lateHistory) => {
+			const firstRead = Promise.withResolvers<ReturnType<typeof conversation>>();
+			fetchConversations.mockResolvedValue([activeConversation('c1')]);
+			fetchConversationMessages
+				.mockReturnValueOnce(firstRead.promise)
+				.mockResolvedValueOnce(conversation(false, ...earlier, sent, reply));
+			const turnEnded = Promise.withResolvers<undefined>();
+			streamCoWriterTurn.mockReturnValue(endingWith(turn(), () => turnEnded.resolve(undefined)));
+			const target = await render();
+
+			await sendTurn(target, 'write a chorus');
+			await turnEnded.promise;
+			firstRead.resolve(conversation(false, ...lateHistory));
+
+			await vi.waitFor(() =>
+				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+			);
+		}
+	);
+
+	it.each(cases)(
+		'keeps the sent message with %s once when the late list step leads to %s',
+		async (_outcome, _read, turn, exchange, _lateHistory, storedAfterTurn) => {
+			const listRead = Promise.withResolvers<ReturnType<typeof activeConversation>[]>();
+			fetchConversations
+				.mockReturnValueOnce(listRead.promise)
+				.mockResolvedValue([activeConversation('c1')]);
+			fetchConversationMessages.mockResolvedValue(conversation(false, ...storedAfterTurn));
+			const turnEnded = Promise.withResolvers<undefined>();
+			streamCoWriterTurn.mockReturnValue(endingWith(turn(), () => turnEnded.resolve(undefined)));
+			const target = await render();
+
+			await sendTurn(target, 'write a chorus');
+			await turnEnded.promise;
+			listRead.resolve([activeConversation('c1')]);
+
+			await vi.waitFor(() =>
+				expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...exchange])
+			);
+		}
+	);
+
+	it('keeps an archived conversation out of the active one sent to while it still loads', async () => {
+		const [, refused, refusedExchange] = outcomes[1];
+		const archived = { ...activeConversation('c0'), archived_at: '2026-09-22T10:00:00' };
+		const activeRead = Promise.withResolvers<ReturnType<typeof conversation>>();
+		fetchConversations.mockResolvedValue([activeConversation('c1'), archived]);
+		fetchConversationMessages
+			.mockResolvedValueOnce(conversation(false, ...earlier))
+			.mockResolvedValueOnce({
+				...conversation(false, chatMessage('u9', 'user', 'archived question')),
+				conversation_id: 'c0',
+				archived_at: archived.archived_at
+			})
+			.mockReturnValueOnce(activeRead.promise);
+		const turnEnded = Promise.withResolvers<undefined>();
+		streamCoWriterTurn.mockReturnValue(endingWith(refused(), () => turnEnded.resolve(undefined)));
+		const target = await render();
+		await vi.waitFor(() => expect(chatView(target)).toEqual(['earlier', 'earlier reply']));
+
+		(await openConversationMenu(target))
+			.querySelectorAll<HTMLButtonElement>('.conv-pick')[1]
+			.click();
+		await vi.waitFor(() => expect(chatView(target)).toEqual(['archived question']));
+		(await openConversationMenu(target))
+			.querySelectorAll<HTMLButtonElement>('.conv-pick')[0]
+			.click();
+		await vi.waitFor(() => expect(fetchConversationMessages).toHaveBeenCalledTimes(3));
+
+		await sendTurn(target, 'write a chorus');
+		await turnEnded.promise;
+		activeRead.resolve(conversation(false, ...earlier));
+
+		await vi.waitFor(() =>
+			expect(chatView(target)).toEqual(['earlier', 'earlier reply', ...refusedExchange])
+		);
+	});
+});
+
 describe('CoWriterPanel proposal target (#238)', () => {
 	beforeEach(() => {
 		conversationPages(
