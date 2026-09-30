@@ -159,6 +159,21 @@ class Song(ShareMixin, Base):
         return self.versions[-1] if self.versions else None
 
 
+class UserSongWork(Base):
+    """One person's own latest edit and listen on a song, whoever owns the song."""
+
+    __tablename__ = "user_song_work"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey(USERS_ID, ondelete="CASCADE"), primary_key=True,
+    )
+    song_id: Mapped[str] = mapped_column(
+        ForeignKey(SONGS_ID, ondelete="CASCADE"), primary_key=True, index=True,
+    )
+    edited_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    played_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+
+
 class Version(Base):
     """A content snapshot — lyrics, prompt, params. Each save = new version."""
 

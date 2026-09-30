@@ -951,6 +951,7 @@ User (username, role: admin|user, bcrypt hash)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
+  ├── UserSongWork (song, edited_at?, played_at? — this person's own latest edit and listen on any song they can open, owner or not)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
@@ -961,6 +962,8 @@ Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?
       Conversation / ConversationSummary / ChatMessage (global co-writer thread),
       CowriterSongMemory, CowriterAlbumMemory
 ```
+
+`UserSongWork` is keyed by (user, song) and upserted by `record_song_work()` in `db/queries/activity.py` when that person saves an edit (song update and rename endpoints, the co-writer's MCP write tools) or starts a listen. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled.
 
 PostgreSQL with connection pooling. SQLAlchemy ORM. Alembic migrations. Redis is a required dependency — the server will refuse to start if Redis is unreachable.
 
@@ -1128,7 +1131,7 @@ close the stream.
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue) |
-| POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this updates Continue activity without changing any edit time. The song's `last_played_at` is recorded only for its owner — an admin's listen on a foreign song answers 200 and leaves the song alone. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |
+| POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this updates Continue activity without changing any edit time. The song's `last_played_at` is recorded only for its owner — an admin's listen on a foreign song answers 200 and leaves the song alone. Every accepted listen stamps the caller's own `UserSongWork.played_at`. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |
 | GET | `/api/songs/{id}/active-generation` | user | The song's newest queued/running generate job, or `null` if none. Ownership 404. Hydrates the song on entry so the frontend can reopen the job's SSE stream after a reload. |
 | GET | `/api/songs/{id}/last-failed-generation` | user | The song's last generate/repaint/cover job if it's still a failure -- `null` once a newer job (any status) or a newer non-archived take supersedes it. Ownership 404. Hydrates the take-list failure banner on page load/reopen; live SSE always wins over it. |
 | POST | `/api/generations/{id}/score` | user | Submit scoring job (→ scoring queue) |
