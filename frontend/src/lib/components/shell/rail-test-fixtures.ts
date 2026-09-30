@@ -25,6 +25,12 @@ export function requireElement<T extends Element>(root: ParentNode, selector: st
 	return element;
 }
 
+export async function openCollectionMenu(target: HTMLElement): Promise<HTMLElement> {
+	requireElement<HTMLButtonElement>(target, '.collection-menu [aria-haspopup="dialog"]').click();
+	await tick();
+	return requireElement<HTMLElement>(document.body, '.menu-panel');
+}
+
 export function requireButtonContainingText(root: ParentNode, text: string): HTMLButtonElement {
 	const button = Array.from(root.querySelectorAll('button')).find((candidate) =>
 		candidate.textContent?.includes(text)
