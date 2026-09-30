@@ -236,9 +236,7 @@ async def run_claimed_cover_suggestion_job(
         staging_dir = await asyncio.to_thread(_staging_directory, audio_dir, album_id, job_id)
         payload = await _generate_cover_image(
             prompt,
-            deadline=time.monotonic() + min(
-                settings.cover_cli_deadline_seconds, settings.cover_job_budget_seconds,
-            ),
+            deadline=time.monotonic() + settings.cover_cli_deadline_seconds,
             abort_signal=abort_signal,
             model=dispatch.model,
         )
