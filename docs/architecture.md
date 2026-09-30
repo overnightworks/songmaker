@@ -489,6 +489,11 @@ calls `event.preventDefault()`, and `shouldHandleGlobalEscape` yields whenever
 `event.defaultPrevented` is set, since that flag survives the whole
 capture/target/bubble dispatch of the one `Event` regardless of what the DOM
 looks like by the time bubble phase reaches `window`.
+An inline layer that is itself a level sits below the collection: the album
+cover editor (`AlbumCoverEditor`) listens on `document`, which the bubbling
+Escape reaches before `window`, asks the same `shouldHandleGlobalEscape`, and
+claims a free Escape with `event.preventDefault()` to close itself the way its
+× does, so Escape from the open editor stays on the album.
 
 Library context — the open collection, filter, search, sort, loaded page,
 scroll, selected song/generation — lives on `history.state`
