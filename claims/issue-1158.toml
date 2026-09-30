@@ -1,8 +1,0 @@
-claim_id = "49bd062ed4ae43619c0be5831aef3ad6"
-agent = "claude-head"
-role = "builder"
-base = "45888a68eb726b4ba15d65fed27556f67c701292"
-branch = "claude/issue-1158-account-circle"
-scope = ["frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/components/AccountMenu.svelte", "frontend/src/lib/components/AccountMenu.test.ts", "frontend/src/lib/components/Icon.svelte", "frontend/src/lib/components/MenuPopover.test.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/detail-back.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings/+page.svelte", "frontend/src/routes/settings/page.test.ts"]
-opened_commit = "38f8288c9542ee50efa6803f170df9fc1827c113"
-whole_reason = "the phone account circle and menu plus the settings-section owner follow-ups"
