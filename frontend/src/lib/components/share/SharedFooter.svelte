@@ -2,26 +2,27 @@
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import { tick } from 'svelte';
 	import { APP_NAME } from '$lib/constants';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import LegalContent from '../LegalContent.svelte';
 
-	let legalSection: string | null = $state(null);
+	const legalSection = historyLayerState<string | null>('shared-legal', null);
 	let modal: HTMLDivElement | undefined = $state();
 
 	function closeLegal(): void {
-		legalSection = null;
+		$legalSection = null;
 	}
 
 	$effect(() => {
-		if (!legalSection) return;
+		if (!$legalSection) return;
 		void tick().then(() => {
 			if (modal) focusFirstIn(modal);
 		});
 	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!legalSection || !modal) return;
-		handleFocusTrapKeydown(modal, event, closeLegal);
+		if (!$legalSection || !modal) return;
+		handleFocusTrapKeydown(modal, event);
 	}
 </script>
 
@@ -30,20 +31,20 @@
 <p class="powered">
 	<span class="footer-item">Powered by <a href="/">{APP_NAME}</a></span>
 	<span class="footer-item"
-		><button class="link-btn" onclick={() => (legalSection = 'impressum')}>Impressum</button></span
+		><button class="link-btn" onclick={() => ($legalSection = 'impressum')}>Impressum</button></span
 	>
 	<span class="footer-item"
-		><button class="link-btn" onclick={() => (legalSection = 'datenschutz')}>Datenschutz</button
+		><button class="link-btn" onclick={() => ($legalSection = 'datenschutz')}>Datenschutz</button
 		></span
 	>
 	<span class="footer-item">
-		<button class="link-btn" onclick={() => (legalSection = 'nutzungsbedingungen')}
+		<button class="link-btn" onclick={() => ($legalSection = 'nutzungsbedingungen')}
 			>Nutzungsbedingungen</button
 		>
 	</span>
 </p>
 
-{#if legalSection}
+{#if $legalSection}
 	<div class="legal-overlay">
 		<button class="legal-backdrop" tabindex="-1" onclick={closeLegal} aria-label="Close"></button>
 		<div
@@ -54,7 +55,7 @@
 			aria-label="Legal information"
 			tabindex="-1"
 		>
-			<LegalContent initialSection={legalSection} onback={closeLegal} />
+			<LegalContent initialSection={$legalSection} onback={closeLegal} />
 		</div>
 	</div>
 {/if}

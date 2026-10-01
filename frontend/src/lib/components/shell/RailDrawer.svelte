@@ -2,7 +2,6 @@
 	import { onDestroy, tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { RAIL_DRAWER_CLOSE_LABEL, RAIL_DRAWER_LABEL } from '$lib/constants';
-	import { railDrawerIsLayer } from '$lib/stores/navigation';
 	import { closeSidebar, railWidth, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
@@ -23,7 +22,7 @@
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!open || !panel) return;
-		handleFocusTrapKeydown(panel, event, () => closeSidebar());
+		handleFocusTrapKeydown(panel, event);
 	}
 </script>
 
@@ -45,7 +44,6 @@
 			aria-modal="true"
 			aria-label={RAIL_DRAWER_LABEL}
 			tabindex="-1"
-			data-sveltekit-replacestate={$railDrawerIsLayer ? '' : undefined}
 		>
 			{@render children()}
 		</div>

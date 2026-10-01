@@ -130,8 +130,8 @@ import {
 	albumTrackNeighbors,
 	backToCollection,
 	followAppPageLink,
+	followShellLayers,
 	goBack,
-	historyLayerState,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
@@ -141,8 +141,6 @@ import {
 	openRailSearchTarget,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
-	railDrawerIsLayer,
-	registerHistoryLayer,
 	resetNavigationForTests,
 	navigateToSongTab,
 	openEditTab,
@@ -150,6 +148,7 @@ import {
 	selectNeighborSong,
 	selectSong
 } from './navigation';
+import { closeTopLayer, historyLayerState } from '$lib/stores/layers';
 import {
 	discardDraft,
 	editLyrics,
@@ -165,6 +164,8 @@ import { toasts } from '$lib/stores/toast';
 function navigableSongDefaults(): Partial<SongItem> {
 	return { title: 'Tide', album_title: 'Nachtstrom', generations: [generation()] };
 }
+
+let stopFollowingShellLayers: () => void = () => undefined;
 
 beforeEach(() => {
 	fetchSong.mockReset();
@@ -192,6 +193,7 @@ beforeEach(() => {
 	resetLibrarySearchForTests();
 	resetPlaylists();
 	resetNavigationForTests();
+	stopFollowingShellLayers = followShellLayers();
 	searchQuery.set('');
 	albumList.set([
 		album({ share_slug: null }),
@@ -211,6 +213,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	stopFollowingShellLayers();
 	for (const { job } of get(activeJobs)) removeJob(job.id);
 	vi.unstubAllGlobals();
 	resetLibraryContextForTests();
@@ -1963,7 +1966,6 @@ describe('the phone rail drawer owns one history entry', () => {
 			index: below,
 			collection: { kind: 'playlist', id: 'p1' }
 		});
-		expect(get(railDrawerIsLayer)).toBe(false);
 	});
 
 	it('closing the drawer by its own control steps back off its entry', async () => {
@@ -2023,12 +2025,6 @@ describe('the phone rail drawer owns one history entry', () => {
 
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/settings/voices' });
 	});
-
-	it('marks the drawer as a layer so a link inside it replaces the entry', async () => {
-		await openDrawer();
-
-		expect(get(railDrawerIsLayer)).toBe(true);
-	});
 });
 
 describe('a menu kept in historyLayerState owns one history entry while open', () => {
@@ -2068,6 +2064,78 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		});
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
 	}
+
+	interface ShownLayer {
+		open: () => void;
+		isOpen: () => boolean;
+	}
+
+	function confirmDialog(): ShownLayer {
+		let shown = false;
+		const dialog = dialogHistoryLayer('confirm-dialog', () => (shown = false));
+		return {
+			open: () => {
+				shown = true;
+				owners.push(dialog.hold(document.createElement('div')) ?? (() => undefined));
+			},
+			isOpen: () => shown
+		};
+	}
+
+	const layerKinds: Array<{ kind: string; layer: () => ShownLayer }> = [
+		{
+			kind: 'a menu',
+			layer: () => {
+				const menu = ownedMenu();
+				return { open: () => menu.set(true), isOpen: () => get(menu) };
+			}
+		},
+		{ kind: 'a dialog', layer: confirmDialog },
+		{
+			kind: 'the drawer',
+			layer: () => ({ open: toggleSidebar, isOpen: () => get(sidebarOpen) })
+		},
+		{
+			kind: 'full Now Playing',
+			layer: () => ({ open: () => openNowPlaying('take'), isOpen: () => get(nowPlayingOpen) })
+		}
+	];
+
+	describe.each([
+		{ way: 'Escape', close: () => void closeTopLayer() },
+		{ way: 'Back', close: pressBack }
+	])('$way closes the topmost layer and nothing below it (issue #1182)', ({ close }) => {
+		beforeEach(() => nowPlayingDockable.set(false));
+
+		afterEach(closeSidebar);
+
+		it.each(layerKinds)('closes $kind and keeps the playlist below it', async ({ layer }) => {
+			const shown = layer();
+			const below = historyEntry().index;
+			shown.open();
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+
+			await close();
+
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+			expect(shown.isOpen()).toBe(false);
+			playlistStands(below);
+		});
+
+		it('closes a menu over full Now Playing and leaves Now Playing open', async () => {
+			const below = historyEntry().index;
+			openNowPlaying('take');
+			const menu = ownedMenu();
+			menu.set(true);
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+
+			await close();
+
+			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+			expect(get(menu)).toBe(false);
+			expect(get(nowPlayingOpen)).toBe(true);
+		});
+	});
 
 	it('Back closes the open menu and keeps the playlist below it', async () => {
 		const menu = ownedMenu();
@@ -2219,21 +2287,22 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 });
 
 describe('overlays outside the library', () => {
-	it('are not layered on /settings, and opening the drawer or a menu there writes no history', () => {
+	it('hold a layer Escape closes on /settings, and opening the drawer or a menu there writes no history', () => {
 		replaceHistoryEntry('/settings/playback');
 		const before = { length: historyLength(), state: historyEntry() };
-
-		const registration = registerHistoryLayer('an-overlay', () => undefined);
 		const menu = historyLayerState('a-menu', false);
 		const leaveOwner = menu.subscribe(() => undefined);
-		menu.set(true);
-		toggleSidebar();
 
-		expect(registration).toEqual({ layered: false });
-		expect(get(railDrawerIsLayer)).toBe(false);
-		expect(get(menu)).toBe(true);
+		toggleSidebar();
+		menu.set(true);
+
 		expect({ length: historyLength(), state: historyEntry() }).toEqual(before);
-		closeSidebar();
+		expect(closeTopLayer()).toBe(true);
+		expect(get(menu)).toBe(false);
+		expect(get(sidebarOpen)).toBe(true);
+		expect(closeTopLayer()).toBe(true);
+		expect(get(sidebarOpen)).toBe(false);
+		expect(closeTopLayer()).toBe(false);
 		leaveOwner();
 	});
 });

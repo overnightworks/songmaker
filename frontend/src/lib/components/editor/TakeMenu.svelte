@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { historyLayerState } from '$lib/stores/navigation';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { historyLayerState } from '$lib/stores/layers';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import type { GenerationItem, ShareResult } from '$lib/api/types';
 	import {
 		TAKE_REPAINT_LABEL,
@@ -53,6 +53,13 @@
 		action();
 	}
 
+	let wasOpen = false;
+	$effect(() => {
+		const isOpen = $open;
+		if (wasOpen && !isOpen) refocusIfDropped(trigger);
+		wasOpen = isOpen;
+	});
+
 	$effect(() => {
 		if (!$open) return;
 		function onDocClick(): void {
@@ -60,10 +67,7 @@
 		}
 		function onDocKeydown(event: KeyboardEvent): void {
 			if (!menuEl) return;
-			handleFocusTrapKeydown(menuEl, event, () => {
-				$open = false;
-				trigger?.focus();
-			});
+			handleFocusTrapKeydown(menuEl, event);
 		}
 		document.addEventListener('click', onDocClick);
 		document.addEventListener('keydown', onDocKeydown, true);
@@ -95,7 +99,6 @@
 			class="overflow-menu"
 			class:flip-up={flipUp}
 			role="menu"
-			data-escape-overlay="true"
 			tabindex="-1"
 			onclick={(e) => e.stopPropagation()}
 			onkeydown={(e) => e.stopPropagation()}

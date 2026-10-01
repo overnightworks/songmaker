@@ -35,7 +35,7 @@
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!dialog) return;
-		handleFocusTrapKeydown(dialog, event, cancel);
+		handleFocusTrapKeydown(dialog, event);
 	}
 </script>
 

@@ -17,6 +17,7 @@ import { discardDraft, editGenParams, setDraftGenParams, setDraftLyrics } from '
 import { loras } from '$lib/stores/loras';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import { recipeModel } from '$lib/stores/recipe';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import VoicePicker from './VoicePicker.svelte';
 
@@ -148,6 +149,23 @@ describe('VoicePicker', () => {
 		expect(target.querySelector('.mobile-label')?.textContent).toBe('Your Voice · sft model');
 		expect(options[1].querySelector('.mode-chip')?.textContent).toBe('sft');
 		expect(target.querySelector('.picker .mode-chip')).toBeNull();
+	});
+
+	it('hands focus back to the picker when Escape closes the list from a voice', async () => {
+		const stopListening = listenForGlobalEscape();
+		try {
+			const target = await render();
+			const [none] = await openOptions(target);
+			none.focus();
+
+			none.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+			await tick();
+
+			expect(target.querySelector('.options')).toBeNull();
+			expect(document.activeElement).toBe(picker(target));
+		} finally {
+			stopListening();
+		}
 	});
 });
 

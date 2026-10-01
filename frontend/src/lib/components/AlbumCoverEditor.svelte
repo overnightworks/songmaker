@@ -36,7 +36,6 @@
 	import { addToast } from '$lib/stores/toast';
 	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
-	import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -394,20 +393,6 @@
 			if (coverSuggestionsBusyAlbumId === albumId) coverSuggestionsBusyAlbumId = null;
 		}
 	}
-
-	// The editor is the level Escape goes up from before it leaves the album.
-	// The document is reached before the window, where the global one level
-	// up listens, so claiming the Escape here keeps that listener from also
-	// leaving the album; a menu or dialog open over the editor keeps its own.
-	$effect(() => {
-		function closeOnEscape(event: KeyboardEvent): void {
-			if (!shouldHandleGlobalEscape(event, document)) return;
-			event.preventDefault();
-			if (!coverSuggestionsBusy) void discardAndClose();
-		}
-		document.addEventListener('keydown', closeOnEscape);
-		return () => document.removeEventListener('keydown', closeOnEscape);
-	});
 
 	async function selectCoverSuggestion(suggestionId: string): Promise<void> {
 		const albumId = currentAlbumId;

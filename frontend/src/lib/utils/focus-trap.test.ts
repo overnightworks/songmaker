@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { holdLayer, resetLayersForTests } from '$lib/stores/layers';
 import { focusFirstIn, handleFocusTrapKeydown } from './focus-trap';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -37,25 +38,42 @@ describe('focusFirstIn', () => {
 });
 
 describe('handleFocusTrapKeydown', () => {
-	it('calls onEscape and prevents default', () => {
+	afterEach(resetLayersForTests);
+
+	it('closes the topmost layer on Escape and claims the key', () => {
 		const container = buildContainer();
-		const onEscape = vi.fn();
+		const closed: string[] = [];
+		holdLayer('now-playing', () => closed.push('now-playing'));
+		holdLayer('now-playing-sheet', () => closed.push('now-playing-sheet'));
 		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
-		handleFocusTrapKeydown(container, event, onEscape);
-		expect(onEscape).toHaveBeenCalledTimes(1);
+
+		handleFocusTrapKeydown(container, event);
+
+		expect(closed).toEqual(['now-playing-sheet']);
 		expect(event.defaultPrevented).toBe(true);
+		container.remove();
+	});
+
+	it('leaves Escape to the page when no layer is open', () => {
+		const container = buildContainer();
+		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+
+		handleFocusTrapKeydown(container, event);
+
+		expect(event.defaultPrevented).toBe(false);
 		container.remove();
 	});
 
 	it('leaves an Escape event consumed by a descendant alone', () => {
 		const container = buildContainer();
-		const onEscape = vi.fn();
+		const close = vi.fn();
+		holdLayer('song-menu', close);
 		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
 		event.preventDefault();
 
-		handleFocusTrapKeydown(container, event, onEscape);
+		handleFocusTrapKeydown(container, event);
 
-		expect(onEscape).not.toHaveBeenCalled();
+		expect(close).not.toHaveBeenCalled();
 		container.remove();
 	});
 
@@ -64,7 +82,7 @@ describe('handleFocusTrapKeydown', () => {
 		const last = requireElement<HTMLElement>(container, '#last');
 		last.focus();
 		const event = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
-		handleFocusTrapKeydown(container, event, vi.fn());
+		handleFocusTrapKeydown(container, event);
 		expect(document.activeElement?.id).toBe('first');
 		container.remove();
 	});
@@ -77,7 +95,7 @@ describe('handleFocusTrapKeydown', () => {
 		last.focus();
 		const event = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
 
-		handleFocusTrapKeydown(container, event, vi.fn());
+		handleFocusTrapKeydown(container, event);
 
 		expect(document.activeElement).toBe(requireElement(container, 'input'));
 		container.remove();
@@ -88,7 +106,7 @@ describe('handleFocusTrapKeydown', () => {
 		const first = requireElement<HTMLElement>(container, '#first');
 		first.focus();
 		const event = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, cancelable: true });
-		handleFocusTrapKeydown(container, event, vi.fn());
+		handleFocusTrapKeydown(container, event);
 		expect(document.activeElement?.id).toBe('last');
 		container.remove();
 	});
@@ -99,7 +117,7 @@ describe('handleFocusTrapKeydown', () => {
 		document.body.append(outside);
 		outside.focus();
 		const event = new KeyboardEvent('keydown', { key: 'Tab', cancelable: true });
-		handleFocusTrapKeydown(container, event, vi.fn());
+		handleFocusTrapKeydown(container, event);
 		expect(document.activeElement?.id).toBe('first');
 		container.remove();
 		outside.remove();
@@ -110,7 +128,7 @@ describe('handleFocusTrapKeydown', () => {
 		const middle = requireElement<HTMLElement>(container, '#middle');
 		middle.focus();
 		const event = new KeyboardEvent('keydown', { key: 'ArrowDown', cancelable: true });
-		handleFocusTrapKeydown(container, event, vi.fn());
+		handleFocusTrapKeydown(container, event);
 		expect(document.activeElement?.id).toBe('middle');
 		expect(event.defaultPrevented).toBe(false);
 		container.remove();

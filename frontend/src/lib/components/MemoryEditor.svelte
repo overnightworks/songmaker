@@ -2,6 +2,7 @@
 	import { tick } from 'svelte';
 	import type { MemoryBundle, MemoryScopeItem } from '$lib/api/types';
 	import { COWRITER_MEMORY_LABEL } from '$lib/constants';
+	import { refocusIfDropped } from '$lib/utils/focus-trap';
 	import Icon from './Icon.svelte';
 	import {
 		shouldReplaceMemoryDraft,
@@ -35,38 +36,18 @@
 		onReject
 	}: Props = $props();
 
-	let editor: HTMLElement | undefined = $state();
 	let closeButton: HTMLButtonElement | undefined = $state();
 
 	$effect(() => {
 		closeButton?.focus();
 	});
 
-	// Escape closes the editor itself and claims the key, so the page's
-	// global Escape does not also leave the song (see escape-level-up.ts).
-	$effect(() => {
-		const openEditor = editor;
-		if (!openEditor) return;
-		function closeOnEscape(event: KeyboardEvent): void {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			onClose();
-		}
-		openEditor.addEventListener('keydown', closeOnEscape);
-		return () => openEditor.removeEventListener('keydown', closeOnEscape);
-	});
-
 	// Answering the last proposal removes the button that held focus; keep focus
-	// inside the editor so the next Escape closes it instead of leaving the song.
-	// Focus the musician moved elsewhere during a slow answer stays where it is.
+	// inside the editor rather than on the page behind it.
 	async function answerProposal(answer: () => void | Promise<void>): Promise<void> {
 		await answer();
 		await tick();
-		if (focusDropped()) closeButton?.focus();
-	}
-
-	function focusDropped(): boolean {
-		return document.activeElement === null || document.activeElement === document.body;
+		refocusIfDropped(closeButton);
 	}
 
 	let userDraft = $state('');
@@ -137,7 +118,7 @@
 </script>
 
 {#if open}
-	<section bind:this={editor} class="memory" aria-label={COWRITER_MEMORY_LABEL}>
+	<section class="memory" aria-label={COWRITER_MEMORY_LABEL}>
 		<header class="memory-head">
 			<span class="memory-title">{COWRITER_MEMORY_LABEL}</span>
 			<button

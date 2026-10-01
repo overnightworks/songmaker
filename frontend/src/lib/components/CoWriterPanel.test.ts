@@ -54,6 +54,8 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 
 import CoWriterPanel from './CoWriterPanel.svelte';
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+import { libraryHistoryStepsLanded } from '$lib/stores/libraryContext';
 import {
 	deleteConversation,
 	fetchMemory,
@@ -250,12 +252,16 @@ describe('CoWriterPanel', () => {
 });
 
 describe('CoWriterPanel conversation line (#1063)', () => {
+	let stopListeningForEscape: () => void = () => undefined;
+
 	beforeEach(() => {
 		vi.useFakeTimers({ toFake: ['Date'] });
 		vi.setSystemTime(new Date('2026-09-27T12:00:00'));
+		stopListeningForEscape = listenForGlobalEscape();
 	});
 
 	afterEach(() => {
+		stopListeningForEscape();
 		vi.useRealTimers();
 	});
 
@@ -1833,7 +1839,9 @@ function typeIntoChat(target: HTMLElement, text: string): void {
 }
 
 function pressEscapeIn(element: Element | null): void {
-	element?.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+	element?.dispatchEvent(
+		new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+	);
 }
 
 describeBackClosesOverlay({
@@ -1843,14 +1851,25 @@ describeBackClosesOverlay({
 	isShown: (target) => target.querySelector('[role="menu"]') !== null,
 	closeWays: [
 		{ way: 'a tap outside', close: () => document.body.click() },
-		{ way: 'Escape', close: () => pressEscapeIn(document.body) },
+		{ way: 'Escape', close: () => pressEscapeIn(document.body) }
+	]
+});
+
+describeBackClosesOverlay({
+	name: 'the co-writer Memory editor',
+	render: () => render(),
+	open: async (target) => {
+		await openMemoryFromMenu(target);
+		await libraryHistoryStepsLanded();
+	},
+	isShown: (target) => target.querySelector('section[aria-label="Memory"]') !== null,
+	closeWays: [
 		{
-			way: 'choosing Memory',
+			way: 'its close button',
 			close: (target) =>
-				Array.from(target.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
-					.find((item) => item.textContent?.trim() === 'Memory')
-					?.click()
-		}
+				target.querySelector<HTMLButtonElement>('button[aria-label="Close memory"]')?.click()
+		},
+		{ way: 'Escape', close: (target) => pressEscapeIn(userMemoryField(target)) }
 	]
 });
 

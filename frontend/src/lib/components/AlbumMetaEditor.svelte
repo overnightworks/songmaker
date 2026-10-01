@@ -20,7 +20,6 @@
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
 	} from '$lib/constants';
-	import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -35,32 +34,12 @@
 	const draft: AlbumDetails = $state(untrack(() => ({ ...details })));
 	let saving = $state(false);
 	let titleInput: HTMLInputElement | undefined = $state();
-	let form: HTMLFormElement | undefined = $state();
 
 	const titleMissing = $derived(draft.title.trim() === '');
 	const canSave = $derived(!titleMissing && !saving);
 	const titleReasonId = $props.id();
 
 	onMount(() => titleInput?.focus());
-
-	function isEscapeTypedInForm(event: KeyboardEvent): boolean {
-		return (
-			event.key === 'Escape' &&
-			!event.defaultPrevented &&
-			event.target instanceof Node &&
-			form?.contains(event.target) === true
-		);
-	}
-
-	$effect(() => {
-		function closeOnEscape(event: KeyboardEvent): void {
-			if (!isEscapeTypedInForm(event) && !shouldHandleGlobalEscape(event, document)) return;
-			event.preventDefault();
-			if (!saving) onclose();
-		}
-		document.addEventListener('keydown', closeOnEscape);
-		return () => document.removeEventListener('keydown', closeOnEscape);
-	});
 
 	async function save(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
@@ -80,12 +59,7 @@
 	}
 </script>
 
-<form
-	bind:this={form}
-	class="album-details"
-	aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL}
-	onsubmit={save}
->
+<form class="album-details" aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL} onsubmit={save}>
 	<div class="details-head">
 		<span class="details-title">{COLLECTION_MENU_EDIT_DETAILS_LABEL}</span>
 		<button

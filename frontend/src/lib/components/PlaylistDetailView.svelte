@@ -34,7 +34,9 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import { historyLayerState, selectSong } from '$lib/stores/navigation';
+	import { selectSong } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
+	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -84,6 +86,7 @@
 	let reorderBusy = $state(false);
 	let showDeleteConfirm = $state(false);
 	const overflowId = historyLayerState<string | null>('playlist-entry-menu', null);
+	let overflowMenuEl: HTMLDivElement | undefined = $state();
 	const initials = $derived(
 		playlistMeta ? titleInitials(playlistMeta.title) : ALBUM_ART_EMPTY_INITIALS
 	);
@@ -110,9 +113,8 @@
 			$overflowId = null;
 		}
 		function onKeydown(event: KeyboardEvent): void {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			$overflowId = null;
+			if (!overflowMenuEl) return;
+			handleFocusTrapKeydown(overflowMenuEl, event);
 		}
 		document.addEventListener('click', onClick);
 		document.addEventListener('keydown', onKeydown, true);
@@ -413,9 +415,9 @@
 									</button>
 									{#if $overflowId === entry.id}
 										<div
+											bind:this={overflowMenuEl}
 											class="entry-overflow-menu"
 											role="menu"
-											data-escape-overlay="true"
 											tabindex="-1"
 											onclick={(e) => e.stopPropagation()}
 											onkeydown={(e) => e.stopPropagation()}

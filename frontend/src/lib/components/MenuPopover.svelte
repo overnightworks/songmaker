@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick, untrack, type Snippet } from 'svelte';
 	import { COMPACT_LAYOUT_MAX_PX } from '$lib/constants';
-	import { historyLayerState } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
 	interface Props {
@@ -93,7 +93,7 @@
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!$open || !panel) return;
-		handleFocusTrapKeydown(panel, event, () => close());
+		handleFocusTrapKeydown(panel, event);
 	}
 
 	function onWindowResize(): void {
