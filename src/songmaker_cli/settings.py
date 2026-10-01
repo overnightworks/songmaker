@@ -358,7 +358,7 @@ class Settings(BaseSettings):
     openai_api_key: SecretStr | None = None
 
     # ── MCP server (songmaker tools exposed to Claude) ────────────────
-    # Only set in the subprocess spawned by chat_api when the CLI
+    # Only set in the subprocess spawned for a co-writer turn when the CLI
     # launches the MCP server via --mcp-config. Identifies the acting
     # user so tool calls can run the same ownership checks as HTTP.
     songmaker_mcp_user_id: str | None = None

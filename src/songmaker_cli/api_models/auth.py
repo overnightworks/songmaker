@@ -9,7 +9,7 @@ from webauth.passwords import check_password_strength
 from webauth.users import session_reference
 
 if TYPE_CHECKING:
-    from songmaker_cli.db.models import AuditLog, LoginAttempt, User, UserSession
+    from songmaker_cli.db.models import LoginAttempt, User, UserSession
 
 
 class LoginRequest(BaseModel):
@@ -112,26 +112,4 @@ class LoginAttemptResponse(BaseModel):
             username=attempt.username,
             success=attempt.success,
             attempted_at=attempt.attempted_at.isoformat(),
-        )
-
-
-class AuditLogResponse(BaseModel):
-    id: str
-    user_id: str | None
-    action: str
-    resource_type: str
-    resource_id: str
-    detail: str
-    created_at: str
-
-    @classmethod
-    def from_orm(cls, entry: AuditLog) -> AuditLogResponse:
-        return cls(
-            id=entry.id,
-            user_id=entry.user_id,
-            action=entry.action,
-            resource_type=entry.resource_type,
-            resource_id=entry.resource_id,
-            detail=entry.detail,
-            created_at=entry.created_at.isoformat(),
         )

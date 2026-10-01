@@ -46,7 +46,6 @@
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
@@ -192,7 +191,6 @@
 		const albumId = selectedAlbum.id;
 		const result = await shareAlbum(albumId);
 		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: true, share_slug: result.share_slug }));
-		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -201,7 +199,6 @@
 		const albumId = selectedAlbum.id;
 		await unshareAlbum(albumId);
 		updateAlbumInList(albumId, (a) => ({ ...a, is_shared: false, share_slug: null }));
-		await refreshSharesAfterMutation();
 	}
 
 	async function onAlbumDelete(): Promise<void> {

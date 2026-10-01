@@ -34,7 +34,6 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import (
     AdminUserLoraResponse,
-    AuditLogResponse,
     CreateUserRequest,
     EvictModelOnWorkerRequest,
     GenerationRetentionReportResponse,
@@ -76,13 +75,11 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     count_active_sessions,
-    count_audit_log,
     count_login_attempts,
     get_user,
     get_worker_identity,
     hard_delete_user,
     list_active_sessions,
-    list_audit_log,
     list_login_attempts,
     list_song_ids_for_owner,
     list_user_loras_for_admin,
@@ -276,21 +273,6 @@ def hard_delete_user_endpoint(
         log.info("Removed empty user audio directory: %s", user_dir)
 
     return StatusResponse(status="ok")
-
-
-@router.get("/audit-log")
-def audit_log_endpoint(
-    page: AdminPagination,
-    db: Session = Depends(get_db_session),
-    _admin: AuthenticatedUser = Depends(require_admin),
-) -> PaginatedResponse[AuditLogResponse]:
-    total = count_audit_log(db)
-    entries = list_audit_log(db, offset=page.offset, limit=page.limit)
-    return PaginatedResponse(
-        items=[AuditLogResponse.from_orm(e) for e in entries],
-        total=total, offset=page.offset, limit=page.limit,
-        has_more=page_has_more(offset=page.offset, fetched=len(entries), total=total),
-    )
 
 
 @router.get("/login-attempts")

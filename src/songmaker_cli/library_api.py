@@ -1,4 +1,4 @@
-"""Personal library index search and share inventory."""
+"""Personal library index search."""
 
 from __future__ import annotations
 
@@ -9,9 +9,7 @@ from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
-    Pagination,
     owner_filter,
-    page_has_more,
     parse_required_search_query,
 )
 from songmaker_cli.api_models import (
@@ -21,9 +19,6 @@ from songmaker_cli.api_models import (
     LibrarySearchResponse,
     LibrarySort,
     LibraryTakePool,
-    PaginatedResponse,
-    ShareInventoryItem,
-    ShareInventoryType,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -40,7 +35,6 @@ from songmaker_cli.db.queries import (
     count_picked_songs_by_album,
     count_songs_by_album,
     list_place_activity,
-    list_shared_inventory,
     search_library,
 )
 from songmaker_cli.library_cursor import (
@@ -151,30 +145,4 @@ def api_library_pool_queue(
         generations=[source.generation for source in membership.sources],
         skipped=membership.skipped,
         skipped_complete=membership.skipped_complete,
-    )
-
-
-@router.get("/library/shares")
-def api_library_shares(
-    page: Pagination,
-    resource_type: ShareInventoryType | None = Query(None, alias="type"),
-    user: AuthenticatedUser = Depends(get_current_user),
-    session: Session = Depends(get_db_session),
-) -> PaginatedResponse[ShareInventoryItem]:
-    result = list_shared_inventory(
-        session,
-        user_id=user.id,
-        item_type=resource_type,
-        offset=page.offset,
-        limit=page.limit,
-    )
-    items = [ShareInventoryItem.from_orm(entity) for entity in result.items]
-    return PaginatedResponse(
-        items=items,
-        total=result.total,
-        offset=page.offset,
-        limit=page.limit,
-        has_more=page_has_more(
-            offset=page.offset, fetched=len(items), total=result.filtered_total,
-        ),
     )

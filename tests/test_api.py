@@ -2207,101 +2207,7 @@ def test_score_generation_submits_job(client: TestClient) -> None:
     mock_pool.enqueue_job.assert_called_once()
 
 
-# ── Song chat endpoint ──────────────────────────────────────────────
-
-
-def _mock_acall():
-    from unittest.mock import AsyncMock, MagicMock, patch
-
-    mock_response = MagicMock()
-    mock_response.text = "Hello from Claude"
-    mock_fn = AsyncMock(return_value=mock_response)
-    return patch("songmaker_cli.chat_api.acall_claude", mock_fn), mock_fn
-
-
-def test_song_chat_send(client: TestClient) -> None:
-    patcher, mock_fn = _mock_acall()
-    with patcher:
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["user_message"]["role"] == "user"
-    assert data["user_message"]["content"] == "hi"
-    assert data["assistant_message"]["role"] == "assistant"
-    assert data["assistant_message"]["content"] == "Hello from Claude"
-
-
-def test_song_chat_marks_job_cancelled_when_request_is_cancelled(
-    client: TestClient,
-) -> None:
-    from unittest.mock import patch
-
-    from fastapi import Request
-
-    from songmaker_cli.api_models.settings import SendChatRequest
-    from songmaker_cli.chat_api import api_song_chat
-    from songmaker_cli.jobs._runtime import _stop_chat_job_heartbeat
-
-    factory = client.app.state.ctx.db
-
-    async def _exercise() -> tuple[asyncio.Event, asyncio.Event]:
-        claude_started = asyncio.Event()
-        heartbeat_started = asyncio.Event()
-        heartbeat_stopped = asyncio.Event()
-        heartbeat_stop_calls = 0
-
-        async def _keep_heartbeat(*_args, **_kwargs) -> None:
-            heartbeat_started.set()
-            try:
-                await asyncio.Future()
-            finally:
-                heartbeat_stopped.set()
-
-        async def _acall(*_args, **_kwargs) -> None:
-            claude_started.set()
-            await asyncio.Future()
-
-        async def _stop_heartbeat(*args, **kwargs) -> None:
-            nonlocal heartbeat_stop_calls
-            heartbeat_stop_calls += 1
-            await _stop_chat_job_heartbeat(*args, **kwargs)
-
-        request = Request({"type": "http", "app": client.app})
-        user = make_authenticated_user(_DEFAULT_USER_ID, username="test_user")
-        with factory() as session:
-            with patch(
-                "songmaker_cli.jobs._runtime._keep_chat_job_heartbeat",
-                _keep_heartbeat,
-            ), patch(
-                "songmaker_cli.jobs._runtime._stop_chat_job_heartbeat",
-                _stop_heartbeat,
-            ), patch("songmaker_cli.chat_api.acall_claude", _acall):
-                task = asyncio.create_task(api_song_chat(
-                    "s1",
-                    SendChatRequest(message="hi"),
-                    request,
-                    user,
-                    session,
-                ))
-                await claude_started.wait()
-                await heartbeat_started.wait()
-                task.cancel()
-                with pytest.raises(asyncio.CancelledError):
-                    await task
-
-        assert heartbeat_stop_calls == 1
-        return heartbeat_stopped, claude_started
-
-    heartbeat_stopped, claude_started = asyncio.run(_exercise())
-
-    assert claude_started.is_set()
-    assert heartbeat_stopped.is_set()
-    with factory() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error_type == "cancelled"
-        assert job.error == "Turn cancelled by the client."
+# ── Chat job heartbeat ──────────────────────────────────────────────
 
 
 def test_chat_heartbeat_writer_updates_an_active_job(client: TestClient) -> None:
@@ -2357,168 +2263,6 @@ def test_chat_heartbeat_timer_continues_after_a_write_failure() -> None:
 
     assert write.call_count == 1
     assert sleeps == 2
-
-
-def test_song_chat_multi_turn(client: TestClient) -> None:
-    patcher, mock_fn = _mock_acall()
-    with patcher:
-        client.post("/api/songs/s1/chat", json={"message": "first"})
-        client.post("/api/songs/s1/chat", json={"message": "second"})
-
-    last_call = mock_fn.call_args
-    messages_arg = last_call.kwargs["messages"]
-    assert len(messages_arg) == 3
-    assert messages_arg[0]["role"] == "user"
-    assert messages_arg[1]["role"] == "assistant"
-    assert messages_arg[2]["role"] == "user"
-
-
-def test_song_chat_history(client: TestClient) -> None:
-    patcher, _ = _mock_acall()
-    with patcher:
-        client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    resp = client.get("/api/songs/s1/chat")
-    assert resp.status_code == 200
-    msgs = resp.json()["messages"]
-    assert len(msgs) == 2
-    assert msgs[0]["role"] == "user"
-    assert msgs[1]["role"] == "assistant"
-
-
-def test_song_chat_clear(client: TestClient) -> None:
-    patcher, _ = _mock_acall()
-    with patcher:
-        client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    resp = client.delete("/api/songs/s1/chat")
-    assert resp.status_code == 200
-
-    history = client.get("/api/songs/s1/chat").json()
-    assert len(history["messages"]) == 0
-
-
-def test_song_chat_attaches_messages_to_active_conversation(
-    client: TestClient,
-) -> None:
-    from songmaker_cli.db.models import ChatMessage, Conversation
-
-    patcher, _ = _mock_acall()
-    with patcher:
-        r1 = client.post("/api/songs/s1/chat", json={"message": "first"})
-        r2 = client.post("/api/songs/s1/chat", json={"message": "second"})
-    assert r1.status_code == 200
-    assert r2.status_code == 200
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        convs = session.query(Conversation).filter_by(archived_at=None).all()
-        assert len(convs) == 1, "expected one active conversation after 2 turns"
-        conv_id = convs[0].id
-        msgs = (
-            session.query(ChatMessage)
-            .order_by(ChatMessage.created_at).all()
-        )
-        # 4 messages (2 user, 2 assistant), every one linked to the same conversation.
-        assert len(msgs) == 4
-        assert all(m.conversation_id == conv_id for m in msgs)
-        assert [m.role for m in msgs] == ["user", "assistant", "user", "assistant"]
-
-
-def test_song_chat_failure_leaves_no_empty_conversation(
-    client: TestClient,
-) -> None:
-    """Regression guard: Claude failure must not persist an empty
-    Conversation row. ``get_or_create_active_conversation`` runs on the
-    success path only.
-    """
-    from unittest.mock import AsyncMock, patch
-
-    from agent_providers.claude.provider import UnavailableError
-
-    from songmaker_cli.db.models import Conversation
-
-    mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-    assert resp.status_code == 503
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        assert session.query(Conversation).count() == 0
-
-
-def test_song_chat_unavailable(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    from agent_providers.claude.provider import UnavailableError
-
-    mock_acall = AsyncMock(side_effect=UnavailableError("no backend"))
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert resp.status_code == 503
-
-
-def test_song_chat_http_error_marks_job_failed_without_exception_log(
-    client: TestClient,
-) -> None:
-    from unittest.mock import patch
-
-    from fastapi import HTTPException
-
-    with patch(
-        "songmaker_cli.chat_api._build_song_context",
-        side_effect=HTTPException(404, "Song not found"),
-    ), patch("songmaker_cli.chat_api.log.exception") as log_exception:
-        response = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert response.status_code == 404
-    log_exception.assert_not_called()
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        job = session.query(Job).filter_by(type="chat").one()
-        assert job.status == "failed"
-        assert job.error_type == "chat_error"
-
-
-def test_song_chat_builds_context(client: TestClient) -> None:
-    from songmaker_cli.chat_api import CHAT_ROLE
-
-    with client.app.state.ctx.db() as session:
-        session.add(Song(
-            id="s2", title="Rain", album_id="rock", track_number=2, slug="rain",
-        ))
-        session.add(Version(
-            id="v2", song_id="s2", version_number=1, lyrics="drizzle", prompt="ballad",
-        ))
-        session.commit()
-
-    patcher, mock_fn = _mock_acall()
-    with patcher:
-        resp = client.post("/api/songs/s1/chat", json={
-            "message": "write a verse",
-            "mentioned_song_ids": ["s2"],
-            "mentioned_version_ids": ["v1"],
-        })
-
-    assert resp.status_code == 200
-    system_arg = mock_fn.call_args.kwargs["system"]
-    assert CHAT_ROLE in system_arg
-    messages_arg = mock_fn.call_args.kwargs["messages"]
-    user_msg = messages_arg[-1]["content"]
-    assert "<song_context>" in user_msg
-    assert "Thunder" in user_msg
-    assert "Rain" in user_msg
-    assert "--- Referenced versions ---" in user_msg
-    assert "[Version 1]" in user_msg
-    assert "Style: hard rock" in user_msg
-    assert "Lyrics:\nboom" in user_msg
-
-
-def test_song_chat_requires_auth(unauthed_client: TestClient) -> None:
-    resp = unauthed_client.post("/api/songs/s1/chat", json={"message": "hi"})
-    assert resp.status_code == 401
 
 
 def test_get_album(client: TestClient) -> None:
@@ -3943,37 +3687,6 @@ def test_create_album_records_audit(client: TestClient) -> None:
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
 
-def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    c.post("/api/albums", json={"title": "Audit Test"})
-    resp = c.get("/api/admin/audit-log")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data["items"]) >= 1
-    assert data["items"][0]["action"] == "create"
-    assert "created_at" in data["items"][0]
-    assert data["total"] >= 1
-
-
-# ── Chat rate limiting ───────────────────────────────────────────────
-
-
-def test_chat_rate_limit(client: TestClient, monkeypatch) -> None:
-    monkeypatch.setenv("CHAT_RATE_LIMIT_USER", "2")
-    monkeypatch.setenv("CHAT_RATE_LIMIT_ADMIN", "300")
-    from songmaker_cli.settings import get_settings
-    get_settings.cache_clear()
-
-    patcher, _ = _mock_acall()
-    with patcher:
-        for _ in range(2):
-            r = client.post("/api/songs/s1/chat", json={"message": "hi"})
-            assert r.status_code == 200
-
-        r = client.post("/api/songs/s1/chat", json={"message": "hi"})
-        assert r.status_code == 429
-
-
 # ── Admin rate limits ────────────────────────────────────────────────
 
 
@@ -4060,71 +3773,6 @@ def test_sanitize_error_hides_unknown_generation_setup_details(
     assert raw_error in caplog.text
 
 
-def test_chat_success_finalizes_job(client: TestClient) -> None:
-    patcher, _ = _mock_acall()
-    with patcher:
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert resp.status_code == 200
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        job = session.query(Job).filter_by(type="chat").first()
-        assert job is not None
-        assert job.status == "completed"
-        assert job.completed_at is not None
-
-
-def test_chat_failure_finalizes_job(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    from agent_providers.claude.provider import UnavailableError
-
-    mock_acall = AsyncMock(side_effect=UnavailableError("down"))
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert resp.status_code == 503
-
-    factory = client.app.state.ctx.db
-    with factory() as session:
-        job = session.query(Job).filter_by(type="chat").first()
-        assert job is not None
-        assert job.status == "failed"
-        assert job.completed_at is not None
-
-
-def test_chat_unavailable_hides_details(client: TestClient) -> None:
-    from unittest.mock import AsyncMock, patch
-
-    from agent_providers.claude.provider import UnavailableError
-
-    err = UnavailableError("Claude CLI error: /home/user/.local/bin...")
-    mock_acall = AsyncMock(side_effect=err)
-    with patch("songmaker_cli.chat_api.acall_claude", mock_acall):
-        resp = client.post("/api/songs/s1/chat", json={"message": "hi"})
-
-    assert resp.status_code == 503
-    assert "Claude is currently unavailable" in resp.json()["detail"]
-    assert "/home/" not in resp.json()["detail"]
-
-
-# ── System prompt ──────────────────────────────────────────────────
-
-
-def test_system_prompt_contains_role_and_structure() -> None:
-    from songmaker_cli.chat_api import CHAT_ROLE, STRUCTURAL_PROMPT, SYSTEM_PROMPT
-
-    assert CHAT_ROLE in SYSTEM_PROMPT
-    assert STRUCTURAL_PROMPT in SYSTEM_PROMPT
-
-
-def test_system_prompt_contains_untrusted_data_notice() -> None:
-    from songmaker_cli.chat_api import SYSTEM_PROMPT, UNTRUSTED_DATA_NOTICE
-
-    assert UNTRUSTED_DATA_NOTICE in SYSTEM_PROMPT
-
-
 # ── Pagination ────────────────────────────────────────────────────
 
 
@@ -4186,7 +3834,6 @@ def test_list_songs_limit_validation(client: TestClient) -> None:
         pytest.param(
             "/api/settings/default-config", "put", {"400", "404"}, id="set-default-config",
         ),
-        pytest.param("/api/settings/claude-models", "put", {"400"}, id="set-claude-models"),
         pytest.param("/api/settings/cowriter", "get", {"422"}, id="get-cowriter"),
         pytest.param("/api/settings/cowriter", "put", {"422"}, id="set-cowriter"),
         pytest.param("/api/settings/providers", "get", {"422"}, id="get-providers"),
@@ -4360,77 +4007,35 @@ def test_deleting_user_rate_limits_restores_the_effective_defaults(tmp_path: Pat
     assert effective["chat_rate_limit"]["is_override"] is False
 
 
-# ── Claude model settings ───────────────────────────────────────────
-
-
-def test_claude_models_get_requires_admin(client: TestClient) -> None:
-    resp = client.get("/api/settings/claude-models")
-    assert resp.status_code == 403
-
-
-def test_claude_models_put_requires_admin(client: TestClient) -> None:
-    resp = client.put("/api/settings/claude-models", json={
-        "chat_model": "claude-sonnet-4-6",
-        "scoring_model": "claude-sonnet-4-6",
-    })
-    assert resp.status_code == 403
-
-
-def test_claude_models_get_defaults(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin")
-    resp = c.get("/api/settings/claude-models")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["chat_model"] == "claude-opus-4-6"
-    assert data["scoring_model"] == "claude-opus-4-6"
-    assert "claude-opus-4-6" in data["allowed_models"]
-    assert "claude-sonnet-4-6" in data["allowed_models"]
-    assert "claude-haiku-4-5-20251001" in data["allowed_models"]
-
-
-def test_claude_models_roundtrip(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin")
-    resp = c.put("/api/settings/claude-models", json={
-        "chat_model": "claude-sonnet-4-6",
-        "scoring_model": "claude-haiku-4-5-20251001",
-    })
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["chat_model"] == "claude-sonnet-4-6"
-    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
-
-    resp = c.get("/api/settings/claude-models")
-    data = resp.json()
-    assert data["chat_model"] == "claude-sonnet-4-6"
-    assert data["scoring_model"] == "claude-haiku-4-5-20251001"
-
-
-def test_claude_models_rejects_invalid(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin")
-    resp = c.put("/api/settings/claude-models", json={
-        "chat_model": "gpt-4",
-        "scoring_model": "claude-opus-4-6",
-    })
-    assert resp.status_code == 400
-
-    resp = c.put("/api/settings/claude-models", json={
-        "chat_model": "claude-opus-4-6",
-        "scoring_model": "not-a-real-model",
-    })
-    assert resp.status_code == 400
-
-
 def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
+    from songmaker_cli.constants import SETTING_CLAUDE_CHAT_MODEL, SETTING_CLAUDE_SCORING_MODEL
+    from songmaker_cli.db.queries.settings import set_claude_model
+
     c = _make_authed_client(tmp_path, role="admin")
-    c.put("/api/settings/claude-models", json={
-        "chat_model": "claude-sonnet-4-6",
-        "scoring_model": "claude-haiku-4-5-20251001",
-    })
+    with c.app.state.ctx.db() as session:
+        set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, "claude-sonnet-4-6")
+        set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, "claude-haiku-4-5-20251001")
+        session.commit()
     resp = c.get("/api/capabilities")
     assert resp.status_code == 200
     data = resp.json()
     assert data["chat_model"] == "claude-sonnet-4-6"
     assert data["scoring_model"] == "claude-haiku-4-5-20251001"
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        pytest.param("post", "/api/songs/s1/chat", id="per-song-chat"),
+        pytest.param("get", "/api/settings/claude-models", id="get-claude-models"),
+        pytest.param("put", "/api/settings/claude-models", id="set-claude-models"),
+        pytest.param("get", "/api/admin/audit-log", id="admin-audit-log"),
+        pytest.param("get", "/api/library/shares", id="library-shares"),
+    ],
+)
+def test_removed_dead_routes_no_longer_answer(tmp_path: Path, method: str, path: str) -> None:
+    client = _make_authed_client(tmp_path, role="admin")
+    assert client.request(method, path, json={}).status_code == 404
 
 
 # ── Bulk delete generations ─────────────────────────────────────────
