@@ -1,16 +1,22 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { goto } from '$app/navigation';
 import {
 	allocateEntryId,
 	land,
 	landedEntry,
 	listenForLandings,
+	loadHistoryPageForTests,
+	navigateTo,
+	pageStateOfHistoryState,
 	pushEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
+	stampNavigatedEntry,
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
+import { startFakeRouter } from '$lib/test-utils/app-navigation';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -159,7 +165,18 @@ describe('history adapter', () => {
 		});
 	});
 
-	afterEach(() => stopListening());
+	afterEach(() => {
+		stopListening();
+		vi.restoreAllMocks();
+	});
+
+	function standingEntry(): unknown {
+		return pageStateOfHistoryState(history.state)?.entry;
+	}
+
+	function seedForeignEntry(url: string): void {
+		history.replaceState(null, '', url);
+	}
 
 	it('a push stamps a fresh id and a replace keeps the id and the layer mark', () => {
 		const page = pushEntry('/album/a', {});
@@ -194,5 +211,85 @@ describe('history adapter', () => {
 
 		expect(landings.slice(1).map(({ stepOff }) => stepOff)).toEqual([true, false]);
 		expect(history.state['sveltekit:states'].entry).toEqual(page);
+	});
+
+	it('an id-less entry on top gets its first id', () => {
+		seedForeignEntry('/album/a');
+
+		const stamped = replaceEntry('/album/a', {});
+
+		expect(stamped).toEqual({ id: expect.any(Number) });
+		expect(standingEntry()).toEqual(stamped);
+	});
+
+	it('an id-less entry below stamped entries stays foreign', async () => {
+		seedForeignEntry('/album/a');
+		pushEntry('/album/b', {});
+		const landed = nextLanding();
+		history.back();
+		await landed;
+
+		const stamped = replaceEntry('/album/a', {});
+
+		expect(stamped).toBeNull();
+		expect(standingEntry()).toBeUndefined();
+	});
+
+	it('stepBackTo on the first entry resolves at once', async () => {
+		seedForeignEntry('/legal');
+		vi.spyOn(history, 'length', 'get').mockReturnValue(1);
+		const first = replaceEntry('/legal', {});
+		vi.restoreAllMocks();
+		const back = vi.spyOn(history, 'back');
+
+		await stepBackTo((first as HistoryEntry).id - 1);
+
+		expect(back).not.toHaveBeenCalled();
+		expect(landings).toEqual([]);
+	});
+
+	it('a navigation pushes a fresh id and a replacing one keeps the id it writes over', async () => {
+		const page = pushEntry('/album/a', {});
+
+		await navigateTo('/album/a/song', {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
+		const replaced = standingEntry();
+		await navigateTo('/settings', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
+
+		expect(replaced).toEqual(page);
+		expect(standingEntry()).toEqual({ id: expect.any(Number) });
+		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+	});
+
+	it.each([
+		{ by: 'a link', type: 'link' as const },
+		{ by: 'a goto from elsewhere', type: 'goto' as const }
+	])('an entry $by writes without an id gets one on top', async ({ type }) => {
+		pushEntry('/album/a', {});
+		await vi.mocked(goto)('/settings');
+
+		stampNavigatedEntry(type);
+
+		expect(standingEntry()).toEqual({ id: expect.any(Number) });
+	});
+
+	it('the router start gets back the id the entry was loaded with', () => {
+		const loaded = pushEntry('/album/a', {});
+		loadHistoryPageForTests();
+		startFakeRouter();
+
+		stampNavigatedEntry('enter');
+
+		expect(standingEntry()).toEqual(loaded);
+		expect(location.pathname).toBe('/album/a');
 	});
 });
