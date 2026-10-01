@@ -1,5 +1,10 @@
 import type { QueueStreamManifest } from '$lib/api/types';
-import { PLAYER_WAITING_FOR_NETWORK } from '$lib/constants';
+import {
+	PLAYER_WAITING_FOR_NETWORK,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '$lib/constants';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -23,6 +28,11 @@ const TRANSPORT_OFFERING_PAUSE: ReadonlySet<TransportState> = new Set([
 
 export function transportOffersPause(transport: TransportState): boolean {
 	return TRANSPORT_OFFERING_PAUSE.has(transport);
+}
+
+export function transportButtonLabel(transport: TransportState): string {
+	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
+	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
 type StreamEndReason = 'normal' | 'window-end';

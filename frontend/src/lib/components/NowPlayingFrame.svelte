@@ -2,7 +2,11 @@
 	import { tick, type Snippet } from 'svelte';
 	import type { WhisperCue } from '$lib/api/types';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		audioPlayer,
+		transportButtonLabel,
+		transportOffersPause
+	} from '$lib/services/audioPlayer.svelte';
 	import {
 		HITBOX_FREQUENT_PX,
 		NOW_PLAYING_CLOSE,
@@ -132,7 +136,10 @@
 
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
-	const isPlaying = $derived(audioPlayer.status === 'playing');
+	const transport = $derived(audioPlayer.transport);
+	const transportIcon = $derived(
+		transport === 'failed' ? 'refresh-cw' : transportOffersPause(transport) ? 'pause' : 'play'
+	);
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
@@ -304,9 +311,9 @@
 							type="button"
 							class="play-btn"
 							onclick={() => audioPlayer.toggle()}
-							aria-label={isPlaying ? 'Pause' : 'Play'}
+							aria-label={transportButtonLabel(transport)}
 						>
-							<Icon name={isPlaying ? 'pause' : 'play'} size={26} />
+							<Icon name={transportIcon} size={26} />
 						</button>
 						<div class="transport-side after">
 							{#if onnext}

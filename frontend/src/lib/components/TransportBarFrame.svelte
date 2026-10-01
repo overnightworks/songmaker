@@ -3,14 +3,13 @@
 	import Icon from './Icon.svelte';
 	import {
 		audioPlayer,
+		transportButtonLabel,
 		transportOffersPause,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		NOW_PLAYING_LABEL,
 		NOW_PLAYING_SWIPE_RISE_PX,
-		TRANSPORT_PAUSE_LABEL,
-		TRANSPORT_PLAY_LABEL,
 		TRANSPORT_RETRY_LABEL
 	} from '$lib/constants';
 	import {
@@ -254,11 +253,7 @@
 		class:playing={isPlaying}
 		class:errored={isError}
 		onclick={onTogglePlay}
-		aria-label={isError
-			? TRANSPORT_RETRY_LABEL
-			: offersPause
-				? TRANSPORT_PAUSE_LABEL
-				: TRANSPORT_PLAY_LABEL}
+		aria-label={transportButtonLabel(transport)}
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>
