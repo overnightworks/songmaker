@@ -437,8 +437,9 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	const takeBySongTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.takeId]));
 
 	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
-	// Desktop moves and plays Closing Time, leaving the mobile Continue target
-	// untouched for the next project in the full serial suite.
+	// Each project reorders its own Continue target, so the two never move the
+	// same song. Other flows may play the mobile target before mobile runs;
+	// library-continue picks its listened-elsewhere song at run time and copes.
 	const playlistSongTitles = [desktopContinueSongTitle, mobileContinueSongTitle];
 	const continueReorderSongs = {
 		desktop: seededSong(songIdByTitle, desktopContinueSongTitle),
