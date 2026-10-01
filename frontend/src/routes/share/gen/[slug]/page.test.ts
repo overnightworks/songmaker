@@ -43,6 +43,7 @@ class FakeAudio {
 	currentTime = 0;
 	duration = 20;
 	readyState = 1;
+	buffered = { length: 0, end: () => 0 };
 	src = '';
 	preload = '';
 	crossOrigin: string | null = null;

@@ -163,8 +163,14 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 	resetTitleDrafts();
 }
 
+// Only a deliberate logout forgets what was playing; a session that merely
+// ran out (401, clearAuth above) keeps it for the same user's next sign-in.
+// It is forgotten after clearAuth, once no signed-in user is left for a take
+// still playing to save it under again.
 export async function logout(): Promise<void> {
 	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
+	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
+	const user = get(currentUser);
 	stopLibraryResourceSync();
 	try {
 		await apiLogout();
@@ -172,5 +178,6 @@ export async function logout(): Promise<void> {
 		// swallow — always clear local state
 	} finally {
 		clearAuth();
+		if (user) forgetPlaybackResume(user.id);
 	}
 }

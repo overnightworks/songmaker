@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest';
+import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
 
 const mockFetchMe = vi.fn();
@@ -50,6 +51,9 @@ import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
+import { followPlaybackForResume } from '$lib/stores/playbackResume';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
@@ -374,5 +378,65 @@ describe('logout', () => {
 		mockApiLogout.mockRejectedValueOnce(new Error('fail'));
 		await logout();
 		expect(get(currentUser)).toBeNull();
+	});
+});
+
+describe('the remembered playback across the session', () => {
+	followPlaybackForResume(() => ({ type: 'album', albumId: 'a-session' }));
+
+	function rememberAPlayingTake(): void {
+		const song = makeSong({ id: 's-session' });
+		audioPlayer.current = {
+			generation: makeGeneration({ id: 'g-session', song_id: song.id }),
+			songId: song.id,
+			songTitle: song.title,
+			artist: song.artist,
+			albumTitle: song.album_title,
+			lyrics: null
+		};
+		audioPlayer.status = 'playing';
+		flushSync();
+	}
+
+	function storedRecord(): unknown {
+		return JSON.parse(localStorage.getItem(`playbackResume:${KNOWN_USER.id}`) ?? 'null');
+	}
+
+	beforeEach(() => {
+		currentUser.set(KNOWN_USER);
+		rememberAPlayingTake();
+	});
+
+	afterEach(() => {
+		currentUser.set(null);
+		audioPlayer.current = null;
+		audioPlayer.status = 'idle';
+		flushSync();
+		localStorage.clear();
+	});
+
+	it('logout forgets the record', async () => {
+		mockApiLogout.mockResolvedValueOnce(undefined);
+		expect(storedRecord()).not.toBeNull();
+
+		await logout();
+
+		expect(storedRecord()).toBeNull();
+	});
+
+	it.each([
+		{
+			loss: 'a 401 on the session check',
+			loseSession: async () => {
+				mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+				await checkAuth(vi.fn());
+			}
+		},
+		{ loss: 'a session lost mid-request', loseSession: async () => clearAuth() }
+	])('a lost session keeps it ($loss)', async ({ loseSession }) => {
+		await loseSession();
+
+		expect(get(currentUser)).toBeNull();
+		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 	});
 });
