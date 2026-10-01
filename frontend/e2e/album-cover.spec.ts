@@ -1,6 +1,6 @@
 // Album cover suggestions are deliberately started by a person: tapping the
-// dashed Add cover place grows the header cover into its editor and asks for
-// the first suggestion (#1154). Since #822 the
+// dashed Add cover place grows the header cover into its editor, which makes
+// nothing until Suggest is tapped (#1186). Since #822 the
 // one dispatch owner is asked inside the cover job, not in a request
 // preflight: the isolated E2E stack mounts no Codex CLI, so the POST succeeds
 // and creates a job, and it is that job which ends failed with the named
@@ -25,24 +25,40 @@ interface CoverJobOutcome {
 	error: string | null;
 }
 
-test('Add cover makes one suggestion in place that ends in a named job failure at desktop and 375 px', async ({
+test('Add cover asks for nothing until Suggest, whose one suggestion ends in a named failure shown once, at desktop and 390 px', async ({
 	page,
 	isMobile
 }) => {
 	const library = readSeededLibrary();
 	const surface = workspace(page);
-	if (isMobile) await page.setViewportSize({ width: 375, height: 844 });
+	if (isMobile) await page.setViewportSize({ width: 390, height: 844 });
+	const suggestionsPath = `/api/albums/${library.albumId}/cover-suggestions`;
+	const isSuggestionAsk = (method: string, url: string): boolean =>
+		method === 'POST' && new URL(url).pathname === suggestionsPath;
+	let suggestionAsks = 0;
+	page.on('request', (request) => {
+		if (isSuggestionAsk(request.method(), request.url())) suggestionAsks += 1;
+	});
 
 	await page.goto(`/album/${library.albumId}`);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 	await expect(surface.getByText('Choose a cover')).toHaveCount(0);
 
-	const createdJob = page.waitForResponse(
-		(response) =>
-			response.request().method() === 'POST' &&
-			new URL(response.url()).pathname === `/api/albums/${library.albumId}/cover-suggestions`
-	);
+	const editing = surface.getByRole('group', { name: 'Cover editing' });
 	await surface.getByRole('button', { name: 'Add cover' }).click();
+	await expect(editing.getByRole('button', { name: 'Suggest', exact: true })).toBeEnabled();
+	await expect(editing.getByText(/left today$/)).toBeVisible();
+	const leftBeforeMistap = await editing.getByText(/left today$/).textContent();
+	await editing.getByRole('button', { name: 'Close cover editing' }).click();
+	await expect(editing).toHaveCount(0);
+	await surface.getByRole('button', { name: 'Add cover' }).click();
+	await expect(editing.getByText(/left today$/)).toHaveText(leftBeforeMistap ?? '');
+	expect(suggestionAsks).toBe(0);
+
+	const createdJob = page.waitForResponse((response) =>
+		isSuggestionAsk(response.request().method(), response.url())
+	);
+	await editing.getByRole('button', { name: 'Suggest', exact: true }).click();
 	const response = await createdJob;
 	expect(response.status()).toBe(200);
 	const job = (await response.json()) as { id: string };
@@ -56,11 +72,12 @@ test('Add cover makes one suggestion in place that ends in a named job failure a
 		.poll(() => coverJobOutcome(page, library.albumId), { timeout: 60_000 })
 		.toEqual(namedFailure);
 
-	const editing = surface.getByRole('group', { name: 'Cover editing' });
 	const failure = editing.getByRole('alert');
 	await expect(failure).toContainText('Couldn’t make a cover suggestion');
 	await expect(failure).toContainText(COVER_JOB_FAILURE);
+	await expect(page.getByText(COVER_JOB_FAILURE)).toHaveCount(1);
 	await expect(editing.getByRole('progressbar')).toHaveCount(0);
+	expect(suggestionAsks).toBe(1);
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
 	const albumAddress = page.url();
