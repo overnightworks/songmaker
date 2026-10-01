@@ -6,8 +6,8 @@
 // and creates a job, and it is that job which ends failed with the named
 // reason the album never gets its covers. A seeded suggestion is optional:
 // this stack cannot manufacture one without the unavailable image route, but a
-// local stack that already has one proves selection and removal through the
-// public API below.
+// local stack that already has one proves selection, and removal from the
+// cover editor that the album ⋯ Cover row opens, below.
 
 import { expect, test, type Page } from '@playwright/test';
 import { readSeededLibrary } from './seed';
@@ -104,6 +104,7 @@ test('an API-seeded suggestion can be chosen and its selected cover removed', as
 	await expect(surface.locator('.header-cover img')).toBeVisible();
 
 	await surface.getByRole('button', { name: 'More' }).click();
-	await surface.getByRole('button', { name: 'Remove cover' }).click();
+	await surface.getByRole('button', { name: 'Cover', exact: true }).click();
+	await editing.getByRole('button', { name: 'Remove', exact: true }).click();
 	await expect(surface.locator('.header-cover img')).toHaveCount(0);
 });

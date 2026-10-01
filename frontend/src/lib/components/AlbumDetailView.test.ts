@@ -12,6 +12,7 @@ import { ApiError } from '$lib/api/fetch';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
+	COLLECTION_MENU_COVER_HINT,
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_NO_SONGS,
 	HITBOX_FREQUENT_PX,
@@ -370,21 +371,21 @@ describe('AlbumDetailView header', () => {
 		}
 	);
 
-	it('names the object and lists Share, Cover, Edit details, Add to playlist, Archive, Delete in the menu', async () => {
+	it('names the album and lists Edit details, Cover, Curate, Add to playlist, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
-		expect(menu.querySelector('.menu-row-label')?.textContent).toBe('Share album');
-		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
-			el.textContent?.trim()
+		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
+			el.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim()
 		);
-		expect(items).toEqual([
-			'Upload…',
+		expect(rows).toEqual([
 			'Edit details',
+			'Cover',
+			'Curate',
 			'Add to playlist',
-			'Curate album',
-			'Archive album',
-			'Delete album'
+			'Share',
+			'Archive',
+			'Delete'
 		]);
 	});
 
@@ -401,7 +402,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const curateItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Curate album'
+			(el) => el.textContent?.trim() === 'Curate'
 		);
 		curateItem?.click();
 		await tick();
@@ -409,7 +410,7 @@ describe('AlbumDetailView header', () => {
 		await vi.waitFor(() => expect(get(curationActive)).toBe(true));
 	});
 
-	it('uploads a cover from the menu action', async () => {
+	it('uploads a cover through the cover editor the menu opens', async () => {
 		uploadAlbumCover.mockResolvedValue(
 			album({
 				id: 'a-local',
@@ -421,11 +422,8 @@ describe('AlbumDetailView header', () => {
 			})
 		);
 		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
-		const input = target.querySelector('.cover-file-input');
-		expect(input).toBeInstanceOf(HTMLInputElement);
-		if (!(input instanceof HTMLInputElement)) return;
-		requireElement<HTMLButtonElement>(menu, '.menu-item').click();
+		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+		await uploadFromCoverEditor(target);
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -442,9 +440,8 @@ describe('AlbumDetailView header', () => {
 	])('toasts $toast when a cover upload fails', async ({ failure, toast }) => {
 		uploadAlbumCover.mockRejectedValue(failure);
 		const target = await renderDetail();
-		const menu = await openCollectionMenu(target);
 		const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-		requireElement<HTMLButtonElement>(menu, '.menu-item').click();
+		await uploadFromCoverEditor(target);
 		const file = new File([new Uint8Array([1, 2, 3])], 'cover.jpg', { type: 'image/jpeg' });
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
@@ -474,7 +471,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const archiveItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
-			(el) => el.textContent?.trim() === 'Archive album'
+			(el) => el.textContent?.trim() === 'Archive'
 		);
 		archiveItem?.click();
 		await tick();
@@ -487,6 +484,15 @@ describe('AlbumDetailView header', () => {
 		expect(get(openCollection)).toBeNull();
 	});
 });
+
+async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
+	const menu = await openCollectionMenu(target);
+	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+		.find((item) => item.textContent?.trim().startsWith('Cover'))
+		?.click();
+	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
+	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();
+}
 
 async function openEditDetails(target: HTMLElement): Promise<HTMLFormElement> {
 	const menu = await openCollectionMenu(target);
@@ -525,6 +531,15 @@ describe('AlbumDetailView Edit details', () => {
 		expect(target.querySelector('.header-meta')).toBeNull();
 		expect(target.textContent).not.toContain('Add subtitle');
 		expect(target.textContent).not.toContain('Add year');
+	});
+
+	it('keeps focus in Title once the menu that opened Edit details has closed', async () => {
+		const target = await renderDetail();
+		const form = await openEditDetails(target);
+		await Promise.resolve();
+		await tick();
+
+		expect(document.activeElement).toBe(field(form, 'Title'));
 	});
 
 	it('saves title, subtitle and year in one update, and the header reads the new details', async () => {
