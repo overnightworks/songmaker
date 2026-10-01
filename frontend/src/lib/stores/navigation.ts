@@ -12,7 +12,7 @@ import {
 } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
-import { handleSave, isDirty } from '$lib/stores/editor';
+import { isDirty } from '$lib/stores/editor';
 import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
@@ -37,11 +37,7 @@ import { openCollection, setOpenCollection, type OpenCollection } from '$lib/sto
 import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
-import {
-	API_ERROR_GENERIC_MESSAGE,
-	EDITOR_SAVE_FAILED,
-	SONG_LINK_NOT_FOUND_TOAST
-} from '$lib/constants';
+import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
@@ -139,10 +135,10 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 
 // A dirty editor draft blocks a song switch or leave (rail row, prev/next,
 // breadcrumb, Escape, Library, a collection opened anywhere, a rail page
-// link, Logout) until the owner resolves it: the deferred navigation is
-// parked here, and SongDetailView renders the Save / Discard / Cancel
-// confirm and either runs the parked action (Discard, or Save then run it)
-// or drops it (Cancel). Only the song's own surface can dirty a draft, and
+// link, Logout, browser or phone Back) until the owner resolves it: the
+// deferred navigation is parked here, and SongDetailView renders the Save /
+// Discard / Cancel confirm and either runs the parked action (Discard, or
+// Save then run it) or drops it (Cancel). Only the song's own surface can dirty a draft, and
 // a way out that skips this guard unmounts that confirm while the draft
 // stays dirty, so a later guarded tap would park with no one to ask
 // (issue #1143).
@@ -574,37 +570,26 @@ export function goBack(): void {
 	void replaceLibraryHistory();
 }
 
-// Browser Back/Forward has already committed the history change by the time
-// `popstate` fires — there is no pending entry left to park a cancellable
-// navigation into, unlike every other guarded path (see
-// `pendingDirtyNavigation` above). A dirty draft is saved instead; a failed
-// save surfaces a toast but never blocks the already-committed navigation.
+// Browser Back/Forward has already moved the address by the time `popstate`
+// fires, so a dirty draft cannot hold it the way every other guarded way out
+// does. The song's entry is written back on top of the one landed on instead,
+// and the step is parked like those (issue #1143): Cancel stays on the song
+// with its draft, Discard -- or Save, once it has saved -- steps back onto the
+// entry the traversal reached. Back never saves or discards a draft by itself.
+// After a reload every traversal is a router navigation, so the address route
+// of that entry may already be resolving: no library is applied until the
+// song's entry is back, and an apply started meanwhile is dropped.
 // Documented next to the dirty-guard paragraph in docs/architecture.md.
-//
-// `savingDraft` memoises the in-flight save: two popstates firing before the
-// first save settles (e.g. rapid Back/Back) await the same promise instead
-// of each POSTing the draft.
-let savingDraft: Promise<void> | null = null;
-
-async function saveDraft(songId: string): Promise<void> {
-	try {
-		await handleSave(songId);
-	} catch (e) {
-		addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
-	}
+function askBeforeLeavingByTraversal(): void {
+	const songEntry = snapshotLibraryHistory(currentHistoryIndex() + 1);
+	const songEntryBack = writeLibraryHistory(songEntry, urlFromState(songEntry), 'push');
+	void holdLibraryRestoresUntil(songEntryBack.finally(cancelLibraryHistoryApply));
+	void guardDirtyNavigation(stepBackOntoTraversalLanding);
 }
 
-async function saveDirtyDraftBeforePopstate(): Promise<void> {
-	if (savingDraft !== null) {
-		await savingDraft;
-		return;
-	}
-	const songId = get(selectedSongId);
-	if (!get(isDirty) || !songId) return;
-	savingDraft = saveDraft(songId).finally(() => {
-		savingDraft = null;
-	});
-	await savingDraft;
+async function stepBackOntoTraversalLanding(): Promise<void> {
+	await libraryHistoryStepsLanded();
+	history.back();
 }
 
 // History layers (issues #1002, #1114): while the library history runs, every
@@ -768,8 +753,11 @@ export function initNavigation(): () => void {
 	function onPopstate(e: PopStateEvent): void {
 		const state = libraryHistoryEntry(e.state);
 		if (popsHistoryLayers(state)) return;
+		if (get(isDirty)) {
+			askBeforeLeavingByTraversal();
+			return;
+		}
 		void (async () => {
-			await holdLibraryRestoresUntil(saveDirtyDraftBeforePopstate());
 			if (isLibraryHistoryState(state)) {
 				const applied = await applyLibraryHistory(state);
 				if (applied && state.songId) {
