@@ -13,6 +13,7 @@ class FakeAudio {
 	ended = false;
 	error: MediaError | null = null;
 	crossOrigin: string | null = null;
+	buffered = { length: 0, end: () => 0 };
 	preload = '';
 	private listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {

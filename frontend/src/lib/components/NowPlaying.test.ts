@@ -131,6 +131,7 @@ class SilentAudio {
 	currentTime = 0;
 	duration = 0;
 	readyState = 0;
+	buffered = { length: 0, end: () => 0 };
 	src = '';
 	preload = '';
 	crossOrigin: string | null = null;
