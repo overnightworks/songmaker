@@ -1148,6 +1148,58 @@ describe('patient recovery while the screen is off', () => {
 		}
 	);
 
+	describe('what the transport offers (#1234)', () => {
+		it.each([
+			{ moment: 'while it buffers', wait: 0 },
+			{ moment: 'while a recovery reload runs', wait: 5 * SECOND }
+		])('a stalled take offers Pause $moment', async ({ wait }) => {
+			loseTheNetworkWhilePlayingAt(40, false);
+			await vi.advanceTimersByTimeAsync(wait);
+
+			expect(audioPlayer.transport).toBe('recovering');
+		});
+
+		it('Pause on a stalled take stops its recovery and leaves it paused', async () => {
+			loseTheNetworkWhilePlayingAt(40, false);
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
+			const load = vi.spyOn(fakeAudio, 'load');
+
+			audioPlayer.toggle();
+			await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+			expect({
+				transport: audioPlayer.transport,
+				status: audioPlayer.status,
+				reloads: load.mock.calls.length
+			}).toEqual({ transport: 'paused', status: 'paused', reloads: 0 });
+		});
+
+		it.each([
+			{ strip: 'the offline strip says so', announced: true, givenUp: 'waiting-for-network' },
+			{ strip: 'nothing says so', announced: false, givenUp: 'failed' }
+		])('a take given up when $strip shows $givenUp', async ({ announced, givenUp }) => {
+			loseTheNetworkWhilePlayingAt(40, announced);
+			await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
+
+			expect(audioPlayer.transport).toBe(givenUp);
+		});
+
+		it.each([
+			{ how: 'from the lock screen', pause: () => audioPlayer.pause() },
+			{ how: 'with the transport button', pause: () => audioPlayer.toggle() }
+		])('a take waiting for the network is paused at once $how', async ({ pause }) => {
+			await giveUpOnAThreeMinuteOutage();
+			const load = vi.spyOn(fakeAudio, 'load');
+
+			pause();
+
+			expect({ transport: audioPlayer.transport, reloads: load.mock.calls.length }).toEqual({
+				transport: 'paused',
+				reloads: 0
+			});
+		});
+	});
+
 	it.each([
 		{ moment: 'before its first byte', startAt: null },
 		{ moment: 'in its first second', startAt: 0.5 },

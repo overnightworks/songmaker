@@ -8,6 +8,23 @@ export type { StreamFallbackState } from './queueStreamEngine';
 
 type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
+// What every surface that draws the transport shows. A stalled take that is
+// being brought back is 'recovering' and one given up while the offline strip
+// names the cause is 'waiting-for-network': the listener asked for sound in
+// both, so both offer Pause. A given-up take the listener paused is 'paused'.
+export type TransportState =
+	'idle' | 'loading' | 'playing' | 'recovering' | 'paused' | 'waiting-for-network' | 'failed';
+
+const TRANSPORT_OFFERING_PAUSE: ReadonlySet<TransportState> = new Set([
+	'playing',
+	'recovering',
+	'waiting-for-network'
+]);
+
+export function transportOffersPause(transport: TransportState): boolean {
+	return TRANSPORT_OFFERING_PAUSE.has(transport);
+}
+
 type StreamEndReason = 'normal' | 'window-end';
 
 type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
@@ -87,6 +104,29 @@ class AudioPlayer {
 		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
 	}
 
+	get transport(): TransportState {
+		switch (this.status) {
+			case 'playing':
+				return 'playing';
+			case 'buffering':
+				return 'recovering';
+			case 'loading':
+				return this.recoveryStartedAt === null ? 'loading' : 'recovering';
+			case 'error':
+				return this.failedTransport;
+			case 'idle':
+				return 'idle';
+			case 'ready':
+			case 'paused':
+				return 'paused';
+		}
+	}
+
+	private get failedTransport(): TransportState {
+		if (this.gaveUpOnStall && !this.autoplayPending) return 'paused';
+		return this.failure?.kind === 'awaiting-network' ? 'waiting-for-network' : 'failed';
+	}
+
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
 	private audio: HTMLAudioElement | null = null;
 	private currentUrl: string | null = null;
@@ -95,10 +135,10 @@ class AudioPlayer {
 	// gap in which Android may freeze a page whose screen is off.
 	private standby: HTMLAudioElement | null = null;
 	private standbyUrl: string | null = null;
-	private autoplayPending = false;
+	private autoplayPending = $state(false);
 	private readonly streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-	private recoveryStartedAt: number | null = null;
+	private recoveryStartedAt = $state<number | null>(null);
 	private pendingRecoverySeek: number | null = null;
 	private lastObservedTime = 0;
 	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
@@ -390,6 +430,10 @@ class AudioPlayer {
 
 	toggle(): void {
 		if (!this.audio || !this.current) return;
+		if (transportOffersPause(this.transport)) {
+			this.pause();
+			return;
+		}
 		if (this.status === 'error') {
 			this.play();
 			return;
@@ -401,8 +445,7 @@ class AudioPlayer {
 			this.autoplayPending = !this.autoplayPending;
 			return;
 		}
-		if (this.audio.paused) this.play();
-		else this.pause();
+		this.play();
 	}
 
 	seek(seconds: number): void {
