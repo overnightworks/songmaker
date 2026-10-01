@@ -14,7 +14,6 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
-	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -37,6 +36,7 @@ import {
 	openLibraryWall,
 	openRailNav,
 	openSettingsFromAccountMenu,
+	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	shellOf,
 	workspace,
@@ -304,15 +304,8 @@ async function expectSettingsStands(page: Page): Promise<void> {
 	await expect(settingsHeading(page)).toBeVisible();
 }
 
-// The phone drawer carries no Settings group (#1174); its search still goes
-// to a Settings page in one step.
-async function openVoicesFromDrawerSearch(page: Page): Promise<void> {
-	const rail = await openRailNav(page, 'mobile');
-	await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(SETTINGS_SECTION);
-	await rail
-		.getByRole('group', { name: 'Pages' })
-		.getByRole('option', { name: nameStartingWith(SETTINGS_SECTION) })
-		.click();
+function openVoicesFromDrawerSearch(page: Page): Promise<void> {
+	return openSettingsSectionFromDrawerSearch(page, SETTINGS_SECTION);
 }
 
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {

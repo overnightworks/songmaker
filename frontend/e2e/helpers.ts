@@ -15,6 +15,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
+	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	RESOURCE_EVENT_STREAM_PATH,
 	SETTINGS_NAV_LABEL
@@ -261,6 +262,19 @@ export function accountMenu(page: Page): Locator {
 export async function openSettingsFromAccountMenu(page: Page): Promise<void> {
 	await accountCircle(page).click();
 	await accountMenu(page).getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
+}
+
+/** A Settings section from the phone drawer's search, its one way there from a song page. */
+export async function openSettingsSectionFromDrawerSearch(
+	page: Page,
+	section: string
+): Promise<void> {
+	const rail = await openRailNav(page, 'mobile');
+	await rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(section);
+	await rail
+		.getByRole('group', { name: 'Pages' })
+		.getByRole('option', { name: nameStartingWith(section) })
+		.click();
 }
 
 /**

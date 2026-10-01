@@ -40,7 +40,6 @@ import {
 	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
-	RAIL_SETTINGS_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
@@ -56,7 +55,7 @@ import {
 	FlowGuard,
 	nameStartingWith,
 	openRailNav,
-	openSettingsFromAccountMenu,
+	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -72,6 +71,7 @@ import {
 } from './seed';
 
 const SONG_PHONE_SONG_TITLE = 'Song Phone Takes';
+const ACCOUNT_SECTION = 'Account';
 // Chosen to prove the player names the real seeded version rather than an
 // assumed v1 — the whole point of L12's "version number as seeded" clause.
 const SONG_PHONE_VERSION_NUMBER = 7;
@@ -353,7 +353,7 @@ test.describe('song page at phone width', () => {
 		await expect(lyrics).toHaveValue(savedLyrics);
 	});
 
-	test('Discard on the account menu Settings lands on its address, which a reload keeps (#1143)', async ({
+	test('Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)', async ({
 		page,
 		isMobile
 	}) => {
@@ -361,18 +361,18 @@ test.describe('song page at phone width', () => {
 		const library = readSeededLibrary();
 		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
 
-		await openSettingsFromAccountMenu(page);
+		await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
 		await expect(unsavedDraftDialog).toBeVisible();
 		await unsavedDraftDialog
 			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 			.click();
 
-		const settingsHeading = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, level: 1 });
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsHeading).toBeVisible();
+		const accountHeading = page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 });
+		await expect(page).toHaveURL(/\/settings\/account$/);
+		await expect(accountHeading).toBeVisible();
 		await page.reload();
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsHeading).toBeVisible();
+		await expect(page).toHaveURL(/\/settings\/account$/);
+		await expect(accountHeading).toBeVisible();
 	});
 });
 
