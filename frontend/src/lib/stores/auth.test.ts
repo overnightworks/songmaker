@@ -387,6 +387,7 @@ describe('the remembered playback across the session', () => {
 
 	it('logout forgets the record', async () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
+		expect(storedRecord()).not.toBeNull();
 
 		await logout();
 
