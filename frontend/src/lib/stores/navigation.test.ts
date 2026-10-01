@@ -27,6 +27,7 @@ import {
 	currentLibraryHistoryState,
 	detailTab,
 	isLibraryHistoryState,
+	libraryHistoryStepsLanded,
 	libraryScrollAnchor,
 	librarySurface,
 	openPlaylistAddress,
@@ -58,7 +59,11 @@ import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
 	API_ERROR_GENERIC_MESSAGE,
+	DIALOG_CANCEL_LABEL,
 	EDITOR_SAVE_FAILED,
+	EDITOR_UNSAVED_DISCARD_LABEL,
+	EDITOR_UNSAVED_SAVE_LABEL,
+	EDITOR_UNSAVED_TITLE,
 	SONG_LINK_NOT_FOUND_TOAST,
 	LIBRARY_HISTORY_KIND,
 	TAKES_ERROR,
@@ -1460,104 +1465,6 @@ describe('initNavigation', () => {
 		cleanup();
 	});
 
-	it('auto-saves a dirty draft before applying a browser-back navigation', async () => {
-		replaceHistoryEntry('/');
-		await openAlbum('a1');
-		await selectSong('s1');
-		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-		setDraftLyrics('unsaved edit');
-		vi.mocked(updateSong).mockResolvedValue(
-			song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
-		);
-
-		const cleanup = initNavigation();
-		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-
-		expect(updateSong).toHaveBeenCalledWith(
-			's1',
-			expect.objectContaining({ lyrics: 'unsaved edit' })
-		);
-		cleanup();
-	});
-
-	it('saves a dirty draft once when two popstates fire before the first save settles', async () => {
-		replaceHistoryEntry('/');
-		await openAlbum('a1');
-		await selectSong('s1');
-		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-		setDraftLyrics('unsaved edit');
-		let resolveSave: (value: SongItem) => void = () => undefined;
-		vi.mocked(updateSong).mockReturnValue(
-			new Promise((resolve) => {
-				resolveSave = resolve;
-			})
-		);
-
-		const cleanup = initNavigation();
-		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
-		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
-		await vi.waitFor(() => expect(updateSong).toHaveBeenCalledTimes(1));
-		expect(get(selectedSongId)).toBe('s1');
-		resolveSave(song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' }));
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-
-		expect(updateSong).toHaveBeenCalledTimes(1);
-		cleanup();
-	});
-
-	// After a reload, Back onto the song opened before the one shown is a
-	// router navigation, which resolves that song's address while the draft
-	// left behind is still saving.
-	it('the address route of the song Back lands on waits for the draft left to save', async () => {
-		const tide = song({ ...navigableSongDefaults(), slug: 's1' });
-		const other = song({ ...navigableSongDefaults(), id: 's2', slug: 's2', album_id: 'a2' });
-		songList.set([tide, other]);
-		fetchSong.mockResolvedValue(tide);
-		await selectSong('s1');
-		await selectSong('s2', other);
-		await reloadLibraryPage();
-		const cleanup = initNavigation();
-		loadSongData(other);
-		setDraftLyrics('unsaved edit');
-		let resolveSave: (value: SongItem) => void = () => undefined;
-		vi.mocked(updateSong).mockReturnValue(
-			new Promise((resolve) => {
-				resolveSave = resolve;
-			})
-		);
-
-		await pressBack();
-		const routed = openSongAddress('a1', 's1');
-		await new Promise((everyQueuedMicrotaskRan) => setTimeout(everyQueuedMicrotaskRan));
-
-		expect(get(selectedSongId)).toBe('s2');
-		resolveSave({ ...other, lyrics: 'unsaved edit' });
-		await expect(routed).resolves.toBe('found');
-		expect(get(selectedSongId)).toBe('s1');
-		cleanup();
-	});
-
-	it('still applies the browser-back navigation when the auto-save fails', async () => {
-		replaceHistoryEntry('/');
-		await openAlbum('a1');
-		await selectSong('s1');
-		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
-		setDraftLyrics('unsaved edit');
-		vi.mocked(updateSong).mockRejectedValue(
-			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
-		);
-
-		const cleanup = initNavigation();
-		window.dispatchEvent(new PopStateEvent('popstate', { state: libraryRootState() }));
-		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
-
-		expect(get(toasts)).toEqual([
-			expect.objectContaining({ type: 'error', message: EDITOR_SAVE_FAILED })
-		]);
-		cleanup();
-	});
-
 	it('does not attempt a save on browser-back when the draft is clean', async () => {
 		replaceHistoryEntry('/');
 		await openAlbum('a1');
@@ -1599,6 +1506,175 @@ describe('initNavigation', () => {
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(historyEntry())).toBe(true));
 		cleanup();
+	});
+});
+
+// Browser or phone Back has already moved the address when the library hears
+// it, so a dirty draft puts the song's entry back and asks the same
+// unsaved-changes question as every other way out (issue #1143 U2): Back never
+// saves or discards the draft by itself.
+describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
+	let target: HTMLElement;
+	let view: ReturnType<typeof mount>;
+	let stopNavigation: () => void;
+
+	beforeEach(() => {
+		stopNavigation = initNavigation();
+		target = document.createElement('div');
+		document.body.append(target);
+		view = mount(SongDetailView, { target });
+	});
+
+	afterEach(async () => {
+		discardDraft();
+		await unmount(view);
+		target.remove();
+		stopNavigation();
+	});
+
+	async function editTheSongOpenedFrom(open: () => Promise<unknown>): Promise<void> {
+		await open();
+		await selectSong('s1');
+		await libraryHistoryStepsLanded();
+		await tick();
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+		setDraftLyrics('unsaved edit');
+	}
+
+	function unsavedChangesDialog(): HTMLElement | null {
+		return document.querySelector(`[role="dialog"][aria-label="${EDITOR_UNSAVED_TITLE}"]`);
+	}
+
+	async function pressBackAndSeeTheQuestion(): Promise<void> {
+		await pressBack();
+		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
+		await libraryHistoryStepsLanded();
+	}
+
+	function answer(label: string): void {
+		const buttons = Array.from(unsavedChangesDialog()?.querySelectorAll('button') ?? []);
+		const button = buttons.find((candidate) => candidate.textContent?.trim() === label);
+		if (!button) throw new Error(`no "${label}" in the unsaved-changes dialog`);
+		button.click();
+	}
+
+	async function expectOnTheSongWithItsDraft(): Promise<void> {
+		await vi.waitFor(() => expect(historyEntry().layer).toBeUndefined());
+		expect(window.location.pathname).toBe('/album/a1/s1');
+		expect(historyEntry().songId).toBe('s1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(editLyrics)).toBe('unsaved edit');
+	}
+
+	it('asks, with the address and entry back on the song and nothing saved', async () => {
+		await editTheSongOpenedFrom(() => openAlbum('a1'));
+
+		await pressBackAndSeeTheQuestion();
+
+		expect(window.location.pathname).toBe('/album/a1/s1');
+		expect(historyEntry().songId).toBe('s1');
+		expect(get(selectedSongId)).toBe('s1');
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('stays on the song with the draft on Cancel', async () => {
+		await editTheSongOpenedFrom(() => openAlbum('a1'));
+		await pressBackAndSeeTheQuestion();
+
+		answer(DIALOG_CANCEL_LABEL);
+
+		await vi.waitFor(() => expect(unsavedChangesDialog()).toBeNull());
+		await expectOnTheSongWithItsDraft();
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('leaves for the entry Back reached on Discard, without saving', async () => {
+		await editTheSongOpenedFrom(() => openAlbum('a1'));
+		await pressBackAndSeeTheQuestion();
+
+		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		expect(window.location.pathname).toBe('/album/a1');
+		expect(historyEntry().songId).toBeNull();
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('saves the draft, then leaves for the entry Back reached, on Save', async () => {
+		await editTheSongOpenedFrom(() => openAlbum('a1'));
+		vi.mocked(updateSong).mockResolvedValue(
+			song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
+		);
+		await pressBackAndSeeTheQuestion();
+
+		answer(EDITOR_UNSAVED_SAVE_LABEL);
+
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		expect(window.location.pathname).toBe('/album/a1');
+		expect(updateSong).toHaveBeenCalledWith(
+			's1',
+			expect.objectContaining({ lyrics: 'unsaved edit' })
+		);
+	});
+
+	// The question keeps its owner: the song stays open, so the next way out
+	// asks again instead of parking with nobody to answer it.
+	it('stays on the song when Save fails, and the next way out asks again', async () => {
+		await editTheSongOpenedFrom(() => openAlbum('a1'));
+		vi.mocked(updateSong).mockRejectedValue(
+			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
+		);
+		await pressBackAndSeeTheQuestion();
+
+		answer(EDITOR_UNSAVED_SAVE_LABEL);
+
+		await vi.waitFor(() =>
+			expect(get(toasts)).toEqual([
+				expect.objectContaining({ type: 'error', message: EDITOR_SAVE_FAILED })
+			])
+		);
+		await expectOnTheSongWithItsDraft();
+		await openAlbum('a2');
+		await vi.waitFor(() => expect(unsavedChangesDialog()).not.toBeNull());
+		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' });
+	});
+
+	it('asks on Back onto the app page the song was opened from, and Discard returns there', async () => {
+		await editTheSongOpenedFrom(() => goto(resolve('/settings/playback')));
+
+		await pressBackAndSeeTheQuestion();
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1'));
+		expect(get(selectedSongId)).toBe('s1');
+
+		answer(EDITOR_UNSAVED_DISCARD_LABEL);
+
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/settings/playback'));
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	// After a reload, Back onto the song opened before the one shown is a
+	// router navigation, which resolves that song's address while the question
+	// about the draft left behind is still open.
+	it('keeps the song shown when the address route Back loads resolves while it asks', async () => {
+		const tide = song({ ...navigableSongDefaults(), slug: 's1' });
+		const other = song({ ...navigableSongDefaults(), id: 's2', slug: 's2', album_id: 'a2' });
+		songList.set([tide, other]);
+		fetchSong.mockResolvedValue(tide);
+		await selectSong('s1');
+		await selectSong('s2', other);
+		await reloadLibraryPage();
+		await tick();
+		loadSongData(other);
+		setDraftLyrics('unsaved edit');
+
+		await pressBackAndSeeTheQuestion();
+		await expect(openSongAddress('a1', 's1')).resolves.toBe('found');
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(window.location.pathname).toBe('/album/a2/s2');
+		expect(unsavedChangesDialog()).not.toBeNull();
+		expect(updateSong).not.toHaveBeenCalled();
 	});
 });
 

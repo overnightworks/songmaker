@@ -5,7 +5,8 @@
 // everything this proves (the compact Edit/Takes tabs, the phone status
 // slot, the button's own failure state) is compact-shell UI with no desktop
 // counterpart to exercise, the same reason kinetic-strip.spec.ts gives for
-// staying desktop-only.
+// staying desktop-only. The one desktop row is the unsaved-draft dialog on
+// the rail's Settings group, which shares the phone rows' arrangement (#1143).
 //
 // CI's e2e stack (docker-compose.ci.yml) runs no ACE-Step worker, so every
 // job state below is seeded directly against the database
@@ -55,6 +56,7 @@ import {
 	FlowGuard,
 	nameStartingWith,
 	openRailNav,
+	openSettingsSection,
 	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
@@ -373,6 +375,60 @@ test.describe('song page at phone width', () => {
 		await page.reload();
 		await expect(page).toHaveURL(/\/settings\/account$/);
 		await expect(accountHeading).toBeVisible();
+	});
+
+	test('Back with an unsaved draft asks first: Cancel keeps the draft on the song, Discard leaves without saving (#1143)', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+		const library = readSeededLibrary();
+		const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
+			await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+		const songAddress = page.url();
+
+		await page.goBack();
+		await expect(unsavedDraftDialog).toBeVisible();
+		await expect(page).toHaveURL(songAddress);
+		await unsavedDraftDialog
+			.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+			.click();
+		await expect(unsavedDraftDialog).toBeHidden();
+		await expect(page).toHaveURL(songAddress);
+		await expect(songHeading).toBeVisible();
+		await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
+
+		await page.goBack();
+		await expect(unsavedDraftDialog).toBeVisible();
+		await unsavedDraftDialog
+			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}$`));
+		await expect(songHeading).toBeHidden();
+
+		await page.goForward();
+		await expect(songHeading).toBeVisible();
+		await expect(lyrics).toHaveValue(savedLyrics);
+	});
+
+	// The defect #1144 fixed reproduced on the desktop rail as well; the phone
+	// rows above cover the drawer, this one the 1440 px rail's Settings group.
+	test('Discard on a desktop rail Settings link with an unsaved draft lands on the page (#1143)', async ({
+		page,
+		isMobile
+	}) => {
+		test.skip(isMobile, 'Desktop rail Settings group; the phone reaches Settings above.');
+		const library = readSeededLibrary();
+		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+
+		await openSettingsSection(page, 'desktop', ACCOUNT_SECTION);
+		await expect(unsavedDraftDialog).toBeVisible();
+		await unsavedDraftDialog
+			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+			.click();
+
+		await expect(page).toHaveURL(/\/settings\/account$/);
+		await expect(page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 })).toBeVisible();
 	});
 });
 
