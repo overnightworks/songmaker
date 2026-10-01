@@ -71,7 +71,6 @@ function fakeCoverEditor(): NonNullable<CollectionHeaderProps['coverEditor']> {
 	}));
 }
 
-// The same seam for the album's details editor, which stands in for the title.
 function fakeDetailsEditor(): NonNullable<CollectionHeaderProps['detailsEditor']> {
 	return createRawSnippet((close: () => () => void) => ({
 		render: () => '<div class="fake-details-editor"><button type="button">Done</button></div>',

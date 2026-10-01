@@ -30,8 +30,6 @@
 
 	let { details, onsave, onclose }: Props = $props();
 
-	// A draft of the details the form opened on: nothing reaches the album
-	// before Save, so closing the form is all it takes to discard it.
 	const draft: AlbumDetails = $state(untrack(() => ({ ...details })));
 	let saving = $state(false);
 	let titleInput: HTMLInputElement | undefined = $state();
@@ -51,7 +49,6 @@
 				year: draft.year.trim()
 			});
 		} catch {
-			// The refusal is already named to the musician; the draft stays to fix.
 			saving = false;
 			return;
 		}

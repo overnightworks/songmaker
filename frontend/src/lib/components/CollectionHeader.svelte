@@ -107,8 +107,6 @@
 		editingCover.set(false);
 	});
 
-	// Details editing belongs to the collection it opened on: another one ends
-	// it, its draft unsaved.
 	$effect(() => {
 		void collectionId;
 		editingDetails.set(false);
