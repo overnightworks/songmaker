@@ -1,7 +1,16 @@
 import { untrack } from 'svelte';
 import { get, writable } from 'svelte/store';
-import { goto, pushState, replaceState } from '$app/navigation';
 import { fetchAlbum } from '$lib/api/albums';
+import {
+	historyStateOnLoad,
+	loadHistoryPageForTests,
+	navigateTo,
+	pageStateOfHistoryState,
+	pushEntry,
+	replaceEntry,
+	resetHistoryControllerForTests,
+	stepBackOffStandingEntry
+} from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
 import type { LibrarySort } from '$lib/api/library';
@@ -89,7 +98,6 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 // history entry, and every other song lands on Edit again.
 const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
-const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
 
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
@@ -97,7 +105,7 @@ let queuedHistoryWrites = 0;
 let mountingRoute: Promise<void> | null = null;
 let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
-let restoredHistory: unknown = libraryHistoryEntry();
+let restoredHistory: unknown = libraryHistoryEntry(historyStateOnLoad());
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -160,17 +168,6 @@ export function libraryRootState(): LibraryHistoryState {
 		generationId: null,
 		scrollAnchor: 0,
 		detailTab: DEFAULT_DETAIL_TAB
-	};
-}
-
-export function libraryWallStateFrom(state: LibraryHistoryState): LibraryHistoryState {
-	return {
-		...state,
-		index: 0,
-		surface: 'browse',
-		collection: null,
-		songId: null,
-		generationId: null
 	};
 }
 
@@ -336,8 +333,7 @@ function navigateLibraryRoute(
 	state: LibraryHistoryState,
 	mode: HistoryWriteMode
 ): Promise<void> {
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-	return goto(url, {
+	return navigateTo(url, {
 		replaceState: mode === 'replace',
 		noScroll: true,
 		keepFocus: true,
@@ -353,7 +349,7 @@ function navigateLibraryRoute(
 // the entry below instead of racing the traversal, and reads `landing` from
 // `currentLibraryHistoryState` meanwhile.
 export function backLibraryHistory(landing: LibraryHistoryState, url: string): Promise<void> {
-	return queueHistoryStep({ pathname: pathnameOf(url), state: landing }, traverseBack);
+	return queueHistoryStep({ pathname: pathnameOf(url), state: landing }, stepBackOffStandingEntry);
 }
 
 // Resolves once every queued history step has landed. A navigation that
@@ -363,13 +359,6 @@ export function backLibraryHistory(landing: LibraryHistoryState, url: string): P
 // push and takes the address back to the song (issue #1143).
 export function libraryHistoryStepsLanded(): Promise<void> {
 	return historyWrites;
-}
-
-function traverseBack(): Promise<void> {
-	return new Promise((resolve) => {
-		window.addEventListener('popstate', () => resolve(), { once: true });
-		history.back();
-	});
 }
 
 interface PlannedHistory {
@@ -400,9 +389,10 @@ function pathnameOf(url: string): string {
 // SvelteKit's single-page start writes its own entry over the one a page
 // loads onto, dropping the library a reload or a restored tab comes back to,
 // and shallow routing may not run before that start is over. So the library
-// the entry carried is read once, while the router loads this module, and the
-// app layout holds every write from its first render until the router reports
-// the start; the first write then puts that library back onto its entry.
+// the entry carried is read once, from what the history controller read while
+// the router loaded, and the app layout holds every write from its first
+// render until the router reports the start; the first write then puts that
+// library back onto its entry, under the id the controller gave back to it.
 // Meanwhile `currentLibraryHistoryState` already answers it, so an address
 // route resolving early keeps the richer entry rather than overwriting it.
 export function holdLibraryHistoryUntilRouterStarts(): () => void {
@@ -425,7 +415,8 @@ export function holdLibraryHistoryUntilRouterStarts(): () => void {
 // A page load, as far as the restored library goes: reads it the way this
 // module's own load does.
 export function loadLibraryHistoryPageForTests(): void {
-	restoredHistory = libraryHistoryEntry();
+	loadHistoryPageForTests();
+	restoredHistory = libraryHistoryEntry(historyStateOnLoad());
 }
 
 // The library history entry as it will stand once every queued write has
@@ -441,11 +432,8 @@ export function currentLibraryHistoryState(): unknown {
 // Every read of an entry -- the current one or the one a popstate lands on --
 // goes through here.
 export function libraryHistoryEntry(entry: unknown = history.state): unknown {
-	if (isHistoryRecord(entry) && SVELTEKIT_HISTORY_STATES_KEY in entry) {
-		const pageState = entry[SVELTEKIT_HISTORY_STATES_KEY];
-		return isHistoryRecord(pageState) ? (pageState.library ?? null) : null;
-	}
-	return entry;
+	const pageState = pageStateOfHistoryState(entry);
+	return pageState === null ? entry : (pageState.library ?? null);
 }
 
 function libraryPageState(state: LibraryHistoryState): App.PageState {
@@ -463,10 +451,8 @@ function writeShallowLibraryHistory(
 ): LibraryHistoryState {
 	const entry = mode === 'push' ? state : keepEntryLayer(state);
 	untrack(() => {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path, and the URL is already a resolved library address built by libraryHistoryUrl
-		if (mode === 'push') pushState(url, libraryPageState(entry));
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- as above
-		else replaceState(url, libraryPageState(entry));
+		if (mode === 'push') pushEntry(url, libraryPageState(entry));
+		else replaceEntry(url, libraryPageState(entry));
 	});
 	return entry;
 }
@@ -1070,6 +1056,7 @@ export function resetLibraryContextForTests(): void {
 	librarySnapshotTaken = false;
 	restoredHistory = null;
 	heldRestores = null;
+	resetHistoryControllerForTests();
 	librarySurface.set('browse');
 	detailTab.set(DEFAULT_DETAIL_TAB);
 	songTabs.clear();

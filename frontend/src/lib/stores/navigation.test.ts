@@ -1,6 +1,7 @@
 import {
 	historyEntry,
 	historyLength,
+	landOnStandingEntry,
 	pressBack,
 	pressForward,
 	reloadLibraryPage,
@@ -136,7 +137,6 @@ import {
 	backToCollection,
 	followAppPageLink,
 	followShellLayers,
-	goBack,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
@@ -228,13 +228,17 @@ afterEach(() => {
 });
 
 // The options a library write that crosses a route boundary navigates with:
-// the library travels as the page state of the entry (issue #1165).
+// the library travels as the page state of the entry (issue #1165), beside
+// the entry's id (issue #1006).
 function crossingWrite(replaceState: boolean) {
 	return {
 		replaceState,
 		noScroll: true,
 		keepFocus: true,
-		state: { library: expect.objectContaining({ kind: LIBRARY_HISTORY_KIND }) }
+		state: {
+			library: expect.objectContaining({ kind: LIBRARY_HISTORY_KIND }),
+			entry: { id: expect.any(Number) }
+		}
 	};
 }
 
@@ -1364,25 +1368,6 @@ describe('openCollectionEntry', () => {
 	});
 });
 
-describe('goBack', () => {
-	it('defers to the browser history when a predecessor exists', async () => {
-		await openAlbum('a1');
-		await selectSong('s1');
-		const back = watchBack();
-		goBack();
-		expect(back.presses()).toBe(1);
-		back.stop();
-	});
-
-	it('returns to the wall and clears selection when there is no predecessor', async () => {
-		await selectSong('s1');
-		replaceHistoryEntry('/');
-		goBack();
-		expect(get(librarySurface)).toBe('browse');
-		expect(get(selectedSongId)).toBeNull();
-	});
-});
-
 describe('revealPlayingSong', () => {
 	it('opens the song at its own address, then crosses again to the take', async () => {
 		replaceHistoryEntry('/');
@@ -2246,6 +2231,30 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		);
 		await pressBack();
 
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		playlistStands(below);
+	});
+
+	// Issue #1006 H1: the menu's own step back waits for a landing that reaches
+	// the entry below it, not for whichever popstate comes first.
+	it("a user Back during a layer's step-back does not release the queued push", async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+		const stepBack = watchBack();
+		menu.set(false);
+		const opening = selectSong('s1');
+		await vi.waitFor(() => expect(stepBack.presses()).toBe(1));
+
+		await landOnStandingEntry();
+
+		expect(historyEntry()).toMatchObject({ index: below + 1, songId: null });
+		stepBack.stop();
+		await pressBack();
+		await opening;
+		await vi.waitFor(() =>
+			expect(historyEntry()).toMatchObject({ index: below + 1, songId: 's1' })
+		);
+		await pressBack();
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		playlistStands(below);
 	});
