@@ -1,9 +1,6 @@
-import { describe, expect, it } from 'vitest';
-import {
-	escapeLevelUpTarget,
-	isEditableElement,
-	shouldHandleGlobalEscape
-} from './escape-level-up';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { closeTopLayer, holdLayer, resetNavigationForTests } from '$lib/stores/navigation';
+import { escapeLevelUpTarget, handleGlobalEscape, isEditableElement } from './escape-level-up';
 
 describe('escapeLevelUpTarget', () => {
 	it('leaves the docked Now Playing panel before any navigation level', () => {
@@ -45,151 +42,98 @@ describe('isEditableElement', () => {
 	});
 });
 
-describe('Escape while overlays are mounted', () => {
-	it('finds an aria-modal dialog', () => {
-		const dialog = document.createElement('div');
-		dialog.setAttribute('aria-modal', 'true');
-		document.body.append(dialog);
-		expect(
-			!shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(true);
-		dialog.remove();
+describe('handleGlobalEscape', () => {
+	afterEach(() => {
+		resetNavigationForTests();
+		document.body.replaceChildren();
 	});
 
-	it('finds a data-escape-overlay popover whose role does not permit aria-modal', () => {
-		const menu = document.createElement('div');
-		menu.setAttribute('role', 'menu');
-		menu.setAttribute('data-escape-overlay', 'true');
-		document.body.append(menu);
-		expect(
-			!shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(true);
-		menu.remove();
+	function fieldOnPage(tag: 'input' | 'textarea'): HTMLElement {
+		const field = document.createElement(tag);
+		document.body.append(field);
+		return field;
+	}
+
+	function pressEscape(target: EventTarget, levelUp: () => void): KeyboardEvent {
+		const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		function onWindowKeydown(keydown: KeyboardEvent): void {
+			handleGlobalEscape(keydown, { closeTopLayer, levelUp });
+		}
+		window.addEventListener('keydown', onWindowKeydown);
+		target.dispatchEvent(event);
+		window.removeEventListener('keydown', onWindowKeydown);
+		return event;
+	}
+
+	it('moves one level up when nothing is open', () => {
+		const levelUp = vi.fn();
+
+		pressEscape(document.body, levelUp);
+
+		expect(levelUp).toHaveBeenCalledOnce();
 	});
 
-	it('reports no overlay when none is mounted', () => {
-		expect(
-			!shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(false);
-	});
-});
+	it('closes the topmost layer, not one below it, and stays on the page', () => {
+		const closed: string[] = [];
+		holdLayer('song', () => closed.push('song'));
+		holdLayer('song-menu', () => closed.push('song-menu'));
+		const levelUp = vi.fn();
 
-describe('shouldHandleGlobalEscape', () => {
-	it('handles Escape with no overlay and no editable focus', () => {
-		expect(
-			shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(true);
+		const event = pressEscape(document.body, levelUp);
+
+		expect(closed).toEqual(['song-menu']);
+		expect(event.defaultPrevented).toBe(true);
+		expect(levelUp).not.toHaveBeenCalled();
+	});
+
+	it('moves up again once the layer it closed has left', () => {
+		const leave = holdLayer('sheet', () => leave());
+		const levelUp = vi.fn();
+
+		pressEscape(document.body, levelUp);
+		pressEscape(document.body, levelUp);
+
+		expect(levelUp).toHaveBeenCalledOnce();
+	});
+
+	it('closes the layer a text field sits in', () => {
+		const close = vi.fn();
+		holdLayer('details-editing', close);
+
+		pressEscape(fieldOnPage('input'), vi.fn());
+
+		expect(close).toHaveBeenCalledOnce();
+	});
+
+	it('never leaves the page from a text field', () => {
+		const levelUp = vi.fn();
+
+		pressEscape(fieldOnPage('textarea'), levelUp);
+
+		expect(levelUp).not.toHaveBeenCalled();
+	});
+
+	it('yields to an Escape a component already claimed', () => {
+		const close = vi.fn();
+		holdLayer('rail-drawer', close);
+		const levelUp = vi.fn();
+		const search = fieldOnPage('input');
+		search.addEventListener('keydown', (event) => event.preventDefault());
+
+		pressEscape(search, levelUp);
+
+		expect(close).not.toHaveBeenCalled();
+		expect(levelUp).not.toHaveBeenCalled();
 	});
 
 	it('ignores keys other than Escape', () => {
-		expect(
-			shouldHandleGlobalEscape(
-				{ key: 'Enter', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(false);
-	});
+		const close = vi.fn();
+		holdLayer('song-menu', close);
+		const levelUp = vi.fn();
 
-	it('yields while typing in a textarea', () => {
-		const textarea = document.createElement('textarea');
-		expect(
-			shouldHandleGlobalEscape(
-				{ key: 'Escape', target: textarea, defaultPrevented: false },
-				document
-			)
-		).toBe(false);
-	});
+		handleGlobalEscape(new KeyboardEvent('keydown', { key: 'Enter' }), { closeTopLayer, levelUp });
 
-	it('yields while a dialog is open', () => {
-		const dialog = document.createElement('div');
-		dialog.setAttribute('aria-modal', 'true');
-		document.body.append(dialog);
-		expect(
-			shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: false },
-				document
-			)
-		).toBe(false);
-		dialog.remove();
-	});
-
-	it('yields when a popover already handled Escape and called preventDefault', () => {
-		expect(
-			shouldHandleGlobalEscape(
-				{ key: 'Escape', target: document.body, defaultPrevented: true },
-				document
-			)
-		).toBe(false);
-	});
-
-	// Reproduces the real browser sequence: a popover's Escape handler is
-	// registered on `document` in the capture phase and unmounts the overlay
-	// (removing its aria-modal/data-escape-overlay marker) synchronously,
-	// inside the same keydown dispatch that the global handler also observes
-	// on `window` in the bubble phase. The old jsdom tests passed because they
-	// called `shouldHandleGlobalEscape` directly against a mocked event
-	// object and never exercised this ordering; dispatching one real
-	// KeyboardEvent through both phases is what actually caught the bug.
-	describe('one real keydown through capture and bubble phases', () => {
-		function attachPopoverCaptureHandler(overlay: HTMLElement): () => void {
-			function onCapture(event: KeyboardEvent): void {
-				if (event.key !== 'Escape') return;
-				event.preventDefault();
-				overlay.remove();
-			}
-			document.addEventListener('keydown', onCapture, true);
-			return () => document.removeEventListener('keydown', onCapture, true);
-		}
-
-		it('does not also fire the global level-up once the popover closes itself', () => {
-			const overlay = document.createElement('div');
-			overlay.setAttribute('aria-modal', 'true');
-			const focusedButton = document.createElement('button');
-			overlay.append(focusedButton);
-			document.body.append(overlay);
-			const detachPopover = attachPopoverCaptureHandler(overlay);
-
-			let globalEscapeFired = false;
-			function onWindowKeydown(event: KeyboardEvent): void {
-				if (shouldHandleGlobalEscape(event, document)) globalEscapeFired = true;
-			}
-			window.addEventListener('keydown', onWindowKeydown);
-
-			focusedButton.dispatchEvent(
-				new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-			);
-
-			window.removeEventListener('keydown', onWindowKeydown);
-			detachPopover();
-			expect(document.body.contains(overlay)).toBe(false);
-			expect(globalEscapeFired).toBe(false);
-		});
-
-		it('still fires the global level-up when no popover is open', () => {
-			let globalEscapeFired = false;
-			function onWindowKeydown(event: KeyboardEvent): void {
-				if (shouldHandleGlobalEscape(event, document)) globalEscapeFired = true;
-			}
-			window.addEventListener('keydown', onWindowKeydown);
-
-			document.dispatchEvent(
-				new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-			);
-
-			window.removeEventListener('keydown', onWindowKeydown);
-			expect(globalEscapeFired).toBe(true);
-		});
+		expect(close).not.toHaveBeenCalled();
+		expect(levelUp).not.toHaveBeenCalled();
 	});
 });

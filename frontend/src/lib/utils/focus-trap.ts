@@ -1,3 +1,5 @@
+import { closeTopLayer } from '$lib/stores/navigation';
+
 const FOCUSABLE_SELECTOR = [
 	'a[href]',
 	'button:not(:disabled)',
@@ -39,18 +41,15 @@ function trapTabKey(container: HTMLElement, event: KeyboardEvent): void {
 
 /**
  * Keeps focus inside `container` while it acts as a modal-like surface
- * (drawer, dropdown menu, dialog): Escape calls `onEscape`, Tab/Shift+Tab
- * wrap at the container's edges instead of leaving it.
+ * (drawer, dropdown menu, dialog): Escape closes the topmost open layer -- the
+ * one Back closes too, which is this surface unless something opened over it
+ * -- and Tab/Shift+Tab wrap at the container's edges instead of leaving it.
  */
-export function handleFocusTrapKeydown(
-	container: HTMLElement,
-	event: KeyboardEvent,
-	onEscape: () => void
-): void {
+export function handleFocusTrapKeydown(container: HTMLElement, event: KeyboardEvent): void {
 	if (event.defaultPrevented) return;
 	if (event.key === 'Escape') {
 		event.preventDefault();
-		onEscape();
+		closeTopLayer();
 		return;
 	}
 	if (event.key !== 'Tab') return;
