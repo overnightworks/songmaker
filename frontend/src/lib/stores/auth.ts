@@ -68,16 +68,17 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 		authNotice.set(null);
 		return user;
 	} catch (err) {
-		authNotice.set(null);
+		const failure = classifyAuthFailure(err);
+		// A 401 alone cannot tell a first visit from an expiry; the session-lost
+		// reaction already left the expiry notice when a session existed (#1215).
+		if (failure !== 'unauthorized') authNotice.set(failure === 'disabled' ? failure : null);
 		authCheckError.set(null);
 		if (err instanceof NetworkError) {
 			rememberUnreachableSessionCheck();
 			return get(currentUser);
 		}
 		forgetUnreachableSessionCheck();
-		const failure = classifyAuthFailure(err);
 		if (failure === 'unauthorized' || failure === 'disabled') {
-			authNotice.set(failure);
 			currentUser.set(null);
 			return null;
 		}
@@ -142,9 +143,11 @@ export async function login(username: string, password: string): Promise<AuthUse
 // title drafts) lives in module state, not the session -- without this, a
 // logout/401 followed by a different user's login on the same tab could
 // briefly serve the previous user's cached playlist data, or open a create
-// card on what they typed.
-export function clearAuth(): void {
+// card on what they typed. `notice` is what the sign-in page says about the
+// session that ended: an expiry says so, a sign-out says nothing.
+export function clearAuth(notice: AuthNotice | null = null): void {
 	currentUser.set(null);
+	authNotice.set(notice);
 	resetGenerationFailures();
 	resetPlaylists();
 	resetLibraryOrder();

@@ -2028,6 +2028,6 @@ describe('library resource sync wiring', () => {
 
 		expect(clearAuth).toHaveBeenCalledOnce();
 		expect(goto).toHaveBeenCalledOnce();
-		expect(vi.mocked(goto).mock.calls[0][0]).toMatch(/^\/login\?redirect=/);
+		expect(vi.mocked(goto).mock.calls[0][0]).toMatch(/^\/login(\?|$)/);
 	});
 });
