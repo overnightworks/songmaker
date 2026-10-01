@@ -23,10 +23,7 @@ vi.mock('$lib/stores/resourceSync', async (importOriginal) => ({
 	retryResourceSync
 }));
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
-	fetchShares: vi
-		.fn()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false })
+	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false })
 }));
 vi.mock('$lib/api/client', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/client')>()),

@@ -94,16 +94,6 @@ export interface AlbumUpdateRequest {
 	year?: number | null;
 }
 
-export interface AuditLogItem {
-	id: string;
-	user_id: string | null;
-	action: string;
-	resource_type: string;
-	resource_id: string;
-	detail: string;
-	created_at: string;
-}
-
 export interface AuthUser {
 	id: string;
 	username: string;
@@ -144,29 +134,11 @@ export interface ChangePasswordRequest {
 	new: string;
 }
 
-export interface ChatHistoryResult {
-	messages: ChatMessageItem[];
-}
-
 export interface ChatMessageItem {
 	id: string;
 	role: string;
 	content: string;
 	created_at: string;
-}
-
-export interface ChatRequest {
-	message: string;
-	context: string;
-}
-
-export interface ChatResult {
-	response: string;
-}
-
-export interface ChatTurnResult {
-	user_message: ChatMessageItem;
-	assistant_message: ChatMessageItem;
 }
 
 export interface ChatTurnV2Request {
@@ -182,17 +154,6 @@ export interface ChatTurnV2Result {
 	conversation_id: string;
 	user_message: ChatMessageItem;
 	assistant_message: ChatMessageItem;
-}
-
-export interface ClaudeModelsRequest {
-	chat_model: string;
-	scoring_model: string;
-}
-
-export interface ClaudeModelsResponse {
-	chat_model: string;
-	scoring_model: string;
-	allowed_models: string[];
 }
 
 export interface CleanupResult {
@@ -799,13 +760,6 @@ export interface RateResult {
 	rating: number;
 }
 
-export interface RecentChatItem {
-	song_id: string;
-	title: string;
-	message_count: number;
-	last_message_at: string | null;
-}
-
 export interface ReferenceAudioResponse {
 	path: string;
 	filename: string;
@@ -884,12 +838,6 @@ export interface ScoringSchemaResponse {
 	scorers: ScorerSchemaItem[];
 }
 
-export interface SendChatRequest {
-	message: string;
-	mentioned_song_ids: string[];
-	mentioned_version_ids: string[];
-}
-
 export interface SessionItem {
 	id: string;
 	user_id: string;
@@ -907,21 +855,6 @@ export interface SetupRequest {
 
 export interface SetupRequired {
 	required: boolean;
-}
-
-export interface ShareInventoryItem {
-	type: 'album' | 'song' | 'generation' | 'playlist';
-	id: string;
-	title: string;
-	share_slug: string;
-	created_at: string;
-	public_path: string;
-	album_id?: string | null;
-	album_title?: string | null;
-	song_id?: string | null;
-	song_title?: string | null;
-	generation_number?: number | null;
-	is_archived?: boolean | null;
 }
 
 export interface ShareResult {

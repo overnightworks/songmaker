@@ -36,7 +36,6 @@ import {
 	resetPlaylists,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
-import { openSharesInventory, resetShares, sharesViewOpen } from '$lib/stores/shares';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -45,7 +44,6 @@ const fetchAlbums = vi.fn();
 const fetchSong = vi.fn();
 const fetchSongs = vi.fn();
 const searchLibrary = vi.fn();
-const fetchShares = vi.fn();
 
 // Only the route-shape crossing suite below drives a write that actually
 // crosses (every other test in this file sets window.location to the write's
@@ -57,8 +55,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 vi.mock('$lib/api/library', () => ({
-	searchLibrary: (...args: unknown[]) => searchLibrary(...args),
-	fetchShares: (...args: unknown[]) => fetchShares(...args)
+	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
 }));
 vi.mock('$lib/api/albums', () => ({
 	fetchAlbum: (...args: unknown[]) => fetchAlbum(...args),
@@ -111,7 +108,6 @@ import {
 	openTakeAddress,
 	resolveLegacySongQueryAddress,
 	libraryRootState,
-	libraryScrollAnchor,
 	rememberedSongTab,
 	resetLibraryContextForTests,
 	showSongTab,
@@ -140,8 +136,6 @@ beforeEach(() => {
 	fetchSong.mockReset();
 	fetchSongs.mockReset();
 	searchLibrary.mockReset();
-	fetchShares.mockReset();
-	fetchShares.mockResolvedValue(emptyPage());
 	fetchPlaylists.mockResolvedValue([]);
 	fetchPlaylist.mockResolvedValue(
 		playlistDetail({ title: 'P', slug: 'p', entry_count: 0, share_slug: null })
@@ -162,7 +156,6 @@ beforeEach(() => {
 	);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetShares();
 	resetPlaylists();
 	searchQuery.set('');
 	albumList.set([]);
@@ -182,7 +175,6 @@ afterEach(() => {
 	stopListeningForLandings();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetShares();
 	resetPlaylists();
 });
 
@@ -258,17 +250,6 @@ describe('library history snapshot', () => {
 		expect(
 			isLibraryHistoryState({ ...libraryRootState(), collection: { kind: 'album', id: 'a1' } })
 		).toBe(true);
-	});
-
-	it('keeps the shares inventory outside the mixed library history', async () => {
-		openSharesInventory();
-		const state = { ...snapshotLibraryHistory(2), scrollAnchor: 240 };
-
-		await applyLibraryHistory(state);
-
-		expect(get(sharesViewOpen)).toBe(true);
-		expect(get(libraryScrollAnchor)).toBe(240);
-		expect(state).not.toHaveProperty('filter');
 	});
 });
 

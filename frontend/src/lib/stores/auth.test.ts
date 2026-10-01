@@ -45,7 +45,6 @@ import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
-import { shareCount } from '$lib/stores/shares';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
 
@@ -249,7 +248,7 @@ describe('clearAuth', () => {
 		expect(get(currentUser)).toBeNull();
 	});
 
-	it('wipes the per-user playlist, share, and generation-failure caches so the next session starts clean', () => {
+	it('wipes the per-user playlist and generation-failure caches so the next session starts clean', () => {
 		playlistList.set([
 			{
 				id: 'p1',
@@ -273,7 +272,6 @@ describe('clearAuth', () => {
 			created_at: '',
 			entries: []
 		});
-		shareCount.set({ status: 'ready', error: null, total: 4 });
 		generationFailures.set({ s1: 'Music generation failed' });
 
 		clearAuth();
@@ -281,7 +279,6 @@ describe('clearAuth', () => {
 		expect(get(generationFailures)).toEqual({});
 		expect(get(playlistList)).toEqual([]);
 		expect(get(selectedPlaylistDetail)).toBeNull();
-		expect(get(shareCount)).toMatchObject({ status: 'idle', total: null });
 	});
 
 	it("forgets the previous musician's Recent ranking and reads the next one's afresh", async () => {

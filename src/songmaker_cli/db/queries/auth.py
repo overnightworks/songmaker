@@ -302,7 +302,3 @@ def list_audit_log(
         .limit(limit)
         .all()
     )
-
-
-def count_audit_log(session: Session) -> int:
-    return session.query(AuditLog).count()

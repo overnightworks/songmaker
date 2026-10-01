@@ -374,12 +374,12 @@ describe('RailSearch', () => {
 	});
 
 	it('keeps local page results available while the server search fails', async () => {
-		railTreeQuery.set('playback');
-		railSearch.set({ query: 'playback', status: 'error', error: 'Offline', hits: [] });
+		railTreeQuery.set('voices');
+		railSearch.set({ query: 'voices', status: 'error', error: 'Offline', hits: [] });
 		const root = await render();
 
 		expect(root.querySelector('[role="alert"]')?.textContent).toContain('Offline');
-		expect(root.textContent).toContain('Playback');
+		expect(root.textContent).toContain('Voices');
 		requireElement<HTMLInputElement>(root, 'input').dispatchEvent(
 			new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true })
 		);
@@ -387,7 +387,7 @@ describe('RailSearch', () => {
 
 		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({
 			kind: 'page',
-			href: '/settings/playback'
+			href: '/settings/voices'
 		});
 	});
 });

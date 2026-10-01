@@ -8,7 +8,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import (
-    AuditLogResponse,
     AuthMeResponse,
     ChangePasswordRequest,
     CreateUserRequest,
@@ -42,8 +41,6 @@ from songmaker_cli.api_models.library import (
     LibrarySearchResponse,
     LibrarySongHit,
     LibrarySort,
-    ShareInventoryItem,
-    ShareInventoryType,
 )
 from songmaker_cli.api_models.loras import (
     AdminUserLoraResponse,
@@ -94,11 +91,7 @@ from songmaker_cli.api_models.resource_events import (
 )
 from songmaker_cli.api_models.settings import (
     CapabilitiesResponse,
-    ChatHistoryResponse,
     ChatMessageResponse,
-    ChatRequest,
-    ChatResponse,
-    ChatTurnResponse,
     ChatTurnV2Request,
     ChatTurnV2Response,
     ConversationListResponse,
@@ -125,8 +118,6 @@ from songmaker_cli.api_models.settings import (
     RateLimitItem,
     RateLimitsResponse,
     RateLimitUpdateRequest,
-    RecentChatItem,
-    SendChatRequest,
     UserRateLimitsResponse,
 )
 from songmaker_cli.api_models.songs import (
@@ -233,18 +224,13 @@ __all__ = [
     "AlbumCreateRequest",
     "AlbumResponse",
     "AlbumUpdateRequest",
-    "AuditLogResponse",
     "BaseGenerationParams",
     "BulkDeleteRequest",
     "BulkDeleteResponse",
     "AuthMeResponse",
     "CapabilitiesResponse",
     "ChangePasswordRequest",
-    "ChatHistoryResponse",
     "ChatMessageResponse",
-    "ChatRequest",
-    "ChatResponse",
-    "ChatTurnResponse",
     "ChatTurnV2Request",
     "ChatTurnV2Response",
     "CleanupResponse",
@@ -330,18 +316,14 @@ __all__ = [
     "RepaintTaskParams",
     "ReorderPlaylistEntryRequest",
     "RateResponse",
-    "RecentChatItem",
     "ResourceHelloEvent",
     "ResourceResyncEvent",
     "ScorerSchemaItem",
     "ScoreRequest",
     "ScoringSchemaResponse",
-    "SendChatRequest",
     "SessionResponse",
     "SetupRequest",
     "SetupRequiredResponse",
-    "ShareInventoryItem",
-    "ShareInventoryType",
     "ShareResponse",
     "SharedPlaylistEntryResponse",
     "SharedPlaylistResponse",

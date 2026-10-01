@@ -93,9 +93,6 @@ vi.mock('$lib/stores/toast', () => ({
 	addUndoToast: vi.fn(),
 	dismissToast: vi.fn()
 }));
-vi.mock('$lib/stores/shares', () => ({
-	refreshSharesAfterMutation: vi.fn()
-}));
 vi.mock('$lib/stores/playlists', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/playlists')>();
 	return {
