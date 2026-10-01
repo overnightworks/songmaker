@@ -1105,6 +1105,31 @@ def test_generation_defaults_rejects_unknown_keys(tmp_path: Path) -> None:
     assert resp.status_code == 422
 
 
+def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path) -> None:
+    admin = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
+    admin.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
+    musician = make_router_app(
+        make_router_ctx(tmp_path, db=init_db(tmp_path / "test.db")),
+        user=make_authenticated_user("u-musician", role="user", username="musician"),
+    )
+
+    resp = TestClient(musician).get("/api/settings/generation-defaults")
+
+    assert resp.status_code == 200
+    assert resp.json() == admin.get("/api/settings/generation-defaults").json()
+
+
+def test_generation_defaults_change_stays_admin_only(tmp_path: Path) -> None:
+    c = _make_authed_client(tmp_path, role="user", user_id="u-user")
+    resp = c.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
+    assert resp.status_code == 403
+
+
+def test_generation_defaults_read_requires_sign_in(unauthed_client: TestClient) -> None:
+    resp = unauthed_client.get("/api/settings/generation-defaults")
+    assert resp.status_code == 401
+
+
 # ── 404 error branches ──────────────────────────────────────────────
 
 

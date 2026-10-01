@@ -156,18 +156,36 @@ function isSessionLostResponse(status: number, path: string): boolean {
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
+const SIGN_IN_PATH = '/login';
 
-// Normalize the current address before carrying it through the login redirect.
-// A pathname can start with //; resolving it catches that foreign-origin escape
-// as well as backslashes, which URL parsing treats as host separators.
+// Normalize an address carried through sign-in. A pathname can start with //;
+// resolving it catches that foreign-origin escape as well as backslashes,
+// which URL parsing treats as host separators. The sign-in page itself is no
+// destination: landing there again would only ask for the password twice.
 function safeInternalPath(candidate: string): string {
 	try {
 		const resolved = new URL(candidate, window.location.origin);
 		if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
+		if (resolved.pathname === SIGN_IN_PATH) return SAFE_INTERNAL_PATH_FALLBACK;
 		return resolved.pathname + resolved.search + resolved.hash;
 	} catch {
 		return SAFE_INTERNAL_PATH_FALLBACK;
 	}
+}
+
+// The sign-in page, asked to bring the person back to `returnTo` afterwards.
+export function signInAddress(returnTo: string): string {
+	const target = safeInternalPath(returnTo);
+	if (target === SAFE_INTERNAL_PATH_FALLBACK) return SIGN_IN_PATH;
+	return `${SIGN_IN_PATH}?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(target)}`;
+}
+
+// Where a sign-in on `signInPage` lands: the address it was asked to return
+// to when that stays on this origin, the library otherwise, so the redirect
+// is never open.
+export function signInReturnPath(signInPage: URL): string {
+	const requested = signInPage.searchParams.get(SESSION_LOST_REDIRECT_PARAM);
+	return requested === null ? SAFE_INTERNAL_PATH_FALLBACK : safeInternalPath(requested);
 }
 
 // The one reaction to "the session is gone" (issue #385). player.ts's
@@ -192,10 +210,9 @@ export function handleSessionLost(): Promise<void> {
 async function reactToSessionLost(): Promise<void> {
 	const { currentUser, clearAuth } = await import('$lib/stores/auth');
 	if (get(currentUser) === null) return;
-	clearAuth();
+	clearAuth('unauthorized');
 	const { goto } = await import('$app/navigation');
-	const returnTo = safeInternalPath(window.location.pathname + window.location.search);
-	await goto(`/login?${SESSION_LOST_REDIRECT_PARAM}=${encodeURIComponent(returnTo)}`);
+	await goto(signInAddress(window.location.pathname + window.location.search));
 }
 
 function abortOnCallerOrTimeout(

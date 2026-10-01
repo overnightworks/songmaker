@@ -4,6 +4,10 @@ import { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS } from '$lib/constants';
 // which another lane owns for the same landing window.
 
 export const AUTH_SESSION_EXPIRED_MESSAGE = 'Your session has expired.';
+// The server's 401 detail for a cookie whose session no longer exists
+// (`webauth.dependencies.SESSION_EXPIRED_DETAIL`); a request without a session
+// cookie is refused with a different detail (#1215).
+export const AUTH_SESSION_EXPIRED_DETAIL = 'Session expired';
 export const AUTH_ACCOUNT_DISABLED_MESSAGE = 'Your account has been disabled.';
 
 export const AUTH_CHECK_RATE_LIMITED_ERROR =
