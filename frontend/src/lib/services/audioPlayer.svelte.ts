@@ -661,6 +661,7 @@ class AudioPlayer {
 	private giveUpOnStall(): void {
 		this.stopProgressWatchdog();
 		this.autoplayPending = false;
+		this.recoveryStartedAt = null;
 		this.fail({ kind: 'stalled', message: ERROR_MSG_STALLED });
 		if (this.audio) this.pauseElement(this.audio);
 	}
