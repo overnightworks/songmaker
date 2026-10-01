@@ -49,6 +49,9 @@ const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const STALL_RECOVERY_MS = 5000;
 const MAX_RECOVERY_ATTEMPTS = 2;
 const RECOVERY_SEEK_BACK_SECONDS = 0.75;
+// A server that never answers the probe must not hold recovery or the error
+// words back for good.
+const PROBE_TIMEOUT_MS = 10_000;
 // An element can report itself playing while its clock stands still and no
 // waiting/stalled event ever fires — silence that pause and play on the same
 // element do not cure. The watchdog samples the clock while playing and treats
@@ -909,7 +912,11 @@ class AudioPlayer {
 
 	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
 		try {
-			const resp = await fetch(url, { method: 'HEAD', credentials: 'include' });
+			const resp = await fetch(url, {
+				method: 'HEAD',
+				credentials: 'include',
+				signal: AbortSignal.timeout(PROBE_TIMEOUT_MS)
+			});
 			return { ok: resp.ok, status: resp.status };
 		} catch {
 			return { ok: false, status: 0 };
