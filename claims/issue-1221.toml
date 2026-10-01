@@ -1,8 +1,0 @@
-claim_id = "d760d350bdaf402f83207cfffb9ee6d0"
-agent = "claude-head"
-role = "builder"
-base = "dd78102030ffa21b6f8bd7f175a3fb9684afecec"
-branch = "claude-head/issue-1221-dead-query-functions"
-scope = ["scripts/dead-symbols.allow", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/conversations.py", "src/songmaker_cli/db/queries/loras.py", "src/songmaker_cli/db/queries/rate_limits.py", "src/songmaker_cli/db/queries/settings.py", "tests/test_conversations.py", "tests/test_db.py", "tests/test_lora_queries.py"]
-opened_commit = "2f9c7112461d9057eff5c926b6582de88fa75969"
-whole_reason = "seven dead query functions across four query modules with their tests"
