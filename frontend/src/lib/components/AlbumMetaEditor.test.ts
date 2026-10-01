@@ -3,27 +3,17 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { field, type } from '$lib/test-utils/new-place-card';
 
 let mounted: ReturnType<typeof mount> | undefined;
-
-function requireElement<T extends Element>(root: ParentNode, selector: string): T {
-	const element = root.querySelector<T>(selector);
-	if (!element) throw new Error(`Expected ${selector} to be rendered`);
-	return element;
-}
-
-function requireAll<T extends Element>(root: ParentNode, selector: string): T[] {
-	return Array.from(root.querySelectorAll<T>(selector));
-}
 
 type Props = ComponentProps<typeof AlbumMetaEditor>;
 
 function baseProps(overrides: Partial<Props> = {}): Props {
 	return {
-		subtitle: 'Live at the Roxy',
-		year: '1994',
-		onsavesubtitle: vi.fn().mockResolvedValue(undefined),
-		onsaveyear: vi.fn().mockResolvedValue(undefined),
+		details: { title: 'Night Drive', subtitle: 'Live at the Roxy', year: '1994' },
+		onsave: vi.fn().mockResolvedValue(undefined),
+		onclose: vi.fn(),
 		...overrides
 	};
 }
@@ -36,6 +26,12 @@ async function render(props: Props): Promise<HTMLElement> {
 	return target;
 }
 
+async function submit(target: HTMLElement): Promise<void> {
+	getByRoleButton(target, 'Save').click();
+	await tick();
+	await tick();
+}
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
@@ -43,72 +39,63 @@ afterEach(async () => {
 });
 
 describe('AlbumMetaEditor', () => {
-	it('shows the current subtitle and year, each independently named', async () => {
+	it('opens as Edit details on the current title, subtitle and year, the title in focus', async () => {
 		const target = await render(baseProps());
-		const [subtitleDisplay, yearDisplay] = requireAll<HTMLButtonElement>(
-			target,
-			'.editable-title-display'
-		);
-		expect(subtitleDisplay.textContent?.trim()).toBe('Live at the Roxy');
-		expect(yearDisplay.textContent?.trim()).toBe('1994');
-		expect(getByRoleButton(target, 'Edit album subtitle')).toBe(subtitleDisplay);
-		expect(getByRoleButton(target, 'Edit album year')).toBe(yearDisplay);
+
+		expect(target.querySelector('form')?.getAttribute('aria-label')).toBe('Edit details');
+		expect(field(target, 'Title').value).toBe('Night Drive');
+		expect(field(target, 'Subtitle').value).toBe('Live at the Roxy');
+		expect(field(target, 'Year').value).toBe('1994');
+		expect(document.activeElement).toBe(field(target, 'Title'));
 	});
 
-	it('shows placeholders and commits an edited subtitle', async () => {
-		const onsavesubtitle = vi.fn().mockResolvedValue(undefined);
-		const target = await render(baseProps({ subtitle: '', onsavesubtitle }));
-		const display = getByRoleButton(target, 'Edit album subtitle');
-		expect(display.textContent?.trim()).toBe('Add subtitle');
+	it('saves title, subtitle and year together, trimmed, then closes', async () => {
+		const props = baseProps();
+		const target = await render(props);
 
-		display.click();
-		await tick();
-		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
-		input.value = 'Remastered';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await vi.waitFor(() => expect(onsavesubtitle).toHaveBeenCalledWith('Remastered'));
+		type(field(target, 'Title'), ' Nightdrive ');
+		type(field(target, 'Subtitle'), 'Late-night synthwave');
+		type(field(target, 'Year'), '2026');
+		await submit(target);
+
+		expect(props.onsave).toHaveBeenCalledWith({
+			title: 'Nightdrive',
+			subtitle: 'Late-night synthwave',
+			year: '2026'
+		});
+		expect(props.onclose).toHaveBeenCalledTimes(1);
 	});
 
-	it('clears the subtitle when emptied', async () => {
-		const onsavesubtitle = vi.fn().mockResolvedValue(undefined);
-		const target = await render(baseProps({ onsavesubtitle }));
-		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
+	it('× closes without saving the edited draft', async () => {
+		const props = baseProps();
+		const target = await render(props);
+
+		type(field(target, 'Year'), '2026');
+		getByRoleButton(target, 'Close edit details').click();
 		await tick();
-		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
-		input.value = '';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await vi.waitFor(() => expect(onsavesubtitle).toHaveBeenCalledWith(''));
+
+		expect(props.onclose).toHaveBeenCalledTimes(1);
+		expect(props.onsave).not.toHaveBeenCalled();
 	});
 
-	it('commits an edited year through the numeric field', async () => {
-		const onsaveyear = vi.fn().mockResolvedValue(undefined);
-		const target = await render(baseProps({ onsaveyear }));
-		const yearButton = getByRoleButton(target, 'Edit album year');
-		yearButton.click();
-		await tick();
-		const inputs = requireAll<HTMLInputElement>(target, '.editable-title-input');
-		const input = inputs[0];
-		input.value = '2001';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
-		await vi.waitFor(() => expect(onsaveyear).toHaveBeenCalledWith('2001'));
+	it('offers no Save while the title is blank', async () => {
+		const props = baseProps();
+		const target = await render(props);
+
+		type(field(target, 'Title'), '   ');
+
+		expect(getByRoleButton(target, 'Save').disabled).toBe(true);
 	});
 
-	it('cancels an edit on Escape without calling either save handler', async () => {
-		const onsavesubtitle = vi.fn().mockResolvedValue(undefined);
-		const onsaveyear = vi.fn().mockResolvedValue(undefined);
-		const target = await render(baseProps({ onsavesubtitle, onsaveyear }));
-		requireElement<HTMLButtonElement>(target, '.editable-title-display').click();
-		await tick();
-		const input = requireElement<HTMLInputElement>(target, '.editable-title-input');
-		input.value = 'Discarded';
-		input.dispatchEvent(new Event('input', { bubbles: true }));
-		input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		await tick();
-		expect(onsavesubtitle).not.toHaveBeenCalled();
-		expect(onsaveyear).not.toHaveBeenCalled();
-		expect(target.querySelector('.editable-title-input')).toBeNull();
+	it('stays open with the draft when the save is refused', async () => {
+		const props = baseProps({ onsave: vi.fn().mockRejectedValue(new Error('refused')) });
+		const target = await render(props);
+
+		type(field(target, 'Year'), '1850');
+		await submit(target);
+
+		expect(props.onclose).not.toHaveBeenCalled();
+		expect(field(target, 'Year').value).toBe('1850');
+		expect(getByRoleButton(target, 'Save').disabled).toBe(false);
 	});
 });
