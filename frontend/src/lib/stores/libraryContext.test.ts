@@ -344,13 +344,13 @@ describe('applyLibraryHistory', () => {
 		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
 	});
 
-	it('applies nothing once a write cancelled it while a Back saved the draft it left', async () => {
-		let settleSave: () => void = () => undefined;
-		void holdLibraryRestoresUntil(new Promise<void>((resolve) => (settleSave = resolve)));
+	it("applies nothing once a write cancelled it while Back put the song's entry back", async () => {
+		let releaseHold: () => void = () => undefined;
+		void holdLibraryRestoresUntil(new Promise<void>((resolve) => (releaseHold = resolve)));
 		const held = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's1' });
 
 		cancelLibraryHistoryApply();
-		settleSave();
+		releaseHold();
 
 		expect(await held).toBe(false);
 		expect(get(librarySurface)).toBe('browse');

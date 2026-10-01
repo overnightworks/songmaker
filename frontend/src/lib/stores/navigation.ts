@@ -465,8 +465,8 @@ function selectSongHistoryMode(
 // guardDirtyNavigation resolves immediately once it parks a dirty draft,
 // before applySelectedSong ever runs, so that follow-up would land against
 // whichever song was open before (issue #265 review of #264, fixed for its
-// one real caller by folding the follow-up into a single guarded action —
-// see revealSharedTake below). A future such caller belongs the same way.
+// one real caller by folding the follow-up into a single guarded action).
+// A future such caller belongs the same way.
 export function selectSong(songId: string, knownSong?: SongItem): Promise<void> {
 	// Evaluated before the guard's own possible park: a dirty draft defers
 	// `applySelectedSong` until the confirm resolves, so historyMode must read
