@@ -49,7 +49,12 @@ import {
 	selectedPlaylist,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
-import { followPlaybackForResume, type ResumeQueueSource } from '$lib/stores/playbackResume';
+import {
+	followPlaybackForResume,
+	savedPlayback,
+	type ResumeQueueSource,
+	type SavedPlayback
+} from '$lib/stores/playbackResume';
 import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
@@ -1113,9 +1118,13 @@ function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQue
 	return { kind: 'take', index: nextIndex, take: ctx.takes[nextIndex] };
 }
 
-function preloadNextTake(): void {
+function takeAfterCurrent(): PlaybackInfo | null {
 	const next = nextQueueTake(get(queueContext), audioPlayer.current);
-	audioPlayer.preload(next.kind === 'take' ? next.take : null);
+	return next.kind === 'take' ? next.take : null;
+}
+
+function preloadNextTake(): void {
+	audioPlayer.preload(takeAfterCurrent());
 }
 
 function playPlaylistInDirection(
@@ -1578,14 +1587,49 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
 
-// The queue a resumed take continues in; none while a share route owns the
-// player, so share playback is never remembered.
+// A share route owns the player while it swaps in its own callbacks, so
+// share playback is never remembered.
+function playsTheAppsTakes(): boolean {
+	return audioPlayer.currentCallbacks === appPlayerCallbacks;
+}
+
+// The queue a resumed take continues in. A library context without takes is
+// no queue yet (the one a reload starts with, or one still building), so it
+// names none rather than the library settings of the moment (#1226).
 function resumeQueueSource(): ResumeQueueSource | null {
-	if (audioPlayer.currentCallbacks !== appPlayerCallbacks) return null;
 	const ctx = get(queueContext);
 	if (ctx.type === 'album') return { type: 'album', albumId: ctx.albumId };
 	if (ctx.type === 'playlist') return { type: 'playlist', playlistId: ctx.playlist.id };
+	if (!ctx.takes?.length) return null;
 	return { type: 'library', ...librarySnapshotOpts() };
 }
 
-followPlaybackForResume(resumeQueueSource);
+followPlaybackForResume({ playsTheAppsTakes, queueSource: resumeQueueSource, takeAfterCurrent });
+
+/**
+ * Shows the take the signed-in user last played on this device, paused where
+ * it stood, so that reopening a page Android killed finds it again (#1187
+ * P2). A take loaded in the meantime is never replaced.
+ */
+export async function restoreLastPlayback(): Promise<void> {
+	const saved = savedPlayback();
+	if (saved === null || audioPlayer.current !== null) return;
+	const take = await playableSavedTake(saved);
+	if (take === null || audioPlayer.current !== null) return;
+	audioPlayer.load(take, { autoplay: false, startAt: saved.position });
+}
+
+// The server answers 404 for a song deleted or out of this user's reach, and
+// a take deleted or archived since is missing from its song or marked so;
+// none of them, nor a server out of reach, is restored, and none is reported.
+async function playableSavedTake(saved: SavedPlayback): Promise<PlaybackInfo | null> {
+	let song: SongItem;
+	try {
+		song = await fetchSong(saved.songId);
+	} catch (err) {
+		if (err instanceof ApiError || err instanceof NetworkError) return null;
+		throw err;
+	}
+	const take = song.generations.find((gen) => gen.id === saved.generationId && !gen.is_archived);
+	return take === undefined ? null : toPlaybackInfo(take, song);
+}
