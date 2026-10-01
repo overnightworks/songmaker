@@ -1,0 +1,8 @@
+claim_id = "2a99edb988e84473a2700d6e39897d2e"
+agent = "claude-head"
+role = "builder"
+base = "a6680e608c467a667fd26b4a55ed120cd8dbd8f8"
+branch = "claude-head/issue-1219-layers-as-entries"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/src/lib/history", "frontend/src/lib/stores/layers.test.ts", "frontend/src/lib/stores/layers.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/app-navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/lib/utils/dialog-history-layer.ts", "scripts/dead-exports.allow"]
+opened_commit = "ff12384934b766b98dbcbc2107f814dac1752265"
+whole_reason = "layers move into the one history owner; both history modules, the layer stack and their fakes"
