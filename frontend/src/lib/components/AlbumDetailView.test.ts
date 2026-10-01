@@ -12,6 +12,7 @@ import { ApiError } from '$lib/api/fetch';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
+	COLLECTION_MENU_COVER_HINT,
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_NO_SONGS,
 	HITBOX_FREQUENT_PX,
@@ -375,7 +376,7 @@ describe('AlbumDetailView header', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
-			el.textContent?.trim()
+			el.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim()
 		);
 		expect(rows).toEqual([
 			'Edit details',
@@ -487,7 +488,7 @@ describe('AlbumDetailView header', () => {
 async function uploadFromCoverEditor(target: HTMLElement): Promise<void> {
 	const menu = await openCollectionMenu(target);
 	Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-		.find((item) => item.textContent?.trim() === 'Cover')
+		.find((item) => item.textContent?.trim().startsWith('Cover'))
 		?.click();
 	await vi.waitFor(() => expect(target.querySelector('.cover-editor')).not.toBeNull());
 	getByRoleButton(requireElement(target, '.cover-editor'), 'Upload').click();

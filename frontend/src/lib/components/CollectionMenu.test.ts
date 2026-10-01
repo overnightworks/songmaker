@@ -1,7 +1,7 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '$lib/api/types';
-import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
+import { COLLECTION_MENU_COVER_HINT, COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import CollectionMenu from './CollectionMenu.svelte';
 
@@ -135,7 +135,7 @@ function menuItemLabels(target: HTMLElement): string[] {
 
 function menuRowLabels(target: HTMLElement): string[] {
 	return Array.from(target.querySelectorAll('.menu-item, .menu-row-label')).map(
-		(row) => row.textContent?.trim() ?? ''
+		(row) => row.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim() ?? ''
 	);
 }
 
@@ -171,6 +171,21 @@ describe('CollectionMenu album rows', () => {
 		expect(items[items.length - 1].classList.contains('destructive')).toBe(true);
 	});
 
+	it('tells on the Cover row what the cover editor offers: upload · suggest', async () => {
+		const { target } = await render(albumMenuProps());
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+
+		const hints = Array.from(target.querySelectorAll('.menu-item-hint')).map((hint) => ({
+			row: hint
+				.closest('.menu-item')
+				?.textContent?.replace(hint.textContent ?? '', '')
+				.trim(),
+			hint: hint.textContent
+		}));
+		expect(hints).toEqual([{ row: 'Cover', hint: 'upload · suggest' }]);
+	});
+
 	it('opens the cover editor from Cover and closes the menu, leaving upload and remove to it', async () => {
 		const handlers = albumMenuProps();
 		const { target } = await render(handlers);
@@ -178,7 +193,7 @@ describe('CollectionMenu album rows', () => {
 		await tick();
 
 		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
-			.find((item) => item.textContent?.trim() === 'Cover')
+			.find((item) => item.textContent?.trim().startsWith('Cover'))
 			?.click();
 		await tick();
 

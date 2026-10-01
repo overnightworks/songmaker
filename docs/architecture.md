@@ -393,7 +393,8 @@ offline · Rename · Delete playlist. The Share row embeds the existing
 `ShareButton` component as its control (same toggle/clipboard/toast logic,
 not reimplemented); a playlist's Rename forwards to the same `EditableTitle`
 click affordance the title itself uses (`EditableTitle` exposes an
-imperative `startEdit()` via `bind:this` for exactly this). Album rows carry their own Play button
+imperative `startEdit()` via `bind:this` for exactly this). Album rows carry
+their own Play button
 (`playAlbumFromGeneration` on the song's picked/first generation) beside the
 existing click-to-open-song target. Album rows are songs — clicking the row
 body opens the song in the editor. Playlist rows are takes — clicking the row

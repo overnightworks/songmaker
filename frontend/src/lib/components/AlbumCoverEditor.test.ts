@@ -666,7 +666,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
 
-		items.find((item) => item.textContent?.trim() === 'Cover')?.click();
+		items.find((item) => item.textContent?.trim().startsWith('Cover'))?.click();
 
 		await vi.waitFor(() => expect(editor(target)).not.toBeNull());
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();

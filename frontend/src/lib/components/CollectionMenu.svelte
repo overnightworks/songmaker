@@ -5,6 +5,7 @@
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 		COLLECTION_MENU_ARCHIVE_LABEL,
 		COLLECTION_MENU_CLOSE_LABEL,
+		COLLECTION_MENU_COVER_HINT,
 		COLLECTION_MENU_COVER_LABEL,
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
 		COLLECTION_MENU_CURATE_LABEL,
@@ -106,10 +107,11 @@
 	}
 </script>
 
-{#snippet actionRow(label: string, action: () => void, icon?: string)}
+{#snippet actionRow(label: string, action: () => void, icon?: string, hint?: string)}
 	<button class="menu-item" onclick={() => runAndClose(action)}>
 		{#if icon}<Icon name={icon} size={14} />{/if}
 		{label}
+		{#if hint}<span class="menu-item-hint" aria-hidden="true">{hint}</span>{/if}
 	</button>
 {/snippet}
 
@@ -136,10 +138,15 @@
 				{@render actionRow(COLLECTION_MENU_EDIT_DETAILS_LABEL, oneditdetails, 'pencil')}
 			{/if}
 			{#if oncoveredit}
-				{@render actionRow(COLLECTION_MENU_COVER_LABEL, oncoveredit, 'image')}
+				{@render actionRow(
+					COLLECTION_MENU_COVER_LABEL,
+					oncoveredit,
+					'image',
+					COLLECTION_MENU_COVER_HINT
+				)}
 			{/if}
 			{#if oncurate}
-				{@render actionRow(COLLECTION_MENU_CURATE_LABEL, oncurate, 'wand')}
+				{@render actionRow(COLLECTION_MENU_CURATE_LABEL, oncurate, 'spark')}
 			{/if}
 			{#if onaddtoplaylist}
 				{@render actionRow(COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, onaddtoplaylist, 'list-plus')}
@@ -226,6 +233,12 @@
 		border: none;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.menu-item-hint {
+		margin-left: auto;
+		font-size: 0.75rem;
+		color: var(--text-subtle);
 	}
 
 	.menu-item:hover:not(:disabled) {

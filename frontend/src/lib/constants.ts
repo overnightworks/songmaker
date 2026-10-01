@@ -560,6 +560,7 @@ export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
 export const COLLECTION_MENU_SHARE_LABEL = 'Share';
 export const COLLECTION_MENU_DELETE_LABEL = 'Delete';
 export const COLLECTION_MENU_COVER_LABEL = 'Cover';
+export const COLLECTION_MENU_COVER_HINT = 'upload · suggest';
 export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
 export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
 export const COLLECTION_MENU_EDIT_DETAILS_LABEL = 'Edit details';
