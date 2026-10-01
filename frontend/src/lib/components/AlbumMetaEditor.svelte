@@ -62,7 +62,12 @@
 <form class="album-details" aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL} onsubmit={save}>
 	<div class="details-head">
 		<span class="details-title">{COLLECTION_MENU_EDIT_DETAILS_LABEL}</span>
-		<button type="button" class="close-btn" aria-label={ALBUM_DETAILS_CLOSE_LABEL} onclick={onclose}>
+		<button
+			type="button"
+			class="close-btn"
+			aria-label={ALBUM_DETAILS_CLOSE_LABEL}
+			onclick={onclose}
+		>
 			<Icon name="x" size={18} />
 		</button>
 	</div>
@@ -79,7 +84,12 @@
 	</label>
 	<label class="field">
 		<span class="field-label">{ALBUM_SUBTITLE_LABEL}</span>
-		<input bind:value={draft.subtitle} type="text" autocomplete="off" maxlength={ALBUM_SUBTITLE_MAX_LENGTH} />
+		<input
+			bind:value={draft.subtitle}
+			type="text"
+			autocomplete="off"
+			maxlength={ALBUM_SUBTITLE_MAX_LENGTH}
+		/>
 	</label>
 	<label class="field field-year">
 		<span class="field-label">{ALBUM_YEAR_LABEL}</span>

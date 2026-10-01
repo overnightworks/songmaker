@@ -33,18 +33,21 @@
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
 		ALBUM_COVER_ALT_TYPE,
+		ALBUM_DETAILS_SAVE_FAILED,
+		ALBUM_DETAILS_SAVED,
 		ALBUM_NO_SONGS,
 		ALBUM_YEAR_MAX,
 		ALBUM_YEAR_MIN,
 		LIBRARY_ALBUMS_LOADING,
 		LIBRARY_RETRY_LABEL,
-		NEW_SONG_ROW_LABEL
+		NEW_SONG_ROW_LABEL,
+		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
-	import AlbumMetaEditor from './AlbumMetaEditor.svelte';
+	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
 	import PlayingMark from './PlayingMark.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
@@ -88,6 +91,9 @@
 	const artFill = $derived(selectedAlbum ? usableAlbumPrimary(selectedAlbum.colors) : null);
 	const initials = $derived(
 		selectedAlbum ? titleInitials(selectedAlbum.title) : ALBUM_ART_EMPTY_INITIALS
+	);
+	const albumMeta = $derived(
+		[selectedAlbum?.subtitle, selectedAlbum?.year].filter(Boolean).join(PLACE_LINE_SEPARATOR)
 	);
 	// Holds the album the card adds to, so a card opened on one album never
 	// shows on the next one this view is reused for.
@@ -154,36 +160,11 @@
 		}
 	}
 
-	async function onRenameAlbum(newTitle: string): Promise<void> {
+	async function onSaveAlbumDetails(details: AlbumDetails): Promise<void> {
 		if (!selectedAlbum) return;
 		const albumId = selectedAlbum.id;
-		try {
-			const updated = await updateAlbum(albumId, { title: newTitle });
-			updateAlbumInList(albumId, () => updated);
-			addToast('Album renamed', 'success');
-		} catch (e) {
-			addToast(describeFailure(e, 'Rename failed'), 'error');
-			throw e;
-		}
-	}
-
-	async function onSaveAlbumSubtitle(newSubtitle: string): Promise<void> {
-		if (!selectedAlbum) return;
-		const albumId = selectedAlbum.id;
-		try {
-			const updated = await updateAlbum(albumId, { subtitle: newSubtitle });
-			updateAlbumInList(albumId, () => updated);
-		} catch (e) {
-			addToast(describeFailure(e, 'Update failed'), 'error');
-			throw e;
-		}
-	}
-
-	async function onSaveAlbumYear(newYear: string): Promise<void> {
-		if (!selectedAlbum) return;
-		const albumId = selectedAlbum.id;
-		const year = newYear ? Number(newYear) : null;
-		if (newYear && !Number.isInteger(year)) {
+		const year = details.year ? Number(details.year) : null;
+		if (details.year && !Number.isInteger(year)) {
 			addToast('Year must be a whole number', 'error');
 			throw new Error('Year must be a whole number');
 		}
@@ -192,10 +173,15 @@
 			throw new Error('Year out of range');
 		}
 		try {
-			const updated = await updateAlbum(albumId, { year });
+			const updated = await updateAlbum(albumId, {
+				title: details.title,
+				subtitle: details.subtitle,
+				year
+			});
 			updateAlbumInList(albumId, () => updated);
+			addToast(ALBUM_DETAILS_SAVED, 'success');
 		} catch (e) {
-			addToast(describeFailure(e, 'Update failed'), 'error');
+			addToast(describeFailure(e, ALBUM_DETAILS_SAVE_FAILED), 'error');
 			throw e;
 		}
 	}
@@ -306,7 +292,7 @@
 			{initials}
 			{artFill}
 			onplay={currentAlbumId && albumHasTakes ? (start) => playAlbum(currentAlbumId, start) : null}
-			onrename={onRenameAlbum}
+			meta={albumMeta}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
 			onshare={onAlbumShareEnable}
@@ -318,12 +304,15 @@
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			oncurate={onCurate}
 		>
-			{#snippet metaEditor()}
+			{#snippet detailsEditor(close: () => void)}
 				<AlbumMetaEditor
-					subtitle={selectedAlbum.subtitle}
-					year={selectedAlbum.year}
-					onsavesubtitle={onSaveAlbumSubtitle}
-					onsaveyear={onSaveAlbumYear}
+					details={{
+						title: selectedAlbum.title,
+						subtitle: selectedAlbum.subtitle,
+						year: selectedAlbum.year
+					}}
+					onsave={onSaveAlbumDetails}
+					onclose={close}
 				/>
 			{/snippet}
 			{#snippet coverEditor(close: () => void)}

@@ -669,7 +669,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			'Upload…',
 			'Replace…',
 			'Remove cover',
-			'Rename',
+			'Edit details',
 			'Add to playlist',
 			'Curate album',
 			'Archive album',
