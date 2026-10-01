@@ -4005,12 +4005,15 @@ describe('restoring the last playback after a reload', () => {
 		}
 	);
 
-	it.each([
-		{ listener: 'leaves it ended', replays: false, plays: nextTake },
-		{ listener: 'plays it again', replays: true, plays: savedTake }
+	it.each<{ listener: string; status: typeof audioPlayer.status; plays: GenerationItem }>([
+		{ listener: 'leaves it ended', status: 'idle', plays: nextTake },
+		{ listener: 'plays it again', status: 'playing', plays: savedTake },
+		{ listener: 'plays it again, still buffering', status: 'buffering', plays: savedTake },
+		{ listener: 'plays it again, still loading', status: 'loading', plays: savedTake },
+		{ listener: 'plays it again and pauses it', status: 'paused', plays: savedTake }
 	])(
 		'a restored album take that ends before its album is gathered: the listener $listener',
-		async ({ replays, plays }) => {
+		async ({ status, plays }) => {
 			vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
 			let serveAlbum: () => void = () => {};
 			vi.mocked(fetchSongs).mockImplementationOnce(
@@ -4029,8 +4032,9 @@ describe('restoring the last playback after a reload', () => {
 
 			await restoreLastPlayback();
 			audioPlayer.currentCallbacks.onPlaybackStarted?.();
+			audioPlayer.status = 'idle';
 			audioPlayer.currentCallbacks.onEnded?.('normal');
-			if (replays) audioPlayer.status = 'playing';
+			audioPlayer.status = status;
 			serveAlbum();
 			await vi.waitFor(() => expect(audioPlayer.preload).toHaveBeenCalledWith(expect.anything()));
 			await new Promise((settled) => setTimeout(settled, 0));
