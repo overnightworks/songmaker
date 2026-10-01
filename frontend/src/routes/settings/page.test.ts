@@ -56,7 +56,6 @@ describe('settings index on the phone', () => {
 
 		expect(rowLabels(target)).toEqual([
 			'Generation',
-			'Playback',
 			'Voices',
 			'Account',
 			'Admin',
@@ -65,7 +64,6 @@ describe('settings index on the phone', () => {
 		]);
 		expect(listRows(target).map((row) => row.getAttribute('href'))).toEqual([
 			'/settings/generation',
-			'/settings/playback',
 			'/settings/voices',
 			'/settings/account',
 			'/settings/users',
@@ -79,7 +77,7 @@ describe('settings index on the phone', () => {
 		currentUser.set(USER);
 		const target = await render();
 
-		expect(rowLabels(target)).toEqual(['Generation', 'Playback', 'Voices', 'Account', 'Legal']);
+		expect(rowLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
 	});
 
 	it('names the tab after the Settings list', async () => {
