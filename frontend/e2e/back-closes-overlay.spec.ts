@@ -140,6 +140,14 @@ async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist)
 	await expect(takeSheet(page)).toBeVisible();
 }
 
+// The sheet has no close button of its own: its backdrop closes it, and only
+// the backdrop's top edge, above the sheet, is there to tap.
+async function tapBesideTakeSheet(page: Page): Promise<void> {
+	await page
+		.getByRole('button', { name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL) })
+		.click({ position: { x: 8, y: 8 } });
+}
+
 async function goBack(page: Page): Promise<void> {
 	await page.goBack();
 }
@@ -457,13 +465,11 @@ const OVERLAY_ROWS: OverlayRow[] = [
 	// Back pressed right after it is underway; each landing says by its entry
 	// which layers it left, so the Back closes Now Playing and nothing more.
 	{
-		name: "the This take sheet's × plus an immediate Back closes one layer more and keeps the song",
+		name: 'a tap beside the This take sheet plus an immediate Back closes one layer more and keeps the song',
 		shell: 'mobile',
 		open: openTakeSheetOverNowPlaying,
 		leave: async (page) => {
-			await page
-				.getByRole('button', { name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL) })
-				.click();
+			await tapBesideTakeSheet(page);
 			await page.goBack();
 		},
 		expectLeft: async (page, _pages, playlist) => {

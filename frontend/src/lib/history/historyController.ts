@@ -170,6 +170,7 @@ let lastRouterIndex = routerIndexOf(history.state);
 const stepBackWaiters = new Map<number, (() => void)[]>();
 let stepBacksLandedWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
+let loadingMount: NavigateOptions | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
 
@@ -259,20 +260,38 @@ interface NavigateOptions {
 // A navigation through the router carries its entry the way a shallow write
 // does: a push a fresh id, a replace the id of the entry it writes over.
 // While it loads, history is not still: the router writes its entry only
-// once the route has loaded, over whatever entry stands then.
+// once the route has loaded, over whatever entry stands then. A replace to
+// the address history already stands on moves nothing: it mounts the route of
+// the entry standing there, and history stays still meanwhile.
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
 		: newEntry();
-	navigationsUnderway += 1;
+	const mount = options.replaceState && standsOnAddress(url) ? options : null;
+	if (mount === null) navigationsUnderway += 1;
+	else loadingMount = mount;
 	try {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 		await goto(url, { ...options, state: stampedPageState(options.state, entry) });
 		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
 	} finally {
-		navigationsUnderway -= 1;
+		if (mount === null) navigationsUnderway -= 1;
+		else if (loadingMount === mount) loadingMount = null;
 		settleStillness();
 	}
+}
+
+function standsOnAddress(url: string): boolean {
+	return new URL(url, location.href).href === location.href;
+}
+
+// A shallow write while a route mounts issues the mount again over the entry
+// it wrote: the router writes over whichever entry stands once the route has
+// loaded, so the older mount would land on that entry with the page state it
+// started with, and the entry would lose its own.
+export function remountOverStandingEntry(url: string, state: App.PageState): Promise<void> {
+	if (loadingMount === null) return Promise.resolve();
+	return navigateTo(url, { ...loadingMount, state });
 }
 
 // A navigation another one superseded wrote no entry of its own, so only one
@@ -380,7 +399,9 @@ function settleStillness(): void {
 
 // The controller's side of the layer stack: a layer held while history moves
 // waits for it to stand still, since an entry pushed meanwhile would land
-// under the step's own landing. A layer leaving from the entry history stands
+// under the step's own landing. A layer held while a route only mounts gets
+// its entry at once, or a Back pressed before the route has loaded would
+// leave the page under it instead of closing it. A layer leaving from the entry history stands
 // on steps back off it; one whose entry stands lower leaves it to the landing
 // that reaches it, which steps off an entry no open layer owns.
 const layerEntries: LayerHistory = {
@@ -412,6 +433,7 @@ function pushLayerEntry(layer: Layer): void {
 	untrack(() => {
 		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 		entryOfLayer.set(layer, pushEntry(location.href, pageState, layer.id).id);
+		void remountOverStandingEntry(location.href, pageState);
 	});
 }
 
@@ -488,6 +510,7 @@ export function resetHistoryControllerForTests(): void {
 	stepBackWaiters.clear();
 	stepBacksLandedWaiters = [];
 	navigationsUnderway = 0;
+	loadingMount = null;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 }

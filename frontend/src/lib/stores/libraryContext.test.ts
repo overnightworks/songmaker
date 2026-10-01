@@ -763,28 +763,27 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
-	// A layer opening over the new album while its route still loads gets its
-	// entry once the route stands: the router writes its entry over whichever
-	// entry stands when the route has loaded, which must not be the layer's.
-	it("gives a layer opened while the album's route still loads its entry once the route stands", async () => {
+	// A layer opening over the new album while its route still loads stands at
+	// once, so a Back pressed before the route has loaded closes it and keeps
+	// the album. The router writes over whichever entry stands once the route
+	// has loaded, so the mount is issued again over the layer's entry.
+	it("gives a layer opened while the album's route still loads its entry at once, which Back closes and keeps the album", async () => {
 		await writeLibraryHistory(libraryRootState(), '/', 'replace');
-		let routeLoaded = (): void => undefined;
-		vi.mocked(goto).mockImplementationOnce(
-			() => new Promise<void>((resolve) => (routeLoaded = resolve))
-		);
-		const mounted = writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
 		const album = standingHistoryEntry();
-		const lengthBefore = historyLength();
+		let menuClosed = false;
 
-		const leaveMenu = holdLayer('menu', () => undefined);
+		holdLayer('menu', () => (menuClosed = true));
 
-		expect(historyLength()).toBe(lengthBefore);
-		routeLoaded();
-		await mounted;
 		expect(standingHistoryEntry()).toEqual({ id: expect.any(Number), layer: 'menu' });
 		expect(standingHistoryEntry()?.id).toBeGreaterThan(album?.id ?? Number.NaN);
 		expect(historyEntry()).toEqual(albumState);
-		leaveMenu();
+		await pressBack();
+		expect(menuClosed).toBe(true);
+		expect(standingHistoryEntry()).toEqual(album);
+		expect(historyEntry()).toEqual(albumState);
+		expect(location.pathname).toBe(albumRoutePath('a2'));
 	});
 
 	// A song-to-song move across album boundaries stays the 'album' shape on

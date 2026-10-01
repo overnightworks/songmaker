@@ -9,6 +9,7 @@ import {
 	ownStepBacksUnderway,
 	pageStateOfHistoryState,
 	pushEntry,
+	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests
 } from '$lib/history/historyController';
@@ -100,7 +101,6 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
-let mountingRoute: Promise<void> | null = null;
 let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
 let restoredHistory: unknown = libraryHistoryEntry(historyStateOnLoad());
@@ -313,15 +313,11 @@ function writeLibraryHistoryKeepingRoute(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	const written = writeShallowLibraryHistory(state, url, mode);
-	return mountingRoute === null ? Promise.resolve() : mountRouteOfEntry(url, written);
+	return remountOverStandingEntry(url, libraryPageState(written));
 }
 
 function mountRouteOfEntry(url: string, entry: LibraryHistoryState): Promise<void> {
-	const mount = navigateLibraryRoute(url, entry, 'replace');
-	mountingRoute = mount;
-	return mount.finally(() => {
-		if (mountingRoute === mount) mountingRoute = null;
-	});
+	return navigateLibraryRoute(url, entry, 'replace');
 }
 
 function navigateLibraryRoute(
@@ -1026,7 +1022,6 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
-	mountingRoute = null;
 	plannedHistory = null;
 	librarySnapshotTaken = false;
 	restoredHistory = null;
