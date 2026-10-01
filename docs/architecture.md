@@ -437,7 +437,7 @@ wins on source order; `+layout.svelte` owns only the attribute it keys on. Every
 rows, `ToastContainer`, `QueueStreamFeedback`, the editor's bottom padding,
 the collection views and Now Playing's own sheet — follows from it instead of
 carrying its own exception. A share page keeps its bar and never carries the
-attribute, so `SharedFooter`'s `var(--player-height, 88px)` stays as it was. Because the bar unmounts, it cannot own the Web Audio graph: an `<audio>` element can be passed to `createMediaElementSource` exactly once, and closing the context that owns that source routes the element's output into a dead graph for the rest of the session — playback that still reports itself as playing but makes no sound. `audioPlayer.svelte.ts` therefore owns the context and the analyser for the element's whole life (`getAnalyser`, `resumeAudioGraph`, closed only in `destroy()`, built lazily so a device that never draws a visualizer never routes its audio through Web Audio), and `TransportBarFrame` only borrows the `AnalyserNode`. The transport chrome and visualizer live in `TransportBarFrame.svelte`, a
+attribute, so `SharedFooter`'s `var(--player-height, 88px)` stays as it was. Because the bar unmounts, it cannot own the Web Audio graph: an `<audio>` element can be passed to `createMediaElementSource` exactly once, and closing the context that owns that source routes the element's output into a dead graph for the rest of the session — playback that still reports itself as playing but makes no sound. `audioPlayer.svelte.ts` therefore owns the context and the analyser for the elements' whole life (`getAnalyser`, `resumeAudioGraph`, closed only in `destroy()`, built lazily so a device that never draws a visualizer never routes its audio through Web Audio), and `TransportBarFrame` only borrows the `AnalyserNode`. The player holds two elements, an active deck and a standby deck, each with its own `MediaElementSource` into the one context: `preload(info)` loads the standby, and `load()` promotes it without waiting for `canplay` when it holds exactly the requested URL with future data, so the analyser carries whichever deck is playing. The transport chrome and visualizer live in `TransportBarFrame.svelte`, a
 presentational component driven by props plus the `audioPlayer` singleton
 directly (never a store) — `PlayerBar` supplies the app's idle-state copy,
 store-derived prev/next, and its own media-session position/playback-state
@@ -489,6 +489,17 @@ the `setShuffle(false)` reset that makes a picked entry honest: a row means
 The idle transport Play keeps its own path, since it must keep the listener's
 shuffle setting. Navigation reads playback only through `idlePlayTarget()`
 ("what would Play start"), never as a queue.
+
+**The queue names its next take once.** `nextQueueTake(ctx, current)` in
+`stores/player.ts` is the one decider of which take follows the current one:
+Next plays it, and every queue load and album rebuild hands it to
+`audioPlayer.preload`, so the standby deck is already loading the next take
+while the current one plays and a track change needs no network round trip
+before the next note. A queue wraps around; the library window's last take is
+followed by the window's end and a one-take queue by nothing, so both preload
+nothing. A take row never plays alone: when the library pool holds only the
+tapped take (nothing picked yet), the queue continues through that take's
+album instead.
 
 Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
 snapshot endpoints prepare the count-windowed sources after releasing the
