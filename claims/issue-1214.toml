@@ -1,8 +1,0 @@
-claim_id = "168815be31354fafa8f7981824adb458"
-agent = "claude-head"
-role = "builder"
-base = "0d203e7b7a1cfc11ab9995a36d43695e3adddd1c"
-branch = "claude-head/issue-1214-self-hosted-fonts"
-scope = ["docs/security.md", "frontend/e2e/self-hosted-fonts.spec.ts", "frontend/package.json", "frontend/pnpm-lock.yaml", "frontend/src/app.css", "frontend/src/service-worker.ts", "frontend/vite.config.ts"]
-opened_commit = "c01c9161e3c5ca638f557a3a53eed3d1f5333bdd"
-whole_reason = "font dependency, its lockfile, the import, the build inline rule, its e2e proof and docs"
