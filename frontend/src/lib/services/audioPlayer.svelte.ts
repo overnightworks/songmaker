@@ -801,7 +801,7 @@ class AudioPlayer {
 			if (this.current !== target || this.status === 'paused' || this.status === 'error') return;
 			if (await this.answeredARefusal(probe)) return;
 		}
-		if (!this.recoverPlayback('media-error')) this.handleMediaError(mediaError);
+		if (!this.recoverPlayback('media-error')) await this.handleMediaError(mediaError);
 	}
 
 	// An error before the take ever played is the take's own (gone,
