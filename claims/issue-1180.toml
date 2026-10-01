@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "fc9a4c14d600212b5b1942fad6a3c1b31fe03b88"
 branch = "claude/issue-1180-album-menu-rows"
-scope = ["docs/architecture.md", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/album-menu.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/AlbumMetaEditor.svelte", "frontend/src/lib/components/AlbumMetaEditor.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/constants.ts"]
+scope = ["docs/architecture.md", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/album-menu.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/AlbumMetaEditor.svelte", "frontend/src/lib/components/AlbumMetaEditor.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts", "frontend/src/lib/components/Icon.svelte", "frontend/src/lib/constants.ts"]
 opened_commit = "04e265d9898062a359bde935a8aba7a8c505c628"
 whole_reason = "the album menu's 7 rows and the Edit details polish"
