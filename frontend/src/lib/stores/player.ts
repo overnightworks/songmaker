@@ -4,6 +4,7 @@ import {
 	createLibraryQueueStreamSnapshot,
 	createQueueStreamSnapshot,
 	fetchLibraryPoolQueue,
+	fetchPlaylist,
 	fetchSong
 } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
@@ -388,19 +389,29 @@ function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
 	};
 }
 
-function loadNativeTake(
-	info: PlaybackInfo,
-	opts: { restart?: boolean; startAt?: number } = {}
-): void {
+// Where a queue's first take starts: at a place in it, and paused when the
+// queue is restored rather than played.
+interface QueueStart {
+	resumeAtTrackTime?: number;
+	autoplay?: boolean;
+}
+
+interface QueueTakeLoad {
+	restart?: boolean;
+	startAt?: number;
+	autoplay?: boolean;
+}
+
+function loadNativeTake(info: PlaybackInfo, opts: QueueTakeLoad = {}): void {
 	clearWindowEnd();
 	loadQueueTake(info, opts);
 }
 
 // Every take a queue plays goes through here, so the take after it is
 // already loading while this one plays (#1187 P1).
-function loadQueueTake(info: PlaybackInfo, opts: { restart?: boolean; startAt?: number }): void {
-	if (opts.startAt !== undefined) {
-		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
+function loadQueueTake(info: PlaybackInfo, opts: QueueTakeLoad): void {
+	if (opts.startAt !== undefined || opts.autoplay !== undefined) {
+		audioPlayer.load(info, { ...opts, restart: opts.restart ?? true });
 	} else if (opts.restart) {
 		audioPlayer.load(info, { restart: true });
 	} else {
@@ -409,23 +420,27 @@ function loadQueueTake(info: PlaybackInfo, opts: { restart?: boolean; startAt?: 
 	preloadNextTake();
 }
 
+function firstTakeLoad(start: QueueStart): QueueTakeLoad {
+	return { restart: true, startAt: start.resumeAtTrackTime, autoplay: start.autoplay };
+}
+
 function playNativeLibraryTakes(
 	takes: PlaybackInfo[],
 	index: number,
-	resumeAtTrackTime?: number
+	start: QueueStart = {}
 ): void {
 	setQueueContext({ type: 'library', takes, index });
-	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
+	loadNativeTake(takes[index], firstTakeLoad(start));
 }
 
 function playNativeAlbumTakes(
 	albumId: string,
 	takes: PlaybackInfo[],
 	index: number,
-	resumeAtTrackTime?: number
+	start: QueueStart = {}
 ): void {
 	setQueueContext({ type: 'album', albumId, takes, index });
-	loadNativeTake(takes[index], { restart: true, startAt: resumeAtTrackTime });
+	loadNativeTake(takes[index], firstTakeLoad(start));
 }
 
 function nativeTakeIndex(
@@ -471,7 +486,7 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 // album the queue continues through instead.
 async function playLibraryFromGeneration(
 	gen: GenerationItem,
-	opts: { resumeAtTrackTime?: number; tappedRowSong?: SongItem } = {}
+	opts: QueueStart & { tappedRowSong?: SongItem } = {}
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
@@ -510,10 +525,10 @@ async function playLibraryFromGeneration(
 	}
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
+	playNativeLibraryTakes(takes, startIndex, opts);
 }
 
-async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<void> {
+async function playLibrary(opts: QueueStart = {}): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
 	playStartNotice.set('building');
@@ -542,7 +557,7 @@ async function playLibrary(opts: { resumeAtTrackTime?: number } = {}): Promise<v
 	playStartNotice.set('idle');
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-	playNativeLibraryTakes(queue.takes.map(poolTakeToPlaybackInfo), 0, opts.resumeAtTrackTime);
+	playNativeLibraryTakes(queue.takes.map(poolTakeToPlaybackInfo), 0, opts);
 }
 
 type IdlePlayTarget =
@@ -1156,6 +1171,15 @@ function takeAfterCurrent(): PlaybackInfo | null {
 	return next.kind === 'take' ? next.take : null;
 }
 
+// What a reopened page shows once the current take has ended: the take the
+// queue plays next, or, where the library window ends, the ended take itself,
+// since a restored library queue builds its next window from there (#1236).
+function takeAfterTheEnd(): PlaybackInfo | null {
+	const next = nextQueueTake(get(queueContext), audioPlayer.current);
+	if (next.kind === 'window-end') return audioPlayer.current;
+	return next.kind === 'take' ? next.take : null;
+}
+
 function preloadNextTake(): void {
 	audioPlayer.preload(takeAfterCurrent());
 }
@@ -1319,12 +1343,12 @@ async function playAlbumFromGeneration(
 	albumId: string,
 	song: SongItem,
 	gen: GenerationItem,
-	opts: { resumeAtTrackTime?: number } = {}
+	opts: QueueStart = {}
 ): Promise<void> {
 	const { seq } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	playNativeAlbumTakes(albumId, [toPlaybackInfo(gen, song)], 0, opts.resumeAtTrackTime);
+	playNativeAlbumTakes(albumId, [toPlaybackInfo(gen, song)], 0, opts);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
@@ -1367,7 +1391,7 @@ export async function curateAlbum(albumId: string): Promise<void> {
 function playPlaylistIndex(
 	ctx: { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] },
 	newIndex: number,
-	opts: { restart?: boolean; startAt?: number } = {}
+	opts: QueueTakeLoad = {}
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
 	const entry = ctx.entries[newIndex];
@@ -1446,7 +1470,7 @@ function startPlaylistQueue(
 	playlist: PlaylistQueueSource,
 	entries: PlaylistEntryItem[],
 	startIndex: number,
-	opts: { restart?: boolean; resumeAtTrackTime?: number } = {}
+	opts: QueueStart & { restart?: boolean } = {}
 ): void {
 	beginPlayStart();
 	clearWindowEnd();
@@ -1457,8 +1481,9 @@ function startPlaylistQueue(
 		byPosition,
 		startEntry ? Math.max(0, byPosition.indexOf(startEntry)) : 0
 	);
-	const loadOpts: { restart?: boolean; startAt?: number } = { restart: opts.restart };
+	const loadOpts: QueueTakeLoad = { restart: opts.restart };
 	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
+	if (opts.autoplay !== undefined) loadOpts.autoplay = opts.autoplay;
 	playPlaylistIndex({ playlist, entries: ordered.items }, ordered.startIndex, loadOpts);
 }
 
@@ -1633,32 +1658,76 @@ function resumeQueueSource(): ResumeQueueSource | null {
 	return { type: 'library', ...librarySnapshotOpts() };
 }
 
-followPlaybackForResume({ playsTheAppsTakes, queueSource: resumeQueueSource, takeAfterCurrent });
+followPlaybackForResume({
+	playsTheAppsTakes,
+	queueSource: resumeQueueSource,
+	takeAfterCurrent: takeAfterTheEnd
+});
 
 /**
  * Shows the take the signed-in user last played on this device, paused where
- * it stood, so that reopening a page Android killed finds it again (#1187
- * P2). A take loaded in the meantime is never replaced.
+ * it stood, in the queue it played from, so that reopening a page Android
+ * killed finds it again and one tap plays on through that queue (#1187 P2).
+ * An album queue is the album the song belongs to now, as the server says. A
+ * take loaded in the meantime is never replaced.
  */
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
 	if (saved === null || audioPlayer.current !== null) return;
-	const take = await playableSavedTake(saved);
-	if (take === null || audioPlayer.current !== null) return;
-	audioPlayer.load(take, { autoplay: false, startAt: saved.position });
+	const found = await playableSavedTake(saved);
+	if (found === null || audioPlayer.current !== null) return;
+	const start: QueueStart = {
+		resumeAtTrackTime: positionWithinTake(saved.position, found.take),
+		autoplay: false
+	};
+	const { source } = saved;
+	if (source.type === 'album') {
+		await playAlbumFromGeneration(found.song.album_id, found.song, found.take, start);
+	} else if (source.type === 'library') {
+		await playLibraryFromGeneration(found.take, start);
+	} else {
+		await restorePlaylistQueue(source.playlistId, found.take, start);
+	}
+}
+
+// A take saved at or past its end would end the moment it plays, so it comes
+// back at its start instead.
+function positionWithinTake(position: number, take: GenerationItem): number {
+	const duration = take.audio_duration_sec;
+	return duration !== null && position >= duration ? 0 : position;
 }
 
 // The server answers 404 for a song deleted or out of this user's reach, and
 // a take deleted or archived since is missing from its song or marked so;
 // none of them, nor a server out of reach, is restored, and none is reported.
-async function playableSavedTake(saved: SavedPlayback): Promise<PlaybackInfo | null> {
-	let song: SongItem;
+async function playableSavedTake(
+	saved: SavedPlayback
+): Promise<{ song: SongItem; take: GenerationItem } | null> {
+	const song = await quietly(() => fetchSong(saved.songId));
+	if (song === null) return null;
+	const take = song.generations.find((gen) => gen.id === saved.generationId && !gen.is_archived);
+	return take === undefined ? null : { song, take };
+}
+
+// A playlist deleted, out of reach, or no longer holding the take restores
+// nothing, as a lost take does.
+async function restorePlaylistQueue(
+	playlistId: string,
+	take: GenerationItem,
+	start: QueueStart
+): Promise<void> {
+	const playlist = await quietly(() => fetchPlaylist(playlistId));
+	if (playlist === null || audioPlayer.current !== null) return;
+	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
+	if (index < 0) return;
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, { restart: true, ...start });
+}
+
+async function quietly<T>(request: () => Promise<T>): Promise<T | null> {
 	try {
-		song = await fetchSong(saved.songId);
+		return await request();
 	} catch (err) {
 		if (err instanceof ApiError || err instanceof NetworkError) return null;
 		throw err;
 	}
-	const take = song.generations.find((gen) => gen.id === saved.generationId && !gen.is_archived);
-	return take === undefined ? null : toPlaybackInfo(take, song);
 }
