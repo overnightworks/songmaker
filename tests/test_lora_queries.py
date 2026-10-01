@@ -24,7 +24,6 @@ from songmaker_cli.db.queries import (
     get_user_lora_sample,
     list_active_user_loras,
     list_user_loras_for_user,
-    restore_user_lora,
     soft_delete_user_lora,
     update_user_lora,
     update_user_lora_sample,
@@ -152,23 +151,17 @@ def test_update_user_lora_missing_raises(session: Session) -> None:
         update_user_lora(session, "does-not-exist", status=LoraStatus.READY)
 
 
-def test_soft_delete_and_restore_user_lora(session: Session) -> None:
+def test_soft_deleted_user_lora_is_no_longer_found(session: Session) -> None:
     lora = create_user_lora(session, _USER_A, "X", "x")
     session.commit()
     soft_delete_user_lora(session, lora.id)
     session.commit()
     assert get_user_lora(session, lora.id) is None
 
-    restore_user_lora(session, lora.id)
-    session.commit()
-    assert get_user_lora(session, lora.id) is not None
-
 
 def test_soft_delete_missing_raises(session: Session) -> None:
     with pytest.raises(ValueError):
         soft_delete_user_lora(session, "missing")
-    with pytest.raises(ValueError):
-        restore_user_lora(session, "missing")
 
 
 def test_list_active_user_loras(session: Session) -> None:

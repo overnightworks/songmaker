@@ -63,9 +63,6 @@ from songmaker_cli.db.queries.conversations import (
     archive_conversation as archive_conversation,
 )
 from songmaker_cli.db.queries.conversations import (
-    count_messages as count_messages,
-)
-from songmaker_cli.db.queries.conversations import (
     create_conversation as create_conversation,
 )
 from songmaker_cli.db.queries.conversations import (
@@ -81,13 +78,7 @@ from songmaker_cli.db.queries.conversations import (
     get_or_create_active_conversation as get_or_create_active_conversation,
 )
 from songmaker_cli.db.queries.conversations import (
-    list_conversations as list_conversations,
-)
-from songmaker_cli.db.queries.conversations import (
     list_messages as list_messages,
-)
-from songmaker_cli.db.queries.conversations import (
-    messages_since as messages_since,
 )
 from songmaker_cli.db.queries.conversations import (
     recent_conversations as recent_conversations,
@@ -231,9 +222,6 @@ from songmaker_cli.db.queries.loras import (
     list_user_loras_for_user as list_user_loras_for_user,
 )
 from songmaker_cli.db.queries.loras import (
-    restore_user_lora as restore_user_lora,
-)
-from songmaker_cli.db.queries.loras import (
     soft_delete_user_lora as soft_delete_user_lora,
 )
 from songmaker_cli.db.queries.loras import (
@@ -292,9 +280,6 @@ from songmaker_cli.db.queries.rate_limits import (
     delete_all_user_rate_limits as delete_all_user_rate_limits,
 )
 from songmaker_cli.db.queries.rate_limits import (
-    delete_rate_limit_setting as delete_rate_limit_setting,
-)
-from songmaker_cli.db.queries.rate_limits import (
     get_all_global_rate_limits as get_all_global_rate_limits,
 )
 from songmaker_cli.db.queries.rate_limits import (
@@ -325,12 +310,6 @@ from songmaker_cli.db.queries.resource_events import (
 )
 from songmaker_cli.db.queries.sentinels import UNSET as UNSET
 from songmaker_cli.db.queries.settings import (
-    ActiveCowriterSettings as ActiveCowriterSettings,
-)
-from songmaker_cli.db.queries.settings import (
-    ActiveJudgeSettings as ActiveJudgeSettings,
-)
-from songmaker_cli.db.queries.settings import (
     CoverSettings as CoverSettings,
 )
 from songmaker_cli.db.queries.settings import (
@@ -341,12 +320,6 @@ from songmaker_cli.db.queries.settings import (
 )
 from songmaker_cli.db.queries.settings import create_preset as create_preset
 from songmaker_cli.db.queries.settings import delete_preset as delete_preset
-from songmaker_cli.db.queries.settings import (
-    get_active_cowriter_settings as get_active_cowriter_settings,
-)
-from songmaker_cli.db.queries.settings import (
-    get_active_judge_settings as get_active_judge_settings,
-)
 from songmaker_cli.db.queries.settings import (
     get_claude_chat_model as get_claude_chat_model,
 )
