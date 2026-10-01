@@ -142,7 +142,17 @@ describe('login page', () => {
 			'the library instead of a raw API answer',
 			`/login?redirect=${encodeURIComponent('/api/auth/me')}`,
 			'/'
-		]
+		],
+		...['/%6Cogin', '/logi%6E/'].map((encodedSignIn) => [
+			`the library instead of the sign-in page spelled ${encodedSignIn}`,
+			`/login?redirect=${encodeURIComponent(encodedSignIn)}`,
+			'/'
+		]),
+		...['/%61pi/auth/me', '/api%2Fauth%2Fme', '/%61pi/albums', '/api%2Fsongs'].map((encodedApi) => [
+			`the library instead of a raw API answer spelled ${encodedApi}`,
+			`/login?redirect=${encodeURIComponent(encodedApi)}`,
+			'/'
+		])
 	])('signs in and lands on %s', async (_label, address, landing) => {
 		mockLogin.mockResolvedValueOnce({ id: 'u1', username: 'felix', role: 'user' });
 		const target = renderPage(address);

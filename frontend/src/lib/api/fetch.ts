@@ -178,7 +178,11 @@ function isSingleSlashPath(candidate: string): boolean {
 // and an API address would show its raw answer.
 const NON_PAGE_PATH_PREFIXES = [`${SIGN_IN_PATH}/`, '/api/'];
 
-function isPagePath(pathname: string): boolean {
+// Judged decoded, the way the router and the server resolve it: URL parsing
+// keeps %-escapes, so /%6Cogin would otherwise reach the sign-in page and
+// /%61pi/... an API address. A single-slash path is already known decodable.
+function isPagePath(encodedPathname: string): boolean {
+	const pathname = decodeURIComponent(encodedPathname);
 	return (
 		pathname !== SIGN_IN_PATH &&
 		!NON_PAGE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
