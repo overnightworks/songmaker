@@ -294,7 +294,10 @@ describe('AlbumDetailView header', () => {
 
 	it('offers to pause this album while it plays', async () => {
 		queueContext.set({ type: 'album', albumId: 'a-local' });
-		audioPlayer.current = { songId: 's-local' } as unknown as typeof audioPlayer.current;
+		audioPlayer.current = {
+			songId: 's-local',
+			generation: generation({ song_id: 's-local' })
+		} as unknown as typeof audioPlayer.current;
 		audioPlayer.status = 'playing';
 
 		const target = await renderDetail();
@@ -345,7 +348,10 @@ describe('AlbumDetailView header', () => {
 			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
 		]);
 		queueContext.set({ type: 'album', albumId: 'a-local' });
-		audioPlayer.current = { songId: 's-local' } as unknown as typeof audioPlayer.current;
+		audioPlayer.current = {
+			songId: 's-local',
+			generation: generation({ song_id: 's-local' })
+		} as unknown as typeof audioPlayer.current;
 		audioPlayer.status = 'playing';
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
@@ -739,7 +745,10 @@ describe('AlbumDetailView song row', () => {
 	it.each(['playing', 'paused'] as const)(
 		'marks the row the transport holds while %s, and only that row',
 		async (status) => {
-			audioPlayer.current = { songId: 's-tide' } as unknown as typeof audioPlayer.current;
+			audioPlayer.current = {
+				songId: 's-tide',
+				generation: generation({ song_id: 's-tide' })
+			} as unknown as typeof audioPlayer.current;
 			audioPlayer.status = status;
 
 			const target = await renderTwoSongs();
