@@ -12,7 +12,8 @@
 		RAIL_LIBRARY_LABEL,
 		RAIL_PLAYLISTS_LABEL
 	} from '$lib/constants';
-	import { historyLayerState, openLibraryWall } from '$lib/stores/navigation';
+	import { openLibraryWall } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { playbackSource, setShuffle, type CollectionStart } from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 

@@ -45,7 +45,7 @@
 
 	function handleKeydown(event: KeyboardEvent): void {
 		if (!menuRef) return;
-		handleFocusTrapKeydown(menuRef, event, close);
+		handleFocusTrapKeydown(menuRef, event);
 	}
 
 	$effect(() => {

@@ -40,10 +40,8 @@
 	const historyLayer = dialogHistoryLayer('confirm-delete-dialog', () => oncancel());
 	const cancel = historyLayer.answer(() => oncancel());
 
-	// The trap claims Escape with preventDefault before closing, so the page's
-	// global Escape (escape-level-up.ts) still yields once the dialog is gone.
 	function trapKeys(event: KeyboardEvent): void {
-		handleFocusTrapKeydown(dialog, event, cancel);
+		handleFocusTrapKeydown(dialog, event);
 	}
 </script>
 

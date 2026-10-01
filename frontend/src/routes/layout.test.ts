@@ -41,6 +41,7 @@ import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
+	nowPlayingDockable,
 	nowPlayingSurface,
 	openNowPlaying,
 	selectedSongId
@@ -605,14 +606,20 @@ describe('global Escape', () => {
 		expect(get(selectedSongId)).toBe('s1');
 	});
 
-	it('does nothing while the rail drawer is open', async () => {
+	it('closes the open rail drawer first and leaves the song only on the next Escape', async () => {
 		selectedSongId.set('s1');
 		await renderLayout('/');
 		sidebarOpen.set(true);
 		await tick();
+
 		pressEscape(window);
 		await tick();
+		expect(get(sidebarOpen)).toBe(false);
 		expect(get(selectedSongId)).toBe('s1');
+
+		pressEscape(window);
+		await tick();
+		expect(get(selectedSongId)).toBeNull();
 	});
 });
 
@@ -702,6 +709,23 @@ describe('docked Now Playing', () => {
 		await tick();
 		expect(target.querySelector('.now-playing')).toBeNull();
 		// Leaving Now Playing is the whole level-up: the open song stays open.
+		expect(get(selectedSongId)).toBe('s1');
+	});
+
+	it('Escape closes a full surface the window narrowed the docked panel into, and the song stays', async () => {
+		selectedSongId.set('s1');
+		audioPlayer.current = playing();
+		const target = await renderDesktopLayout();
+		openNowPlaying('queue');
+		await tick();
+		nowPlayingDockable.set(false);
+		await tick();
+		expect(target.querySelector('.now-playing.docked')).toBeNull();
+
+		pressEscape(target.querySelector('.now-playing') ?? window);
+		await tick();
+
+		expect(target.querySelector('.now-playing')).toBeNull();
 		expect(get(selectedSongId)).toBe('s1');
 	});
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { holdLayer, resetNavigationForTests } from '$lib/stores/navigation';
+import { holdLayer, resetLayersForTests } from '$lib/stores/layers';
 import { focusFirstIn, handleFocusTrapKeydown } from './focus-trap';
 
 function requireElement<T extends Element>(root: ParentNode, selector: string): T {
@@ -38,7 +38,7 @@ describe('focusFirstIn', () => {
 });
 
 describe('handleFocusTrapKeydown', () => {
-	afterEach(resetNavigationForTests);
+	afterEach(resetLayersForTests);
 
 	it('closes the topmost layer on Escape and claims the key', () => {
 		const container = buildContainer();
@@ -51,6 +51,16 @@ describe('handleFocusTrapKeydown', () => {
 
 		expect(closed).toEqual(['now-playing-sheet']);
 		expect(event.defaultPrevented).toBe(true);
+		container.remove();
+	});
+
+	it('leaves Escape to the page when no layer is open', () => {
+		const container = buildContainer();
+		const event = new KeyboardEvent('keydown', { key: 'Escape', cancelable: true });
+
+		handleFocusTrapKeydown(container, event);
+
+		expect(event.defaultPrevented).toBe(false);
 		container.remove();
 	});
 

@@ -36,15 +36,16 @@ type EscapeLevelUpTarget = 'now-playing' | 'collection' | 'wall' | null;
 // (escapeNowPlaying / backToCollection / openLibraryWall).
 //
 // Now Playing sits above the navigation levels because it is the surface the
-// listener opened last. Only its docked panel reaches this decision: the
-// panel is deliberately not a layer, while the full-screen surface is one and
-// closes before any level up.
+// listener opened last. A full surface the listener chose is a layer and has
+// closed before any level up; what reaches this decision is the docked panel,
+// deliberately not a layer, or a full surface the window narrowed it into,
+// which holds no history entry (stores/navigation).
 export function escapeLevelUpTarget(
-	hasDockedNowPlaying: boolean,
+	hasOpenNowPlaying: boolean,
 	hasOpenSong: boolean,
 	hasOpenCollection: boolean
 ): EscapeLevelUpTarget {
-	if (hasDockedNowPlaying) return 'now-playing';
+	if (hasOpenNowPlaying) return 'now-playing';
 	if (hasOpenSong) return 'collection';
 	if (hasOpenCollection) return 'wall';
 	return null;

@@ -23,13 +23,13 @@
 	} from '$lib/stores/auth';
 	import {
 		backToCollection,
-		closeTopLayer,
 		followShellLayers,
 		forgetLayerEntries,
 		initNavigation,
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
+	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
 		startLibraryResourceSync,
@@ -41,7 +41,6 @@
 		escapeNowPlaying,
 		nowPlayingDockable,
 		nowPlayingOpen,
-		nowPlayingSurface,
 		selectedSongId
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -225,7 +224,7 @@
 
 	function levelUp(): void {
 		const target = escapeLevelUpTarget(
-			$nowPlayingSurface === 'docked',
+			$nowPlayingOpen,
 			$selectedSongId !== null,
 			$openCollection !== null
 		);

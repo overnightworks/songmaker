@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
 	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
-	import { historyLayerState, openAlbum, openPlaylist } from '$lib/stores/navigation';
+	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,

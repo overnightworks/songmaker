@@ -34,7 +34,8 @@
 		loadSavedOfflinePlaylist,
 		type StreamProgress
 	} from '$lib/services/offline';
-	import { historyLayerState, selectSong } from '$lib/stores/navigation';
+	import { selectSong } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		ALBUM_ART_EMPTY_INITIALS,
 		ALBUM_COVER_ACCEPT,
@@ -109,17 +110,8 @@
 		function onClick(): void {
 			$overflowId = null;
 		}
-		function onKeydown(event: KeyboardEvent): void {
-			if (event.key !== 'Escape') return;
-			event.preventDefault();
-			$overflowId = null;
-		}
 		document.addEventListener('click', onClick);
-		document.addEventListener('keydown', onKeydown, true);
-		return () => {
-			document.removeEventListener('click', onClick);
-			document.removeEventListener('keydown', onKeydown, true);
-		};
+		return () => document.removeEventListener('click', onClick);
 	});
 
 	async function onPlaylistShareEnable() {
@@ -415,7 +407,6 @@
 										<div
 											class="entry-overflow-menu"
 											role="menu"
-											data-escape-overlay="true"
 											tabindex="-1"
 											onclick={(e) => e.stopPropagation()}
 											onkeydown={(e) => e.stopPropagation()}

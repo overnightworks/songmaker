@@ -654,6 +654,22 @@ describeBackClosesOverlay({
 		{
 			way: '×',
 			close: (target) => getByRoleButton(target, 'Close edit details').click()
+		},
+		{
+			way: 'Escape in a field',
+			close: (target) =>
+				detailsForm(target)
+					?.querySelector('input')
+					?.dispatchEvent(
+						new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+					)
+		},
+		{
+			way: 'Escape outside the form',
+			close: () =>
+				document.body.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+				)
 		}
 	]
 });

@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
-	import { writable, type Writable } from 'svelte/store';
 	import type { WhisperCue } from '$lib/api/types';
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -28,6 +27,7 @@
 		type NowPlayingSurfaceKind
 	} from '$lib/constants/now-playing';
 	import { formatTime } from '$lib/utils/format';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
@@ -39,7 +39,6 @@
 		source = null,
 		surface = 'full',
 		onclose,
-		onEscape,
 		onExpand,
 		onCollapse,
 		canPrev = false,
@@ -54,7 +53,6 @@
 		rightPanelLabel,
 		sheetLabel,
 		rightPanelOpenOnMount = false,
-		sheetOpen = writable(false),
 		showTakeLabel = true,
 		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
 		// #45: the fully-resolved take's cues/transcript, distinct from `info`
@@ -80,11 +78,6 @@
 		// of its own, since the transport bar beside it keeps carrying that.
 		surface?: NowPlayingSurfaceKind;
 		onclose: () => void;
-		// Escape while the surface holds focus. The app steps down one level
-		// (full screen back to the docked panel) where the plain close button
-		// leaves Now Playing altogether; a caller that makes no such
-		// distinction can omit it.
-		onEscape?: () => void;
 		// The docked panel grows to the full surface; the full surface shrinks
 		// back to the panel wherever the viewport has room for one. A caller
 		// with only one surface omits both.
@@ -105,10 +98,6 @@
 		// so the dialog's aria-label stays a stable description.
 		sheetLabel: string;
 		rightPanelOpenOnMount?: boolean;
-		// Whether the stacked layout's sheet is up. The app hands in one Back
-		// closes (stores/navigation's historyLayerState); a share page, which
-		// keeps no library history, leaves the plain default.
-		sheetOpen?: Writable<boolean>;
 		// Take/version numbering is an internal editing concept — the app's
 		// NowPlaying shows it, a public share listener never sees "Take N"
 		// (share's classic-mode playback has no real take number to show
@@ -127,6 +116,7 @@
 	} = $props();
 
 	const isDocked = $derived(surface === 'docked');
+	const sheetOpen = historyLayerState('now-playing-sheet', false);
 
 	let root: HTMLDivElement | undefined = $state();
 	let stacked = $state(false);
@@ -175,18 +165,12 @@
 	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		// The docked panel is not an overlay: it neither traps focus nor
-		// answers Escape — the page's own level-up owns that key while it is
-		// open, exactly as it would with no panel at all.
+		// The docked panel is not a layer: it neither traps focus nor answers
+		// Escape — the page's own level-up owns that key while it is open,
+		// exactly as it would with no panel at all.
 		if (isDocked || !root) return;
-		if ($sheetOpen) {
-			if (!mobileSheet) return;
-			handleFocusTrapKeydown(mobileSheet, event, () => {
-				$sheetOpen = false;
-			});
-			return;
-		}
-		handleFocusTrapKeydown(root, event, onEscape ?? onclose);
+		const trap = $sheetOpen ? mobileSheet : root;
+		if (trap) handleFocusTrapKeydown(trap, event);
 	}
 
 	async function openMobilePanel(): Promise<void> {
