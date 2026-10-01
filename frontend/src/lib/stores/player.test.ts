@@ -3973,6 +3973,31 @@ describe('restoring the last playback after a reload', () => {
 		}
 	);
 
+	it('a restored album take that ends before its album is gathered still plays on', async () => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+		let serveAlbum: () => void = () => {};
+		vi.mocked(fetchSongs).mockImplementationOnce(
+			() =>
+				new Promise((resolve) => {
+					serveAlbum = () =>
+						resolve({
+							items: [savedSong, nextSong],
+							total: 2,
+							offset: 0,
+							limit: 200,
+							has_more: false
+						});
+				})
+		);
+
+		await restoreLastPlayback();
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		audioPlayer.currentCallbacks.onEnded?.('normal');
+		serveAlbum();
+
+		await vi.waitFor(() => expect(audioPlayer.current?.generation.id).toBe(nextTake.id));
+	});
+
 	it.each<{ kind: QueueKind; after: string; statuses: ('playing' | 'paused')[] }>([
 		{ kind: 'album', after: 'it stands paused', statuses: ['paused'] },
 		{ kind: 'playlist', after: 'it plays and pauses', statuses: ['playing', 'paused'] }

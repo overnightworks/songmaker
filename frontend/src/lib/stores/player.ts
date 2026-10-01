@@ -1619,7 +1619,20 @@ function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
 		windowEnded.set(true);
 		return;
 	}
-	void playNextSong();
+	void playNextSongOnceRestoredAlbumIsGathered();
+}
+
+// A take restored near its end can end before its album is gathered; the
+// album's next song still follows it, unless another take was started while
+// the album was being gathered (#1236).
+async function playNextSongOnceRestoredAlbumIsGathered(): Promise<void> {
+	const gathering = restoredAlbumQueueGathering;
+	if (gathering !== null) {
+		const ended = audioPlayer.current;
+		await gathering;
+		if (audioPlayer.current !== ended) return;
+	}
+	await playNextSong();
 }
 
 const recordedListens = new Set<string>();
@@ -1733,6 +1746,7 @@ export async function restoreLastPlayback(): Promise<void> {
 // take names its album queue at once but gathers the album's other takes only
 // once it plays, not on every reload (#1236).
 let restoredAlbumQueueToGather: (() => Promise<void>) | null = null;
+let restoredAlbumQueueGathering: Promise<void> | null = null;
 
 function restoreAlbumTake(song: SongItem, take: GenerationItem, start: QueueStart): void {
 	const { seq } = beginPlayStart();
@@ -1742,8 +1756,13 @@ function restoreAlbumTake(song: SongItem, take: GenerationItem, start: QueueStar
 
 function gatherRestoredAlbumQueue(): void {
 	const gather = restoredAlbumQueueToGather;
+	if (gather === null) return;
 	restoredAlbumQueueToGather = null;
-	gather?.().catch(toastAlbumSongsFailure);
+	restoredAlbumQueueGathering = gather()
+		.catch(toastAlbumSongsFailure)
+		.finally(() => {
+			restoredAlbumQueueGathering = null;
+		});
 }
 
 // A take saved at or past its end would end the moment it plays, so it comes
