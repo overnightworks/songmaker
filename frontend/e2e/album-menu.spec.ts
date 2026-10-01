@@ -8,6 +8,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import {
 	ALBUM_DETAILS_CLOSE_LABEL,
 	ALBUM_DETAILS_SAVE_LABEL,
+	ALBUM_DETAILS_SAVED,
 	ALBUM_SUBTITLE_LABEL,
 	ALBUM_YEAR_LABEL,
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
@@ -177,9 +178,11 @@ async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
 	return editor;
 }
 
-test('Edit details changes title, subtitle and year; × and Back discard', async ({
-	page
-}, testInfo) => {
+async function onOwnAlbum(
+	page: Page,
+	testInfo: TestInfo,
+	flow: (album: { id: string; title: string }) => Promise<void>
+): Promise<void> {
 	const title = `Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
 	const created = await page.request.post('/api/albums', {
 		headers: await csrfHeaders(page),
@@ -189,6 +192,20 @@ test('Edit details changes title, subtitle and year; × and Back discard', async
 	const album = (await created.json()) as { id: string };
 	try {
 		await page.goto(`/album/${album.id}`);
+		await flow({ id: album.id, title });
+	} finally {
+		const removed = await page.request.delete(`/api/albums/${album.id}`, {
+			headers: await csrfHeaders(page)
+		});
+		expect(removed.ok()).toBe(true);
+	}
+}
+
+test('Edit details changes title, subtitle and year; × and Back discard', async ({
+	page
+}, testInfo) => {
+	await onOwnAlbum(page, testInfo, async (album) => {
+		const title = album.title;
 		const header = workspace(page).locator('.collection-header');
 		await expect(header.getByRole('heading', { name: title })).toBeVisible();
 		await expect(header).not.toContainText('Add subtitle');
@@ -219,10 +236,40 @@ test('Edit details changes title, subtitle and year; × and Back discard', async
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
 		await expect(header.getByRole('heading', { name: renamed })).toBeVisible();
 		await expect(meta).toHaveText('Late-night synthwave · 2026');
-	} finally {
-		const removed = await page.request.delete(`/api/albums/${album.id}`, {
-			headers: await csrfHeaders(page)
+	});
+});
+
+test('Back during a slow Edit details save keeps the form until the details are saved', async ({
+	page
+}, testInfo) => {
+	await onOwnAlbum(page, testInfo, async (album) => {
+		const header = workspace(page).locator('.collection-header');
+		await expect(header.getByRole('heading', { name: album.title })).toBeVisible();
+		let answerSave!: () => void;
+		const saveMayAnswer = new Promise<void>((resolve) => (answerSave = resolve));
+		let saveSent!: () => void;
+		const saveIsSent = new Promise<void>((resolve) => (saveSent = resolve));
+		await page.route(`**/api/albums/${album.id}`, async (route) => {
+			if (route.request().method() !== 'PUT') return route.fallback();
+			saveSent();
+			await saveMayAnswer;
+			return route.fallback();
 		});
-		expect(removed.ok()).toBe(true);
-	}
+
+		const editor = await openEditDetails(page, header);
+		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('2026');
+		await editor.getByRole('button', { name: ALBUM_DETAILS_SAVE_LABEL, exact: true }).click();
+		await saveIsSent;
+		await page.goBack();
+
+		await expect(editor).toBeVisible();
+		await expect(editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true })).toHaveValue('2026');
+		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
+
+		answerSave();
+		await expect(page.getByText(ALBUM_DETAILS_SAVED, { exact: true })).toBeVisible();
+		await expect(editor).toBeHidden();
+		await expect(header.locator('.header-meta')).toHaveText('2026');
+		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
+	});
 });

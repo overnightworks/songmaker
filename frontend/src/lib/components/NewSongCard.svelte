@@ -43,6 +43,8 @@
 	closeLabel={NEW_SONG_CLOSE_LABEL}
 	hint={NEW_SONG_HINT}
 	failedMessage={NEW_SONG_FAILED}
+	draftKey={`song:${album.id}`}
+	bind:title
 	ready={title.trim() !== ''}
 	create={createListedSong}
 	open={openSong}

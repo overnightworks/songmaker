@@ -6,8 +6,9 @@
 </script>
 
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { untrack, type Snippet } from 'svelte';
 	import { describeFailure } from '$lib/api/fetch';
+	import { dropTitleDraft, keepTitleDraft, titleDraft } from '$lib/stores/titleDrafts';
 	import { addToast, dismissToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -18,6 +19,10 @@
 		hint: string;
 		/** The readable reason a refused create names; never the server's own detail. */
 		failedMessage: string;
+		/** Which card's title draft this is: one per card kind, and per album for a song. */
+		draftKey: string;
+		/** The title field's text, which the card keeps as its draft. */
+		title: string;
 		ready: boolean;
 		/** Creates the place, lists it, and answers its id. */
 		create: () => Promise<string>;
@@ -32,6 +37,8 @@
 		closeLabel,
 		hint,
 		failedMessage,
+		draftKey,
+		title = $bindable(),
 		ready,
 		create,
 		open,
@@ -41,6 +48,10 @@
 	}: Props = $props();
 
 	let creating = $state(false);
+
+	title = untrack(() => titleDraft(draftKey) ?? title);
+
+	$effect(() => keepTitleDraft(draftKey, title));
 
 	const canCreate = $derived(ready && !creating);
 
@@ -56,6 +67,7 @@
 			creating = false;
 			return;
 		}
+		dropTitleDraft(draftKey);
 		dismissEarlierFailures();
 		oncreated();
 		await open(id);
