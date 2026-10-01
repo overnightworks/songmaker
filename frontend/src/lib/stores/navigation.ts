@@ -11,6 +11,7 @@ import {
 	type LayerHistory
 } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
+import { listenForLandings, stepBackOffStandingEntry } from '$lib/history/historyController';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
 import { isDirty } from '$lib/stores/editor';
 import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
@@ -51,7 +52,6 @@ import {
 	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	libraryRootState,
-	libraryWallStateFrom,
 	rememberedSongTab,
 	setLibrarySurface,
 	showSongTab,
@@ -63,8 +63,6 @@ import {
 
 export type { DetailTab };
 export { detailTab };
-
-let suppressPush = false;
 
 function urlFromState(state: LibraryHistoryState): string {
 	return libraryHistoryUrl(state);
@@ -80,14 +78,12 @@ function currentHistoryIndex(): number {
 // it in libraryContext.ts. The promise matters only to a caller that writes
 // again straight afterwards -- a crossing write is asynchronous.
 function replaceLibraryHistory(): Promise<void> {
-	if (suppressPush) return Promise.resolve();
 	cancelLibraryHistoryApply();
 	const next = snapshotLibraryHistory(currentHistoryIndex());
 	return writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
 function pushLibraryHistory(): Promise<void> {
-	if (suppressPush) return Promise.resolve();
 	cancelLibraryHistoryApply();
 	const current = currentLibraryHistoryState();
 	if (isLibraryHistoryState(current)) {
@@ -330,12 +326,10 @@ export function openCollectionEntry(collection: OpenCollection): void {
 
 export function backToCollection(): void {
 	void guardDirtyNavigation(() => {
-		suppressPush = true;
 		selectedSongId.set(null);
 		selectedGenerationId.set(null);
 		openTakesTab();
 		setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
-		suppressPush = false;
 		void replaceLibraryHistory();
 	});
 }
@@ -417,11 +411,9 @@ function loadSongContext(songId: string): Promise<void> {
 // newer selection must win over this late 404.
 function reportSongLinkNotFound(songId: string): void {
 	if (get(selectedSongId) !== songId) return;
-	suppressPush = true;
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface(get(openCollection) ? 'detail' : 'browse');
-	suppressPush = false;
 	void replaceLibraryHistory();
 	addToast(SONG_LINK_NOT_FOUND_TOAST, 'error');
 }
@@ -473,8 +465,8 @@ function selectSongHistoryMode(
 // guardDirtyNavigation resolves immediately once it parks a dirty draft,
 // before applySelectedSong ever runs, so that follow-up would land against
 // whichever song was open before (issue #265 review of #264, fixed for its
-// one real caller by folding the follow-up into a single guarded action —
-// see revealSharedTake below). A future such caller belongs the same way.
+// one real caller by folding the follow-up into a single guarded action).
+// A future such caller belongs the same way.
 export function selectSong(songId: string, knownSong?: SongItem): Promise<void> {
 	// Evaluated before the guard's own possible park: a dirty draft defers
 	// `applySelectedSong` until the confirm resolves, so historyMode must read
@@ -555,21 +547,6 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 	});
 }
 
-export function goBack(): void {
-	const state = currentLibraryHistoryState();
-	if (isLibraryHistoryState(state) && state.index > 0) {
-		history.back();
-		return;
-	}
-	const current = isLibraryHistoryState(state) ? state : snapshotLibraryHistory(0);
-	suppressPush = true;
-	void applyLibraryHistory(libraryWallStateFrom(current));
-	openTakesTab();
-	setLibrarySurface('browse');
-	suppressPush = false;
-	void replaceLibraryHistory();
-}
-
 // Browser Back/Forward has already moved the address by the time `popstate`
 // fires, so a dirty draft cannot hold it the way every other guarded way out
 // does. The song's entry is written back on top of the one landed on instead,
@@ -589,7 +566,7 @@ function askBeforeLeavingByTraversal(): void {
 
 async function stepBackOntoTraversalLanding(): Promise<void> {
 	await libraryHistoryStepsLanded();
-	history.back();
+	void stepBackOffStandingEntry();
 }
 
 // History layers (issues #1002, #1114): while the library history runs, every
@@ -750,7 +727,9 @@ export function initNavigation(): () => void {
 	const staleLanding = staleLayerEntryLanding(existing);
 	if (staleLanding) stepBackOnto(staleLanding);
 
-	function onPopstate(e: PopStateEvent): void {
+	// The history controller's landing handler: the controller has settled its
+	// own step-backs by the time a landing reaches here.
+	function onLanding(e: PopStateEvent): void {
 		const state = libraryHistoryEntry(e.state);
 		if (popsHistoryLayers(state)) return;
 		if (get(isDirty)) {
@@ -769,10 +748,10 @@ export function initNavigation(): () => void {
 		})();
 	}
 
-	window.addEventListener('popstate', onPopstate);
+	const stopListening = listenForLandings((_landing, event) => onLanding(event));
 	keepLayerHistory(libraryLayerHistory);
 	return () => {
-		window.removeEventListener('popstate', onPopstate);
+		stopListening();
 		forgetLayerEntries();
 	};
 }
@@ -786,7 +765,6 @@ export function forgetLayerEntries(): void {
 }
 
 export function resetNavigationForTests(): void {
-	suppressPush = false;
 	forgetLayerEntries();
 	resetLayersForTests();
 	pendingDirtyNavigation.set(null);

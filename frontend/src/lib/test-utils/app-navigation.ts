@@ -51,6 +51,10 @@ export const fakePage = stateProxy<{ url: URL; state: App.PageState }>({
 let currentHistoryIndex = 0;
 let currentNavigationIndex = 0;
 let hasNavigated = false;
+// SvelteKit starts counting on an entry that carries no place of its own from
+// the clock, past every place it handed out before in this tab; the fake
+// counts on from the highest place it handed out instead.
+let highestHistoryIndex = 0;
 
 const afterNavigateCallbacks = new Set<(navigation: AfterNavigate) => void>();
 
@@ -90,8 +94,9 @@ export function startFakeRouter(): void {
 	hasNavigated = false;
 	reportedNavigations.length = 0;
 	const loaded = routerEntry(history.state);
-	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? 1;
+	currentHistoryIndex = routerIndex(loaded, ROUTER_HISTORY_INDEX) ?? highestHistoryIndex + 1;
 	currentNavigationIndex = routerIndex(loaded, ROUTER_NAVIGATION_INDEX) ?? currentHistoryIndex;
+	highestHistoryIndex = Math.max(highestHistoryIndex, currentHistoryIndex);
 	writeHistoryEntry(
 		{
 			[ROUTER_HISTORY_INDEX]: currentHistoryIndex,
@@ -111,9 +116,14 @@ export function reportFakeRouterEnter(): void {
 	reportNavigation('enter', null);
 }
 
+function stepHistoryIndexUp(): void {
+	currentHistoryIndex += 1;
+	highestHistoryIndex = Math.max(highestHistoryIndex, currentHistoryIndex);
+}
+
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
 	if (!options.replaceState) {
-		currentHistoryIndex += 1;
+		stepHistoryIndexUp();
 		currentNavigationIndex += 1;
 	}
 	const state = options.state ?? {};
@@ -135,7 +145,7 @@ async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<v
 
 function writeShallowEntry(url: string | URL, state: App.PageState, mode: HistoryWriteMode): void {
 	if (mode === 'push') {
-		currentHistoryIndex += 1;
+		stepHistoryIndexUp();
 		hasNavigated = true;
 	}
 	writeHistoryEntry(
