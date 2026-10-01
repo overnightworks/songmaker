@@ -846,6 +846,54 @@ describe('frozen-clock watchdog', () => {
 	);
 });
 
+describe('patient recovery while the screen is off', () => {
+	const SECOND = 1000;
+	const PROBE_TIMEOUT = 10 * SECOND;
+
+	// The platform's AbortSignal.timeout runs on a clock fake timers never move.
+	function abortAfterOnTheFakeClock(milliseconds: number): AbortSignal {
+		const controller = new AbortController();
+		setTimeout(() => controller.abort(new DOMException('timed out', 'TimeoutError')), milliseconds);
+		return controller.signal;
+	}
+
+	function hangUntilAborted(_url: string, init: RequestInit): Promise<Response> {
+		return new Promise((_resolve, reject) => {
+			init.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+		});
+	}
+
+	function startPlayingAt(seconds: number): void {
+		fakeAudio.currentTime = seconds;
+		fakeAudio.paused = false;
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+		fakeAudio.fire('timeupdate');
+	}
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		vi.spyOn(AbortSignal, 'timeout').mockImplementation(abortAfterOnTheFakeClock);
+		vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+	});
+
+	it('a HEAD probe that never answers gives up after its timeout', async () => {
+		fetchMock.mockImplementation(hangUntilAborted);
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		startPlayingAt(12);
+		fakeAudio.fire('stalled');
+
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+		const whileProbing = { status: audioPlayer.status, src: fakeAudio.src };
+		await vi.advanceTimersByTimeAsync(PROBE_TIMEOUT);
+
+		expect({ whileProbing, afterTheTimeout: fakeAudio.src }).toEqual({
+			whileProbing: { status: 'loading', src: '/api/queue-streams/snap/audio' },
+			afterTheTimeout: expect.stringMatching(recoveryUrlOf('/api/queue-streams/snap/audio'))
+		});
+	});
+});
+
 describe('stream playback', () => {
 	it('leaves the current playback alone when an empty stream has no start track', () => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
@@ -1117,10 +1165,10 @@ describe('error handling', () => {
 		await Promise.resolve();
 		await Promise.resolve();
 		expect(audioPlayer.status).toBe('error');
-		expect(fetchMock).toHaveBeenCalledWith('/audio/a1/song_v1.mp3', {
-			method: 'HEAD',
-			credentials: 'include'
-		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/audio/a1/song_v1.mp3',
+			expect.objectContaining({ method: 'HEAD', credentials: 'include' })
+		);
 	});
 
 	it('recovers from a mid-track media error before probing URL', () => {
@@ -1163,10 +1211,10 @@ describe('error handling', () => {
 		await new Promise((r) => setTimeout(r, 0));
 
 		expect(audioPlayer.status).toBe('error');
-		expect(fetchMock).toHaveBeenCalledWith('/audio/a1/song_v1.mp3', {
-			method: 'HEAD',
-			credentials: 'include'
-		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/audio/a1/song_v1.mp3',
+			expect.objectContaining({ method: 'HEAD', credentials: 'include' })
+		);
 	});
 
 	it('401 probe response triggers onAuthLost', async () => {
@@ -1648,10 +1696,10 @@ describe('loadUrl()', () => {
 		fakeAudio.fire('error');
 		await new Promise((r) => setTimeout(r, 0));
 
-		expect(fetchMock).toHaveBeenCalledWith('/shared/slug/audio/first.mp3', {
-			method: 'HEAD',
-			credentials: 'include'
-		});
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/shared/slug/audio/first.mp3',
+			expect.objectContaining({ method: 'HEAD', credentials: 'include' })
+		);
 		expect(audioPlayer.status).toBe('error');
 		expect(appOnAuthLost).not.toHaveBeenCalled();
 	});
