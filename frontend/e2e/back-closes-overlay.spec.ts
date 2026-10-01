@@ -140,12 +140,19 @@ async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist)
 	await expect(takeSheet(page)).toBeVisible();
 }
 
-// The sheet has no close button of its own: its backdrop closes it, and only
-// the backdrop's top edge, above the sheet, is there to tap.
+// The sheet has no close button of its own: its dimmed backdrop closes it.
+// Now Playing's header stays above the backdrop, so the tap lands on the
+// strip of backdrop just above the sheet.
 async function tapBesideTakeSheet(page: Page): Promise<void> {
-	await page
-		.getByRole('button', { name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL) })
-		.click({ position: { x: 8, y: 8 } });
+	const backdrop = page.getByRole('button', {
+		name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL)
+	});
+	const [backdropBox, sheetBox] = await Promise.all([
+		backdrop.boundingBox(),
+		takeSheet(page).boundingBox()
+	]);
+	if (!backdropBox || !sheetBox) throw new Error('The This take sheet is not on screen');
+	await backdrop.click({ position: { x: 8, y: sheetBox.y - backdropBox.y - 8 } });
 }
 
 async function goBack(page: Page): Promise<void> {
