@@ -1,0 +1,7 @@
+claim_id = "513a84dbcccb4dc7bcb087afa9f9cc34"
+agent = "claude-head"
+role = "builder"
+base = "72e3e2ddc5f303c8fa43a4e4329af03c33c93bd4"
+branch = "claude-head/issue-1194-history-controller-core"
+scope = ["frontend/src/app.d.ts", "frontend/src/lib/history", "scripts/dead-exports.allow"]
+opened_commit = "411ed2689b2bba51f99f8174a9e42f3d7dc2572c"
