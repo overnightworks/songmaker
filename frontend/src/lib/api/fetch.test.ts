@@ -647,7 +647,9 @@ describe('sign-in return path', () => {
 		['a backslash host', `?redirect=${encodeURIComponent('/\\attacker.example/x')}`, '/'],
 		['a host split by a tab', `?redirect=${encodeURIComponent('/\t/attacker.example/x')}`, '/'],
 		['a script URL', `?redirect=${encodeURIComponent('javascript:alert(1)')}`, '/'],
-		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/']
+		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/'],
+		['the sign-in page spelled encoded', `?redirect=${encodeURIComponent('/%6Cogin')}`, '/'],
+		['an API address spelled encoded', `?redirect=${encodeURIComponent('/%61pi/auth/me')}`, '/']
 	])('lands on %s', (_label, query, expected) => {
 		expect(signInReturnPath(signInPage(query))).toBe(expected);
 	});
