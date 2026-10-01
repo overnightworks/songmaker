@@ -25,8 +25,7 @@
 		onlogout: () => void;
 	}
 
-	// Without an account the rail is navigation only: the phone drawer leaves
-	// Settings and the user row to the account circle's menu.
+	// The phone drawer passes no account: its account circle's menu has Settings and Log out.
 	let {
 		account,
 		collapsed = false,
