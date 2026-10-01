@@ -10,11 +10,11 @@ import {
 	ALBUM_DETAILS_CLOSE_LABEL,
 	ALBUM_DETAILS_SAVE_LABEL,
 	ALBUM_SUBTITLE_LABEL,
-	ALBUM_TITLE_LABEL,
 	ALBUM_YEAR_LABEL,
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,
-	collectionPlayLabel
+	collectionPlayLabel,
+	NEW_ALBUM_TITLE_LABEL
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -196,7 +196,7 @@ test('Edit details changes title, subtitle and year; × and Back discard', async
 
 		const renamed = `${title} remastered`;
 		let editor = await openEditDetails(page, header);
-		await editor.getByLabel(ALBUM_TITLE_LABEL, { exact: true }).fill(renamed);
+		await editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true }).fill(renamed);
 		await editor.getByLabel(ALBUM_SUBTITLE_LABEL, { exact: true }).fill('Late-night synthwave');
 		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('2026');
 		await editor.getByRole('button', { name: ALBUM_DETAILS_SAVE_LABEL, exact: true }).click();

@@ -78,6 +78,37 @@ describe('AlbumMetaEditor', () => {
 		expect(props.onsave).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		['the title field', (target: HTMLElement) => field(target, 'Title')],
+		['the Save button', (target: HTMLElement) => getByRoleButton(target, 'Save')]
+	])('Escape in %s closes without saving and claims the Escape', async (_where, focusOf) => {
+		const props = baseProps();
+		const target = await render(props);
+		type(field(target, 'Year'), '2026');
+
+		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		focusOf(target).dispatchEvent(escape);
+
+		expect(props.onclose).toHaveBeenCalledTimes(1);
+		expect(props.onsave).not.toHaveBeenCalled();
+		expect(escape.defaultPrevented).toBe(true);
+	});
+
+	it('neither × nor Escape closes while a save is in flight', async () => {
+		const props = baseProps({ onsave: vi.fn(() => new Promise<void>(() => {})) });
+		const target = await render(props);
+
+		await submit(target);
+		const close = getByRoleButton(target, 'Close edit details');
+		close.click();
+		field(target, 'Title').dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+
+		expect(close.disabled).toBe(true);
+		expect(props.onclose).not.toHaveBeenCalled();
+	});
+
 	it('offers no Save while the title is blank', async () => {
 		const props = baseProps();
 		const target = await render(props);
