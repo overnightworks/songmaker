@@ -1,10 +1,10 @@
 import {
 	historyEntry,
-	pushHistoryEntry,
 	replaceHistoryEntry,
 	standingHistoryEntry
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
+import { pushEntry } from '$lib/history/historyController';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -899,15 +899,16 @@ describe('a reload on a library page', () => {
 describe('a reload over the phone Now Playing', () => {
 	it('stays on the Library wall the sign-in redirect lands on', async () => {
 		resetLibraryContextForTests();
-		resetNavigationForTests();
 		const playlist = {
 			...libraryRootState(),
 			index: 1,
 			surface: 'detail' as const,
 			collection: { kind: 'playlist' as const, id: 'p1' }
 		};
-		pushHistoryEntry('/playlist/friday-night', playlist);
-		pushHistoryEntry('/playlist/friday-night', { ...playlist, index: 2, layer: 'now-playing' });
+		pushEntry('/playlist/friday-night', { library: playlist });
+		pushEntry('/playlist/friday-night', { library: playlist }, 'now-playing');
+		// The reload forgets the open layer, so its entry is left unowned on top.
+		resetNavigationForTests();
 		loadLibraryHistoryPageForTests();
 		startFakeRouter();
 		currentUser.set(null);
