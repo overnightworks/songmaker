@@ -40,7 +40,6 @@ import {
 	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
-	RAIL_SETTINGS_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
@@ -56,6 +55,7 @@ import {
 	FlowGuard,
 	nameStartingWith,
 	openRailNav,
+	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	SONG_PHONE_FLOW_API_REQUEST_BUDGET,
 	workspace
@@ -71,6 +71,7 @@ import {
 } from './seed';
 
 const SONG_PHONE_SONG_TITLE = 'Song Phone Takes';
+const ACCOUNT_SECTION = 'Account';
 // Chosen to prove the player names the real seeded version rather than an
 // assumed v1 — the whole point of L12's "version number as seeded" clause.
 const SONG_PHONE_VERSION_NUMBER = 7;
@@ -352,7 +353,7 @@ test.describe('song page at phone width', () => {
 		await expect(lyrics).toHaveValue(savedLyrics);
 	});
 
-	test('Discard on a drawer Settings link lands on its address, which a reload keeps (#1143)', async ({
+	test('Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)', async ({
 		page,
 		isMobile
 	}) => {
@@ -360,15 +361,13 @@ test.describe('song page at phone width', () => {
 		const library = readSeededLibrary();
 		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
 
-		const rail = await openRailNav(page, 'mobile');
-		await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true }).click();
-		await rail.getByRole('link', { name: 'Account', exact: true }).click();
+		await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
 		await expect(unsavedDraftDialog).toBeVisible();
 		await unsavedDraftDialog
 			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
 			.click();
 
-		const accountHeading = page.getByRole('heading', { name: 'Account', level: 1 });
+		const accountHeading = page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 });
 		await expect(page).toHaveURL(/\/settings\/account$/);
 		await expect(accountHeading).toBeVisible();
 		await page.reload();

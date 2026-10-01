@@ -34,7 +34,13 @@ vi.mock('$lib/api/client', async () => (await import('./rail-test-fixtures')).ra
 import Rail from './Rail.svelte';
 
 const onlogout = vi.fn();
-const { render, cleanup } = createComponentMount(Rail, { username: 'felix', onlogout });
+const { render, cleanup } = createComponentMount(Rail, {
+	account: { username: 'felix', onlogout }
+});
+const navigationOnly = createComponentMount(Rail, {
+	showCollapseControl: false,
+	showResizeHandle: false
+});
 let collapsedMounted: ReturnType<typeof mount> | undefined;
 
 async function renderCollapsedRail(): Promise<HTMLElement> {
@@ -42,7 +48,7 @@ async function renderCollapsedRail(): Promise<HTMLElement> {
 	document.body.append(target);
 	collapsedMounted = mount(Rail, {
 		target,
-		props: { username: 'felix', onlogout, collapsed: true }
+		props: { account: { username: 'felix', onlogout }, collapsed: true }
 	});
 	await tick();
 	return target;
@@ -124,6 +130,7 @@ beforeEach(() => {
 
 afterEach(async () => {
 	await cleanup();
+	await navigationOnly.cleanup();
 	if (collapsedMounted) await unmount(collapsedMounted);
 	collapsedMounted = undefined;
 	resetLibraryContextForTests();
@@ -150,6 +157,20 @@ describe('Rail', () => {
 		expect(groupRows[1]?.textContent).toContain('Playlists');
 		expect(groupRows[2]?.textContent).toContain('Settings');
 		expect(target.textContent).toContain('felix');
+	});
+
+	it('carries navigation only without an account: brand, search, Library and Playlists', async () => {
+		const target = await navigationOnly.render();
+		const groupTitles = Array.from(
+			target.querySelectorAll('.rail-group > .disclose-row .group-title'),
+			(title) => title.textContent?.trim()
+		);
+
+		expect(requireElement(target, '.brand').textContent).toBe('Hallucinai');
+		expect(target.querySelectorAll('input[type="search"]')).toHaveLength(1);
+		expect(groupTitles).toEqual(['Library', 'Playlists']);
+		expect(target.querySelector('.rail-bottom')).toBeNull();
+		expect(target.querySelector('.rail-collapse, input[type="range"]')).toBeNull();
 	});
 
 	it('renders the only search field directly beneath the brand', async () => {
