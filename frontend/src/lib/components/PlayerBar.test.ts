@@ -402,7 +402,7 @@ function playButton(): HTMLButtonElement {
 	return button;
 }
 
-async function press(button: HTMLButtonElement = playButton()): Promise<void> {
+async function clickAndSettle(button: HTMLButtonElement = playButton()): Promise<void> {
 	button.click();
 	await tick();
 	await Promise.resolve();
@@ -417,16 +417,16 @@ describe('PlayerBar transport labels', () => {
 		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-		await press();
+		await clickAndSettle();
 		audio.fire('canplay');
 		await tick();
 		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PAUSE_LABEL);
 
-		await press();
+		await clickAndSettle();
 		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
 
 		vi.spyOn(audio, 'play').mockRejectedValue(new Error('decode failed'));
-		await press();
+		await clickAndSettle();
 		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_RETRY_LABEL);
 	});
 });
@@ -1188,7 +1188,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		const whileRecovering = playButton().getAttribute('aria-label');
 		const load = vi.spyOn(audio, 'load');
 
-		await press();
+		await clickAndSettle();
 		await vi.advanceTimersByTimeAsync(60_000);
 		await tick();
 
@@ -1250,7 +1250,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await tick();
 		const whileWaiting = lockScreen.playbackState;
 
-		await press();
+		await clickAndSettle();
 
 		expect({ whileWaiting, afterPause: lockScreen.playbackState }).toEqual({
 			whileWaiting: 'playing',
@@ -1262,7 +1262,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await giveUpWhileOffline();
 		const load = vi.spyOn(audio, 'load');
 
-		await press(waitingRetry());
+		await clickAndSettle(waitingRetry());
 
 		expect(load).toHaveBeenCalledOnce();
 	});
@@ -1270,7 +1270,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 	it.each([
 		// The lock screen's pause action is the player's own pause (stores/player.ts).
 		{ how: 'from the lock screen', pause: async () => audioPlayer.pause() },
-		{ how: "with the bar's Pause", pause: () => press() }
+		{ how: "with the bar's Pause", pause: () => clickAndSettle() }
 	])('a take given up offline and paused $how shows Paused at once', async ({ pause }) => {
 		await giveUpWhileOffline();
 
