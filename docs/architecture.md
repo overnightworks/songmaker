@@ -1525,7 +1525,7 @@ never been observed; with a newer observation, it is `alive`.
   so only one web replica reaps a given tick.
 - A queued job reports `No worker alive for this job type — please retry.`
   when its known-dead execution worker exceeded its grace, or `Queued too long — please retry.`
-  when it exceeded the age guard. A running one reports `Heartbeat lost — please retry.`
+  when it exceeded the age guard. A running one reports `Took too long to finish — please retry.`
   The request path applies that same rule only to the submitting user's jobs just before
   active-job limits, so a job that crosses a threshold between lifecycle ticks cannot cause a
   spurious 429.
