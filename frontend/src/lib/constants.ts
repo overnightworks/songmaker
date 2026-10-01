@@ -151,6 +151,9 @@ export function collectionShuffleLabel(kind: CollectionPlayKind): string {
 export const TRANSPORT_PLAY_LABEL = 'Play';
 export const TRANSPORT_PAUSE_LABEL = 'Pause';
 export const TRANSPORT_RETRY_LABEL = 'Retry';
+// What the transport says once it gave up on a take while the network was
+// gone: its return retries the take by itself, so no Retry press is asked for.
+export const PLAYER_WAITING_FOR_NETWORK = 'Waiting for the network.';
 
 export const NOW_PLAYING_LABEL = 'Now Playing';
 

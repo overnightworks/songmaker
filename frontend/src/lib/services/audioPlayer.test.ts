@@ -7,6 +7,7 @@ const NO_STRIP_SHOWN = (): boolean => false;
 const SECOND = 1000;
 const RECOVERY_DEADLINE = 2 * 60 * SECOND;
 const STALLED = 'Playback stalled. Press Retry.';
+const WAITING_FOR_NETWORK = 'Waiting for the network.';
 
 function callbacks(overrides: Partial<AudioPlayerCallbacks> = {}): AudioPlayerCallbacks {
 	return {
@@ -632,6 +633,23 @@ describe('frozen-clock watchdog', () => {
 		}
 	);
 
+	it.each(playbackModes)(
+		'keeps $mode paused by an outside pause after it played on by itself after giving up',
+		async ({ loadMode }) => {
+			loadMode();
+			await freezeUntilTheDeadlinePasses();
+			startPlayingAt(fakeAudio.currentTime);
+
+			fakeAudio.pause();
+			fakeAudio.fire('canplay');
+
+			expect({ status: audioPlayer.status, paused: fakeAudio.paused }).toEqual({
+				status: 'ready',
+				paused: true
+			});
+		}
+	);
+
 	it.each([
 		{ action: 'Retry', leaveGivenUpState: () => audioPlayer.play() },
 		{
@@ -685,6 +703,27 @@ describe('frozen-clock watchdog', () => {
 				beforeTheDeadline: { status: 'loading', retried: true },
 				afterTheDeadline: { status: 'error', error: STALLED, paused: true }
 			});
+		}
+	);
+
+	it.each(playbackModes)(
+		'keeps $mode given up when the late error of its last reload arrives',
+		async ({ loadMode }) => {
+			loadMode();
+			await freezeUntilTheDeadlinePasses();
+			const srcWhenGivenUp = fakeAudio.src;
+			fetchMock.mockClear();
+
+			fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+			fakeAudio.fire('error');
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+			expect({
+				status: audioPlayer.status,
+				error: audioPlayer.error,
+				probed: fetchMock.mock.calls.length > 0,
+				reloaded: fakeAudio.src !== srcWhenGivenUp
+			}).toEqual({ status: 'error', error: STALLED, probed: false, reloaded: false });
 		}
 	);
 
@@ -894,8 +933,8 @@ describe('patient recovery while the screen is off', () => {
 	});
 
 	const outages = [
-		{ strip: 'the offline strip says so', announced: true },
-		{ strip: 'nothing says so', announced: false }
+		{ strip: 'the offline strip says so', announced: true, givenUpWords: WAITING_FOR_NETWORK },
+		{ strip: 'nothing says so', announced: false, givenUpWords: STALLED }
 	];
 
 	let networkGone: boolean;
@@ -950,7 +989,7 @@ describe('patient recovery while the screen is off', () => {
 
 	it.each(outages)(
 		'a 3-minute outage lands in the given-up state, when $strip',
-		async ({ announced }) => {
+		async ({ announced, givenUpWords }) => {
 			loseTheNetworkWhilePlayingAt(40, announced);
 
 			await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE - 10 * SECOND);
@@ -961,7 +1000,7 @@ describe('patient recovery while the screen is off', () => {
 				givenUpBeforeTheDeadline,
 				status: audioPlayer.status,
 				error: audioPlayer.error
-			}).toEqual({ givenUpBeforeTheDeadline: false, status: 'error', error: STALLED });
+			}).toEqual({ givenUpBeforeTheDeadline: false, status: 'error', error: givenUpWords });
 		}
 	);
 
@@ -1011,18 +1050,128 @@ describe('patient recovery while the screen is off', () => {
 		});
 	});
 
-	it('a late answer clears stalled', async () => {
-		audioPlayer.load(makeInfo());
+	async function giveUpOnAThreeMinuteOutage(): Promise<void> {
+		loseTheNetworkWhilePlayingAt(40, true);
 		await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
-		const beforeTheAnswer = audioPlayer.error;
+	}
 
+	it('the return of a network it gave up waiting for retries the take once by itself', async () => {
+		await giveUpOnAThreeMinuteOutage();
+		const load = vi.spyOn(fakeAudio, 'load');
+
+		networkGone = false;
+		audioPlayer.resumeAfterNetworkReturn();
+		const reloads = load.mock.calls.length;
 		fakeAudio.fire('loadedmetadata');
 		fakeAudio.fire('canplay');
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect({
-			beforeTheAnswer,
-			afterIt: { status: audioPlayer.status, error: audioPlayer.error }
-		}).toEqual({ beforeTheAnswer: STALLED, afterIt: { status: 'ready', error: null } });
+			reloads,
+			src: fakeAudio.src,
+			status: audioPlayer.status,
+			error: audioPlayer.error,
+			position: fakeAudio.currentTime
+		}).toEqual({
+			reloads: 1,
+			src: expect.stringMatching(recoveryUrlOf('/audio/a1/song_v1.mp3')),
+			status: 'playing',
+			error: null,
+			position: 39.25
+		});
+	});
+
+	it('a listener who paused while it waited for the network keeps silence when the network returns', async () => {
+		await giveUpOnAThreeMinuteOutage();
+		audioPlayer.pause();
+		const load = vi.spyOn(fakeAudio, 'load');
+
+		networkGone = false;
+		audioPlayer.resumeAfterNetworkReturn();
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect({
+			reloads: load.mock.calls.length,
+			status: audioPlayer.status,
+			error: audioPlayer.error
+		}).toEqual({ reloads: 0, status: 'error', error: STALLED });
+	});
+
+	const givenUpTakes = [
+		{
+			take: 'a take whose first byte never came',
+			giveUp: async () => {
+				audioPlayer.load(makeInfo());
+				await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
+			}
+		},
+		{ take: 'a take that waited for the network', giveUp: giveUpOnAThreeMinuteOutage }
+	];
+
+	async function answerLate(): Promise<void> {
+		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('canplay');
+		await vi.advanceTimersByTimeAsync(0);
+	}
+
+	it.each(givenUpTakes)(
+		'a late answer plays on $take when the listener never paused',
+		async ({ giveUp }) => {
+			await giveUp();
+			const beforeTheAnswer = audioPlayer.status;
+
+			await answerLate();
+
+			expect({
+				beforeTheAnswer,
+				afterIt: { status: audioPlayer.status, error: audioPlayer.error, paused: fakeAudio.paused }
+			}).toEqual({
+				beforeTheAnswer: 'error',
+				afterIt: { status: 'playing', error: null, paused: false }
+			});
+		}
+	);
+
+	it.each(givenUpTakes)(
+		'a late answer leaves $take paused when the listener paused it',
+		async ({ giveUp }) => {
+			await giveUp();
+			audioPlayer.pause();
+
+			await answerLate();
+
+			expect({
+				status: audioPlayer.status,
+				error: audioPlayer.error,
+				paused: fakeAudio.paused
+			}).toEqual({ status: 'ready', error: null, paused: true });
+		}
+	);
+
+	it.each([
+		{ moment: 'before its first byte', startAt: null },
+		{ moment: 'in its first second', startAt: 0.5 },
+		{ moment: 'forty seconds in', startAt: 40 }
+	])('a take stalling $moment waits like any other', async ({ startAt }) => {
+		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+		audioPlayer.load(makeInfo());
+		if (startAt !== null) startPlayingAt(startAt);
+		fakeAudio.fire('waiting');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+		fakeAudio.fire('error');
+		await vi.advanceTimersByTimeAsync(0);
+		const afterTheReloadFailed = { status: audioPlayer.status, error: audioPlayer.error };
+		await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+		expect({
+			afterTheReloadFailed,
+			aMinuteLater: { status: audioPlayer.status, error: audioPlayer.error }
+		}).toEqual({
+			afterTheReloadFailed: { status: 'loading', error: null },
+			aMinuteLater: { status: 'loading', error: null }
+		});
 	});
 });
 
@@ -1197,6 +1346,57 @@ describe('stream playback', () => {
 		fakeAudio.fire('loadedmetadata');
 		// Resumes just behind the stalled position (seek-back margin).
 		expect(fakeAudio.currentTime).toBeCloseTo(12 - 0.75, 2);
+	});
+
+	it('asks a stalled stream one HEAD probe at a time, whatever else asks for recovery meanwhile', async () => {
+		vi.useFakeTimers();
+		let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+		fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+		const load = vi.spyOn(fakeAudio, 'load');
+
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+		fakeAudio.fire('error');
+		audioPlayer.resumeAfterNetworkReturn();
+		await vi.advanceTimersByTimeAsync(SECOND);
+		answerProbe({ ok: true, status: 200 });
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect({ probes: fetchMock.mock.calls.length, reloads: load.mock.calls.length }).toEqual({
+			probes: 1,
+			reloads: 1
+		});
+	});
+
+	it('names a lost session on a stalled stream and asks for sign-in', async () => {
+		vi.useFakeTimers();
+		fetchMock.mockResolvedValue({ ok: false, status: 401 });
+		const onAuthLost = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onAuthLost }));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		expect({
+			signInAsked: onAuthLost.mock.calls.length > 0,
+			status: audioPlayer.status,
+			error: audioPlayer.error,
+			src: fakeAudio.src
+		}).toEqual({
+			signInAsked: true,
+			status: 'error',
+			error: 'Playback failed. Press Retry.',
+			src: '/api/queue-streams/snap/audio'
+		});
 	});
 
 	it('rebuilds an expired stream snapshot and resumes at position', async () => {

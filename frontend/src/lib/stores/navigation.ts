@@ -1,17 +1,14 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { get, writable } from 'svelte/store';
-import {
-	dropLayersFrom,
-	keepLayerHistory,
-	layerSwitch,
-	resetLayersForTests,
-	stackedLayers,
-	type Layer,
-	type LayerHistory
-} from '$lib/stores/layers';
+import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
-import { listenForLandings, stepBackOffStandingEntry } from '$lib/history/historyController';
+import {
+	forgetLayerEntries,
+	listenForLandings,
+	stepBackOffStandingEntry,
+	type Landing
+} from '$lib/history/historyController';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
 import { isDirty } from '$lib/stores/editor';
 import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
@@ -42,7 +39,6 @@ import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/const
 import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
-	backLibraryHistory,
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
@@ -62,7 +58,7 @@ import {
 } from '$lib/stores/libraryContext';
 
 export type { DetailTab };
-export { detailTab };
+export { detailTab, forgetLayerEntries };
 
 function urlFromState(state: LibraryHistoryState): string {
 	return libraryHistoryUrl(state);
@@ -144,11 +140,17 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
 // instead of running it (see the comment above), a clean draft runs it
 // immediately. Every song-switch/leave entry point must route through this
-// — never re-implement the if/else inline. The phone drawer closes over a
-// parked navigation: the question now belongs to the song behind it, and
-// Keep editing must land on that draft, not on the drawer (issue #1143).
-async function guardDirtyNavigation(action: () => void | Promise<void>): Promise<void> {
+// — never re-implement the if/else inline. A way out that has already moved
+// history puts the song back first, through `beforeAsking`. The phone drawer
+// closes over a parked navigation: the question now belongs to the song
+// behind it, and Keep editing must land on that draft, not on the drawer
+// (issue #1143).
+async function guardDirtyNavigation(
+	action: () => void | Promise<void>,
+	beforeAsking: () => void = () => undefined
+): Promise<void> {
 	if (get(isDirty)) {
+		beforeAsking();
 		closeSidebar();
 		pendingDirtyNavigation.set(action);
 		return;
@@ -549,19 +551,19 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 
 // Browser Back/Forward has already moved the address by the time `popstate`
 // fires, so a dirty draft cannot hold it the way every other guarded way out
-// does. The song's entry is written back on top of the one landed on instead,
-// and the step is parked like those (issue #1143): Cancel stays on the song
-// with its draft, Discard -- or Save, once it has saved -- steps back onto the
-// entry the traversal reached. Back never saves or discards a draft by itself.
-// After a reload every traversal is a router navigation, so the address route
-// of that entry may already be resolving: no library is applied until the
-// song's entry is back, and an apply started meanwhile is dropped.
-// Documented next to the dirty-guard paragraph in docs/architecture.md.
-function askBeforeLeavingByTraversal(): void {
+// does. The song's entry is written back on top of the one landed on before
+// the question instead (issue #1143): Cancel stays on the song with its
+// draft, Discard -- or Save, once it has saved -- steps back onto the entry
+// the traversal reached, whose landing then applies it. Back never saves or
+// discards a draft by itself. After a reload every traversal is a router
+// navigation, so the address route of that entry may already be resolving: no
+// library is applied until the song's entry is back, and an apply started
+// meanwhile is dropped. Documented next to the dirty-guard paragraph in
+// docs/architecture.md.
+function putTheSongBackOverTheLanding(): void {
 	const songEntry = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	const songEntryBack = writeLibraryHistory(songEntry, urlFromState(songEntry), 'push');
 	void holdLibraryRestoresUntil(songEntryBack.finally(cancelLibraryHistoryApply));
-	void guardDirtyNavigation(stepBackOntoTraversalLanding);
 }
 
 async function stepBackOntoTraversalLanding(): Promise<void> {
@@ -569,117 +571,13 @@ async function stepBackOntoTraversalLanding(): Promise<void> {
 	void stepBackOffStandingEntry();
 }
 
-// History layers (issues #1002, #1114): while the library history runs, every
-// layer opened on the stack (stores/layers.ts) owns one history entry on top
-// of the library it covers, at the same address. Back then closes the topmost
-// layer and leaves that library exactly as it was -- no workspace re-apply, no
-// dirty-draft save -- instead of applying whatever entry sits below it while
-// the overlay stays on top. The entry is a copy of that library marked with
-// the layer's id, and replace writes keep the mark (libraryContext.ts). A layer
-// that leaves any other way (×, Done, Escape, a surface change) steps back off
-// its entry, so no stale copy of the library is left for Back to land on. Off
-// the library (Settings) a layer owns no entry: Back leaves the page as it
-// always has.
-//
-// The library entry under each layer's own entry, for the layers that own one.
-const libraryBelowLayer = new Map<Layer, LibraryHistoryState>();
-// Step-backs issued here rather than by the browser: their popstates land on
-// an entry whose library is already showing, so they apply nothing.
-let ownLayerStepBacks = 0;
-
-const libraryLayerHistory: LayerHistory = {
-	held(layer) {
-		const below = currentLibraryHistoryState();
-		if (!isLibraryHistoryState(below)) return;
-		libraryBelowLayer.set(layer, below);
-		void writeLibraryHistory(
-			{ ...below, index: below.index + 1, layer: layer.id },
-			urlFromState(below),
-			'push'
-		);
-	},
-	left(layer) {
-		const below = libraryBelowLayer.get(layer);
-		libraryBelowLayer.delete(layer);
-		if (below && ownsTopEntry(layer, below)) stepBackOnto(below);
+async function applyLanding(state: unknown): Promise<void> {
+	if (!isLibraryHistoryState(state)) {
+		await applyLibraryHistory(libraryRootState());
+		return;
 	}
-};
-
-function ownsTopEntry(layer: Layer, below: LibraryHistoryState): boolean {
-	const top = currentLibraryHistoryState();
-	return isLibraryHistoryState(top) && top.layer === layer.id && top.index === below.index + 1;
-}
-
-function stepBackOnto(landing: LibraryHistoryState): void {
-	ownLayerStepBacks += 1;
-	void backLibraryHistory(landing, urlFromState(landing));
-}
-
-function leftByStepTo(layer: Layer, landing: number): boolean {
-	const below = libraryBelowLayer.get(layer);
-	return below === undefined || below.index >= landing;
-}
-
-// A popstate that leaves layer entries closes those layers, topmost first.
-// A step onto the entry right below them keeps the library as it stands; a
-// longer jump (several entries back at once) applies its own entry as usual.
-function popsHistoryLayers(state: unknown): boolean {
-	if (ownLayerStepBacks > 0) {
-		ownLayerStepBacks -= 1;
-		stepOffStackedStaleLayerEntry(state);
-		return true;
-	}
-	const landing = isLibraryHistoryState(state) ? state.index : -1;
-	const layers = stackedLayers();
-	let depth = layers.length;
-	while (depth > 0 && leftByStepTo(layers[depth - 1], landing)) depth -= 1;
-	const left = dropLayersFrom(depth);
-	const lowestLeftBelow = left.length > 0 ? libraryBelowLayer.get(left[0]) : undefined;
-	for (const layer of left) libraryBelowLayer.delete(layer);
-	const staleLanding = staleLayerEntryLanding(state);
-	if (staleLanding) {
-		// The copy may be out of date -- the entry below can be rewritten after
-		// Back closed its layer -- so it applies nothing; the step's own
-		// popstate applies the entry it lands on.
-		void backLibraryHistory(staleLanding, urlFromState(staleLanding));
-		return true;
-	}
-	return lowestLeftBelow?.index === landing;
-}
-
-// Layers stack (a menu over Now Playing), so the last of this module's own
-// step-backs off a stale layer entry -- after a reload on the top one -- can
-// land on the stale entry of the layer below, and steps on until it reaches
-// the library. A write already queued past that entry (an album row in the
-// drawer over the cover editor, which the new album closes) moves on from it
-// by itself; stepping off as well would land behind that write, on the
-// library it left.
-function stepOffStackedStaleLayerEntry(state: unknown): void {
-	if (ownLayerStepBacks > 0 || historyMovesOnFrom(state)) return;
-	const staleLanding = staleLayerEntryLanding(state);
-	if (staleLanding) stepBackOnto(staleLanding);
-}
-
-function historyMovesOnFrom(state: unknown): boolean {
-	const planned = currentLibraryHistoryState();
-	return (
-		isLibraryHistoryState(state) && isLibraryHistoryState(planned) && planned.index !== state.index
-	);
-}
-
-// An entry marked as a layer that no open layer owns -- left behind by a
-// reload, or reached again with Forward after Back closed its layer -- is a
-// copy of the library below it, where Back would visibly do nothing; the
-// caller steps off it onto that library. Any open layer can own it, not only
-// the top one: a sheet reopened over Now Playing before the step back off its
-// old entry lands already sits above the Now Playing entry that step reaches.
-function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
-	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
-	const ownedByOpenLayer = Array.from(libraryBelowLayer).some(
-		([layer, below]) => layer.id === state.layer && below.index === state.index - 1
-	);
-	if (ownedByOpenLayer) return null;
-	return { ...state, index: state.index - 1, layer: undefined };
+	const applied = await applyLibraryHistory(state);
+	if (applied && state.songId) await loadSongContext(state.songId);
 }
 
 // The shell's own overlays -- full Now Playing and the phone drawer -- live in
@@ -724,44 +622,24 @@ export function initNavigation(): () => void {
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
 	}
-	const staleLanding = staleLayerEntryLanding(existing);
-	if (staleLanding) stepBackOnto(staleLanding);
 
-	// The history controller's landing handler: the controller has settled its
-	// own step-backs by the time a landing reaches here.
-	function onLanding(e: PopStateEvent): void {
-		const state = libraryHistoryEntry(e.state);
-		if (popsHistoryLayers(state)) return;
-		if (get(isDirty)) {
-			askBeforeLeavingByTraversal();
-			return;
-		}
-		void (async () => {
-			if (isLibraryHistoryState(state)) {
-				const applied = await applyLibraryHistory(state);
-				if (applied && state.songId) {
-					await loadSongContext(state.songId);
-				}
-			} else {
-				await applyLibraryHistory(libraryRootState());
+	// The history controller's landing handler: by the time a landing reaches
+	// here the controller has closed the layers it left, so only a landing on
+	// another page entry is the library's to apply.
+	function onLanding(landing: Landing, event: PopStateEvent): void {
+		if (!landing.apply) return;
+		const state = libraryHistoryEntry(event.state);
+		let songPutBack = false;
+		void guardDirtyNavigation(
+			() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),
+			() => {
+				putTheSongBackOverTheLanding();
+				songPutBack = true;
 			}
-		})();
+		);
 	}
 
-	const stopListening = listenForLandings((_landing, event) => onLanding(event));
-	keepLayerHistory(libraryLayerHistory);
-	return () => {
-		stopListening();
-		forgetLayerEntries();
-	};
-}
-
-// The library history stops: the overlays still open keep their layers, which
-// own no history entry any more.
-export function forgetLayerEntries(): void {
-	keepLayerHistory(null);
-	libraryBelowLayer.clear();
-	ownLayerStepBacks = 0;
+	return listenForLandings(onLanding);
 }
 
 export function resetNavigationForTests(): void {
