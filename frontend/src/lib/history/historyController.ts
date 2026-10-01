@@ -122,15 +122,13 @@ function storedCount(storage: Pick<Storage, 'getItem'>, key: string, what: strin
 
 type TabStorage = Pick<Storage, 'getItem' | 'setItem'>;
 
-// The names a browser refuses a storage write under: a full quota, or a
-// private mode that offers storage but will not keep anything in it.
-const REFUSED_STORAGE_WRITES: ReadonlySet<string> = new Set([
-	'QuotaExceededError',
-	'SecurityError'
-]);
+// The names a browser refuses storage under: a full quota, a private mode that
+// offers storage but will not keep anything in it, or site data blocked so that
+// even reaching session storage is denied.
+const STORAGE_REFUSALS: ReadonlySet<string> = new Set(['QuotaExceededError', 'SecurityError']);
 
-function isRefusedStorageWrite(error: unknown): boolean {
-	return error instanceof DOMException && REFUSED_STORAGE_WRITES.has(error.name);
+function isStorageRefusal(error: unknown): boolean {
+	return error instanceof DOMException && STORAGE_REFUSALS.has(error.name);
 }
 
 // The tab's counts live in session storage so that a reload keeps them. Once
@@ -147,12 +145,31 @@ function tabStorage(storage: TabStorage): TabStorage {
 					storage.setItem(key, value);
 					return;
 				} catch (error) {
-					if (!isRefusedStorageWrite(error)) throw error;
+					if (!isStorageRefusal(error)) throw error;
 					memoryAfterRefusal = new Map();
 				}
 			}
 			memoryAfterRefusal.set(key, value);
 		}
+	};
+}
+
+// A browser that denies session storage outright leaves the tab's counts to
+// this document's memory from the start.
+function sessionTabStorage(): TabStorage {
+	try {
+		return tabStorage(sessionStorage);
+	} catch (error) {
+		if (!isStorageRefusal(error)) throw error;
+		return tabStorage(documentMemory());
+	}
+}
+
+function documentMemory(): TabStorage {
+	const items = new Map<string, string>();
+	return {
+		getItem: (key) => items.get(key) ?? null,
+		setItem: (key, value) => void items.set(key, value)
 	};
 }
 
@@ -202,7 +219,7 @@ export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 // SvelteKit's start writes its own entry over the one the page loads onto and
 // drops the page state that entry carried, so the state is read while this
 // module loads, before the router starts.
-let historyStorage = tabStorage(sessionStorage);
+let historyStorage = sessionTabStorage();
 let stateOnLoad: unknown = readStateOnLoad();
 let ledger: HistoryLedger = EMPTY_LEDGER;
 // Whether history stands on its top entry, the only place an id-less entry may
@@ -557,7 +574,7 @@ export function loadHistoryPageForTests(): void {
 }
 
 export function resetHistoryControllerForTests(): void {
-	historyStorage = tabStorage(sessionStorage);
+	historyStorage = sessionTabStorage();
 	stateOnLoad = readStateOnLoad();
 	ledger = EMPTY_LEDGER;
 	standsOnTop = true;

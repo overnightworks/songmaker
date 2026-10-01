@@ -284,6 +284,18 @@ describe('history adapter', () => {
 		expect(layer.id).toBe(4);
 	});
 
+	it('loads and keeps stamping entries when the browser denies session storage itself', async () => {
+		vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
+			throw new DOMException('Access is denied for this document.', 'SecurityError');
+		});
+		vi.resetModules();
+
+		const loaded = await import('$lib/history/historyController');
+		const ids = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
+
+		expect(ids).toEqual([1, 2]);
+	});
+
 	it('a session storage write failing for another reason is not swallowed', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 			throw new TypeError('broken storage');
