@@ -1,8 +1,0 @@
-claim_id = "ddaf9f11987b48b3be04d9dbf1e8a0b4"
-agent = "claude-head"
-role = "builder"
-base = "72e3e2ddc5f303c8fa43a4e4329af03c33c93bd4"
-branch = "claude/issue-1186-cover-suggest-on-tap"
-scope = ["docs/architecture.md", "docs/design/album-browsing.html", "docs/design/album-cover.html", "frontend/e2e/album-cover.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "src/songmaker_cli/db/queries/jobs.py", "tests/test_db.py", "tests/test_jobs.py", "tests/test_lifecycle_job_reaper.py"]
-opened_commit = "f8b4b929c009fe087b855346f913a2f2459af71a"
-whole_reason = "cover editor opens without generating, honest counts and one announcement per outcome"
