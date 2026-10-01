@@ -96,8 +96,9 @@ export interface PlaybackToFollow {
 // take to another (#1226).
 let takeStartedUnder: string | null = null;
 
-// What this tab last saved, kept in memory so that the 5 s rhythm costs no
-// storage read per tick, nor a write per tick once storage refuses (#1226).
+// The record as this tab last saved or read it, kept in memory so that the
+// 5 s rhythm costs no storage read per tick, nor a write per tick once
+// storage refuses (#1226).
 let knownRecord: { userId: string; generationId: string; position: number } | null = null;
 
 /**
@@ -178,13 +179,13 @@ function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
 	writeRecord(userId, recordOf(source, current, position));
 }
 
-// A take still loading has no position of its own yet: one the record
-// already holds keeps the saved position (a restore, a reload), a take new
-// to it starts at 0. Once loaded, the element's own clock counts, since the
-// player's copy only moves with timeupdate and may stand a quarter second
+// A take still loading, or failed to load, has no position of its own: one
+// the record already holds keeps the saved position (a restore, a reload), a
+// take new to it starts at 0. Otherwise the element's own clock counts, since
+// the player's copy only moves with timeupdate and may stand a quarter second
 // behind a pause (#1226).
 function positionToSave(userId: string, take: PlaybackInfo): number | null {
-	if (audioPlayer.status === 'loading') {
+	if (audioPlayer.status === 'loading' || audioPlayer.status === 'error') {
 		return savedPositionOf(userId, take) === null ? 0 : null;
 	}
 	return audioPlayer.getElement()?.currentTime ?? audioPlayer.currentTime;

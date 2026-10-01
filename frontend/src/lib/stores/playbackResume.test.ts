@@ -34,7 +34,7 @@ function savedPoint(userId = LISTENER.id): { generationId: string; position: num
 	return record && { generationId: record.generationId, position: record.position };
 }
 
-function playTake(generationId: string, status: 'playing' | 'loading' = 'playing'): void {
+function playTake(generationId: string, status: 'playing' | 'loading' | 'error' = 'playing'): void {
 	const song = makeSong({ id: `s-${generationId}` });
 	audioPlayer.current = {
 		generation: makeGeneration({ id: generationId, song_id: song.id }),
@@ -230,27 +230,30 @@ describe('playback resume record', () => {
 		expect(savedPlayback()).toBeNull();
 	});
 
-	it('a restored take keeps its saved position while it loads', () => {
-		playTake('g-before-the-kill');
-		localStorage.setItem(
-			recordKey(LISTENER.id),
-			JSON.stringify({
-				source: ALBUM_QUEUE,
-				songId: 's-g-restored',
-				generationId: 'g-restored',
-				position: 42
-			})
-		);
-		audioPlayer.current = null;
-		audioPlayer.status = 'idle';
-		flushSync();
+	it.each(['loading', 'error'] as const)(
+		'a restored take keeps its saved position while %s',
+		(status) => {
+			playTake('g-before-the-kill');
+			localStorage.setItem(
+				recordKey(LISTENER.id),
+				JSON.stringify({
+					source: ALBUM_QUEUE,
+					songId: 's-g-restored',
+					generationId: 'g-restored',
+					position: 42
+				})
+			);
+			audioPlayer.current = null;
+			audioPlayer.status = 'idle';
+			flushSync();
 
-		savedPlayback();
-		playTake('g-restored', 'loading');
-		setPageVisibility('hidden');
+			savedPlayback();
+			playTake('g-restored', status);
+			setPageVisibility('hidden');
 
-		expect(savedPoint()).toEqual({ generationId: 'g-restored', position: 42 });
-	});
+			expect(savedPoint()).toEqual({ generationId: 'g-restored', position: 42 });
+		}
+	);
 
 	it('with storage unavailable saves nothing and plays on silently', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
