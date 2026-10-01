@@ -1,7 +1,8 @@
 import {
 	historyEntry,
 	pushHistoryEntry,
-	replaceHistoryEntry
+	replaceHistoryEntry,
+	standingHistoryEntry
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -934,14 +935,12 @@ describe('signing out on the phone', () => {
 		const target = await renderLayout('/');
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
-		await vi.waitFor(() =>
-			expect(currentLibraryHistoryState()).toMatchObject({ layer: 'account-menu' })
-		);
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
 
 		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
 		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
-		expect(currentLibraryHistoryState()).toMatchObject({ layer: 'account-menu' });
+		expect(standingHistoryEntry()?.layer).toBe('account-menu');
 	});
 });
 
