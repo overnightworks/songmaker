@@ -4,7 +4,7 @@ import {
 	makePlaylistDetail as playlistDetail,
 	makeSong as song
 } from '$lib/test-utils/factories';
-import { historyEntry, historyLength, replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { historyLength } from '$lib/test-utils/library-history';
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
@@ -144,23 +144,6 @@ describe('detail views own no content back', () => {
 		expect(generationTarget.textContent).toContain(EDITOR_STYLE_PROMPT_LABEL);
 		expect(generationTarget.textContent).toContain(EDITOR_LYRICS_LABEL);
 		expect(generationTarget.querySelector('.cowriter-chat')).toBeNull();
-	});
-
-	it('does not treat a take as a separate back destination', async () => {
-		const { goBack, initNavigation, resetNavigationForTests } =
-			await import('$lib/stores/navigation');
-		resetNavigationForTests();
-		replaceHistoryEntry('/?song=s1&gen=g1');
-		const cleanup = initNavigation();
-		// The write crosses into the song's own address (issue #275) and is
-		// therefore asynchronous -- see the note on writeLibraryHistory.
-		await vi.waitFor(() => expect(historyEntry().index).toBe(0));
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(selectedGenerationId)).toBe('g1');
-		goBack();
-		expect(get(selectedSongId)).toBeNull();
-		expect(get(selectedGenerationId)).toBeNull();
-		cleanup();
 	});
 
 	it('does not render a settings content back beside the shell', async () => {

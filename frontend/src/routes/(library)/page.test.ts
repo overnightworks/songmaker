@@ -1,4 +1,5 @@
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { startFakeRouter } from '$lib/test-utils/app-navigation';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -32,16 +33,7 @@ const api = vi.hoisted(() => ({
 	fetchActiveModels: vi.fn()
 }));
 
-const routeSearch = vi.hoisted(() => new URLSearchParams());
-
-vi.mock('$app/state', () => ({
-	page: {
-		params: {},
-		get url() {
-			return { searchParams: routeSearch };
-		}
-	}
-}));
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 // Stands in for the router the way the real one behaves for a same-shape
 // write: it moves the history entry, but nothing here re-resolves the
 // mounted route -- a route-crossing `goto` from this page therefore never
@@ -142,9 +134,8 @@ function openAddress(): HTMLElement {
 // live library stream running, which routes/+layout.svelte starts for every
 // signed-in library route.
 function coldTabAt(search: string): void {
-	routeSearch.forEach((_, key) => routeSearch.delete(key));
-	new URLSearchParams(search).forEach((value, key) => routeSearch.set(key, value));
 	replaceHistoryEntry('/' + search);
+	startFakeRouter();
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);
@@ -497,10 +488,9 @@ describe('a legacy /?song=&gen= address whose take is gone', () => {
 			})
 		);
 		let releaseGoto: (() => void) | undefined;
+		const navigate = vi.mocked(goto).getMockImplementation();
 		vi.mocked(goto).mockImplementationOnce((url, options) => {
-			if ((options as { replaceState?: boolean } | undefined)?.replaceState) {
-				replaceHistoryEntry(url as string);
-			}
+			void navigate?.(url, options);
 			return new Promise<void>((res) => {
 				releaseGoto = () => res(undefined);
 			});

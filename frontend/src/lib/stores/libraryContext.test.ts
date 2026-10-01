@@ -86,6 +86,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto, pushState, replaceState } from '$app/navigation';
+import { listenForLandings } from '$lib/history/historyController';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
@@ -114,6 +115,14 @@ import {
 	writeLibraryHistory,
 	type LibraryHistoryState
 } from './libraryContext';
+
+// A library entry as it reaches the router: the library beside the id the
+// history controller stamped the entry with (issue #1006).
+function stampedLibrary(library: LibraryHistoryState): App.PageState {
+	return { library, entry: { id: expect.any(Number) } };
+}
+
+let stopListeningForLandings: () => void = () => undefined;
 
 function emptyPage<T>(items: T[] = []) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
@@ -159,9 +168,11 @@ beforeEach(() => {
 	vi.mocked(goto).mockClear();
 	vi.mocked(pushState).mockClear();
 	vi.mocked(replaceState).mockClear();
+	stopListeningForLandings = listenForLandings(() => undefined);
 });
 
 afterEach(() => {
+	stopListeningForLandings();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
@@ -333,13 +344,13 @@ describe('applyLibraryHistory', () => {
 		expect(get(selectedPlaylistDetail)?.id).toBe('p2');
 	});
 
-	it('applies nothing once a write cancelled it while a Back saved the draft it left', async () => {
-		let settleSave: () => void = () => undefined;
-		void holdLibraryRestoresUntil(new Promise<void>((resolve) => (settleSave = resolve)));
+	it("applies nothing once a write cancelled it while Back put the song's entry back", async () => {
+		let releaseHold: () => void = () => undefined;
+		void holdLibraryRestoresUntil(new Promise<void>((resolve) => (releaseHold = resolve)));
 		const held = applyLibraryHistory({ ...libraryRootState(), surface: 'detail', songId: 's1' });
 
 		cancelLibraryHistoryApply();
-		settleSave();
+		releaseHold();
 
 		expect(await held).toBe(false);
 		expect(get(librarySurface)).toBe('browse');
@@ -709,7 +720,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 			replaceState: true,
 			noScroll: true,
 			keepFocus: true,
-			state: { library: libraryRootState() }
+			state: stampedLibrary(libraryRootState())
 		});
 		expect(historyLength()).toBe(lengthBefore + 1);
 		expect(historyEntry()).toEqual(libraryRootState());
@@ -769,7 +780,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		await written;
 		expect(vi.mocked(goto).mock.lastCall).toEqual([
 			albumRoutePath('a2'),
-			{ replaceState: true, noScroll: true, keepFocus: true, state: { library: layered } }
+			{ replaceState: true, noScroll: true, keepFocus: true, state: stampedLibrary(layered) }
 		]);
 		expect(historyEntry()).toEqual(layered);
 	});
@@ -788,7 +799,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 			await writeLibraryHistory(albumState, albumRoutePath('a2'), mode);
 
 			expect(goto).not.toHaveBeenCalled();
-			expect(write).toHaveBeenCalledWith(albumRoutePath('a2'), { library: albumState });
+			expect(write).toHaveBeenCalledWith(albumRoutePath('a2'), stampedLibrary(albumState));
 			expect(historyEntry()).toEqual(albumState);
 			expect(location.pathname).toBe(albumRoutePath('a2'));
 		}
@@ -813,7 +824,7 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 			replaceState: false,
 			noScroll: true,
 			keepFocus: true,
-			state: { library: libraryRootState() }
+			state: stampedLibrary(libraryRootState())
 		});
 	});
 });
@@ -853,10 +864,14 @@ describe('a page load', () => {
 		reportRouterStarted();
 		await written;
 
-		expect(vi.mocked(replaceState).mock.calls).toEqual([
-			[`${location.origin}/playlist/p`, { library: playlistState }],
-			['/playlist/p', { library: scrolled }]
+		const loadedOnto = `${location.origin}/playlist/p`;
+		const writes = vi.mocked(replaceState).mock.calls;
+		expect(writes).toEqual([
+			[loadedOnto, { entry: { id: expect.any(Number) } }],
+			[loadedOnto, stampedLibrary(playlistState)],
+			['/playlist/p', stampedLibrary(scrolled)]
 		]);
+		expect(new Set(writes.map(([, state]) => state.entry?.id)).size).toBe(1);
 		expect(historyEntry()).toEqual(scrolled);
 	});
 
