@@ -153,11 +153,9 @@ than skipped in the other shell.
 the spec): measured over both shells (desktop / 375px) at 13/13 for the
 sign-in, 19/19 for the reload, 14/14 for the sign-out and the refused return,
 18/15 for the refused admin page, 13/12 for the expired session and 11/11 for
-the lockout, against a shared ceiling of 30. The deep-link sign-in (#1215) and
-the phone's session lost behind its menu (#1230) run under the same ceiling
-and have not been measured yet; read their numbers off the spec's own
-`Auth flow /api requests` log lines of a green CI run before adding them
-here. Its own arrangement -- one
+the lockout, 23/26 for the deep-link sign-in (#1215), and 28 at 375px for the
+phone's session lost behind its menu (#1230, a phone-only flow), against a
+shared ceiling of 30. Its own arrangement -- one
 non-admin account per project, created through `POST /api/admin/users` and
 deleted again in `afterAll` -- does not touch that budget: like the rail's
 filler albums, it runs from the run's API context rather than the page. What

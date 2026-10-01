@@ -62,14 +62,14 @@ import {
  * What each test costs the API, measured on a green run of both shells against
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
- * page, 13/12 for the expired session, 11/11 for the lockout; the deep-link
- * sign-in and the phone's session lost behind its menu are not measured yet.
- * One ceiling for
- * the file, the same way `admin-models.spec.ts` carries one for its four. The
- * budget is a ceiling, not a knob: a flow that suddenly needs several more
- * round trips is a regression, so find the extra requests instead of raising
- * this number -- see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the
- * full reasoning.
+ * page, 13/12 for the expired session, 11/11 for the lockout, 23/26 for the
+ * deep-link sign-in, and 28 at 375px for the phone's session lost behind its
+ * menu, which runs on the phone only. One ceiling for the file, the same way
+ * `admin-models.spec.ts` carries one for its four. The budget is a ceiling,
+ * not a knob: a flow that suddenly needs several more round trips is a
+ * regression, so find the extra requests instead of raising this number --
+ * see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full
+ * reasoning.
  */
 const AUTH_FLOW_API_REQUEST_BUDGET = 30;
 
@@ -79,19 +79,18 @@ const ADMIN_API_PREFIX = '/api/admin/';
 const ADMIN_USERS_PATH = '/api/admin/users';
 const ADMIN_SESSIONS_PATH = '/api/admin/sessions';
 const ADMIN_LOGIN_ATTEMPTS_PATH = '/api/admin/login-attempts';
-// The library lists the phone drawer reads as it opens, which a session lost
-// behind it refuses.
-const ALBUMS_PATH = '/api/albums';
-const PLAYLISTS_PATH = '/api/playlists';
 const REFUSED_PATHS = [
 	AUTH_LOGIN_PATH,
 	AUTH_ME_PATH,
 	ADMIN_USERS_PATH,
 	ADMIN_SESSIONS_PATH,
-	ADMIN_LOGIN_ATTEMPTS_PATH,
-	ALBUMS_PATH,
-	PLAYLISTS_PATH
+	ADMIN_LOGIN_ATTEMPTS_PATH
 ];
+// The library lists the phone drawer reads as it opens, which a session lost
+// behind it refuses. Only the flow tagged with this expects that refusal; in
+// every other flow it still fails the guard.
+const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
+const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
 const ADMIN_PAGE_PATH = '/settings/users';
 const SESSION_COOKIE = 'session_id';
 
@@ -173,13 +172,16 @@ test.afterAll(async () => {
 	await adminApi.dispose();
 });
 
-test.beforeEach(async ({ page, isMobile }) => {
+test.beforeEach(async ({ page, isMobile }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
 	// Every refusal this file drives is one of its six sentences: the login it
 	// locks out, the `/api/auth/me` a dead session answers, the admin calls a
 	// non-admin makes. A refusal anywhere else, and any 5xx at all, still fails
 	// the flow.
-	guard = new FlowGuard(page, { refusalsExpectedOn: REFUSED_PATHS });
+	const refusalsExpectedOn = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
+		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
+		: REFUSED_PATHS;
+	guard = new FlowGuard(page, { refusalsExpectedOn });
 });
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
@@ -431,28 +433,30 @@ test('a logged-out deep link signs in onto the song it asked for', async ({ page
 	await attachShot(page, testInfo, 'auth-deep-link-returned');
 });
 
-test('a session lost behind a song page on the phone is sent to sign-in from the menu', async ({
-	page,
-	isMobile
-}, testInfo) => {
-	test.skip(!isMobile, 'The drawer the menu opens is the phone shell.');
-	const songAddress = await seedOwnSong();
-	await signInOnto(page, songAddress);
-	const signedIn = await sessionCookie(page.context());
-	expect(signedIn).toBeDefined();
+test(
+	'a session lost behind a song page on the phone is sent to sign-in from the menu',
+	{ tag: LIBRARY_LISTS_REFUSED_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		test.skip(!isMobile, 'The drawer the menu opens is the phone shell.');
+		const songAddress = await seedOwnSong();
+		await signInOnto(page, songAddress);
+		const signedIn = await sessionCookie(page.context());
+		expect(signedIn).toBeDefined();
 
-	await ageSessionPastAbsoluteLimit(sessionIdOf(signedIn as Cookie));
-	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		await ageSessionPastAbsoluteLimit(sessionIdOf(signedIn as Cookie));
+		await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 
-	// Not a dark page on the song's own address: the door, asked to bring the
-	// person back to that song, saying why they are there.
-	await expect(page).toHaveURL(
-		(url) =>
-			url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === songAddress
-	);
-	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
-	await attachShot(page, testInfo, 'auth-phone-session-lost');
-});
+		// Not a dark page on the song's own address: the door, asked to bring the
+		// person back to that song, saying why they are there.
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' &&
+				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === songAddress
+		);
+		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
+		await attachShot(page, testInfo, 'auth-phone-session-lost');
+	}
+);
 
 test('wrong passwords lock the account, in words and for as long as it says', async ({
 	page
