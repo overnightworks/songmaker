@@ -3,17 +3,22 @@ import { flushSync } from 'svelte';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { currentUser } from '$lib/stores/auth';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import {
-	followPlaybackForResume,
-	readPlaybackResume,
-	type ResumeQueueSource
-} from './playbackResume';
+import { followPlaybackForResume, type ResumeQueueSource } from './playbackResume';
 
 const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const };
 const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
 const ALBUM_QUEUE: ResumeQueueSource = { type: 'album', albumId: 'a-resume' };
 
 followPlaybackForResume(() => ALBUM_QUEUE);
+
+function storedRecord(userId: string): unknown {
+	return JSON.parse(localStorage.getItem(`playbackResume:${userId}`) ?? 'null');
+}
+
+function savedPoint(userId = LISTENER.id): { generationId: string; position: number } | null {
+	const record = storedRecord(userId) as { generationId: string; position: number } | null;
+	return record && { generationId: record.generationId, position: record.position };
+}
 
 function playTake(generationId: string): void {
 	const song = makeSong({ id: `s-${generationId}` });
@@ -40,11 +45,6 @@ function setPageVisibility(state: DocumentVisibilityState): void {
 	document.dispatchEvent(new Event('visibilitychange'));
 }
 
-function savedPoint(): { generationId: string; position: number } | null {
-	const record = readPlaybackResume();
-	return record && { generationId: record.generationId, position: record.position };
-}
-
 beforeEach(() => {
 	currentUser.set(LISTENER);
 });
@@ -67,7 +67,7 @@ describe('playback resume record', () => {
 
 		setPageVisibility('hidden');
 
-		expect(readPlaybackResume()).toEqual({
+		expect(storedRecord(LISTENER.id)).toEqual({
 			source: ALBUM_QUEUE,
 			songId: 's-g-hide',
 			generationId: 'g-hide',
@@ -100,18 +100,18 @@ describe('playback resume record', () => {
 	});
 
 	it("another user's record is never read", () => {
-		playTake('g-mine');
+		playTake('g-shared-device');
 		playTo(42);
 		setPageVisibility('hidden');
 
 		currentUser.set(OTHER_LISTENER);
-		expect(readPlaybackResume()).toBeNull();
+		playTo(44);
 
-		playTake('g-theirs');
-		expect(savedPoint()).toEqual({ generationId: 'g-theirs', position: 0 });
-
-		currentUser.set(LISTENER);
-		expect(savedPoint()).toEqual({ generationId: 'g-mine', position: 42 });
+		expect(savedPoint(OTHER_LISTENER.id)).toEqual({
+			generationId: 'g-shared-device',
+			position: 44
+		});
+		expect(savedPoint(LISTENER.id)).toEqual({ generationId: 'g-shared-device', position: 42 });
 	});
 
 	it('saves nothing without a signed-in user', () => {
@@ -119,22 +119,24 @@ describe('playback resume record', () => {
 		playTake('g-anonymous');
 		setPageVisibility('hidden');
 
-		currentUser.set(LISTENER);
-		expect(readPlaybackResume()).toBeNull();
+		expect(localStorage.length).toBe(0);
 	});
 
-	it('reads a damaged record as nothing', () => {
+	it('replaces a damaged record on the next tick', () => {
 		playTake('g-damaged');
-		expect(readPlaybackResume()).not.toBeNull();
-		const listenerKeys = Object.keys(localStorage).filter((key) => key.includes(LISTENER.id));
-		for (const key of listenerKeys) localStorage.setItem(key, '{"generationId": 7}');
+		localStorage.setItem(`playbackResume:${LISTENER.id}`, '{"generationId": 7');
 
-		expect(readPlaybackResume()).toBeNull();
+		playTo(1);
+
+		expect(savedPoint()).toEqual({ generationId: 'g-damaged', position: 1 });
 	});
 
 	it('with storage unavailable saves nothing and plays on silently', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 			throw new DOMException('storage is full', 'QuotaExceededError');
+		});
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementationOnce(() => {
+			throw new DOMException('storage is blocked', 'SecurityError');
 		});
 
 		expect(() => {
@@ -142,11 +144,6 @@ describe('playback resume record', () => {
 			playTo(6);
 			setPageVisibility('hidden');
 		}).not.toThrow();
-		expect(readPlaybackResume()).toBeNull();
-
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-			throw new DOMException('storage is blocked', 'SecurityError');
-		});
-		expect(readPlaybackResume()).toBeNull();
+		expect(savedPoint()).toBeNull();
 	});
 });
