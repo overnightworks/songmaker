@@ -49,7 +49,12 @@ import {
 	selectedPlaylist,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
-import { followPlaybackForResume, type ResumeQueueSource } from '$lib/stores/playbackResume';
+import {
+	followPlaybackForResume,
+	savedPlayback,
+	type ResumeQueueSource,
+	type SavedPlayback
+} from '$lib/stores/playbackResume';
 import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
@@ -1593,3 +1598,31 @@ function resumeQueueSource(): ResumeQueueSource | null {
 }
 
 followPlaybackForResume({ queueSource: resumeQueueSource, takeAfterCurrent });
+
+/**
+ * Shows the take the signed-in user last played on this device, paused where
+ * it stood, so that reopening a page Android killed finds it again (#1187
+ * P2). A take loaded in the meantime is never replaced.
+ */
+export async function restoreLastPlayback(): Promise<void> {
+	const saved = savedPlayback();
+	if (saved === null || audioPlayer.current !== null) return;
+	const take = await playableSavedTake(saved);
+	if (take === null || audioPlayer.current !== null) return;
+	audioPlayer.load(take, { autoplay: false, startAt: saved.position });
+}
+
+// The server answers 404 for a song deleted or out of this user's reach, and
+// a take deleted or archived since is missing from its song or marked so;
+// none of them, nor a server out of reach, is restored, and none is reported.
+async function playableSavedTake(saved: SavedPlayback): Promise<PlaybackInfo | null> {
+	let song: SongItem;
+	try {
+		song = await fetchSong(saved.songId);
+	} catch (err) {
+		if (err instanceof ApiError || err instanceof NetworkError) return null;
+		throw err;
+	}
+	const take = song.generations.find((gen) => gen.id === saved.generationId && !gen.is_archived);
+	return take === undefined ? null : toPlaybackInfo(take, song);
+}

@@ -82,6 +82,7 @@ import {
 	nowPlayingSurface,
 	openNowPlaying,
 	playTake,
+	restoreLastPlayback,
 	playTakeAndShowNowPlaying,
 	playPlaylistEntryAndShowNowPlaying,
 	registerNowPlayingTrigger,
@@ -3665,5 +3666,84 @@ describe('remembering what the app plays', () => {
 		sharePlayback.stop();
 
 		expect(storedRecord()).toBeNull();
+	});
+});
+
+describe('restoring the last playback after a reload', () => {
+	const LISTENER = { id: 'u-restore', username: 'listener', role: 'user' as const };
+	const SAVED_POSITION = 42;
+	const savedTake = makeGen({ ...genDefaults, id: 'g-saved', song_id: 's-saved' });
+	const savedSong = makeSong({ ...queuedSongDefaults(), id: 's-saved', generations: [savedTake] });
+
+	function saveRecord(): void {
+		localStorage.setItem(
+			`playbackResume:${LISTENER.id}`,
+			JSON.stringify({
+				source: { type: 'album', albumId: savedSong.album_id },
+				songId: savedSong.id,
+				generationId: savedTake.id,
+				position: SAVED_POSITION,
+				savedAt: 0
+			})
+		);
+	}
+
+	beforeEach(() => {
+		currentUser.set(LISTENER);
+		saveRecord();
+	});
+
+	afterEach(() => {
+		currentUser.set(null);
+		localStorage.clear();
+	});
+
+	it('shows the saved take paused at its saved position', async () => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(makePlayback(savedTake, savedSong), {
+			autoplay: false,
+			startAt: SAVED_POSITION
+		});
+		expect(audioPlayer.current?.generation.id).toBe(savedTake.id);
+	});
+
+	it.each([
+		{ take: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
+		{ take: 'a foreign song', answer: () => Promise.reject(new ApiError(403, 'no', '/x')) },
+		{
+			take: 'a deleted take',
+			answer: () => Promise.resolve({ ...savedSong, generations: [] })
+		},
+		{
+			take: 'an archived take',
+			answer: () =>
+				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] })
+		},
+		{
+			take: 'an unreachable server',
+			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch')))
+		}
+	])('a deleted, archived or foreign take restores nothing ($take)', async ({ answer }) => {
+		vi.mocked(fetchSong).mockImplementationOnce(answer);
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.current).toBeNull();
+		expect(get(toasts)).toEqual([]);
+	});
+
+	it('never replaces a take started while the saved one loads', async () => {
+		const tapped = makePlayback(makeGen({ ...genDefaults, id: 'g-tapped' }), savedSong);
+		vi.mocked(fetchSong).mockImplementationOnce(async () => {
+			audioPlayer.current = tapped;
+			return savedSong;
+		});
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.current?.generation.id).toBe(tapped.generation.id);
 	});
 });

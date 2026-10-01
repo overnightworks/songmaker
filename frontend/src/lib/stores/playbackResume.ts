@@ -68,6 +68,22 @@ export function forgetPlaybackResume(userId: string): void {
 	if (knownRecord?.userId === userId) knownRecord = null;
 }
 
+/** Where the signed-in user's take stood when this device last saved it. */
+export interface SavedPlayback {
+	songId: string;
+	generationId: string;
+	position: number;
+}
+
+/** The signed-in user's saved take; null when none is saved or it cannot be read. */
+export function savedPlayback(): SavedPlayback | null {
+	const userId = signedInUserId();
+	if (userId === null) return null;
+	const saved = parseSavedPlayback(readStorage(storageKey(userId)));
+	if (saved !== null) knownRecord = { userId, ...saved };
+	return saved;
+}
+
 export interface PlaybackToFollow {
 	/** The queue the take plays from; null while the player is not the app's own. */
 	queueSource: () => ResumeQueueSource | null;
@@ -139,9 +155,16 @@ function playedOnSinceLastSave(): boolean {
 	if (current === null || takeHasEnded()) return false;
 	const userId = userTheTakeStartedUnder();
 	if (userId === null) return false;
-	const saved = knownRecord;
-	if (saved?.userId !== userId || saved.generationId !== current.generation.id) return true;
-	return Math.abs(audioPlayer.currentTime - saved.position) >= PROGRESS_SAVE_EVERY_SECONDS;
+	const saved = savedPositionOf(userId, current);
+	if (saved === null) return true;
+	return Math.abs(audioPlayer.currentTime - saved) >= PROGRESS_SAVE_EVERY_SECONDS;
+}
+
+function savedPositionOf(userId: string, take: PlaybackInfo): number | null {
+	if (knownRecord?.userId !== userId || knownRecord.generationId !== take.generation.id) {
+		return null;
+	}
+	return knownRecord.position;
 }
 
 function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
@@ -150,12 +173,20 @@ function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
 	const userId = userTheTakeStartedUnder();
 	const source = queueSource();
 	if (userId === null || source === null) return;
-	writeRecord(userId, recordOf(source, current, positionNow()));
+	const position = positionToSave(userId, current);
+	if (position === null) return;
+	writeRecord(userId, recordOf(source, current, position));
 }
 
-// The element's own clock: the player's copy only moves with timeupdate and
-// may stand a quarter second behind a pause (#1226).
-function positionNow(): number {
+// A take still loading has no position of its own yet: one the record
+// already holds keeps the saved position (a restore, a reload), a take new
+// to it starts at 0. Once loaded, the element's own clock counts, since the
+// player's copy only moves with timeupdate and may stand a quarter second
+// behind a pause (#1226).
+function positionToSave(userId: string, take: PlaybackInfo): number | null {
+	if (audioPlayer.status === 'loading') {
+		return savedPositionOf(userId, take) === null ? 0 : null;
+	}
 	return audioPlayer.getElement()?.currentTime ?? audioPlayer.currentTime;
 }
 
@@ -188,13 +219,46 @@ function writeRecord(userId: string, record: PlaybackResumeRecord): void {
 	writeStorage(storageKey(userId), JSON.stringify(record));
 }
 
+function parseSavedPlayback(stored: string | null): SavedPlayback | null {
+	if (stored === null) return null;
+	let value: unknown;
+	try {
+		value = JSON.parse(stored);
+	} catch {
+		return null;
+	}
+	return isSavedPlayback(value)
+		? { songId: value.songId, generationId: value.generationId, position: value.position }
+		: null;
+}
+
+function isSavedPlayback(value: unknown): value is SavedPlayback {
+	if (typeof value !== 'object' || value === null) return false;
+	const saved = value as Record<string, unknown>;
+	return (
+		typeof saved.songId === 'string' &&
+		typeof saved.generationId === 'string' &&
+		typeof saved.position === 'number' &&
+		Number.isFinite(saved.position) &&
+		saved.position >= 0
+	);
+}
+
 // Private browsing, a full quota or blocked site data: resuming is a comfort,
 // so playback goes on and simply nothing is remembered (#1209).
+function readStorage(key: string): string | null {
+	try {
+		return localStorage.getItem(key);
+	} catch {
+		return null;
+	}
+}
+
 function writeStorage(key: string, value: string): void {
 	try {
 		localStorage.setItem(key, value);
 	} catch {
-		// Nothing is remembered; see above.
+		// Nothing is remembered; see readStorage.
 	}
 }
 

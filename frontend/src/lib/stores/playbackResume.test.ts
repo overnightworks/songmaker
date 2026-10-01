@@ -3,7 +3,7 @@ import { flushSync } from 'svelte';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { currentUser } from '$lib/stores/auth';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { followPlaybackForResume, type ResumeQueueSource } from './playbackResume';
+import { followPlaybackForResume, savedPlayback, type ResumeQueueSource } from './playbackResume';
 
 const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const };
 const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
@@ -34,7 +34,7 @@ function savedPoint(userId = LISTENER.id): { generationId: string; position: num
 	return record && { generationId: record.generationId, position: record.position };
 }
 
-function playTake(generationId: string): void {
+function playTake(generationId: string, status: 'playing' | 'loading' = 'playing'): void {
 	const song = makeSong({ id: `s-${generationId}` });
 	audioPlayer.current = {
 		generation: makeGeneration({ id: generationId, song_id: song.id }),
@@ -45,7 +45,7 @@ function playTake(generationId: string): void {
 		lyrics: null
 	};
 	audioPlayer.currentTime = 0;
-	audioPlayer.status = 'playing';
+	audioPlayer.status = status;
 	flushSync();
 }
 
@@ -196,6 +196,60 @@ describe('playback resume record', () => {
 		setPageVisibility('hidden');
 
 		expect(localStorage.length).toBe(0);
+	});
+
+	it("reads the signed-in user's saved take", () => {
+		playTake('g-read-back');
+		playTo(12);
+
+		expect(savedPlayback()).toEqual({
+			songId: 's-g-read-back',
+			generationId: 'g-read-back',
+			position: 12
+		});
+	});
+
+	it.each([
+		{ record: 'a damaged record', stored: '{"generationId": 7' },
+		{ record: 'a record without a take', stored: '{"songId": "s-x", "position": 3}' },
+		{
+			record: 'a record with a negative position',
+			stored: '{"songId": "s-x", "generationId": "g-x", "position": -1}'
+		}
+	])('$record reads as nothing saved', ({ stored }) => {
+		localStorage.setItem(recordKey(LISTENER.id), stored);
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it('unreadable storage reads as nothing saved', () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new DOMException('storage is blocked', 'SecurityError');
+		});
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it('a restored take keeps its saved position while it loads', () => {
+		playTake('g-before-the-kill');
+		localStorage.setItem(
+			recordKey(LISTENER.id),
+			JSON.stringify({
+				source: ALBUM_QUEUE,
+				songId: 's-g-restored',
+				generationId: 'g-restored',
+				position: 42
+			})
+		);
+		audioPlayer.current = null;
+		audioPlayer.status = 'idle';
+		flushSync();
+
+		savedPlayback();
+		playTake('g-restored', 'loading');
+		setPageVisibility('hidden');
+
+		expect(savedPoint()).toEqual({ generationId: 'g-restored', position: 42 });
 	});
 
 	it('with storage unavailable saves nothing and plays on silently', () => {
