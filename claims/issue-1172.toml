@@ -1,8 +1,0 @@
-claim_id = "606fa2b431634d408d01f55625f7bffc"
-agent = "claude-head"
-role = "builder"
-base = "9d9af7accbb2ffc49be2ad453262097b73c3942a"
-branch = "claude/issue-1172-new-song-row"
-scope = ["frontend/e2e/album-new-song.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/NewPlaceCard.svelte", "frontend/src/lib/components/NewSongCard.svelte", "frontend/src/lib/components/NewSongCard.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
-opened_commit = "e2ed527eef59df5e52e8701f5a3686413c7f0c0b"
-whole_reason = "the + New song row at the end of the album's track list, replacing the header +"
