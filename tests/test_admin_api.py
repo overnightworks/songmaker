@@ -15,7 +15,7 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
-from songmaker_cli.db.queries import create_user, create_user_lora
+from songmaker_cli.db.queries import create_user, create_user_lora, list_audit_log
 
 
 @pytest.fixture
@@ -82,10 +82,19 @@ def managed_account(admin_client: TestClient) -> _ManagedAccount:
         yield _ManagedAccount(response.json()["id"], musician, reference)
 
 
-def _audit_entries(client: TestClient) -> list:
-    response = client.get("/api/admin/audit-log")
-    assert response.status_code == 200
-    return response.json()["items"]
+def _audit_entries(client: TestClient) -> list[dict[str, str | None]]:
+    with client.app.state.ctx.db() as session:
+        return [
+            {
+                "id": entry.id,
+                "user_id": entry.user_id,
+                "action": entry.action,
+                "resource_type": entry.resource_type,
+                "resource_id": entry.resource_id,
+                "detail": entry.detail,
+            }
+            for entry in list_audit_log(session)
+        ]
 
 
 def test_admin_can_update_a_user_after_a_session_cache_miss(
@@ -841,9 +850,8 @@ def test_hard_delete_preserves_audit_log(client: TestClient) -> None:
     resp = client.delete(f"/api/admin/users/{user_id}/permanent")
     assert resp.status_code == 200
 
-    audit = client.get("/api/admin/audit-log").json()
     delete_entries = [
-        e for e in audit["items"]
+        e for e in _audit_entries(client)
         if e["action"] == "hard_delete" and e["resource_id"] == user_id
     ]
     assert len(delete_entries) == 1

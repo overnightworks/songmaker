@@ -3687,18 +3687,6 @@ def test_create_album_records_audit(client: TestClient) -> None:
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
 
-def test_audit_log_admin_endpoint(tmp_path: Path) -> None:
-    c = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    c.post("/api/albums", json={"title": "Audit Test"})
-    resp = c.get("/api/admin/audit-log")
-    assert resp.status_code == 200
-    data = resp.json()
-    assert len(data["items"]) >= 1
-    assert data["items"][0]["action"] == "create"
-    assert "created_at" in data["items"][0]
-    assert data["total"] >= 1
-
-
 # ── Admin rate limits ────────────────────────────────────────────────
 
 
@@ -4041,6 +4029,7 @@ def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
         pytest.param("post", "/api/songs/s1/chat", id="per-song-chat"),
         pytest.param("get", "/api/settings/claude-models", id="get-claude-models"),
         pytest.param("put", "/api/settings/claude-models", id="set-claude-models"),
+        pytest.param("get", "/api/admin/audit-log", id="admin-audit-log"),
     ],
 )
 def test_removed_dead_routes_no_longer_answer(tmp_path: Path, method: str, path: str) -> None:

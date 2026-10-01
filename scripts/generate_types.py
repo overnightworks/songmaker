@@ -62,7 +62,6 @@ TS_MODEL_NAMES: dict[str, str] = {
     "ResourceResyncEvent": "ResourceResyncEvent",
     "AlbumResponse": "AlbumItem",
     "AuthMeResponse": "AuthUser",
-    "AuditLogResponse": "AuditLogItem",
     "CapabilitiesResponse": "Capabilities",
     "ChatMessageResponse": "ChatMessageItem",
     "ChatTurnV2Response": "ChatTurnV2Result",

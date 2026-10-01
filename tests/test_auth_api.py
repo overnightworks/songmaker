@@ -18,7 +18,7 @@ from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.db.models import UserSession
-from songmaker_cli.db.queries import create_user
+from songmaker_cli.db.queries import create_user, list_audit_log
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -447,12 +447,17 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
     assert DEFAULT_SESSION_COOKIE_NAME not in resp.cookies
 
 
+def _audit_log_is_empty(client: TestClient) -> bool:
+    with client.app.state.ctx.db() as session:
+        return list_audit_log(session) == []
+
+
 def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestClient) -> None:
     setup = client.post(
         "/api/auth/setup", json={"username": "admin", "password": "secure1234"},
     )
     assert setup.status_code == 200
-    assert client.get("/api/admin/audit-log").json()["items"] == []
+    assert _audit_log_is_empty(client)
 
     client.headers["X-CSRF-Token"] = client.cookies[DEFAULT_CSRF_COOKIE_NAME]
     change = client.put(
@@ -460,7 +465,7 @@ def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestC
         json={"current": "secure1234", "new_password": "newpassword1"},
     )
     assert change.status_code == 200
-    assert client.get("/api/admin/audit-log").json()["items"] == []
+    assert _audit_log_is_empty(client)
 
 
 def test_password_change_cache_failure_rolls_back_password_and_sessions(client: TestClient) -> None:
