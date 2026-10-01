@@ -131,15 +131,6 @@ def soft_delete_user_lora(session: Session, lora_id: str) -> datetime:
     return now
 
 
-def restore_user_lora(session: Session, lora_id: str) -> UserLora:
-    lora = session.query(UserLora).filter_by(id=lora_id).first()
-    if not lora:
-        raise ValueError(f"UserLora not found: {lora_id}")
-    lora.deleted_at = None
-    session.flush()
-    return lora
-
-
 def list_active_user_loras(
     session: Session,
     *,
