@@ -1623,14 +1623,14 @@ function handlePlaybackEnded(reason: 'normal' | 'window-end' = 'normal'): void {
 }
 
 // A take restored near its end can end before its album is gathered; the
-// album's next song still follows it, unless another take was started while
-// the album was being gathered (#1236).
+// album's next song still follows it, unless another take was started, or the
+// ended one played again, while the album was being gathered (#1236).
 async function playNextSongOnceRestoredAlbumIsGathered(): Promise<void> {
 	const gathering = restoredAlbumQueueGathering;
 	if (gathering !== null) {
 		const ended = audioPlayer.current;
 		await gathering;
-		if (audioPlayer.current !== ended) return;
+		if (audioPlayer.current !== ended || audioPlayer.status === 'playing') return;
 	}
 	await playNextSong();
 }
