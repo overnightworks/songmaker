@@ -1,8 +1,0 @@
-claim_id = "6796ac06c8d74b78b2946d3fb00aaa6e"
-agent = "claude-head"
-role = "builder"
-base = "2eb0429918b2fc53b706233b5c4ef77e4736b25f"
-branch = "claude-head/issue-1207-backend-hygiene"
-scope = [".importlinter", "CLAUDE.md", "docs/security.md", "scripts/check_dead_symbols.py", "scripts/dead-symbols.allow", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/cover_suggestions.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/auth.py", "src/songmaker_cli/playlist_api.py", "tests/test_acestep_state.py", "tests/test_admin_api.py", "tests/test_api.py", "tests/test_auth_api.py", "tests/test_check_dead_symbols.py"]
-opened_commit = "aeb0ca1d39b82ad4fd2d97ae6ea1c8b3e30487f8"
-whole_reason = "four small backend hygiene cards bundled under one lane"
