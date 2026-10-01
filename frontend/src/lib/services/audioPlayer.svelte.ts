@@ -1,4 +1,5 @@
 import type { QueueStreamManifest } from '$lib/api/types';
+import { PLAYER_WAITING_FOR_NETWORK } from '$lib/constants';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -15,7 +16,9 @@ type RecoveryReason = StallReason | 'media-error';
 
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
-type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
+// 'awaiting-network' is a stall given up while the network was gone; its
+// return retries the take by itself.
+type FailureKind = 'stalled' | 'awaiting-network' | 'failed' | 'autoplay-blocked';
 
 // 'unreachable' carries no words: the owner's offline strip names the cause.
 type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
@@ -347,6 +350,10 @@ class AudioPlayer {
 			this.play();
 			return;
 		}
+		if (this.failure?.kind === 'awaiting-network') {
+			this.retryAfterWaitingForNetwork();
+			return;
+		}
 		if (!this.stallRecoveryTimer) return;
 		this.clearStallRecoveryTimer();
 		this.recoverFromStall('network-return');
@@ -538,7 +545,8 @@ class AudioPlayer {
 			}
 		});
 		on('canplay', () => {
-			// A late answer takes the given-up message back; a real failure keeps it.
+			// A late answer takes the given-up message back and plays on unless the
+			// listener paused; a real failure keeps its message.
 			if (this.gaveUpOnStall) this.failure = null;
 			else if (this.status === 'error') return;
 			this.clearStallRecoveryTimer();
@@ -656,14 +664,27 @@ class AudioPlayer {
 	}
 
 	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message; a late answer then clears the message but starts no
-	// sound of its own.
+	// the stalled message. The listener's wish to hear the take outlives it, so
+	// a late answer plays on unless the listener pauses in the meantime.
 	private giveUpOnStall(): void {
+		const listenerWantsSound =
+			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
 		this.stopProgressWatchdog();
-		this.autoplayPending = false;
 		this.recoveryStartedAt = null;
-		this.fail({ kind: 'stalled', message: ERROR_MSG_STALLED });
+		this.fail(
+			this.callbacks.networkFailureIsAnnounced()
+				? { kind: 'awaiting-network', message: PLAYER_WAITING_FOR_NETWORK }
+				: { kind: 'stalled', message: ERROR_MSG_STALLED }
+		);
+		this.autoplayPending = listenerWantsSound;
 		if (this.audio) this.pauseElement(this.audio);
+	}
+
+	// A listener who paused while the take waited is not woken by the network:
+	// the take keeps its Retry, now under the plain stalled words.
+	private retryAfterWaitingForNetwork(): void {
+		if (this.autoplayPending) this.play();
+		else this.failure = { kind: 'stalled', message: ERROR_MSG_STALLED };
 	}
 
 	// A failed take is no longer watched: only Retry, or the network's return
@@ -675,12 +696,14 @@ class AudioPlayer {
 	}
 
 	private get gaveUpOnStall(): boolean {
-		return this.status === 'error' && this.failure?.kind === 'stalled';
+		const kind = this.failure?.kind;
+		return this.status === 'error' && (kind === 'stalled' || kind === 'awaiting-network');
 	}
 
 	private resumeAfterGivingUp(): void {
 		this.status = 'playing';
 		this.failure = null;
+		this.autoplayPending = false;
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
