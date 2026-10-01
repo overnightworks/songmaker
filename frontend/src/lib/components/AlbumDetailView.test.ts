@@ -25,7 +25,7 @@ import {
 	collectionShuffleLabel
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
-import { describeBackClosesOverlay, historyEntry } from '$lib/test-utils/library-history';
+import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
 import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
 import { findElementByRoleAndName, openCollectionMenu } from './shell/rail-test-fixtures';
 import {
@@ -649,7 +649,7 @@ describeBackClosesOverlay({
 	render: renderDetail,
 	open: async (target) => {
 		const form = await openEditDetails(target);
-		await vi.waitFor(() => expect(historyEntry().layer).toBe('details-editing'));
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('details-editing'));
 		type(field(form, 'Year'), '2026');
 	},
 	isShown: (target) => detailsForm(target) !== null,

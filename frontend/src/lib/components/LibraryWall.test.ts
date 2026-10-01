@@ -1,7 +1,7 @@
 import {
 	describeBackClosesOverlay,
-	historyEntry,
-	replaceHistoryEntry
+	replaceHistoryEntry,
+	standingHistoryEntry
 } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makePlaylist as playlist } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
@@ -630,7 +630,7 @@ for (const kind of [NEW_ALBUM, NEW_PLAYLIST]) {
 		render,
 		open: async (target) => {
 			await chooseNew(target, kind);
-			await vi.waitFor(() => expect(historyEntry().layer).toBe('library-new-card'));
+			await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('library-new-card'));
 		},
 		isShown: (target) => newCard(target, kind) !== null,
 		afterBack: () => {

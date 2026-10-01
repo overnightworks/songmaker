@@ -5,11 +5,13 @@ import {
 	historyStateOnLoad,
 	loadHistoryPageForTests,
 	navigateTo,
+	ownStepBacksLanded,
+	ownStepBacksUnderway,
 	pageStateOfHistoryState,
 	pushEntry,
+	remountOverStandingEntry,
 	replaceEntry,
-	resetHistoryControllerForTests,
-	stepBackOffStandingEntry
+	resetHistoryControllerForTests
 } from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
@@ -75,9 +77,6 @@ export interface LibraryHistoryState {
 	generationId: string | null;
 	scrollAnchor: number;
 	detailTab?: DetailTab;
-	// Set on the entry a history layer owns (navigation.ts): an overlay that
-	// sits on top of the library this state describes, at the same address.
-	layer?: string;
 }
 
 // A song opened for the first time lands on Edit — on a compact layout the
@@ -102,7 +101,6 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 let historyApplyGeneration = 0;
 let historyWrites: Promise<void> = Promise.resolve();
 let queuedHistoryWrites = 0;
-let mountingRoute: Promise<void> | null = null;
 let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
 let restoredHistory: unknown = libraryHistoryEntry(historyStateOnLoad());
@@ -117,11 +115,7 @@ function isHistoryRecord(value: unknown): value is Record<string, unknown> {
 
 function hasValidHistoryMetadata(state: Record<string, unknown>): boolean {
 	if (state.kind !== LIBRARY_HISTORY_KIND) return false;
-	if (typeof state.index !== 'number' || !Number.isInteger(state.index) || state.index < 0) {
-		return false;
-	}
-	if (state.layer !== undefined && typeof state.layer !== 'string') return false;
-	return true;
+	return typeof state.index === 'number' && Number.isInteger(state.index) && state.index >= 0;
 }
 
 function hasValidHistoryBrowseState(state: Record<string, unknown>): boolean {
@@ -230,8 +224,7 @@ type HistoryWriteMode = 'push' | 'replace';
 // `/playlist/<slug>`; `libraryRouteShape` names which) is a navigation:
 // `goto`, carrying the library as its page state. The frequent same-shape
 // churn -- filter, sort, scroll, search cursor, another song of the open
-// album, another take of the open song, a history layer over the library --
-// is shallow routing (`pushState`/`replaceState`), synchronous and without a
+// album, another take of the open song -- is shallow routing (`pushState`/`replaceState`), synchronous and without a
 // route resolution. Issue #276 measured what a `goto` costs per write against
 // how often that churn fires, which is why only a crossing navigates.
 //
@@ -246,7 +239,9 @@ type HistoryWriteMode = 'push' | 'replace';
 // a newer navigation supersedes it and a Back aborts it, so a song tapped while
 // its album's route still loads installs its own entry at once too, and a
 // crossing queued behind a step back (the phone drawer closing, Go to song out
-// of a history layer) installs its entry the moment that step lands. A write
+// of full Now Playing) installs its entry the moment that step lands: a write
+// waits for every step back the history controller has underway, since one
+// issued meanwhile would land under the step's own landing. A write
 // that keeps the route while a mount is loading re-issues the mount for the
 // entry now standing, or the older mount would land on it with the library it
 // started with. Such an entry keeps the navigation index of the library entry
@@ -279,10 +274,11 @@ export function writeLibraryHistory(
 	const pathname = pathnameOf(url);
 	const from = plannedHistory?.pathname ?? window.location.pathname;
 	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
-	if (queuedHistoryWrites === 0 && !crossesRoutes) {
+	const historyStandsStill = queuedHistoryWrites === 0 && !ownStepBacksUnderway();
+	if (historyStandsStill && !crossesRoutes) {
 		return writeLibraryHistoryKeepingRoute(state, url, mode);
 	}
-	if (queuedHistoryWrites === 0 && mode === 'push' && historyStandsOnLibraryPage()) {
+	if (historyStandsStill && mode === 'push' && historyStandsOnLibraryPage()) {
 		return pushEntryAndMountItsRoute(state, url);
 	}
 	let mounted: Promise<void> = Promise.resolve();
@@ -295,7 +291,7 @@ export function writeLibraryHistory(
 			mounted = pushEntryAndMountItsRoute(state, url);
 			return;
 		}
-		await navigateLibraryRoute(url, mode === 'replace' ? keepEntryLayer(state) : state, mode);
+		await navigateLibraryRoute(url, state, mode);
 	});
 	return landed.then(() => mounted);
 }
@@ -317,15 +313,11 @@ function writeLibraryHistoryKeepingRoute(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	const written = writeShallowLibraryHistory(state, url, mode);
-	return mountingRoute === null ? Promise.resolve() : mountRouteOfEntry(url, written);
+	return remountOverStandingEntry(url, libraryPageState(written));
 }
 
 function mountRouteOfEntry(url: string, entry: LibraryHistoryState): Promise<void> {
-	const mount = navigateLibraryRoute(url, entry, 'replace');
-	mountingRoute = mount;
-	return mount.finally(() => {
-		if (mountingRoute === mount) mountingRoute = null;
-	});
+	return navigateLibraryRoute(url, entry, 'replace');
 }
 
 function navigateLibraryRoute(
@@ -341,26 +333,14 @@ function navigateLibraryRoute(
 	});
 }
 
-// Steps back onto the entry below, whose state the caller already knows
-// (issue #1002: a history layer in navigation.ts leaving for the library it
-// covers). A traversal is asynchronous -- it lands only once a popstate
-// reaches the entry below, which the history controller tells by the entry's
-// id, not by whichever popstate comes first (issue #1006) -- so it joins the
-// same queue as a crossing write: a write issued
-// straight afterwards (Go to song opening the playing song) lands on top of
-// the entry below instead of racing the traversal, and reads `landing` from
-// `currentLibraryHistoryState` meanwhile.
-export function backLibraryHistory(landing: LibraryHistoryState, url: string): Promise<void> {
-	return queueHistoryStep({ pathname: pathnameOf(url), state: landing }, stepBackOffStandingEntry);
-}
-
-// Resolves once every queued history step has landed. A navigation that
-// leaves the library (an app page) writes no LibraryHistoryState, so it
-// cannot join the queue; it waits here instead, or a step back still in
-// flight (the unsaved-changes dialog leaving its own entry) lands after its
-// push and takes the address back to the song (issue #1143).
+// Resolves once every queued history step has landed, and every step back
+// the history controller has underway. A navigation that leaves the library
+// (an app page) writes no LibraryHistoryState, so it cannot join the queue;
+// it waits here instead, or a step back still in flight (the unsaved-changes
+// dialog leaving its own entry) lands after its push and takes the address
+// back to the song (issue #1143).
 export function libraryHistoryStepsLanded(): Promise<void> {
-	return historyWrites;
+	return historyWrites.then(ownStepBacksLanded);
 }
 
 interface PlannedHistory {
@@ -374,7 +354,9 @@ function queueHistoryStep(
 ): Promise<void> {
 	if (planned) plannedHistory = planned;
 	queuedHistoryWrites += 1;
-	const write = historyWrites.then(step);
+	const write = historyWrites.then(() =>
+		ownStepBacksUnderway() ? ownStepBacksLanded().then(step) : step()
+	);
 	historyWrites = write
 		.catch(() => undefined)
 		.finally(() => {
@@ -443,31 +425,18 @@ function libraryPageState(state: LibraryHistoryState): App.PageState {
 }
 
 // SvelteKit's shallow writers read `page.url`, so a write from inside an
-// effect -- a dialog's history layer registering as it mounts -- would make
-// that effect re-run on the next Back, which moves `page.url` before the layer
-// stack hears the step, and the re-run would push a layer entry nobody owns.
+// effect would make that effect re-run on the next Back, which moves
+// `page.url` before the library hears the step.
 function writeShallowLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,
 	mode: HistoryWriteMode
 ): LibraryHistoryState {
-	const entry = mode === 'push' ? state : keepEntryLayer(state);
 	untrack(() => {
-		if (mode === 'push') pushEntry(url, libraryPageState(entry));
-		else replaceEntry(url, libraryPageState(entry));
+		if (mode === 'push') pushEntry(url, libraryPageState(state));
+		else replaceEntry(url, libraryPageState(state));
 	});
-	return entry;
-}
-
-// A replace rewrites the library an entry shows, never what the entry is: an
-// entry a history layer owns stays marked as that layer, whichever writer
-// snapshots the library onto it.
-function keepEntryLayer(state: LibraryHistoryState): LibraryHistoryState {
-	const entry = libraryHistoryEntry();
-	if (state.layer !== undefined || !isLibraryHistoryState(entry) || entry.layer === undefined) {
-		return state;
-	}
-	return { ...state, layer: entry.layer };
+	return state;
 }
 
 // Back from another page onto an entry shallow routing wrote loads the route
@@ -1053,7 +1022,6 @@ export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	historyWrites = Promise.resolve();
 	queuedHistoryWrites = 0;
-	mountingRoute = null;
 	plannedHistory = null;
 	librarySnapshotTaken = false;
 	restoredHistory = null;
