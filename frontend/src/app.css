@@ -1,4 +1,7 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700&family=Open+Sans:wght@400;600&display=swap');
+@import '@fontsource/oswald/400.css';
+@import '@fontsource/oswald/700.css';
+@import '@fontsource/open-sans/400.css';
+@import '@fontsource/open-sans/600.css';
 
 *,
 *::before,
