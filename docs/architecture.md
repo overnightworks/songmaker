@@ -521,12 +521,14 @@ that merely ran out keeps it), and a logout in another tab stops this tab
 writing it back. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
 the saved song, finds the take, and rebuilds the queue the record names around
-it through the same starts a tap uses (`playAlbumFromGeneration` for the
-song's album, `playLibraryFromGeneration`, or `startPlaylistQueue` on the
-fetched playlist), with autoplay off at the saved position. The queue context
-is set before the take loads, so the first save after a restore keeps the
-album or playlist source, the transport shows the take paused, one tap plays
-it, and its end plays the next take of the same queue. A position at or past
+it with autoplay off at the saved position: `playLibraryFromGeneration`, or
+`startPlaylistQueue` on the fetched playlist, the same starts a tap uses; an
+album take loads as a one-take queue of the song's album and gathers the
+album's other takes (`gatherAlbumQueueAround`, a request per song) only once
+it starts playing, so a reload costs one song fetch. The queue context is set
+before the take loads, so the first save after a restore keeps the album or
+playlist source, the transport shows the take paused, one tap plays it, and
+its end plays the next take of the same queue. A position at or past
 the take's end restores at 0. A record whose song, take or playlist id is no
 UUID is read as nothing saved, so it sends no request. A song the
 server no longer serves (deleted, or not this user's: 404), a take deleted or

@@ -1,6 +1,13 @@
 import { expect, test, type Page } from '@playwright/test';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
-import { FlowGuard, nameStartingWith, shellOf, workspace, type Shell } from './helpers';
+import {
+	csrfHeaders,
+	FlowGuard,
+	nameStartingWith,
+	shellOf,
+	workspace,
+	type Shell
+} from './helpers';
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
 
 /**
@@ -54,8 +61,8 @@ async function seekThePlayingDeck(page: Page, seconds: number): Promise<void> {
 	}, seconds);
 }
 
-// After a reload the restored take's deck stands at the saved place; the
-// standby deck may already hold the next take of its queue, at its start.
+// After a reload only the restored take has a source: nothing preloads after
+// it until its queue continues.
 async function loadedDeckPositions(page: Page): Promise<number[]> {
 	return page.evaluate(() =>
 		[...(window as unknown as DeckWindow).audioDecks]
@@ -121,9 +128,7 @@ test('reload mid-take shows the same take at the same position, paused', async (
 
 	await expect(transport).toContainText(songTitle);
 	await expect(transportPlay).toBeVisible();
-	await expect
-		.poll(() => loadedDeckPositions(page))
-		.toContainEqual(expect.closeTo(MID_TAKE_SECONDS, 0));
+	await expect.poll(() => loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
 	if (shell === 'desktop') {
 		await expect
 			.poll(async () =>
@@ -146,26 +151,52 @@ test('reload mid-take shows the same take at the same position, paused', async (
 	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
 });
 
+// An album of its own holds just the two songs, so the second one follows the
+// first, and gathering the album once the restored take plays is quick next
+// to the half take left to play.
+async function withAlbumOfTwoSongs(
+	page: Page,
+	marker: string,
+	flow: (album: { id: string; firstTitle: string; secondTitle: string }) => Promise<void>
+): Promise<void> {
+	const created = await page.request.post('/api/albums', {
+		headers: await csrfHeaders(page),
+		data: { title: `E2E Restore Queue ${marker}`, artist: '' }
+	});
+	expect(created.ok()).toBe(true);
+	const { id } = (await created.json()) as { id: string };
+	const firstTitle = `Restore Queue ${marker} first`;
+	const secondTitle = `Restore Queue ${marker} second`;
+	try {
+		await seedSongPhoneSong(id, firstTitle, 1, 1);
+		await seedSongPhoneSong(id, secondTitle, 1, 1);
+		await flow({ id, firstTitle, secondTitle });
+	} finally {
+		const removed = await page.request.delete(`/api/albums/${id}`, {
+			headers: await csrfHeaders(page)
+		});
+		expect(removed.ok()).toBe(true);
+	}
+}
+
 test('reload mid-album, one tap plays on, and the next song follows when the take ends', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
 	const shell = shellOf(testInfo);
-	const library = readSeededLibrary();
-	const marker = `${shell} ${runMarker()}`;
-	const restoredTitle = `Restore Queue ${marker} first`;
-	const nextTitle = `Restore Queue ${marker} second`;
-	await seedSongPhoneSong(library.songPhoneAlbumId, restoredTitle, 1, 1);
-	await seedSongPhoneSong(library.songPhoneAlbumId, nextTitle, 1, 1);
 	await followTheAudioDecks(page);
 	const { transport, play, pause } = transportOf(page);
 
-	await pauseMidTakeAndReload(page, shell, library.songPhoneAlbumId, restoredTitle);
+	await withAlbumOfTwoSongs(page, `${shell} ${runMarker()}`, async (album) => {
+		await pauseMidTakeAndReload(page, shell, album.id, album.firstTitle);
 
-	await expect(transport).toContainText(restoredTitle);
-	await play.click();
-	await expect(pause).toBeVisible();
-	await expect(transport).toContainText(nextTitle, { timeout: TRACK_CHANGE_TIMEOUT_MS });
+		await expect(transport).toContainText(album.firstTitle);
+		await play.click();
+		await expect(pause).toBeVisible();
+		await expect(transport).toContainText(album.secondTitle, {
+			timeout: TRACK_CHANGE_TIMEOUT_MS
+		});
+	});
 
 	console.log(`Playback restore queue flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
