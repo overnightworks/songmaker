@@ -1,0 +1,7 @@
+claim_id = "3157a9091bc5412a82e45ecff5731b15"
+agent = "claude-head"
+role = "builder"
+base = "0d203e7b7a1cfc11ab9995a36d43695e3adddd1c"
+branch = "claude-head/issue-1210-patient-recovery"
+scope = ["frontend/src/lib/constants.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
+opened_commit = "fe99ced7dadcd6ad5c2b5fe897a569f6f0ec504c"
