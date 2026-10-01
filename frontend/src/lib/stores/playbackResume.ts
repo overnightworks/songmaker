@@ -45,7 +45,7 @@ function stopSavingOnLogoutInAnotherTab(): void {
 	window.addEventListener('storage', (event) => {
 		const userId = signedInUserId();
 		if (userId === null || event.key !== storageKey(userId) || event.newValue !== null) return;
-		removeStorage(event.key);
+		forgetPlaybackResume(userId);
 		stopSavingUntilTheUserChanges();
 	});
 }
@@ -65,19 +65,44 @@ function stopSavingUntilTheUserChanges(): void {
 
 export function forgetPlaybackResume(userId: string): void {
 	removeStorage(storageKey(userId));
+	if (knownRecord?.userId === userId) knownRecord = null;
 }
+
+export interface PlaybackToFollow {
+	/** The queue the take plays from; null while the player is not the app's own. */
+	queueSource: () => ResumeQueueSource | null;
+	/** The take the queue plays after the current one, if any. */
+	takeAfterCurrent: () => PlaybackInfo | null;
+}
+
+// The user signed in when the current take started: a take is only ever
+// saved under that user, so a user switch in this tab never hands one user's
+// take to another (#1226).
+let takeStartedUnder: string | null = null;
+
+// What this tab last saved, kept in memory so that the 5 s rhythm costs no
+// storage read per tick, nor a write per tick once storage refuses (#1226).
+let knownRecord: { userId: string; generationId: string; position: number } | null = null;
 
 /**
  * Called once by the app's player. Saves on a take change, on pause, when
- * the page hides, and about every 5 s of playback in between.
+ * the page hides, and about every 5 s of playback in between; a take that
+ * ended leaves the take after it, at its start.
  */
-export function followPlaybackForResume(queueSource: () => ResumeQueueSource | null): void {
-	const save = () => saveWhatIsPlaying(queueSource);
-	whenChanged(() => audioPlayer.current?.generation.id, save);
+export function followPlaybackForResume(follow: PlaybackToFollow): void {
+	const save = () => saveWhatIsPlaying(follow.queueSource);
+	whenChanged(
+		() => audioPlayer.current?.generation.id,
+		() => {
+			takeStartedUnder = signedInUserId();
+			save();
+		}
+	);
 	whenChanged(
 		() => audioPlayer.status,
 		(status) => {
 			if (status === 'paused') save();
+			if (status === 'idle') saveTheTakeAfterTheEnd(follow);
 		}
 	);
 	whenChanged(
@@ -99,50 +124,77 @@ function whenChanged<T>(read: () => T, react: (value: T) => void): void {
 	toStore(read).subscribe((value) => untrack(() => react(value)));
 }
 
+function userTheTakeStartedUnder(): string | null {
+	const userId = signedInUserId();
+	return userId !== null && userId === takeStartedUnder ? userId : null;
+}
+
+// The player stands idle with a take loaded only once that take has ended.
+function takeHasEnded(): boolean {
+	return audioPlayer.status === 'idle';
+}
+
 function playedOnSinceLastSave(): boolean {
 	const current = audioPlayer.current;
-	if (current === null) return false;
-	const userId = signedInUserId();
+	if (current === null || takeHasEnded()) return false;
+	const userId = userTheTakeStartedUnder();
 	if (userId === null) return false;
-	const saved = readSavedPoint(userId);
-	if (saved?.generationId !== current.generation.id) return true;
+	const saved = knownRecord;
+	if (saved?.userId !== userId || saved.generationId !== current.generation.id) return true;
 	return Math.abs(audioPlayer.currentTime - saved.position) >= PROGRESS_SAVE_EVERY_SECONDS;
 }
 
 function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
 	const current = audioPlayer.current;
-	if (current === null) return;
-	const userId = signedInUserId();
+	if (current === null || takeHasEnded()) return;
+	const userId = userTheTakeStartedUnder();
 	const source = queueSource();
 	if (userId === null || source === null) return;
-	writeStorage(storageKey(userId), JSON.stringify(recordOf(source, current)));
+	writeRecord(userId, recordOf(source, current, positionNow()));
 }
 
-function recordOf(source: ResumeQueueSource, current: PlaybackInfo): PlaybackResumeRecord {
+// The element's own clock: the player's copy only moves with timeupdate and
+// may stand a quarter second behind a pause (#1226).
+function positionNow(): number {
+	return audioPlayer.getElement()?.currentTime ?? audioPlayer.currentTime;
+}
+
+function saveTheTakeAfterTheEnd(follow: PlaybackToFollow): void {
+	if (audioPlayer.current === null) return;
+	const userId = userTheTakeStartedUnder();
+	const source = follow.queueSource();
+	if (userId === null || source === null) return;
+	const next = follow.takeAfterCurrent();
+	if (next === null) forgetPlaybackResume(userId);
+	else writeRecord(userId, recordOf(source, next, 0));
+}
+
+function recordOf(
+	source: ResumeQueueSource,
+	take: PlaybackInfo,
+	position: number
+): PlaybackResumeRecord {
 	return {
 		source,
-		songId: current.songId,
-		generationId: current.generation.id,
-		position: audioPlayer.currentTime,
+		songId: take.songId,
+		generationId: take.generation.id,
+		position,
 		savedAt: Date.now()
 	};
 }
 
-// Private browsing, a full quota or blocked site data: resuming is a comfort,
-// so playback goes on and simply nothing is remembered (#1209).
-function readStorage(key: string): string | null {
-	try {
-		return localStorage.getItem(key);
-	} catch {
-		return null;
-	}
+function writeRecord(userId: string, record: PlaybackResumeRecord): void {
+	knownRecord = { userId, generationId: record.generationId, position: record.position };
+	writeStorage(storageKey(userId), JSON.stringify(record));
 }
 
+// Private browsing, a full quota or blocked site data: resuming is a comfort,
+// so playback goes on and simply nothing is remembered (#1209).
 function writeStorage(key: string, value: string): void {
 	try {
 		localStorage.setItem(key, value);
 	} catch {
-		// Nothing is remembered; see readStorage.
+		// Nothing is remembered; see above.
 	}
 }
 
@@ -152,24 +204,4 @@ function removeStorage(key: string): void {
 	} catch {
 		// Storage that cannot be reached holds no record to forget.
 	}
-}
-
-type SavedPoint = Pick<PlaybackResumeRecord, 'generationId' | 'position'>;
-
-function readSavedPoint(userId: string): SavedPoint | null {
-	const stored = readStorage(storageKey(userId));
-	if (stored === null) return null;
-	let value: unknown;
-	try {
-		value = JSON.parse(stored);
-	} catch {
-		return null;
-	}
-	return isSavedPoint(value) ? value : null;
-}
-
-function isSavedPoint(value: unknown): value is SavedPoint {
-	if (typeof value !== 'object' || value === null) return false;
-	const point = value as Record<string, unknown>;
-	return typeof point.generationId === 'string' && Number.isFinite(point.position);
 }

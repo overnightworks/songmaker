@@ -1113,9 +1113,13 @@ function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQue
 	return { kind: 'take', index: nextIndex, take: ctx.takes[nextIndex] };
 }
 
-function preloadNextTake(): void {
+function takeAfterCurrent(): PlaybackInfo | null {
 	const next = nextQueueTake(get(queueContext), audioPlayer.current);
-	audioPlayer.preload(next.kind === 'take' ? next.take : null);
+	return next.kind === 'take' ? next.take : null;
+}
+
+function preloadNextTake(): void {
+	audioPlayer.preload(takeAfterCurrent());
 }
 
 function playPlaylistInDirection(
@@ -1588,4 +1592,4 @@ function resumeQueueSource(): ResumeQueueSource | null {
 	return { type: 'library', ...librarySnapshotOpts() };
 }
 
-followPlaybackForResume(resumeQueueSource);
+followPlaybackForResume({ queueSource: resumeQueueSource, takeAfterCurrent });

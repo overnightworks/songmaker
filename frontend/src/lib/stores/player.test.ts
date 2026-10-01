@@ -3617,6 +3617,35 @@ describe('remembering what the app plays', () => {
 		expect(storedRecord()).toMatchObject({ source, generationId: 'g-resume-queue' });
 	});
 
+	function albumQueueOf(generationIds: string[]): QueueContext {
+		const takes = generationIds.map((id) =>
+			makePlayback(makeGen({ ...genDefaults, id, song_id: song.id }), song)
+		);
+		return { type: 'album', albumId: 'a-resume', takes, index: 0 };
+	}
+
+	function endTheTake(): void {
+		audioPlayer.status = 'idle';
+		audioPlayer.currentTime = 0;
+		flushSync();
+	}
+
+	it.each<[string, string[], string | null]>([
+		['the next take at 0', ['g-ending', 'g-after'], 'g-after'],
+		['nothing without a next take', ['g-ending'], null]
+	])('an ended take saves %s', (_next, queue, saved) => {
+		queueContext.set(albumQueueOf(queue));
+		playAndHide('g-ending');
+		audioPlayer.currentTime = 30;
+		flushSync();
+
+		endTheTake();
+
+		expect(storedRecord()).toEqual(
+			saved === null ? null : expect.objectContaining({ generationId: saved, position: 0 })
+		);
+	});
+
 	it('share playback is never saved', () => {
 		const sharePlayback = new SharePlayback();
 		sharePlayback.start(
