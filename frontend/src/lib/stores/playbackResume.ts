@@ -33,23 +33,33 @@ function storageKey(userId: string): string {
 // A logout in another tab removes the record, but this tab still holds the
 // user until its own session check fails; the take it keeps playing must not
 // write the record back, and a copy written before this tab heard of the
-// logout goes too (#1209). A fresh sign-in lifts this.
-let loggedOutInAnotherTab: string | null = null;
+// logout goes too (#1209). Saving resumes once the signed-in user changes.
+let loggedOutInAnotherTab = false;
 
 function signedInUserId(): string | null {
-	const userId = get(currentUser)?.id ?? null;
-	return userId === loggedOutInAnotherTab ? null : userId;
+	if (loggedOutInAnotherTab) return null;
+	return get(currentUser)?.id ?? null;
 }
 
 function stopSavingOnLogoutInAnotherTab(): void {
-	currentUser.subscribe(() => {
-		loggedOutInAnotherTab = null;
-	});
 	window.addEventListener('storage', (event) => {
 		const userId = signedInUserId();
 		if (userId === null || event.key !== storageKey(userId) || event.newValue !== null) return;
-		loggedOutInAnotherTab = userId;
 		removeStorage(event.key);
+		stopSavingUntilTheUserChanges();
+	});
+}
+
+function stopSavingUntilTheUserChanges(): void {
+	loggedOutInAnotherTab = true;
+	let heardTheCurrentUser = false;
+	const stopListening = currentUser.subscribe(() => {
+		if (!heardTheCurrentUser) {
+			heardTheCurrentUser = true;
+			return;
+		}
+		loggedOutInAnotherTab = false;
+		stopListening();
 	});
 }
 
@@ -91,8 +101,9 @@ function whenChanged<T>(read: () => T, react: (value: T) => void): void {
 
 function playedOnSinceLastSave(): boolean {
 	const current = audioPlayer.current;
+	if (current === null) return false;
 	const userId = signedInUserId();
-	if (current === null || userId === null) return false;
+	if (userId === null) return false;
 	const saved = readSavedPoint(userId);
 	if (saved?.generationId !== current.generation.id) return true;
 	return Math.abs(audioPlayer.currentTime - saved.position) >= PROGRESS_SAVE_EVERY_SECONDS;
