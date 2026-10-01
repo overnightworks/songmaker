@@ -48,7 +48,7 @@ import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
-import { followPlaybackForResume, readPlaybackResume } from '$lib/stores/playbackResume';
+import { followPlaybackForResume } from '$lib/stores/playbackResume';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
@@ -368,8 +368,8 @@ describe('the remembered playback across the session', () => {
 		flushSync();
 	}
 
-	function signInAgain(): void {
-		currentUser.set(KNOWN_USER);
+	function storedRecord(): unknown {
+		return JSON.parse(localStorage.getItem(`playbackResume:${KNOWN_USER.id}`) ?? 'null');
 	}
 
 	beforeEach(() => {
@@ -389,9 +389,8 @@ describe('the remembered playback across the session', () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 
 		await logout();
-		signInAgain();
 
-		expect(readPlaybackResume()).toBeNull();
+		expect(storedRecord()).toBeNull();
 	});
 
 	it.each([
@@ -405,10 +404,8 @@ describe('the remembered playback across the session', () => {
 		{ loss: 'a session lost mid-request', loseSession: async () => clearAuth() }
 	])('a lost session keeps it ($loss)', async ({ loseSession }) => {
 		await loseSession();
+
 		expect(get(currentUser)).toBeNull();
-
-		signInAgain();
-
-		expect(readPlaybackResume()).toMatchObject({ generationId: 'g-session' });
+		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 	});
 });

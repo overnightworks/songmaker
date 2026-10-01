@@ -115,7 +115,7 @@ import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
 import { currentUser } from '$lib/stores/auth';
-import { readPlaybackResume, type ResumeQueueSource } from '$lib/stores/playbackResume';
+import type { ResumeQueueSource } from '$lib/stores/playbackResume';
 import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
@@ -3566,6 +3566,10 @@ describe('remembering what the app plays', () => {
 	const LISTENER = { id: 'u-resume', username: 'listener', role: 'user' as const };
 	const song = makeSong({ ...queuedSongDefaults(), id: 's-resume' });
 
+	function storedRecord(): unknown {
+		return JSON.parse(localStorage.getItem(`playbackResume:${LISTENER.id}`) ?? 'null');
+	}
+
 	function playAndHide(generationId: string): void {
 		audioPlayer.current = makePlayback(
 			makeGen({ ...genDefaults, id: generationId, song_id: song.id }),
@@ -3610,7 +3614,7 @@ describe('remembering what the app plays', () => {
 
 		playAndHide('g-resume-queue');
 
-		expect(readPlaybackResume()).toMatchObject({ source, generationId: 'g-resume-queue' });
+		expect(storedRecord()).toMatchObject({ source, generationId: 'g-resume-queue' });
 	});
 
 	it('share playback is never saved', () => {
@@ -3631,6 +3635,6 @@ describe('remembering what the app plays', () => {
 		playAndHide('g-resume-share');
 		sharePlayback.stop();
 
-		expect(readPlaybackResume()).toBeNull();
+		expect(storedRecord()).toBeNull();
 	});
 });
