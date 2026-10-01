@@ -127,7 +127,7 @@ function isRefusedStorageWrite(error: unknown): boolean {
 // storage refuses a write, they live in this document's memory instead, seeded
 // by what storage kept: ids stay monotonic while the document lives, which is
 // all the controller can still promise, rather than the page failing to render.
-export function tabStorage(storage: TabStorage): TabStorage {
+function tabStorage(storage: TabStorage): TabStorage {
 	let memoryAfterRefusal: Map<string, string> | null = null;
 	return {
 		getItem: (key) => memoryAfterRefusal?.get(key) ?? storage.getItem(key),

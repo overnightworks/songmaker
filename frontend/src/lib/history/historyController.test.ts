@@ -14,7 +14,6 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	stepBackTo,
-	tabStorage,
 	type HistoryEntry
 } from '$lib/history/historyController';
 import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
@@ -50,17 +49,18 @@ function storageQuotaExceeded(): DOMException {
 	return new DOMException('The quota has been exceeded.', 'QuotaExceededError');
 }
 
-function storageRefusingWritesAfter(acceptedWrites: number): Pick<Storage, 'getItem' | 'setItem'> {
-	const storage = memoryStorage();
+function sessionStorageRefusingWritesAfter(acceptedWrites: number): void {
+	const acceptWrite = Storage.prototype.setItem;
 	let writes = 0;
-	return {
-		getItem: storage.getItem,
-		setItem: (key, value) => {
-			writes += 1;
-			if (writes > acceptedWrites) throw storageQuotaExceeded();
-			storage.setItem(key, value);
-		}
-	};
+	vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+		this: Storage,
+		key: string,
+		value: string
+	) {
+		writes += 1;
+		if (writes > acceptedWrites) throw storageQuotaExceeded();
+		acceptWrite.call(this, key, value);
+	});
 }
 
 describe('landing reducer', () => {
@@ -145,35 +145,6 @@ describe('entry ids', () => {
 		tab.setItem('songmaker:history-entry-id', 'twelve');
 
 		expect(() => allocateEntryId(tab)).toThrow(/not a count/);
-	});
-
-	it('the allocator keeps counting when storage throws on set', () => {
-		const tab = tabStorage(storageRefusingWritesAfter(0));
-
-		const ids = [allocateEntryId(tab), allocateEntryId(tab), allocateEntryId(tab)];
-
-		expect(ids).toEqual([1, 2, 3]);
-	});
-
-	it('ids stay monotonic after storage starts failing', () => {
-		const tab = tabStorage(storageRefusingWritesAfter(2));
-
-		const ids = [allocateEntryId(tab), allocateEntryId(tab), allocateEntryId(tab)];
-		const afterFailing = allocateEntryId(tab);
-
-		expect(ids).toEqual([1, 2, 3]);
-		expect(afterFailing).toBe(4);
-	});
-
-	it('a storage write failing for another reason is not swallowed', () => {
-		const tab = tabStorage({
-			getItem: () => null,
-			setItem: () => {
-				throw new TypeError('broken storage');
-			}
-		});
-
-		expect(() => allocateEntryId(tab)).toThrow(/broken storage/);
 	});
 
 	it.each([
@@ -270,9 +241,7 @@ describe('history adapter', () => {
 	});
 
 	it('keeps stamping and pushing entries when session storage refuses writes', () => {
-		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-			throw storageQuotaExceeded();
-		});
+		sessionStorageRefusingWritesAfter(0);
 		seedForeignEntry('/album/a');
 
 		const first = replaceEntry('/album/a', {});
@@ -281,6 +250,24 @@ describe('history adapter', () => {
 		expect(first).toEqual({ id: 1 });
 		expect(pushed).toEqual({ id: 2 });
 		expect(standingEntry()).toEqual(pushed);
+	});
+
+	it('ids stay monotonic after session storage starts refusing writes', () => {
+		sessionStorageRefusingWritesAfter(2);
+
+		const ids = ['/album/a', '/album/b', '/album/c', '/album/d'].map(
+			(url) => pushEntry(url, {}).id
+		);
+
+		expect(ids).toEqual([1, 2, 3, 4]);
+	});
+
+	it('a session storage write failing for another reason is not swallowed', () => {
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new TypeError('broken storage');
+		});
+
+		expect(() => pushEntry('/album/a', {})).toThrow(/broken storage/);
 	});
 
 	it('an id-less entry on top gets its first id', () => {
