@@ -11,8 +11,22 @@ const ALBUM_QUEUE: ResumeQueueSource = { type: 'album', albumId: 'a-resume' };
 
 followPlaybackForResume(() => ALBUM_QUEUE);
 
+function recordKey(userId: string): string {
+	return `playbackResume:${userId}`;
+}
+
 function storedRecord(userId: string): unknown {
-	return JSON.parse(localStorage.getItem(`playbackResume:${userId}`) ?? 'null');
+	return JSON.parse(localStorage.getItem(recordKey(userId)) ?? 'null');
+}
+
+// Another tab's logout removes the record; this tab hears of it only later,
+// as a storage event, and may have ticked in between.
+function logOutInAnotherTab(userId: string, beforeThisTabHears: () => void = () => {}): void {
+	const key = recordKey(userId);
+	const oldValue = localStorage.getItem(key);
+	localStorage.removeItem(key);
+	beforeThisTabHears();
+	window.dispatchEvent(new StorageEvent('storage', { key, oldValue, newValue: null }));
 }
 
 function savedPoint(userId = LISTENER.id): { generationId: string; position: number } | null {
@@ -114,6 +128,29 @@ describe('playback resume record', () => {
 		expect(savedPoint(LISTENER.id)).toEqual({ generationId: 'g-shared-device', position: 42 });
 	});
 
+	it('a logout in another tab stops this tab saving the record again', () => {
+		playTake('g-two-tabs');
+
+		logOutInAnotherTab(LISTENER.id, () => playTo(3));
+		playTo(9);
+		audioPlayer.status = 'paused';
+		flushSync();
+		setPageVisibility('hidden');
+		playTake('g-two-tabs-next');
+
+		expect(storedRecord(LISTENER.id)).toBeNull();
+	});
+
+	it('saves again once the user signs in anew after a logout in another tab', () => {
+		playTake('g-signed-in-again');
+		logOutInAnotherTab(LISTENER.id);
+
+		currentUser.set({ ...LISTENER });
+		playTo(9);
+
+		expect(savedPoint()).toEqual({ generationId: 'g-signed-in-again', position: 9 });
+	});
+
 	it('saves nothing without a signed-in user', () => {
 		currentUser.set(null);
 		playTake('g-anonymous');
@@ -124,7 +161,7 @@ describe('playback resume record', () => {
 
 	it('replaces a damaged record on the next tick', () => {
 		playTake('g-damaged');
-		localStorage.setItem(`playbackResume:${LISTENER.id}`, '{"generationId": 7');
+		localStorage.setItem(recordKey(LISTENER.id), '{"generationId": 7');
 
 		playTo(1);
 

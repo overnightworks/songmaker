@@ -30,8 +30,27 @@ function storageKey(userId: string): string {
 	return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
+// A logout in another tab removes the record, but this tab still holds the
+// user until its own session check fails; the take it keeps playing must not
+// write the record back, and a copy written before this tab heard of the
+// logout goes too (#1209). A fresh sign-in lifts this.
+let loggedOutInAnotherTab: string | null = null;
+
 function signedInUserId(): string | null {
-	return get(currentUser)?.id ?? null;
+	const userId = get(currentUser)?.id ?? null;
+	return userId === loggedOutInAnotherTab ? null : userId;
+}
+
+function stopSavingOnLogoutInAnotherTab(): void {
+	currentUser.subscribe(() => {
+		loggedOutInAnotherTab = null;
+	});
+	window.addEventListener('storage', (event) => {
+		const userId = signedInUserId();
+		if (userId === null || event.key !== storageKey(userId) || event.newValue !== null) return;
+		loggedOutInAnotherTab = userId;
+		removeStorage(event.key);
+	});
 }
 
 export function forgetPlaybackResume(userId: string): void {
@@ -58,6 +77,7 @@ export function followPlaybackForResume(queueSource: () => ResumeQueueSource | n
 		}
 	);
 	if (typeof document === 'undefined') return;
+	stopSavingOnLogoutInAnotherTab();
 	document.addEventListener('visibilitychange', () => {
 		if (document.visibilityState === 'hidden') save();
 	});
