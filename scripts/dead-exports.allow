@@ -3,3 +3,10 @@
 frontend/src/routes/*:ssr # SvelteKit route configuration.
 frontend/src/routes/*:prerender # SvelteKit route configuration.
 frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # Dependency-injected sync controller: isolated race, reconnect, authorization and bounded-buffer tests without the singleton browser/network owner.
+frontend/src/lib/history/historyController.ts:land # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:allocateEntryId # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:landedEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:pushEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:replaceEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:stepBackTo # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:listenForLandings # installed by #1006 H1: the history controller core lands before its first caller (#1194).
