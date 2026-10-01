@@ -7,16 +7,16 @@ import { writable, type Writable } from 'svelte/store';
 // level up (utils/escape-level-up.ts).
 //
 // On a library page a layer also owns one history entry, which Back closes it
-// through; stores/navigation keeps those entries while the library history
-// runs. The stack itself depends on nothing app-only, so a logged-out share
-// page holds its overlays here too.
+// through; the history controller keeps those entries while the library
+// history runs. The stack itself depends on nothing app-only, so a logged-out
+// share page holds its overlays here too.
 export interface Layer {
 	readonly id: string;
 	readonly close: () => void;
 }
 
-// What the library history does as layers come and go: `held` may give a new
-// layer its own entry, `left` steps back off the entry a layer leaves behind.
+// What history does as layers come and go: `held` may give a new layer its
+// own entry, `left` steps back off the entry a layer leaves behind.
 export interface LayerHistory {
 	held: (layer: Layer) => void;
 	left: (layer: Layer) => void;
@@ -66,13 +66,12 @@ function leaveLayer(layer: Layer): void {
 	}
 }
 
-// Back has already stepped off the entries of the layers from `depth` up, so
-// they close, topmost first, without stepping back again; one held open holds
-// itself again, with a fresh entry. Returns them, lowest first.
-export function dropLayersFrom(depth: number): Layer[] {
-	const dropped = openLayers.splice(depth);
-	for (const leaving of [...dropped].reverse()) leaving.close();
-	return dropped;
+// History has already left the entries of the layers from `depth` up -- Back,
+// a jump of several entries, or a page pushed over them -- so they close,
+// topmost first, without stepping back again; one held open holds itself
+// again while what it guards stays.
+export function dropLayersFrom(depth: number): void {
+	for (const leaving of openLayers.splice(depth).reverse()) leaving.close();
 }
 
 // Holds and leaves one overlay's layer as its shown value changes. Escape and
@@ -116,9 +115,11 @@ export function historyLayerState<T>(id: string, closed: T): Writable<T> {
 // close waits for the save -- which closes the overlay on success, or leaves it
 // open with the typed text and the reason on failure. Back has already stepped
 // off the layer's entry when it reaches the stack, so the layer holds itself
-// again, with a new entry for the next Back -- unless that Back jumped past the
-// overlay too, which then has closed and needs no holding. Settling lets go of
-// this layer alone: a layer opened above it during the save stays open.
+// again -- unless that Back jumped past the overlay too, which then has closed
+// and needs no holding. Held again it owns no entry: one pushed without a
+// person's gesture is one Chrome may let Back skip (issue #1006 H2), so the
+// next Back leaves the overlay instead. Settling lets go of this layer alone:
+// a layer opened above it during the save stays open.
 export async function holdOpenWhile<T>(id: string, work: Promise<T>): Promise<T> {
 	const guarded = openLayers.at(-1);
 	function holdOpen(): Layer {
@@ -130,10 +131,10 @@ export async function holdOpenWhile<T>(id: string, work: Promise<T>): Promise<T>
 		};
 		layersHeldOpen.add(layer);
 		openLayers.push(layer);
-		layerHistory?.held(layer);
 		return layer;
 	}
 	let held = holdOpen();
+	layerHistory?.held(held);
 	try {
 		return await work;
 	} finally {
