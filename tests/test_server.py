@@ -105,7 +105,7 @@ def test_api_songs(server_app: TestClient) -> None:
     assert data["total"] == 1
 
 
-def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
+def _sveltekit_app_client(tmp_path: Path, assets: dict[str, bytes]) -> TestClient:
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
     data_dir = tmp_path / "data"
@@ -115,7 +115,8 @@ def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
     sk_dir = project_root / "frontend" / "build"
     sk_app_dir = sk_dir / "_app"
     sk_app_dir.mkdir(parents=True)
-    (sk_app_dir / "dummy.js").write_text("// chunk")
+    for name, content in assets.items():
+        (sk_app_dir / name).write_bytes(content)
     (sk_dir / "index.html").write_text("<html>Test</html>")
 
     factory = init_db(data_dir / "songmaker.db")
@@ -129,10 +130,20 @@ def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app)
+    return TestClient(create_app(audio_dir, data_dir, project_root, ctx=ctx))
+
+
+def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
+    client = _sveltekit_app_client(tmp_path, {"dummy.js": b"// chunk"})
     resp = client.get("/_app/dummy.js")
     assert resp.status_code == 200
+
+
+def test_sveltekit_app_serves_woff2_fonts_as_font_woff2(tmp_path: Path) -> None:
+    client = _sveltekit_app_client(tmp_path, {"oswald-latin-400-normal.woff2": b"wOF2"})
+    resp = client.get("/_app/oswald-latin-400-normal.woff2")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "font/woff2"
 
 
 def test_get_audio_path_traversal_denied(server_app: TestClient) -> None:
