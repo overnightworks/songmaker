@@ -8,7 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { expect, type APIRequestContext } from '@playwright/test';
-import type { JobItem } from '../src/lib/api/types';
+import type { CreateUserRequest, JobItem } from '../src/lib/api/types';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
 
 const execFileAsync = promisify(execFile);
@@ -68,8 +68,10 @@ const E2E_ALBUM_TITLE_PREFIX = 'E2E ';
 // `api_models/auth.py`), and what the absolute-age flow needs to reach past:
 // `session_absolute_max_age_seconds`' own default in `settings.py`, and the
 // Redis key `REDIS_SESSION_PREFIX` in `songmaker_cli/constants.py` builds.
-const NON_ADMIN_ROLE = 'user';
+const NON_ADMIN_ROLE: AccountRole = 'user';
 const SESSION_ABSOLUTE_MAX_AGE_DAYS = 90;
+
+export type AccountRole = CreateUserRequest['role'];
 const REDIS_SESSION_KEY_PREFIX = 'songmaker:session';
 const SESSION_ID_SHAPE = /^[A-Za-z0-9_-]+$/;
 
@@ -999,19 +1001,21 @@ export function readSeededLibrary(): SeededLibrary {
 /**
  * A second account, created through the same admin API the admin page uses:
  * what a *non-admin* musician may reach is not provable from the run's one
- * admin session. `auth-flows.spec.ts` removes it again when its flows are
- * done, so a run leaves the users table as it found it.
+ * admin session, and a library of its own is not reachable from the run's
+ * shared one. The flow that creates it removes it again when it is done, so a
+ * run leaves the users table as it found it.
  */
 export async function createAccount(
 	api: APIRequestContext,
 	username: string,
-	password: string
+	password: string,
+	role: AccountRole = NON_ADMIN_ROLE
 ): Promise<string> {
 	const seed = await SeedApi.fromSession(api);
 	const account = await seed.postJson<CreatedResource>('/api/admin/users', {
 		username,
 		password,
-		role: NON_ADMIN_ROLE
+		role
 	});
 	return account.id;
 }
