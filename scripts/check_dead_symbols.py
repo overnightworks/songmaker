@@ -4,6 +4,8 @@ This conservative name scan is not a reachability proof: same-name references,
 including external forward annotations and lookup strings, can keep a symbol alive.
 Allow entries are exact src-relative path:name pairs followed by # and a reason.
 Same-file uses count only as AST name/attribute references, never strings/docstrings.
+An import is not a use: a re-export such as `from .auth import name as name` keeps
+nothing alive unless the importing file itself uses the bound name.
 """
 
 from __future__ import annotations
@@ -32,15 +34,19 @@ def declarations(tree: ast.Module) -> set[str]:
 
 def references(tree: ast.AST, *, external: bool = False) -> set[str]:
     names = set()
+    imported_as = defaultdict(set)
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
             names.add(node.id)
         elif isinstance(node, ast.Attribute):
             names.add(node.attr)
         elif external and isinstance(node, ast.ImportFrom):
-            names.update(alias.name for alias in node.names)
+            for alias in node.names:
+                imported_as[alias.asname or alias.name].add(alias.name)
         elif external and isinstance(node, ast.Constant) and isinstance(node.value, str):
             names.update(re.findall(r"\b[A-Za-z_]\w*\b", node.value))
+    for binding in imported_as.keys() & names:
+        names.update(imported_as[binding])
     return names
 
 
