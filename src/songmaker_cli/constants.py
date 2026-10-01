@@ -218,19 +218,6 @@ CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
 
-# Owned solely by the legacy `/settings/claude-models` endpoint and the dead
-# chat_api.py co-writer (chat_model). scoring_model is not orphaned: it is
-# the Claude judge's fallback until a judge_provider/judge_model pair is
-# configured (#315, get_judge_model()) — once that pair exists it takes over
-# and scoring_model has no further effect. The co-writer reads its live
-# catalog instead (agent_providers/catalog.py). Retire this list with chat_api.py's
-# cleanup.
-MODEL_ALLOWED_CLAUDE = frozenset({
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5-20251001",
-})
-
 # Whisper hallucination detection
 HALLUCINATION_MIN_LINES = 5
 HALLUCINATION_MAX_UNIQUE = 2
