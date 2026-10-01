@@ -507,8 +507,8 @@ of playback in between; the last save is kept in memory, so that rhythm reads
 no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
 queue's next take (`nextQueueTake`) at 0, or no record when nothing follows.
-A take still loading, or failed to load, keeps the position its record already holds. Share
-playback is never saved, a deliberate logout forgets the record (a session
+A take still loading, or failed to load, keeps the position its record
+already holds. Share playback is never saved, a deliberate logout forgets the record (a session
 that merely ran out keeps it), and a logout in another tab stops this tab
 writing it back. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
