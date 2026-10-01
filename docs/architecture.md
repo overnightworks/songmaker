@@ -508,7 +508,9 @@ no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
 queue's next take (`nextQueueTake`) at 0, or no record when nothing follows.
 A take still loading, or failed to load, keeps the position its record
-already holds. Share playback is never saved, a deliberate logout forgets the record (a session
+already holds, and a take the app holds no queue for yet (a restored one, or
+one still playing while a library queue builds) keeps the queue its record
+names instead of the library settings of the moment. Share playback is never saved, a deliberate logout forgets the record (a session
 that merely ran out keeps it), and a logout in another tab stops this tab
 writing it back. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches

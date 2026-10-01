@@ -353,6 +353,7 @@ describe('logout', () => {
 
 describe('the remembered playback across the session', () => {
 	followPlaybackForResume({
+		playsTheAppsTakes: () => true,
 		queueSource: () => ({ type: 'album', albumId: 'a-session' }),
 		takeAfterCurrent: () => null
 	});

@@ -3605,7 +3605,11 @@ describe('remembering what the app plays', () => {
 		},
 		{
 			kind: 'library',
-			queue: { type: 'library' },
+			queue: {
+				type: 'library',
+				takes: [makePlayback(makeGen({ ...genDefaults, id: 'g-resume-queue' }), song)],
+				index: 0
+			},
 			source: { type: 'library', pool: 'all', shuffle: true }
 		}
 	])('saves the $kind queue the take plays from', ({ queue, source }) => {
@@ -3698,6 +3702,10 @@ describe('restoring the last playback after a reload', () => {
 		localStorage.clear();
 	});
 
+	function storedRecord(): unknown {
+		return JSON.parse(localStorage.getItem(`playbackResume:${LISTENER.id}`) ?? 'null');
+	}
+
 	it('shows the saved take paused at its saved position', async () => {
 		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
 
@@ -3733,6 +3741,24 @@ describe('restoring the last playback after a reload', () => {
 
 		expect(audioPlayer.current).toBeNull();
 		expect(get(toasts)).toEqual([]);
+	});
+
+	it.each<{ after: string; statuses: ('playing' | 'paused')[] }>([
+		{ after: 'it stands paused', statuses: ['paused'] },
+		{ after: 'it plays and pauses', statuses: ['playing', 'paused'] }
+	])('a restored take keeps the queue its record names once $after', async ({ statuses }) => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+
+		await restoreLastPlayback();
+		for (const status of statuses) {
+			audioPlayer.status = status;
+			flushSync();
+		}
+
+		expect(storedRecord()).toMatchObject({
+			source: { type: 'album', albumId: savedSong.album_id },
+			generationId: savedTake.id
+		});
 	});
 
 	it('never replaces a take started while the saved one loads', async () => {

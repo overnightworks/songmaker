@@ -1587,17 +1587,24 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
 
-// The queue a resumed take continues in; none while a share route owns the
-// player, so share playback is never remembered.
+// A share route owns the player while it swaps in its own callbacks, so
+// share playback is never remembered.
+function playsTheAppsTakes(): boolean {
+	return audioPlayer.currentCallbacks === appPlayerCallbacks;
+}
+
+// The queue a resumed take continues in. A library context without takes is
+// no queue yet (the one a reload starts with, or one still building), so it
+// names none rather than the library settings of the moment (#1226).
 function resumeQueueSource(): ResumeQueueSource | null {
-	if (audioPlayer.currentCallbacks !== appPlayerCallbacks) return null;
 	const ctx = get(queueContext);
 	if (ctx.type === 'album') return { type: 'album', albumId: ctx.albumId };
 	if (ctx.type === 'playlist') return { type: 'playlist', playlistId: ctx.playlist.id };
+	if (!ctx.takes?.length) return null;
 	return { type: 'library', ...librarySnapshotOpts() };
 }
 
-followPlaybackForResume({ queueSource: resumeQueueSource, takeAfterCurrent });
+followPlaybackForResume({ playsTheAppsTakes, queueSource: resumeQueueSource, takeAfterCurrent });
 
 /**
  * Shows the take the signed-in user last played on this device, paused where

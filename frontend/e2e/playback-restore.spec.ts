@@ -59,6 +59,14 @@ async function loadedDeckPositions(page: Page): Promise<number[]> {
 	);
 }
 
+// The record is the one per-user key the app keeps for what was playing.
+async function savedQueueSource(page: Page): Promise<unknown> {
+	return page.evaluate(() => {
+		const key = Object.keys(localStorage).find((name) => name.startsWith('playbackResume:'));
+		return key === undefined ? null : JSON.parse(localStorage.getItem(key) ?? 'null').source;
+	});
+}
+
 test('reload mid-take shows the same take at the same position, paused', async ({
 	page
 }, testInfo) => {
@@ -103,6 +111,12 @@ test('reload mid-take shows the same take at the same position, paused', async (
 
 	await transportPlay.click();
 	await expect(transportPause).toBeVisible();
+	await transportPause.click();
+	await expect(transportPlay).toBeVisible();
+	expect(await savedQueueSource(page)).toEqual({
+		type: 'album',
+		albumId: library.songPhoneAlbumId
+	});
 
 	console.log(`Playback restore flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();

@@ -9,7 +9,11 @@ const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const
 const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
 const ALBUM_QUEUE: ResumeQueueSource = { type: 'album', albumId: 'a-resume' };
 
-followPlaybackForResume({ queueSource: () => ALBUM_QUEUE, takeAfterCurrent: () => null });
+followPlaybackForResume({
+	playsTheAppsTakes: () => true,
+	queueSource: () => ALBUM_QUEUE,
+	takeAfterCurrent: () => null
+});
 
 function recordKey(userId: string): string {
 	return `playbackResume:${userId}`;
@@ -203,18 +207,35 @@ describe('playback resume record', () => {
 		playTo(12);
 
 		expect(savedPlayback()).toEqual({
+			source: ALBUM_QUEUE,
 			songId: 's-g-read-back',
 			generationId: 'g-read-back',
 			position: 12
 		});
 	});
 
+	const WHOLE_RECORD = { source: ALBUM_QUEUE, songId: 's-x', generationId: 'g-x', position: 3 };
+
 	it.each([
 		{ record: 'a damaged record', stored: '{"generationId": 7' },
-		{ record: 'a record without a take', stored: '{"songId": "s-x", "position": 3}' },
+		{
+			record: 'a record without a take',
+			stored: JSON.stringify({ ...WHOLE_RECORD, generationId: undefined })
+		},
+		{
+			record: 'a record without its queue',
+			stored: JSON.stringify({ ...WHOLE_RECORD, source: undefined })
+		},
+		{
+			record: 'a record naming an unknown library pool',
+			stored: JSON.stringify({
+				...WHOLE_RECORD,
+				source: { type: 'library', pool: 'keeps', shuffle: false }
+			})
+		},
 		{
 			record: 'a record with a negative position',
-			stored: '{"songId": "s-x", "generationId": "g-x", "position": -1}'
+			stored: JSON.stringify({ ...WHOLE_RECORD, position: -1 })
 		}
 	])('$record reads as nothing saved', ({ stored }) => {
 		localStorage.setItem(recordKey(LISTENER.id), stored);

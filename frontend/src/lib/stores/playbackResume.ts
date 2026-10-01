@@ -3,12 +3,11 @@ import { get, toStore } from 'svelte/store';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { PlaybackInfo } from '$lib/services/playbackTypes';
 import { currentUser } from '$lib/stores/auth';
-import type { LibraryTakePool } from '$lib/stores/playbackSettings';
+import { LIBRARY_TAKE_POOLS, type LibraryTakePool } from '$lib/stores/playbackSettings';
 
 // What the app was playing, kept per user on this device, so that reopening
 // a page Android killed can show the same take at the same position (#1187
-// P2). Only the app's own queues are followed: the queue source the owner
-// hands in is null whenever the player is not the app's (a share route).
+// P2). Only the app's own takes are followed, never a share route's.
 
 export type ResumeQueueSource =
 	| { type: 'album'; albumId: string }
@@ -70,6 +69,7 @@ export function forgetPlaybackResume(userId: string): void {
 
 /** Where the signed-in user's take stood when this device last saved it. */
 export interface SavedPlayback {
+	source: ResumeQueueSource;
 	songId: string;
 	generationId: string;
 	position: number;
@@ -85,7 +85,9 @@ export function savedPlayback(): SavedPlayback | null {
 }
 
 interface PlaybackToFollow {
-	/** The queue the take plays from; null while the player is not the app's own. */
+	/** Whether the player plays the app's own takes rather than a share route's. */
+	playsTheAppsTakes: () => boolean;
+	/** The queue the take plays from; null while the app holds none for it yet. */
 	queueSource: () => ResumeQueueSource | null;
 	/** The take the queue plays after the current one, if any. */
 	takeAfterCurrent: () => PlaybackInfo | null;
@@ -99,7 +101,7 @@ let takeStartedUnder: string | null = null;
 // The record as this tab last saved or read it, kept in memory so that the
 // 5 s rhythm costs no storage read per tick, nor a write per tick once
 // storage refuses (#1226).
-let knownRecord: { userId: string; generationId: string; position: number } | null = null;
+let knownRecord: (SavedPlayback & { userId: string }) | null = null;
 
 /**
  * Called once by the app's player. Saves on a take change, on pause, when
@@ -107,7 +109,7 @@ let knownRecord: { userId: string; generationId: string; position: number } | nu
  * ended leaves the take after it, at its start.
  */
 export function followPlaybackForResume(follow: PlaybackToFollow): void {
-	const save = () => saveWhatIsPlaying(follow.queueSource);
+	const save = () => saveWhatIsPlaying(follow);
 	whenChanged(
 		() => audioPlayer.current?.generation.id,
 		() => {
@@ -156,24 +158,28 @@ function playedOnSinceLastSave(): boolean {
 	if (current === null || takeHasEnded()) return false;
 	const userId = userTheTakeStartedUnder();
 	if (userId === null) return false;
-	const saved = savedPositionOf(userId, current);
+	const saved = savedRecordOf(userId, current);
 	if (saved === null) return true;
-	return Math.abs(audioPlayer.currentTime - saved) >= PROGRESS_SAVE_EVERY_SECONDS;
+	return Math.abs(audioPlayer.currentTime - saved.position) >= PROGRESS_SAVE_EVERY_SECONDS;
 }
 
-function savedPositionOf(userId: string, take: PlaybackInfo): number | null {
+function savedRecordOf(userId: string, take: PlaybackInfo): SavedPlayback | null {
 	if (knownRecord?.userId !== userId || knownRecord.generationId !== take.generation.id) {
 		return null;
 	}
-	return knownRecord.position;
+	return knownRecord;
 }
 
-function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
+// A take the app holds no queue for yet (one a reload restored, or one still
+// playing while a new library queue builds) keeps the queue its record names;
+// a take new to the record has none to keep and is not saved (#1226).
+function saveWhatIsPlaying(follow: PlaybackToFollow): void {
 	const current = audioPlayer.current;
-	if (current === null || takeHasEnded()) return;
+	if (current === null || takeHasEnded() || !follow.playsTheAppsTakes()) return;
 	const userId = userTheTakeStartedUnder();
-	const source = queueSource();
-	if (userId === null || source === null) return;
+	if (userId === null) return;
+	const source = follow.queueSource() ?? savedRecordOf(userId, current)?.source ?? null;
+	if (source === null) return;
 	const position = positionToSave(userId, current);
 	if (position === null) return;
 	writeRecord(userId, recordOf(source, current, position));
@@ -186,18 +192,18 @@ function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
 // behind a pause (#1226).
 function positionToSave(userId: string, take: PlaybackInfo): number | null {
 	if (audioPlayer.status === 'loading' || audioPlayer.status === 'error') {
-		return savedPositionOf(userId, take) === null ? 0 : null;
+		return savedRecordOf(userId, take) === null ? 0 : null;
 	}
 	return audioPlayer.getElement()?.currentTime ?? audioPlayer.currentTime;
 }
 
 function saveTheTakeAfterTheEnd(follow: PlaybackToFollow): void {
-	if (audioPlayer.current === null) return;
+	if (audioPlayer.current === null || !follow.playsTheAppsTakes()) return;
 	const userId = userTheTakeStartedUnder();
-	const source = follow.queueSource();
-	if (userId === null || source === null) return;
+	if (userId === null) return;
 	const next = follow.takeAfterCurrent();
-	if (next === null) forgetPlaybackResume(userId);
+	const source = follow.queueSource();
+	if (next === null || source === null) forgetPlaybackResume(userId);
 	else writeRecord(userId, recordOf(source, next, 0));
 }
 
@@ -216,7 +222,13 @@ function recordOf(
 }
 
 function writeRecord(userId: string, record: PlaybackResumeRecord): void {
-	knownRecord = { userId, generationId: record.generationId, position: record.position };
+	knownRecord = {
+		userId,
+		source: record.source,
+		songId: record.songId,
+		generationId: record.generationId,
+		position: record.position
+	};
 	writeStorage(storageKey(userId), JSON.stringify(record));
 }
 
@@ -229,19 +241,39 @@ function parseSavedPlayback(stored: string | null): SavedPlayback | null {
 		return null;
 	}
 	return isSavedPlayback(value)
-		? { songId: value.songId, generationId: value.generationId, position: value.position }
+		? {
+				source: value.source,
+				songId: value.songId,
+				generationId: value.generationId,
+				position: value.position
+			}
 		: null;
 }
 
-function isSavedPlayback(value: unknown): value is SavedPlayback {
-	if (typeof value !== 'object' || value === null) return false;
-	const saved = value as Record<string, unknown>;
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return typeof value === 'object' && value !== null;
+}
+
+function isResumeQueueSource(value: unknown): value is ResumeQueueSource {
+	if (!isRecord(value)) return false;
+	if (value.type === 'album') return typeof value.albumId === 'string';
+	if (value.type === 'playlist') return typeof value.playlistId === 'string';
 	return (
-		typeof saved.songId === 'string' &&
-		typeof saved.generationId === 'string' &&
-		typeof saved.position === 'number' &&
-		Number.isFinite(saved.position) &&
-		saved.position >= 0
+		value.type === 'library' &&
+		typeof value.shuffle === 'boolean' &&
+		(LIBRARY_TAKE_POOLS as readonly unknown[]).includes(value.pool)
+	);
+}
+
+function isSavedPlayback(value: unknown): value is SavedPlayback {
+	if (!isRecord(value)) return false;
+	return (
+		isResumeQueueSource(value.source) &&
+		typeof value.songId === 'string' &&
+		typeof value.generationId === 'string' &&
+		typeof value.position === 'number' &&
+		Number.isFinite(value.position) &&
+		value.position >= 0
 	);
 }
 
