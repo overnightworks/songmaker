@@ -8,11 +8,19 @@
 	// own address and renders an overlay in `children` while it does — stacked over
 	// the workspace rather than replacing it, so the workspace underneath never
 	// unmounts for a resolution that fails or is still in flight.
+	import { onMount } from 'svelte';
 	import LibraryWorkspace from '$lib/components/LibraryWorkspace.svelte';
 	import { libraryAddressOverlayActive } from '$lib/stores/libraryAddressOverlay';
+	import { restoreLastPlayback } from '$lib/stores/player';
 
 	let { children } = $props();
 	let workspaceWrapper: HTMLDivElement | undefined = $state();
+
+	// The root layout renders this group only once auth has a user, so the
+	// take that user last played here can come back, paused (#1187 P2).
+	onMount(() => {
+		void restoreLastPlayback();
+	});
 
 	// `position: absolute` and `z-index` on the overlay only decide paint
 	// order, not the accessibility tree or the tab order -- the workspace is
