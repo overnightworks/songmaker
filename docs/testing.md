@@ -240,13 +240,17 @@ request budget per shell.
   `RAIL_FLOW_API_REQUEST_BUDGET` in `frontend/e2e/helpers.ts`) — that is the
   one place the number is written down, so it cannot drift out of sync with
   this doc the way it did before issue #326.
-- **One login per run.** Global setup authenticates once, seeds an album, songs,
-  takes, a pick and a share link through the public API, and hands its session
-  to every attempt as storage state. Mutable fixtures (the playlist) are seeded
-  per attempt so a retry starts clean. `auth-flows.spec.ts` is the one file that
-  signs in itself: signing in, being locked out, signing out and expiring are
-  what it proves (#872), so it starts from an explicitly empty storage state and
-  drives the login form. Its own numbers — the request budget, the failed
+- **One shared login per run.** Global setup authenticates once, seeds an
+  album, songs, takes, a pick and a share link through the public API, and
+  hands its session to every attempt as storage state. Mutable fixtures (the
+  playlist) are seeded per attempt so a retry starts clean. Two files sign in
+  on their own. `queue-continuity.spec.ts` creates a flow-owned account once
+  per project, signs it in through the API, seeds an album with three songs
+  and no pick, and deletes the account permanently afterwards: a library with
+  nothing picked cannot be reached from the shared admin library.
+  `auth-flows.spec.ts` signs in itself: signing in, being locked out, signing
+  out and expiring are what it proves (#872), so it starts from an explicitly
+  empty storage state and drives the login form. Its own numbers — the request budget, the failed
   attempts it costs, and the `LOGIN_RATE_LIMIT` / `LOGIN_LOCKOUT_*` overrides in
   `docker/docker-compose.ci.yml` that carry them — live in
   `frontend/e2e/README.md`.
