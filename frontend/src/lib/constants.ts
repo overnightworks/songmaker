@@ -514,7 +514,6 @@ export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestion…';
 export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your cover…';
 export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
 export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
-export const ALBUM_COVER_SUGGESTION_ALREADY_RUNNING = 'A cover suggestion is already being made.';
 // The server's own words for a spent daily limit, so the editor says it the
 // same way whether it knew before asking or was refused.
 export const ALBUM_COVER_DAILY_LIMIT_REACHED = 'Daily cover suggestion limit reached';
