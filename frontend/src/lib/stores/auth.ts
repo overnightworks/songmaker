@@ -14,6 +14,7 @@ import { resetGenerationFailures } from '$lib/stores/jobs';
 import { resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { resetPlaylists } from '$lib/stores/playlists';
 import { resetShares } from '$lib/stores/shares';
+import { resetTitleDrafts } from '$lib/stores/titleDrafts';
 
 export const currentUser = writable<AuthUser | null>(null);
 export const authLoading = writable(true);
@@ -139,15 +140,17 @@ export async function login(username: string, password: string): Promise<AuthUse
 }
 
 // Every per-user cache (playlist detail cache, share count/inventory
-// cache, Recent ranking) lives in module state, not the session -- without this, a
-// logout/401 followed by a different user's login on the same tab could
-// briefly serve the previous user's cached playlist or share data.
+// cache, Recent ranking, create-card title drafts) lives in module state, not
+// the session -- without this, a logout/401 followed by a different user's
+// login on the same tab could briefly serve the previous user's cached
+// playlist or share data, or open a create card on what they typed.
 export function clearAuth(): void {
 	currentUser.set(null);
 	resetGenerationFailures();
 	resetPlaylists();
 	resetShares();
 	resetLibraryOrder();
+	resetTitleDrafts();
 }
 
 export async function logout(): Promise<void> {

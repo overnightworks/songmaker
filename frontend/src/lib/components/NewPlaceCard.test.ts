@@ -17,7 +17,8 @@ vi.mock('$lib/api/client', () => ({
 	createSong: (...args: unknown[]) => createSong(...args)
 }));
 vi.mock('$lib/stores/playlists', () => ({
-	createNewPlaylist: (...args: unknown[]) => createNewPlaylist(...args)
+	createNewPlaylist: (...args: unknown[]) => createNewPlaylist(...args),
+	resetPlaylists: vi.fn()
 }));
 vi.mock('$lib/stores/libraryData', () => ({ addAlbumToList: vi.fn(), addSongToList: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => ({
@@ -26,6 +27,9 @@ vi.mock('$lib/stores/navigation', () => ({
 	selectSong: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
+vi.mock('$lib/stores/jobs', () => ({ resetGenerationFailures: vi.fn() }));
+vi.mock('$lib/stores/shares', () => ({ resetShares: vi.fn() }));
+vi.mock('$lib/stores/libraryOrder', () => ({ resetLibraryOrder: vi.fn() }));
 
 const NIGHTDRIVE = album({ id: 'a-night', title: 'Nightdrive' });
 const TIDEWATER = album({ id: 'a-tide', title: 'Tidewater' });
@@ -124,6 +128,16 @@ describe.each(CARDS)('$card keeps its typed text as a draft (#1184 K2)', (cardCa
 		type(field(card, cardCase.field), 'Night');
 		type(field(card, cardCase.field), '');
 		await close();
+
+		expect(field(await open(cardCase), cardCase.field).value).toBe('');
+	});
+
+	it('opens empty for the next musician once the session ended without a reload', async () => {
+		const { field, type } = await cardHelpers();
+		type(field(await open(cardCase), cardCase.field), 'Night');
+		await close();
+		const { clearAuth } = await import('$lib/stores/auth');
+		clearAuth();
 
 		expect(field(await open(cardCase), cardCase.field).value).toBe('');
 	});
