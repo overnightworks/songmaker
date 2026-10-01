@@ -106,9 +106,7 @@
 		action();
 	}
 
-	// Edit details opens a form that focuses its own Title; handing focus back
-	// to the trigger as the menu closes would pull the caret out of that form.
-	function openFormAndClose(action: () => void): void {
+	function closeLeavingFocusToForm(action: () => void): void {
 		runAndClose(action, false);
 	}
 </script>
@@ -141,7 +139,7 @@
 		<p class="menu-heading">{kindLabel} · {title}</p>
 		{#if kind === 'album'}
 			{#if oneditdetails}
-				<button class="menu-item" onclick={() => openFormAndClose(oneditdetails)}>
+				<button class="menu-item" onclick={() => closeLeavingFocusToForm(oneditdetails)}>
 					<Icon name="pencil" size={14} />
 					{COLLECTION_MENU_EDIT_DETAILS_LABEL}
 				</button>
