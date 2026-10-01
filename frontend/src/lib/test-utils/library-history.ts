@@ -1,7 +1,6 @@
 import { tick } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-	currentLibraryHistoryState,
 	holdLibraryHistoryUntilRouterStarts,
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
@@ -9,7 +8,13 @@ import {
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
-import { stampNavigatedEntry } from '$lib/history/historyController';
+import {
+	ownStepBacksUnderway,
+	pageStateOfHistoryState,
+	resetHistoryControllerForTests,
+	stampNavigatedEntry,
+	type HistoryEntry
+} from '$lib/history/historyController';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
 
@@ -92,16 +97,26 @@ export function reloadLibraryPage(): Promise<void> {
 	return libraryHistoryStepsLanded();
 }
 
-// The entry history will stand on once every queued step has landed.
+// The id of the entry history will stand on once the step back the history
+// controller has underway lands -- below the one it stands on now, which is
+// as far as a test needs to tell them apart.
 export function plannedHistoryIndex(): number {
-	return (currentLibraryHistoryState() as { index: number }).index;
+	const standing = standingHistoryEntry()?.id ?? Number.NEGATIVE_INFINITY;
+	return ownStepBacksUnderway() ? standing - 1 : standing;
+}
+
+// The entry history stands on, as the history controller stamped it: its id,
+// and for an entry an open layer owns, that layer's id.
+export function standingHistoryEntry(): HistoryEntry | null {
+	return (pageStateOfHistoryState(history.state)?.entry as HistoryEntry | undefined) ?? null;
 }
 
 // A library page with the history layer stack running, the way the app layout
-// starts it -- the shell's own layers followed and Escape listened for; the
-// returned function stops it.
+// starts it on a fresh tab -- the page's entry stamped, the shell's own layers
+// followed and Escape listened for; the returned function stops it.
 function startLibraryHistory(): () => void {
 	replaceHistoryEntry('/');
+	resetHistoryControllerForTests();
 	const stopFollowingShellLayers = followShellLayers();
 	const stopListening = listenForGlobalEscape();
 	const stopNavigation = initNavigation();
@@ -113,15 +128,24 @@ function startLibraryHistory(): () => void {
 	};
 }
 
-async function expectHistoryAt(index: number): Promise<void> {
-	await vi.waitFor(() => expect(historyEntry().index).toBe(index));
+async function expectHistoryOn(entry: HistoryEntry | null): Promise<void> {
+	await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(entry));
 	expect(location.pathname).toBe('/');
+}
+
+async function expectLayerEntryAbove(page: HistoryEntry | null): Promise<HistoryEntry> {
+	await vi.waitFor(() => {
+		expect(standingHistoryEntry()?.layer).toBeDefined();
+		expect(standingHistoryEntry()?.id).toBeGreaterThan(page?.id ?? Number.NEGATIVE_INFINITY);
+	});
+	expect(location.pathname).toBe('/');
+	return standingHistoryEntry() as HistoryEntry;
 }
 
 export interface CloseWay {
 	way: string;
 	close: (target: HTMLElement) => unknown;
-	/** For an item that opens a dialog: the planned entry its action saw, read with plannedHistoryIndex. */
+	/** For an item that opens a dialog: the entry its action saw history planned on, read with plannedHistoryIndex. */
 	actionSawHistoryAt?: () => number | undefined;
 }
 
@@ -144,7 +168,8 @@ export interface OverlayUnderBack {
 export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 	describe(`${overlay.name} under Back`, () => {
 		let stopLibraryHistory: () => void;
-		let below: number;
+		let below: HistoryEntry | null;
+		let layerEntry: HistoryEntry;
 
 		beforeEach(() => {
 			stopLibraryHistory = startLibraryHistory();
@@ -154,11 +179,11 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 		async function renderOpen(): Promise<HTMLElement> {
 			const target = await overlay.render();
-			below = historyEntry().index;
+			below = standingHistoryEntry();
 			await overlay.open(target);
 			await tick();
 			expect(overlay.isShown(target)).toBe(true);
-			await expectHistoryAt(below + 1);
+			layerEntry = await expectLayerEntryAbove(below);
 			return target;
 		}
 
@@ -170,7 +195,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 			expect(overlay.isShown(target)).toBe(false);
 			expect(overlay.over?.isShown() ?? true).toBe(true);
 			await overlay.afterBack?.();
-			await expectHistoryAt(below);
+			await expectHistoryOn(below);
 		});
 
 		it('opening it again after Back closed it adds one entry again', async () => {
@@ -181,7 +206,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 			await tick();
 
 			expect(overlay.isShown(target)).toBe(true);
-			await expectHistoryAt(below + 1);
+			await expectLayerEntryAbove(below);
 		});
 
 		it.each(overlay.closeWays)('closing it by $way leaves no entry behind', async ({ close }) => {
@@ -191,7 +216,7 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 			await tick();
 
 			expect(overlay.isShown(target)).toBe(false);
-			await expectHistoryAt(below);
+			await expectHistoryOn(below);
 		});
 
 		const handOvers = overlay.closeWays.filter((way) => way.actionSawHistoryAt !== undefined);
@@ -203,8 +228,8 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 
 					await close(target);
 
-					await vi.waitFor(() => expect(actionSawHistoryAt?.()).toBe(below));
-					await expectHistoryAt(below);
+					await vi.waitFor(() => expect(actionSawHistoryAt?.()).toBeLessThan(layerEntry.id));
+					await expectHistoryOn(below);
 				}
 			);
 		}
@@ -218,7 +243,12 @@ export function describeBackClosesOverlay(overlay: OverlayUnderBack): void {
 				await pressBack();
 
 				expect(over.isShown()).toBe(false);
-				await expectHistoryAt(below - 1);
+				await vi.waitFor(() => {
+					expect(standingHistoryEntry()?.layer).toBeUndefined();
+					expect(standingHistoryEntry()?.id ?? Number.NEGATIVE_INFINITY).toBeLessThan(
+						below?.id ?? Number.POSITIVE_INFINITY
+					);
+				});
 			});
 		}
 	});

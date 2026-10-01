@@ -6,6 +6,7 @@ import {
 	pressForward,
 	reloadLibraryPage,
 	replaceHistoryEntry,
+	standingHistoryEntry,
 	watchBack
 } from '$lib/test-utils/library-history';
 import {
@@ -165,6 +166,16 @@ import { updateSong } from '$lib/api/client';
 import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
+
+// A layer's entry is a copy of the page it covers, so the entry itself -- not
+// the library it carries -- tells whether history stands on the layer.
+async function expectStandingLayer(layer: string): Promise<void> {
+	await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe(layer));
+}
+
+async function expectStandingOn(entry: ReturnType<typeof standingHistoryEntry>): Promise<void> {
+	await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(entry));
+}
 
 function navigableSongDefaults(): Partial<SongItem> {
 	return { title: 'Tide', album_title: 'Nachtstrom', generations: [generation()] };
@@ -1319,7 +1330,7 @@ describe('a dirty draft guards song switch / leave', () => {
 				await leaveWithADirtyDraft();
 				const dialog = dialogHistoryLayer('confirm-dialog', () => undefined);
 				dialog.hold(document.createElement('div'));
-				await vi.waitFor(() => expect(historyEntry().layer).toBe('confirm-dialog'));
+				await expectStandingLayer('confirm-dialog');
 				const leave = get(pendingDirtyNavigation);
 				pendingDirtyNavigation.set(null);
 				const dialogEntryLeft = new Promise((landed) =>
@@ -1544,7 +1555,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 	}
 
 	async function expectOnTheSongWithItsDraft(): Promise<void> {
-		await vi.waitFor(() => expect(historyEntry().layer).toBeUndefined());
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBeUndefined());
 		expect(window.location.pathname).toBe('/album/a1/s1');
 		expect(historyEntry().songId).toBe('s1');
 		expect(get(selectedSongId)).toBe('s1');
@@ -1724,13 +1735,13 @@ describe('full Now Playing owns one history entry', () => {
 		'closing the compact Now Playing steps back off its entry onto $origin',
 		async ({ open, library }) => {
 			await open();
-			const below = historyEntry().index;
+			const page = standingHistoryEntry();
 			openNowPlaying('take');
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+			await expectStandingLayer('now-playing');
 
 			closeNowPlaying();
 
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+			await expectStandingOn(page);
 			expect(libraryShown()).toEqual({ ...library, surface: 'detail' });
 		}
 	);
@@ -1740,9 +1751,8 @@ describe('full Now Playing owns one history entry', () => {
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
-		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 
 		await pressBack();
 
@@ -1778,13 +1788,13 @@ describe('full Now Playing owns one history entry', () => {
 		}
 	])('steps off the Now Playing entry it reaches by $way', async ({ reach }) => {
 		await openPlaylist('p1');
-		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 
 		await reach();
 
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await expectStandingOn(page);
 		expect(get(nowPlayingOpen)).toBe(false);
 		expect(libraryShown()).toEqual({
 			collection: { kind: 'playlist', id: 'p1' },
@@ -1795,18 +1805,18 @@ describe('full Now Playing owns one history entry', () => {
 
 	it('a reload on a sheet entry over Now Playing steps off both entries onto the playlist', async () => {
 		await openPlaylist('p1');
-		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		openNowPlaying('take');
 		const sheet = historyLayerState('a-sheet', false);
 		const leaveSheetOwner = sheet.subscribe(() => undefined);
 		sheet.set(true);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+		await expectStandingLayer('a-sheet');
 
 		await reloadBeforeNavigationStarts();
 		stopNavigation = initNavigation();
 
 		await vi.waitFor(() => {
-			expect(historyEntry().index).toBe(below);
+			expect(standingHistoryEntry()).toEqual(page);
 			expect(currentLibraryHistoryState()).toBe(historyEntry());
 		});
 		expect(get(nowPlayingOpen)).toBe(false);
@@ -1820,17 +1830,17 @@ describe('full Now Playing owns one history entry', () => {
 
 	it('stays on the playlist Back reaches from the Now Playing entry a reload left before navigation started', async () => {
 		await openPlaylist('p1');
-		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		const playlistPath = location.pathname;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 		await reloadBeforeNavigationStarts();
 		await pressBack();
 
 		stopNavigation = initNavigation();
 
 		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
-		expect(historyEntry().index).toBe(below);
+		expect(standingHistoryEntry()).toEqual(page);
 		expect(location.pathname).toBe(playlistPath);
 	});
 
@@ -1839,7 +1849,7 @@ describe('full Now Playing owns one history entry', () => {
 		await selectSong('s1');
 		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 		await pressBack();
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 		backToCollection();
@@ -1910,7 +1920,7 @@ describe('full Now Playing owns one history entry', () => {
 			await openPlaylist('p1');
 			const below = historyEntry().index;
 			open();
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+			await expectStandingLayer('now-playing');
 
 			await pressBack();
 
@@ -1933,12 +1943,13 @@ describe('full Now Playing owns one history entry', () => {
 		await openAlbum('a1');
 		await openPlaylist('p1');
 		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		openNowPlaying('queue');
 		expandNowPlaying();
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 
 		dockNowPlaying();
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await expectStandingOn(page);
 		await pressBack();
 
 		await vi.waitFor(() =>
@@ -1955,7 +1966,7 @@ describe('full Now Playing owns one history entry', () => {
 		await openPlaylist('p1');
 		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 		await pressBack();
 		await vi.waitFor(() => expect(get(nowPlayingOpen)).toBe(false));
 
@@ -1980,18 +1991,18 @@ describe('full Now Playing owns one history entry', () => {
 
 	it('keeps its entry when the window grows room for the docked panel, and Back then docks it', async () => {
 		await openPlaylist('p1');
-		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		openNowPlaying('queue');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
-		const opened = { length: historyLength(), index: historyEntry().index };
+		await expectStandingLayer('now-playing');
+		const opened = { length: historyLength(), entry: standingHistoryEntry() };
 
 		nowPlayingDockable.set(true);
 		await tick();
-		expect({ length: historyLength(), index: historyEntry().index }).toEqual(opened);
+		expect({ length: historyLength(), entry: standingHistoryEntry() }).toEqual(opened);
 		await pressBack();
 
 		await vi.waitFor(() => expect(get(nowPlayingSurface)).toBe('docked'));
-		expect(historyEntry().index).toBe(below);
+		expect(standingHistoryEntry()).toEqual(page);
 	});
 });
 
@@ -2008,12 +2019,17 @@ describe('the phone rail drawer owns one history entry', () => {
 		closeSidebar();
 	});
 
-	async function openDrawer(): Promise<{ below: number; path: string }> {
+	async function openDrawer(): Promise<{
+		below: number;
+		page: ReturnType<typeof standingHistoryEntry>;
+		path: string;
+	}> {
 		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		const path = location.pathname;
 		toggleSidebar();
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
-		return { below, path };
+		await expectStandingLayer('rail-drawer');
+		return { below, page, path };
 	}
 
 	it('Back closes the drawer and keeps the address and the playlist', async () => {
@@ -2030,11 +2046,11 @@ describe('the phone rail drawer owns one history entry', () => {
 	});
 
 	it('closing the drawer by its own control steps back off its entry', async () => {
-		const { below, path } = await openDrawer();
+		const { page, path } = await openDrawer();
 
 		closeSidebar();
 
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await expectStandingOn(page);
 		expect(location.pathname).toBe(path);
 	});
 
@@ -2113,11 +2129,12 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 	async function openOnTopOfPlaylist(menu: Writable<boolean>): Promise<number> {
 		const below = historyEntry().index;
 		menu.set(true);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('a-menu');
 		return below;
 	}
 
 	function playlistStands(below: number): void {
+		expect(standingHistoryEntry()?.layer).toBeUndefined();
 		expect(historyEntry()).toMatchObject({
 			index: below,
 			collection: { kind: 'playlist', id: 'p1' },
@@ -2173,26 +2190,26 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		it.each(layerKinds)('closes $kind and keeps the playlist below it', async ({ layer }) => {
 			const shown = layer();
 			const below = historyEntry().index;
+			const page = standingHistoryEntry();
 			shown.open();
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+			await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBeDefined());
 
 			await close();
 
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+			await expectStandingOn(page);
 			expect(shown.isOpen()).toBe(false);
 			playlistStands(below);
 		});
 
 		it('closes a menu over full Now Playing and leaves Now Playing open', async () => {
-			const below = historyEntry().index;
 			openNowPlaying('take');
 			const menu = ownedMenu();
 			menu.set(true);
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+			await expectStandingLayer('a-menu');
 
 			await close();
 
-			await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+			await expectStandingLayer('now-playing');
 			expect(get(menu)).toBe(false);
 			expect(get(nowPlayingOpen)).toBe(true);
 		});
@@ -2213,7 +2230,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const below = await openOnTopOfPlaylist(menu);
 
 		menu.set(false);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBeUndefined());
 		await pressBack();
 
 		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a1' }));
@@ -2247,7 +2264,8 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 		await landOnStandingEntry();
 
-		expect(historyEntry()).toMatchObject({ index: below + 1, songId: null });
+		expect(standingHistoryEntry()?.layer).toBe('a-menu');
+		expect(historyEntry()).toMatchObject({ songId: null });
 		stepBack.stop();
 		await pressBack();
 		await opening;
@@ -2263,7 +2281,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const menu = ownedMenu();
 		const below = await openOnTopOfPlaylist(menu);
 		toggleSidebar();
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+		await expectStandingLayer('rail-drawer');
 
 		const going = openAlbum('a1');
 		menu.set(false);
@@ -2283,10 +2301,11 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		const below = historyEntry().index;
 
 		menu.set(true);
+		const firstMenuEntry = standingHistoryEntry();
 		menu.set(false);
 		menu.set(true);
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
-		expect(historyEntry().index).toBe(below + 1);
+		await vi.waitFor(() => expect(standingHistoryEntry()).not.toEqual(firstMenuEntry));
+		await expectStandingLayer('a-menu');
 		await pressBack();
 
 		await vi.waitFor(() => expect(get(menu)).toBe(false));
@@ -2296,10 +2315,10 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 	it('Back over a sheet in Now Playing closes only the sheet; the next Back closes Now Playing', async () => {
 		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+		await expectStandingLayer('a-sheet');
 
 		await pressBack();
 		await vi.waitFor(() => expect(get(sheet)).toBe(false));
@@ -2313,15 +2332,16 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 	it('a sheet in Now Playing closed and opened again in quick succession keeps both entries for Back', async () => {
 		const below = historyEntry().index;
 		openNowPlaying('take');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('now-playing');
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+		await expectStandingLayer('a-sheet');
+		const firstSheetEntry = standingHistoryEntry();
 
 		sheet.set(false);
 		sheet.set(true);
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
-		expect(historyEntry().index).toBe(below + 2);
+		await vi.waitFor(() => expect(standingHistoryEntry()).not.toEqual(firstSheetEntry));
+		await expectStandingLayer('a-sheet');
 		await pressBack();
 		await vi.waitFor(() => expect(get(sheet)).toBe(false));
 		expect(get(nowPlayingOpen)).toBe(true);
@@ -2333,14 +2353,15 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 	it('closing Now Playing under an open sheet closes the sheet and leaves both entries', async () => {
 		const below = historyEntry().index;
+		const page = standingHistoryEntry();
 		openNowPlaying('take');
 		const sheet = ownedMenu('a-sheet');
 		sheet.set(true);
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 2));
+		await expectStandingLayer('a-sheet');
 
 		closeNowPlaying();
 
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await expectStandingOn(page);
 		expect(get(sheet)).toBe(false);
 		playlistStands(below);
 	});
@@ -2348,11 +2369,12 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 	it('a menu whose owner goes away while it is open leaves its entry', async () => {
 		const menu = historyLayerState('a-menu', false);
 		const leaveOwner = menu.subscribe(() => undefined);
+		const page = standingHistoryEntry();
 		const below = await openOnTopOfPlaylist(menu);
 
 		leaveOwner();
 
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below));
+		await expectStandingOn(page);
 		playlistStands(below);
 	});
 
@@ -2361,7 +2383,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		owners.push(entryMenu.subscribe(() => undefined));
 		const below = historyEntry().index;
 		entryMenu.set('e1');
-		await vi.waitFor(() => expect(historyEntry().index).toBe(below + 1));
+		await expectStandingLayer('an-entry-menu');
 
 		entryMenu.set('e2');
 		await pressBack();
