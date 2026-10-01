@@ -82,7 +82,6 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => {
 		...actual,
 		backToCollection: vi.fn(),
 		openAlbum: vi.fn(),
-		openLibraryCreate: vi.fn(),
 		openLibraryWall: vi.fn(),
 		openPlaylist: vi.fn(),
 		selectSong: vi.fn(),
@@ -736,7 +735,7 @@ function applyNarrowScreenRules(): void {
 	document.head.append(sheet);
 }
 
-async function mountRow(view: 'album' | 'playlist'): Promise<HTMLElement> {
+async function mountRow(view: 'album' | 'playlist', rowSelector: string): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	if (view === 'album') {
@@ -745,8 +744,8 @@ async function mountRow(view: 'album' | 'playlist'): Promise<HTMLElement> {
 		mounted.push(mount(PlaylistDetailView, { target }));
 	}
 	await tick();
-	const row = target.querySelector<HTMLElement>(view === 'album' ? '.item-row' : '.entry-row');
-	if (!row) throw new Error(`the ${view} row is missing`);
+	const row = target.querySelector<HTMLElement>(rowSelector);
+	if (!row) throw new Error(`the ${view} row ${rowSelector} is missing`);
 	injectComponentStyles(
 		view === 'album' ? albumDetailViewSource : playlistDetailViewSource,
 		view === 'album' ? 'AlbumDetailView.svelte' : 'PlaylistDetailView.svelte',
@@ -756,14 +755,18 @@ async function mountRow(view: 'album' | 'playlist'): Promise<HTMLElement> {
 }
 
 describe('collection rows on a phone', () => {
-	it.each(['album', 'playlist'] as const)(
-		'draws the %s row 62 px high, the whole row inside its border its target',
-		async (view) => {
-			const row = await mountRow(view);
+	it.each([
+		{ row: 'album song', view: 'album', rowSelector: '.item-row' },
+		{ row: 'album + New song', view: 'album', rowSelector: '.new-song-row' },
+		{ row: 'playlist entry', view: 'playlist', rowSelector: '.entry-row' }
+	] as const)(
+		'draws the $row row 62 px high, the whole row inside its border its target',
+		async ({ row: name, view, rowSelector }) => {
+			const row = await mountRow(view, rowSelector);
 			applyNarrowScreenRules();
 
 			const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
-			expect(minHeightPx(row, `${view} row`)).toBe(PHONE_ROW_HEIGHT_PX);
+			expect(minHeightPx(row, `${name} row`)).toBe(PHONE_ROW_HEIGHT_PX);
 			expect(
 				[paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))
 			).toEqual([0, 0, 0, 0]);

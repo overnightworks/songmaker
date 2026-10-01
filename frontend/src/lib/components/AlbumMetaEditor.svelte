@@ -1,80 +1,254 @@
-<script lang="ts">
-	import EditableTitle from './EditableTitle.svelte';
-	import {
-		ALBUM_SUBTITLE_LABEL,
-		ALBUM_SUBTITLE_MAX_LENGTH,
-		ALBUM_SUBTITLE_PLACEHOLDER,
-		ALBUM_YEAR_LABEL,
-		ALBUM_YEAR_MAX_LENGTH,
-		ALBUM_YEAR_PLACEHOLDER
-	} from '$lib/constants';
-
-	interface Props {
+<script module lang="ts">
+	export interface AlbumDetails {
+		title: string;
 		subtitle: string;
 		year: string;
-		onsavesubtitle: (subtitle: string) => Promise<void>;
-		onsaveyear: (year: string) => Promise<void>;
 	}
-
-	let { subtitle, year, onsavesubtitle, onsaveyear }: Props = $props();
 </script>
 
-<p class="album-meta">
-	<span class="album-meta-field album-meta-subtitle">
-		<EditableTitle
-			value={subtitle}
-			onsave={onsavesubtitle}
-			ariaLabel={ALBUM_SUBTITLE_LABEL}
-			allowEmpty
-			placeholder={ALBUM_SUBTITLE_PLACEHOLDER}
+<script lang="ts">
+	import { onMount, untrack } from 'svelte';
+	import {
+		ALBUM_DETAILS_CLOSE_LABEL,
+		ALBUM_DETAILS_SAVE_LABEL,
+		ALBUM_SUBTITLE_LABEL,
+		ALBUM_SUBTITLE_MAX_LENGTH,
+		ALBUM_YEAR_LABEL,
+		ALBUM_YEAR_MAX_LENGTH,
+		COLLECTION_MENU_EDIT_DETAILS_LABEL,
+		NEW_ALBUM_TITLE_LABEL,
+		NEW_PLACE_TEXT_MAX_LENGTH
+	} from '$lib/constants';
+	import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
+	import Icon from './Icon.svelte';
+
+	interface Props {
+		details: AlbumDetails;
+		/** Saves the edited details; rejects, having named the reason, when the save is refused. */
+		onsave: (details: AlbumDetails) => Promise<void>;
+		onclose: () => void;
+	}
+
+	let { details, onsave, onclose }: Props = $props();
+
+	const draft: AlbumDetails = $state(untrack(() => ({ ...details })));
+	let saving = $state(false);
+	let titleInput: HTMLInputElement | undefined = $state();
+	let form: HTMLFormElement | undefined = $state();
+
+	const canSave = $derived(draft.title.trim() !== '' && !saving);
+
+	onMount(() => titleInput?.focus());
+
+	function isEscapeTypedInForm(event: KeyboardEvent): boolean {
+		return (
+			event.key === 'Escape' &&
+			!event.defaultPrevented &&
+			event.target instanceof Node &&
+			form?.contains(event.target) === true
+		);
+	}
+
+	$effect(() => {
+		function closeOnEscape(event: KeyboardEvent): void {
+			if (!isEscapeTypedInForm(event) && !shouldHandleGlobalEscape(event, document)) return;
+			event.preventDefault();
+			if (!saving) onclose();
+		}
+		document.addEventListener('keydown', closeOnEscape);
+		return () => document.removeEventListener('keydown', closeOnEscape);
+	});
+
+	async function save(event: SubmitEvent): Promise<void> {
+		event.preventDefault();
+		if (!canSave) return;
+		saving = true;
+		try {
+			await onsave({
+				title: draft.title.trim(),
+				subtitle: draft.subtitle.trim(),
+				year: draft.year.trim()
+			});
+		} catch {
+			saving = false;
+			return;
+		}
+		onclose();
+	}
+</script>
+
+<form
+	bind:this={form}
+	class="album-details"
+	aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL}
+	onsubmit={save}
+>
+	<div class="details-head">
+		<span class="details-title">{COLLECTION_MENU_EDIT_DETAILS_LABEL}</span>
+		<button
+			type="button"
+			class="close-btn"
+			aria-label={ALBUM_DETAILS_CLOSE_LABEL}
+			disabled={saving}
+			onclick={onclose}
+		>
+			<Icon name="x" size={18} />
+		</button>
+	</div>
+	<label class="field">
+		<span class="field-label">{NEW_ALBUM_TITLE_LABEL}</span>
+		<input
+			bind:this={titleInput}
+			bind:value={draft.title}
+			type="text"
+			autocomplete="off"
+			maxlength={NEW_PLACE_TEXT_MAX_LENGTH}
+			required
+		/>
+	</label>
+	<label class="field">
+		<span class="field-label">{ALBUM_SUBTITLE_LABEL}</span>
+		<input
+			bind:value={draft.subtitle}
+			type="text"
+			autocomplete="off"
 			maxlength={ALBUM_SUBTITLE_MAX_LENGTH}
 		/>
-	</span>
-	<span class="album-meta-sep" aria-hidden="true">·</span>
-	<span class="album-meta-field album-meta-year">
-		<EditableTitle
-			value={year}
-			onsave={onsaveyear}
-			ariaLabel={ALBUM_YEAR_LABEL}
-			allowEmpty
-			placeholder={ALBUM_YEAR_PLACEHOLDER}
-			maxlength={ALBUM_YEAR_MAX_LENGTH}
+	</label>
+	<label class="field field-year">
+		<span class="field-label">{ALBUM_YEAR_LABEL}</span>
+		<input
+			bind:value={draft.year}
+			type="text"
 			inputmode="numeric"
+			autocomplete="off"
+			maxlength={ALBUM_YEAR_MAX_LENGTH}
 		/>
-	</span>
-</p>
+	</label>
+	<div class="details-foot">
+		<button type="submit" class="save-btn" disabled={!canSave}>{ALBUM_DETAILS_SAVE_LABEL}</button>
+	</div>
+</form>
 
 <style>
-	.album-meta {
+	.album-details {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		min-width: 0;
+		padding: 12px;
+		border: 1px solid var(--accent);
+		border-radius: var(--card-radius);
+		background: var(--surface);
+	}
+
+	.details-head {
 		display: flex;
 		align-items: center;
-		gap: 0.4rem;
-		margin: 0.15rem 0 0;
-		font-size: 0.8rem;
+		justify-content: space-between;
+		margin: -6px -6px -4px 0;
+	}
+
+	.details-title {
+		color: var(--text);
+		font-family: var(--font-display);
+		font-size: 0.85rem;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+	}
+
+	.close-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		padding: 0;
+		border: 0;
+		border-radius: var(--btn-radius-sm);
+		background: none;
 		color: var(--text-muted);
 	}
 
-	.album-meta-field {
-		display: inline-block;
-		flex: 0 1 auto;
+	.close-btn:hover {
+		color: var(--text);
+	}
+
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
 		min-width: 0;
 	}
 
-	.album-meta-field :global(.editable-title-input) {
-		width: auto;
+	.field-label {
+		color: var(--text-muted);
+		font-family: var(--font-display);
+		font-size: 11px;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
 	}
 
-	.album-meta-subtitle :global(.editable-title-input) {
-		min-width: 8rem;
-		max-width: 22rem;
+	.field input {
+		min-width: 0;
+		height: 40px;
+		padding: 0 12px;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: var(--bg);
+		color: var(--text);
+		font-family: var(--font-body);
+		font-size: 15px;
 	}
 
-	.album-meta-year :global(.editable-title-input) {
-		min-width: 3.5rem;
-		max-width: 5rem;
+	.field input:focus {
+		border-color: var(--accent);
+		outline: none;
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 30%, transparent);
 	}
 
-	.album-meta-sep {
-		color: var(--text-subtle, rgba(255, 255, 255, 0.35));
+	.field-year input {
+		max-width: 6rem;
+	}
+
+	.details-foot {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.save-btn {
+		height: 32px;
+		padding: 0 20px;
+		border: 1px solid var(--accent);
+		border-radius: var(--btn-radius-sm);
+		background: var(--accent);
+		color: #fff;
+		font-family: var(--font-display);
+		font-size: 0.78rem;
+		font-weight: 500;
+		letter-spacing: 0.5px;
+		text-transform: uppercase;
+	}
+
+	.save-btn:disabled {
+		border-color: var(--border);
+		background: none;
+		color: var(--text-disabled);
+		cursor: default;
+	}
+
+	@media (max-width: 768px) {
+		.close-btn,
+		.save-btn {
+			height: 44px;
+		}
+
+		.close-btn {
+			width: 44px;
+		}
+
+		.field input {
+			height: 52px;
+		}
 	}
 </style>

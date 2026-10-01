@@ -45,7 +45,6 @@ import {
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
-	librarySurface,
 	libraryRootState,
 	libraryWallStateFrom,
 	rememberedSongTab,
@@ -336,12 +335,6 @@ export function backToCollection(): void {
 	});
 }
 
-export async function openLibraryCreate(): Promise<void> {
-	setLibrarySurface('create');
-	closeSidebar();
-	await pushLibraryHistory();
-}
-
 // The rail's "Library" link: leaves the open song (if any) but keeps the
 // open collection in the rail context (GitLab-style — the context persists
 // until another collection replaces it), and always pushes a fresh history
@@ -558,16 +551,6 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 }
 
 export function goBack(): void {
-	if (get(librarySurface) === 'create') {
-		const createState = currentLibraryHistoryState();
-		if (isLibraryHistoryState(createState) && createState.index > 0) {
-			history.back();
-			return;
-		}
-		setLibrarySurface('browse');
-		void replaceLibraryHistory();
-		return;
-	}
 	const state = currentLibraryHistoryState();
 	if (isLibraryHistoryState(state) && state.index > 0) {
 		history.back();

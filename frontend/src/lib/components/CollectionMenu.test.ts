@@ -39,6 +39,7 @@ function defaultProps() {
 		onshare: vi.fn<() => Promise<ShareResult>>().mockResolvedValue(shareResult()),
 		onunshare: vi.fn(),
 		onrename: vi.fn(),
+		oneditdetails: undefined as (() => void) | undefined,
 		ondelete: vi.fn()
 	};
 }
@@ -123,6 +124,42 @@ describe('CollectionMenu share warning', () => {
 		await openMenuAndShare(target);
 
 		expect(shareWarningDialog(target)).toBeNull();
+	});
+});
+
+function menuItemLabels(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('.menu-item')).map(
+		(item) => item.textContent?.trim() ?? ''
+	);
+}
+
+describe('CollectionMenu Edit details', () => {
+	it('offers Edit details in place of Rename and hands the tap over, closing the menu', async () => {
+		const oneditdetails = vi.fn();
+		const { target, props } = await render({ oneditdetails });
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+
+		expect(menuItemLabels(target)).toContain('Edit details');
+		expect(menuItemLabels(target)).not.toContain('Rename');
+
+		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((item) => item.textContent?.trim() === 'Edit details')
+			?.click();
+		await tick();
+
+		expect(oneditdetails).toHaveBeenCalledTimes(1);
+		expect(props.onrename).not.toHaveBeenCalled();
+		expect(target.querySelector('.menu-panel')).toBeNull();
+	});
+
+	it('keeps Rename where no details editing is offered, as for a playlist', async () => {
+		const { target } = await render({ kind: 'playlist' });
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+
+		expect(menuItemLabels(target)).toContain('Rename');
+		expect(menuItemLabels(target)).not.toContain('Edit details');
 	});
 });
 
