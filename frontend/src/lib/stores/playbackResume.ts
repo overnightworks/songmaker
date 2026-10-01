@@ -94,11 +94,11 @@ function playedOnSinceLastSave(): boolean {
 }
 
 function saveWhatIsPlaying(queueSource: () => ResumeQueueSource | null): void {
-	const userId = signedInUserId();
 	const current = audioPlayer.current;
-	if (userId === null || current === null) return;
+	if (current === null) return;
+	const userId = signedInUserId();
 	const source = queueSource();
-	if (source === null) return;
+	if (userId === null || source === null) return;
 	writeStorage(storageKey(userId), JSON.stringify(recordOf(source, current)));
 }
 
