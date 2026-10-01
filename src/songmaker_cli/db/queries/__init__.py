@@ -33,7 +33,6 @@ from songmaker_cli.db.queries.auth import (
     cleanup_old_login_attempts as cleanup_old_login_attempts,
 )
 from songmaker_cli.db.queries.auth import count_active_sessions as count_active_sessions
-from songmaker_cli.db.queries.auth import count_audit_log as count_audit_log
 from songmaker_cli.db.queries.auth import count_login_attempts as count_login_attempts
 from songmaker_cli.db.queries.auth import (
     count_recent_failed_attempts as count_recent_failed_attempts,
@@ -58,11 +57,6 @@ from songmaker_cli.db.queries.auth import record_audit as record_audit
 from songmaker_cli.db.queries.auth import record_login_attempt as record_login_attempt
 from songmaker_cli.db.queries.auth import update_user as update_user
 from songmaker_cli.db.queries.auth import user_count as user_count
-from songmaker_cli.db.queries.chat import count_chat_messages as count_chat_messages
-from songmaker_cli.db.queries.chat import create_chat_message as create_chat_message
-from songmaker_cli.db.queries.chat import delete_chat_messages as delete_chat_messages
-from songmaker_cli.db.queries.chat import list_chat_messages as list_chat_messages
-from songmaker_cli.db.queries.chat import songs_with_chat as songs_with_chat
 from songmaker_cli.db.queries.conversations import (
     append_message as append_message,
 )
