@@ -1,0 +1,8 @@
+claim_id = "55e052bfb4e04e6091bdddc8f2eb1aee"
+agent = "claude-head"
+role = "builder"
+base = "d4d39ee10bc3f03e74df35cabd2b4bd08641eb72"
+branch = "claude/issue-1184-keep-typed"
+scope = ["frontend/e2e/album-new-song.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts", "frontend/src/lib/components/AlbumMetaEditor.svelte", "frontend/src/lib/components/AlbumMetaEditor.test.ts", "frontend/src/lib/components/NewAlbumCard.svelte", "frontend/src/lib/components/NewPlaceCard.svelte", "frontend/src/lib/components/NewPlaceCard.test.ts", "frontend/src/lib/components/NewPlaylistCard.svelte", "frontend/src/lib/components/NewSongCard.svelte", "frontend/src/lib/stores/layers.test.ts", "frontend/src/lib/stores/layers.ts"]
+opened_commit = "7c350220960e2cd7fa38a21ec3dfc7cbf1fe0c0a"
+whole_reason = "closing a layer never loses typed text: save guard and create-card drafts"
