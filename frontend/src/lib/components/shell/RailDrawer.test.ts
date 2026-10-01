@@ -1,25 +1,18 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { get, type Writable } from 'svelte/store';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { get } from 'svelte/store';
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-vi.mock('$lib/stores/navigation', async () => {
-	const { writable } = await import('svelte/store');
-	return { railDrawerIsLayer: writable(false) };
-});
-
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
-import { railDrawerIsLayer as railDrawerIsLayerStore } from '$lib/stores/navigation';
+import { followShellLayers, resetNavigationForTests } from '$lib/stores/navigation';
 import { closeSidebar, railWidth, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import RailDrawer from './RailDrawer.svelte';
 import railDrawerSource from './RailDrawer.svelte?raw';
-
-const railDrawerIsLayer = railDrawerIsLayerStore as Writable<boolean>;
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -34,12 +27,19 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	return element;
 }
 
+let stopFollowingShellLayers: () => void = () => undefined;
+
+beforeEach(() => {
+	stopFollowingShellLayers = followShellLayers();
+});
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
 	closeSidebar();
-	railDrawerIsLayer.set(false);
+	stopFollowingShellLayers();
+	resetNavigationForTests();
 	railWidth.set(264);
 	localStorage.removeItem('songmaker.rail-width');
 });
@@ -128,24 +128,6 @@ describe('RailDrawer', () => {
 
 		expect(document.activeElement).toBe(search);
 	});
-
-	it.each([
-		{ layered: true, replaces: '' },
-		{ layered: false, replaces: null }
-	])(
-		'a link inside the drawer replaces the current entry only while the drawer owns one: $layered',
-		async ({ layered, replaces }) => {
-			const target = document.createElement('div');
-			document.body.append(target);
-			mounted = mount(RailDrawer, { target, props: { children } });
-			railDrawerIsLayer.set(layered);
-			toggleSidebar();
-			await tick();
-
-			const panel = requireElement(document.body, '.drawer-panel');
-			expect(panel.getAttribute('data-sveltekit-replacestate')).toBe(replaces);
-		}
-	);
 
 	it('closes when the compact shell that holds it goes away', async () => {
 		const target = document.createElement('div');
