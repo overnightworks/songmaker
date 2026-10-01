@@ -25,6 +25,7 @@ import {
 import {
 	NOW_PLAYING_EXPAND_LABEL,
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
+	nowPlayingSheetCloseLabel,
 	takeRowLabel
 } from '../src/lib/constants/now-playing';
 import {
@@ -128,6 +129,15 @@ async function openSongsTakes(page: Page, playlist: SeededPlaylist): Promise<Loc
 
 function takeSheet(page: Page): Locator {
 	return page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL });
+}
+
+async function openTakeSheetOverNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
+	const takes = await openSongsTakes(page, playlist);
+	await takes
+		.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })
+		.click();
+	await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeVisible();
+	await expect(takeSheet(page)).toBeVisible();
 }
 
 async function goBack(page: Page): Promise<void> {
@@ -431,14 +441,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 	{
 		name: 'Back over Now Playing closes the This take sheet first, and the next Back closes Now Playing',
 		shell: 'mobile',
-		open: async (page, playlist) => {
-			const takes = await openSongsTakes(page, playlist);
-			await takes
-				.getByRole('button', { name: nameStartingWith(takeRowLabel(SEEDED_TAKE_NUMBER)) })
-				.click();
-			await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeVisible();
-			await expect(takeSheet(page)).toBeVisible();
-		},
+		open: openTakeSheetOverNowPlaying,
 		leave: goBack,
 		expectLeft: async (page, _pages, playlist) => {
 			await expect(takeSheet(page)).toBeHidden();
@@ -449,6 +452,26 @@ const OVERLAY_ROWS: OverlayRow[] = [
 			await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeHidden();
 			await expectSongStands(page, 'mobile', firstSong(playlist));
 		}
+	},
+	// Issue #1219: the sheet's own close steps back off its entry while the
+	// Back pressed right after it is underway; each landing says by its entry
+	// which layers it left, so the Back closes Now Playing and nothing more.
+	{
+		name: "the This take sheet's × plus an immediate Back closes one layer more and keeps the song",
+		shell: 'mobile',
+		open: openTakeSheetOverNowPlaying,
+		leave: async (page) => {
+			await page
+				.getByRole('button', { name: nowPlayingSheetCloseLabel(NOW_PLAYING_RIGHT_PANEL_LABEL) })
+				.click();
+			await page.goBack();
+		},
+		expectLeft: async (page, _pages, playlist) => {
+			await expect(takeSheet(page)).toBeHidden();
+			await expect(page.getByRole('dialog', { name: firstSong(playlist) })).toBeHidden();
+			await expectSongStands(page, 'mobile', firstSong(playlist));
+		},
+		afterwards: backReaches('playlist')
 	}
 ];
 
