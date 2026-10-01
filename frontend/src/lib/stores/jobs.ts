@@ -9,6 +9,7 @@ import { isNotFound } from '$lib/api/fetch';
 import {
 	GENERATE_TAKE_ARRIVAL_WAIT_MS,
 	JOB_STREAM_MAX_CONNECTION_ERRORS,
+	JOB_TYPE_COVER,
 	JOB_TYPE_GENERATE
 } from '$lib/constants';
 import { offline } from '$lib/stores/connectivity';
@@ -140,7 +141,10 @@ function endedWithTakes(job: JobStatus): boolean {
 	return job.status === 'completed' || job.status === 'partial';
 }
 
+// A cover job's end is shown in place by the cover editor that asked for it,
+// so a toast would only announce the same outcome a second time.
 function notifyTerminalJob(job: JobStatus, songId: string | undefined): void {
+	if (job.type === JOB_TYPE_COVER) return;
 	if (job.status === 'completed') {
 		addToast(`${job.type} completed`, 'success');
 		return;
