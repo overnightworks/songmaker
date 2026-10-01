@@ -449,7 +449,10 @@ describe('RailLibraryGroup', () => {
 				song({ id: 's1', title: 'Tide', track_number: 1 }),
 				song({ id: 's2', title: 'Ebb', track_number: 2 })
 			]);
-			audioPlayer.current = { songId: currentSongId } as unknown as typeof audioPlayer.current;
+			audioPlayer.current = {
+				songId: currentSongId,
+				generation: generation({ id: `g-${currentSongId}`, song_id: currentSongId })
+			} as unknown as typeof audioPlayer.current;
 			audioPlayer.status = status;
 
 			const target = await render();
