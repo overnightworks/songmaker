@@ -1,25 +1,14 @@
 <script module lang="ts">
-	import { SvelteMap } from 'svelte/reactivity';
-
 	// Kept per card kind -- its failure message -- rather than per instance or
 	// label: a failure said by a card that was closed since, or that named
 	// another album, is just as false once that kind of place exists.
 	const failureToastsByCard: Record<string, number[]> = {};
-
-	// What was typed in a card's title field, kept for the rest of the session
-	// (issue #1184): a card closed by Back, Escape or × opens again on it.
-	// Creating, or clearing the field, drops it.
-	const titleDrafts = new SvelteMap<string, string>();
-
-	function keepTitleDraft(key: string, title: string): void {
-		if (title.trim() === '') titleDrafts.delete(key);
-		else titleDrafts.set(key, title);
-	}
 </script>
 
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
 	import { describeFailure } from '$lib/api/fetch';
+	import { dropTitleDraft, keepTitleDraft, titleDraft } from '$lib/stores/titleDrafts';
 	import { addToast, dismissToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -60,7 +49,7 @@
 
 	let creating = $state(false);
 
-	title = untrack(() => titleDrafts.get(draftKey) ?? title);
+	title = untrack(() => titleDraft(draftKey) ?? title);
 
 	$effect(() => keepTitleDraft(draftKey, title));
 
@@ -78,7 +67,7 @@
 			creating = false;
 			return;
 		}
-		titleDrafts.delete(draftKey);
+		dropTitleDraft(draftKey);
 		dismissEarlierFailures();
 		oncreated();
 		await open(id);
