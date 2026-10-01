@@ -528,12 +528,14 @@ album's other takes (`gatherAlbumQueueAround`, a request per song) only once
 it starts playing, so a reload costs one song fetch. The queue context is set
 before the take loads, so the first save after a restore keeps the album or
 playlist source, the transport shows the take paused, one tap plays it, and
-its end plays the next take of the same queue. A position at or past
+its end plays the next take of the same queue, waiting for the album to be
+gathered when the take ends first. A position at or past
 the take's end restores at 0. A record whose song, take or playlist id is no
 UUID is read as nothing saved, so it sends no request. A song the
 server no longer serves (deleted, or not this user's: 404), a take deleted or
-archived since, a playlist gone or no longer holding the take, or a server out
-of reach restores nothing and says nothing.
+archived since, a playlist gone or no longer holding the take, a library pool
+that no longer serves it, or a server out of reach restores nothing and says
+nothing: no toast, no notice, no Retry.
 `e2e/playback-restore.spec.ts` drives the reload on both shells.
 
 Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
