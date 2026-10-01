@@ -1,0 +1,8 @@
+claim_id = "406c0ad71a244f16953ccf1b0f94694d"
+agent = "claude-head"
+role = "builder"
+base = "0d203e7b7a1cfc11ab9995a36d43695e3adddd1c"
+branch = "claude-head/issue-1209-playback-resume-save"
+scope = ["frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/playbackResume.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "ba8ff68c5f35152191ee59245115c17c2259cf0a"
+whole_reason = "new resume store plus its two hook sites and their tests"
