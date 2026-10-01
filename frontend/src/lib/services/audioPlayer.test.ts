@@ -1286,38 +1286,70 @@ describe('error handling', () => {
 		);
 	});
 
-	it('recovers from a mid-track media error before probing URL', () => {
-		audioPlayer.load(makeInfo(), { autoplay: false });
+	function failPartWayThrough(): void {
 		fakeAudio.fire('play');
 		fakeAudio.currentTime = 40;
 		fakeAudio.fire('timeupdate');
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
-
 		fakeAudio.fire('error');
+	}
+
+	it('reloads a take the server still serves after a mid-track media error', async () => {
+		failPartWayThrough();
+		await new Promise((r) => setTimeout(r, 0));
 
 		expect(audioPlayer.status).toBe('loading');
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
-		expect(fetchMock).not.toHaveBeenCalled();
+		expect(fetchMock).toHaveBeenCalledWith(
+			'/audio/a1/song_v1.mp3',
+			expect.objectContaining({ method: 'HEAD', credentials: 'include' })
+		);
 
 		fakeAudio.fire('loadedmetadata');
 		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
-	it('answers failed reloads one look at a time and gives up after two minutes', () => {
+	it.each([
+		{ answer: 401, outcome: { signInAsked: true, error: 'Playback failed. Press Retry.' } },
+		{ answer: 404, outcome: { signInAsked: false, error: 'Audio file not found.' } }
+	])(
+		'names a $answer answer to a mid-track media error at once instead of reloading',
+		async ({ answer, outcome }) => {
+			vi.useFakeTimers();
+			fetchMock.mockResolvedValue({ ok: false, status: answer });
+			const onAuthLost = vi.fn();
+			audioPlayer.swapCallbacks(callbacks({ onAuthLost }));
+
+			failPartWayThrough();
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+			expect({
+				signInAsked: onAuthLost.mock.calls.length > 0,
+				status: audioPlayer.status,
+				error: audioPlayer.error,
+				src: fakeAudio.src
+			}).toEqual({ ...outcome, status: 'error', src: '/audio/a1/song_v1.mp3' });
+		}
+	);
+
+	it('answers failed reloads one look at a time and gives up after two minutes', async () => {
 		vi.useFakeTimers();
 		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
 		fakeAudio.fire('play');
 		fakeAudio.currentTime = 41;
 		fakeAudio.fire('timeupdate');
 		fakeAudio.fire('error');
+		await vi.advanceTimersByTimeAsync(0);
 		const firstReloadUrl = fakeAudio.src;
 
 		fakeAudio.fire('error');
+		await vi.advanceTimersByTimeAsync(0);
 		const afterItsOwnError = fakeAudio.src;
 		for (let look = 0; look < 30; look += 1) {
-			vi.advanceTimersByTime(5 * SECOND);
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
 			fakeAudio.fire('error');
 		}
+		await vi.advanceTimersByTimeAsync(0);
 
 		expect({
 			firstReloadUrl,

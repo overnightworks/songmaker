@@ -620,7 +620,7 @@ class AudioPlayer {
 				void this.recoverStream('media-error');
 				return;
 			}
-			if (!this.recoverPlayback('media-error')) this.handleMediaError(el.error);
+			void this.recoverFromMediaError(el.error);
 		});
 	}
 
@@ -782,14 +782,38 @@ class AudioPlayer {
 		this.stallRecoveryTimer = null;
 	}
 
+	// A take that fails part-way through is asked first whether the server
+	// still serves it, as a stream is: a lost session or a deleted take is
+	// named at once instead of being reloaded until the deadline. While the
+	// owner reports the network gone the probe could only fail too.
+	private async recoverFromMediaError(mediaError: MediaError | null): Promise<void> {
+		const target = this.current;
+		const url = this.currentUrl;
+		if (
+			url &&
+			this.audio &&
+			this.failedPartWayThrough(this.audio) &&
+			!this.callbacks.networkFailureIsAnnounced()
+		) {
+			const probe = await this.probeUrl(url);
+			if (this.current !== target || this.gaveUpOnStall) return;
+			if (await this.answeredARefusal(probe)) return;
+		}
+		if (!this.recoverPlayback('media-error')) this.handleMediaError(mediaError);
+	}
+
 	// An error before the take ever played is the take's own (gone,
 	// unreadable): it is probed and named at once, never retried.
+	private failedPartWayThrough(el: HTMLAudioElement): boolean {
+		return !el.ended && this.reachedPosition(el) >= 1;
+	}
+
 	private recoverPlayback(reason: RecoveryReason): boolean {
 		const el = this.audio;
 		if (this.streamEngine.active || !this.current || !el || !this.currentUrl || el.ended)
 			return false;
+		if (reason === 'media-error' && !this.failedPartWayThrough(el)) return false;
 		const reachedTime = this.reachedPosition(el);
-		if (reason === 'media-error' && reachedTime < 1) return false;
 
 		const step = this.nextRecoveryStep(reason);
 		if (step === 'give-up') return false;
@@ -993,14 +1017,24 @@ class AudioPlayer {
 
 		if (this.current !== target) return;
 
-		if (probe.status === 401) {
-			await this.callbacks.onAuthLost?.();
-			return;
-		}
-		if (probe.status === 404) this.failure = { kind: 'failed', message: ERROR_MSG_NOT_FOUND };
-		else if (probe.ok && mediaError && mediaError.code !== MediaError.MEDIA_ERR_NETWORK)
+		if (await this.answeredARefusal(probe)) return;
+		if (probe.ok && mediaError && mediaError.code !== MediaError.MEDIA_ERR_NETWORK)
 			this.failure = { kind: 'failed', message: decodeMediaError(mediaError) };
 		else this.failForAnUnknownReason();
+	}
+
+	// A lost session goes to sign-in; a take the server no longer has says so.
+	private async answeredARefusal(probe: { status: number }): Promise<boolean> {
+		if (probe.status === 401) {
+			this.failForAnUnknownReason();
+			await this.callbacks.onAuthLost?.();
+			return true;
+		}
+		if (probe.status === 404) {
+			this.fail({ kind: 'failed', message: ERROR_MSG_NOT_FOUND });
+			return true;
+		}
+		return false;
 	}
 
 	private failForAnUnknownReason(): void {
