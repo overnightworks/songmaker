@@ -3874,13 +3874,20 @@ describe('restoring the last playback after a reload', () => {
 		expect(audioPlayer.current?.generation.id).toBe(savedTake.id);
 	});
 
-	it("a saved position past the take's end restores at 0", async () => {
-		saveRecord({ position: (savedTake.audio_duration_sec ?? 0) + 1 });
+	it.each([
+		{ saved: 'past its end', beforeEnd: -1, restoresAt: 'its start' },
+		{ saved: 'at its end', beforeEnd: 0, restoresAt: 'its start' },
+		{ saved: 'within its last second', beforeEnd: 0.056, restoresAt: 'its start' },
+		{ saved: 'a second and more before its end', beforeEnd: 1.5, restoresAt: 'that position' }
+	])('a take saved $saved restores at $restoresAt', async ({ beforeEnd, restoresAt }) => {
+		const position = (savedTake.audio_duration_sec ?? 0) - beforeEnd;
+		saveRecord({ position });
 		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
 
 		await restoreLastPlayback();
 
-		expect(restoredLoad()).toMatchObject({ autoplay: false, startAt: 0 });
+		const startAt = restoresAt === 'its start' ? 0 : position;
+		expect(restoredLoad()).toMatchObject({ autoplay: false, startAt });
 	});
 
 	it.each<QueueKind>(['album', 'playlist', 'library'])(

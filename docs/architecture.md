@@ -531,8 +531,8 @@ it starts playing, so a reload costs one song fetch. The queue context is set
 before the take loads, so the first save after a restore keeps the album or
 playlist source, the transport shows the take paused, one tap plays it, and
 its end plays the next take of the same queue, waiting for the album to be
-gathered when the take ends first. A position at or past
-the take's end restores at 0. A record whose song, take or playlist id is no
+gathered when the take ends first. A position in the take's last second, or
+past its end, restores at 0, so Play does not skip straight to the next take. A record whose song, take or playlist id is no
 UUID is read as nothing saved, so it sends no request. A song the
 server no longer serves (deleted, or not this user's: 404), a take deleted or
 archived since, a playlist gone or no longer holding the take, a library pool

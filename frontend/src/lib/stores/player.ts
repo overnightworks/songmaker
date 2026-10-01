@@ -1778,11 +1778,16 @@ function gatherRestoredAlbumQueue(): void {
 		});
 }
 
-// A take saved at or past its end would end the moment it plays, so it comes
-// back at its start instead.
+// A take saved in its last second would end the moment it plays, and Play
+// would skip straight to the next take, so it comes back at its start instead
+// (#1236).
+const RESTORE_AT_START_WITHIN_END_SECONDS = 1;
+
 function positionWithinTake(position: number, take: GenerationItem): number {
 	const duration = take.audio_duration_sec;
-	return duration !== null && position >= duration ? 0 : position;
+	return duration !== null && position >= duration - RESTORE_AT_START_WITHIN_END_SECONDS
+		? 0
+		: position;
 }
 
 // The server answers 404 for a song deleted or out of this user's reach, and
