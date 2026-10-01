@@ -1,8 +1,0 @@
-claim_id = "d523b8a3ce134f258099fb58676812eb"
-agent = "claude-head"
-role = "builder"
-base = "e3fe2d19a73feea87a3e0974259e80d6b3ac7677"
-branch = "claude/issue-1177-edit-details"
-scope = ["frontend/e2e/album-menu.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/AlbumMetaEditor.svelte", "frontend/src/lib/components/AlbumMetaEditor.test.ts", "frontend/src/lib/components/CollectionHeader.svelte", "frontend/src/lib/components/CollectionHeader.test.ts", "frontend/src/lib/components/CollectionMenu.svelte", "frontend/src/lib/components/CollectionMenu.test.ts"]
-opened_commit = "d7c0ba8391ccf61561dff774723859623c689685"
-whole_reason = "Edit details replaces Rename and the Add subtitle · Add year line"
