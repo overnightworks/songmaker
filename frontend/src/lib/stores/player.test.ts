@@ -122,7 +122,8 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/s
 import {
 	libraryTakePool,
 	setDesktopNowPlayingSurface,
-	setLibraryTakePool
+	setLibraryTakePool,
+	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import { loadPlaylistDetail, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
@@ -3895,6 +3896,30 @@ describe('restoring the last playback after a reload', () => {
 			audioPlayer.currentCallbacks.onEnded?.('normal');
 
 			expect(audioPlayer.current?.generation.id).toBe(nextTake.id);
+		}
+	);
+
+	it.each<{ pool: LibraryTakePool; shuffle: boolean }>([
+		{ pool: 'all', shuffle: true },
+		{ pool: 'picks', shuffle: false }
+	])(
+		'a restored library take plays on in the $pool pool, shuffle $shuffle, as its record names',
+		async (recorded) => {
+			setLibraryTakePool(recorded.pool === 'all' ? 'picks' : 'all');
+			setShuffle(!recorded.shuffle);
+			const source = { type: 'library', ...recorded };
+			saveRecord({ source });
+			vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+			QUEUES.library.serve();
+
+			await restoreLastPlayback();
+			await playTheRestoredTake();
+			audioPlayer.currentCallbacks.onEnded?.('normal');
+			audioPlayer.status = 'playing';
+			flushSync();
+
+			expect(fetchLibraryPoolQueue).toHaveBeenCalledWith(expect.objectContaining(recorded));
+			expect(storedRecord()).toMatchObject({ source, generationId: nextTake.id });
 		}
 	);
 

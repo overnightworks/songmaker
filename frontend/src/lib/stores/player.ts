@@ -1736,10 +1736,23 @@ export async function restoreLastPlayback(): Promise<void> {
 	if (source.type === 'album') {
 		restoreAlbumTake(found.song, found.take, start);
 	} else if (source.type === 'library') {
-		await playLibraryFromGeneration(found.take, { ...start, quiet: true });
+		await restoreLibraryTake(source, found.take, start);
 	} else {
 		await restorePlaylistQueue(source.playlistId, found.take, start);
 	}
+}
+
+// The device's library settings are what build, extend and save a library
+// queue, so a restored one takes on the settings its record names; the pool
+// and shuffle controls then show the queue that plays (#1236).
+async function restoreLibraryTake(
+	source: Extract<ResumeQueueSource, { type: 'library' }>,
+	take: GenerationItem,
+	start: QueueStart
+): Promise<void> {
+	setLibraryTakePool(source.pool);
+	setShuffle(source.shuffle);
+	await playLibraryFromGeneration(take, { ...start, quiet: true });
 }
 
 // Gathering an album's takes costs a request per song, so a restored album

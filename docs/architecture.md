@@ -521,7 +521,9 @@ that merely ran out keeps it), and a logout in another tab stops this tab
 writing it back. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
 the saved song, finds the take, and rebuilds the queue the record names around
-it with autoplay off at the saved position: `playLibraryFromGeneration`, or
+it with autoplay off at the saved position: `playLibraryFromGeneration`, after
+the device's library pool and shuffle settings take on the ones the record
+names, since those settings build and save every library queue, or
 `startPlaylistQueue` on the fetched playlist, the same starts a tap uses; an
 album take loads as a one-take queue of the song's album and gathers the
 album's other takes (`gatherAlbumQueueAround`, a request per song) only once
