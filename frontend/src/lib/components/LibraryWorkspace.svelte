@@ -13,7 +13,6 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { albumList } from '$lib/stores/libraryData';
 	import { selectedSong } from '$lib/stores/player';
 	import { librarySurface } from '$lib/stores/libraryContext';
 	import { openCollection } from '$lib/stores/collection';
@@ -22,7 +21,6 @@
 	import { offline } from '$lib/stores/connectivity';
 	import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 	import LibraryWall from './LibraryWall.svelte';
-	import CreateForm from './CreateForm.svelte';
 	import SongDetailView from './SongDetailView.svelte';
 	import AlbumDetailView from './AlbumDetailView.svelte';
 	import PlaylistDetailView from './PlaylistDetailView.svelte';
@@ -79,8 +77,6 @@
 		<main class="main">
 			{#if song}
 				<SongDetailView />
-			{:else if surface === 'create'}
-				<CreateForm albums={$albumList} />
 			{:else if surface === 'detail' && collection?.kind === 'album'}
 				<AlbumDetailView albumId={collection.id} />
 			{:else if surface === 'detail' && collection?.kind === 'playlist'}

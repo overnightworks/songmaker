@@ -45,7 +45,6 @@ import {
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
-	librarySurface,
 	libraryRootState,
 	libraryWallStateFrom,
 	rememberedSongTab,
@@ -552,16 +551,6 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 }
 
 export function goBack(): void {
-	if (get(librarySurface) === 'create') {
-		const createState = currentLibraryHistoryState();
-		if (isLibraryHistoryState(createState) && createState.index > 0) {
-			history.back();
-			return;
-		}
-		setLibrarySurface('browse');
-		void replaceLibraryHistory();
-		return;
-	}
 	const state = currentLibraryHistoryState();
 	if (isLibraryHistoryState(state) && state.index > 0) {
 		history.back();
