@@ -266,6 +266,30 @@ describe('jobs store', () => {
 		expect(get(activeJobs)).toHaveLength(0);
 	});
 
+	it.each([
+		{ type: 'cover', status: 'completed', error: undefined, announced: [] },
+		{
+			type: 'cover',
+			status: 'failed',
+			error: 'Cover suggestion could not be generated',
+			announced: []
+		},
+		{ type: 'cover', status: 'cancelled', error: undefined, announced: [] },
+		{ type: 'score', status: 'completed', error: undefined, announced: ['score completed'] }
+	] as const)(
+		'a $type job that ends $status announces $announced, since the cover editor shows its own outcome',
+		async ({ type, status, error, announced }) => {
+			toasts.set([]);
+			trackJob(makeJob({ type, status: 'running' }), { albumId: 'album-1' });
+
+			latestSource().simulateMessage(makeJob({ type, status, error }));
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(get(toasts).map((toast) => toast.message)).toEqual(announced);
+			expect(get(activeJobs)).toHaveLength(0);
+		}
+	);
+
 	async function failEveryReopen(times: number): Promise<void> {
 		for (let i = 0; i < times; i++) {
 			latestSource().simulateError();

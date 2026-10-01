@@ -504,16 +504,16 @@ export const ALBUM_COVER_EDIT_LABEL = 'Edit cover';
 export const ALBUM_COVER_EDITING_LABEL = 'Cover editing';
 export const ALBUM_COVER_EDITING_CLOSE_LABEL = 'Close cover editing';
 export const ALBUM_COVER_EDITING_UPLOAD_LABEL = 'Upload';
+export const ALBUM_COVER_SUGGEST_LABEL = 'Suggest';
 export const ALBUM_COVER_SUGGEST_ANOTHER_LABEL = 'Suggest another';
 export const ALBUM_COVER_SUGGESTION_USE_LABEL = 'Use';
 export const ALBUM_COVER_EDITING_REMOVE_LABEL = 'Remove';
 export const ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL = 'Previous suggestion';
 export const ALBUM_COVER_NEXT_SUGGESTION_LABEL = 'Next suggestion';
-export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestions…';
+export const ALBUM_COVER_SUGGESTIONS_LOADING = 'Loading cover suggestion…';
 export const ALBUM_COVER_SUGGESTING_LABEL = 'Making your cover…';
 export const ALBUM_COVER_SUGGESTION_FAILED_TITLE = 'Couldn’t make a cover suggestion';
 export const ALBUM_COVER_SUGGESTION_FAILED_FALLBACK = 'The cover suggestion failed. Try again.';
-export const ALBUM_COVER_SUGGESTION_ALREADY_RUNNING = 'A cover suggestion is already being made.';
 // The server's own words for a spent daily limit, so the editor says it the
 // same way whether it knew before asking or was refused.
 export const ALBUM_COVER_DAILY_LIMIT_REACHED = 'Daily cover suggestion limit reached';
@@ -689,6 +689,7 @@ export const RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS = 1000;
 export const RESOURCE_SYNC_TRACKED_EVENT_LIMIT = 256;
 export const JOB_TYPE_GENERATE = 'generate';
 export const JOB_TYPE_SCORE = 'score';
+export const JOB_TYPE_COVER = 'cover';
 
 // Shown when the backend's IP rate limiter (`webauth.middleware.rate_limit`)
 // rejects a request with 429 — the budget classes it enforces
