@@ -9,6 +9,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 
 import { get } from 'svelte/store';
 import {
+	COLLECTION_MENU_COVER_HINT,
 	COLLECTION_MENU_LABEL,
 	collectionPauseLabel,
 	collectionPlayLabel,
@@ -334,7 +335,7 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
 		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
-			el.textContent?.trim()
+			el.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim()
 		);
 		expect(rows).toEqual([
 			'Edit details',
@@ -402,7 +403,7 @@ describe('CollectionHeader', () => {
 			const menu = await openCollectionMenu(target);
 
 			Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
-				.find((el) => el.textContent?.trim() === 'Cover')
+				.find((el) => el.textContent?.trim().startsWith('Cover'))
 				?.click();
 			await tick();
 
