@@ -1,8 +1,0 @@
-claim_id = "6f883804be154208956a331aec18d16b"
-agent = "claude-head"
-role = "builder"
-base = "aa709e668db4a8533650eb9e57af004a2e7914b8"
-branch = "claude-head/issue-1226-playback-restore"
-scope = ["docs/architecture.md", "frontend/e2e/playback-restore.spec.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/playbackResume.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/routes/(library)/+layout.svelte"]
-opened_commit = "ee6b7e15c256268bab3a8852e82fc77f4b23564e"
-whole_reason = "restore reader plus the save hardening it relies on, its e2e and docs"
