@@ -1,0 +1,8 @@
+claim_id = "808b960c3fae4ff78a581a9a581b70bd"
+agent = "claude-head"
+role = "builder"
+base = "e3fe2d19a73feea87a3e0974259e80d6b3ac7677"
+branch = "claude/issue-1176-remove-create-form"
+scope = ["frontend/e2e", "frontend/src/lib/components/CreateForm.svelte", "frontend/src/lib/components/CreateForm.test.ts", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/frequent-hitbox.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "scripts/dead-exports.allow"]
+opened_commit = "6bb360d4dc925ba27851cbb386a3caa0e31b2b07"
+whole_reason = "delete CreateForm and the create surface with every reference"
