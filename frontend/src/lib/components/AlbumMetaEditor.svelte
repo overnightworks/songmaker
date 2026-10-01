@@ -11,6 +11,7 @@
 	import {
 		ALBUM_DETAILS_CLOSE_LABEL,
 		ALBUM_DETAILS_SAVE_LABEL,
+		ALBUM_DETAILS_TITLE_REQUIRED,
 		ALBUM_SUBTITLE_LABEL,
 		ALBUM_SUBTITLE_MAX_LENGTH,
 		ALBUM_YEAR_LABEL,
@@ -36,7 +37,9 @@
 	let titleInput: HTMLInputElement | undefined = $state();
 	let form: HTMLFormElement | undefined = $state();
 
-	const canSave = $derived(draft.title.trim() !== '' && !saving);
+	const titleMissing = $derived(draft.title.trim() === '');
+	const canSave = $derived(!titleMissing && !saving);
+	const titleReasonId = $props.id();
 
 	onMount(() => titleInput?.focus());
 
@@ -104,7 +107,14 @@
 			autocomplete="off"
 			maxlength={NEW_PLACE_TEXT_MAX_LENGTH}
 			required
+			aria-invalid={titleMissing}
+			aria-describedby={titleMissing ? titleReasonId : undefined}
 		/>
+		{#if titleMissing}
+			<span id={titleReasonId} class="field-reason" role="alert"
+				>{ALBUM_DETAILS_TITLE_REQUIRED}</span
+			>
+		{/if}
 	</label>
 	<label class="field">
 		<span class="field-label">{ALBUM_SUBTITLE_LABEL}</span>
@@ -187,6 +197,11 @@
 		font-size: 11px;
 		letter-spacing: 0.5px;
 		text-transform: uppercase;
+	}
+
+	.field-reason {
+		color: var(--score-bad);
+		font-size: 0.8rem;
 	}
 
 	.field input {

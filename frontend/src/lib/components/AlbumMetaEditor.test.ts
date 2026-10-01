@@ -109,13 +109,43 @@ describe('AlbumMetaEditor', () => {
 		expect(props.onclose).not.toHaveBeenCalled();
 	});
 
-	it('offers no Save while the title is blank', async () => {
-		const props = baseProps();
-		const target = await render(props);
+	it('offers no Save while the title is blank and names why beside the title', async () => {
+		const target = await render(baseProps());
+		expect(target.querySelector('[role="alert"]')).toBeNull();
 
 		type(field(target, 'Title'), '   ');
 
 		expect(getByRoleButton(target, 'Save').disabled).toBe(true);
+		expect(target.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+			'Title cannot be empty'
+		);
+		expect(field(target, 'Title').getAttribute('aria-invalid')).toBe('true');
+	});
+
+	it('Escape with the focus outside the form closes it without saving', async () => {
+		const props = baseProps();
+		await render(props);
+		const outside = document.createElement('button');
+		document.body.append(outside);
+		outside.focus();
+
+		outside.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+
+		expect(props.onclose).toHaveBeenCalledTimes(1);
+		expect(props.onsave).not.toHaveBeenCalled();
+	});
+
+	it('leaves an Escape an open popover already claimed to that popover', async () => {
+		const props = baseProps();
+		const target = await render(props);
+		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		escape.preventDefault();
+
+		field(target, 'Title').dispatchEvent(escape);
+
+		expect(props.onclose).not.toHaveBeenCalled();
 	});
 
 	it('stays open with the draft when the save is refused', async () => {

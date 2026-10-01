@@ -571,6 +571,7 @@ export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';
 export const ALBUM_DETAILS_CLOSE_LABEL = 'Close edit details';
 export const ALBUM_DETAILS_SAVE_LABEL = 'Save';
+export const ALBUM_DETAILS_TITLE_REQUIRED = 'Title cannot be empty';
 export const ALBUM_DETAILS_SAVED = 'Details saved';
 export const ALBUM_DETAILS_SAVE_FAILED = 'Saving the details failed';
 export const ALBUM_SUBTITLE_LABEL = 'Subtitle';
