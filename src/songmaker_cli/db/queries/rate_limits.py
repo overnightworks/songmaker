@@ -51,17 +51,6 @@ def upsert_rate_limit_setting(
     return setting
 
 
-def delete_rate_limit_setting(
-    session: Session, setting_key: str, user_id: str | None = None,
-) -> bool:
-    existing = get_rate_limit_setting(session, setting_key, user_id)
-    if not existing:
-        return False
-    session.delete(existing)
-    session.flush()
-    return True
-
-
 def get_all_global_rate_limits(session: Session) -> list[RateLimitSetting]:
     return (
         session.query(RateLimitSetting)
