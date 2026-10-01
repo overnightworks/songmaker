@@ -240,10 +240,11 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
 	const entry = loaded ?? firstIdOnTop();
-	if (entry === null) return settleOnPage(null);
-	const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
-	replaceState(location.href, stampedPageState(pageState, entry));
+	if (entry !== null) {
+		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
+		replaceState(location.href, stampedPageState(pageState, entry));
+	}
 	settleOnPage(entry);
 }
 

@@ -343,8 +343,10 @@ function navigateLibraryRoute(
 
 // Steps back onto the entry below, whose state the caller already knows
 // (issue #1002: a history layer in navigation.ts leaving for the library it
-// covers). A traversal is asynchronous -- it lands only when its `popstate`
-// fires -- so it joins the same queue as a crossing write: a write issued
+// covers). A traversal is asynchronous -- it lands only once a popstate
+// reaches the entry below, which the history controller tells by the entry's
+// id, not by whichever popstate comes first (issue #1006) -- so it joins the
+// same queue as a crossing write: a write issued
 // straight afterwards (Go to song opening the playing song) lands on top of
 // the entry below instead of racing the traversal, and reads `landing` from
 // `currentLibraryHistoryState` meanwhile.
