@@ -38,9 +38,10 @@ import {
 import { CREATED_SORTS } from '$lib/utils/recency';
 
 // 'browse' shows the library wall (the LibraryWall component); 'detail' shows
-// whichever collection is currently open; 'create' shows the create form.
-// Song detail always wins over all three (see LibraryWorkspace.svelte).
-type LibrarySurface = 'browse' | 'detail' | 'create';
+// whichever collection is currently open. Song detail always wins over both
+// (see LibraryWorkspace.svelte). An entry still carrying the removed create
+// surface is no library entry any more, so Back onto it lands on the wall.
+type LibrarySurface = 'browse' | 'detail';
 // Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate;
 // 'cowriter' hosts the conversation; 'takes' lists generations.
 // LEGACY_DETAIL_TAB_MAP below keeps history entries written under the older
@@ -78,7 +79,7 @@ export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
-const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail', 'create']);
+const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 	write: 'edit',
 	generations: 'takes',
@@ -923,9 +924,9 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 }
 
 // Only an album's own detail shows its songs. The wall keeps the album that
-// was open last as its collection and the create form keeps it too, yet
-// neither shows a song of it, so landing on either -- a Back, or a reload that
-// restores it -- pays no round trip for them; opening the album loads them.
+// was open last as its collection, yet shows no song of it, so landing on the
+// wall -- a Back, or a reload that restores it -- pays no round trip for them;
+// opening the album loads them.
 export function albumWhoseSongsShow(
 	surface: LibrarySurface,
 	collection: CollectionSnapshot
