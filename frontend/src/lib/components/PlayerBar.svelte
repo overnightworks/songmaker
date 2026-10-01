@@ -28,7 +28,7 @@
 		selectedPlaylistDetail
 	} from '$lib/stores/playlists';
 	import { transportBarHidden } from '$lib/stores/transportBar';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { audioPlayer, transportOffersPause } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
@@ -148,7 +148,9 @@
 	});
 
 	$effect(() => {
-		updateMediaSessionPlaybackState(isPlaying ? 'playing' : current ? 'paused' : 'none');
+		updateMediaSessionPlaybackState(
+			transportOffersPause(transport) ? 'playing' : current ? 'paused' : 'none'
+		);
 		updateMediaSessionPositionState(currentTime, duration);
 	});
 

@@ -1161,11 +1161,15 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await tick();
 	}
 
-	async function giveUpWhileOffline(arrange: () => void = () => {}): Promise<void> {
-		await stallWhilePlaying(arrange);
+	async function giveUpWhileOfflineAfterStall(): Promise<void> {
 		reportResourceStreamReachable(false);
 		await vi.advanceTimersByTimeAsync(PAST_THE_RECOVERY_DEADLINE_MS);
 		await tick();
+	}
+
+	async function giveUpWhileOffline(arrange: () => void = () => {}): Promise<void> {
+		await stallWhilePlaying(arrange);
+		await giveUpWhileOfflineAfterStall();
 	}
 
 	function waitingRetry(): HTMLButtonElement {
@@ -1217,6 +1221,40 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			redFailure: false,
 			main: TRANSPORT_PAUSE_LABEL,
 			smallRetry: TRANSPORT_RETRY_LABEL
+		});
+	});
+
+	function installLockScreen(): Pick<MediaSession, 'playbackState'> {
+		const lockScreen = {
+			playbackState: 'none' as MediaSessionPlaybackState,
+			setPositionState() {}
+		};
+		Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: lockScreen });
+		onTestFinished(() => {
+			Reflect.deleteProperty(navigator, 'mediaSession');
+		});
+		return lockScreen;
+	}
+
+	it.each([
+		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },
+		{
+			moment: 'while a recovery reload runs',
+			reach: () => vi.advanceTimersByTimeAsync(STALL_LOOK_MS)
+		},
+		{ moment: 'while it waits for the network', reach: () => giveUpWhileOfflineAfterStall() }
+	])('the lock screen offers Pause $moment, like the bar', async ({ reach }) => {
+		const lockScreen = installLockScreen();
+		await stallWhilePlaying();
+		await reach();
+		await tick();
+		const whileWaiting = lockScreen.playbackState;
+
+		await press();
+
+		expect({ whileWaiting, afterPause: lockScreen.playbackState }).toEqual({
+			whileWaiting: 'playing',
+			afterPause: 'paused'
 		});
 	});
 
