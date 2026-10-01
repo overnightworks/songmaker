@@ -994,6 +994,23 @@ describe('patient recovery while the screen is off', () => {
 		});
 	});
 
+	it('a take playing again after a late answer gets the full wait at its next stall', async () => {
+		audioPlayer.load(makeInfo());
+		await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
+		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('canplay');
+		audioPlayer.play();
+		startPlayingAt(12);
+		fakeAudio.fire('waiting');
+
+		await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual({
+			status: 'loading',
+			error: null
+		});
+	});
+
 	it('a late answer clears stalled', async () => {
 		audioPlayer.load(makeInfo());
 		await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
