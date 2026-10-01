@@ -1,7 +1,0 @@
-claim_id = "0eb419154a754d21b628ab79d0b61827"
-agent = "claude-head"
-role = "builder"
-base = "0d203e7b7a1cfc11ab9995a36d43695e3adddd1c"
-branch = "claude-head/issue-1208-queue-continuity-e2e"
-scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/e2e/seed.ts"]
-opened_commit = "ffce7a16dd283d1373a252cb99ddf347cefbb141"
