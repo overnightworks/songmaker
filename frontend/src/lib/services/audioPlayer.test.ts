@@ -35,6 +35,21 @@ function makeInfo(overrides: Partial<PlaybackInfo> = {}): PlaybackInfo {
 	};
 }
 
+function takeInfo(id: string, mp3Path: string): PlaybackInfo {
+	return makeInfo({ generation: makeGen({ id, mp3_path: mp3Path }) });
+}
+
+// A standby deck the browser has buffered far enough to play on at once.
+function preloadReady(
+	info: PlaybackInfo,
+	readyState: number = HTMLMediaElement.HAVE_FUTURE_DATA
+): FakeAudio {
+	audioPlayer.preload(info);
+	const standby = createdAudios[createdAudios.length - 1];
+	standby.readyState = readyState;
+	return standby;
+}
+
 function recoveryUrlOf(url: string): RegExp {
 	const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 	return new RegExp(`^${escaped}\\?recover=\\S+$`);
@@ -102,6 +117,7 @@ class FakeAudio {
 	error: MediaError | null = null;
 	crossOrigin: string | null = null;
 	preload = '';
+	readyState = 0;
 	bufferedUntil = 0;
 	private listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
@@ -146,14 +162,22 @@ class FakeAudio {
 }
 
 let fakeAudio: FakeAudio;
+let createdAudios: FakeAudio[];
+
+function activeDeck(): FakeAudio {
+	return audioPlayer.getElement() as unknown as FakeAudio;
+}
 let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
 	fakeAudio = new FakeAudio();
+	createdAudios = [];
 	vi.stubGlobal(
 		'Audio',
 		vi.fn(function () {
-			return fakeAudio;
+			const el = createdAudios.length === 0 ? fakeAudio : new FakeAudio();
+			createdAudios.push(el);
+			return el;
 		})
 	);
 	vi.stubGlobal('MediaError', {
@@ -962,7 +986,7 @@ describe('stream playback', () => {
 
 		audioPlayer.destroy();
 		audioPlayer.loadStream({ ...makeStreamManifest(), windowed: true }, 1, { autoplay: false });
-		fakeAudio.fire('ended');
+		activeDeck().fire('ended');
 
 		expect(onEnded).toHaveBeenCalledTimes(2);
 	});
@@ -1711,6 +1735,179 @@ describe('swapCallbacks() / restoreCallbacks()', () => {
 	});
 });
 
+describe('standby deck', () => {
+	const first = takeInfo('g1', 'a1/first.mp3');
+	const next = takeInfo('g2', 'a1/next.mp3');
+	const other = takeInfo('g3', 'a1/other.mp3');
+
+	function playFirst(): void {
+		audioPlayer.load(first);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+	}
+
+	it('a preloaded next take starts on load without loading its source again', async () => {
+		playFirst();
+		const standby = preloadReady(next);
+		const loadSpy = vi.spyOn(standby, 'load');
+
+		audioPlayer.load(next);
+		await Promise.resolve();
+
+		expect(audioPlayer.getElement()).toBe(standby);
+		expect(loadSpy).not.toHaveBeenCalled();
+		expect(standby.src).toBe('/audio/a1/next.mp3');
+		expect(standby.playMock).toHaveBeenCalledOnce();
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(audioPlayer.status).toBe('playing');
+		expect(fakeAudio.paused).toBe(true);
+		expect(fakeAudio.src).toBe('');
+	});
+
+	it('a promoted take starts at the asked position and stays paused when asked', () => {
+		playFirst();
+		const standby = preloadReady(next);
+
+		audioPlayer.load(next, { autoplay: false, startAt: 30 });
+
+		expect(standby.currentTime).toBe(30);
+		expect(audioPlayer.currentTime).toBe(30);
+		expect(standby.playMock).not.toHaveBeenCalled();
+		expect(audioPlayer.status).toBe('ready');
+	});
+
+	it('a load whose URL differs from the preloaded one loads normally and drops the preload', () => {
+		playFirst();
+		const standby = preloadReady(next);
+
+		audioPlayer.load(other);
+
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).toBe('/audio/a1/other.mp3');
+		expect(audioPlayer.status).toBe('loading');
+		expect(standby.src).toBe('');
+
+		audioPlayer.load(next);
+
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).toBe('/audio/a1/next.mp3');
+	});
+
+	it('a preloaded take without future data loads normally on the active deck', () => {
+		playFirst();
+		const standby = preloadReady(next, HTMLMediaElement.HAVE_CURRENT_DATA);
+
+		audioPlayer.load(next);
+
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).toBe('/audio/a1/next.mp3');
+		expect(audioPlayer.status).toBe('loading');
+		expect(standby.src).toBe('');
+	});
+
+	it('preloading the take already standing by does not fetch it again', () => {
+		const standby = preloadReady(next);
+		const loadSpy = vi.spyOn(standby, 'load');
+
+		audioPlayer.preload(next);
+
+		expect(loadSpy).not.toHaveBeenCalled();
+	});
+
+	it('a newer preload replaces the older one and null drops it', () => {
+		playFirst();
+		const standby = preloadReady(next);
+
+		audioPlayer.preload(other);
+		expect(standby.src).toBe('/audio/a1/other.mp3');
+
+		audioPlayer.preload(null);
+		expect(standby.src).toBe('');
+		audioPlayer.load(other);
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+	});
+
+	it('events from the standby never change status, error or current', async () => {
+		const onEnded = vi.fn();
+		const onPlaybackStarted = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onEnded, onPlaybackStarted }));
+		playFirst();
+		onPlaybackStarted.mockClear();
+		const standby = preloadReady(next);
+		standby.error = { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED } as MediaError;
+
+		for (const event of [
+			'loadstart',
+			'loadedmetadata',
+			'canplay',
+			'timeupdate',
+			'play',
+			'playing',
+			'pause',
+			'waiting',
+			'stalled',
+			'ended',
+			'error'
+		]) {
+			standby.fire(event);
+		}
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.error).toBeNull();
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		expect(onEnded).not.toHaveBeenCalled();
+		expect(onPlaybackStarted).not.toHaveBeenCalled();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('a failed preload leaves the active take playing and the next load works normally', async () => {
+		playFirst();
+		audioPlayer.preload(next);
+		const standby = createdAudios[1];
+		standby.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+		standby.fire('error');
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect(audioPlayer.status).toBe('playing');
+		expect(audioPlayer.error).toBeNull();
+
+		audioPlayer.load(next);
+		fakeAudio.fire('canplay');
+
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).toBe('/audio/a1/next.mp3');
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(fakeAudio.playMock).toHaveBeenCalledTimes(2);
+	});
+
+	it('events from the deck a promotion retired never reach the player', () => {
+		playFirst();
+		preloadReady(next);
+		audioPlayer.load(next);
+
+		fakeAudio.fire('error');
+		fakeAudio.fire('loadstart');
+
+		expect(audioPlayer.status).not.toBe('error');
+		expect(audioPlayer.status).not.toBe('loading');
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+	});
+
+	it.each(['unload', 'destroy'] as const)('%s clears the standby', (teardown) => {
+		playFirst();
+		const standby = preloadReady(next);
+
+		audioPlayer[teardown]();
+		audioPlayer.load(next);
+
+		expect(standby.src).toBe('');
+		expect(audioPlayer.getElement()).not.toBe(standby);
+		expect(audioPlayer.status).toBe('loading');
+	});
+});
+
 // The <audio> element can be handed to createMediaElementSource exactly once,
 // and closing the context that owns that source silences the element for good
 // — so the graph has to belong to the player, not to a transport bar the app
@@ -1727,7 +1924,7 @@ describe('audio graph', () => {
 			state: 'running',
 			destination: {},
 			createAnalyser: vi.fn(() => analyser),
-			createMediaElementSource: vi.fn(() => ({ connect: vi.fn() })),
+			createMediaElementSource: vi.fn((_el: unknown) => ({ connect: vi.fn() })),
 			resume: vi.fn(),
 			close: vi.fn()
 		};
@@ -1781,6 +1978,23 @@ describe('audio graph', () => {
 		audioPlayer.destroy();
 
 		expect(fake.context.close).toHaveBeenCalledOnce();
+	});
+
+	it("the analyser carries the promoted deck's sound", () => {
+		const fake = fakeAudioContext();
+		vi.stubGlobal('AudioContext', fake.constructor);
+		audioPlayer.load(takeInfo('g1', 'a1/first.mp3'));
+		const analyser = audioPlayer.getAnalyser();
+		preloadReady(takeInfo('g2', 'a1/next.mp3'));
+
+		audioPlayer.load(takeInfo('g2', 'a1/next.mp3'));
+
+		const sourceOf = fake.context.createMediaElementSource;
+		const promotedIndex = sourceOf.mock.calls.findIndex(([el]) => el === audioPlayer.getElement());
+		expect(promotedIndex).toBeGreaterThan(-1);
+		expect(sourceOf.mock.results[promotedIndex].value.connect).toHaveBeenCalledWith(analyser);
+		expect(audioPlayer.getAnalyser()).toBe(analyser);
+		expect(fake.constructor).toHaveBeenCalledOnce();
 	});
 
 	it('builds no graph where the browser offers no Web Audio', () => {
