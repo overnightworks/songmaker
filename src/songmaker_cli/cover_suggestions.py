@@ -6,12 +6,13 @@ import logging
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Final, Protocol
+from typing import Final
 
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
-from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, ROLE_ADMIN, JobType
+from songmaker_cli.api_helpers import Actor, can_access_album
+from songmaker_cli.constants import ALBUM_COVER_SUGGESTIONS_DIRNAME, JobType
 from songmaker_cli.db.models import Job
 from songmaker_cli.db.queries import (
     count_cover_jobs_since,
@@ -27,13 +28,6 @@ ALBUM_NOT_FOUND: Final = "Album not found"
 COVER_SUGGESTIONS_ALREADY_RUNNING: Final = "Cover suggestions are already being generated"
 DAILY_COVER_SUGGESTION_LIMIT_REACHED: Final = "Daily cover suggestion limit reached"
 _COVER_SUGGESTIONS_LOCK_ID: Final = 7
-
-
-class CoverSuggestionActor(Protocol):
-    """The identity facts needed to authorize a cover request."""
-
-    id: str
-    role: str
 
 
 class CoverSuggestionRequestError(Exception):
@@ -64,7 +58,7 @@ class CoverSuggestionDailyLimitReachedError(CoverSuggestionRequestError):
 
 
 def request_cover_suggestions(
-    session: Session, album_id: str, actor: CoverSuggestionActor,
+    session: Session, album_id: str, actor: Actor,
 ) -> Job:
     """Prepare one single-image cover job after enforcing the album's request contract.
 
@@ -75,9 +69,7 @@ def request_cover_suggestions(
     conflict, limit, and job-creation decisions.
     """
     album = get_album(session, album_id)
-    if album is None or (
-        actor.role != ROLE_ADMIN and album.created_by != actor.id
-    ):
+    if album is None or not can_access_album(album, actor):
         raise CoverSuggestionAlbumNotFoundError()
 
     _lock_cover_suggestion_request(session)
