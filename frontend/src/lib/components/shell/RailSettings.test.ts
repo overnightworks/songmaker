@@ -81,15 +81,15 @@ async function clickSection(label: string): Promise<void> {
 
 describe('RailSettings', () => {
 	it('opens the clicked section', async () => {
-		await clickSection('Playback');
+		await clickSection('Voices');
 
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/voices');
 	});
 
 	it('holds a section for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
 		setDraftLyrics('unsaved edit');
 
-		await clickSection('Playback');
+		await clickSection('Voices');
 
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 		expect(vi.mocked(goto)).not.toHaveBeenCalled();
@@ -105,7 +105,6 @@ describe('RailSettings', () => {
 		expect(toggle.getAttribute('aria-expanded')).toBe('true');
 		expect(itemLabels(target)).toEqual([
 			'Generation',
-			'Playback',
 			'Voices',
 			'Account',
 			'Admin',
@@ -137,7 +136,7 @@ describe('RailSettings', () => {
 		currentUser.set(USER);
 		pageState.url = new URL('https://songmaker.test/settings/generation');
 		const target = await render();
-		expect(itemLabels(target)).toEqual(['Generation', 'Playback', 'Voices', 'Account', 'Legal']);
+		expect(itemLabels(target)).toEqual(['Generation', 'Voices', 'Account', 'Legal']);
 	});
 
 	it('persists its open state under RAIL_SETTINGS_OPEN_STORAGE_KEY', async () => {

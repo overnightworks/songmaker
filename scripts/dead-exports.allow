@@ -2,43 +2,7 @@
 *:*ForTests # Deliberate reset/control seams for isolated tests.
 frontend/src/routes/*:ssr # SvelteKit route configuration.
 frontend/src/routes/*:prerender # SvelteKit route configuration.
-
-# Deferred shares/archive slice (#928 C); keep entries exact so new names fail the gate.
-frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_TOGGLE_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_LOADING # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_ERROR # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_ARCHIVED_UNARCHIVE_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_COUNT_SEP # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARED_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARED_LOADING # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_UNSHARE_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_OPEN_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_UNSHARE_TITLE # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_UNSHARE_WARNING # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_ALL_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_FILTER_LABEL # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPES # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPE_LABELS # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:LIBRARY_SHARES_TYPE_EMPTY # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/constants.ts:librarySharesStatusLabel # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # Dependency-injected sync controller: isolated race, reconnect, authorization and bounded-buffer tests without the singleton browser/network owner.
-frontend/src/lib/stores/shares.ts:ShareLoadStatus # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:ShareCountState # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:ShareInventoryState # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:sharesViewOpen # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:shareCount # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:shareInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:openSharesInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:closeSharesInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:toggleSharesInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:watchShareStatus # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:watchShareView # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:refreshShareCount # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:loadShareInventory # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:loadMoreShares # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
-frontend/src/lib/stores/shares.ts:setShareTypeFilter # #928 C / finding 1: shares/archive inventory removal requires its own vertical slice.
 frontend/src/lib/history/historyController.ts:land # the pure landing reducer is exported for its table tests; #1006 H2 makes layers its callers.
 frontend/src/lib/history/historyController.ts:allocateEntryId # the id allocator is exported for its tests over an in-memory Storage (#1194).
 frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader is exported for its codec tests (#1194).

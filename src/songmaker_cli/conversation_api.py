@@ -9,9 +9,6 @@ This module owns the Phase 3 conversation-scoped chat API:
 - ``POST /conversations/new`` — archive the active one and start fresh.
 - ``DELETE /conversations/{id}`` — wipe a conversation.
 - ``GET /memory`` / ``PUT /memory/...`` — durable user, song, and album notes.
-
-The legacy per-song endpoints in ``chat_api.py`` remain for backwards
-compatibility during rollout.
 """
 
 from __future__ import annotations

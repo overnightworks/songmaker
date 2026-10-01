@@ -21,7 +21,6 @@ export {
 } from './albums';
 export {
 	fetchLibraryPoolQueue,
-	fetchShares,
 	searchLibrary,
 	type LibrarySearchHit,
 	type LibrarySearchResponse,

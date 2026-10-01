@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Final
 
+from agent_providers.claude.provider import is_available as is_claude_cli_available
 from agent_providers.constants import COWRITER_PROVIDERS
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
@@ -12,6 +13,7 @@ from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import gen_params_to_json
 from songmaker_cli.api_models import (
+    CapabilitiesResponse,
     GenerationDefaultsRequest,
     PresetCreateRequest,
     PresetResponse,
@@ -24,8 +26,6 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.api_models.settings import (
     AvailableModelResponse,
-    ClaudeModelsRequest,
-    ClaudeModelsResponse,
     CoverSettingsRequest,
     CoverSettingsResponse,
     CowriterSettingsRequest,
@@ -81,7 +81,6 @@ from songmaker_cli.db.queries.settings import (
     list_presets,
     list_shared_presets,
     name_exists,
-    set_claude_model,
     set_cover_settings,
     set_cowriter_settings,
     set_cowriter_tail_token_budget,
@@ -91,6 +90,7 @@ from songmaker_cli.db.queries.settings import (
     toggle_model,
     update_preset,
 )
+from songmaker_cli.settings import get_settings
 
 if TYPE_CHECKING:
     from songmaker_cli.provider_status import ProviderSnapshot
@@ -350,53 +350,22 @@ def api_set_default_config(
     return DefaultConfigResponse(config=req.config)
 
 
-# ── Claude model settings ─────────────────────────────────────────
+# ── Capabilities ─────────────────────────────────────────────────
 
 
-@router.get("/settings/claude-models")
-def api_get_claude_models(
-    _admin: AuthenticatedUser = Depends(require_admin),
+@router.get("/capabilities")
+def api_capabilities(
+    _user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> ClaudeModelsResponse:
-    from songmaker_cli.constants import MODEL_ALLOWED_CLAUDE
-
-    return ClaudeModelsResponse(
+) -> CapabilitiesResponse:
+    api_key = get_settings().anthropic_api_key
+    return CapabilitiesResponse(
+        claude_api=api_key is not None and bool(api_key.get_secret_value()),
+        claude_cli=is_claude_cli_available(api_key=None),
+        generation=True,
+        scoring=True,
         chat_model=get_claude_chat_model(session),
         scoring_model=get_claude_scoring_model(session),
-        allowed_models=sorted(MODEL_ALLOWED_CLAUDE),
-    )
-
-
-@router.put(
-    "/settings/claude-models",
-    responses={400: {"description": "Selected Claude model is not allowed"}},
-)
-def api_set_claude_models(
-    req: ClaudeModelsRequest,
-    admin: AuthenticatedUser = Depends(require_admin),
-    session: Session = Depends(get_db_session),
-) -> ClaudeModelsResponse:
-    from songmaker_cli.constants import (
-        MODEL_ALLOWED_CLAUDE,
-        SETTING_CLAUDE_CHAT_MODEL,
-        SETTING_CLAUDE_SCORING_MODEL,
-    )
-
-    if req.chat_model not in MODEL_ALLOWED_CLAUDE:
-        raise HTTPException(400, f"Invalid chat model. Allowed: {sorted(MODEL_ALLOWED_CLAUDE)}")
-    if req.scoring_model not in MODEL_ALLOWED_CLAUDE:
-        raise HTTPException(400, f"Invalid scoring model. Allowed: {sorted(MODEL_ALLOWED_CLAUDE)}")
-
-    set_claude_model(session, SETTING_CLAUDE_CHAT_MODEL, req.chat_model)
-    set_claude_model(session, SETTING_CLAUDE_SCORING_MODEL, req.scoring_model)
-    record_audit(session, admin.id, AuditAction.UPDATE, ResourceType.CLAUDE_MODELS,
-                 detail=f"chat={req.chat_model} scoring={req.scoring_model}")
-    session.commit()
-
-    return ClaudeModelsResponse(
-        chat_model=get_claude_chat_model(session),
-        scoring_model=get_claude_scoring_model(session),
-        allowed_models=sorted(MODEL_ALLOWED_CLAUDE),
     )
 
 
@@ -857,8 +826,6 @@ def _get_env_defaults() -> dict[str, int]:
         SETTING_MAX_USER_ACTIVE_JOBS,
         SETTING_SCORING_RATE_LIMIT,
     )
-    from songmaker_cli.settings import get_settings
-
     settings = get_settings()
     return {
         SETTING_GENERATION_RATE_LIMIT: settings.generation_rate_limit_user,

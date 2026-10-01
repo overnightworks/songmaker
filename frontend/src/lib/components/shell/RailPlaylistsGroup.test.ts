@@ -71,6 +71,7 @@ beforeEach(() => {
 		audioPlayer.current = playback;
 		audioPlayer.status = 'playing';
 	});
+	vi.spyOn(audioPlayer, 'preload').mockImplementation(() => {});
 });
 
 afterEach(async () => {
