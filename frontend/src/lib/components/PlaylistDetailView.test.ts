@@ -124,6 +124,7 @@ beforeEach(() => {
 		audioPlayer.current = playback;
 		audioPlayer.status = 'playing';
 	});
+	vi.spyOn(audioPlayer, 'preload').mockImplementation(() => {});
 	// jsdom leaves the player without a media element, so its own play/pause are
 	// no-ops and a stopped take would look exactly like a running one. These
 	// stubs move the status the way a real element does, so what a click did to

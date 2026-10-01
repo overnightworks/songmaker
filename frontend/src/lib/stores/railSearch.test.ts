@@ -200,7 +200,6 @@ describe('groupRailSearchResults', () => {
 			admin: true,
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Playback', '/settings/playback'),
 				settingsPage('Voices', '/settings/voices'),
 				settingsPage('Account', '/settings/account'),
 				settingsPage('Admin', '/settings/users'),
@@ -213,7 +212,6 @@ describe('groupRailSearchResults', () => {
 			admin: false,
 			settingsPages: [
 				settingsPage('Generation', '/settings/generation'),
-				settingsPage('Playback', '/settings/playback'),
 				settingsPage('Voices', '/settings/voices'),
 				settingsPage('Account', '/settings/account'),
 				settingsPage('Legal', '/settings/legal')
@@ -230,9 +228,7 @@ describe('groupRailSearchResults', () => {
 	);
 
 	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
-		const pages = [
-			{ label: 'Vernissage guide', href: '/settings/playback', section: null }
-		] as const;
+		const pages = [{ label: 'Vernissage guide', href: '/settings/voices', section: null }] as const;
 
 		const groups = groupRailSearchResults(vernissageState, [picks], pages);
 
@@ -244,7 +240,7 @@ describe('groupRailSearchResults', () => {
 				{ kind: 'song', id: 's1' }
 			],
 			[{ kind: 'playlist', id: 'p1' }],
-			[{ kind: 'page', href: '/settings/playback' }]
+			[{ kind: 'page', href: '/settings/voices' }]
 		]);
 	});
 
@@ -343,9 +339,9 @@ describe('groupRailSearchResults', () => {
 				{ text: 'ssage', matched: false }
 			]
 		],
-		['Playback', 'settings', [{ text: 'Playback', matched: false }]]
+		['Voices', 'settings', [{ text: 'Voices', matched: false }]]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
-		const page = { label, href: '/settings/playback', section: 'Settings' } as const;
+		const page = { label, href: '/settings/voices', section: 'Settings' } as const;
 		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
 		expect(group?.results[0]?.labelParts).toEqual(parts);

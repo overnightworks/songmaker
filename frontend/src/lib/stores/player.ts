@@ -291,9 +291,7 @@ function playGeneration(
 ): void {
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
-	const info = toPlaybackInfo(gen, song);
-	if (opts.restart) audioPlayer.load(info, { restart: true });
-	else audioPlayer.load(info);
+	loadQueueTake(toPlaybackInfo(gen, song), opts);
 }
 
 function randomIndex(length: number): number {
@@ -388,15 +386,20 @@ function loadNativeTake(
 	opts: { restart?: boolean; startAt?: number } = {}
 ): void {
 	clearWindowEnd();
+	loadQueueTake(info, opts);
+}
+
+// Every take a queue plays goes through here, so the take after it is
+// already loading while this one plays (#1187 P1).
+function loadQueueTake(info: PlaybackInfo, opts: { restart?: boolean; startAt?: number }): void {
 	if (opts.startAt !== undefined) {
 		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
-		return;
-	}
-	if (opts.restart) {
+	} else if (opts.restart) {
 		audioPlayer.load(info, { restart: true });
-		return;
+	} else {
+		audioPlayer.load(info);
 	}
-	audioPlayer.load(info);
+	preloadNextTake();
 }
 
 function playNativeLibraryTakes(
@@ -456,9 +459,12 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 	loadNativeTake(takes[index]);
 }
 
+// A take row never plays alone (#1187 P6): when the pool holds only the
+// tapped take, as it does before anything is picked, the row's song names the
+// album the queue continues through instead.
 async function playLibraryFromGeneration(
 	gen: GenerationItem,
-	opts: { resumeAtTrackTime?: number } = {}
+	opts: { resumeAtTrackTime?: number; tappedRowSong?: SongItem } = {}
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
@@ -491,6 +497,10 @@ async function playLibraryFromGeneration(
 		return;
 	}
 	playStartNotice.set('idle');
+	if (takes.length === 1 && opts.tappedRowSong) {
+		await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
+		return;
+	}
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
 	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
@@ -998,7 +1008,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	try {
 		const albumId = get(selectedAlbumId);
 		if (albumId) await playAlbumFromGeneration(albumId, song, gen);
-		else await playLibraryFromGeneration(gen);
+		else await playLibraryFromGeneration(gen, { tappedRowSong: song });
 	} catch (e) {
 		addToast(describeFailure(e, PLAYBACK_FAILED_TOAST), 'error');
 	}
@@ -1072,32 +1082,67 @@ function playStreamInDirection(direction: QueueDirection): boolean {
 	return true;
 }
 
+type NextQueueTake =
+	{ kind: 'take'; index: number; take: PlaybackInfo } | { kind: 'window-end' } | { kind: 'none' };
+
+const NO_NEXT_TAKE: NextQueueTake = { kind: 'none' };
+
+// The one decider of which take follows the current one: Next plays it, and
+// the preload loads it while the current one still plays, so the two can
+// never disagree. A queue wraps around; the library window's last take is
+// followed by its end, not by a take.
+function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQueueTake {
+	if (ctx.type === 'playlist') {
+		if (ctx.entries.length <= 1) return NO_NEXT_TAKE;
+		const index = (currentPlaylistIndex(ctx, current) + 1) % ctx.entries.length;
+		return { kind: 'take', index, take: playlistEntryToPlaybackInfo(ctx.entries[index]) };
+	}
+	const index = nativeTakeIndex(ctx, current);
+	if (index < 0 || ctx.takes === undefined) return NO_NEXT_TAKE;
+	if (
+		ctx.type === 'library' &&
+		index === ctx.takes.length - 1 &&
+		!get(libraryQueueSkippedComplete)
+	) {
+		return { kind: 'window-end' };
+	}
+	if (ctx.takes.length <= 1) return NO_NEXT_TAKE;
+	const nextIndex = (index + 1) % ctx.takes.length;
+	return { kind: 'take', index: nextIndex, take: ctx.takes[nextIndex] };
+}
+
+function preloadNextTake(): void {
+	const next = nextQueueTake(get(queueContext), audioPlayer.current);
+	audioPlayer.preload(next.kind === 'take' ? next.take : null);
+}
+
 function playPlaylistInDirection(
 	ctx: Extract<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
+	if (direction === 1) {
+		const next = nextQueueTake(ctx, audioPlayer.current);
+		if (next.kind === 'take') playPlaylistIndex(ctx, next.index);
+		return;
+	}
 	if (ctx.entries.length <= 1) return;
 	const currentIndex = currentPlaylistIndex(ctx);
-	playPlaylistIndex(ctx, (currentIndex + direction + ctx.entries.length) % ctx.entries.length);
+	playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length);
 }
 
 function playNativeTakesInDirection(
 	ctx: Exclude<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
-	const index = nativeTakeIndex(ctx, audioPlayer.current);
-	if (index < 0 || ctx.takes === undefined) return;
-	if (
-		direction === 1 &&
-		ctx.type === 'library' &&
-		index === ctx.takes.length - 1 &&
-		!get(libraryQueueSkippedComplete)
-	) {
-		windowEnded.set(true);
+	if (direction === 1) {
+		const next = nextQueueTake(ctx, audioPlayer.current);
+		if (next.kind === 'window-end') windowEnded.set(true);
+		if (next.kind === 'take') playNativeIndex(ctx, next.index);
 		return;
 	}
-	if (ctx.takes.length <= 1) return;
-	playNativeIndex(ctx, (index + direction + ctx.takes.length) % ctx.takes.length);
+	const index = nativeTakeIndex(ctx, audioPlayer.current);
+	if (index < 0 || ctx.takes === undefined || ctx.takes.length <= 1) return;
+	playNativeIndex(ctx, (index - 1 + ctx.takes.length) % ctx.takes.length);
 }
 
 function playContextInDirection(ctx: QueueContext, direction: QueueDirection): boolean {
@@ -1227,6 +1272,7 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 	const entries = await collectAlbumEntries(albumId, seq);
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, startTake.gen.id);
+	preloadNextTake();
 }
 
 async function playAlbumFromGeneration(
@@ -1244,6 +1290,7 @@ async function playAlbumFromGeneration(
 	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, gen.id);
+	preloadNextTake();
 }
 
 // The one entry point for curation: the same per-song candidate takes
@@ -1290,16 +1337,7 @@ function playPlaylistIndex(
 		entries: ctx.entries,
 		index: newIndex
 	});
-	const info = playlistEntryToPlaybackInfo(entry);
-	if (opts.startAt !== undefined) {
-		audioPlayer.load(info, { restart: opts.restart ?? true, startAt: opts.startAt });
-		return;
-	}
-	if (opts.restart) {
-		audioPlayer.load(info, { restart: true });
-		return;
-	}
-	audioPlayer.load(info);
+	loadQueueTake(playlistEntryToPlaybackInfo(entry), opts);
 }
 
 function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
