@@ -6,6 +6,7 @@
 	import { followAppPageLink } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { recipeModel } from '$lib/stores/recipe';
+	import { refocusIfDropped } from '$lib/utils/focus-trap';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
 		VOICE_PICKER_DELETED_LABEL,
@@ -25,6 +26,14 @@
 	const selectedLora = $derived(($loras ?? []).find((lora) => lora.id === current) ?? null);
 	const targetModelMode = $derived($recipeModel ?? '');
 	const open = historyLayerState('voice-picker', false);
+	let triggerButton: HTMLButtonElement | undefined = $state();
+
+	let listWasOpen = false;
+	$effect(() => {
+		const isOpen = $open;
+		if (listWasOpen && !isOpen) refocusIfDropped(triggerButton);
+		listWasOpen = isOpen;
+	});
 
 	function isSelectable(lora: UserLoraItem): boolean {
 		return (
@@ -71,6 +80,7 @@
 	<span class="label mobile-label">{voicePickerMobileLabel(targetModelMode)}</span>
 	<div class="picker-wrap">
 		<button
+			bind:this={triggerButton}
 			type="button"
 			class="picker"
 			aria-haspopup="listbox"
