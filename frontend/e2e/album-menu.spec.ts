@@ -178,7 +178,6 @@ async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
 	return editor;
 }
 
-// Runs `flow` on an album of its own, opened on its page, and deletes it after.
 async function onOwnAlbum(
 	page: Page,
 	testInfo: TestInfo,
