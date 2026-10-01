@@ -1,0 +1,8 @@
+claim_id = "420d5eac846847eebae4cd83f9d09539"
+agent = "claude-head"
+role = "builder"
+base = "cf322a2ebcf294b4d3e2c31549b8b875f0794b2c"
+branch = "claude-head/issue-1242-admin-bulk-delete"
+scope = ["docs/security.md", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/db/queries/generations.py", "src/songmaker_cli/generation_api.py", "tests/test_api.py", "tests/test_generations.py"]
+opened_commit = "458e35c9fedb2174e244765df6e4dc6af20ad114"
+whole_reason = "every take-delete path answers the admin question the same way"
