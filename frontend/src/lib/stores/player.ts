@@ -481,12 +481,35 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 	loadNativeTake(takes[index]);
 }
 
+interface LibraryTakeStart extends QueueStart {
+	tappedRowSong?: SongItem;
+	// A restore reports nothing it cannot rebuild (#1187 P2), so the listener
+	// who reopens the page is never asked to retry a play they did not start.
+	quiet?: boolean;
+}
+
+function reportLibraryTakeStartFailure(
+	gen: GenerationItem,
+	opts: LibraryTakeStart,
+	notice: PlayStartNotice,
+	toast: string
+): void {
+	clearLibraryQueueSkipFeedback();
+	if (opts.quiet) {
+		playStartNotice.set('idle');
+		return;
+	}
+	retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
+	playStartNotice.set(notice);
+	addToast(toast, 'error');
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
 async function playLibraryFromGeneration(
 	gen: GenerationItem,
-	opts: QueueStart & { tappedRowSong?: SongItem } = {}
+	opts: LibraryTakeStart = {}
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
@@ -502,20 +525,19 @@ async function playLibraryFromGeneration(
 		});
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
-		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
-		playStartNotice.set(isEmptyPoolError(err) ? 'empty' : 'error');
-		clearLibraryQueueSkipFeedback();
-		addToast(libraryStreamFailureToast(err), 'error');
+		reportLibraryTakeStartFailure(
+			gen,
+			opts,
+			isEmptyPoolError(err) ? 'empty' : 'error',
+			libraryStreamFailureToast(err)
+		);
 		return;
 	}
 	if (!playStartIsCurrent(seq)) return;
 	const takes = queue.takes.map(poolTakeToPlaybackInfo);
 	const startIndex = takes.findIndex((take) => take.generation.id === gen.id);
 	if (startIndex < 0) {
-		retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
-		playStartNotice.set('error');
-		clearLibraryQueueSkipFeedback();
-		addToast(QUEUE_TAKE_MISSING_TOAST, 'error');
+		reportLibraryTakeStartFailure(gen, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
 		return;
 	}
 	playStartNotice.set('idle');
@@ -1701,7 +1723,7 @@ export async function restoreLastPlayback(): Promise<void> {
 	if (source.type === 'album') {
 		restoreAlbumTake(found.song, found.take, start);
 	} else if (source.type === 'library') {
-		await playLibraryFromGeneration(found.take, start);
+		await playLibraryFromGeneration(found.take, { ...start, quiet: true });
 	} else {
 		await restorePlaylistQueue(source.playlistId, found.take, start);
 	}

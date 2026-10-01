@@ -3948,6 +3948,31 @@ describe('restoring the last playback after a reload', () => {
 		expect(get(toasts)).toEqual([]);
 	});
 
+	it.each([
+		{ pool: 'a server error', answer: () => Promise.reject(new ApiError(503, 'down', '/x')) },
+		{
+			pool: 'an unreachable server',
+			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch')))
+		},
+		{
+			pool: 'a pool without the saved take',
+			answer: () => Promise.resolve(makePoolQueue({ takes: [poolTakeOf(nextSong, nextTake)] }))
+		}
+	])(
+		'a library take the pool cannot serve restores nothing, silently ($pool)',
+		async ({ answer }) => {
+			saveRecord({ source: QUEUES.library.source });
+			vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+			vi.mocked(fetchLibraryPoolQueue).mockImplementationOnce(answer);
+
+			await restoreLastPlayback();
+
+			expect(audioPlayer.current).toBeNull();
+			expect(get(toasts)).toEqual([]);
+			expect(get(playStartNotice)).toBe('idle');
+		}
+	);
+
 	it.each<{ kind: QueueKind; after: string; statuses: ('playing' | 'paused')[] }>([
 		{ kind: 'album', after: 'it stands paused', statuses: ['paused'] },
 		{ kind: 'playlist', after: 'it plays and pauses', statuses: ['playing', 'paused'] }
