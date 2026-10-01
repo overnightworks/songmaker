@@ -19,7 +19,6 @@ import {
 	upsertSongInList
 } from '$lib/stores/libraryData';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
-import { patchSharesFromSong } from '$lib/stores/shares';
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 
@@ -190,7 +189,6 @@ export function applySyncedSong(song: SongItem): void {
 			hit.type === 'song' && hit.song.id === song.id ? { ...hit, song: toSongSummary(song) } : hit
 		)
 	}));
-	patchSharesFromSong(song);
 }
 
 function toSongSummary(song: SongItem): SongSummaryResponse {

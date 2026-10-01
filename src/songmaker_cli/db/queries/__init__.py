@@ -421,19 +421,10 @@ from songmaker_cli.db.queries.settings import (
 from songmaker_cli.db.queries.settings import toggle_model as toggle_model
 from songmaker_cli.db.queries.settings import update_preset as update_preset
 from songmaker_cli.db.queries.sharing import (
-    SharedInventoryPage as SharedInventoryPage,
-)
-from songmaker_cli.db.queries.sharing import (
-    count_shared_inventory as count_shared_inventory,
-)
-from songmaker_cli.db.queries.sharing import (
     disable_sharing as disable_sharing,
 )
 from songmaker_cli.db.queries.sharing import (
     enable_sharing as enable_sharing,
-)
-from songmaker_cli.db.queries.sharing import (
-    list_shared_inventory as list_shared_inventory,
 )
 from songmaker_cli.db.queries.sharing import (
     shared_album_audio_filename_is_presented as shared_album_audio_filename_is_presented,
