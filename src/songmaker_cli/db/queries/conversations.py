@@ -39,15 +39,6 @@ def get_active_conversation(
     )
 
 
-def list_conversations(
-    session: Session, user_id: str, include_archived: bool = True,
-) -> list[Conversation]:
-    query = session.query(Conversation).filter(Conversation.user_id == user_id)
-    if not include_archived:
-        query = query.filter(Conversation.archived_at.is_(None))
-    return query.order_by(Conversation.updated_at.desc()).all()
-
-
 def create_conversation(
     session: Session, user_id: str, title: str | None = None,
 ) -> Conversation:
@@ -90,14 +81,6 @@ def delete_conversation(session: Session, conversation_id: str) -> None:
     if not deleted:
         raise ValueError(f"Conversation not found: {conversation_id}")
     session.flush()
-
-
-def count_messages(session: Session, conversation_id: str) -> int:
-    return (
-        session.query(ChatMessage)
-        .filter(ChatMessage.conversation_id == conversation_id)
-        .count()
-    )
 
 
 def list_messages(
@@ -162,32 +145,6 @@ def upsert_summary(
         existing.token_count = token_count
     session.flush()
     return existing
-
-
-def messages_since(
-    session: Session,
-    conversation_id: str,
-    since_message_id: str | None,
-) -> list[ChatMessage]:
-    """Return messages created strictly after the given boundary message.
-
-    ``since_message_id`` is an exclusive lower bound — useful for fetching
-    everything that came after the last summarized message. If it is None
-    or points to a deleted row, the full conversation is returned.
-    """
-    query = (
-        session.query(ChatMessage)
-        .filter(ChatMessage.conversation_id == conversation_id)
-    )
-    if since_message_id is not None:
-        boundary = (
-            session.query(ChatMessage.created_at)
-            .filter_by(id=since_message_id)
-            .scalar()
-        )
-        if boundary is not None:
-            query = query.filter(ChatMessage.created_at > boundary)
-    return query.order_by(ChatMessage.created_at).all()
 
 
 def recent_conversations(

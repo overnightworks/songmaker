@@ -114,22 +114,6 @@ def test_archive_unknown_id_raises(db_session: Session):
         q.archive_conversation(db_session, "bogus")
 
 
-def test_list_conversations_filters_archived(db_session: Session):
-    _seed_user(db_session)
-    active = q.create_conversation(db_session, "u1", title="active")
-    archived = q.create_conversation(db_session, "u1", title="archived")
-    q.archive_conversation(db_session, archived.id)
-    db_session.commit()
-
-    all_ids = {c.id for c in q.list_conversations(db_session, "u1")}
-    assert all_ids == {active.id, archived.id}
-
-    active_ids = {
-        c.id for c in q.list_conversations(db_session, "u1", include_archived=False)
-    }
-    assert active_ids == {active.id}
-
-
 def test_delete_conversation_removes_messages(db_session: Session):
     _seed_user(db_session)
     _seed_album_song(db_session, "u1")
@@ -176,6 +160,10 @@ def test_append_message_updates_conversation_timestamp(db_session: Session):
     assert _as_naive(new_updated) > _as_naive(past)
 
 
+def _message_count(session: Session, conversation_id: str) -> int:
+    return session.query(ChatMessage).filter_by(conversation_id=conversation_id).count()
+
+
 def _as_naive(dt):
     return dt.replace(tzinfo=None) if dt.tzinfo else dt
 
@@ -188,7 +176,7 @@ def test_list_and_count_messages(db_session: Session):
     q.append_message(db_session, conv.id, "assistant", "b", song_id="s1")
     db_session.commit()
 
-    assert q.count_messages(db_session, conv.id) == 2
+    assert _message_count(db_session, conv.id) == 2
     assert [m.content for m in q.list_messages(db_session, conv.id)] == ["a", "b"]
 
 
@@ -228,45 +216,6 @@ def test_upsert_summary_inserts_then_updates(db_session: Session):
     assert updated.summary_text == "S2"
     assert updated.token_count == 9
     assert db_session.query(ConversationSummary).count() == 1
-
-
-# ── messages_since ────────────────────────────────────────────────────
-
-
-def test_messages_since_returns_all_when_boundary_none(db_session: Session):
-    _seed_user(db_session)
-    _seed_album_song(db_session, "u1")
-    conv = q.create_conversation(db_session, "u1")
-    q.append_message(db_session, conv.id, "user", "one", song_id="s1")
-    q.append_message(db_session, conv.id, "assistant", "two", song_id="s1")
-    db_session.commit()
-
-    got = q.messages_since(db_session, conv.id, since_message_id=None)
-    assert [m.content for m in got] == ["one", "two"]
-
-
-def test_messages_since_exclusive_boundary(db_session: Session):
-    _seed_user(db_session)
-    _seed_album_song(db_session, "u1")
-    conv = q.create_conversation(db_session, "u1")
-    m1 = q.append_message(db_session, conv.id, "user", "one", song_id="s1")
-    q.append_message(db_session, conv.id, "assistant", "two", song_id="s1")
-    q.append_message(db_session, conv.id, "user", "three", song_id="s1")
-    db_session.commit()
-
-    got = q.messages_since(db_session, conv.id, since_message_id=m1.id)
-    assert [m.content for m in got] == ["two", "three"]
-
-
-def test_messages_since_unknown_boundary_returns_all(db_session: Session):
-    _seed_user(db_session)
-    _seed_album_song(db_session, "u1")
-    conv = q.create_conversation(db_session, "u1")
-    q.append_message(db_session, conv.id, "user", "one", song_id="s1")
-    db_session.commit()
-
-    got = q.messages_since(db_session, conv.id, since_message_id="nope")
-    assert len(got) == 1
 
 
 # ── recent_conversations ──────────────────────────────────────────────
@@ -311,7 +260,7 @@ def test_archived_conversation_keeps_messages(db_session: Session):
     q.archive_conversation(db_session, conv.id)
     db_session.commit()
 
-    assert q.count_messages(db_session, conv.id) == 1
+    assert _message_count(db_session, conv.id) == 1
     refetched = q.get_conversation(db_session, conv.id)
     assert refetched is not None
     assert refetched.archived_at is not None
@@ -336,7 +285,7 @@ def test_song_delete_cascades_chat_messages_but_keeps_conversation(
     song = db_session.query(Song).filter_by(id="s1").one()
     db_session.delete(song)
     db_session.commit()
-    assert q.count_messages(db_session, conv.id) == 0
+    assert _message_count(db_session, conv.id) == 0
     assert q.get_conversation(db_session, conv.id) is not None
 
 
