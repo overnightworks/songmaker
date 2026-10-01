@@ -61,7 +61,7 @@ vi.mock('$lib/api/client', () => ({
 vi.mock('$lib/api/songs', () => ({
 	recordSongListen: vi.fn().mockResolvedValue(undefined)
 }));
-import { albumList, songList } from './libraryData';
+import { albumList, songList, upsertSongInList } from './libraryData';
 import {
 	buildQueueViewModel,
 	canPlayNextSong,
@@ -2081,6 +2081,55 @@ describe('the queue names its next take', () => {
 		await playPlaylistEntryAndShowNowPlaying(playlistOf(1), 0);
 
 		expect(preloadedGenerationId()).toBeNull();
+	});
+
+	it.each([
+		['album', 'g2', () => playAlbum('a1')],
+		['playlist', 'g2', () => playPlaylistEntryAndShowNowPlaying(playlistOf(3), 0)],
+		[
+			'library window end',
+			null,
+			async () => {
+				vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+					makePoolQueue({ takes: [poolTake(1), poolTake(2)], skipped_complete: false })
+				);
+				await playTake(albumSong(2).generations[0], albumSong(2));
+			}
+		]
+	])('Up next and Next give one answer (%s)', async (_queue, nextGenerationId, start) => {
+		songList.set([albumSong(1), albumSong(2), albumSong(3)]);
+		await start();
+
+		const ctx = get(queueContext);
+		const current = audioPlayer.current;
+		expect(buildQueueViewModel(ctx, current).upNext?.generationId ?? null).toBe(nextGenerationId);
+		expect(canPlayNextSong(current, get(songList), ctx)).toBe(nextGenerationId !== null);
+	});
+
+	it('picking another take of a song still ahead in the album queue plays that take there', async () => {
+		songList.set([albumSong(1), albumSong(2), albumSong(3)]);
+		await playAlbum('a1');
+		const repicked = makeGen({
+			...genDefaults,
+			id: 'g2-repicked',
+			song_id: 's2',
+			is_picked: true,
+			mp3_path: 'a1/s2-repicked.mp3'
+		});
+		const song2 = albumSong(2);
+
+		upsertSongInList({
+			...song2,
+			generations: [{ ...song2.generations[0], is_picked: false }, repicked]
+		});
+
+		const ctx = get(queueContext);
+		expect(
+			buildQueueViewModel(ctx, audioPlayer.current).items.map((row) => row.generationId)
+		).toEqual(['g1', 'g2-repicked', 'g3']);
+		expect(preloadedGenerationId()).toBe('g2-repicked');
+		await playNextSong();
+		expect(audioPlayer.current?.generation.id).toBe('g2-repicked');
 	});
 
 	it('a take row whose pool holds only that take continues through its album', async () => {

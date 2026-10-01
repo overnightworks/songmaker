@@ -688,17 +688,9 @@ export function canPlayNextSong(
 ): boolean {
 	if (audioPlayer.mode === 'stream') return audioPlayer.canNextStreamTrack;
 	if (!current) return false;
-	if (ctx.type === 'playlist') {
-		return ctx.entries.length > 1;
+	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
+		return nextQueueTake(ctx, current).kind === 'take';
 	}
-	if (ctx.type === 'library' && ctx.takes && ctx.takes.length > 0) {
-		if (!get(libraryQueueSkippedComplete)) {
-			const index = nativeTakeIndex(ctx, current);
-			return index >= 0 && index < ctx.takes.length - 1;
-		}
-		return ctx.takes.length > 1;
-	}
-	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.some((s) => s.id !== current.songId && s.generation_count > 0);
@@ -706,9 +698,20 @@ export function canPlayNextSong(
 
 // Archived takes are not playable (their rows offer no play affordance), so
 // they never stand in as a song's take in a queue either.
+function playableGens(song: SongItem): GenerationItem[] {
+	return song.generations.filter((gen) => !gen.is_archived);
+}
+
+function pickedGen(song: SongItem): GenerationItem | undefined {
+	return playableGens(song).find((gen) => gen.is_picked);
+}
+
 function bestGen(song: SongItem): GenerationItem | undefined {
-	const playable = song.generations.filter((gen) => !gen.is_archived);
-	return playable.find((gen) => gen.is_picked) ?? playable[0];
+	return pickedGen(song) ?? playableGens(song)[0];
+}
+
+function albumQueueTake(song: SongItem, gen: GenerationItem): PlaybackInfo {
+	return playlistEntryToPlaybackInfo(toAlbumQueueEntry(song, gen));
 }
 
 function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryItem {
@@ -785,6 +788,32 @@ function setAlbumQueueTakes(
 	);
 }
 
+// An album queue plays each song's pick, so a take picked for a song still
+// ahead takes that song's place in the queue, and the preload follows it if it
+// is the next one. Songs already played keep the take they played, and a
+// move within the queue keeps curation going, as playNativeIndex does.
+function followPicksAheadInAlbumQueue(songs: SongItem[]): void {
+	const ctx = get(queueContext);
+	if (ctx.type !== 'album' || !ctx.takes) return;
+	const currentIndex = nativeTakeIndex(ctx, audioPlayer.current);
+	if (currentIndex < 0) return;
+	const songsById = new Map(songs.map((song) => [song.id, song]));
+	let repicked = false;
+	const takes = ctx.takes.map((take, index) => {
+		if (index <= currentIndex) return take;
+		const song = songsById.get(take.songId);
+		const picked = song && pickedGen(song);
+		if (!song || !picked || picked.id === take.generation.id) return take;
+		repicked = true;
+		return albumQueueTake(song, picked);
+	});
+	if (!repicked) return;
+	queueContext.set({ ...ctx, takes, index: currentIndex });
+	preloadNextTake();
+}
+
+songList.subscribe(followPicksAheadInAlbumQueue);
+
 // Whether the transport holds an entry's take: the same generation played
 // from the same file, since a re-import keeps the id but changes the path.
 function holdsEntryTake(current: PlaybackInfo, entry: PlaylistEntryItem): boolean {
@@ -822,9 +851,13 @@ export interface QueueViewModel {
 	upNext: QueueRowItem | null;
 }
 
-function nextQueueItem(items: QueueRowItem[], currentIndex: number): QueueRowItem | null {
-	if (items.length <= 1 || currentIndex < 0) return null;
-	return items[(currentIndex + 1) % items.length] ?? null;
+function upNextItem(
+	items: QueueRowItem[],
+	ctx: QueueContext,
+	current: PlaybackInfo | null
+): QueueRowItem | null {
+	const next = nextQueueTake(ctx, current);
+	return next.kind === 'take' ? (items[next.index] ?? null) : null;
 }
 
 // Every queue row reads its own measured length, never a stand-in --
@@ -866,14 +899,14 @@ export function buildQueueViewModel(
 	if (ctx.type === 'playlist') {
 		const items = ctx.entries.map((entry) => playlistQueueItem(entry));
 		const currentIndex = currentPlaylistIndex(ctx, current);
-		return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
+		return { items, currentIndex, upNext: upNextItem(items, ctx, current) };
 	}
 	if (!ctx.takes || ctx.takes.length === 0) {
 		return { items: [], currentIndex: -1, upNext: null };
 	}
 	const items = ctx.takes.map((take) => nativeQueueItem(take));
 	const currentIndex = nativeTakeIndex(ctx, current);
-	return { items, currentIndex, upNext: nextQueueItem(items, currentIndex) };
+	return { items, currentIndex, upNext: upNextItem(items, ctx, current) };
 }
 
 // Plays the queue row at `index` in whatever queue context is active. A
@@ -1273,11 +1306,7 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 		return;
 	}
 	playStartNotice.set('idle');
-	playNativeAlbumTakes(
-		albumId,
-		[playlistEntryToPlaybackInfo(toAlbumQueueEntry(startTake.song, startTake.gen))],
-		0
-	);
+	playNativeAlbumTakes(albumId, [albumQueueTake(startTake.song, startTake.gen)], 0);
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq);
