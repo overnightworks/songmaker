@@ -86,8 +86,19 @@ describe('removed library row preference', () => {
 		vi.resetModules();
 		const fresh = await import('./playbackSettings');
 
-		expect(get(fresh.queuePlaybackMode)).toBe('stream');
 		expect(get(fresh.desktopNowPlayingSurface)).toBe('docked');
 		expect(localStorage.getItem(LIBRARY_ROW_OPEN_STORAGE_KEY)).toBe('true');
+	});
+});
+
+describe('removed stream/classic queue choice', () => {
+	it('clears the stored choice once the app loads', async () => {
+		localStorage.setItem('queuePlaybackMode', 'classic');
+		localStorage.setItem('queuePlaybackModeChosen', 'true');
+		vi.resetModules();
+		await import('./playbackSettings');
+
+		expect(localStorage.getItem('queuePlaybackMode')).toBeNull();
+		expect(localStorage.getItem('queuePlaybackModeChosen')).toBeNull();
 	});
 });

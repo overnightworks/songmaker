@@ -38,10 +38,8 @@ import {
 	desktopNowPlayingSurface,
 	LIBRARY_TAKE_POOL_LABELS,
 	libraryTakePool,
-	queuePlaybackMode,
 	setDesktopNowPlayingSurface,
 	setLibraryTakePool,
-	shouldUseQueueStream,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
 import {
@@ -989,9 +987,9 @@ export function escapeNowPlaying(): void {
 const PLAYBACK_FAILED_TOAST = 'Playback failed';
 
 // The single playback entry point for a take row (TakesList, TakeStrip):
-// toggles pause if the row's take is already playing, otherwise starts it
-// through the active queue-playback mode (stream or classic), reporting any
-// failure as a toast instead of throwing into the caller.
+// toggles pause if the row's take is already playing, otherwise starts a
+// queue from it (its album, else the library pool), reporting any failure as
+// a toast instead of throwing into the caller.
 export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
 	if (audioPlayer.current?.generation.id === gen.id && audioPlayer.status === 'playing') {
 		audioPlayer.toggle();
@@ -999,16 +997,8 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	}
 	try {
 		const albumId = get(selectedAlbumId);
-		if (shouldUseQueueStream(get(queuePlaybackMode))) {
-			if (albumId) {
-				await playAlbumFromGeneration(albumId, song, gen);
-				return;
-			}
-			await playLibraryFromGeneration(gen);
-			return;
-		}
-		setQueueContext(albumId ? { type: 'album', albumId } : { type: 'library' });
-		playGeneration(gen, song, { restart: true });
+		if (albumId) await playAlbumFromGeneration(albumId, song, gen);
+		else await playLibraryFromGeneration(gen);
 	} catch (e) {
 		addToast(describeFailure(e, PLAYBACK_FAILED_TOAST), 'error');
 	}
