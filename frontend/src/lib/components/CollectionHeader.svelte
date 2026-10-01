@@ -29,7 +29,8 @@
 		 * null while the view has nothing to start.
 		 */
 		onplay: ((start: CollectionStart) => void) | null;
-		onrename: (title: string) => Promise<void>;
+		/** Renames in place through the title; a collection with detailsEditor renames there instead. */
+		onrename?: (title: string) => Promise<void>;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
@@ -46,8 +47,14 @@
 		offlineProgressLabel?: string | null;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
-		/** Album-only metadata editor (subtitle/year) rendered under the title. */
-		metaEditor?: Snippet;
+		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
+		meta?: string;
+		/**
+		 * Album-only: edits the details -- title, subtitle and year -- in place of
+		 * the title, opened from the menu's Edit details and ended through the
+		 * close it is handed.
+		 */
+		detailsEditor?: Snippet<[close: () => void]>;
 		/**
 		 * Album-only: edits the cover in place of the cover itself, and ends
 		 * editing through the close it is handed.
@@ -81,13 +88,15 @@
 		offlineProgressLabel = null,
 		playlistCovers,
 		playlistCover,
-		metaEditor,
+		meta = '',
+		detailsEditor,
 		coverEditor
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
 	let coverFailed = $state(false);
 	const editingCover = historyLayerState('cover-editing', false);
+	const editingDetails = historyLayerState('details-editing', false);
 
 	// Cover editing belongs to the collection and the cover it opened on: a new
 	// cover -- used, uploaded or removed -- or another collection ends it.
@@ -96,6 +105,13 @@
 		void coverUrl;
 		coverFailed = false;
 		editingCover.set(false);
+	});
+
+	// Details editing belongs to the collection it opened on: another one ends
+	// it, its draft unsaved.
+	$effect(() => {
+		void collectionId;
+		editingDetails.set(false);
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
@@ -125,6 +141,14 @@
 
 	function triggerRename(): void {
 		editableTitle?.startEdit();
+	}
+
+	function openDetailsEditing(): void {
+		editingDetails.set(true);
+	}
+
+	function closeDetailsEditing(): void {
+		editingDetails.set(false);
 	}
 
 	// The queue names where the music comes from; while that is this very
@@ -160,15 +184,23 @@
 </script>
 
 {#snippet titleArea()}
-	<h2 class="header-title" aria-label={title}>
-		<EditableTitle
-			bind:this={editableTitle}
-			value={title}
-			onsave={onrename}
-			ariaLabel={`${kind} title`}
-		/>
-	</h2>
-	{#if metaEditor}{@render metaEditor()}{/if}
+	{#if detailsEditor && $editingDetails}
+		{@render detailsEditor(closeDetailsEditing)}
+	{:else}
+		<h2 class="header-title" aria-label={title}>
+			{#if onrename}
+				<EditableTitle
+					bind:this={editableTitle}
+					value={title}
+					onsave={onrename}
+					ariaLabel={`${kind} title`}
+				/>
+			{:else}
+				{title}
+			{/if}
+		</h2>
+		{#if meta}<p class="header-meta">{meta}</p>{/if}
+	{/if}
 	<Breadcrumb items={breadcrumbItems} />
 {/snippet}
 
@@ -192,7 +224,8 @@
 		{offlineSaved}
 		{offlineSaving}
 		{offlineProgressLabel}
-		onrename={triggerRename}
+		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
+		onrename={onrename ? triggerRename : undefined}
 	/>
 {/snippet}
 
@@ -232,6 +265,15 @@
 		text-transform: uppercase;
 		letter-spacing: 1.5px;
 		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.header-meta {
+		margin: 0.15rem 0 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
