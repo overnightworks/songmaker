@@ -289,16 +289,3 @@ def record_audit(
     session.flush()
     return entry
 
-
-def list_audit_log(
-    session: Session,
-    offset: int = 0,
-    limit: int = 100,
-) -> list[AuditLog]:
-    return (
-        session.query(AuditLog)
-        .order_by(AuditLog.created_at.desc())
-        .offset(offset)
-        .limit(limit)
-        .all()
-    )
