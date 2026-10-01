@@ -65,6 +65,7 @@ class FakeAudio {
 	crossOrigin: string | null = null;
 	buffered = { length: 0, end: () => 0 };
 	ended = false;
+	error: MediaError | null = null;
 	private listeners = new Map<string, Array<(event: Event) => void>>();
 
 	addEventListener(name: string, listener: (event: Event) => void) {

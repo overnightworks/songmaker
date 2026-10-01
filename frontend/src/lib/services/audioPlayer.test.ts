@@ -125,6 +125,8 @@ class FakeAudio {
 	bufferedUntil = 0;
 	private listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
+		if (this.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+			return Promise.reject(new DOMException('no supported source', 'NotSupportedError'));
 		this.paused = false;
 		queueMicrotask(() => this.fire('play'));
 		return Promise.resolve();
@@ -155,6 +157,7 @@ class FakeAudio {
 		return this.playMock();
 	}
 	load(): void {
+		this.error = null;
 		this.fire('loadstart');
 	}
 	fire(name: string, init?: Partial<Event>): void {
@@ -1250,6 +1253,33 @@ describe('patient recovery while the screen is off', () => {
 			await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
 
 			expect(audioPlayer.transport).toBe(givenUp);
+		});
+
+		it('Play after pausing a Retry that failed offline fetches the take again once the network is back', async () => {
+			await giveUpOnAThreeMinuteOutage();
+			audioPlayer.play();
+			fakeAudio.error = { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED } as MediaError;
+			fakeAudio.fire('error');
+			await vi.advanceTimersByTimeAsync(0);
+			audioPlayer.toggle();
+			const paused = audioPlayer.transport;
+			networkGone = false;
+			audioPlayer.resumeAfterNetworkReturn();
+
+			audioPlayer.toggle();
+			await answerLate();
+
+			expect({
+				paused,
+				transport: audioPlayer.transport,
+				error: audioPlayer.error,
+				src: fakeAudio.src
+			}).toEqual({
+				paused: 'paused',
+				transport: 'playing',
+				error: null,
+				src: expect.stringMatching(recoveryUrlOf('/audio/a1/song_v1.mp3'))
+			});
 		});
 
 		it.each([

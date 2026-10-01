@@ -413,7 +413,7 @@ class AudioPlayer {
 
 	play(): void {
 		if (!this.audio || !this.current) return;
-		if (this.status === 'error') {
+		if (this.status === 'error' || this.pausedOnAFailedLoad) {
 			this.reloadOnPlay('media-error');
 			return;
 		}
@@ -794,6 +794,13 @@ class AudioPlayer {
 	private trackSteadyPlayback(playingSteadily: boolean): void {
 		this.steadyChecks = playingSteadily ? this.steadyChecks + 1 : 0;
 		if (this.steadyChecks >= STEADY_CHECKS_BEFORE_RECOVERY_ENDS) this.recoveryStartedAt = null;
+	}
+
+	// A recovery reload that failed while the network was gone leaves the
+	// element holding no take; the listener's pause hid that failure, so the
+	// next play must fetch the take again instead of resuming the element.
+	private get pausedOnAFailedLoad(): boolean {
+		return this.status === 'paused' && this.audio !== null && this.audio.error !== null;
 	}
 
 	// Survives a pause on purpose: pause and play on an element whose clock
