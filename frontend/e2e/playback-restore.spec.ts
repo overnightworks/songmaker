@@ -11,14 +11,14 @@ import {
 import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
 
 /**
- * Measured on two local runs against one stack (01.10.2026, #1236): 44 requests
- * on desktop and 46 on mobile for opening the album and the song, playing the
- * take, and the reload whose restore rebuilds the album queue (one song fetch
- * plus the album's songs); 48 and 51 when the restored take plays on into the
- * next song. Doubling the album's songs added at most one. The songs and their
- * takes are seeded against the database and cost nothing here.
+ * Measured in CI (01.10.2026, #1236): 43 requests on desktop and 46 on mobile
+ * for opening the album and the song, playing the take, the reload whose
+ * restore asks for the saved song alone, and the tap that plays it on and
+ * gathers its album; 46 and 43 when the restored take plays on into the next
+ * song. The songs and their takes are seeded against the database and cost
+ * nothing here.
  */
-const PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET = 60;
+const PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET = 50;
 
 /** Mid-take in the 3 s fixture take (`e2e/fixtures/take.mp3`). */
 const MID_TAKE_SECONDS = 1.5;
@@ -152,8 +152,7 @@ test('reload mid-take shows the same take at the same position, paused', async (
 });
 
 // An album of its own holds just the two songs, so the second one follows the
-// first, and gathering the album once the restored take plays is quick next
-// to the half take left to play.
+// first.
 async function withAlbumOfTwoSongs(
 	page: Page,
 	marker: string,
