@@ -35,6 +35,16 @@ export function transportButtonLabel(transport: TransportState): string {
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
+const TRANSPORT_OF_SETTLED_STATUS: Readonly<
+	Record<Exclude<PlayerStatus, 'loading' | 'error'>, TransportState>
+> = {
+	idle: 'idle',
+	ready: 'paused',
+	playing: 'playing',
+	paused: 'paused',
+	buffering: 'recovering'
+};
+
 type StreamEndReason = 'normal' | 'window-end';
 
 type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
@@ -115,21 +125,10 @@ class AudioPlayer {
 	}
 
 	get transport(): TransportState {
-		switch (this.status) {
-			case 'playing':
-				return 'playing';
-			case 'buffering':
-				return 'recovering';
-			case 'loading':
-				return this.recoveryStartedAt === null ? 'loading' : 'recovering';
-			case 'error':
-				return this.failedTransport;
-			case 'idle':
-				return 'idle';
-			case 'ready':
-			case 'paused':
-				return 'paused';
-		}
+		if (this.status === 'loading')
+			return this.recoveryStartedAt === null ? 'loading' : 'recovering';
+		if (this.status === 'error') return this.failedTransport;
+		return TRANSPORT_OF_SETTLED_STATUS[this.status];
 	}
 
 	private get failedTransport(): TransportState {
