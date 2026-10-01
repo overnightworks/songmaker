@@ -1,7 +1,0 @@
-claim_id = "4d9d3fe5f11e47298ef041b48377aa83"
-agent = "claude-head"
-role = "builder"
-base = "6694e5c6a26139a68e81952033f2d99b077346ab"
-branch = "claude-head/issue-1231-board-merge-method"
-scope = [".agent-claim/board.toml"]
-opened_commit = "b3f71c0435ac4e6059f3000af943f3e8deb76cf1"
