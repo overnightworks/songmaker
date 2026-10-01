@@ -1,0 +1,7 @@
+claim_id = "0420fbd71814433ea36463b808abe8e4"
+agent = "claude-head"
+role = "builder"
+base = "cf322a2ebcf294b4d3e2c31549b8b875f0794b2c"
+branch = "claude-head/issue-1239-preset-instance-defaults"
+scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/src/routes/settings/generation/+page.svelte", "frontend/src/routes/settings/generation/page.test.ts"]
+opened_commit = "457c6cfda04708f4dd95c298834f9dcc098ce8dd"
