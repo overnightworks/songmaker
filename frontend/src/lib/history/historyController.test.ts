@@ -16,6 +16,7 @@ import {
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
+import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
 
 type Ledger = Parameters<typeof land>[0];
@@ -157,6 +158,7 @@ describe('history adapter', () => {
 
 	beforeEach(() => {
 		sessionStorage.clear();
+		history.replaceState(null, '', '/');
 		resetHistoryControllerForTests();
 		landings.length = 0;
 		stopListening = listenForLandings((landing) => {
@@ -167,8 +169,15 @@ describe('history adapter', () => {
 
 	afterEach(() => {
 		stopListening();
+		resetLayersForTests();
 		vi.restoreAllMocks();
 	});
+
+	async function traverse(step: () => void): Promise<void> {
+		const landed = nextLanding();
+		step();
+		await landed;
+	}
 
 	function standingEntry(): unknown {
 		return pageStateOfHistoryState(history.state)?.entry;
@@ -280,6 +289,57 @@ describe('history adapter', () => {
 		stampNavigatedEntry(type);
 
 		expect(standingEntry()).toEqual({ id: expect.any(Number) });
+	});
+
+	it('a page push closes the layers below it', () => {
+		pushEntry('/album/a', {});
+		let menuOpen = true;
+		holdLayer('album-menu', () => (menuOpen = false));
+
+		const song = pushEntry('/album/a/song', {});
+
+		expect(menuOpen).toBe(false);
+		expect(stackedLayers()).toEqual([]);
+		expect(standingEntry()).toEqual(song);
+	});
+
+	it("Forward onto a closed layer's entry steps off it", async () => {
+		const wall = pushEntry('/', {});
+		const album = pushEntry('/album/a', {});
+		holdLayer('album-menu', () => undefined);
+		await traverse(() => history.back());
+		expect(stackedLayers()).toEqual([]);
+
+		await traverse(() => history.forward());
+		await vi.waitFor(() => expect(standingEntry()).toEqual(album));
+		await traverse(() => history.back());
+
+		expect(standingEntry()).toEqual(wall);
+	});
+
+	it('a router push after a Back gets an id on top', async () => {
+		pushEntry('/album/a', {});
+		const song = pushEntry('/album/a/song', {});
+		await traverse(() => history.back());
+
+		await vi.mocked(goto)('/settings');
+		stampNavigatedEntry('link');
+
+		expect(standingEntry()).toEqual({ id: expect.any(Number) });
+		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(song.id);
+	});
+
+	it('a router replace after a Back stays foreign below stamped entries', async () => {
+		pushEntry('/album/a', {});
+		pushEntry('/album/a/song', {});
+		history.replaceState(null, '', '/album/b');
+		pushEntry('/album/b/song', {});
+		await traverse(() => history.back());
+
+		await vi.mocked(goto)('/album/c', { replaceState: true });
+		stampNavigatedEntry('goto');
+
+		expect(standingEntry()).toBeUndefined();
 	});
 
 	it('the router start gets back the id the entry was loaded with', () => {
