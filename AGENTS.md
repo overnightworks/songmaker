@@ -25,12 +25,10 @@
   - Set both right after `gh issue create` via `gh api graphql`
     (`updateIssue`, `addSubIssue`) — `gh issue edit` fails here with a
     Projects-classic GraphQL error.
-- The board reads a work item's contract from the typed `agent-claim` fenced
+- The board reads a work item's contract from the typed `aco` fenced
   block, not prose markers (`body_contract = "block"` in
-  `.agent-claim/board.toml` — the fenced-block token and this config path
-  intentionally keep the old name even though the command is now `aco`; see
-  the `agent-coordination` README's "Typed body contract" section for the
-  schema). Every hand-created item (`gh issue create`, an operator-opened
+  `.aco/board.toml`; see the `agent-coordination` README's "Typed body
+  contract" section for the schema). Every hand-created item (`gh issue create`, an operator-opened
   issue) must carry the four-line block — `cut` is the only command that
   writes it automatically.
 
