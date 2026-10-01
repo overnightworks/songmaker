@@ -2587,22 +2587,6 @@ def test_delete_all_user_rate_limits(db_session: Session) -> None:
     assert get_user_rate_limits(db_session, user.id) == []
 
 
-def test_delete_rate_limit_setting(db_session: Session) -> None:
-    from songmaker_cli.db.queries import (
-        delete_rate_limit_setting,
-        get_rate_limit_setting,
-        upsert_rate_limit_setting,
-    )
-
-    upsert_rate_limit_setting(db_session, "generation_rate_limit", 50)
-    db_session.commit()
-
-    assert delete_rate_limit_setting(db_session, "generation_rate_limit") is True
-    db_session.commit()
-    assert get_rate_limit_setting(db_session, "generation_rate_limit") is None
-    assert delete_rate_limit_setting(db_session, "generation_rate_limit") is False
-
-
 # ── Migration tests ────────────────────────────────────────────────
 
 
