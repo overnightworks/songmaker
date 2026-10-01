@@ -94,16 +94,6 @@ export interface AlbumUpdateRequest {
 	year?: number | null;
 }
 
-export interface AuditLogItem {
-	id: string;
-	user_id: string | null;
-	action: string;
-	resource_type: string;
-	resource_id: string;
-	detail: string;
-	created_at: string;
-}
-
 export interface AuthUser {
 	id: string;
 	username: string;

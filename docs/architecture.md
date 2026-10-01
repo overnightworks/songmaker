@@ -1185,7 +1185,7 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
-| * | `/api/admin/*` | admin | User CRUD, sessions, audit log, ACE-Step control |
+| * | `/api/admin/*` | admin | User CRUD, sessions, login attempts, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
 | GET | `/metrics` | public | Job stats, HTTP counters, VRAM usage (Prometheus) |

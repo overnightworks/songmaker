@@ -1,7 +1,6 @@
 # Exact exceptions to the production-reference rule; no wildcards.
 # Framework entries name the dispatcher; migrations retain their frozen schema history.
 
-songmaker_cli/admin_api.py:audit_log_endpoint # HTTP dispatcher: router.get('/audit-log')
 songmaker_cli/admin_api.py:create_user_endpoint # HTTP dispatcher: router.post('/users', responses={409: {'description': 'User already exists'}})
 songmaker_cli/admin_api.py:deactivate_user_endpoint # HTTP dispatcher: router.delete('/users/{user_id}', responses={400: {'description': 'User cannot be deactivated'}, 404: {'description': 'User does not exist'}})
 songmaker_cli/admin_api.py:download_model_endpoint # HTTP dispatcher: router.post('/registry/{mode}/download', responses={400: {'description': 'Requested model mode is invalid'}, 409: {'description': 'Model is already downloaded or downloading'}, 503: {'description': 'Model registry or job queue is unavailable'}})

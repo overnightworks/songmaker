@@ -1087,7 +1087,7 @@ and session-revocation exceptions described under
 
 - **Actions tracked**: `create`, `update`, `delete`, `generate`, `score`, `cleanup`, `share`, `unshare`, `deactivate`, `session_ip_change`, `session_ua_change`
 - **Fields**: `user_id`, `action`, `resource_type`, `resource_id`, `detail`, `created_at`
-- **Admin access**: `GET /api/admin/audit-log?limit=100`
+- **Read access**: none over HTTP — the `GET /api/admin/audit-log` endpoint was removed until an admin surface shows the trail (#1190); the rows stay in the database and are read there.
 
 ## Production Deployment
 

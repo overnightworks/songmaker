@@ -8,7 +8,6 @@ from __future__ import annotations
 from pydantic import BaseModel
 
 from songmaker_cli.api_models.auth import (
-    AuditLogResponse,
     AuthMeResponse,
     ChangePasswordRequest,
     CreateUserRequest,
@@ -227,7 +226,6 @@ __all__ = [
     "AlbumCreateRequest",
     "AlbumResponse",
     "AlbumUpdateRequest",
-    "AuditLogResponse",
     "BaseGenerationParams",
     "BulkDeleteRequest",
     "BulkDeleteResponse",
