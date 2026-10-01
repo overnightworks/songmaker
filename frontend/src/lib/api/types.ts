@@ -857,21 +857,6 @@ export interface SetupRequired {
 	required: boolean;
 }
 
-export interface ShareInventoryItem {
-	type: 'album' | 'song' | 'generation' | 'playlist';
-	id: string;
-	title: string;
-	share_slug: string;
-	created_at: string;
-	public_path: string;
-	album_id?: string | null;
-	album_title?: string | null;
-	song_id?: string | null;
-	song_title?: string | null;
-	generation_number?: number | null;
-	is_archived?: boolean | null;
-}
-
 export interface ShareResult {
 	status: string;
 	share_url: string;

@@ -1,13 +1,6 @@
-import type {
-	LibrarySearchResponse,
-	LibraryContinueResponse,
-	LibraryPoolQueue,
-	PaginatedResponse,
-	ShareInventoryItem
-} from './types';
+import type { LibrarySearchResponse, LibraryContinueResponse, LibraryPoolQueue } from './types';
 import { apiFetch } from './fetch';
-import { LIBRARY_QUERY_REQUIRED, LIBRARY_SHARES_PAGE_SIZE } from '$lib/constants';
-import type { ShareInventoryType } from '$lib/constants';
+import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
 import type { CreatedSort } from '$lib/utils/recency';
 
 const LIBRARY_POOL_QUEUE_PATH = '/api/library/pool-queue';
@@ -71,17 +64,4 @@ export async function fetchLibraryPoolQueue(options?: {
 	return apiFetch<LibraryPoolQueue>(`${LIBRARY_POOL_QUEUE_PATH}?${params}`, {
 		signal: options?.signal
 	});
-}
-
-export async function fetchShares(options?: {
-	offset?: number;
-	limit?: number;
-	type?: ShareInventoryType | null;
-}): Promise<PaginatedResponse<ShareInventoryItem>> {
-	const params = new URLSearchParams({
-		offset: String(options?.offset ?? 0),
-		limit: String(options?.limit ?? LIBRARY_SHARES_PAGE_SIZE)
-	});
-	if (options?.type) params.set('type', options.type);
-	return apiFetch<PaginatedResponse<ShareInventoryItem>>(`/api/library/shares?${params}`);
 }

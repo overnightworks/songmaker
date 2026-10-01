@@ -612,11 +612,6 @@ export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
 
 export const LIBRARY_HISTORY_KIND = 'songmaker' as const;
 export const LIBRARY_ALBUMS_LOADING = 'Loading albums…';
-export const LIBRARY_ARCHIVED_TOGGLE_LABEL = 'Archived';
-export const LIBRARY_ARCHIVED_EMPTY = 'No archived albums';
-export const LIBRARY_ARCHIVED_LOADING = 'Loading archived albums…';
-export const LIBRARY_ARCHIVED_ERROR = 'Failed to load archived albums';
-export const LIBRARY_ARCHIVED_UNARCHIVE_LABEL = 'Unarchive';
 export const LIBRARY_PLAYLISTS_LOADING = 'Loading playlists…';
 export const LIBRARY_PLAYLISTS_ERROR = 'Failed to load playlists';
 const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
@@ -628,37 +623,7 @@ export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
 export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
 export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
 export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';
-export const LIBRARY_SHARES_LABEL = 'Shared';
-export const LIBRARY_SHARES_COUNT_SEP = ' · ';
-export const LIBRARY_SHARED_EMPTY = 'Nothing shared';
-export const LIBRARY_SHARED_LOADING = 'Loading shares…';
-export const LIBRARY_SHARES_ERROR = 'Failed to load shares';
 export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
-export const LIBRARY_SHARES_UNSHARE_LABEL = 'Unshare';
-export const LIBRARY_SHARES_OPEN_LABEL = 'Open';
-export const LIBRARY_SHARES_UNSHARE_TITLE = 'Unshare';
-export const LIBRARY_SHARES_UNSHARE_WARNING = 'The public link will stop working.';
-export const LIBRARY_SHARES_ALL_LABEL = 'All';
-export const LIBRARY_SHARES_FILTER_LABEL = 'Share type';
-export const LIBRARY_SHARES_PAGE_SIZE = 50;
-export const LIBRARY_SHARES_TYPES = ['album', 'song', 'generation', 'playlist'] as const;
-export type ShareInventoryType = (typeof LIBRARY_SHARES_TYPES)[number];
-export const LIBRARY_SHARES_TYPE_LABELS: Record<ShareInventoryType, string> = {
-	album: 'Album',
-	song: 'Song',
-	generation: NOW_PLAYING_TAKE_PREFIX,
-	playlist: 'Playlist'
-};
-export const LIBRARY_SHARES_TYPE_EMPTY: Record<ShareInventoryType, string> = {
-	album: 'No shared albums',
-	song: 'No shared songs',
-	generation: 'No shared takes',
-	playlist: 'No shared playlists'
-};
-
-export function librarySharesStatusLabel(total: number): string {
-	return `${LIBRARY_SHARES_LABEL}${LIBRARY_SHARES_COUNT_SEP}${total}`;
-}
 
 export const COWRITER_TURN_PATH = '/api/chat/turn';
 export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';

@@ -4030,6 +4030,7 @@ def test_capabilities_reflects_db_model(tmp_path: Path) -> None:
         pytest.param("get", "/api/settings/claude-models", id="get-claude-models"),
         pytest.param("put", "/api/settings/claude-models", id="set-claude-models"),
         pytest.param("get", "/api/admin/audit-log", id="admin-audit-log"),
+        pytest.param("get", "/api/library/shares", id="library-shares"),
     ],
 )
 def test_removed_dead_routes_no_longer_answer(tmp_path: Path, method: str, path: str) -> None:
