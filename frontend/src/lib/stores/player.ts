@@ -459,9 +459,12 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 	loadNativeTake(takes[index]);
 }
 
+// A take row never plays alone (#1187 P6): when the pool holds only the
+// tapped take, as it does before anything is picked, the row's song names the
+// album the queue continues through instead.
 async function playLibraryFromGeneration(
 	gen: GenerationItem,
-	opts: { resumeAtTrackTime?: number } = {}
+	opts: { resumeAtTrackTime?: number; tappedRowSong?: SongItem } = {}
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
@@ -494,6 +497,10 @@ async function playLibraryFromGeneration(
 		return;
 	}
 	playStartNotice.set('idle');
+	if (takes.length === 1 && opts.tappedRowSong) {
+		await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
+		return;
+	}
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
 	playNativeLibraryTakes(takes, startIndex, opts.resumeAtTrackTime);
@@ -1001,7 +1008,7 @@ export async function playTake(gen: GenerationItem, song: SongItem): Promise<voi
 	try {
 		const albumId = get(selectedAlbumId);
 		if (albumId) await playAlbumFromGeneration(albumId, song, gen);
-		else await playLibraryFromGeneration(gen);
+		else await playLibraryFromGeneration(gen, { tappedRowSong: song });
 	} catch (e) {
 		addToast(describeFailure(e, PLAYBACK_FAILED_TOAST), 'error');
 	}
