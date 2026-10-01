@@ -25,7 +25,8 @@
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
 	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
-	import { historyLayerState, selectSong } from '$lib/stores/navigation';
+	import { selectSong } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';

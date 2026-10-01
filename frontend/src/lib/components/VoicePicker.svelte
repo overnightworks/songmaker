@@ -3,8 +3,10 @@
 	import { onMount } from 'svelte';
 	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 	import { loras, loadLoras, isLoraActive } from '$lib/stores/loras';
-	import { followAppPageLink, historyLayerState } from '$lib/stores/navigation';
+	import { followAppPageLink } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { recipeModel } from '$lib/stores/recipe';
+	import { refocusIfDropped } from '$lib/utils/focus-trap';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
 		VOICE_PICKER_DELETED_LABEL,
@@ -24,6 +26,14 @@
 	const selectedLora = $derived(($loras ?? []).find((lora) => lora.id === current) ?? null);
 	const targetModelMode = $derived($recipeModel ?? '');
 	const open = historyLayerState('voice-picker', false);
+	let triggerButton: HTMLButtonElement | undefined = $state();
+
+	let listWasOpen = false;
+	$effect(() => {
+		const isOpen = $open;
+		if (listWasOpen && !isOpen) refocusIfDropped(triggerButton);
+		listWasOpen = isOpen;
+	});
 
 	function isSelectable(lora: UserLoraItem): boolean {
 		return (
@@ -70,13 +80,13 @@
 	<span class="label mobile-label">{voicePickerMobileLabel(targetModelMode)}</span>
 	<div class="picker-wrap">
 		<button
+			bind:this={triggerButton}
 			type="button"
 			class="picker"
 			aria-haspopup="listbox"
 			aria-expanded={$open}
 			aria-controls="voice-picker-options"
 			onclick={() => ($open = !$open)}
-			onkeydown={(event) => event.key === 'Escape' && ($open = false)}
 		>
 			<span>{selectedLabel}</span>
 			<span aria-hidden="true">⌄</span>

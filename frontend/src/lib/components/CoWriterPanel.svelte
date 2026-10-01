@@ -37,8 +37,8 @@
 		COWRITER_TOOL_CALL_FOREIGN_TARGET_TITLE,
 		COWRITER_TOOL_CALL_TARGET_PREFIX
 	} from '$lib/constants';
-	import { historyLayerState } from '$lib/stores/navigation';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { historyLayerState } from '$lib/stores/layers';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import {
 		collectPendingProposals,
 		proposalKey,
@@ -130,7 +130,7 @@
 	let conversationMenu: HTMLDivElement | undefined = $state();
 
 	let conversationAwaitingDelete: ConversationItem | null = $state(null);
-	let memoryOpen = $state(false);
+	const memoryOpen = historyLayerState('cowriter-memory', false);
 	let memoryBundle: MemoryBundle | null = $state(null);
 	let memoryLoading = $state(false);
 	let memoryError = $state('');
@@ -865,12 +865,6 @@
 				if (item) selectMentionItem(item);
 				return;
 			}
-			if (e.key === 'Escape') {
-				e.preventDefault();
-				e.stopPropagation();
-				$showMentions = false;
-				return;
-			}
 		}
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
@@ -897,13 +891,19 @@
 	}
 
 	function openMemory(): void {
-		memoryOpen = true;
+		$memoryOpen = true;
 	}
 
 	function closeMemory(): void {
-		memoryOpen = false;
-		conversationMenuTrigger?.focus();
+		$memoryOpen = false;
 	}
+
+	let menuOrMemoryWasOpen = false;
+	$effect(() => {
+		const isOpen = $conversationMenuOpen || $memoryOpen;
+		if (menuOrMemoryWasOpen && !isOpen) refocusIfDropped(conversationMenuTrigger);
+		menuOrMemoryWasOpen = isOpen;
+	});
 
 	function chooseFromConversationMenu(choice: () => void | Promise<void>): void {
 		$conversationMenuOpen = false;
@@ -918,10 +918,7 @@
 		}
 		function trapMenuKeys(event: KeyboardEvent): void {
 			if (!conversationMenu) return;
-			handleFocusTrapKeydown(conversationMenu, event, () => {
-				$conversationMenuOpen = false;
-				conversationMenuTrigger?.focus();
-			});
+			handleFocusTrapKeydown(conversationMenu, event);
 		}
 		document.addEventListener('click', closeOnOutsideClick);
 		document.addEventListener('keydown', trapMenuKeys, true);
@@ -979,7 +976,6 @@
 					bind:this={conversationMenu}
 					class="convo-menu"
 					role="menu"
-					data-escape-overlay="true"
 					tabindex="-1"
 					onclick={(e) => e.stopPropagation()}
 					onkeydown={(e) => e.stopPropagation()}
@@ -1040,7 +1036,7 @@
 	{/if}
 
 	<MemoryEditor
-		open={memoryOpen}
+		open={$memoryOpen}
 		onClose={closeMemory}
 		bundle={memoryBundle}
 		loading={memoryLoading}

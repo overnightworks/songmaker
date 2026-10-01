@@ -78,32 +78,13 @@ describe('AlbumMetaEditor', () => {
 		expect(props.onsave).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		['the title field', (target: HTMLElement) => field(target, 'Title')],
-		['the Save button', (target: HTMLElement) => getByRoleButton(target, 'Save')]
-	])('Escape in %s closes without saving and claims the Escape', async (_where, focusOf) => {
-		const props = baseProps();
-		const target = await render(props);
-		type(field(target, 'Year'), '2026');
-
-		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-		focusOf(target).dispatchEvent(escape);
-
-		expect(props.onclose).toHaveBeenCalledTimes(1);
-		expect(props.onsave).not.toHaveBeenCalled();
-		expect(escape.defaultPrevented).toBe(true);
-	});
-
-	it('neither × nor Escape closes while a save is in flight', async () => {
+	it('× does not close while a save is in flight', async () => {
 		const props = baseProps({ onsave: vi.fn(() => new Promise<void>(() => {})) });
 		const target = await render(props);
 
 		await submit(target);
 		const close = getByRoleButton(target, 'Close edit details');
 		close.click();
-		field(target, 'Title').dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-		);
 
 		expect(close.disabled).toBe(true);
 		expect(props.onclose).not.toHaveBeenCalled();
@@ -120,32 +101,6 @@ describe('AlbumMetaEditor', () => {
 			'Title cannot be empty'
 		);
 		expect(field(target, 'Title').getAttribute('aria-invalid')).toBe('true');
-	});
-
-	it('Escape with the focus outside the form closes it without saving', async () => {
-		const props = baseProps();
-		await render(props);
-		const outside = document.createElement('button');
-		document.body.append(outside);
-		outside.focus();
-
-		outside.dispatchEvent(
-			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
-		);
-
-		expect(props.onclose).toHaveBeenCalledTimes(1);
-		expect(props.onsave).not.toHaveBeenCalled();
-	});
-
-	it('leaves an Escape an open popover already claimed to that popover', async () => {
-		const props = baseProps();
-		const target = await render(props);
-		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
-		escape.preventDefault();
-
-		field(target, 'Title').dispatchEvent(escape);
-
-		expect(props.onclose).not.toHaveBeenCalled();
 	});
 
 	it('stays open with the draft when the save is refused', async () => {

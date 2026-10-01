@@ -23,11 +23,13 @@
 	} from '$lib/stores/auth';
 	import {
 		backToCollection,
-		forgetHistoryLayers,
+		followShellLayers,
+		forgetLayerEntries,
 		initNavigation,
 		isLibraryWorkspacePath,
 		openLibraryWall
 	} from '$lib/stores/navigation';
+	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
 		startLibraryResourceSync,
@@ -39,7 +41,6 @@
 		escapeNowPlaying,
 		nowPlayingDockable,
 		nowPlayingOpen,
-		nowPlayingSurface,
 		selectedSongId
 	} from '$lib/stores/player';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -55,7 +56,7 @@
 	import { transportBarHidden } from '$lib/stores/transportBar';
 	import { offline } from '$lib/stores/connectivity';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
-	import { escapeLevelUpTarget, shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
+	import { escapeLevelUpTarget, handleGlobalEscape } from '$lib/utils/escape-level-up';
 	import { dev, browser } from '$app/environment';
 	import { get } from 'svelte/store';
 
@@ -142,6 +143,8 @@
 		return () => delete root.dataset.offline;
 	});
 
+	$effect(() => followShellLayers());
+
 	// Library history is shallow routing, which waits for the router: the first
 	// navigation it reports -- the page it started on -- lets the writes go.
 	const reportRouterStarted = holdLibraryHistoryUntilRouterStarts();
@@ -214,21 +217,24 @@
 	}
 
 	async function handleLogout() {
-		forgetHistoryLayers();
+		forgetLayerEntries();
 		await logout();
 		window.location.href = '/login';
 	}
 
-	function onWindowKeydown(event: KeyboardEvent): void {
-		if (!shouldHandleGlobalEscape(event, document)) return;
+	function levelUp(): void {
 		const target = escapeLevelUpTarget(
-			$nowPlayingSurface === 'docked',
+			$nowPlayingOpen,
 			$selectedSongId !== null,
 			$openCollection !== null
 		);
 		if (target === 'now-playing') escapeNowPlaying();
 		else if (target === 'collection') backToCollection();
 		else if (target === 'wall') void openLibraryWall();
+	}
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		handleGlobalEscape(event, { closeTopLayer, levelUp });
 	}
 </script>
 

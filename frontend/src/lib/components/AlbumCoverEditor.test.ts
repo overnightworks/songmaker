@@ -10,7 +10,7 @@ import { getByRoleButton, accessibleName } from '$lib/test-utils/accessible-name
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
-import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import {
 	createComponentMount,
 	openCollectionMenu,
@@ -440,18 +440,22 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(accessibleName(requireElement(target, 'button.header-cover'))).toBe('Add cover');
 	});
 
-	it('Escape closes the editor like × and leaves the global one level up alone', async () => {
+	it('Escape closes the editor like × and moves no level up', async () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
 		const target = await renderDetail();
 		await openCoverEditing(target);
 		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
-		const escape = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+		const levelUp = vi.fn();
+		const stopListening = listenForGlobalEscape(levelUp);
 
-		document.body.dispatchEvent(escape);
+		document.body.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+		stopListening();
 
 		await editingClosed(target);
 		expect(discardAlbumCoverSuggestions).toHaveBeenCalledWith('a-local');
-		expect(shouldHandleGlobalEscape(escape, document)).toBe(false);
+		expect(levelUp).not.toHaveBeenCalled();
 	});
 
 	it.each([
@@ -878,6 +882,15 @@ describeBackClosesOverlay({
 			way: '×',
 			close: async (target) => {
 				pressEditorButton(target, 'Close cover editing');
+				await editingClosed(target);
+			}
+		},
+		{
+			way: 'Escape',
+			close: async (target) => {
+				document.body.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+				);
 				await editingClosed(target);
 			}
 		}

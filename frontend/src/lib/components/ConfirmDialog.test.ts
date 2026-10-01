@@ -53,13 +53,23 @@ describe('ConfirmDialog', () => {
 		expect(props.onsecondary).toHaveBeenCalledTimes(1);
 	});
 
-	it('calls oncancel on Cancel and on Escape', async () => {
+	it.each([
+		{
+			way: 'Cancel',
+			press: (target: HTMLElement) =>
+				target.querySelector<HTMLButtonElement>('.cancel-btn')?.click()
+		},
+		{
+			way: 'Escape',
+			press: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	])('calls oncancel once on $way', async ({ press }) => {
 		const { target, props } = await render();
-		target.querySelector<HTMLButtonElement>('.cancel-btn')?.click();
-		expect(props.oncancel).toHaveBeenCalledTimes(1);
 
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		expect(props.oncancel).toHaveBeenCalledTimes(2);
+		press(target);
+
+		expect(props.oncancel).toHaveBeenCalledOnce();
 	});
 
 	it('omits the secondary action when none is given', async () => {

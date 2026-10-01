@@ -134,6 +134,10 @@ async function goBack(page: Page): Promise<void> {
 	await page.goBack();
 }
 
+async function pressEscape(page: Page): Promise<void> {
+	await page.keyboard.press('Escape');
+}
+
 async function openSong(page: Page, shell: Shell, playlist: SeededPlaylist): Promise<void> {
 	await openEntryMenu(page, playlist);
 	await openSongFromEntryMenu(page);
@@ -335,9 +339,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		name: 'Back closes the phone rail drawer and keeps the playlist',
 		shell: 'mobile',
 		open: openRailDrawer,
-		leave: async (page) => {
-			await page.goBack();
-		},
+		leave: goBack,
 		expectLeft: async (page, pages) => {
 			await expect(railDrawer(page)).toBeHidden();
 			await expectPlaylistStands(page, pages);
@@ -371,9 +373,7 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		name: 'Back docks the full Now Playing on the desktop and keeps the playlist',
 		shell: 'desktop',
 		open: expandNowPlaying,
-		leave: async (page) => {
-			await page.goBack();
-		},
+		leave: goBack,
 		expectLeft: async (page, pages, playlist) => {
 			const [playing] = playlist.songTitles;
 			await expect(page.getByRole('complementary', { name: playing })).toBeVisible();
@@ -474,8 +474,16 @@ async function openSeededPlaylist(
 	return { playlist, pages: { wall, playlist: playlistHeading, playlistAddress: page.url() } };
 }
 
-test.describe('Back closes the open overlay first', () => {
-	for (const row of OVERLAY_ROWS) {
+// Escape closes what Back closes (#1182): every row where Back closes an
+// overlay runs again with Escape in its place, and leaves the same history.
+function escapeInsteadOfBack(row: OverlayRow): OverlayRow {
+	return { ...row, name: row.name.replace(/^Back/, 'Escape'), leave: pressEscape };
+}
+
+const ESCAPE_ROWS = OVERLAY_ROWS.filter((row) => row.leave === goBack).map(escapeInsteadOfBack);
+
+test.describe('Back and Escape close the open overlay first', () => {
+	for (const row of [...OVERLAY_ROWS, ...ESCAPE_ROWS]) {
 		test(row.name, async ({ page, request }, testInfo) => {
 			test.skip(shellOf(testInfo) !== row.shell, `The row belongs to the ${row.shell} shell.`);
 			const guard = new FlowGuard(page);
