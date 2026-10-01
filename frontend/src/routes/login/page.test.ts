@@ -97,6 +97,31 @@ describe('login page', () => {
 			'the library instead of a foreign host',
 			`/login?redirect=${encodeURIComponent('//attacker.example/x')}`,
 			'/'
+		],
+		[
+			'the library instead of a same-origin absolute URL',
+			`/login?redirect=${encodeURIComponent(`${window.location.origin}/settings`)}`,
+			'/'
+		],
+		[
+			'the library instead of a one-slash scheme',
+			`/login?redirect=${encodeURIComponent('http:/example.com')}`,
+			'/'
+		],
+		[
+			'the library instead of an encoded foreign host',
+			`/login?redirect=${encodeURIComponent('/%2F%2Fattacker.example/x')}`,
+			'/'
+		],
+		[
+			'the library instead of a relative path',
+			`/login?redirect=${encodeURIComponent('album/x')}`,
+			'/'
+		],
+		[
+			'the library instead of the sign-in page',
+			`/login?redirect=${encodeURIComponent('/login')}`,
+			'/'
 		]
 	])('signs in and lands on %s', async (_label, address, landing) => {
 		mockLogin.mockResolvedValueOnce({ id: 'u1', username: 'felix', role: 'user' });

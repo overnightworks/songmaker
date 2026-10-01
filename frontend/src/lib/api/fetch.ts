@@ -158,19 +158,32 @@ function isSessionLostResponse(status: number, path: string): boolean {
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
 const SIGN_IN_PATH = '/login';
 
-// Normalize an address carried through sign-in. A pathname can start with //;
-// resolving it catches that foreign-origin escape as well as backslashes,
-// which URL parsing treats as host separators. The sign-in page itself is no
-// destination: landing there again would only ask for the password twice.
-function safeInternalPath(candidate: string): string {
+// A path of this app starts with exactly one slash. A second slash or a
+// backslash makes it a foreign host; anything else -- an absolute URL even on
+// this origin, a one-slash scheme, a relative path -- is no address the app
+// hands out (#1230).
+const SINGLE_SLASH_PATH = /^\/(?![/\\])/;
+
+// Percent-encoded slashes count as slashes: decoded once more on the way, a
+// /%2F%2F path would turn into a foreign host.
+function isSingleSlashPath(candidate: string): boolean {
 	try {
-		const resolved = new URL(candidate, window.location.origin);
-		if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
-		if (resolved.pathname === SIGN_IN_PATH) return SAFE_INTERNAL_PATH_FALLBACK;
-		return resolved.pathname + resolved.search + resolved.hash;
+		return [candidate, decodeURIComponent(candidate)].every((form) => SINGLE_SLASH_PATH.test(form));
 	} catch {
-		return SAFE_INTERNAL_PATH_FALLBACK;
+		return false;
 	}
+}
+
+// Normalize an address carried through sign-in. Resolving it still checks the
+// origin: URL parsing drops tabs and newlines, so a single-slash path can turn
+// into a foreign host on the way. The sign-in page itself is no destination:
+// landing there again would only ask for the password twice.
+function safeInternalPath(candidate: string): string {
+	if (!isSingleSlashPath(candidate)) return SAFE_INTERNAL_PATH_FALLBACK;
+	const resolved = new URL(candidate, window.location.origin);
+	if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
+	if (resolved.pathname === SIGN_IN_PATH) return SAFE_INTERNAL_PATH_FALLBACK;
+	return resolved.pathname + resolved.search + resolved.hash;
 }
 
 // The sign-in page, asked to bring the person back to `returnTo` afterwards.

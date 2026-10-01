@@ -595,10 +595,7 @@ describe('session-lost redirect target', () => {
 		],
 		['//attacker.example/x', '/login'],
 		['///attacker.example/x', '/login'],
-		[
-			'/%2F%2Fattacker.example/x',
-			`/login?redirect=${encodeURIComponent('/%2F%2Fattacker.example/x')}`
-		]
+		['/%2F%2Fattacker.example/x', '/login']
 	])('returns from %s only to a same-origin path', async (path, expected) => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
@@ -648,6 +645,7 @@ describe('sign-in return path', () => {
 		['an absolute URL', `?redirect=${encodeURIComponent('https://attacker.example/x')}`, '/'],
 		['a protocol-relative host', `?redirect=${encodeURIComponent('//attacker.example/x')}`, '/'],
 		['a backslash host', `?redirect=${encodeURIComponent('/\\attacker.example/x')}`, '/'],
+		['a host split by a tab', `?redirect=${encodeURIComponent('/\t/attacker.example/x')}`, '/'],
 		['a script URL', `?redirect=${encodeURIComponent('javascript:alert(1)')}`, '/'],
 		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/']
 	])('lands on %s', (_label, query, expected) => {
