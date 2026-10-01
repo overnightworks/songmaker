@@ -332,7 +332,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it('names a throttled ask as a failure and keeps Suggest another open while suggestions are left', async () => {
+	it('names a throttled ask as an ordinary failure, rereads the count and keeps Suggest open', async () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions({ used_today: 3 }));
 		createAlbumCoverSuggestions.mockRejectedValue(
 			new ApiError(429, 'Too many requests, slow down', '/api/albums/a-local')
@@ -905,6 +905,78 @@ describe('AlbumCoverEditor in the album header', () => {
 			expect(target.textContent).not.toContain('already being');
 		}
 	);
+
+	it.each([
+		{
+			result: 'its new image',
+			found: coverSuggestions({
+				...ONE_SUGGESTION,
+				job: coverJob({ id: 'ended-run', status: 'completed', progress: 1 }),
+				used_today: 3
+			}),
+			shows: (target: HTMLElement) => {
+				expect(shownImage(target)).toBe('/suggestion-one.png');
+				expect(failureAlert(target)).toBeNull();
+			}
+		},
+		{
+			result: 'its failure line, also when it spent the last suggestion of the day',
+			found: coverSuggestions({
+				job: coverJob({ id: 'ended-run', status: 'failed', error: 'The model ran out of memory' }),
+				used_today: 10
+			}),
+			shows: (target: HTMLElement) =>
+				expect(failureAlert(target)?.textContent).toContain('The model ran out of memory')
+		}
+	])(
+		"a refused ask whose run already ended shows that run's result: $result",
+		async ({ found, shows }) => {
+			fetchAlbumCoverSuggestions
+				.mockResolvedValueOnce(coverSuggestions({ used_today: 2 }))
+				.mockResolvedValue(found);
+			createAlbumCoverSuggestions.mockRejectedValue(
+				new ApiError(409, 'Cover suggestions are already being generated', '/api/x')
+			);
+			const target = await renderDetail();
+			await openCoverEditing(target);
+
+			await pressSuggestOnceLoaded(target);
+
+			await reachSuggestionsLoads(2);
+			shows(target);
+			expect(target.textContent).not.toContain('already being');
+		}
+	);
+
+	it('the daily limit is the only message for that tap, also after reopening', async () => {
+		const olderRunFailed = coverJob({
+			id: 'older-run',
+			status: 'failed',
+			error: 'An older run went wrong'
+		});
+		fetchAlbumCoverSuggestions
+			.mockResolvedValueOnce(coverSuggestions({ job: olderRunFailed, used_today: 9 }))
+			.mockResolvedValue(coverSuggestions({ job: olderRunFailed, used_today: 10 }));
+		createAlbumCoverSuggestions.mockRejectedValue(
+			new ApiError(429, 'Daily cover suggestion limit reached', '/api/albums/a-local')
+		);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+
+		await pressSuggestOnceLoaded(target);
+		await vi.waitFor(() =>
+			expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached')
+		);
+		expect(failureAlert(target)).toBeNull();
+
+		pressEditorButton(target, 'Close cover editing');
+		await editingClosed(target);
+		await openCoverEditing(target);
+		await reachSuggestionsLoads(3);
+
+		expect(countLine(target)).toBe('0 of 10 left today Daily cover suggestion limit reached');
+		expect(failureAlert(target)).toBeNull();
+	});
 
 	it('hydrates a running cover job once and shows its suggestion after the streamed completion', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);
