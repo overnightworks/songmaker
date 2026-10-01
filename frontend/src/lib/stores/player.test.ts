@@ -7,7 +7,6 @@ import {
 } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
-import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type {
 	GenerationItem,
@@ -208,9 +207,6 @@ function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
 }
 
 beforeEach(() => {
-	// These tests pin the classic per-track queue path; stream is now the
-	// product default, so classic must be an explicit choice here.
-	setQueuePlaybackMode('classic');
 	vi.mocked(fetchSongs).mockResolvedValue({
 		items: [],
 		total: 0,
@@ -352,6 +348,9 @@ describe('browsing state', () => {
 
 describe('playback dispatch', () => {
 	it('playing a take uses its version lyrics, never the song draft', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({ takes: [makePoolTake({ lyrics: 'old verse', album_title: 'Nachtstrom' })] })
+		);
 		const gen = makeGen({ ...genDefaults, version_lyrics: 'old verse' });
 		const song = makeSong({
 			...queuedSongDefaults(),
@@ -359,8 +358,7 @@ describe('playback dispatch', () => {
 			album_title: 'Nachtstrom'
 		});
 		await playTake(gen, song);
-		expect(audioPlayer.current).toEqual({
-			generation: gen,
+		expect(audioPlayer.current).toMatchObject({
 			songId: 's1',
 			songTitle: 'Song',
 			artist: 'Artist',
@@ -1372,7 +1370,6 @@ function makeManifest(overrides: Partial<QueueStreamManifest> = {}): QueueStream
 
 describe('native first play ignores stream settings', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		toasts.set([]);
 	});
 
@@ -1545,7 +1542,6 @@ describe('native first play ignores stream settings', () => {
 
 describe('starting library playback from a take', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		toasts.set([]);
 	});
 
@@ -1789,7 +1785,6 @@ describe('starting library playback from a take', () => {
 
 describe('rebuildQueueStream routing', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		vi.spyOn(audioPlayer, 'loadStream').mockImplementation(() => {});
 		toasts.set([]);
 	});
@@ -1868,7 +1863,6 @@ describe('rebuildQueueStream routing', () => {
 
 describe('starting album playback from a take', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		toasts.set([]);
 	});
 
@@ -1938,7 +1932,6 @@ describe('starting album playback from a take', () => {
 
 describe('playAlbum start track', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('classic');
 		toasts.set([]);
 	});
 
@@ -2078,7 +2071,6 @@ describe('playAlbum start track', () => {
 
 describe('curateAlbum', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('classic');
 		toasts.set([]);
 	});
 
@@ -2259,7 +2251,6 @@ describe('curateAlbum', () => {
 
 describe('shuffle rebuilds the playing queue', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		toasts.set([]);
 	});
 
@@ -2383,7 +2374,6 @@ describe('shuffle rebuilds the playing queue', () => {
 
 describe('library take pool', () => {
 	beforeEach(() => {
-		setQueuePlaybackMode('stream');
 		toasts.set([]);
 	});
 
@@ -3054,16 +3044,25 @@ describe('jumpToQueueIndex', () => {
 });
 
 describe('playTake', () => {
-	it('plays the take through the classic queue path', async () => {
-		const gen = makeGen(genDefaults);
-		const song = makeSong(queuedSongDefaults());
+	it('a take row always starts a queue from that take', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g1' }),
+					makePoolTake({ generation_id: 'g2', song_id: 's2', song_title: 'Two' })
+				]
+			})
+		);
 
-		await playTake(gen, song);
+		await playTake(makeGen(genDefaults), makeSong(queuedSongDefaults()));
 
-		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ generation: gen }), {
-			restart: true
-		});
-		expect(get(queueContext)).toEqual({ type: 'library' });
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		const ctx = get(queueContext);
+		expect(ctx.type).toBe('library');
+		expect(ctx.type === 'library' && ctx.takes?.map((take) => take.generation.id)).toEqual([
+			'g1',
+			'g2'
+		]);
 	});
 
 	it('toggles pause instead of restarting when the row take is already playing', async () => {
@@ -3080,7 +3079,6 @@ describe('playTake', () => {
 	});
 
 	it('reports a toast instead of throwing when the queue-stream path fails', async () => {
-		setQueuePlaybackMode('stream');
 		vi.mocked(fetchLibraryPoolQueue).mockRejectedValueOnce(new Error('offline'));
 
 		await playTake(makeGen(genDefaults), makeSong(queuedSongDefaults()));
@@ -3114,14 +3112,13 @@ describe('playTake', () => {
 
 describe('playTakeAndShowNowPlaying', () => {
 	it('plays the take and opens Now Playing on the judging panel', async () => {
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue());
 		const gen = makeGen(genDefaults);
 		const song = makeSong(queuedSongDefaults());
 
 		await playTakeAndShowNowPlaying(gen, song);
 
-		expect(audioPlayer.load).toHaveBeenCalledWith(expect.objectContaining({ generation: gen }), {
-			restart: true
-		});
+		expect(audioPlayer.current?.generation.id).toBe(gen.id);
 		expect(get(nowPlayingPanel)).toBe('take');
 		expect(get(nowPlayingOpen)).toBe(true);
 	});

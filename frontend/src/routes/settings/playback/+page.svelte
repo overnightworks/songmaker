@@ -1,43 +1,12 @@
-<script lang="ts">
-	import {
-		queuePlaybackMode,
-		setQueuePlaybackMode,
-		type QueuePlaybackMode
-	} from '$lib/stores/playbackSettings';
-
-	const playbackModes: { value: QueuePlaybackMode; label: string; note: string }[] = [
-		{
-			value: 'stream',
-			label: 'Continuous stream',
-			note: 'Shared links (/share/…) play as one continuous stream. In your library a clicked take continues through its album or pool queue.'
-		},
-		{
-			value: 'classic',
-			label: 'Per-track',
-			note: 'Shared links play one track at a time. In your library a clicked take plays on its own.'
-		}
-	];
-</script>
-
 <div class="settings-page">
 	<h1>Playback</h1>
 
 	<section>
-		<h2>Queue Mode</h2>
-		<div class="mode-list" role="radiogroup" aria-label="Queue playback mode">
-			{#each playbackModes as mode (mode.value)}
-				<button
-					type="button"
-					class:active={$queuePlaybackMode === mode.value}
-					role="radio"
-					aria-checked={$queuePlaybackMode === mode.value}
-					onclick={() => setQueuePlaybackMode(mode.value)}
-				>
-					<span>{mode.label}</span>
-					<small>{mode.note}</small>
-				</button>
-			{/each}
-		</div>
+		<h2>Queue</h2>
+		<p>
+			A take you play keeps going through its album or library. Shared links play as one stream, or
+			track by track when shuffled.
+		</p>
 	</section>
 </div>
 
@@ -63,50 +32,10 @@
 		letter-spacing: 0.5px;
 	}
 
-	.mode-list {
-		display: grid;
-		gap: 0.75rem;
-	}
-
-	.mode-list button {
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 0.35rem;
-		width: 100%;
-		min-height: 58px;
-		padding: 0.9rem 1rem;
-		border: 1px solid var(--border);
-		border-radius: var(--input-radius);
-		background: var(--bg);
-		color: var(--text);
-		cursor: pointer;
-		text-align: left;
-		font-family: var(--font-body);
-		transition:
-			background 0.15s,
-			border-color 0.15s,
-			box-shadow 0.15s;
-	}
-
-	.mode-list button:hover {
-		background: var(--surface-hover);
-		border-color: var(--accent);
-	}
-
-	.mode-list button.active {
-		border-color: var(--primary);
-		box-shadow: 0 0 0 1px var(--primary);
-	}
-
-	.mode-list span {
-		font-weight: 700;
-		font-size: 0.95rem;
-	}
-
-	.mode-list small {
+	p {
 		color: var(--text-muted);
-		font-size: 0.82rem;
-		line-height: 1.4;
+		font-size: 0.9rem;
+		line-height: 1.5;
+		max-width: 40rem;
 	}
 </style>
