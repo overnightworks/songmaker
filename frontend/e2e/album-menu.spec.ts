@@ -2,11 +2,28 @@
 // sit on their own row under cover and title (#1135, #915 F1+F5). Both are
 // layout promises jsdom cannot measure, so only a real browser at a phone and
 // a laptop width shows them: the operator's phone cut the album menu off past
-// the left edge of the screen.
+// the left edge of the screen. The album's details -- title, subtitle and year
+// -- change through the ⋯'s Edit details, where × and Back discard (#1177).
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
-import { COLLECTION_MENU_LABEL, collectionPlayLabel } from '../src/lib/constants';
-import { boundingBoxes, FlowGuard, shellOf, workspace, type RenderedBox } from './helpers';
+import {
+	ALBUM_DETAILS_CLOSE_LABEL,
+	ALBUM_DETAILS_SAVE_LABEL,
+	ALBUM_SUBTITLE_LABEL,
+	ALBUM_YEAR_LABEL,
+	COLLECTION_MENU_EDIT_DETAILS_LABEL,
+	COLLECTION_MENU_LABEL,
+	collectionPlayLabel,
+	NEW_ALBUM_TITLE_LABEL
+} from '../src/lib/constants';
+import {
+	boundingBoxes,
+	csrfHeaders,
+	FlowGuard,
+	shellOf,
+	workspace,
+	type RenderedBox
+} from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
 const VIEWPORT_MARGIN_PX = 8;
@@ -19,7 +36,8 @@ const VIEWPORT_HEIGHT_PX = 844;
  * on mobile, the playlist cold open 12 on desktop and 8 on mobile, and the
  * logged-out public album page 0 on both, since opening the ⋯ asks the API
  * nothing. Shared budget, sized from the costliest flow the same way
- * playlist-address.spec.ts's is.
+ * playlist-address.spec.ts's is. The Edit details flow opens an album of its
+ * own, with no songs, and adds its one save.
  */
 const ALBUM_MENU_FLOW_API_REQUEST_BUDGET = 15;
 
@@ -146,4 +164,65 @@ test('the public album page keeps its actions on their own row', async ({ browse
 	);
 	shareGuard.assertClean();
 	await visitor.close();
+});
+
+async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
+	await header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+	await page
+		.getByRole('dialog', { name: COLLECTION_MENU_LABEL })
+		.getByRole('button', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL, exact: true })
+		.click();
+	const editor = header.getByRole('form', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL });
+	await expect(editor).toBeVisible();
+	return editor;
+}
+
+test('Edit details changes title, subtitle and year; × and Back discard', async ({
+	page
+}, testInfo) => {
+	const title = `Nightdrive ${shellOf(testInfo)} ${Date.now()}`;
+	const created = await page.request.post('/api/albums', {
+		headers: await csrfHeaders(page),
+		data: { title, artist: '' }
+	});
+	expect(created.ok()).toBe(true);
+	const album = (await created.json()) as { id: string };
+	try {
+		await page.goto(`/album/${album.id}`);
+		const header = workspace(page).locator('.collection-header');
+		await expect(header.getByRole('heading', { name: title })).toBeVisible();
+		await expect(header).not.toContainText('Add subtitle');
+		await expect(header).not.toContainText('Add year');
+
+		const renamed = `${title} remastered`;
+		let editor = await openEditDetails(page, header);
+		await editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true }).fill(renamed);
+		await editor.getByLabel(ALBUM_SUBTITLE_LABEL, { exact: true }).fill('Late-night synthwave');
+		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('2026');
+		await editor.getByRole('button', { name: ALBUM_DETAILS_SAVE_LABEL, exact: true }).click();
+
+		await expect(editor).toBeHidden();
+		await expect(header.getByRole('heading', { name: renamed })).toBeVisible();
+		const meta = header.locator('.header-meta');
+		await expect(meta).toHaveText('Late-night synthwave · 2026');
+
+		editor = await openEditDetails(page, header);
+		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('1999');
+		await editor.getByRole('button', { name: ALBUM_DETAILS_CLOSE_LABEL, exact: true }).click();
+		await expect(editor).toBeHidden();
+		await expect(meta).toHaveText('Late-night synthwave · 2026');
+
+		editor = await openEditDetails(page, header);
+		await editor.getByLabel(ALBUM_YEAR_LABEL, { exact: true }).fill('1999');
+		await page.goBack();
+		await expect(editor).toBeHidden();
+		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
+		await expect(header.getByRole('heading', { name: renamed })).toBeVisible();
+		await expect(meta).toHaveText('Late-night synthwave · 2026');
+	} finally {
+		const removed = await page.request.delete(`/api/albums/${album.id}`, {
+			headers: await csrfHeaders(page)
+		});
+		expect(removed.ok()).toBe(true);
+	}
 });
