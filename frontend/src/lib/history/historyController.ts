@@ -102,6 +102,16 @@ function lastAllocatedEntryId(storage: Pick<Storage, 'getItem'>): number {
 	return storedCount(storage, ENTRY_ID_COUNTER_KEY, 'history entry counter');
 }
 
+// Storage that refused writes forgets the counter with the document, while the
+// tab's entries keep their ids: the counter catches up with every entry this
+// document meets, so an id it hands out never repeats or undercuts one below.
+// With storage that keeps the counter, no entry ever outranks it.
+function countEntryMet(storage: TabStorage, met: HistoryEntry | null): void {
+	if (met !== null && met.id > lastAllocatedEntryId(storage)) {
+		storage.setItem(ENTRY_ID_COUNTER_KEY, String(met.id));
+	}
+}
+
 function storedCount(storage: Pick<Storage, 'getItem'>, key: string, what: string): number {
 	const stored = storage.getItem(key) ?? '0';
 	if (!/^\d+$/.test(stored)) {
@@ -125,8 +135,8 @@ function isRefusedStorageWrite(error: unknown): boolean {
 
 // The tab's counts live in session storage so that a reload keeps them. Once
 // storage refuses a write, they live in this document's memory instead, seeded
-// by what storage kept: ids stay monotonic while the document lives, which is
-// all the controller can still promise, rather than the page failing to render.
+// by what storage kept and raised by every entry the document meets, rather
+// than the page failing to render.
 function tabStorage(storage: TabStorage): TabStorage {
 	let memoryAfterRefusal: Map<string, string> | null = null;
 	return {
@@ -192,9 +202,9 @@ export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 // SvelteKit's start writes its own entry over the one the page loads onto and
 // drops the page state that entry carried, so the state is read while this
 // module loads, before the router starts.
-let stateOnLoad: unknown = history.state;
-let ledger: HistoryLedger = EMPTY_LEDGER;
 let historyStorage = tabStorage(sessionStorage);
+let stateOnLoad: unknown = readStateOnLoad();
+let ledger: HistoryLedger = EMPTY_LEDGER;
 // Whether history stands on its top entry, the only place an id-less entry may
 // get an id: ids grow bottom to top, so a first id given further down would
 // outrank the entries above it, and a step-back from one of those would never
@@ -210,6 +220,11 @@ let navigationsUnderway = 0;
 let loadingMount: NavigateOptions | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
+
+function readStateOnLoad(): unknown {
+	countEntryMet(historyStorage, entryOfHistoryState(history.state));
+	return history.state;
+}
 
 function standsOnTopOnLoad(): boolean {
 	const loaded = entryOfHistoryState(stateOnLoad);
@@ -514,6 +529,7 @@ export function listenForLandings(
 ): () => void {
 	function onPopstate(event: PopStateEvent): void {
 		const landed = landedEntry(event);
+		countEntryMet(historyStorage, landed);
 		const landing = land(ledger, landed);
 		ledger = landing.ledger;
 		standsOnTop = false;
@@ -536,14 +552,14 @@ export function listenForLandings(
 // A page load, as far as history goes: the state the page loaded onto is read
 // again, the way this module's own load reads it.
 export function loadHistoryPageForTests(): void {
-	stateOnLoad = history.state;
+	stateOnLoad = readStateOnLoad();
 	standsOnTop = standsOnTopOnLoad();
 }
 
 export function resetHistoryControllerForTests(): void {
-	stateOnLoad = history.state;
-	ledger = EMPTY_LEDGER;
 	historyStorage = tabStorage(sessionStorage);
+	stateOnLoad = readStateOnLoad();
+	ledger = EMPTY_LEDGER;
 	standsOnTop = true;
 	lastRouterIndex = routerIndexOf(history.state);
 	stepBackWaiters.clear();

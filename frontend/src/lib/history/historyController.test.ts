@@ -262,6 +262,28 @@ describe('history adapter', () => {
 		expect(ids).toEqual([1, 2, 3, 4]);
 	});
 
+	it('ids stay above the entry a reload lands on while session storage refuses writes', () => {
+		sessionStorageRefusingWritesAfter(0);
+		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+		resetHistoryControllerForTests();
+
+		const layer = pushEntry('/album/c', {}, 'now-playing');
+
+		expect(layer.id).toBe(4);
+	});
+
+	it('ids stay above an entry Forward lands on after a reload while session storage refuses writes', async () => {
+		sessionStorageRefusingWritesAfter(0);
+		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+		await traverse(() => history.back());
+		resetHistoryControllerForTests();
+		await traverse(() => history.forward());
+
+		const layer = pushEntry('/album/c', {}, 'now-playing');
+
+		expect(layer.id).toBe(4);
+	});
+
 	it('a session storage write failing for another reason is not swallowed', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 			throw new TypeError('broken storage');
