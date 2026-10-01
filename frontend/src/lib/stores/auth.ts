@@ -7,7 +7,8 @@ import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	AUTH_CHECK_SERVER_ERROR
+	AUTH_CHECK_SERVER_ERROR,
+	AUTH_SESSION_EXPIRED_DETAIL
 } from '$lib/constants/auth';
 import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
@@ -68,16 +69,15 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 		authNotice.set(null);
 		return user;
 	} catch (err) {
-		authNotice.set(null);
+		const failure = classifyAuthFailure(err);
+		noteFailedSessionCheck(err, failure);
 		authCheckError.set(null);
 		if (err instanceof NetworkError) {
 			rememberUnreachableSessionCheck();
 			return get(currentUser);
 		}
 		forgetUnreachableSessionCheck();
-		const failure = classifyAuthFailure(err);
 		if (failure === 'unauthorized' || failure === 'disabled') {
-			authNotice.set(failure);
 			currentUser.set(null);
 			return null;
 		}
@@ -86,6 +86,16 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 	} finally {
 		authLoading.set(false);
 	}
+}
+
+// Only a 401 for a session the server no longer holds says the session
+// expired: a request without a session cookie is a first visit or a signed-out
+// deep link, and keeps whatever the session-lost reaction left (#1215).
+function noteFailedSessionCheck(error: unknown, failure: AuthFailureKind): void {
+	if (failure === 'disabled') authNotice.set('disabled');
+	else if (failure !== 'unauthorized') authNotice.set(null);
+	else if (error instanceof ApiError && error.detail === AUTH_SESSION_EXPIRED_DETAIL)
+		authNotice.set('unauthorized');
 }
 
 function rememberUnreachableSessionCheck(): void {
@@ -142,9 +152,11 @@ export async function login(username: string, password: string): Promise<AuthUse
 // title drafts) lives in module state, not the session -- without this, a
 // logout/401 followed by a different user's login on the same tab could
 // briefly serve the previous user's cached playlist data, or open a create
-// card on what they typed.
-export function clearAuth(): void {
+// card on what they typed. `notice` is what the sign-in page says about the
+// session that ended: an expiry says so, a sign-out says nothing.
+export function clearAuth(notice: AuthNotice | null = null): void {
 	currentUser.set(null);
+	authNotice.set(notice);
 	resetGenerationFailures();
 	resetPlaylists();
 	resetLibraryOrder();

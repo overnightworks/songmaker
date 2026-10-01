@@ -42,7 +42,10 @@ import {
 	resetAuthForTests
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
-import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
+import {
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
+	AUTH_SESSION_EXPIRED_DETAIL
+} from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -130,6 +133,25 @@ describe('checkAuth', () => {
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
+	});
+
+	it.each([
+		['a first visit without a session', 'Authentication required', null],
+		['a reload whose session has expired', AUTH_SESSION_EXPIRED_DETAIL, 'unauthorized']
+	])(
+		'tells %s about an expired session only when there was one',
+		async (_label, detail, notice) => {
+			mockFetchMe.mockRejectedValueOnce(new ApiError(401, detail, AUTH_ME_PATH));
+			await checkAuth(vi.fn());
+			expect(get(authNotice)).toBe(notice);
+		}
+	);
+
+	it('keeps the expiry notice of a session that ended through the next session check', async () => {
+		currentUser.set(KNOWN_USER);
+		clearAuth('unauthorized');
+		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+		await checkAuth(vi.fn());
 		expect(get(authNotice)).toBe('unauthorized');
 	});
 
@@ -205,7 +227,6 @@ describe('checkAuth with the server out of reach', () => {
 
 		expect(get(offline)).toBe(false);
 		expect(get(authCheckUnreachable)).toBe(false);
-		expect(get(authNotice)).toBe('unauthorized');
 	});
 });
 
@@ -250,6 +271,15 @@ describe('clearAuth', () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		clearAuth();
 		expect(get(currentUser)).toBeNull();
+	});
+
+	it.each([
+		['an expired session', 'unauthorized' as const, 'unauthorized'],
+		['a sign-out', undefined, null]
+	])('leaves the sign-in page the notice of %s', (_label, notice, expected) => {
+		authNotice.set('disabled');
+		clearAuth(notice);
+		expect(get(authNotice)).toBe(expected);
 	});
 
 	it('wipes the per-user playlist and generation-failure caches so the next session starts clean', () => {

@@ -796,7 +796,7 @@ describe('auth check failure', () => {
 		return vi
 			.mocked(goto)
 			.mock.calls.map(([to]) => to)
-			.filter((to) => to === '/login' || to === '/setup');
+			.filter((to) => String(to).startsWith('/login') || to === '/setup');
 	}
 
 	it('shows a retry-able error instead of navigating to /login on a transient failure', async () => {
@@ -848,25 +848,35 @@ describe('auth check failure', () => {
 		expect(signInRedirects()).toEqual([]);
 	});
 
-	it('navigates to /login on a 401 (no known user, no check error)', async () => {
-		currentUser.set(null);
-		authLoading.set(true);
-		authCheckError.set(null);
-		vi.mocked(checkAuth).mockImplementationOnce(async () => {
+	it.each([
+		['the library', '/', '/login'],
+		[
+			'a logged-out deep link',
+			'/album/northern-lights/glass-river',
+			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river'
+		]
+	])(
+		'sends %s to sign-in on a 401 (no known user, no check error)',
+		async (_label, path, signIn) => {
 			currentUser.set(null);
-			authLoading.set(false);
+			authLoading.set(true);
 			authCheckError.set(null);
-			return null;
-		});
-		mountLayout('/');
-		await tick();
-		await Promise.resolve();
-		await tick();
-		await Promise.resolve();
-		await tick();
+			vi.mocked(checkAuth).mockImplementationOnce(async () => {
+				currentUser.set(null);
+				authLoading.set(false);
+				authCheckError.set(null);
+				return null;
+			});
+			mountLayout(path);
+			await tick();
+			await Promise.resolve();
+			await tick();
+			await Promise.resolve();
+			await tick();
 
-		expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
-	});
+			expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true });
+		}
+	);
 });
 
 // SvelteKit's start drops the library a reloaded entry carried, and shallow

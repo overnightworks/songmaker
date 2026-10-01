@@ -2,7 +2,8 @@
 // B6 of the library extraction #825): signing in, being locked out after
 // repeated wrong passwords, signing out, coming back to a reloaded tab, being
 // refused the admin page, and returning to a session that has outlived its
-// absolute maximum age.
+// absolute maximum age -- and, since #1215, a logged-out deep link that signs
+// in onto the address it asked for.
 //
 // This is here rather than in the unit suite because each of those six
 // sentences is about the browser and the server together: which page the
@@ -80,6 +81,14 @@ const REFUSED_PATHS = [
 ];
 const ADMIN_PAGE_PATH = '/settings/users';
 const SESSION_COOKIE = 'session_id';
+const CSRF_COOKIE = 'csrf_token';
+const CSRF_HEADER = 'x-csrf-token';
+
+// The song the deep-link flow asks for: the account's own, so the sign-in
+// that follows may open it. Plain ASCII, so its slug is the lowercased,
+// hyphenated title (`api_helpers.unique_song_slug`).
+const DEEP_LINK_SONG_TITLE = 'Glass River';
+const DEEP_LINK_SONG_SLUG = 'glass-river';
 
 // The narrowest phone the shell is drawn for -- the mobile project's own
 // viewport is 390, and #872 rules this chain at 375.
@@ -233,6 +242,42 @@ async function expectAccountLocked(refusal: Response): Promise<void> {
 	expect((await refusal.json()).detail).toBe(ACCOUNT_LOCKED_DETAIL);
 }
 
+/**
+ * Gives the account one album with one song, through a session of its own
+ * outside the browser, and returns that song's address.
+ */
+async function seedOwnSongAddress(): Promise<string> {
+	const api = await request.newContext({ baseURL: BASE_URL });
+	try {
+		const login = await api.post(AUTH_LOGIN_PATH, {
+			data: { username: account.username, password: account.password }
+		});
+		expect(login.status()).toBe(200);
+		const { cookies } = await api.storageState();
+		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE)?.value ?? '';
+		const headers = { [CSRF_HEADER]: csrf, origin: BASE_URL };
+		const album = await api.post('/api/albums', {
+			headers,
+			data: { title: `E2E sign-in return ${Date.now().toString(36)}`, artist: account.username }
+		});
+		expect(album.ok()).toBe(true);
+		const albumId = ((await album.json()) as { id: string }).id;
+		const song = await api.post('/api/songs', {
+			headers,
+			data: {
+				title: DEEP_LINK_SONG_TITLE,
+				album_id: albumId,
+				lyrics: `${DEEP_LINK_SONG_TITLE} lyrics`,
+				prompt: 'calm test tone'
+			}
+		});
+		expect(song.ok()).toBe(true);
+		return `/album/${albumId}/${DEEP_LINK_SONG_SLUG}`;
+	} finally {
+		await api.dispose();
+	}
+}
+
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
 	await page.screenshot({ path, fullPage: true });
@@ -279,9 +324,12 @@ test.describe('admin row actions', () => {
 });
 
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
-	// A tab that knows nothing is sent to the door rather than shown a wall.
+	// A tab that knows nothing is sent to the door rather than shown a wall,
+	// and is not told about a session it never had.
 	await page.goto('/');
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
 
 	const response = await submitLogin(page, account.username, account.password);
 	expect(response.status()).toBe(200);
@@ -377,6 +425,23 @@ test('a session past its absolute maximum age lands on the login page', async ({
 	// server no longer honours.
 	expect(await sessionCookie(page.context())).toBeDefined();
 	await attachShot(page, testInfo, 'auth-session-expired');
+});
+
+test('a logged-out deep link signs in onto the song it asked for', async ({ page }, testInfo) => {
+	const songAddress = await seedOwnSongAddress();
+
+	await page.goto(songAddress);
+
+	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
+
+	const response = await submitLogin(page, account.username, account.password);
+	expect(response.status()).toBe(200);
+
+	await expect(page).toHaveURL(new RegExp(`${songAddress}$`));
+	await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
+	await attachShot(page, testInfo, 'auth-deep-link-returned');
 });
 
 test('wrong passwords lock the account, in words and for as long as it says', async ({
