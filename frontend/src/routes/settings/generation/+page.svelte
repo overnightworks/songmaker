@@ -20,6 +20,7 @@
 		deletePreset
 	} from '$lib/stores/presets';
 	import { fetchGenerationDefaults } from '$lib/api/client';
+	import { isAdmin } from '$lib/stores/auth';
 	import type { VersionGenerationParams } from '$lib/api/types';
 	import ParamControls from '$lib/components/ParamControls.svelte';
 
@@ -43,17 +44,22 @@
 		return { ...builtin, ...global, ...overrides };
 	}
 
+	async function loadGlobalDefaults(): Promise<void> {
+		if (!$isAdmin) return;
+		try {
+			globalDefaults = await fetchGenerationDefaults();
+		} catch {
+			error = 'Failed to load generation defaults';
+		}
+	}
+
 	onMount(async () => {
 		await Promise.all([
 			loadBuiltins(),
 			loadPresets(),
 			loadActiveModels(),
 			loadDefaultConfig(),
-			fetchGenerationDefaults()
-				.then((d) => {
-					globalDefaults = d;
-				})
-				.catch(() => {})
+			loadGlobalDefaults()
 		]);
 		if (modelModes.length > 0) {
 			presetModel = modelModes[0];

@@ -8,6 +8,7 @@
 
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
+	ACCOUNT_MENU_LOGOUT_LABEL,
 	collectionPauseLabel,
 	collectionPlayLabel,
 	collectionShuffleLabel,
@@ -31,6 +32,7 @@ import {
 	RAIL_NAV_LABEL,
 	PLAYING_MARK_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL,
+	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
@@ -46,6 +48,8 @@ import {
 	NOW_PLAYING_TAKE_TAB
 } from '../src/lib/constants/now-playing';
 import {
+	accountCircle,
+	accountMenu,
 	boundingBoxes,
 	containing,
 	FlowGuard,
@@ -54,6 +58,7 @@ import {
 	NARROW_VIEWPORT,
 	nameStartingWith,
 	openLibraryWall,
+	openSettingsSection,
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
@@ -189,11 +194,35 @@ async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 }
 
 /**
- * One navigation, no modes (#263): Settings is a disclosure inside the same
- * rail the album lives in, not a second column beside the content. Opening a
- * section is a real navigation (#265), and the rail's own album context row
- * is the way back — the "click back into the album" promise that made the
- * disclosure worth building in the first place (#264).
+ * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
+ * brand, search, Library and Playlists. Settings, the theme and Log out live
+ * in the account circle's menu, so the drawer repeats none of them.
+ */
+async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
+	const rail = await openRailNav(page, 'mobile');
+	await expect(rail.getByRole('combobox', { name: RAIL_SEARCH_LABEL })).toBeVisible();
+	await expect(
+		rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) })
+	).toBeVisible();
+	await expect(rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true })).toHaveCount(0);
+	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
+	await page.keyboard.press('Escape');
+	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await accountCircle(page).click();
+	await expect(
+		accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
+	).toBeVisible();
+	await page.keyboard.press('Escape');
+	await expect(accountMenu(page)).toBeHidden();
+}
+
+/**
+ * One navigation, no modes (#263): on the desktop Settings is a disclosure
+ * inside the same rail the album lives in, not a second column beside the
+ * content; on the phone it is the account menu's Settings list (#1174).
+ * Opening a section is a real navigation (#265), and the rail's own album
+ * context row is the way back — the "click back into the album" promise that
+ * made the disclosure worth building in the first place (#264).
  */
 async function expectSettingsRailRoundTrip(
 	page: Page,
@@ -201,9 +230,7 @@ async function expectSettingsRailRoundTrip(
 	surface: Locator,
 	albumTitle: string
 ): Promise<void> {
-	let rail = await openRailNav(page, shell);
-	await rail.getByRole('button', { name: RAIL_SETTINGS_LABEL }).click();
-	await rail.getByRole('link', { name: 'Voices', exact: true }).click();
+	await openSettingsSection(page, shell, 'Voices');
 
 	await expect(page).toHaveURL(/\/settings\/voices$/);
 	// The removed second column — the old `.settings-sidebar` — is gone, and
@@ -214,11 +241,11 @@ async function expectSettingsRailRoundTrip(
 
 	if (shell === 'desktop') {
 		// No gap for a second column: the content starts right where the rail ends.
-		const [railBox, mainBox] = await boundingBoxes(rail, surface);
+		const [railBox, mainBox] = await boundingBoxes(await openRailNav(page, shell), surface);
 		expect(Math.abs(mainBox.x - (railBox.x + railBox.width))).toBeLessThanOrEqual(2);
 	}
 
-	rail = await openRailNav(page, shell);
+	const rail = await openRailNav(page, shell);
 	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
@@ -825,43 +852,50 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 	expect(page.url()).toBe(selectedAlbumUrl);
 
-	// SETTINGS is the same kind of group header: both its visible text and
-	// caret only disclose its children. Neither can choose an admin page.
-	rail = await openRailNav(page, shell);
-	const settingsGroupToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
-	const settingsUrl = page.url();
-	await settingsGroupToggle.locator('.group-title').click();
-	await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'true');
-	expect(page.url()).toBe(settingsUrl);
-	await settingsGroupToggle.locator('.caret').click();
-	await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'false');
-	expect(page.url()).toBe(settingsUrl);
+	if (shell === 'mobile') {
+		await expectPhoneDrawerIsNavigationOnly(page);
+	} else {
+		// SETTINGS is the same kind of group header: both its visible text and
+		// caret only disclose its children. Neither can choose an admin page.
+		rail = await openRailNav(page, shell);
+		const settingsGroupToggle = rail.getByRole('button', {
+			name: RAIL_SETTINGS_LABEL,
+			exact: true
+		});
+		const settingsUrl = page.url();
+		await settingsGroupToggle.locator('.group-title').click();
+		await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'true');
+		expect(page.url()).toBe(settingsUrl);
+		await settingsGroupToggle.locator('.caret').click();
+		await expect(settingsGroupToggle).toHaveAttribute('aria-expanded', 'false');
+		expect(page.url()).toBe(settingsUrl);
 
-	// "Settings stays pinned below LIBRARY and PLAYLISTS" (#326 finding 6) as
-	// a promise, not a CSS class assertion: seed.ts adds enough filler albums
-	// that the rail's own list genuinely overflows, so this really scrolls
-	// past content rather than measuring a page that never needed to scroll.
-	rail = await openRailNav(page, shell);
-	const libraryGroupTitle = rail.getByRole('button', {
-		name: nameStartingWith(RAIL_LIBRARY_LABEL)
-	});
-	const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
-	await expect(libraryGroupTitle).toBeInViewport();
-	await expect(settingsToggle).toBeInViewport();
+		// "Settings stays pinned below LIBRARY and PLAYLISTS" (#326 finding 6) as
+		// a promise, not a CSS class assertion: seed.ts adds enough filler albums
+		// that the rail's own list genuinely overflows, so this really scrolls
+		// past content rather than measuring a page that never needed to scroll.
+		rail = await openRailNav(page, shell);
+		const libraryGroupTitle = rail.getByRole('button', {
+			name: nameStartingWith(RAIL_LIBRARY_LABEL)
+		});
+		const settingsToggle = rail.getByRole('button', { name: RAIL_SETTINGS_LABEL, exact: true });
+		await expect(libraryGroupTitle).toBeInViewport();
+		await expect(settingsToggle).toBeInViewport();
 
-	const railBox = await rail.boundingBox();
-	if (!railBox) throw new Error('Expected the rail to render');
-	await page.mouse.move(railBox.x + railBox.width / 2, railBox.y + railBox.height / 3);
-	await page.mouse.wheel(0, 8000);
+		const railBox = await rail.boundingBox();
+		if (!railBox) throw new Error('Expected the rail to render');
+		await page.mouse.move(railBox.x + railBox.width / 2, railBox.y + railBox.height / 3);
+		await page.mouse.wheel(0, 8000);
 
-	// Proof this really scrolled, not a no-op: the top of the scrollable
-	// region -- the LIBRARY group's own title -- has scrolled out of view.
-	await expect(libraryGroupTitle).not.toBeInViewport();
+		// Proof this really scrolled, not a no-op: the top of the scrollable
+		// region -- the LIBRARY group's own title -- has scrolled out of view.
+		await expect(libraryGroupTitle).not.toBeInViewport();
 
-	// The pin promise itself: Settings remains reachable while the Library
-	// content has scrolled past. Its exact pixel position is an implementation
-	// detail while the disclosure's height is animating.
-	await expect(settingsToggle).toBeInViewport();
+		// The pin promise itself: Settings remains reachable while the Library
+		// content has scrolled past. Its exact pixel position is an implementation
+		// detail while the disclosure's height is animating.
+		await expect(settingsToggle).toBeInViewport();
+	}
 
 	await openLibraryWall(page, shell);
 	rail = await openRailNav(page, shell);
