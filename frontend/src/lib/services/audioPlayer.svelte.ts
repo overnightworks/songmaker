@@ -1005,11 +1005,12 @@ class AudioPlayer {
 	// status-aware and stays in-stream.
 	// While a probe is out, whatever else asks for recovery — the element's
 	// error, the network's return — is answered by that probe's reload. A
-	// pause or a failure that lands while the probe or the rebuild is out has
-	// the last word.
+	// pause, a failure or another take that lands while the probe or the
+	// rebuild is out has the last word.
 	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
 		if (!el || !this.streamEngine.active || this.streamProbe !== null) return;
+		const target = this.current;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		const step = this.nextRecoveryStep(reason);
@@ -1033,13 +1034,13 @@ class AudioPlayer {
 			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
 		);
 		const probe = await this.probeStream(state.manifest.stream_url);
-		if (probe === null || this.streamRecoveryInterrupted()) return;
+		if (probe === null || this.streamRecoveryInterrupted(target)) return;
 
 		if (probe.status === 404) {
 			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
 			// own track list and resume at the same track position.
 			const fresh = await this.callbacks.onStreamRebuild?.(state);
-			if (this.streamRecoveryInterrupted()) return;
+			if (this.streamRecoveryInterrupted(target)) return;
 			if (fresh && fresh.tracks.length > 0) {
 				const currentId = track?.generation_id;
 				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
@@ -1063,8 +1064,8 @@ class AudioPlayer {
 		this.reloadSource(el, state.manifest.stream_url);
 	}
 
-	private streamRecoveryInterrupted(): boolean {
-		return this.status !== 'loading';
+	private streamRecoveryInterrupted(target: PlaybackInfo | null): boolean {
+		return this.current !== target || this.status !== 'loading';
 	}
 
 	// Null when the take changed while the probe was out: its answer is stale.

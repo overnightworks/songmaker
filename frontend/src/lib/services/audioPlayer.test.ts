@@ -1205,6 +1205,44 @@ describe('patient recovery while the screen is off', () => {
 		);
 
 		it.each([
+			{
+				interruption: 'Pause is pressed',
+				interrupt: () => audioPlayer.toggle(),
+				afterwards: { song: 'Second', transport: 'paused' }
+			},
+			{
+				interruption: 'another take loads',
+				interrupt: () =>
+					audioPlayer.load(makeInfo({ songTitle: 'Next take' }), { autoplay: false }),
+				afterwards: { song: 'Next take', transport: 'loading' }
+			}
+		])(
+			'a snapshot rebuild that answers after $interruption leaves the player alone',
+			async ({ interrupt, afterwards }) => {
+				let answerRebuild: (fresh: QueueStreamManifest) => void = () => {};
+				fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+				audioPlayer.swapCallbacks(
+					callbacks({
+						onStreamRebuild: () => new Promise((resolve) => (answerRebuild = resolve))
+					})
+				);
+				audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+				startPlayingAt(12);
+				fakeAudio.fire('stalled');
+				await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+				interrupt();
+				answerRebuild(makeStreamManifest());
+				await vi.advanceTimersByTimeAsync(0);
+
+				expect({
+					song: audioPlayer.current?.songTitle,
+					transport: audioPlayer.transport
+				}).toEqual(afterwards);
+			}
+		);
+
+		it.each([
 			{ strip: 'the offline strip says so', announced: true, givenUp: 'waiting-for-network' },
 			{ strip: 'nothing says so', announced: false, givenUp: 'failed' }
 		])('a take given up when $strip shows $givenUp', async ({ announced, givenUp }) => {
