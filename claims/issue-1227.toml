@@ -1,0 +1,8 @@
+claim_id = "54bc77a963bf4b978ff04f8d62216c9a"
+agent = "claude-head"
+role = "builder"
+base = "5c19487779f233f18cc6995cd998dc4da989812f"
+branch = "claude-head/issue-1227-recovery-edges"
+scope = ["frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
+opened_commit = "8ff2636dfdb0b1ca6f98b8a08f55cd98f0685b22"
+whole_reason = "player recovery edges with its copy and the bar that shows it"
