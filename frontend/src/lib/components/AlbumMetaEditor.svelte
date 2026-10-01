@@ -20,6 +20,7 @@
 		NEW_ALBUM_TITLE_LABEL,
 		NEW_PLACE_TEXT_MAX_LENGTH
 	} from '$lib/constants';
+	import { holdOpenWhile } from '$lib/stores/layers';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -46,11 +47,14 @@
 		if (!canSave) return;
 		saving = true;
 		try {
-			await onsave({
-				title: draft.title.trim(),
-				subtitle: draft.subtitle.trim(),
-				year: draft.year.trim()
-			});
+			await holdOpenWhile(
+				'details-saving',
+				onsave({
+					title: draft.title.trim(),
+					subtitle: draft.subtitle.trim(),
+					year: draft.year.trim()
+				})
+			);
 		} catch {
 			saving = false;
 			return;
