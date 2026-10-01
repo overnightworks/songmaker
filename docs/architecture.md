@@ -137,10 +137,17 @@ wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
 coarse pointer) holds: the brand (the rail's Library shortcut, `openLibraryWall`)
 pinned at the top; a scroll container in the middle holding the LIBRARY
 group, built on the shared `RailGroup.svelte` (chevron, icon, label, count —
-one row shape for every group); and, pinned below that scroll container, the
-SETTINGS group (also a `RailGroup.svelte`, via `RailSettings.svelte`) and a
-user row (username, theme toggle, Logout — inline, no popup menu;
-`shell/UserRow.svelte`). `RailLibraryGroup.svelte` is the LIBRARY group: it
+one row shape for every group); and, on the desktop only, pinned below that
+scroll container, the SETTINGS group (also a `RailGroup.svelte`, via
+`RailSettings.svelte`) and a user row (username, theme toggle, Logout —
+inline, no popup menu; `shell/UserRow.svelte`). The phone drawer is
+navigation only — brand, search, LIBRARY and PLAYLISTS (#1174, frame H3 of
+`docs/design/navigation.html`): the phone app bar (`PhoneAppBar.svelte`)
+carries a 44px account circle at its right edge, and its menu
+(`AccountMenu.svelte`) holds Settings, the theme switch and Log out, so the
+drawer repeats none of them; `Rail` renders the block only when the layout
+hands it an `account`. Choosing Settings there while `/settings` is already
+on screen only closes the menu. `RailLibraryGroup.svelte` is the LIBRARY group: it
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
 takes/pick summary per row, an equalizer marking the one actually playing, a

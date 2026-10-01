@@ -8,6 +8,7 @@
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
+	import { page } from '$app/state';
 	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
@@ -21,9 +22,12 @@
 
 	let popover: MenuPopover | undefined = $state();
 
+	const SETTINGS_HREF = '/settings';
+
 	function openSettings(): void {
 		popover?.close();
-		void openAppPage('/settings');
+		if (page.url.pathname === SETTINGS_HREF) return;
+		void openAppPage(SETTINGS_HREF);
 	}
 </script>
 

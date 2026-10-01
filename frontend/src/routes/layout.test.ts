@@ -16,7 +16,8 @@ import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
-	OFFLINE_STRIP_MESSAGE
+	OFFLINE_STRIP_MESSAGE,
+	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
@@ -443,12 +444,26 @@ describe('app shell', () => {
 		expect(requireElement<HTMLButtonElement>(rail, '.brand').textContent).toBeTruthy();
 	});
 
-	it('renders the rail inline instead of a drawer on wide layouts', async () => {
+	it('keeps the phone drawer to navigation, leaving Settings and the user row to the account circle', async () => {
+		const target = await renderLayout('/');
+		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
+		await tick();
+		const drawer = requireElement<HTMLElement>(document.body, '.drawer-panel');
+
+		expect(requireElement(drawer, '.rail-search')).toBeTruthy();
+		expect(drawer.textContent).not.toContain(RAIL_SETTINGS_LABEL);
+		expect(drawer.textContent).not.toContain(USER.username);
+		expect(drawer.querySelector('button.logout')).toBeNull();
+	});
+
+	it('renders the rail inline instead of a drawer on wide layouts, keeping its Settings group and user row', async () => {
 		stubMatchMedia(false);
 		delete document.documentElement.dataset.pointer;
 		const target = await renderLayout('/');
 		expect(target.querySelector('.mobile-strip')).toBeNull();
-		expect(requireElement(target, '.rail')).toBeTruthy();
+		const rail = requireElement<HTMLElement>(target, '.rail');
+		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
+		expect(requireElement(rail, '.rail-bottom').textContent).toContain(USER.username);
 	});
 
 	it('makes the desktop workspace follow the rail edge control', async () => {
@@ -888,40 +903,22 @@ describe('a reload over the phone Now Playing', () => {
 });
 
 describe('signing out on the phone', () => {
-	it.each([
-		{
-			way: 'the rail drawer',
-			layer: 'rail-drawer',
-			open: () => sidebarOpen.set(true),
-			logout: (target: HTMLElement) =>
-				requireElement<HTMLButtonElement>(target, '[role="dialog"] button.logout').click()
-		},
-		{
-			way: 'the account menu',
-			layer: 'account-menu',
-			open: (target: HTMLElement) =>
-				getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click(),
-			logout: (target: HTMLElement) => getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click()
-		}
-	])(
-		'from $way leaves history where it stands, so nothing interrupts the way to the sign-in page',
-		async ({ layer, open, logout }) => {
-			resetLibraryContextForTests();
-			resetNavigationForTests();
-			replaceHistoryEntry('/');
-			const target = await renderLayout('/');
-			await vi.waitFor(() =>
-				expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true)
-			);
-			open(target);
-			await vi.waitFor(() => expect(currentLibraryHistoryState()).toMatchObject({ layer }));
+	it('from the account menu leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		replaceHistoryEntry('/');
+		const target = await renderLayout('/');
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
+		await vi.waitFor(() =>
+			expect(currentLibraryHistoryState()).toMatchObject({ layer: 'account-menu' })
+		);
 
-			logout(target);
+		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
-			await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
-			expect(currentLibraryHistoryState()).toMatchObject({ layer });
-		}
-	);
+		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
+		expect(currentLibraryHistoryState()).toMatchObject({ layer: 'account-menu' });
+	});
 });
 
 // The live library stream and the history listener used to belong to the
