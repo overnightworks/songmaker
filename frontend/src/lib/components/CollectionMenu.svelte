@@ -111,8 +111,14 @@
 	}
 </script>
 
-{#snippet actionRow(label: string, action: () => void, icon?: string, hint?: string)}
-	<button class="menu-item" onclick={() => runAndClose(action)}>
+{#snippet actionRow(
+	label: string,
+	action: () => void,
+	icon?: string,
+	hint?: string,
+	close: (action: () => void) => void = runAndClose
+)}
+	<button class="menu-item" onclick={() => close(action)}>
 		{#if icon}<Icon name={icon} size={14} />{/if}
 		{label}
 		{#if hint}<span class="menu-item-hint" aria-hidden="true">{hint}</span>{/if}
@@ -139,10 +145,13 @@
 		<p class="menu-heading">{kindLabel} · {title}</p>
 		{#if kind === 'album'}
 			{#if oneditdetails}
-				<button class="menu-item" onclick={() => closeLeavingFocusToForm(oneditdetails)}>
-					<Icon name="pencil" size={14} />
-					{COLLECTION_MENU_EDIT_DETAILS_LABEL}
-				</button>
+				{@render actionRow(
+					COLLECTION_MENU_EDIT_DETAILS_LABEL,
+					oneditdetails,
+					'pencil',
+					undefined,
+					closeLeavingFocusToForm
+				)}
 			{/if}
 			{#if oncoveredit}
 				{@render actionRow(
