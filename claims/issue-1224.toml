@@ -1,8 +1,0 @@
-claim_id = "2b55b709bcf54a7ba3f094ab66294f96"
-agent = "claude-head"
-role = "builder"
-base = "f13146c253960adde11f96318641071bccb4d403"
-branch = "claude-head/issue-1224-font-subsets"
-scope = ["frontend/e2e/self-hosted-fonts.spec.ts", "frontend/src/app.css", "src/songmaker_cli/server.py", "tests/test_server.py"]
-opened_commit = "1b1fed9261cc2849cdb09370e2fdc605d730cf06"
-whole_reason = "font subsets plus the server's woff2 content type and their tests"
