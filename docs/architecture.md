@@ -498,6 +498,26 @@ nothing. A take row never plays alone: when the library pool holds only the
 tapped take (nothing picked yet), the queue continues through that take's
 album instead.
 
+**What was playing survives a killed page (#1187 P2).** `stores/playbackResume.ts`
+owns one record per user on this device, `localStorage["playbackResume:<userId>"]`:
+the queue the take plays from (album, playlist, or library pool and shuffle),
+the song and take ids, the position in seconds and when it was saved. It is
+written on a take change, on pause, when the page hides, and about every 5 s
+of playback in between; the last save is kept in memory, so that rhythm reads
+no storage per tick. A take is only ever saved under the user it started
+under, a pause saves the element's own clock, and a take that ended leaves the
+queue's next take (`nextQueueTake`) at 0, or no record when nothing follows.
+A take still loading keeps the position its record already holds. Share
+playback is never saved, a deliberate logout forgets the record (a session
+that merely ran out keeps it), and a logout in another tab stops this tab
+writing it back. After auth, the `(library)` layout calls
+`restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
+the saved song, finds the take, and loads it with autoplay off at the saved
+position, so the transport shows it paused and one tap plays it. A song the
+server no longer serves (deleted, or not this user's: 404), a take deleted or
+archived since, or a server out of reach restores nothing and says nothing.
+`e2e/playback-restore.spec.ts` drives the reload on both shells.
+
 Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
 snapshot endpoints prepare the count-windowed sources after releasing the
 request session and before their build can reach ffmpeg. The product cap is six
