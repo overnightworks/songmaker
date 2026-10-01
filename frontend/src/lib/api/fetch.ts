@@ -228,7 +228,7 @@ export function handleSessionLost(): Promise<void> {
 async function reactToSessionLost(): Promise<void> {
 	const [{ currentUser, clearAuth }, { forgetLayerEntries }] = await Promise.all([
 		import('$lib/stores/auth'),
-		import('$lib/stores/navigation')
+		import('$lib/history/historyController')
 	]);
 	if (get(currentUser) === null) return;
 	forgetLayerEntries();
