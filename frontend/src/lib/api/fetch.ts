@@ -207,9 +207,18 @@ export function handleSessionLost(): Promise<void> {
 // lose (first load, or a second caller that lost the in-flight race above),
 // so this leaves +layout.svelte's own /login-vs-/setup routing to decide
 // instead of forcing a redirect that could race it.
+//
+// The library history stops before the shell goes, as on a sign-out: an
+// overlay closing with the shell -- the phone drawer above all -- would
+// otherwise step back off its history entry after the sign-in navigation
+// below and land on the page the session was lost on (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const { currentUser, clearAuth } = await import('$lib/stores/auth');
+	const [{ currentUser, clearAuth }, { forgetLayerEntries }] = await Promise.all([
+		import('$lib/stores/auth'),
+		import('$lib/stores/navigation')
+	]);
 	if (get(currentUser) === null) return;
+	forgetLayerEntries();
 	clearAuth('unauthorized');
 	const { goto } = await import('$app/navigation');
 	await goto(signInAddress(window.location.pathname + window.location.search));
