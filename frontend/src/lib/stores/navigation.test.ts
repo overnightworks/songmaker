@@ -1277,9 +1277,9 @@ describe('a dirty draft guards song switch / leave', () => {
 	describe.each([
 		[
 			'a Settings row',
-			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/playback')
+			() => followAppPageLink(new MouseEvent('click', { button: 0 }), '/settings/voices')
 		],
-		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })]
+		['a page search hit', () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })]
 	] as const)('leaving for an app page through %s (issue #1143)', (_name, leave) => {
 		async function leaveWithADirtyDraft(): Promise<void> {
 			await openAlbum('a1');
@@ -1306,7 +1306,7 @@ describe('a dirty draft guards song switch / leave', () => {
 			await get(pendingDirtyNavigation)?.();
 			pendingDirtyNavigation.set(null);
 
-			expect(window.location.pathname).toBe('/settings/playback');
+			expect(window.location.pathname).toBe('/settings/voices');
 		});
 
 		it('keeps the page address when Discard answers the dialog, which steps off its own entry first', async () => {
@@ -1329,7 +1329,7 @@ describe('a dirty draft guards song switch / leave', () => {
 				})();
 				await Promise.all([dialogEntryLeft, leaving]);
 
-				expect(window.location.pathname).toBe('/settings/playback');
+				expect(window.location.pathname).toBe('/settings/voices');
 			} finally {
 				stopNavigation();
 			}
@@ -1641,7 +1641,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 	});
 
 	it('asks on Back onto the app page the song was opened from, and Discard returns there', async () => {
-		await editTheSongOpenedFrom(() => goto(resolve('/settings/playback')));
+		await editTheSongOpenedFrom(() => goto(resolve('/settings/voices')));
 
 		await pressBackAndSeeTheQuestion();
 		await vi.waitFor(() => expect(window.location.pathname).toBe('/album/a1/s1'));
@@ -1649,7 +1649,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 
 		answer(EDITOR_UNSAVED_DISCARD_LABEL);
 
-		await vi.waitFor(() => expect(window.location.pathname).toBe('/settings/playback'));
+		await vi.waitFor(() => expect(window.location.pathname).toBe('/settings/voices'));
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
@@ -2057,7 +2057,7 @@ describe('the phone rail drawer owns one history entry', () => {
 		{ way: 'a row that opens an album', go: () => openAlbum('a1') },
 		{
 			way: 'a rail search page target',
-			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/playback' })
+			go: () => openRailSearchTarget({ kind: 'page', href: '/settings/voices' })
 		},
 		{
 			way: 'a Settings link',
@@ -2364,7 +2364,7 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 
 describe('overlays outside the library', () => {
 	it('hold a layer Escape closes on /settings, and opening the drawer or a menu there writes no history', () => {
-		replaceHistoryEntry('/settings/playback');
+		replaceHistoryEntry('/settings/voices');
 		const before = { length: historyLength(), state: historyEntry() };
 		const menu = historyLayerState('a-menu', false);
 		const leaveOwner = menu.subscribe(() => undefined);
@@ -2402,11 +2402,11 @@ describe('openRailSearchTarget', () => {
 		toggleSidebar();
 		expect(get(sidebarOpen)).toBe(true);
 
-		await openRailSearchTarget({ kind: 'page', href: '/settings/playback' });
+		await openRailSearchTarget({ kind: 'page', href: '/settings/voices' });
 
 		expect(get(sidebarOpen)).toBe(false);
-		expect(window.location.pathname).toBe('/settings/playback');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/playback');
+		expect(window.location.pathname).toBe('/settings/voices');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith('/settings/voices');
 	});
 });
 
