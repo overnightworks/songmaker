@@ -28,6 +28,8 @@ export const STORAGE_STATE_FILE = path.join(ARTIFACT_DIR, 'storage-state.json');
 export const BASE_URL = process.env.E2E_BASE_URL ?? 'http://localhost:8080';
 
 const CSRF_COOKIE = 'csrf_token';
+// The app's own take address (`audioUrlOf` in `services/audioPlayer.svelte.ts`).
+const AUDIO_PATH_PREFIX = '/audio/';
 const CSRF_HEADER = 'x-csrf-token';
 
 const ALBUM_ARTIST = 'E2E Ensemble';
@@ -104,6 +106,19 @@ export interface SeededSong {
 	title: string;
 }
 
+/** A song and the address its one take plays from. */
+export interface SeededTrack {
+	songTitle: string;
+	audioPath: string;
+}
+
+/** The whole library of a fresh account: one album, a take per song, nothing picked or kept. */
+export interface SeededUnpickedLibrary {
+	albumId: string;
+	/** In album order. */
+	tracks: SeededTrack[];
+}
+
 /** A private, playable take for the Voices flow to select through its real catalogue. */
 export interface SeededVoiceTake {
 	songTitle: string;
@@ -130,6 +145,21 @@ interface VoiceLifecycle {
 	deleted_at: string | null;
 }
 
+interface ImportedTake extends CreatedResource {
+	mp3_path: string;
+}
+
+interface SeededAlbumSong {
+	songId: string;
+	takeId: string;
+	track: SeededTrack;
+}
+
+export interface Credentials {
+	username: string;
+	password: string;
+}
+
 interface CreatedSong extends CreatedResource {
 	slug: string;
 }
@@ -141,6 +171,8 @@ export interface SeededLibrary {
 	albumTitle: string;
 	/** Number of songs in the primary album, for its rendered summary. */
 	albumSongCount: number;
+	/** The primary album's songs in album order; only the first one's take is picked. */
+	albumTracks: SeededTrack[];
 	/** Also the album's address: an album id is its slug (issue #269). */
 	albumId: string;
 	albumShareUrl: string;
@@ -296,11 +328,12 @@ class SeedApi {
 		private readonly csrfToken: string
 	) {}
 
-	/** The one login of the run. Everything after it reuses the session. */
-	static async login(api: APIRequestContext): Promise<SeedApi> {
-		const response = await api.post('/api/auth/login', {
-			data: { username: requiredEnv('ADMIN_USERNAME'), password: requiredEnv('ADMIN_PASSWORD') }
-		});
+	/** The run's one admin login, or a flow's own account. Everything after it reuses the session. */
+	static async login(
+		api: APIRequestContext,
+		credentials: Credentials = adminCredentials()
+	): Promise<SeedApi> {
+		const response = await api.post('/api/auth/login', { data: credentials });
 		if (!response.ok()) {
 			throw new Error(`Login failed: ${response.status()} ${await response.text()}`);
 		}
@@ -357,32 +390,49 @@ class SeedApi {
 	}
 }
 
+function adminCredentials(): Credentials {
+	return { username: requiredEnv('ADMIN_USERNAME'), password: requiredEnv('ADMIN_PASSWORD') };
+}
+
+/** Seeds `SONG_TITLES` into the album in that order, each with one imported take. */
+async function seedSongsWithOneTakeEach(
+	seed: SeedApi,
+	albumId: string
+): Promise<SeededAlbumSong[]> {
+	const takeAudio = readFileSync(TAKE_FIXTURE);
+	const songs: SeededAlbumSong[] = [];
+	for (const title of SONG_TITLES) {
+		const song = await seed.postJson<CreatedResource>('/api/songs', {
+			title,
+			album_id: albumId,
+			lyrics: `${title} — seeded lyrics`,
+			prompt: 'calm test tone'
+		});
+		const take = await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
+			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
+		});
+		songs.push({
+			songId: song.id,
+			takeId: take.id,
+			track: { songTitle: title, audioPath: AUDIO_PATH_PREFIX + take.mp3_path }
+		});
+	}
+	return songs;
+}
+
 export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary> {
 	await archivePreviousE2EAlbums();
 	const seed = await SeedApi.login(api);
 	const albumTitle = `${ALBUM_TITLE_PREFIX} ${runMarker()}`;
-	const takeAudio = readFileSync(TAKE_FIXTURE);
 
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: albumTitle,
 		artist: ALBUM_ARTIST
 	});
 
-	const songIdByTitle = new Map<string, string>();
-	const takeBySongTitle = new Map<string, string>();
-	for (const title of SONG_TITLES) {
-		const song = await seed.postJson<CreatedResource>('/api/songs', {
-			title,
-			album_id: album.id,
-			lyrics: `${title} — seeded lyrics`,
-			prompt: 'calm test tone'
-		});
-		const take = await seed.postFile<CreatedResource>(`/api/songs/${song.id}/reimport`, {
-			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: takeAudio }
-		});
-		songIdByTitle.set(title, song.id);
-		takeBySongTitle.set(title, take.id);
-	}
+	const albumSongs = await seedSongsWithOneTakeEach(seed, album.id);
+	const songIdByTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.songId]));
+	const takeBySongTitle = new Map(albumSongs.map((song) => [song.track.songTitle, song.takeId]));
 
 	const [pickedSongTitle, mobileContinueSongTitle, desktopContinueSongTitle] = SONG_TITLES;
 	// Desktop moves and plays Closing Time, leaving the mobile Continue target
@@ -423,6 +473,7 @@ export async function seedLibrary(api: APIRequestContext): Promise<SeededLibrary
 	return {
 		albumTitle,
 		albumSongCount: SONG_TITLES.length,
+		albumTracks: albumSongs.map((song) => song.track),
 		albumId: album.id,
 		albumShareUrl: `${BASE_URL}/share/${share.share_slug}`,
 		pickedSongTitle,
@@ -963,6 +1014,23 @@ export async function createAccount(
 		role: NON_ADMIN_ROLE
 	});
 	return account.id;
+}
+
+/**
+ * Signs `api` in as a flow's own account and seeds its whole library -- the
+ * library a musician has before their first pick.
+ */
+export async function seedUnpickedLibrary(
+	api: APIRequestContext,
+	credentials: Credentials
+): Promise<SeededUnpickedLibrary> {
+	const seed = await SeedApi.login(api, credentials);
+	const album = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
+		artist: ALBUM_ARTIST
+	});
+	const songs = await seedSongsWithOneTakeEach(seed, album.id);
+	return { albumId: album.id, tracks: songs.map((song) => song.track) };
 }
 
 /** Removes an account created for a flow, rows and all. */
