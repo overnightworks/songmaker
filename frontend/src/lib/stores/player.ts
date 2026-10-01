@@ -20,6 +20,7 @@ import type {
 } from '$lib/api/types';
 import {
 	audioPlayer,
+	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type StreamFallbackState
 } from '$lib/services/audioPlayer.svelte';
@@ -48,6 +49,7 @@ import {
 	selectedPlaylist,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
+import { followPlaybackForResume, type ResumeQueueSource } from '$lib/stores/playbackResume';
 import { closeSidebar } from '$lib/stores/ui';
 import {
 	LIBRARY_QUEUE_EMPTY_TITLE,
@@ -1566,11 +1568,24 @@ function resumePlaybackOnReturn(): void {
 // once as one typed object (see AudioPlayerCallbacks) rather than five
 // scattered assignments — a share route swaps in its own set on mount and
 // restores this one on destroy.
-audioPlayer.swapCallbacks({
+const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onEnded: handlePlaybackEnded,
 	onPlaybackStarted: recordFirstTakeListen,
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
 	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
-});
+};
+audioPlayer.swapCallbacks(appPlayerCallbacks);
+
+// The queue a resumed take continues in; none while a share route owns the
+// player, so share playback is never remembered.
+function resumeQueueSource(): ResumeQueueSource | null {
+	if (audioPlayer.currentCallbacks !== appPlayerCallbacks) return null;
+	const ctx = get(queueContext);
+	if (ctx.type === 'album') return { type: 'album', albumId: ctx.albumId };
+	if (ctx.type === 'playlist') return { type: 'playlist', playlistId: ctx.playlist.id };
+	return { type: 'library', ...librarySnapshotOpts() };
+}
+
+followPlaybackForResume(resumeQueueSource);
