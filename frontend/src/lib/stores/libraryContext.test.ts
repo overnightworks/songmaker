@@ -4,7 +4,8 @@ import {
 	pressBack,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
-	replaceHistoryEntry
+	replaceHistoryEntry,
+	standingHistoryEntry
 } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
@@ -87,11 +88,11 @@ vi.mock('$lib/api/client', () => ({
 
 import { goto, pushState, replaceState } from '$app/navigation';
 import { listenForLandings } from '$lib/history/historyController';
+import { holdLayer } from '$lib/stores/layers';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
 	applyLibraryHistory,
-	backLibraryHistory,
 	cancelLibraryHistoryApply,
 	captureLibraryScroll,
 	detailTab,
@@ -746,13 +747,12 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// entry stands, so a Back pressed while its route still loads returns to
 	// the page underneath instead of stepping past it.
 	it('installs a crossing push queued behind a step back the moment that step lands', async () => {
-		replaceHistoryEntry('/', libraryRootState());
-		const layered = { ...libraryRootState(), index: 1, layer: 'menu' };
-		await writeLibraryHistory(layered, '/', 'push');
+		await writeLibraryHistory(libraryRootState(), '/', 'replace');
+		const leaveMenu = holdLayer('menu', () => undefined);
 		const lengthBefore = historyLength();
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
 
-		void backLibraryHistory(libraryRootState(), '/');
+		leaveMenu();
 		void writeLibraryHistory({ ...albumState, index: 1 }, albumRoutePath('a2'), 'push');
 
 		await vi.waitFor(() => expect(location.pathname).toBe(albumRoutePath('a2')));
@@ -763,26 +763,28 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
-	// A layer opening over the new album while its route still loads stands at
-	// once, and the router mounts the route over the layer's entry rather than
-	// writing the album's older library onto it.
-	it('mounts a route that still loads over the entry a same-shape push installs meanwhile', async () => {
-		replaceHistoryEntry('/', libraryRootState());
-		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
-		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+	// A layer opening over the new album while its route still loads gets its
+	// entry once the route stands: the router writes its entry over whichever
+	// entry stands when the route has loaded, which must not be the layer's.
+	it("gives a layer opened while the album's route still loads its entry once the route stands", async () => {
+		await writeLibraryHistory(libraryRootState(), '/', 'replace');
+		let routeLoaded = (): void => undefined;
+		vi.mocked(goto).mockImplementationOnce(
+			() => new Promise<void>((resolve) => (routeLoaded = resolve))
+		);
+		const mounted = writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
+		const album = standingHistoryEntry();
 		const lengthBefore = historyLength();
-		const layered = { ...albumState, index: albumState.index + 1, layer: 'menu' };
 
-		const written = writeLibraryHistory(layered, albumRoutePath('a2'), 'push');
+		const leaveMenu = holdLayer('menu', () => undefined);
 
-		expect(historyEntry()).toEqual(layered);
-		expect(historyLength()).toBe(lengthBefore + 1);
-		await written;
-		expect(vi.mocked(goto).mock.lastCall).toEqual([
-			albumRoutePath('a2'),
-			{ replaceState: true, noScroll: true, keepFocus: true, state: stampedLibrary(layered) }
-		]);
-		expect(historyEntry()).toEqual(layered);
+		expect(historyLength()).toBe(lengthBefore);
+		routeLoaded();
+		await mounted;
+		expect(standingHistoryEntry()).toEqual({ id: expect.any(Number), layer: 'menu' });
+		expect(standingHistoryEntry()?.id).toBeGreaterThan(album?.id ?? Number.NaN);
+		expect(historyEntry()).toEqual(albumState);
+		leaveMenu();
 	});
 
 	// A song-to-song move across album boundaries stays the 'album' shape on

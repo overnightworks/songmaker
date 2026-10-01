@@ -1,11 +1,21 @@
 import type { NavigationType } from '@sveltejs/kit';
+import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
+import {
+	dropLayersFrom,
+	keepLayerHistory,
+	stackedLayers,
+	type Layer,
+	type LayerHistory
+} from '$lib/stores/layers';
 
 // The one owner of the tab's history (issue #1006, ruling of 01.10.2026): only
 // this module writes or traverses history. Every entry it writes carries an
 // id, so a landing -- a Back, a Forward, a jump of several entries, or one of
 // the controller's own step-backs -- says by itself where history now stands,
-// and which open layers and pending step-backs it has left behind.
+// and which open layers and pending step-backs it has left behind. While the
+// library history runs, every layer opened on the stack (stores/layers.ts)
+// owns one entry on top of the page it covers.
 
 // What the controller stamps into an entry's page state. `layer` marks an entry
 // an open layer pushed over the page it covers.
@@ -28,7 +38,7 @@ interface HistoryLedger {
 	readonly current: HistoryEntry | null;
 }
 
-interface Landing {
+export interface Landing {
 	readonly dropLayers: readonly OpenLayerEntry[];
 	readonly settled: readonly number[];
 	readonly stepOff: boolean;
@@ -39,6 +49,7 @@ interface Landing {
 // SvelteKit keeps an entry's page state under this key; its own constant is
 // internal to the package and not exported.
 const SVELTEKIT_HISTORY_STATES_KEY = 'sveltekit:states';
+const SVELTEKIT_HISTORY_INDEX_KEY = 'sveltekit:history';
 const ENTRY_ID_COUNTER_KEY = 'songmaker:history-entry-id';
 const FIRST_ENTRY_KEY = 'songmaker:history-first-entry';
 const FOREIGN_ENTRY_RANK = Number.NEGATIVE_INFINITY;
@@ -126,6 +137,18 @@ function entryOfHistoryState(state: unknown): HistoryEntry | null {
 	return isHistoryEntry(entry) ? entry : null;
 }
 
+// The entry history stands on, as the controller stamped it.
+function standingEntry(): HistoryEntry | null {
+	return entryOfHistoryState(history.state);
+}
+
+// SvelteKit's place for an entry among the tab's entries: one more than the
+// entry it was pushed over, the same as the entry it was written over.
+function routerIndexOf(state: unknown): number | undefined {
+	const index = isRecord(state) ? state[SVELTEKIT_HISTORY_INDEX_KEY] : undefined;
+	return typeof index === 'number' ? index : undefined;
+}
+
 export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 	return entryOfHistoryState(event.state);
 }
@@ -141,7 +164,14 @@ let ledger: HistoryLedger = EMPTY_LEDGER;
 // see its landing as reaching its target. A landing leaves the top as far as
 // the controller can tell, a push reaches it again.
 let standsOnTop = standsOnTopOnLoad();
+// The router's place of the entry history stood on when the controller last
+// looked, which tells a router push from a router replace.
+let lastRouterIndex = routerIndexOf(history.state);
 const stepBackWaiters = new Map<number, (() => void)[]>();
+let stepBacksLandedWaiters: (() => void)[] = [];
+let navigationsUnderway = 0;
+const entryOfLayer = new Map<Layer, number>();
+let layersAwaitingEntry: Layer[] = [];
 
 function standsOnTopOnLoad(): boolean {
 	const loaded = entryOfHistoryState(stateOnLoad);
@@ -183,17 +213,27 @@ function settleOnPage(entry: HistoryEntry | null): void {
 	if (entry?.layer === undefined) ledger = { ...ledger, current: entry };
 }
 
+// A page pushed on top closes the layers open below it (issue #1006, ruling
+// of 01.10.2026): an overlay belongs to the page it covers.
+function pushedPage(entry: HistoryEntry): void {
+	standsOnTop = true;
+	dropLayers(ledger.layers);
+	ledger = { ...ledger, layers: [], current: entry };
+}
+
 // A push allocates an id; an entry pushed for a layer belongs to that layer
 // until a landing leaves it.
 export function pushEntry(url: string, state: App.PageState, layer?: string): HistoryEntry {
 	const entry = newEntry(layer);
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	pushState(url, stampedPageState(state, entry));
+	lastRouterIndex = routerIndexOf(history.state);
+	if (layer === undefined) {
+		pushedPage(entry);
+		return entry;
+	}
 	standsOnTop = true;
-	ledger =
-		layer === undefined
-			? { ...ledger, current: entry }
-			: { ...ledger, layers: [...ledger.layers, { layer, entry: entry.id }] };
+	ledger = { ...ledger, layers: [...ledger.layers, { layer, entry: entry.id }] };
 	return entry;
 }
 
@@ -204,6 +244,7 @@ export function replaceEntry(url: string, state: App.PageState): HistoryEntry | 
 	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop();
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	replaceState(url, stampedPageState(state, entry));
+	lastRouterIndex = routerIndexOf(history.state);
 	settleOnPage(entry);
 	return entry;
 }
@@ -217,12 +258,29 @@ interface NavigateOptions {
 
 // A navigation through the router carries its entry the way a shallow write
 // does: a push a fresh id, a replace the id of the entry it writes over.
-export function navigateTo(url: string, options: NavigateOptions): Promise<void> {
+// While it loads, history is not still: the router writes its entry only
+// once the route has loaded, over whatever entry stands then.
+export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
 		: newEntry();
-	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	return goto(url, { ...options, state: stampedPageState(options.state, entry) });
+	navigationsUnderway += 1;
+	try {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
+		await goto(url, { ...options, state: stampedPageState(options.state, entry) });
+		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
+	} finally {
+		navigationsUnderway -= 1;
+		settleStillness();
+	}
+}
+
+// A navigation another one superseded wrote no entry of its own, so only one
+// whose entry stands settles the page.
+function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
+	lastRouterIndex = routerIndexOf(history.state);
+	if (options.replaceState) settleOnPage(entry);
+	else pushedPage(entry);
 }
 
 // Every navigation the router reports once it has written its entry: a link
@@ -231,13 +289,20 @@ export function navigateTo(url: string, options: NavigateOptions): Promise<void>
 // start dropped gets back the id it was loaded with, and any other gets a
 // first id on top. A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
-	if (type === 'popstate') return;
+	if (type === 'popstate') {
+		lastRouterIndex = routerIndexOf(history.state);
+		return;
+	}
+	const routerPushed = isRouterPush();
+	lastRouterIndex = routerIndexOf(history.state);
 	const carried = entryOfHistoryState(history.state);
 	if (carried !== null) {
 		if (carried.id === lastAllocatedEntryId(sessionStorage)) standsOnTop = true;
-		settleOnPage(carried);
+		if (routerPushed) pushedPage(carried);
+		else settleOnPage(carried);
 		return;
 	}
+	if (routerPushed) standsOnTop = true;
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
 	const entry = loaded ?? firstIdOnTop();
 	if (entry !== null) {
@@ -245,7 +310,15 @@ export function stampNavigatedEntry(type: NavigationType): void {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
 		replaceState(location.href, stampedPageState(pageState, entry));
 	}
-	settleOnPage(entry);
+	if (routerPushed && entry !== null) pushedPage(entry);
+	else settleOnPage(entry);
+}
+
+// A router push -- a link, or a `goto` from anywhere -- stands one place above
+// the entry the controller last saw, a replace on that same place.
+function isRouterPush(): boolean {
+	const index = routerIndexOf(history.state);
+	return index !== undefined && lastRouterIndex !== undefined && index === lastRouterIndex + 1;
 }
 
 // Steps back once and resolves when a landing at or below `target` settles the
@@ -280,8 +353,102 @@ function settleStepBack(target: number): void {
 	settle?.();
 }
 
-// The landing handler hears each landing once the controller has settled its
-// step-backs and, on a layer entry no open layer owns, started stepping off it.
+export function ownStepBacksUnderway(): boolean {
+	return ledger.stepBacks.length > 0;
+}
+
+// Resolves once none of the controller's own step-backs is still underway: a
+// write issued after one lands on the entry it steps back to.
+export function ownStepBacksLanded(): Promise<void> {
+	if (!ownStepBacksUnderway()) return Promise.resolve();
+	return new Promise((resolve) => stepBacksLandedWaiters.push(resolve));
+}
+
+// Once history stands still -- no own step-back underway and no navigation
+// loading -- the layers opened meanwhile get their entries, in the order they
+// opened, on top of the entry that then stands.
+function settleStillness(): void {
+	if (ownStepBacksUnderway()) return;
+	const waiting = stepBacksLandedWaiters;
+	stepBacksLandedWaiters = [];
+	for (const resolve of waiting) resolve();
+	if (navigationsUnderway > 0) return;
+	const awaiting = layersAwaitingEntry;
+	layersAwaitingEntry = [];
+	for (const layer of awaiting) pushLayerEntry(layer);
+}
+
+// The controller's side of the layer stack: a layer held while history moves
+// waits for it to stand still, since an entry pushed meanwhile would land
+// under the step's own landing. A layer leaving from the entry history stands
+// on steps back off it; one whose entry stands lower leaves it to the landing
+// that reaches it, which steps off an entry no open layer owns.
+const layerEntries: LayerHistory = {
+	held(layer) {
+		if (ownStepBacksUnderway() || navigationsUnderway > 0) {
+			layersAwaitingEntry = [...layersAwaitingEntry, layer];
+			return;
+		}
+		pushLayerEntry(layer);
+	},
+	left(layer) {
+		if (layersAwaitingEntry.includes(layer)) {
+			layersAwaitingEntry = layersAwaitingEntry.filter((awaiting) => awaiting !== layer);
+			return;
+		}
+		const entry = entryOfLayer.get(layer);
+		if (entry === undefined) return;
+		entryOfLayer.delete(layer);
+		ledger = { ...ledger, layers: ledger.layers.filter((open) => open.entry !== entry) };
+		if (standingEntry()?.id === entry) void stepBackOffStandingEntry();
+	}
+};
+
+// The entry is a copy of the page it covers, at the same address. Pushed from
+// inside an effect -- a dialog holding its layer as it mounts -- SvelteKit's
+// shallow writer would read `page.url` into that effect and re-run it on the
+// next Back, pushing an entry nobody owns.
+function pushLayerEntry(layer: Layer): void {
+	untrack(() => {
+		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
+		entryOfLayer.set(layer, pushEntry(location.href, pageState, layer.id).id);
+	});
+}
+
+function dropLayers(open: readonly OpenLayerEntry[]): void {
+	const left = new Set(open.map((layer) => layer.entry));
+	const depth = stackedLayers().findIndex((layer) => left.has(entryOfLayer.get(layer) ?? NaN));
+	for (const [layer, entry] of entryOfLayer) if (left.has(entry)) entryOfLayer.delete(layer);
+	if (depth !== -1) dropLayersFrom(depth);
+}
+
+// A layer entry history stands on that no open layer owns -- one a reload
+// came back onto -- is a copy of the page below it, where Back would visibly
+// do nothing.
+function stepOffUnownedLayerEntry(): void {
+	const standing = standingEntry();
+	if (standing?.layer === undefined) return;
+	if (ledger.layers.some((open) => open.entry === standing.id)) return;
+	void stepBackTo(standing.id - 1);
+}
+
+// The library history stops: the overlays still open keep their layers, which
+// own no history entry any more, and nothing waits for a landing nobody hears.
+export function forgetLayerEntries(): void {
+	keepLayerHistory(null);
+	entryOfLayer.clear();
+	layersAwaitingEntry = [];
+	ledger = { ...ledger, layers: [], stepBacks: [] };
+	for (const target of Array.from(stepBackWaiters.keys())) {
+		while (stepBackWaiters.has(target)) settleStepBack(target);
+	}
+	settleStillness();
+}
+
+// The landing handler hears each landing once the controller has closed the
+// layers it left, settled its step-backs and, on a layer entry no open layer
+// owns, started stepping off it. While it listens, every layer opened owns an
+// entry.
 export function listenForLandings(
 	onLanding: (landing: Landing, event: PopStateEvent) => void
 ): () => void {
@@ -290,12 +457,20 @@ export function listenForLandings(
 		const landing = land(ledger, landed);
 		ledger = landing.ledger;
 		standsOnTop = false;
+		lastRouterIndex = routerIndexOf(event.state);
+		dropLayers(landing.dropLayers);
 		for (const target of landing.settled) settleStepBack(target);
 		if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
+		settleStillness();
 		onLanding(landing, event);
 	}
 	window.addEventListener('popstate', onPopstate);
-	return () => window.removeEventListener('popstate', onPopstate);
+	keepLayerHistory(layerEntries);
+	stepOffUnownedLayerEntry();
+	return () => {
+		window.removeEventListener('popstate', onPopstate);
+		forgetLayerEntries();
+	};
 }
 
 // A page load, as far as history goes: the state the page loaded onto is read
@@ -309,5 +484,10 @@ export function resetHistoryControllerForTests(): void {
 	stateOnLoad = history.state;
 	ledger = EMPTY_LEDGER;
 	standsOnTop = true;
+	lastRouterIndex = routerIndexOf(history.state);
 	stepBackWaiters.clear();
+	stepBacksLandedWaiters = [];
+	navigationsUnderway = 0;
+	entryOfLayer.clear();
+	layersAwaitingEntry = [];
 }
