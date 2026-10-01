@@ -9,6 +9,7 @@ import {
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+import { stampNavigatedEntry } from '$lib/history/historyController';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
 
@@ -43,6 +44,13 @@ export async function pressForward(): Promise<void> {
 	await traverseHistory(() => history.forward());
 }
 
+// A popstate that lands where history already stands -- what a user's Back
+// from an entry above it delivers -- resolving once the library has reacted.
+export async function landOnStandingEntry(): Promise<void> {
+	window.dispatchEvent(new PopStateEvent('popstate', { state: history.state }));
+	await tick();
+}
+
 export interface BackWatch {
 	presses: () => number;
 	stop: () => void;
@@ -72,7 +80,11 @@ async function traverseHistory(step: () => void): Promise<void> {
 export function reloadLibraryPageBeforeRouterStarts(): () => void {
 	loadLibraryHistoryPageForTests();
 	startFakeRouter();
-	return holdLibraryHistoryUntilRouterStarts();
+	const reportStart = holdLibraryHistoryUntilRouterStarts();
+	return () => {
+		stampNavigatedEntry('enter');
+		reportStart();
+	};
 }
 
 export function reloadLibraryPage(): Promise<void> {

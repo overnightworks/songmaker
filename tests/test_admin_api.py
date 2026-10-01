@@ -15,7 +15,8 @@ from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 from webauth.passwords import hash_password
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
-from songmaker_cli.db.queries import create_user, create_user_lora, list_audit_log
+from songmaker_cli.db.models import AuditLog
+from songmaker_cli.db.queries import create_user, create_user_lora
 
 
 @pytest.fixture
@@ -93,7 +94,7 @@ def _audit_entries(client: TestClient) -> list[dict[str, str | None]]:
                 "resource_id": entry.resource_id,
                 "detail": entry.detail,
             }
-            for entry in list_audit_log(session)
+            for entry in session.query(AuditLog).order_by(AuditLog.created_at, AuditLog.id)
         ]
 
 
