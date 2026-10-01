@@ -853,19 +853,9 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();
 	});
 
-	it.each([
-		{
-			refusal: 'a daily limit',
-			error: serverRefusal('Daily cover suggestion limit reached'),
-			named: 'Daily cover suggestion limit reached'
-		},
-		{
-			refusal: 'a suggestion that already runs',
-			error: new ApiError(409, 'Cover suggestions are already being generated', '/api/x'),
-			named: 'A cover suggestion is already being made.'
-		}
-	])('names $refusal in the singular, once, without a toast', async ({ error, named }) => {
-		createAlbumCoverSuggestions.mockRejectedValue(error);
+	it('names a daily limit in the singular, once, without a toast', async () => {
+		const named = 'Daily cover suggestion limit reached';
+		createAlbumCoverSuggestions.mockRejectedValue(serverRefusal(named));
 		const target = await renderDetail();
 		await openCoverEditing(target);
 
@@ -875,30 +865,46 @@ describe('AlbumCoverEditor in the album header', () => {
 		const alert = requireElement(target, '[role="alert"]');
 		expect(alert.textContent).toContain('Couldn’t make a cover suggestion');
 		expect(alert.textContent).toContain(named);
-		expect(target.textContent).not.toContain('Cover suggestions are already being generated');
 		expect(target.textContent?.split(named)).toHaveLength(2);
 		expect(addToast).not.toHaveBeenCalled();
 	});
 
-	it('a refusal because a suggestion already runs reads the list again and follows that run', async () => {
-		vi.stubGlobal('EventSource', FakeJobEventSource);
-		fetchAlbumCoverSuggestions
-			.mockResolvedValueOnce(coverSuggestions({ used_today: 2 }))
-			.mockResolvedValue(
-				coverSuggestions({ job: coverJob({ status: 'running', progress: 0.3 }), used_today: 3 })
+	it.each([
+		{
+			reread: 'follows the run that still goes',
+			found: coverSuggestions({
+				job: coverJob({ status: 'running', progress: 0.3 }),
+				used_today: 3
+			}),
+			shows: (target: HTMLElement) =>
+				expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull()
+		},
+		{
+			reread: 'shows the suggestion of a run that ended meanwhile',
+			found: coverSuggestions({ ...ONE_SUGGESTION, used_today: 3 }),
+			shows: (target: HTMLElement) => expect(shownImage(target)).toBe('/suggestion-one.png')
+		}
+	])(
+		'a refusal because a suggestion already runs reads the list again and $reread, with no word of its own',
+		async ({ found, shows }) => {
+			vi.stubGlobal('EventSource', FakeJobEventSource);
+			fetchAlbumCoverSuggestions
+				.mockResolvedValueOnce(coverSuggestions({ used_today: 2 }))
+				.mockResolvedValue(found);
+			createAlbumCoverSuggestions.mockRejectedValue(
+				new ApiError(409, 'Cover suggestions are already being generated', '/api/x')
 			);
-		createAlbumCoverSuggestions.mockRejectedValue(
-			new ApiError(409, 'Cover suggestions are already being generated', '/api/x')
-		);
-		const target = await renderDetail();
-		await openCoverEditing(target);
+			const target = await renderDetail();
+			await openCoverEditing(target);
 
-		await pressSuggestOnceLoaded(target);
+			await pressSuggestOnceLoaded(target);
 
-		await vi.waitFor(() => expect(countLine(target)).toBe('7 of 10 left today'));
-		expect(target.querySelector('.cover-stage [role="progressbar"]')).not.toBeNull();
-		expect(failureAlert(target)).toBeNull();
-	});
+			await vi.waitFor(() => expect(countLine(target)).toContain('7 of 10 left today'));
+			shows(target);
+			expect(failureAlert(target)).toBeNull();
+			expect(target.textContent).not.toContain('already being');
+		}
+	);
 
 	it('hydrates a running cover job once and shows its suggestion after the streamed completion', async () => {
 		vi.stubGlobal('EventSource', FakeJobEventSource);

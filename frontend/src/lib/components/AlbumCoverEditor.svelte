@@ -25,7 +25,6 @@
 		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
 		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_COVER_SUGGESTING_LABEL,
-		ALBUM_COVER_SUGGESTION_ALREADY_RUNNING,
 		ALBUM_COVER_SUGGESTION_FAILED_FALLBACK,
 		ALBUM_COVER_SUGGESTION_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTION_USE_LABEL,
@@ -258,9 +257,6 @@
 		if (error instanceof NetworkError) {
 			return { ...COVER_SUGGESTIONS_SETTLED, unreachable: true };
 		}
-		if (error instanceof ApiError && error.status === HTTP_CONFLICT) {
-			return { ...COVER_SUGGESTIONS_SETTLED, failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING };
-		}
 		return {
 			...COVER_SUGGESTIONS_SETTLED,
 			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
@@ -316,14 +312,14 @@
 	// A refusal means the count and list the editor holds are stale -- another
 	// tab or a new day may have moved them -- so both are read again. Only a
 	// count that says today's suggestions are spent makes a 429 the daily
-	// limit, with the server's words beside it, and a 409 whose run the reread
-	// now follows needs no word of its own; any other refusal (the request
-	// throttle, a run that already ended) is an ordinary failure that the next
+	// limit, with the server's words beside it. A 409 needs no word of its own:
+	// the reread either follows the run that still goes or shows how it ended.
+	// Any other 429 (the request throttle) is an ordinary failure that the next
 	// Suggest may retry.
 	async function rereadAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await loadCoverSuggestions(albumId);
 		if (albumId !== currentAlbumId || coverSuggestions === null) return;
-		if (refusal.status === HTTP_CONFLICT && isCoverSuggestionGenerating) return;
+		if (refusal.status === HTTP_CONFLICT) return;
 		if (refusal.status === HTTP_TOO_MANY_REQUESTS && dailySuggestionsSpent) {
 			const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
 			updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
