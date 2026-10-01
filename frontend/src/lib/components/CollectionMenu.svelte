@@ -101,9 +101,15 @@
 		missingTakeSongs = [];
 	}
 
-	function runAndClose(action: () => void): void {
-		popover?.close();
+	function runAndClose(action: () => void, restoreFocus = true): void {
+		popover?.close(restoreFocus);
 		action();
+	}
+
+	// Edit details opens a form that focuses its own Title; handing focus back
+	// to the trigger as the menu closes would pull the caret out of that form.
+	function openFormAndClose(action: () => void): void {
+		runAndClose(action, false);
 	}
 </script>
 
@@ -135,7 +141,10 @@
 		<p class="menu-heading">{kindLabel} · {title}</p>
 		{#if kind === 'album'}
 			{#if oneditdetails}
-				{@render actionRow(COLLECTION_MENU_EDIT_DETAILS_LABEL, oneditdetails, 'pencil')}
+				<button class="menu-item" onclick={() => openFormAndClose(oneditdetails)}>
+					<Icon name="pencil" size={14} />
+					{COLLECTION_MENU_EDIT_DETAILS_LABEL}
+				</button>
 			{/if}
 			{#if oncoveredit}
 				{@render actionRow(

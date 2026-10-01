@@ -173,6 +173,7 @@ async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
 		.click();
 	const editor = header.getByRole('form', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL });
 	await expect(editor).toBeVisible();
+	await expect(editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true })).toBeFocused();
 	return editor;
 }
 

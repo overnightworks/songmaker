@@ -533,6 +533,15 @@ describe('AlbumDetailView Edit details', () => {
 		expect(target.textContent).not.toContain('Add year');
 	});
 
+	it('keeps focus in Title once the menu that opened Edit details has closed', async () => {
+		const target = await renderDetail();
+		const form = await openEditDetails(target);
+		await Promise.resolve();
+		await tick();
+
+		expect(document.activeElement).toBe(field(form, 'Title'));
+	});
+
 	it('saves title, subtitle and year in one update, and the header reads the new details', async () => {
 		updateAlbum.mockResolvedValue(
 			album({ id: 'a-local', title: 'Nightdrive', subtitle: 'Late-night synthwave', year: '2026' })
