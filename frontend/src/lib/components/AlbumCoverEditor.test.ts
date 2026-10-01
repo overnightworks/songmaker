@@ -11,6 +11,7 @@ import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+import { dropLayersFrom, stackedLayers } from '$lib/stores/layers';
 import {
 	createComponentMount,
 	openCollectionMenu,
@@ -130,6 +131,15 @@ function editorActions(target: HTMLElement): string[] {
 
 function pressEditorButton(target: HTMLElement, name: string): void {
 	getByRoleButton(requireElement(target, '.cover-editor'), name).click();
+}
+
+function uploadCoverFile(target: HTMLElement): void {
+	const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
+	vi.spyOn(input, 'click').mockImplementation(() => undefined);
+	pressEditorButton(target, 'Upload');
+	const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
+	Object.defineProperty(input, 'files', { configurable: true, value: [file] });
+	input.dispatchEvent(new Event('change', { bubbles: true }));
 }
 
 function swipe(target: HTMLElement, travel: number): void {
@@ -450,6 +460,37 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(levelUp).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{
+			way: 'Escape',
+			press: () =>
+				document.body.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+				)
+		},
+		{ way: 'Back', press: () => dropLayersFrom(stackedLayers().length - 1) },
+		{
+			way: '×',
+			press: (target: HTMLElement) => pressEditorButton(target, 'Close cover editing')
+		}
+	])('$way during an upload closes nothing until the cover is saved', async ({ press }) => {
+		const uploading = deferred<ReturnType<typeof coveredAlbum>>();
+		uploadAlbumCover.mockReturnValue(uploading.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		const stopListening = listenForGlobalEscape();
+
+		uploadCoverFile(target);
+		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledOnce());
+		press(target);
+		await tick();
+
+		expect(editor(target)).not.toBeNull();
+		uploading.resolve(coveredAlbum(UPLOADED));
+		await editingClosed(target);
+		stopListening();
+	});
+
 	it('× discards the unused suggestions and closes the editor', async () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
 		const target = await renderDetail();
@@ -492,12 +533,7 @@ describe('AlbumCoverEditor in the album header', () => {
 			way: 'Upload',
 			leave: (target: HTMLElement) => {
 				uploadAlbumCover.mockResolvedValue(coveredAlbum(UPLOADED));
-				const input = requireElement<HTMLInputElement>(target, '.cover-file-input');
-				vi.spyOn(input, 'click').mockImplementation(() => undefined);
-				pressEditorButton(target, 'Upload');
-				const file = new File([new Uint8Array([1])], 'cover.jpg', { type: 'image/jpeg' });
-				Object.defineProperty(input, 'files', { configurable: true, value: [file] });
-				input.dispatchEvent(new Event('change', { bubbles: true }));
+				uploadCoverFile(target);
 			}
 		},
 		{ way: 'another album', leave: () => selectedAlbumId.set('a-other') }

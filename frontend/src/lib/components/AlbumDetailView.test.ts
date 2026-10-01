@@ -428,9 +428,10 @@ describe('AlbumDetailView header', () => {
 		Object.defineProperty(input, 'files', { configurable: true, value: [file] });
 		input.dispatchEvent(new Event('change', { bubbles: true }));
 		await vi.waitFor(() => expect(uploadAlbumCover).toHaveBeenCalledTimes(1));
-		await tick();
-		expect(target.querySelector('img')?.getAttribute('alt')).toBe(
-			`${ALBUM_COVER_ALT_TYPE} Night Drive`
+		await vi.waitFor(() =>
+			expect(target.querySelector('img')?.getAttribute('alt')).toBe(
+				`${ALBUM_COVER_ALT_TYPE} Night Drive`
+			)
 		);
 	});
 
