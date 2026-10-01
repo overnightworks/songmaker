@@ -163,7 +163,7 @@ class TestLifecycleReaper:
         with ctx.db() as session:
             job = session.query(Job).filter_by(id="chat-running").one()
             assert job.status == JobStatus.FAILED
-            assert job.error == "Heartbeat lost — please retry."
+            assert job.error == "Took too long to finish — please retry."
             assert job.error_type == "heartbeat_lost"
 
     def test_leaves_a_fresh_chat_job_alone(self, ctx) -> None:

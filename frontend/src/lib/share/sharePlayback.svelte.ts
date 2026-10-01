@@ -10,8 +10,6 @@ import {
 	type AudioPlayerCallbacks,
 	type PlaybackInfo
 } from '$lib/services/audioPlayer.svelte';
-import { queuePlaybackMode, shouldUseQueueStream } from '$lib/stores/playbackSettings';
-import { get } from 'svelte/store';
 import {
 	playableTracks,
 	trackPlaybackInfo,
@@ -199,9 +197,7 @@ export class SharePlayback {
 	}
 
 	private canUseStream(): boolean {
-		return (
-			this.fetchStream !== null && !this.shuffle && shouldUseQueueStream(get(queuePlaybackMode))
-		);
+		return this.fetchStream !== null && !this.shuffle;
 	}
 
 	private async ensureManifest(): Promise<QueueStreamManifest> {

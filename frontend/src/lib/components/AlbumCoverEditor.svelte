@@ -23,8 +23,8 @@
 		ALBUM_COVER_NEXT_SUGGESTION_LABEL,
 		ALBUM_COVER_PREVIOUS_SUGGESTION_LABEL,
 		ALBUM_COVER_SUGGEST_ANOTHER_LABEL,
+		ALBUM_COVER_SUGGEST_LABEL,
 		ALBUM_COVER_SUGGESTING_LABEL,
-		ALBUM_COVER_SUGGESTION_ALREADY_RUNNING,
 		ALBUM_COVER_SUGGESTION_FAILED_FALLBACK,
 		ALBUM_COVER_SUGGESTION_FAILED_TITLE,
 		ALBUM_COVER_SUGGESTION_USE_LABEL,
@@ -63,9 +63,7 @@
 	>;
 
 	type StageSlot =
-		| { kind: 'suggestion'; id: string; url: string }
-		| { kind: 'making'; progress: number }
-		| { kind: 'failed'; reason: string };
+		{ kind: 'suggestion'; id: string; url: string } | { kind: 'making'; progress: number };
 
 	const HTTP_CONFLICT = 409;
 	const HTTP_TOO_MANY_REQUESTS = 429;
@@ -145,29 +143,28 @@
 			kind: 'suggestion',
 			...suggestion
 		})),
-		...stageStatusSlot()
+		...(isCoverSuggestionGenerating
+			? [{ kind: 'making', progress: coverSuggestionsProgress } as const]
+			: [])
 	]);
 	const shownSlotIndex = $derived(
 		Math.min(chosenSlot ?? stageSlots.length - 1, stageSlots.length - 1)
 	);
 	const shownSlot = $derived(stageSlots[shownSlotIndex] ?? null);
 	const shownSuggestionId = $derived(shownSlot?.kind === 'suggestion' ? shownSlot.id : null);
-	const shownSuggestionNumber = $derived(Math.min(shownSlotIndex + 1, suggestionCount));
+	const shownSuggestionNumber = $derived(shownSuggestionId ? shownSlotIndex + 1 : null);
 	const stageLabel = $derived(
-		hasSuggestions ? albumCoverStageLabel(shownSuggestionNumber, suggestionCount) : undefined
+		shownSuggestionNumber ? albumCoverStageLabel(shownSuggestionNumber, suggestionCount) : undefined
 	);
-
-	function stageStatusSlot(): StageSlot[] {
-		if (isCoverSuggestionGenerating) {
-			return [{ kind: 'making', progress: coverSuggestionsProgress }];
-		}
-		if (coverSuggestionFailure) return [{ kind: 'failed', reason: coverSuggestionFailure }];
-		return [];
-	}
 
 	const coverSuggestionsReloads = reloadWhileUnreachable(reloadCoverSuggestions);
 	$effect(() => () => coverSuggestionsReloads.stop());
 
+	// Opening the editor only reads what exists: a suggestion spends today's
+	// quota, so only Suggest makes one, and a mistap closed at once costs
+	// nothing (#1186). However the editor leaves an album -- ×, Back, Upload,
+	// Use or another album -- it leaves nothing unused behind: a suggestion
+	// still running is stopped and what × or Use did not already discard goes.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		coverSuggestionsState = {
@@ -179,26 +176,12 @@
 		coverSuggestionsReloads.stop();
 		const visit = new AbortController();
 		albumVisit = visit;
-		queueMicrotask(() => void openOnAlbum(albumId, visit.signal));
+		queueMicrotask(() => void loadCoverSuggestions(albumId));
 		return () => {
 			visit.abort();
 			discardUnusedOnLeave(albumId);
 		};
 	});
-
-	// Opening an album that has neither a cover nor anything suggested is the
-	// deliberate ask for its first suggestion. A suggestion spends quota, so an
-	// editor closed or moved to another album while the first load runs must
-	// never make one. However the editor leaves an album -- ×, Back, Upload,
-	// Use or another album -- it leaves nothing unused behind: a suggestion
-	// still running is stopped and what × or Use did not already discard goes.
-	async function openOnAlbum(albumId: string, visit: AbortSignal): Promise<void> {
-		await loadCoverSuggestions(albumId);
-		if (visit.aborted) return;
-		const nothingToShow =
-			coverSuggestions !== null && !hasSuggestions && !isCoverSuggestionGenerating;
-		if (!album.cover && nothingToShow) await suggestCover();
-	}
 
 	function reloadCoverSuggestions(): void {
 		void loadCoverSuggestions(currentAlbumId);
@@ -274,9 +257,6 @@
 		if (error instanceof NetworkError) {
 			return { ...COVER_SUGGESTIONS_SETTLED, unreachable: true };
 		}
-		if (error instanceof ApiError && error.status === HTTP_CONFLICT) {
-			return { ...COVER_SUGGESTIONS_SETTLED, failure: ALBUM_COVER_SUGGESTION_ALREADY_RUNNING };
-		}
 		return {
 			...COVER_SUGGESTIONS_SETTLED,
 			failure: describeFailure(error, ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
@@ -308,8 +288,8 @@
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
-			if (error instanceof ApiError && error.status === HTTP_TOO_MANY_REQUESTS) {
-				await recountAfterRefusal(albumId, error);
+			if (isRefusal(error)) {
+				await rereadAfterRefusal(albumId, error);
 				return;
 			}
 			showSuggestFailure(albumId, error);
@@ -322,20 +302,30 @@
 		reloadCoverSuggestionsAfter(outcome);
 	}
 
-	// A refusal means the count the editor holds is stale -- another tab or a
-	// new day may have moved it -- so the count is read again. Only a count
-	// that says today's suggestions are spent makes it the daily limit, with
-	// the server's words beside it; any other refusal (the request throttle)
-	// is an ordinary failure that the next Suggest another may retry.
-	async function recountAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
+	function isRefusal(error: unknown): error is ApiError {
+		return (
+			error instanceof ApiError &&
+			(error.status === HTTP_CONFLICT || error.status === HTTP_TOO_MANY_REQUESTS)
+		);
+	}
+
+	// A refusal means the count and list the editor holds are stale -- another
+	// tab or a new day may have moved them -- so both are read again. Only a
+	// count that says today's suggestions are spent makes a 429 the daily
+	// limit, with the server's words beside it. A 409 needs no word of its own:
+	// the reread either follows the run that still goes or shows how it ended.
+	// Any other 429 (the request throttle) is an ordinary failure that the next
+	// Suggest may retry.
+	async function rereadAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await loadCoverSuggestions(albumId);
 		if (albumId !== currentAlbumId || coverSuggestions === null) return;
-		if (!dailySuggestionsSpent) {
-			showSuggestFailure(albumId, refusal);
+		if (refusal.status === HTTP_CONFLICT) return;
+		if (refusal.status === HTTP_TOO_MANY_REQUESTS && dailySuggestionsSpent) {
+			const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
+			updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
 			return;
 		}
-		const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
-		updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
+		showSuggestFailure(albumId, refusal);
 	}
 
 	// A load still answering from before the stop would report the run as
@@ -479,11 +469,6 @@
 						<span style:width={`${Math.max(4, shownSlot.progress * 100)}%`}></span>
 					</div>
 				</div>
-			{:else if shownSlot?.kind === 'failed'}
-				<div class="stage-failed" role="alert">
-					<strong>{ALBUM_COVER_SUGGESTION_FAILED_TITLE}</strong>
-					<p>{shownSlot.reason}</p>
-				</div>
 			{:else if album.cover}
 				<img
 					src={album.cover.detail}
@@ -491,7 +476,8 @@
 					draggable="false"
 				/>
 			{:else}
-				<span class="stage-empty">{ALBUM_COVER_ADD_LABEL}</span>
+				<button type="button" class="stage-empty" onclick={onupload}>{ALBUM_COVER_ADD_LABEL}</button
+				>
 			{/if}
 		</div>
 		{#if stageSlots.length > 1}
@@ -513,7 +499,7 @@
 				>{ALBUM_COVER_SUGGESTIONS_RETRY_LABEL}</button
 			>
 		{:else if coverSuggestions}
-			{#if hasSuggestions}
+			{#if shownSuggestionNumber}
 				<b>{albumCoverSuggestionPosition(shownSuggestionNumber, suggestionCount)}</b>
 				<span aria-hidden="true">·</span>
 			{/if}
@@ -529,6 +515,12 @@
 		{#if dailyLimitNote}
 			<span class="cover-limit">{dailyLimitNote}</span>
 		{/if}
+		{#if coverSuggestionFailure}
+			<span class="cover-failure" role="alert">
+				<strong>{ALBUM_COVER_SUGGESTION_FAILED_TITLE}</strong>
+				{coverSuggestionFailure}
+			</span>
+		{/if}
 	</p>
 
 	<div class="cover-actions">
@@ -540,16 +532,27 @@
 			class="cover-action"
 			data-hitbox="frequent"
 			disabled={!canSuggestCover}
-			onclick={suggestCover}>{ALBUM_COVER_SUGGEST_ANOTHER_LABEL}</button
+			onclick={suggestCover}
+			>{hasSuggestions ? ALBUM_COVER_SUGGEST_ANOTHER_LABEL : ALBUM_COVER_SUGGEST_LABEL}</button
 		>
-		<button
-			type="button"
-			class="cover-action cover-use"
-			data-hitbox="frequent"
-			disabled={!shownSuggestionId || coverSuggestionsBusy}
-			onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
-			>{ALBUM_COVER_SUGGESTION_USE_LABEL}</button
-		>
+		{#if hasSuggestions}
+			<button
+				type="button"
+				class="cover-action cover-use"
+				data-hitbox="frequent"
+				disabled={!shownSuggestionId || coverSuggestionsBusy}
+				onclick={() => shownSuggestionId && selectCoverSuggestion(shownSuggestionId)}
+				>{ALBUM_COVER_SUGGESTION_USE_LABEL}</button
+			>
+		{/if}
+		{#if album.cover}
+			<button
+				type="button"
+				class="cover-action cover-remove"
+				data-hitbox="frequent"
+				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
+			>
+		{/if}
 		<button
 			type="button"
 			class="cover-close"
@@ -561,14 +564,6 @@
 		>
 			<Icon name="x" size={20} />
 		</button>
-		{#if album.cover}
-			<button
-				type="button"
-				class="cover-action cover-remove"
-				data-hitbox="frequent"
-				onclick={onremove}>{ALBUM_COVER_EDITING_REMOVE_LABEL}</button
-			>
-		{/if}
 	</div>
 </div>
 
@@ -638,6 +633,10 @@
 	}
 
 	.stage-empty {
+		width: 100%;
+		height: 100%;
+		border: none;
+		background: none;
 		color: var(--text-muted);
 		font-family: var(--font-display);
 		font-size: 0.85rem;
@@ -645,19 +644,15 @@
 		text-transform: uppercase;
 	}
 
-	.stage-making,
-	.stage-failed {
+	.stage-making {
 		display: flex;
 		flex-direction: column;
 		gap: 0.6rem;
 		width: 100%;
 		padding: 1rem;
-		text-align: center;
-	}
-
-	.stage-making {
 		color: var(--text-muted);
 		font-size: 0.83rem;
+		text-align: center;
 	}
 
 	.stage-progress {
@@ -675,21 +670,17 @@
 		transition: width 180ms ease-out;
 	}
 
-	.stage-failed {
-		height: 100%;
-		justify-content: center;
-		border-top: 3px solid var(--score-bad);
+	.cover-failure {
+		flex-basis: 100%;
+		padding-top: 0.3rem;
+		border-top: 2px solid var(--score-bad);
+		text-align: center;
 	}
 
-	.stage-failed strong {
+	.cover-failure strong {
+		display: block;
 		color: var(--text);
-		font-size: 0.85rem;
-	}
-
-	.stage-failed p {
-		margin: 0;
-		color: var(--text-subtle);
-		font-size: 0.78rem;
+		font-size: 0.8rem;
 	}
 
 	.cover-count {

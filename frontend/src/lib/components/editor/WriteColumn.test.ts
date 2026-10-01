@@ -13,12 +13,13 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 		deleteConversation: vi.fn(),
 		fetchMemory: vi.fn().mockResolvedValue(null),
 		fetchCowriterSettings: vi.fn().mockResolvedValue({ provider: 'claude', model: '' }),
-		fetchVersions: vi.fn().mockResolvedValue([])
+		fetchVersions: vi.fn().mockResolvedValue([]),
+		fetchLibraryPoolQueue: vi.fn()
 	};
 });
 import { editLyrics, loadSongData, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
 import { nowPlayingOpen } from '$lib/stores/player';
-import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
+import { fetchLibraryPoolQueue } from '$lib/api/client';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { EDITOR_VIEW_COWRITER_LABEL } from '$lib/constants';
 import type { SongItem } from '$lib/api/types';
@@ -229,34 +230,48 @@ describe('WriteColumn Co-Writer mode', () => {
 	});
 
 	it('plays a take from the strip on click without opening Now Playing', async () => {
-		// Classic mode makes playTake's audioPlayer.load call synchronous and
-		// deterministic — no library-pool API round trip to mock. Asserting on
-		// audioPlayer (the real playback boundary) instead of a re-exported
-		// player.ts function exercises TakeStrip's actual entry point,
-		// playTake, rather than stubbing it out from under the click handler.
-		// The spy is scoped and restored locally so it never bleeds into the
-		// module-level $lib/api/client mocks the other tests in this file rely
-		// on being set once at module load.
-		setQueuePlaybackMode('classic');
+		// Asserting on audioPlayer (the real playback boundary) instead of a
+		// re-exported player.ts function exercises TakeStrip's actual entry
+		// point, playTake, rather than stubbing it out from under the click
+		// handler. The spy is scoped and restored locally so it never bleeds
+		// into the other tests in this file.
 		const loadSpy = vi.spyOn(audioPlayer, 'load').mockImplementation((info) => {
 			audioPlayer.current = info;
 		});
 		try {
 			const gen = generation({ id: 'g9' });
 			const targetSong = song({ ...draftSongDefaults(), generations: [gen] });
+			vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce({
+				pool: 'picks',
+				takes: [
+					{
+						generation_id: gen.id,
+						song_id: targetSong.id,
+						song_title: targetSong.title,
+						artist: targetSong.artist,
+						album_title: targetSong.album_title,
+						lyrics: null,
+						generation_number: gen.generation_number,
+						mp3_path: gen.mp3_path,
+						seed: gen.seed,
+						model_mode: gen.model_mode,
+						is_picked: gen.is_picked,
+						is_kept: gen.is_kept
+					}
+				],
+				skipped: [],
+				skipped_complete: true
+			});
 			const { target } = await render({
 				coWriterOpen: true,
 				song: targetSong
 			});
 			target.querySelector<HTMLButtonElement>('.take-chip')?.click();
-			await tick();
-			await Promise.resolve();
-			expect(audioPlayer.load).toHaveBeenCalledWith(
-				expect.objectContaining({
+			await vi.waitFor(() =>
+				expect(audioPlayer.current).toMatchObject({
 					generation: expect.objectContaining({ id: gen.id }),
 					songId: targetSong.id
-				}),
-				expect.objectContaining({ restart: true })
+				})
 			);
 			expect(get(nowPlayingOpen)).toBe(false);
 		} finally {
