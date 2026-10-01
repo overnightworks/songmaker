@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 
 import { goto } from '$app/navigation';
 import {
@@ -18,7 +19,12 @@ import {
 } from '$lib/constants';
 import { theme } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
-import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
+import { startFakeRouter } from '$lib/test-utils/app-navigation';
+import {
+	describeBackClosesOverlay,
+	plannedHistoryIndex,
+	replaceHistoryEntry
+} from '$lib/test-utils/library-history';
 import AccountMenu from './AccountMenu.svelte';
 
 const USERNAME = 'felix';
@@ -28,6 +34,8 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 
 beforeEach(() => {
 	theme.set('dark');
+	replaceHistoryEntry('/');
+	startFakeRouter();
 });
 
 afterEach(async () => {
@@ -96,6 +104,21 @@ describe('AccountMenu', () => {
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/settings'));
 		expect(target.querySelector('[role="dialog"]')).toBeNull();
+	});
+
+	it('only closes when Settings is already the page on screen, adding no history entry', async () => {
+		replaceHistoryEntry('/settings');
+		startFakeRouter();
+		const target = await renderAccountMenu();
+		const panel = await openMenu(target);
+
+		getByRoleButton(panel, RAIL_SETTINGS_LABEL).click();
+		await tick();
+		await Promise.resolve();
+
+		expect(target.querySelector('[role="dialog"]')).toBeNull();
+		expect(goto).not.toHaveBeenCalled();
+		expect(location.pathname).toBe('/settings');
 	});
 
 	it('logs out through the shell', async () => {
