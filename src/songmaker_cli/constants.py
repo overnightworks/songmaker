@@ -711,7 +711,6 @@ class ResourceType(StrEnum):
     PRESET = "preset"
     MODEL = "model"
     DEFAULT_CONFIG = "default_config"
-    CLAUDE_MODELS = "claude_models"
     COWRITER = "cowriter"
     JUDGE = "judge"
     COVER = "cover"

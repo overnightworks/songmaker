@@ -47,7 +47,6 @@ from songmaker_cli.db.queries.auth import get_user as get_user
 from songmaker_cli.db.queries.auth import get_user_by_username as get_user_by_username
 from songmaker_cli.db.queries.auth import hard_delete_user as hard_delete_user
 from songmaker_cli.db.queries.auth import list_active_sessions as list_active_sessions
-from songmaker_cli.db.queries.auth import list_audit_log as list_audit_log
 from songmaker_cli.db.queries.auth import list_login_attempts as list_login_attempts
 from songmaker_cli.db.queries.auth import list_users as list_users
 from songmaker_cli.db.queries.auth import (
