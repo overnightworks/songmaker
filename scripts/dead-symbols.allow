@@ -1,7 +1,6 @@
 # Exact exceptions to the production-reference rule; no wildcards.
 # Framework entries name the dispatcher; migrations retain their frozen schema history.
 
-songmaker_cli/admin_api.py:audit_log_endpoint # HTTP dispatcher: router.get('/audit-log')
 songmaker_cli/admin_api.py:create_user_endpoint # HTTP dispatcher: router.post('/users', responses={409: {'description': 'User already exists'}})
 songmaker_cli/admin_api.py:deactivate_user_endpoint # HTTP dispatcher: router.delete('/users/{user_id}', responses={400: {'description': 'User cannot be deactivated'}, 404: {'description': 'User does not exist'}})
 songmaker_cli/admin_api.py:download_model_endpoint # HTTP dispatcher: router.post('/registry/{mode}/download', responses={400: {'description': 'Requested model mode is invalid'}, 409: {'description': 'Model is already downloaded or downloading'}, 503: {'description': 'Model registry or job queue is unavailable'}})
@@ -44,11 +43,6 @@ songmaker_cli/auth_api.py:change_password # HTTP dispatcher: router.put('/passwo
 songmaker_cli/auth_api.py:logout # HTTP dispatcher: router.delete('/session')
 songmaker_cli/auth_api.py:me # HTTP dispatcher: router.get('/me')
 songmaker_cli/auth_api.py:setup_required # HTTP dispatcher: router.get('/setup-required')
-songmaker_cli/chat_api.py:api_capabilities # HTTP dispatcher: router.get('/capabilities')
-songmaker_cli/chat_api.py:api_recent_chats # HTTP dispatcher: router.get('/chat/recent')
-songmaker_cli/chat_api.py:api_song_chat # HTTP dispatcher: router.post('/songs/{song_id}/chat', responses={503: {'description': 'Claude is currently unavailable'}})
-songmaker_cli/chat_api.py:api_song_chat_clear # HTTP dispatcher: router.delete('/songs/{song_id}/chat')
-songmaker_cli/chat_api.py:api_song_chat_history # HTTP dispatcher: router.get('/songs/{song_id}/chat')
 songmaker_cli/conversation_api.py:api_chat_turn # HTTP dispatcher: router.post('/chat/turn', responses={404: {'description': 'Mentioned album or version does not exist'}, 422: {'description': 'Chat context or co-writer configuration is invalid'}})
 songmaker_cli/conversation_api.py:api_conversation_messages # HTTP dispatcher: router.get('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
 songmaker_cli/conversation_api.py:api_delete_conversation # HTTP dispatcher: router.delete('/conversations/{conversation_id}', responses={404: {'description': 'Conversation does not exist'}})
@@ -87,7 +81,6 @@ songmaker_cli/jobs_api.py:api_stream_job # HTTP dispatcher: router.get('/jobs/{j
 songmaker_cli/library_api.py:api_library_continue # HTTP dispatcher: router.get('/library/continue')
 songmaker_cli/library_api.py:api_library_pool_queue # HTTP dispatcher: router.get('/library/pool-queue')
 songmaker_cli/library_api.py:api_library_search # HTTP dispatcher: router.get('/library/search', responses={422: {'description': 'Search cursor is invalid or does not match the query'}})
-songmaker_cli/library_api.py:api_library_shares # HTTP dispatcher: router.get('/library/shares')
 songmaker_cli/lifecycle.py:bubblewrap_startup_probe_command # Operational caller scripts/prove_codex_image_sandbox.py outside src
 songmaker_cli/lora_api.py:api_add_sample # HTTP dispatcher: router.post('/loras/{lora_id}/samples', responses={409: {'description': 'LoRA cannot accept another sample'}, 413: {'description': 'Sample file is too large'}, 422: {'description': 'Sample upload is invalid'}})
 songmaker_cli/lora_api.py:api_add_sample_from_generation # HTTP dispatcher: router.post('/loras/{lora_id}/samples/from-generation', responses={404: {'description': 'Generation does not exist'}, 409: {'description': 'LoRA cannot accept another sample'}, 422: {'description': 'Generation cannot be used as a sample'}})
@@ -134,11 +127,11 @@ songmaker_cli/scoring/spectral_quality.py:score_spectral_quality # Scorer regist
 songmaker_cli/scoring/text_accuracy.py:clear_cache # Whisper cache cleanup seam used by tests/test_scorers_extended.py
 songmaker_cli/scoring/text_accuracy.py:score_text_accuracy # Scorer registry: register('text_accuracy')
 songmaker_cli/scoring_worker.py:ScoringWorkerSettings # arq CLI entry point selected by docker-compose.yml scoring-worker command
+songmaker_cli/settings_api.py:api_capabilities # HTTP dispatcher: router.get('/capabilities')
 songmaker_cli/settings_api.py:api_create_preset # HTTP dispatcher: router.post('/settings/presets', responses={400: {'description': 'Requested model is not available'}, 409: {'description': PRESET_NAME_EXISTS_DETAIL}})
 songmaker_cli/settings_api.py:api_delete_preset # HTTP dispatcher: router.delete('/settings/presets/{preset_id}', responses={404: {'description': 'Preset does not exist'}})
 songmaker_cli/settings_api.py:api_delete_user_rate_limits # HTTP dispatcher: router.delete('/settings/rate-limits/user/{user_id}', responses={404: {'description': 'User does not exist'}})
 songmaker_cli/settings_api.py:api_get_builtins # HTTP dispatcher: router.get('/settings/generation-builtins')
-songmaker_cli/settings_api.py:api_get_claude_models # HTTP dispatcher: router.get('/settings/claude-models')
 songmaker_cli/settings_api.py:api_get_cover_settings # HTTP dispatcher: router.get('/settings/cover')
 songmaker_cli/settings_api.py:api_get_cowriter_settings # HTTP dispatcher: router.get('/settings/cowriter', responses={422: {'description': 'Stored co-writer configuration is invalid'}})
 songmaker_cli/settings_api.py:api_get_default_config # HTTP dispatcher: router.get('/settings/default-config')
@@ -148,7 +141,6 @@ songmaker_cli/settings_api.py:api_get_provider_status # HTTP dispatcher: router.
 songmaker_cli/settings_api.py:api_list_active_models # HTTP dispatcher: router.get('/settings/models')
 songmaker_cli/settings_api.py:api_list_all_models # HTTP dispatcher: router.get('/settings/models/all')
 songmaker_cli/settings_api.py:api_list_presets # HTTP dispatcher: router.get('/settings/presets')
-songmaker_cli/settings_api.py:api_set_claude_models # HTTP dispatcher: router.put('/settings/claude-models', responses={400: {'description': 'Selected Claude model is not allowed'}})
 songmaker_cli/settings_api.py:api_set_cover_settings # HTTP dispatcher: router.put('/settings/cover', responses={422: {'description': 'Unknown cover provider or route'}})
 songmaker_cli/settings_api.py:api_set_cowriter_settings # HTTP dispatcher: router.put('/settings/cowriter', responses={422: {'description': 'Co-writer provider, route, or model is unknown'}})
 songmaker_cli/settings_api.py:api_set_default_config # HTTP dispatcher: router.put('/settings/default-config', responses={400: {'description': 'Default configuration is invalid'}, 404: {'description': 'User does not exist'}})

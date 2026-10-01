@@ -23,7 +23,6 @@
 		deletePlaylistCover
 	} from '$lib/stores/playlists';
 	import { addToast } from '$lib/stores/toast';
-	import { refreshSharesAfterMutation } from '$lib/stores/shares';
 	import { pinQueueStream, unpinQueueStream } from '$lib/api/queue-streams';
 	import {
 		saveStream,
@@ -132,7 +131,6 @@
 			is_shared: true,
 			share_slug: result.share_slug
 		}));
-		await refreshSharesAfterMutation();
 		return result;
 	}
 
@@ -140,7 +138,6 @@
 		if (!playlistMeta) return;
 		await unsharePlaylist(playlistMeta.id);
 		updatePlaylistInList(playlistMeta.id, (p) => ({ ...p, is_shared: false, share_slug: null }));
-		await refreshSharesAfterMutation();
 	}
 
 	async function onPlaylistDelete(): Promise<void> {

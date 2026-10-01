@@ -91,18 +91,7 @@ LIBRARY_SORTS: Final[frozenset[str]] = frozenset({
 })
 LIBRARY_ITEM_ALBUM: Final[str] = "album"
 LIBRARY_ITEM_SONG: Final[str] = "song"
-LIBRARY_ITEM_GENERATION: Final[str] = "generation"
 LIBRARY_ITEM_PLAYLIST: Final[str] = "playlist"
-SHARE_INVENTORY_TYPES: Final[frozenset[str]] = frozenset({
-    LIBRARY_ITEM_ALBUM,
-    LIBRARY_ITEM_SONG,
-    LIBRARY_ITEM_GENERATION,
-    LIBRARY_ITEM_PLAYLIST,
-})
-SHARE_PUBLIC_PATH_ALBUM: Final[str] = "/share/{slug}"
-SHARE_PUBLIC_PATH_SONG: Final[str] = "/share/song/{slug}"
-SHARE_PUBLIC_PATH_GENERATION: Final[str] = "/share/gen/{slug}"
-SHARE_PUBLIC_PATH_PLAYLIST: Final[str] = "/share/playlist/{slug}"
 LIBRARY_CURSOR_VERSION: Final[int] = 1
 LIBRARY_CURSOR_KEY_VERSION: Final[str] = "v"
 LIBRARY_CURSOR_KEY_Q: Final[str] = "q"
@@ -217,19 +206,6 @@ CODEX_RESOURCES_DIRECTORY: Final[str] = "/usr/local/codex-resources"
 
 COWRITER_SUMMARY_TAG = "conversation_summary"
 COWRITER_MAX_SUMMARY_CHARS = 12_000
-
-# Owned solely by the legacy `/settings/claude-models` endpoint and the dead
-# chat_api.py co-writer (chat_model). scoring_model is not orphaned: it is
-# the Claude judge's fallback until a judge_provider/judge_model pair is
-# configured (#315, get_judge_model()) — once that pair exists it takes over
-# and scoring_model has no further effect. The co-writer reads its live
-# catalog instead (agent_providers/catalog.py). Retire this list with chat_api.py's
-# cleanup.
-MODEL_ALLOWED_CLAUDE = frozenset({
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "claude-haiku-4-5-20251001",
-})
 
 # Whisper hallucination detection
 HALLUCINATION_MIN_LINES = 5

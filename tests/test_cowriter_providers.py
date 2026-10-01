@@ -66,6 +66,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries.settings import (
+    get_claude_scoring_model,
     get_cover_settings,
     get_cowriter_models_by_provider,
     get_cowriter_tail_token_budget,
@@ -78,6 +79,7 @@ from songmaker_cli.db.queries.settings import (
     set_provider_routes,
 )
 from songmaker_cli.mcp_server.tools import tool_create_song
+from songmaker_cli.settings import get_settings
 
 LIVE_CATALOG = {
     "claude": ["claude-opus-4-6", "claude-sonnet-4-6"],
@@ -880,6 +882,27 @@ def test_each_saved_provider_calls_only_itself(admin_client, every_provider_is_c
         assert ctx.endswith("hello")
 
 
+def test_chat_turns_beyond_the_chat_rate_limit_are_refused(
+    admin_client,
+    monkeypatch,
+    every_provider_is_configured,
+):
+    client, _ = admin_client
+    monkeypatch.setenv("CHAT_RATE_LIMIT_ADMIN", "2")
+    get_settings.cache_clear()
+    client.put("/api/settings/cowriter", json={"provider": "claude", "model": "claude-opus-4-6"})
+
+    async def _claude(**_kwargs):
+        yield FinalEvent(text="ok")
+
+    with patch("agent_providers.dispatch.stream_claude_turn", _claude):
+        statuses = [
+            client.post("/api/chat/turn", json={"message": "hi"}).status_code for _ in range(3)
+        ]
+
+    assert statuses == [200, 200, 429]
+
+
 def test_missing_credentials_named_error_persists_no_reply(
     admin_client, monkeypatch, every_provider_is_configured,
 ):
@@ -1012,8 +1035,8 @@ def test_cowriter_provider_switch_keeps_scoring_model(
         )
         session.commit()
     client.put("/api/settings/cowriter", json={"provider": "codex", "model": "gpt-5.4"})
-    models = client.get("/api/settings/claude-models").json()
-    assert models["scoring_model"] == "claude-haiku-4-5-20251001"
+    with factory() as session:
+        assert get_claude_scoring_model(session) == "claude-haiku-4-5-20251001"
     cowriter = client.get("/api/settings/cowriter").json()
     assert cowriter["provider"] == "codex"
     assert cowriter["allowed_models"] == LIVE_CATALOG["codex"]

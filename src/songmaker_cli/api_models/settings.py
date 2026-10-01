@@ -94,17 +94,6 @@ class AvailableModelResponse(BaseModel):
     capabilities: ModelCapabilities | None = None
 
 
-class ClaudeModelsRequest(BaseModel):
-    chat_model: str
-    scoring_model: str
-
-
-class ClaudeModelsResponse(BaseModel):
-    chat_model: str
-    scoring_model: str
-    allowed_models: list[str]
-
-
 class CowriterSettingsRequest(BaseModel):
     provider: str
     model: str
@@ -214,21 +203,6 @@ class ProviderStatusResponse(BaseModel):
     cover_routes: dict[Literal["cli", "api"], ProviderRouteReadiness]
 
 
-class ChatRequest(BaseModel):
-    message: str = Field(max_length=50_000)
-    context: str = Field("", max_length=10_000)
-
-
-class ChatResponse(BaseModel):
-    response: str
-
-
-class SendChatRequest(BaseModel):
-    message: str = Field(max_length=50_000)
-    mentioned_song_ids: list[str] = Field(default_factory=list)
-    mentioned_version_ids: list[str] = Field(default_factory=list)
-
-
 class ChatMessageResponse(BaseModel):
     id: str
     role: str
@@ -243,22 +217,6 @@ class ChatMessageResponse(BaseModel):
             content=msg.content,
             created_at=msg.created_at.isoformat(),
         )
-
-
-class ChatTurnResponse(BaseModel):
-    user_message: ChatMessageResponse
-    assistant_message: ChatMessageResponse
-
-
-class ChatHistoryResponse(BaseModel):
-    messages: list[ChatMessageResponse]
-
-
-class RecentChatItem(BaseModel):
-    song_id: str
-    title: str
-    message_count: int
-    last_message_at: str | None
 
 
 class ConversationResponse(BaseModel):

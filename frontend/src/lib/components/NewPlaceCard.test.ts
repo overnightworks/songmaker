@@ -28,7 +28,6 @@ vi.mock('$lib/stores/navigation', () => ({
 }));
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn(), dismissToast: vi.fn() }));
 vi.mock('$lib/stores/jobs', () => ({ resetGenerationFailures: vi.fn() }));
-vi.mock('$lib/stores/shares', () => ({ resetShares: vi.fn() }));
 vi.mock('$lib/stores/libraryOrder', () => ({ resetLibraryOrder: vi.fn() }));
 
 const NIGHTDRIVE = album({ id: 'a-night', title: 'Nightdrive' });
