@@ -1,0 +1,8 @@
+claim_id = "2a33fe534b6945a798398c5b1fdff42b"
+agent = "claude-head"
+role = "builder"
+base = "6694e5c6a26139a68e81952033f2d99b077346ab"
+branch = "claude-head/issue-1230-expired-session-phone"
+scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/seed.ts", "frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/login", "tests/test_api.py"]
+opened_commit = "63933e6e6f6fc46bd17a4afe0fafeb58d6f2ef54"
+whole_reason = "the session-loss path on the phone plus the redirect rule and their tests"
