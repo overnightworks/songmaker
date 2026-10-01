@@ -1980,12 +1980,27 @@ describe('audio graph', () => {
 		expect(fake.context.close).toHaveBeenCalledOnce();
 	});
 
-	it("the analyser carries the promoted deck's sound", () => {
+	it.each([
+		{
+			order: 'analyser before preload',
+			arrange: () => {
+				const analyser = audioPlayer.getAnalyser();
+				preloadReady(takeInfo('g2', 'a1/next.mp3'));
+				return analyser;
+			}
+		},
+		{
+			order: 'preload before analyser',
+			arrange: () => {
+				preloadReady(takeInfo('g2', 'a1/next.mp3'));
+				return audioPlayer.getAnalyser();
+			}
+		}
+	])("the analyser carries the promoted deck's sound ($order)", ({ arrange }) => {
 		const fake = fakeAudioContext();
 		vi.stubGlobal('AudioContext', fake.constructor);
 		audioPlayer.load(takeInfo('g1', 'a1/first.mp3'));
-		const analyser = audioPlayer.getAnalyser();
-		preloadReady(takeInfo('g2', 'a1/next.mp3'));
+		const analyser = arrange();
 
 		audioPlayer.load(takeInfo('g2', 'a1/next.mp3'));
 
