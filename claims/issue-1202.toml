@@ -1,0 +1,7 @@
+claim_id = "0caa766ece4a42a1b85cee051d42a64b"
+agent = "claude-head"
+role = "builder"
+base = "1ee6c0c2bc5715c83a7c538feade920da98ab82a"
+branch = "claude-head/issue-1202-cover-refusal-messages"
+scope = ["frontend/src/lib/components/AlbumCoverEditor.svelte", "frontend/src/lib/components/AlbumCoverEditor.test.ts"]
+opened_commit = "c6d36a3f645abacd68c9b83590f6ca328490a4e9"
