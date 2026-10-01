@@ -122,6 +122,26 @@ describe('login page', () => {
 			'the library instead of the sign-in page',
 			`/login?redirect=${encodeURIComponent('/login')}`,
 			'/'
+		],
+		[
+			'the library instead of the sign-in page with a trailing slash',
+			`/login?redirect=${encodeURIComponent('/login/')}`,
+			'/'
+		],
+		[
+			'the library instead of the sign-in page with two trailing slashes',
+			`/login?redirect=${encodeURIComponent('/login//')}`,
+			'/'
+		],
+		[
+			'an upper-case path, which is no sign-in page',
+			`/login?redirect=${encodeURIComponent('/LOGIN')}`,
+			'/LOGIN'
+		],
+		[
+			'the library instead of a raw API answer',
+			`/login?redirect=${encodeURIComponent('/api/auth/me')}`,
+			'/'
 		]
 	])('signs in and lands on %s', async (_label, address, landing) => {
 		mockLogin.mockResolvedValueOnce({ id: 'u1', username: 'felix', role: 'user' });

@@ -174,15 +174,25 @@ function isSingleSlashPath(candidate: string): boolean {
 	}
 }
 
+// No page to land on: the sign-in page would only ask for the password twice,
+// and an API address would show its raw answer.
+const NON_PAGE_PATH_PREFIXES = [`${SIGN_IN_PATH}/`, '/api/'];
+
+function isPagePath(pathname: string): boolean {
+	return (
+		pathname !== SIGN_IN_PATH &&
+		!NON_PAGE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+	);
+}
+
 // Normalize an address carried through sign-in. Resolving it still checks the
 // origin: URL parsing drops tabs and newlines, so a single-slash path can turn
-// into a foreign host on the way. The sign-in page itself is no destination:
-// landing there again would only ask for the password twice.
+// into a foreign host on the way.
 function safeInternalPath(candidate: string): string {
 	if (!isSingleSlashPath(candidate)) return SAFE_INTERNAL_PATH_FALLBACK;
 	const resolved = new URL(candidate, window.location.origin);
 	if (resolved.origin !== window.location.origin) return SAFE_INTERNAL_PATH_FALLBACK;
-	if (resolved.pathname === SIGN_IN_PATH) return SAFE_INTERNAL_PATH_FALLBACK;
+	if (!isPagePath(resolved.pathname)) return SAFE_INTERNAL_PATH_FALLBACK;
 	return resolved.pathname + resolved.search + resolved.hash;
 }
 
