@@ -545,7 +545,7 @@ def _stale_job_verdict(
     cutoff = now - timedelta(seconds=thresholds.heartbeat_seconds)
     if not _is_heartbeat_stale(job, cutoff):
         return None
-    return QueuedJobVerdict("Heartbeat lost — please retry.", "heartbeat_lost")
+    return QueuedJobVerdict("Took too long to finish — please retry.", "heartbeat_lost")
 
 
 def job_counts_by_type_and_status(session: Session) -> dict[str, dict[str, int]]:
