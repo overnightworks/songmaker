@@ -2310,7 +2310,7 @@ def test_reaper_distinguishes_queued_vs_running(
     assert queued_after.error_type == "queued_too_long"
     assert running_after.error_type == "heartbeat_lost"
     assert "Queued too long" in queued_after.error
-    assert "Heartbeat lost" in running_after.error
+    assert "Took too long" in running_after.error
 
 
 # ── user-filtered stale job reaper ─────────────────────────────────
