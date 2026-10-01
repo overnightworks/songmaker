@@ -1,4 +1,5 @@
 import type { QueueStreamManifest } from '$lib/api/types';
+import { PLAYER_WAITING_FOR_NETWORK } from '$lib/constants';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -15,10 +16,14 @@ type RecoveryReason = StallReason | 'media-error';
 
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
-type FailureKind = 'stalled' | 'failed' | 'autoplay-blocked';
+// 'awaiting-network' is a stall given up while the network was gone; its
+// return retries the take by itself.
+type FailureKind = 'stalled' | 'awaiting-network' | 'failed' | 'autoplay-blocked';
 
 // 'unreachable' carries no words: the owner's offline strip names the cause.
 type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
+
+type ProbeAnswer = { ok: boolean; status: number };
 
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
@@ -101,6 +106,7 @@ class AudioPlayer {
 	private stillChecks = 0;
 	private steadyChecks = 0;
 	private recoveryUrlSerial = 0;
+	private streamProbe: Promise<ProbeAnswer> | null = null;
 	private pauseRequestedByApp = false;
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
@@ -347,6 +353,10 @@ class AudioPlayer {
 			this.play();
 			return;
 		}
+		if (this.failure?.kind === 'awaiting-network') {
+			this.retryAfterWaitingForNetwork();
+			return;
+		}
 		if (!this.stallRecoveryTimer) return;
 		this.clearStallRecoveryTimer();
 		this.recoverFromStall('network-return');
@@ -482,6 +492,7 @@ class AudioPlayer {
 		this.clearStallRecoveryTimer();
 		this.stopProgressWatchdog();
 		this.recoveryStartedAt = null;
+		this.streamProbe = null;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -538,7 +549,8 @@ class AudioPlayer {
 			}
 		});
 		on('canplay', () => {
-			// A late answer takes the given-up message back; a real failure keeps it.
+			// A late answer takes the given-up message back and plays on unless the
+			// listener paused; a real failure keeps its message.
 			if (this.gaveUpOnStall) this.failure = null;
 			else if (this.status === 'error') return;
 			this.clearStallRecoveryTimer();
@@ -656,18 +668,32 @@ class AudioPlayer {
 	}
 
 	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message; a late answer then clears the message but starts no
-	// sound of its own.
+	// the stalled message. The listener's wish to hear the take outlives it, so
+	// a late answer plays on unless the listener pauses in the meantime.
 	private giveUpOnStall(): void {
+		const listenerWantsSound =
+			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
 		this.stopProgressWatchdog();
-		this.autoplayPending = false;
 		this.recoveryStartedAt = null;
-		this.fail({ kind: 'stalled', message: ERROR_MSG_STALLED });
+		this.fail(
+			this.callbacks.networkFailureIsAnnounced()
+				? { kind: 'awaiting-network', message: PLAYER_WAITING_FOR_NETWORK }
+				: { kind: 'stalled', message: ERROR_MSG_STALLED }
+		);
+		this.autoplayPending = listenerWantsSound;
 		if (this.audio) this.pauseElement(this.audio);
 	}
 
-	// A failed take is no longer watched: only Retry, or the network's return
-	// after an 'unreachable' failure, sets it going again.
+	// A listener who paused while the take waited is not woken by the network:
+	// the take keeps its Retry, now under the plain stalled words.
+	private retryAfterWaitingForNetwork(): void {
+		if (this.autoplayPending) this.play();
+		else this.failure = { kind: 'stalled', message: ERROR_MSG_STALLED };
+	}
+
+	// A failed take is no longer watched: only Retry, the network's return
+	// after an 'unreachable' or 'awaiting-network' failure, or a late canplay
+	// after a given-up stall sets it going again.
 	private fail(failure: Failure): void {
 		this.clearStallRecoveryTimer();
 		this.status = 'error';
@@ -675,12 +701,14 @@ class AudioPlayer {
 	}
 
 	private get gaveUpOnStall(): boolean {
-		return this.status === 'error' && this.failure?.kind === 'stalled';
+		const kind = this.failure?.kind;
+		return this.status === 'error' && (kind === 'stalled' || kind === 'awaiting-network');
 	}
 
 	private resumeAfterGivingUp(): void {
 		this.status = 'playing';
 		this.failure = null;
+		this.autoplayPending = false;
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
@@ -805,9 +833,10 @@ class AudioPlayer {
 	}
 
 	// An error before the take ever played is the take's own (gone,
-	// unreadable): it is probed and named at once, never retried.
+	// unreadable): it is probed and named at once, never retried. An error
+	// while a stall is being recovered is the stall's, however early it came.
 	private failedPartWayThrough(el: HTMLAudioElement): boolean {
-		return !el.ended && this.reachedPosition(el) >= 1;
+		return !el.ended && (this.recoveryStartedAt !== null || this.reachedPosition(el) >= 1);
 	}
 
 	private recoverPlayback(reason: RecoveryReason): boolean {
@@ -921,9 +950,11 @@ class AudioPlayer {
 	// path is the mode locked phones kill, so reinstating it on a blip would
 	// resurrect the exact defect stream mode exists to fix. Recovery is
 	// status-aware and stays in-stream.
+	// While a probe is out, whatever else asks for recovery — the element's
+	// error, the network's return — is answered by that probe's reload.
 	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
-		if (!el || !this.streamEngine.active) return;
+		if (!el || !this.streamEngine.active || this.streamProbe !== null) return;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		const step = this.nextRecoveryStep(reason);
@@ -946,13 +977,9 @@ class AudioPlayer {
 			0,
 			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
 		);
-		const probe = await this.probeUrl(state.manifest.stream_url);
-		if (!this.streamEngine.active) return;
+		const probe = await this.probeStream(state.manifest.stream_url);
+		if (probe === null) return;
 
-		if (probe.status === 401) {
-			await this.callbacks.onAuthLost?.();
-			return;
-		}
 		if (probe.status === 404) {
 			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
 			// own track list and resume at the same track position.
@@ -969,9 +996,8 @@ class AudioPlayer {
 				});
 				return;
 			}
-			this.fail({ kind: 'failed', message: ERROR_MSG_NOT_FOUND });
-			return;
 		}
+		if (await this.answeredARefusal(probe)) return;
 
 		console.debug('Recovering stream playback', {
 			reason,
@@ -981,7 +1007,17 @@ class AudioPlayer {
 		this.reloadSource(el, state.manifest.stream_url);
 	}
 
-	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
+	// Null when the take changed while the probe was out: its answer is stale.
+	private async probeStream(url: string): Promise<ProbeAnswer | null> {
+		const probe = this.probeUrl(url);
+		this.streamProbe = probe;
+		const answer = await probe;
+		if (this.streamProbe !== probe) return null;
+		this.streamProbe = null;
+		return answer;
+	}
+
+	private async probeUrl(url: string): Promise<ProbeAnswer> {
 		try {
 			const resp = await fetch(url, {
 				method: 'HEAD',
@@ -1005,7 +1041,7 @@ class AudioPlayer {
 			};
 			return;
 		}
-		this.handleMediaError(this.audio?.error ?? null);
+		void this.handleMediaError(this.audio?.error ?? null);
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
@@ -1026,7 +1062,7 @@ class AudioPlayer {
 	}
 
 	// A lost session goes to sign-in; a take the server no longer has says so.
-	private async answeredARefusal(probe: { status: number }): Promise<boolean> {
+	private async answeredARefusal(probe: ProbeAnswer): Promise<boolean> {
 		if (probe.status === 401) {
 			this.failForAnUnknownReason();
 			await this.callbacks.onAuthLost?.();
