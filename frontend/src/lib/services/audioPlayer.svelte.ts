@@ -183,7 +183,7 @@ class AudioPlayer {
 		info: PlaybackInfo,
 		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
 	): void {
-		this.loadFromUrl(info, AUDIO_URL_PREFIX + info.generation.mp3_path, opts);
+		this.loadFromUrl(info, audioUrlOf(info), opts);
 	}
 
 	// Classic per-track playback from a URL the caller already resolved
@@ -207,7 +207,7 @@ class AudioPlayer {
 			this.clearStandby();
 			return;
 		}
-		const url = AUDIO_URL_PREFIX + info.generation.mp3_path;
+		const url = audioUrlOf(info);
 		if (this.standbyUrl === url) return;
 		const el = this.standby ?? this.createStandby();
 		this.standbyUrl = url;
@@ -997,6 +997,12 @@ function clearDeck(el: HTMLAudioElement): void {
 	el.pause();
 	el.src = '';
 	el.removeAttribute('src');
+}
+
+// The one place a take's URL is spelled: preload() and load() must agree on it
+// exactly, or a standby deck is never promoted.
+function audioUrlOf(info: PlaybackInfo): string {
+	return AUDIO_URL_PREFIX + info.generation.mp3_path;
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {
