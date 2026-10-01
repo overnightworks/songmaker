@@ -74,8 +74,12 @@ class AudioPlayer {
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
 	private audio: HTMLAudioElement | null = null;
 	private currentUrl: string | null = null;
+	// The next take loads on a second element while the current one plays, so
+	// a track change swaps decks instead of fetching from byte 0 — the silent
+	// gap in which Android may freeze a page whose screen is off.
+	private standby: HTMLAudioElement | null = null;
+	private standbyUrl: string | null = null;
 	private autoplayPending = false;
-	private listenersAttached = false;
 	private readonly streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
 	private recoveryAttempts = 0;
@@ -122,6 +126,8 @@ class AudioPlayer {
 	//
 	// Built on first request rather than with the element, so a device that
 	// never draws a visualizer never routes its audio through Web Audio at all.
+	// Both decks feed the one analyser, each through its own source; only the
+	// active deck plays, so the analyser always carries what is heard.
 	// Null where there is no element or no Web Audio; a browser that refuses a
 	// context throws, and the caller decides whether that is fatal.
 	getAnalyser(): AnalyserNode | null {
@@ -131,14 +137,20 @@ class AudioPlayer {
 		const context = new AudioContext();
 		try {
 			const analyser = context.createAnalyser();
-			context.createMediaElementSource(el).connect(analyser);
 			analyser.connect(context.destination);
 			this.audioGraph = { context, analyser };
+			this.routeIntoGraph(el);
+			if (this.standby) this.routeIntoGraph(this.standby);
 			return analyser;
 		} catch (e) {
-			void context.close();
+			this.closeAudioGraph();
 			throw e;
 		}
+	}
+
+	private routeIntoGraph(el: HTMLAudioElement): void {
+		if (!this.audioGraph) return;
+		this.audioGraph.context.createMediaElementSource(el).connect(this.audioGraph.analyser);
 	}
 
 	// A context starts suspended until a user gesture, and while it carries
@@ -171,7 +183,7 @@ class AudioPlayer {
 		info: PlaybackInfo,
 		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
 	): void {
-		this.loadFromUrl(info, AUDIO_URL_PREFIX + info.generation.mp3_path, opts);
+		this.loadFromUrl(info, audioUrlOf(info), opts);
 	}
 
 	// Classic per-track playback from a URL the caller already resolved
@@ -186,6 +198,21 @@ class AudioPlayer {
 		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
 	): void {
 		this.loadFromUrl(info, url, opts);
+	}
+
+	// Loads the take a later load() is expected to ask for, replacing whatever
+	// stood by; null drops it. Nothing plays and nothing the player shows changes.
+	preload(info: PlaybackInfo | null): void {
+		if (info === null) {
+			this.clearStandby();
+			return;
+		}
+		const url = audioUrlOf(info);
+		if (this.standbyUrl === url) return;
+		const el = this.standby ?? this.createStandby();
+		this.standbyUrl = url;
+		el.src = url;
+		el.load();
 	}
 
 	private loadFromUrl(
@@ -213,6 +240,13 @@ class AudioPlayer {
 			return;
 		}
 
+		const readyStandby = this.standbyReadyFor(url);
+		if (readyStandby) {
+			this.promote(readyStandby, info, url, { autoplay, startAt: opts.startAt });
+			return;
+		}
+
+		this.clearStandby();
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
 		this.stillChecks = 0;
@@ -240,6 +274,7 @@ class AudioPlayer {
 		if (!streamState) return;
 		this.syncStreamBoundaries();
 		if (opts.resumeAt !== undefined) this.streamEngine.resumeAt(opts.resumeAt);
+		this.clearStandby();
 		const el = this.ensureAudio();
 		this.clearStallRecoveryTimer();
 		this.recoveryAttempts = 0;
@@ -260,6 +295,55 @@ class AudioPlayer {
 		// browsers accept a currentTime assignment before metadata without
 		// error, then reset it to 0 when metadata arrives — which silently
 		// started every stream at track 1.
+	}
+
+	// Never waits for canplay: a deck with future data has already passed it,
+	// and on a locked phone the event may not come before the page is frozen.
+	private standbyReadyFor(url: string): HTMLAudioElement | null {
+		const el = this.standby;
+		if (!el || this.standbyUrl !== url) return null;
+		return el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA ? el : null;
+	}
+
+	private promote(
+		promoted: HTMLAudioElement,
+		info: PlaybackInfo,
+		url: string,
+		opts: { autoplay: boolean; startAt: number | undefined }
+	): void {
+		const previous = this.audio;
+		this.clearStallRecoveryTimer();
+		this.stopProgressWatchdog();
+		this.audio = promoted;
+		this.standby = previous;
+		this.standbyUrl = null;
+		this.recoveryAttempts = 0;
+		this.stillChecks = 0;
+		this.pauseRequestedByApp = false;
+		this.autoplayPending = false;
+		this.pendingRecoverySeek = opts.startAt ?? null;
+		this.lastObservedTime = 0;
+		this.currentTime = promoted.currentTime;
+		this.duration = promoted.duration || 0;
+		this.failure = null;
+		this.status = 'ready';
+		this.setCurrent(info);
+		this.currentUrl = url;
+		this.applyPendingRecoverySeek(promoted);
+		if (opts.autoplay) this.play();
+		if (previous) clearDeck(previous);
+	}
+
+	private createStandby(): HTMLAudioElement {
+		const el = this.createDeck();
+		this.standby = el;
+		this.routeIntoGraph(el);
+		return el;
+	}
+
+	private clearStandby(): void {
+		this.standbyUrl = null;
+		if (this.standby) clearDeck(this.standby);
 	}
 
 	// Only a failure the lost network explains goes on by itself: a real
@@ -369,6 +453,7 @@ class AudioPlayer {
 		this.autoplayPending = false;
 		this.clearStallRecoveryTimer();
 		this.stopProgressWatchdog();
+		this.clearStandby();
 		if (this.audio) {
 			this.pauseElement(this.audio);
 			this.audio.src = '';
@@ -392,8 +477,10 @@ class AudioPlayer {
 
 	destroy(): void {
 		this.streamEndSignaled = false;
-		// The graph is bound to this element for good, so it goes with it.
+		// The graph is bound to these elements for good, so it goes with them.
 		this.closeAudioGraph();
+		this.clearStandby();
+		this.standby = null;
 		if (!this.audio) {
 			this.streamEngine.clear();
 			this.syncStreamBoundaries();
@@ -406,7 +493,6 @@ class AudioPlayer {
 		this.audio.removeAttribute('src');
 		this.audio = null;
 		this.currentUrl = null;
-		this.listenersAttached = false;
 		this.status = 'idle';
 		this.setCurrent(null);
 		this.mode = 'classic';
@@ -423,23 +509,32 @@ class AudioPlayer {
 
 	private ensureAudio(): HTMLAudioElement {
 		if (this.audio) return this.audio;
+		this.audio = this.createDeck();
+		return this.audio;
+	}
+
+	private createDeck(): HTMLAudioElement {
 		const el = new Audio();
 		el.crossOrigin = 'anonymous';
 		el.preload = 'auto';
-		this.audio = el;
 		this.attachListeners(el);
 		return el;
 	}
 
+	// Every handler acts for the active deck only: the standby loads, and
+	// clearing a deck can fire error, without either touching what is shown.
 	private attachListeners(el: HTMLAudioElement): void {
-		if (this.listenersAttached) return;
-		this.listenersAttached = true;
+		const on = (name: keyof HTMLMediaElementEventMap, handler: () => void): void => {
+			el.addEventListener(name, () => {
+				if (el === this.audio) handler();
+			});
+		};
 
-		el.addEventListener('loadstart', () => {
+		on('loadstart', () => {
 			this.status = 'loading';
 			this.failure = null;
 		});
-		el.addEventListener('loadedmetadata', () => {
+		on('loadedmetadata', () => {
 			if (this.streamEngine.active) {
 				this.duration = this.streamEngine.activeDuration;
 				this.applyPendingStreamSeek(el);
@@ -448,7 +543,7 @@ class AudioPlayer {
 				this.applyPendingRecoverySeek(el);
 			}
 		});
-		el.addEventListener('canplay', () => {
+		on('canplay', () => {
 			if (this.status === 'error') return;
 			if (this.streamEngine.active) this.applyPendingStreamSeek(el);
 			else this.applyPendingRecoverySeek(el);
@@ -461,7 +556,7 @@ class AudioPlayer {
 				el.play().catch((err) => this.handlePlayRejection(err));
 			}
 		});
-		el.addEventListener('timeupdate', () => {
+		on('timeupdate', () => {
 			if (this.streamEngine.active) {
 				this.updateStreamPosition(el.currentTime);
 				return;
@@ -474,19 +569,19 @@ class AudioPlayer {
 			}
 			this.currentTime = el.currentTime;
 		});
-		el.addEventListener('play', () => {
+		on('play', () => {
 			this.streamEndSignaled = false;
 			if (this.status !== 'error') this.status = 'playing';
 			this.startProgressWatchdog(el);
 		});
-		el.addEventListener('playing', () => {
+		on('playing', () => {
 			this.clearStallRecoveryTimer();
 			this.startProgressWatchdog(el);
 			if (this.gaveUpOnStall) this.resumeAfterGivingUp();
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
-		el.addEventListener('pause', () => {
+		on('pause', () => {
 			this.recordPauseSource(el);
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
@@ -495,19 +590,19 @@ class AudioPlayer {
 			if (el.ended) return;
 			this.status = 'paused';
 		});
-		el.addEventListener('waiting', () => {
+		on('waiting', () => {
 			if (this.status === 'playing' || this.status === 'buffering') {
 				this.status = 'buffering';
 				this.scheduleStallRecovery();
 			}
 		});
-		el.addEventListener('stalled', () => {
+		on('stalled', () => {
 			if (this.status === 'playing' || this.status === 'buffering') {
 				this.status = 'buffering';
 				this.scheduleStallRecovery();
 			}
 		});
-		el.addEventListener('ended', () => {
+		on('ended', () => {
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
 			if (this.streamEngine.active && this.nextStreamTrack({ autoplay: true })) return;
@@ -520,7 +615,7 @@ class AudioPlayer {
 				this.callbacks.onEnded?.(reason);
 			}
 		});
-		el.addEventListener('error', () => {
+		on('error', () => {
 			if (!this.currentUrl) return;
 			if (this.streamEngine.active) {
 				void this.recoverStream('media-error');
@@ -894,6 +989,20 @@ class AudioPlayer {
 		this.current = current;
 		this.callbacks.onCurrentChange?.(current);
 	}
+}
+
+// Emptying src fires error on some browsers; the deck's listeners ignore it
+// because a cleared deck is never the active one.
+function clearDeck(el: HTMLAudioElement): void {
+	el.pause();
+	el.src = '';
+	el.removeAttribute('src');
+}
+
+// The one place a take's URL is spelled: preload() and load() must agree on it
+// exactly, or a standby deck is never promoted.
+function audioUrlOf(info: PlaybackInfo): string {
+	return AUDIO_URL_PREFIX + info.generation.mp3_path;
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {
