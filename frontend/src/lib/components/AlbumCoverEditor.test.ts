@@ -660,23 +660,13 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(target.querySelector('.header-title')?.textContent).toContain('Other Night');
 	});
 
-	it('Replace… in the menu opens the cover editing without making anything', async () => {
+	it('Cover in the menu opens the cover editing without making anything', async () => {
 		albumList.set([coveredAlbum()]);
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
-		expect(items.map((item) => item.textContent?.trim())).toEqual([
-			'Upload…',
-			'Replace…',
-			'Remove cover',
-			'Edit details',
-			'Add to playlist',
-			'Curate album',
-			'Archive album',
-			'Delete album'
-		]);
 
-		items.find((item) => item.textContent?.trim() === 'Replace…')?.click();
+		items.find((item) => item.textContent?.trim() === 'Cover')?.click();
 
 		await vi.waitFor(() => expect(editor(target)).not.toBeNull());
 		expect(createAlbumCoverSuggestions).not.toHaveBeenCalled();

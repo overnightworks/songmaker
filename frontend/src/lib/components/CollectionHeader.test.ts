@@ -324,24 +324,37 @@ describe('CollectionHeader', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('names the object first in the menu and lists album entries in order, without Remove cover when there is no cover', async () => {
-		const target = await render(baseProps());
+	it('names the object first in the menu and lists the album rows in their order', async () => {
+		const target = await render({
+			...detailsEditingAlbum(),
+			coverEditor: fakeCoverEditor(),
+			oncurate: vi.fn(),
+			onarchive: vi.fn()
+		});
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
-		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
+		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Upload…', 'Rename', 'Add to playlist', 'Delete album']);
+		expect(rows).toEqual([
+			'Edit details',
+			'Cover',
+			'Curate',
+			'Add to playlist',
+			'Share',
+			'Archive',
+			'Delete'
+		]);
 	});
 
-	it('adds Remove cover once a cover exists and wires it to onremovecover', async () => {
-		const props = { ...baseProps(), coverUrl: 'https://x/cover.jpg' };
+	it('adds Remove cover to a playlist once a cover exists and wires it to onremovecover', async () => {
+		const props = { ...baseProps(), kind: 'playlist' as const, coverUrl: 'https://x/cover.jpg' };
 		const target = await render(props);
 		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll('.menu-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Upload…', 'Remove cover', 'Rename', 'Add to playlist', 'Delete album']);
+		expect(items).toEqual(['Upload…', 'Remove cover', 'Rename', 'Delete playlist']);
 		const removeItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
 			(el) => el.textContent?.trim() === 'Remove cover'
 		);
@@ -382,28 +395,20 @@ describe('CollectionHeader', () => {
 		expect(target.textContent).not.toContain('Add cover');
 	});
 
-	it('opens cover editing from Replace… in the menu once a cover exists', async () => {
-		const target = await render({
-			...baseProps(),
-			coverUrl: 'https://x/cover.jpg',
-			coverEditor: fakeCoverEditor()
-		});
-		const menu = await openCollectionMenu(target);
-		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
-		expect(items.map((el) => el.textContent?.trim())).toEqual([
-			'Upload…',
-			'Replace…',
-			'Remove cover',
-			'Rename',
-			'Add to playlist',
-			'Delete album'
-		]);
+	it.each([{ coverUrl: null }, { coverUrl: 'https://x/cover.jpg' }])(
+		'opens cover editing from Cover in the menu (cover $coverUrl)',
+		async ({ coverUrl }) => {
+			const target = await render({ ...baseProps(), coverUrl, coverEditor: fakeCoverEditor() });
+			const menu = await openCollectionMenu(target);
 
-		items.find((el) => el.textContent?.trim() === 'Replace…')?.click();
-		await tick();
+			Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'))
+				.find((el) => el.textContent?.trim() === 'Cover')
+				?.click();
+			await tick();
 
-		expect(target.querySelector('.fake-cover-editor')).not.toBeNull();
-	});
+			expect(target.querySelector('.fake-cover-editor')).not.toBeNull();
+		}
+	);
 
 	it('lists playlist cover actions alongside its existing actions', async () => {
 		const props = { ...baseProps(), kind: 'playlist' as const, onsaveoffline: vi.fn() };
@@ -493,10 +498,9 @@ describe('CollectionHeader', () => {
 		const menu = await openCollectionMenu(target);
 		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
 		expect(items.map((el) => el.textContent?.trim())).toEqual([
-			'Upload…',
 			'Edit details',
 			'Add to playlist',
-			'Delete album'
+			'Delete'
 		]);
 
 		items.find((el) => el.textContent?.trim() === 'Edit details')?.click();
@@ -521,8 +525,8 @@ describe('CollectionHeader', () => {
 		expect(heading.querySelector('button')).toBeNull();
 	});
 
-	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {
-		const target = await render(baseProps());
+	it('forwards Rename in the playlist menu to the title EditableTitle interaction', async () => {
+		const target = await render({ ...baseProps(), kind: 'playlist' as const });
 		const menu = await openCollectionMenu(target);
 		const renameItem = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item')).find(
 			(el) => el.textContent?.trim() === 'Rename'

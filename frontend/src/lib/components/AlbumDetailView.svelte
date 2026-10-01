@@ -299,8 +299,6 @@
 			onunshare={onAlbumShareDisable}
 			ondelete={() => (showDeleteConfirm = true)}
 			onarchive={onAlbumArchive}
-			oncover={onCoverAction}
-			onremovecover={onCoverRemove}
 			onaddtoplaylist={() => (playlistPickerOpen = true)}
 			oncurate={onCurate}
 		>
