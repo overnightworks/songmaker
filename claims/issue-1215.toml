@@ -1,0 +1,8 @@
+claim_id = "af53ad1847d44c9f887fcc2a9d2272a4"
+agent = "claude-head"
+role = "builder"
+base = "0d203e7b7a1cfc11ab9995a36d43695e3adddd1c"
+branch = "claude-head/issue-1215-sign-in-honest"
+scope = ["frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/constants/auth.ts", "frontend/src/routes/login"]
+opened_commit = "d58a430a2e4067b622ed990634a6921ca6aefed5"
+whole_reason = "the login route and its redirect sources"
