@@ -161,6 +161,11 @@
 	const coverSuggestionsReloads = reloadWhileUnreachable(reloadCoverSuggestions);
 	$effect(() => () => coverSuggestionsReloads.stop());
 
+	// Opening the editor only reads what exists: a suggestion spends today's
+	// quota, so only Suggest makes one, and a mistap closed at once costs
+	// nothing (#1186). However the editor leaves an album -- ×, Back, Upload,
+	// Use or another album -- it leaves nothing unused behind: a suggestion
+	// still running is stopped and what × or Use did not already discard goes.
 	$effect(() => {
 		const albumId = currentAlbumId;
 		coverSuggestionsState = {
@@ -178,12 +183,6 @@
 			discardUnusedOnLeave(albumId);
 		};
 	});
-
-	// Opening the editor only reads what exists: a suggestion spends today's
-	// quota, so only Suggest makes one, and a mistap closed at once costs
-	// nothing (#1186). However the editor leaves an album -- ×, Back, Upload,
-	// Use or another album -- it leaves nothing unused behind: a suggestion
-	// still running is stopped and what × or Use did not already discard goes.
 
 	function reloadCoverSuggestions(): void {
 		void loadCoverSuggestions(currentAlbumId);
