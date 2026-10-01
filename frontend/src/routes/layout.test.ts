@@ -974,13 +974,17 @@ describe('a session lost behind the open phone drawer', () => {
 		);
 
 		const back = watchBack();
+		let backPresses: number;
+		try {
+			await handleSessionLost();
+			await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
+			backPresses = back.presses();
+		} finally {
+			back.stop();
+		}
 
-		await handleSessionLost();
-
-		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
 		expect(goto).toHaveBeenCalledWith(signInAddress('/'));
-		expect(back.presses()).toBe(0);
-		back.stop();
+		expect(backPresses).toBe(0);
 	});
 });
 
