@@ -49,6 +49,10 @@ function storageQuotaExceeded(): DOMException {
 	return new DOMException('The quota has been exceeded.', 'QuotaExceededError');
 }
 
+function storageAccessDenied(): DOMException {
+	return new DOMException('Access is denied for this document.', 'SecurityError');
+}
+
 function sessionStorageRefusingWritesAfter(acceptedWrites: number): void {
 	const acceptWrite = Storage.prototype.setItem;
 	let writes = 0;
@@ -284,17 +288,24 @@ describe('history adapter', () => {
 		expect(layer.id).toBe(4);
 	});
 
-	it('loads and keeps stamping entries when the browser denies session storage itself', async () => {
-		vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
-			throw new DOMException('Access is denied for this document.', 'SecurityError');
-		});
-		vi.resetModules();
+	it.each([
+		['reaching session storage', () => vi.spyOn(window, 'sessionStorage', 'get')],
+		['reading session storage', () => vi.spyOn(Storage.prototype, 'getItem')],
+		['writing session storage', () => vi.spyOn(Storage.prototype, 'setItem')]
+	])(
+		'loads and keeps stamping entries when the browser denies %s',
+		async (_denied, spyOnStorageAccess) => {
+			spyOnStorageAccess().mockImplementation(() => {
+				throw storageAccessDenied();
+			});
+			vi.resetModules();
 
-		const loaded = await import('$lib/history/historyController');
-		const ids = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
+			const loaded = await import('$lib/history/historyController');
+			const ids = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
 
-		expect(ids).toEqual([1, 2]);
-	});
+			expect(ids).toEqual([1, 2]);
+		}
+	);
 
 	it('a session storage write failing for another reason is not swallowed', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
