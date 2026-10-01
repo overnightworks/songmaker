@@ -136,7 +136,6 @@ import {
 	isLibraryWorkspacePath,
 	openAlbum,
 	openCollectionEntry,
-	openLibraryCreate,
 	openLibraryWall,
 	openPlaylist,
 	openRailSearchTarget,
@@ -747,8 +746,7 @@ describe('Back and Forward across an app page', () => {
 describe.each([
 	['openAlbum', () => openAlbum('a1')],
 	['openPlaylist', () => openPlaylist('p1')],
-	['openLibraryWall', () => openLibraryWall()],
-	['openLibraryCreate', () => openLibraryCreate()]
+	['openLibraryWall', () => openLibraryWall()]
 ])('%s closes the rail drawer', (_name, action) => {
 	it('closes an open drawer instead of leaving it over the new surface', async () => {
 		toggleSidebar();
@@ -1375,24 +1373,6 @@ describe('goBack', () => {
 		expect(get(librarySurface)).toBe('browse');
 		expect(get(selectedSongId)).toBeNull();
 	});
-
-	it('leaves the create surface for the wall when there is no predecessor', () => {
-		librarySurface.set('create');
-		goBack();
-		expect(get(librarySurface)).toBe('browse');
-	});
-
-	it('keeps the create surface while the browser returns to its predecessor', () => {
-		replaceHistoryEntry('/', { ...libraryRootState(), index: 1, surface: 'create' });
-		librarySurface.set('create');
-		const back = watchBack();
-
-		goBack();
-
-		expect(back.presses()).toBe(1);
-		expect(get(librarySurface)).toBe('create');
-		back.stop();
-	});
 });
 
 describe('revealPlayingSong', () => {
@@ -1458,6 +1438,22 @@ describe('initNavigation', () => {
 
 		await vi.waitFor(() => expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' }));
 		expect(get(librarySurface)).toBe('detail');
+		cleanup();
+	});
+
+	it('lands on the wall when Back reaches an entry of the removed create form', async () => {
+		await openAlbum('a1');
+		const cleanup = initNavigation();
+		const createFormEntry = {
+			...libraryRootState(),
+			surface: 'create',
+			collection: { kind: 'album' as const, id: 'a1' }
+		};
+
+		window.dispatchEvent(new PopStateEvent('popstate', { state: createFormEntry }));
+
+		await vi.waitFor(() => expect(get(openCollection)).toBeNull());
+		expect(get(librarySurface)).toBe('browse');
 		cleanup();
 	});
 

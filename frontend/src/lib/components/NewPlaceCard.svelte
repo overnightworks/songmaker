@@ -1,6 +1,7 @@
 <script module lang="ts">
-	// Kept per card kind rather than per instance: a failure said by a card
-	// that was closed since is just as false once that kind of place exists.
+	// Kept per card kind -- its failure message -- rather than per instance or
+	// label: a failure said by a card that was closed since, or that named
+	// another album, is just as false once that kind of place exists.
 	const failureToastsByCard: Record<string, number[]> = {};
 </script>
 
@@ -65,13 +66,13 @@
 			offline: NEW_PLACE_OFFLINE,
 			withholdServerDetail: true
 		});
-		const earlier = failureToastsByCard[label] ?? [];
-		failureToastsByCard[label] = [...earlier, addToast(message, 'error')];
+		const earlier = failureToastsByCard[failedMessage] ?? [];
+		failureToastsByCard[failedMessage] = [...earlier, addToast(message, 'error')];
 	}
 
 	function dismissEarlierFailures(): void {
-		for (const id of failureToastsByCard[label] ?? []) dismissToast(id);
-		failureToastsByCard[label] = [];
+		for (const id of failureToastsByCard[failedMessage] ?? []) dismissToast(id);
+		failureToastsByCard[failedMessage] = [];
 	}
 </script>
 

@@ -9,6 +9,7 @@
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
 		COLLECTION_MENU_CURATE_LABEL,
 		COLLECTION_MENU_DELETE_PREFIX,
+		COLLECTION_MENU_EDIT_DETAILS_LABEL,
 		COLLECTION_MENU_LABEL,
 		COLLECTION_MENU_RENAME_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_LABEL,
@@ -28,11 +29,13 @@
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
-		onrename: () => void;
+		/** Albums edit title, subtitle and year together; offering it replaces Rename. */
+		oneditdetails?: () => void;
+		onrename?: () => void;
 		ondelete: () => void;
 		onarchive?: () => void;
 		oncover?: () => void;
-		oncoversuggest?: () => void;
+		oncoveredit?: () => void;
 		hasCover?: boolean;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
@@ -50,11 +53,12 @@
 		shareSlug,
 		onshare,
 		onunshare,
+		oneditdetails,
 		onrename,
 		ondelete,
 		onarchive,
 		oncover,
-		oncoversuggest,
+		oncoveredit,
 		hasCover = false,
 		onremovecover,
 		onaddtoplaylist,
@@ -112,8 +116,8 @@
 				>{ALBUM_COVER_UPLOAD_LABEL}</button
 			>
 		{/if}
-		{#if kind === 'album' && oncoversuggest}
-			<button class="menu-item" onclick={() => runAndClose(oncoversuggest)}
+		{#if kind === 'album' && oncoveredit}
+			<button class="menu-item" onclick={() => runAndClose(oncoveredit)}
 				>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
 			>
 		{/if}
@@ -133,9 +137,15 @@
 				{/if}
 			</button>
 		{/if}
-		<button class="menu-item" onclick={() => runAndClose(onrename)}
-			>{COLLECTION_MENU_RENAME_LABEL}</button
-		>
+		{#if oneditdetails}
+			<button class="menu-item" onclick={() => runAndClose(oneditdetails)}
+				>{COLLECTION_MENU_EDIT_DETAILS_LABEL}</button
+			>
+		{:else if onrename}
+			<button class="menu-item" onclick={() => runAndClose(onrename)}
+				>{COLLECTION_MENU_RENAME_LABEL}</button
+			>
+		{/if}
 		{#if kind === 'album' && onaddtoplaylist}
 			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
 				>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button

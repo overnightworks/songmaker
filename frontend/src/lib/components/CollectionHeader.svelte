@@ -7,8 +7,6 @@
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
 	import {
-		ALBUM_ADD_SONG_GLYPH,
-		ALBUM_ADD_SONG_LABEL,
 		ALBUM_COVER_ADD_LABEL,
 		ALBUM_COVER_EDIT_LABEL,
 		RAIL_LIBRARY_LABEL,
@@ -31,7 +29,8 @@
 		 * null while the view has nothing to start.
 		 */
 		onplay: ((start: CollectionStart) => void) | null;
-		onrename: (title: string) => Promise<void>;
+		/** Renames in place through the title; a collection with detailsEditor renames there instead. */
+		onrename?: (title: string) => Promise<void>;
 		isShared: boolean;
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
@@ -41,7 +40,6 @@
 		oncover?: () => void;
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
-		onaddsong?: () => void;
 		oncurate?: () => void;
 		onsaveoffline?: () => void;
 		offlineSaved?: boolean;
@@ -49,8 +47,14 @@
 		offlineProgressLabel?: string | null;
 		playlistCovers?: AlbumCoverUrls[];
 		playlistCover?: AlbumCoverUrls | null;
-		/** Album-only metadata editor (subtitle/year) rendered under the title. */
-		metaEditor?: Snippet;
+		/** Album-only: the subtitle and year line read under the title, empty when neither is set. */
+		meta?: string;
+		/**
+		 * Album-only: edits the details -- title, subtitle and year -- in place of
+		 * the title, opened from the menu's Edit details and ended through the
+		 * close it is handed.
+		 */
+		detailsEditor?: Snippet<[close: () => void]>;
 		/**
 		 * Album-only: edits the cover in place of the cover itself, and ends
 		 * editing through the close it is handed.
@@ -77,7 +81,6 @@
 		oncover,
 		onremovecover,
 		onaddtoplaylist,
-		onaddsong,
 		oncurate,
 		onsaveoffline,
 		offlineSaved = false,
@@ -85,13 +88,15 @@
 		offlineProgressLabel = null,
 		playlistCovers,
 		playlistCover,
-		metaEditor,
+		meta = '',
+		detailsEditor,
 		coverEditor
 	}: Props = $props();
 
 	let editableTitle: EditableTitle | undefined = $state();
 	let coverFailed = $state(false);
 	const editingCover = historyLayerState('cover-editing', false);
+	const editingDetails = historyLayerState('details-editing', false);
 
 	// Cover editing belongs to the collection and the cover it opened on: a new
 	// cover -- used, uploaded or removed -- or another collection ends it.
@@ -100,6 +105,11 @@
 		void coverUrl;
 		coverFailed = false;
 		editingCover.set(false);
+	});
+
+	$effect(() => {
+		void collectionId;
+		editingDetails.set(false);
 	});
 
 	const showCover = $derived(Boolean(coverUrl) && !coverFailed);
@@ -129,6 +139,14 @@
 
 	function triggerRename(): void {
 		editableTitle?.startEdit();
+	}
+
+	function openDetailsEditing(): void {
+		editingDetails.set(true);
+	}
+
+	function closeDetailsEditing(): void {
+		editingDetails.set(false);
 	}
 
 	// The queue names where the music comes from; while that is this very
@@ -164,32 +182,27 @@
 </script>
 
 {#snippet titleArea()}
-	<h2 class="header-title" aria-label={title}>
-		<EditableTitle
-			bind:this={editableTitle}
-			value={title}
-			onsave={onrename}
-			ariaLabel={`${kind} title`}
-		/>
-	</h2>
-	{#if metaEditor}{@render metaEditor()}{/if}
+	{#if detailsEditor && $editingDetails}
+		{@render detailsEditor(closeDetailsEditing)}
+	{:else}
+		<h2 class="header-title" aria-label={title}>
+			{#if onrename}
+				<EditableTitle
+					bind:this={editableTitle}
+					value={title}
+					onsave={onrename}
+					ariaLabel={`${kind} title`}
+				/>
+			{:else}
+				{title}
+			{/if}
+		</h2>
+		{#if meta}<p class="header-meta">{meta}</p>{/if}
+	{/if}
 	<Breadcrumb items={breadcrumbItems} />
 {/snippet}
 
 {#snippet actions()}
-	{#if onaddsong}
-		<button
-			type="button"
-			class="add-song-btn"
-			data-hitbox="frequent"
-			onclick={onaddsong}
-			aria-label={ALBUM_ADD_SONG_LABEL}
-			title={ALBUM_ADD_SONG_LABEL}
-		>
-			<span class="add-song-full">{ALBUM_ADD_SONG_LABEL}</span>
-			<span class="add-song-glyph" aria-hidden="true">{ALBUM_ADD_SONG_GLYPH}</span>
-		</button>
-	{/if}
 	<CollectionMenu
 		{kind}
 		{title}
@@ -200,7 +213,7 @@
 		{ondelete}
 		{onarchive}
 		{oncover}
-		oncoversuggest={coverEditor && showCover ? openCoverEditing : undefined}
+		oncoveredit={coverEditor && showCover ? openCoverEditing : undefined}
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}
@@ -209,7 +222,8 @@
 		{offlineSaved}
 		{offlineSaving}
 		{offlineProgressLabel}
-		onrename={triggerRename}
+		oneditdetails={detailsEditor ? openDetailsEditing : undefined}
+		onrename={onrename ? triggerRename : undefined}
 	/>
 {/snippet}
 
@@ -254,45 +268,18 @@
 		white-space: nowrap;
 	}
 
-	.add-song-btn {
-		padding: 0 0.7rem;
-		background: none;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-pill);
+	.header-meta {
+		margin: 0.15rem 0 0;
+		font-size: 0.8rem;
 		color: var(--text-muted);
-		font-family: var(--font-display);
-		font-size: 0.75rem;
-		text-transform: uppercase;
-		letter-spacing: 0.5px;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.add-song-btn:hover {
-		border-color: var(--primary);
-		color: var(--primary);
-	}
-
-	.add-song-glyph {
-		display: none;
 	}
 
 	@media (max-width: 768px) {
 		.header-title {
 			font-size: 1.2rem;
-		}
-
-		.add-song-btn {
-			padding: 0;
-		}
-
-		.add-song-full {
-			display: none;
-		}
-
-		.add-song-glyph {
-			display: inline;
-			font-size: 1.1rem;
-			line-height: 1;
 		}
 	}
 </style>

@@ -9,7 +9,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 
 import { get } from 'svelte/store';
 import {
-	ALBUM_ADD_SONG_LABEL,
+	COLLECTION_MENU_LABEL,
 	collectionPauseLabel,
 	collectionPlayLabel,
 	collectionShuffleLabel
@@ -69,6 +69,19 @@ function fakeCoverEditor(): NonNullable<CollectionHeaderProps['coverEditor']> {
 			element.querySelector('button')?.addEventListener('click', () => close()());
 		}
 	}));
+}
+
+function fakeDetailsEditor(): NonNullable<CollectionHeaderProps['detailsEditor']> {
+	return createRawSnippet((close: () => () => void) => ({
+		render: () => '<div class="fake-details-editor"><button type="button">Done</button></div>',
+		setup: (element: Element) => {
+			element.querySelector('button')?.addEventListener('click', () => close()());
+		}
+	}));
+}
+
+function detailsEditingAlbum(): CollectionHeaderProps {
+	return { ...baseProps(), onrename: undefined, detailsEditor: fakeDetailsEditor() };
 }
 
 async function render(props: CollectionHeaderProps): Promise<HTMLElement> {
@@ -424,26 +437,15 @@ describe('CollectionHeader', () => {
 		expect(document.body.querySelector('.menu-panel')).toBeNull();
 	});
 
-	it('offers Add song next to the collection menu only when the surface can create one', async () => {
-		// #141/6: the rail is navigation — creating a song is a header action.
-		const withoutCreate = await render(baseProps());
-		expect(withoutCreate.querySelector('.add-song-btn')).toBeNull();
-		if (mounted) await unmount(mounted);
+	it('keeps its action row to Play, Shuffle and the menu: a new song is made from the track list', async () => {
+		const target = await render(baseProps());
 
-		const onaddsong = vi.fn();
-		const target = await render({ ...baseProps(), onaddsong });
-		const addSong = requireElement<HTMLButtonElement>(target, '.add-song-btn');
-		expect(addSong.getAttribute('aria-label')).toBe(ALBUM_ADD_SONG_LABEL);
-		expect(requireElement(addSong, '.add-song-full').textContent?.trim()).toBe(
-			ALBUM_ADD_SONG_LABEL
-		);
-
-		// Sizing itself is pinned once for the shared mechanism in
-		// frequent-hitbox.test.ts; here the contract is that this control opts in.
-		expect(addSong.dataset.hitbox).toBe('frequent');
-
-		addSong.click();
-		expect(onaddsong).toHaveBeenCalledTimes(1);
+		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
+		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
+			collectionPlayLabel('album'),
+			collectionShuffleLabel('album'),
+			COLLECTION_MENU_LABEL
+		]);
 	});
 
 	it('announces the album title as the heading name, with a separately named edit button', async () => {
@@ -466,25 +468,57 @@ describe('CollectionHeader', () => {
 		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
 	});
 
-	it('renders the album-only metaEditor snippet under the title, above the breadcrumb', async () => {
-		const metaEditor = createRawSnippet(() => ({
-			render: () => `<p class="album-meta-stub">Live at the Roxy · 1994</p>`
-		}));
-		const target = await render({ ...baseProps(), metaEditor });
-		const heading = getByRoleHeading(target, 'Night Drive');
-		expect(heading.tagName).toBe('H2');
+	it('reads the meta line under the title, above the breadcrumb', async () => {
+		const target = await render({ ...baseProps(), meta: 'Live at the Roxy · 1994' });
 		const titles = requireElement(target, '.header-titles');
-		const stub = requireElement(titles, '.album-meta-stub');
-		expect(stub.textContent).toBe('Live at the Roxy · 1994');
-		const breadcrumb = requireElement(titles, 'nav');
+		const meta = requireElement(titles, '.header-meta');
+		expect(meta.textContent).toBe('Live at the Roxy · 1994');
 		expect(
-			stub.compareDocumentPosition(breadcrumb) & Node.DOCUMENT_POSITION_FOLLOWING
+			requireElement(titles, 'h2').compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING
+		).toBeTruthy();
+		expect(
+			meta.compareDocumentPosition(requireElement(titles, 'nav')) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
 
-	it('renders no metaEditor area when the caller passes none, as playlists do', async () => {
-		const target = await render({ ...baseProps(), kind: 'playlist' as const });
-		expect(target.querySelector('.album-meta-stub')).toBeNull();
+	it('shows no meta line and no Add subtitle · Add year line when there is no meta', async () => {
+		const target = await render(baseProps());
+		expect(target.querySelector('.header-meta')).toBeNull();
+		expect(target.textContent).not.toContain('Add subtitle');
+		expect(target.textContent).not.toContain('Add year');
+	});
+
+	it('opens the details editor in place of the title from Edit details, and its close ends it', async () => {
+		const target = await render(detailsEditingAlbum());
+		const menu = await openCollectionMenu(target);
+		const items = Array.from(menu.querySelectorAll<HTMLButtonElement>('.menu-item'));
+		expect(items.map((el) => el.textContent?.trim())).toEqual([
+			'Upload…',
+			'Edit details',
+			'Add to playlist',
+			'Delete album'
+		]);
+
+		items.find((el) => el.textContent?.trim() === 'Edit details')?.click();
+		await tick();
+
+		const titles = requireElement(target, '.header-titles');
+		expect(titles.querySelector('.fake-details-editor')).not.toBeNull();
+		expect(titles.querySelector('h2')).toBeNull();
+		expect(titles.querySelector('nav')).not.toBeNull();
+
+		getByRoleButton(target, 'Done').click();
+		await tick();
+
+		expect(target.querySelector('.fake-details-editor')).toBeNull();
+		expect(getByRoleHeading(target, 'Night Drive')).not.toBeNull();
+	});
+
+	it('names an album title that renames only through Edit details as a plain heading', async () => {
+		const target = await render(detailsEditingAlbum());
+		const heading = getByRoleHeading(target, 'Night Drive');
+		expect(heading.textContent?.trim()).toBe('Night Drive');
+		expect(heading.querySelector('button')).toBeNull();
 	});
 
 	it('forwards Rename in the menu to the title EditableTitle interaction', async () => {
