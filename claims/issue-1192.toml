@@ -1,0 +1,7 @@
+claim_id = "36bfe125777a4dfca279827f2d3c1114"
+agent = "claude-head"
+role = "builder"
+base = "72e3e2ddc5f303c8fa43a4e4329af03c33c93bd4"
+branch = "claude-head/issue-1192-standby-deck"
+scope = ["frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
+opened_commit = "f3596e96b13f6119bd54b537360a1356dfb2b21a"
