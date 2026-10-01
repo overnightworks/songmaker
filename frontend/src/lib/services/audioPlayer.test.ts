@@ -1175,6 +1175,36 @@ describe('patient recovery while the screen is off', () => {
 		});
 
 		it.each([
+			{ answer: 'the stream still serves', probe: { ok: true, status: 200 } },
+			{ answer: 'its snapshot expired', probe: { ok: false, status: 404 } }
+		])(
+			'Pause while a stalled stream is probed has the last word when $answer',
+			async ({ probe }) => {
+				let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+				fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+				audioPlayer.swapCallbacks(
+					callbacks({ onStreamRebuild: vi.fn().mockResolvedValue(makeStreamManifest()) })
+				);
+				audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+				startPlayingAt(12);
+				fakeAudio.fire('stalled');
+				await vi.advanceTimersByTimeAsync(5 * SECOND);
+				const whileProbing = audioPlayer.transport;
+				const load = vi.spyOn(fakeAudio, 'load');
+
+				audioPlayer.toggle();
+				answerProbe(probe);
+				await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+				expect({
+					whileProbing,
+					transport: audioPlayer.transport,
+					reloads: load.mock.calls.length
+				}).toEqual({ whileProbing: 'recovering', transport: 'paused', reloads: 0 });
+			}
+		);
+
+		it.each([
 			{ strip: 'the offline strip says so', announced: true, givenUp: 'waiting-for-network' },
 			{ strip: 'nothing says so', announced: false, givenUp: 'failed' }
 		])('a take given up when $strip shows $givenUp', async ({ announced, givenUp }) => {
