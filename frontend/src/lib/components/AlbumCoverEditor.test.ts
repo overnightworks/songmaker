@@ -425,6 +425,31 @@ describe('AlbumCoverEditor in the album header', () => {
 		);
 	});
 
+	it('Escape while Use saves closes nothing; the editor closes once the cover is saved', async () => {
+		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
+		const saving = deferred<ReturnType<typeof coveredAlbum>>();
+		selectAlbumCoverSuggestion.mockReturnValue(saving.promise);
+		const target = await renderDetail();
+		await openCoverEditing(target);
+		await vi.waitFor(() => expect(shownImage(target)).toBe('/suggestion-three.png'));
+		const levelUp = vi.fn();
+		const stopListening = listenForGlobalEscape(levelUp);
+
+		pressEditorButton(target, 'Use');
+		await tick();
+		document.body.dispatchEvent(
+			new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+		);
+		await tick();
+
+		expect(editor(target)).not.toBeNull();
+		expect(discardAlbumCoverSuggestions).not.toHaveBeenCalled();
+		saving.resolve(coveredAlbum());
+		await editingClosed(target);
+		stopListening();
+		expect(levelUp).not.toHaveBeenCalled();
+	});
+
 	it('× discards the unused suggestions and closes the editor', async () => {
 		fetchAlbumCoverSuggestions.mockResolvedValue(coverSuggestions(THREE_SUGGESTIONS));
 		const target = await renderDetail();
