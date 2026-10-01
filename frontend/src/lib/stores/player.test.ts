@@ -6,6 +6,7 @@ import {
 	makeSong
 } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import type {
@@ -113,6 +114,8 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
+import { currentUser } from '$lib/stores/auth';
+import { readPlaybackResume, type ResumeQueueSource } from '$lib/stores/playbackResume';
 import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
@@ -3556,5 +3559,78 @@ describe('audioPlayer offline announcement wiring', () => {
 		reportResourceStreamReachable(true);
 
 		expect(resume).toHaveBeenCalledOnce();
+	});
+});
+
+describe('remembering what the app plays', () => {
+	const LISTENER = { id: 'u-resume', username: 'listener', role: 'user' as const };
+	const song = makeSong({ ...queuedSongDefaults(), id: 's-resume' });
+
+	function playAndHide(generationId: string): void {
+		audioPlayer.current = makePlayback(
+			makeGen({ ...genDefaults, id: generationId, song_id: song.id }),
+			song
+		);
+		audioPlayer.status = 'playing';
+		flushSync();
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
+		document.dispatchEvent(new Event('visibilitychange'));
+	}
+
+	beforeEach(() => {
+		currentUser.set(LISTENER);
+	});
+
+	afterEach(() => {
+		currentUser.set(null);
+		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'visible' });
+		localStorage.clear();
+	});
+
+	it.each<{ kind: string; queue: QueueContext; source: ResumeQueueSource }>([
+		{
+			kind: 'album',
+			queue: { type: 'album', albumId: 'a-resume' },
+			source: { type: 'album', albumId: 'a-resume' }
+		},
+		{
+			kind: 'playlist',
+			queue: playlistQueue([], 0),
+			source: { type: 'playlist', playlistId: QUEUE_PLAYLIST.id }
+		},
+		{
+			kind: 'library',
+			queue: { type: 'library' },
+			source: { type: 'library', pool: 'all', shuffle: true }
+		}
+	])('saves the $kind queue the take plays from', ({ queue, source }) => {
+		setShuffle(true);
+		setLibraryTakePool('all');
+		queueContext.set(queue);
+
+		playAndHide('g-resume-queue');
+
+		expect(readPlaybackResume()).toMatchObject({ source, generationId: 'g-resume-queue' });
+	});
+
+	it('share playback is never saved', () => {
+		const sharePlayback = new SharePlayback();
+		sharePlayback.start(
+			{
+				kind: 'song',
+				title: 'Shared song',
+				artist: 'Artist',
+				albumTitle: null,
+				year: null,
+				cover: null,
+				tracks: []
+			},
+			null
+		);
+
+		playAndHide('g-resume-share');
+		sharePlayback.stop();
+
+		expect(readPlaybackResume()).toBeNull();
 	});
 });
