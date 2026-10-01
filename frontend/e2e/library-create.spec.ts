@@ -1,6 +1,7 @@
 // + NEW on the Library head makes an album or a playlist from the wall, even
 // from an empty library (#1149, #1166, #915 F2a/F2b; pictures N1–N5 in
-// docs/design/navigation.html).
+// docs/design/navigation.html). A card closed with a typed title opens again
+// on it (#1184 K2).
 // The empty library is this user's own library answered empty on the wire, so
 // the first-album path runs against the seeded stack; creating the album and
 // opening its page are real.
@@ -101,6 +102,12 @@ test('an empty library makes its first album from + New on the Library head and 
 	await newButton(page).click();
 	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
 	await card.getByLabel(NEW_ALBUM_TITLE_LABEL).fill(title);
+	await page.keyboard.press('Escape');
+	await expect(card).toBeHidden();
+
+	await newButton(page).click();
+	await newMenu(page).getByRole('button', { name: LIBRARY_NEW_ALBUM_LABEL }).click();
+	await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
 	await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
 
 	await expect(page).toHaveURL(/\/album\//);
