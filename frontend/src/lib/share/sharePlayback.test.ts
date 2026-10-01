@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { setQueuePlaybackMode } from '$lib/stores/playbackSettings';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { fromSharedAlbum, type SharedCollectionView } from './sharedCollection';
 import { SharePlayback } from './sharePlayback.svelte';
@@ -157,7 +156,6 @@ beforeEach(() => {
 		onCurrentChange: null,
 		networkFailureIsAnnounced: () => false
 	});
-	setQueuePlaybackMode('classic');
 });
 
 afterEach(() => {
@@ -278,8 +276,7 @@ describe('a failed take offline', () => {
 });
 
 describe('stream playback', () => {
-	it('plays via the stream manifest when stream mode is enabled and a fetcher is provided', async () => {
-		setQueuePlaybackMode('stream');
+	it('a share without shuffle uses its stream', async () => {
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
@@ -294,7 +291,6 @@ describe('stream playback', () => {
 	});
 
 	it('flags windowEnded without wrapping when a windowed stream ends', async () => {
-		setQueuePlaybackMode('stream');
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(true));
 		const playback = new SharePlayback();
 		const view = albumView();
@@ -310,7 +306,6 @@ describe('stream playback', () => {
 	});
 
 	it('falls back to classic playback when the stream fetch fails', async () => {
-		setQueuePlaybackMode('stream');
 		const fetchStream = vi.fn().mockRejectedValue(new Error('network'));
 		const playback = new SharePlayback();
 		const view = albumView();
@@ -325,7 +320,6 @@ describe('stream playback', () => {
 	});
 
 	it('reuses a fresh manifest across two plays instead of refetching', async () => {
-		setQueuePlaybackMode('stream');
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
@@ -341,7 +335,6 @@ describe('stream playback', () => {
 	});
 
 	it('rebuilds a shared stream after its snapshot expires', async () => {
-		setQueuePlaybackMode('stream');
 		const freshManifest = { ...streamManifest(false), stream_url: '/shared-stream-fresh.mp3' };
 		const fetchStream = vi
 			.fn()
@@ -368,7 +361,6 @@ describe('stream playback', () => {
 
 describe('shuffle', () => {
 	it('drops out of stream mode to classic per-track playback, keeping the playing track first', async () => {
-		setQueuePlaybackMode('stream');
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
@@ -388,7 +380,6 @@ describe('shuffle', () => {
 	});
 
 	it('returns to stream mode when disabled', async () => {
-		setQueuePlaybackMode('stream');
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
