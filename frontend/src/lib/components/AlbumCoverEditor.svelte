@@ -44,6 +44,8 @@
 		onclose: () => void;
 		onupload: () => void;
 		onremove: () => void;
+		/** An upload or removal the album page is saving, which × waits for. */
+		saving: boolean;
 	}
 
 	interface CoverSuggestionsState {
@@ -74,7 +76,7 @@
 		limitNote: null
 	};
 
-	let { album, onclose, onupload, onremove }: Props = $props();
+	let { album, onclose, onupload, onremove, saving }: Props = $props();
 
 	const currentAlbumId = $derived(album.id);
 
@@ -554,7 +556,7 @@
 			data-hitbox="frequent"
 			aria-label={ALBUM_COVER_EDITING_CLOSE_LABEL}
 			title={ALBUM_COVER_EDITING_CLOSE_LABEL}
-			disabled={coverSuggestionsBusy}
+			disabled={coverSuggestionsBusy || saving}
 			onclick={discardAndClose}
 		>
 			<Icon name="x" size={20} />

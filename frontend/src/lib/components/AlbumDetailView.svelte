@@ -26,7 +26,7 @@
 	} from '$lib/stores/libraryData';
 	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
-	import { historyLayerState } from '$lib/stores/layers';
+	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
 	import { setOpenCollection } from '$lib/stores/collection';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
 	import { addAlbumToPlaylist } from '$lib/stores/playlists';
@@ -133,7 +133,7 @@
 		if (!file || !selectedAlbum) return;
 		coverBusy = true;
 		try {
-			const updated = await uploadAlbumCover(selectedAlbum.id, file);
+			const updated = await holdOpenWhile('cover-saving', uploadAlbumCover(selectedAlbum.id, file));
 			updateAlbumInList(selectedAlbum.id, () => updated);
 			addToast('Cover saved', 'success');
 		} catch (e) {
@@ -151,7 +151,7 @@
 		if (!selectedAlbum) return;
 		coverBusy = true;
 		try {
-			const updated = await deleteAlbumCover(selectedAlbum.id);
+			const updated = await holdOpenWhile('cover-saving', deleteAlbumCover(selectedAlbum.id));
 			updateAlbumInList(selectedAlbum.id, () => updated);
 			addToast('Cover removed', 'success');
 		} catch (e) {
@@ -320,6 +320,7 @@
 					onclose={close}
 					onupload={onCoverAction}
 					onremove={onCoverRemove}
+					saving={coverBusy}
 				/>
 			{/snippet}
 		</CollectionHeader>
