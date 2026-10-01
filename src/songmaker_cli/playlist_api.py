@@ -12,6 +12,7 @@ from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.api_helpers import (
     PLAYLIST_NOT_FOUND_DETAIL,
+    check_album_access,
     check_generation_access,
     check_playlist_access,
     check_song_access,
@@ -40,7 +41,6 @@ from songmaker_cli.constants import (
     COVER_NOT_FOUND,
     COVER_VARIANT_DETAIL,
     COVER_VERSION_QUERY,
-    ROLE_ADMIN,
     AuditAction,
     ResourceType,
 )
@@ -299,11 +299,7 @@ def api_add_album_to_playlist(
     ctx: AppContext = Depends(get_app_context),
 ) -> AddAlbumToPlaylistResponse:
     check_playlist_access(session, playlist_id, user)
-    album = get_album(session, req.album_id)
-    if not album:
-        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN and album.created_by != user.id:
-        raise HTTPException(404, ALBUM_NOT_FOUND_DETAIL)
+    check_album_access(get_album(session, req.album_id), user)
 
     def _readable(generation: Generation) -> bool:
         try:
