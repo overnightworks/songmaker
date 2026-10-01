@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Annotated, Final, NoReturn
+from typing import TYPE_CHECKING, Annotated, Final, NoReturn, Protocol
 from urllib.parse import urlsplit
 
 from fastapi import Depends, HTTPException, Query, Request
@@ -445,10 +445,26 @@ def owner_filter(user: AuthenticatedUser) -> str | None:
     return user.id
 
 
+class Actor(Protocol):
+    """The identity facts an access decision reads."""
+
+    id: str
+    role: str
+
+
+def can_access_album(album: Album | None, user: Actor, *, require_owner: bool = False) -> bool:
+    """Whether the user reaches the album and everything inside it.
+
+    The creator always does. An admin reaches everything they can open, even
+    an album that no longer loads, unless the caller requires ownership.
+    """
+    if user.role == ROLE_ADMIN and not require_owner:
+        return True
+    return album is not None and album.created_by == user.id
+
+
 def check_album_access(album: Album | None, user: AuthenticatedUser) -> Album:
-    if not album:
-        raise HTTPException(404, "Album not found")
-    if user.role != ROLE_ADMIN and album.created_by != user.id:
+    if not album or not can_access_album(album, user):
         raise HTTPException(404, "Album not found")
     return album
 
@@ -460,14 +476,14 @@ def check_song_access(
     song = get_song(session, song_id)
     if not song:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN and not is_song_owner(song, user):
+    if not can_access_album(song.album, user):
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
 
 
 def is_song_owner(song: Song, user: AuthenticatedUser) -> bool:
     """Whether the song lies in an album the user created (an admin's reach aside)."""
-    return song.album is not None and song.album.created_by == user.id
+    return can_access_album(song.album, user, require_owner=True)
 
 
 def check_song_access_including_deleted(
@@ -482,10 +498,9 @@ def check_song_access_including_deleted(
     song = get_song(session, song_id, include_deleted_rows=True)
     if not song:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
-    if user.role != ROLE_ADMIN:
-        album = get_album(session, song.album_id, include_deleted_rows=True)
-        if not album or album.created_by != user.id:
-            raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
+    album = get_album(session, song.album_id, include_deleted_rows=True)
+    if not can_access_album(album, user):
+        raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     return song
 
 
@@ -571,10 +586,9 @@ def check_generation_access(
     gen = get_generation(session, gen_id)
     if not gen:
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
-    if require_owner or user.role != ROLE_ADMIN:
-        album = gen.song.album if gen.song else None
-        if not album or album.created_by != user.id:
-            raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
+    album = gen.song.album if gen.song else None
+    if not can_access_album(album, user, require_owner=require_owner):
+        raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     return gen
 
 

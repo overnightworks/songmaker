@@ -3,10 +3,7 @@
 frontend/src/routes/*:ssr # SvelteKit route configuration.
 frontend/src/routes/*:prerender # SvelteKit route configuration.
 frontend/src/lib/stores/resourceSync.ts:ResourceSyncController # Dependency-injected sync controller: isolated race, reconnect, authorization and bounded-buffer tests without the singleton browser/network owner.
-frontend/src/lib/history/historyController.ts:land # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:allocateEntryId # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:landedEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:pushEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:replaceEntry # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:stepBackTo # installed by #1006 H1: the history controller core lands before its first caller (#1194).
-frontend/src/lib/history/historyController.ts:listenForLandings # installed by #1006 H1: the history controller core lands before its first caller (#1194).
+frontend/src/lib/history/historyController.ts:land # the pure landing reducer is exported for its table tests; #1006 H2 makes layers its callers.
+frontend/src/lib/history/historyController.ts:allocateEntryId # the id allocator is exported for its tests over an in-memory Storage (#1194).
+frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader is exported for its codec tests (#1194).
+frontend/src/lib/history/historyController.ts:stepBackTo # #1006 H2 (layer step-backs) and H6 (legal) call it directly; until then only stepBackOffStandingEntry does (#1205).

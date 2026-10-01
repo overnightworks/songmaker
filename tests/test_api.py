@@ -19,6 +19,7 @@ from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
     SONG_SLUG_MAX_LENGTH,
     Album,
+    AuditLog,
     AvailableModel,
     Generation,
     Job,
@@ -3678,12 +3679,10 @@ def test_unkeep_generation_value_error(client: TestClient) -> None:
 
 
 def test_create_album_records_audit(client: TestClient) -> None:
-    from songmaker_cli.db.queries import list_audit_log
-
     client.post("/api/albums", json={"title": "Audited"})
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
-        entries = list_audit_log(session)
+        entries = session.query(AuditLog).all()
     assert any(e.action == "create" and e.resource_type == "album" for e in entries)
 
 
