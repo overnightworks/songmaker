@@ -176,17 +176,14 @@ function isSingleSlashPath(candidate: string): boolean {
 
 // No page to land on: the sign-in page would only ask for the password twice,
 // and an API address would show its raw answer.
-const NON_PAGE_PATH_PREFIXES = [`${SIGN_IN_PATH}/`, '/api/'];
+const NON_PAGE_ROOTS = [SIGN_IN_PATH, '/api'];
 
-// Judged decoded, the way the router and the server resolve it: URL parsing
-// keeps %-escapes, so /%6Cogin would otherwise reach the sign-in page and
-// /%61pi/... an API address. A single-slash path is already known decodable.
+// Judged decoded and lower-cased, so no spelling slips past: URL parsing keeps
+// %-escapes and case, so /%6Cogin or /LOGIN would otherwise count as a page.
+// A single-slash path is already known decodable.
 function isPagePath(encodedPathname: string): boolean {
-	const pathname = decodeURIComponent(encodedPathname);
-	return (
-		pathname !== SIGN_IN_PATH &&
-		!NON_PAGE_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
-	);
+	const pathname = decodeURIComponent(encodedPathname).toLowerCase();
+	return !NON_PAGE_ROOTS.some((root) => pathname === root || pathname.startsWith(`${root}/`));
 }
 
 // Normalize an address carried through sign-in. Resolving it still checks the

@@ -649,7 +649,18 @@ describe('sign-in return path', () => {
 		['a script URL', `?redirect=${encodeURIComponent('javascript:alert(1)')}`, '/'],
 		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/'],
 		['the sign-in page spelled encoded', `?redirect=${encodeURIComponent('/%6Cogin')}`, '/'],
-		['an API address spelled encoded', `?redirect=${encodeURIComponent('/%61pi/auth/me')}`, '/']
+		['an API address spelled encoded', `?redirect=${encodeURIComponent('/%61pi/auth/me')}`, '/'],
+		['a nested page', `?redirect=${encodeURIComponent('/album/a/b')}`, '/album/a/b'],
+		['a path below the sign-in page', `?redirect=${encodeURIComponent('/login/x')}`, '/'],
+		['the sign-in page with an encoded slash', `?redirect=${encodeURIComponent('/login%2F')}`, '/'],
+		['the sign-in page in capitals', `?redirect=${encodeURIComponent('/LOGIN')}`, '/'],
+		[
+			'the sign-in page in capitals with a slash',
+			`?redirect=${encodeURIComponent('/LOGIN/')}`,
+			'/'
+		],
+		['an API address in capitals', `?redirect=${encodeURIComponent('/API/auth/me')}`, '/'],
+		['the API root', `?redirect=${encodeURIComponent('/api')}`, '/']
 	])('lands on %s', (_label, query, expected) => {
 		expect(signInReturnPath(signInPage(query))).toBe(expected);
 	});

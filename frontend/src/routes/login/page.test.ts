@@ -134,9 +134,9 @@ describe('login page', () => {
 			'/'
 		],
 		[
-			'an upper-case path, which is no sign-in page',
+			'the library instead of the sign-in page in capitals',
 			`/login?redirect=${encodeURIComponent('/LOGIN')}`,
-			'/LOGIN'
+			'/'
 		],
 		[
 			'the library instead of a raw API answer',
