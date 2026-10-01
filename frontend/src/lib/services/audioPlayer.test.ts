@@ -1348,6 +1348,57 @@ describe('stream playback', () => {
 		expect(fakeAudio.currentTime).toBeCloseTo(12 - 0.75, 2);
 	});
 
+	it('asks a stalled stream one HEAD probe at a time, whatever else asks for recovery meanwhile', async () => {
+		vi.useFakeTimers();
+		let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+		fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+		const load = vi.spyOn(fakeAudio, 'load');
+
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+		fakeAudio.fire('error');
+		audioPlayer.resumeAfterNetworkReturn();
+		await vi.advanceTimersByTimeAsync(SECOND);
+		answerProbe({ ok: true, status: 200 });
+		await vi.advanceTimersByTimeAsync(0);
+
+		expect({ probes: fetchMock.mock.calls.length, reloads: load.mock.calls.length }).toEqual({
+			probes: 1,
+			reloads: 1
+		});
+	});
+
+	it('names a lost session on a stalled stream and asks for sign-in', async () => {
+		vi.useFakeTimers();
+		fetchMock.mockResolvedValue({ ok: false, status: 401 });
+		const onAuthLost = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onAuthLost }));
+		audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+		fakeAudio.fire('play');
+		fakeAudio.currentTime = 12;
+		fakeAudio.fire('timeupdate');
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		expect({
+			signInAsked: onAuthLost.mock.calls.length > 0,
+			status: audioPlayer.status,
+			error: audioPlayer.error,
+			src: fakeAudio.src
+		}).toEqual({
+			signInAsked: true,
+			status: 'error',
+			error: 'Playback failed. Press Retry.',
+			src: '/api/queue-streams/snap/audio'
+		});
+	});
+
 	it('rebuilds an expired stream snapshot and resumes at position', async () => {
 		vi.useFakeTimers();
 		fetchMock.mockResolvedValue({ ok: false, status: 404 });

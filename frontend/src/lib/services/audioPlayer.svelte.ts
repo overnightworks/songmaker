@@ -23,6 +23,8 @@ type FailureKind = 'stalled' | 'awaiting-network' | 'failed' | 'autoplay-blocked
 // 'unreachable' carries no words: the owner's offline strip names the cause.
 type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
 
+type ProbeAnswer = { ok: boolean; status: number };
+
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
 // restoreCallbacks move the whole set atomically so a new owner never
@@ -104,6 +106,7 @@ class AudioPlayer {
 	private stillChecks = 0;
 	private steadyChecks = 0;
 	private recoveryUrlSerial = 0;
+	private streamProbe: Promise<ProbeAnswer> | null = null;
 	private pauseRequestedByApp = false;
 	private streamEndSignaled = false;
 	private streamCanNext = $state(false);
@@ -489,6 +492,7 @@ class AudioPlayer {
 		this.clearStallRecoveryTimer();
 		this.stopProgressWatchdog();
 		this.recoveryStartedAt = null;
+		this.streamProbe = null;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
@@ -945,9 +949,11 @@ class AudioPlayer {
 	// path is the mode locked phones kill, so reinstating it on a blip would
 	// resurrect the exact defect stream mode exists to fix. Recovery is
 	// status-aware and stays in-stream.
+	// While a probe is out, whatever else asks for recovery — the element's
+	// error, the network's return — is answered by that probe's reload.
 	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
-		if (!el || !this.streamEngine.active) return;
+		if (!el || !this.streamEngine.active || this.streamProbe) return;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		const step = this.nextRecoveryStep(reason);
@@ -970,13 +976,9 @@ class AudioPlayer {
 			0,
 			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
 		);
-		const probe = await this.probeUrl(state.manifest.stream_url);
-		if (!this.streamEngine.active) return;
+		const probe = await this.probeStream(state.manifest.stream_url);
+		if (probe === null) return;
 
-		if (probe.status === 401) {
-			await this.callbacks.onAuthLost?.();
-			return;
-		}
 		if (probe.status === 404) {
 			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
 			// own track list and resume at the same track position.
@@ -993,9 +995,8 @@ class AudioPlayer {
 				});
 				return;
 			}
-			this.fail({ kind: 'failed', message: ERROR_MSG_NOT_FOUND });
-			return;
 		}
+		if (await this.answeredARefusal(probe)) return;
 
 		console.debug('Recovering stream playback', {
 			reason,
@@ -1005,7 +1006,17 @@ class AudioPlayer {
 		this.reloadSource(el, state.manifest.stream_url);
 	}
 
-	private async probeUrl(url: string): Promise<{ ok: boolean; status: number }> {
+	// Null when the take changed while the probe was out: its answer is stale.
+	private async probeStream(url: string): Promise<ProbeAnswer | null> {
+		const probe = this.probeUrl(url);
+		this.streamProbe = probe;
+		const answer = await probe;
+		if (this.streamProbe !== probe) return null;
+		this.streamProbe = null;
+		return answer;
+	}
+
+	private async probeUrl(url: string): Promise<ProbeAnswer> {
 		try {
 			const resp = await fetch(url, {
 				method: 'HEAD',
@@ -1029,7 +1040,7 @@ class AudioPlayer {
 			};
 			return;
 		}
-		this.handleMediaError(this.audio?.error ?? null);
+		void this.handleMediaError(this.audio?.error ?? null);
 	}
 
 	private async handleMediaError(mediaError: MediaError | null): Promise<void> {
@@ -1050,7 +1061,7 @@ class AudioPlayer {
 	}
 
 	// A lost session goes to sign-in; a take the server no longer has says so.
-	private async answeredARefusal(probe: { status: number }): Promise<boolean> {
+	private async answeredARefusal(probe: ProbeAnswer): Promise<boolean> {
 		if (probe.status === 401) {
 			this.failForAnUnknownReason();
 			await this.callbacks.onAuthLost?.();
