@@ -953,7 +953,7 @@ class AudioPlayer {
 	// error, the network's return — is answered by that probe's reload.
 	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
-		if (!el || !this.streamEngine.active || this.streamProbe) return;
+		if (!el || !this.streamEngine.active || this.streamProbe !== null) return;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		const step = this.nextRecoveryStep(reason);
