@@ -12,7 +12,13 @@ import {
 	whenBackOnline
 } from './connectivity';
 
+function pageBecomes(state: DocumentVisibilityState): void {
+	Object.defineProperty(document, 'visibilityState', { configurable: true, value: state });
+	document.dispatchEvent(new Event('visibilitychange'));
+}
+
 afterEach(() => {
+	Reflect.deleteProperty(document, 'visibilityState');
 	resetConnectivityForTests();
 	vi.restoreAllMocks();
 	vi.useRealTimers();
@@ -61,6 +67,65 @@ describe('connectivity', () => {
 
 		reportResourceStreamReachable(true);
 		expect(get(offline)).toBe(false);
+		stop();
+	});
+
+	it('a library stream cut while hidden does not mark playback offline', () => {
+		const stop = offline.subscribe(() => {});
+		pageBecomes('hidden');
+
+		reportResourceStreamReachable(false);
+		reportResourceStreamReachable(false);
+
+		expect(get(offline)).toBe(false);
+		stop();
+	});
+
+	it('a browser offline event while hidden still marks offline', () => {
+		const stop = offline.subscribe(() => {});
+		pageBecomes('hidden');
+		reportResourceStreamReachable(false);
+
+		browserReportsOnline(false);
+
+		expect(get(offline)).toBe(true);
+		stop();
+	});
+
+	it('a stream still cut after the page becomes visible marks offline as before', () => {
+		const stop = offline.subscribe(() => {});
+		pageBecomes('hidden');
+		reportResourceStreamReachable(false);
+
+		pageBecomes('visible');
+		expect(get(offline)).toBe(true);
+
+		reportResourceStreamReachable(true);
+		expect(get(offline)).toBe(false);
+		stop();
+	});
+
+	it('a stream still cut when the visible page reconnects stays offline once hidden again', () => {
+		const stop = offline.subscribe(() => {});
+		pageBecomes('hidden');
+		reportResourceStreamReachable(false);
+		pageBecomes('visible');
+		reportResourceStreamReachable(false);
+
+		pageBecomes('hidden');
+
+		expect(get(offline)).toBe(true);
+		stop();
+	});
+
+	it('a stream cut while visible stays offline when the page is hidden afterwards', () => {
+		const stop = offline.subscribe(() => {});
+		reportResourceStreamReachable(false);
+
+		pageBecomes('hidden');
+		reportResourceStreamReachable(false);
+
+		expect(get(offline)).toBe(true);
 		stop();
 	});
 

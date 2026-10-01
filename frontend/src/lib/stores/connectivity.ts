@@ -7,8 +7,10 @@ import { UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants';
  * The one answer to "can this page reach the server right now" (#1039).
  * The browser's own network state says it first; the library's live stream
  * and, before any library runs, the session check add the case the browser
- * cannot see — online, but the server does not answer (#1118). Surfaces read
- * `offline` and never decide on their own.
+ * cannot see — online, but the server does not answer (#1118). A stream cut
+ * while the page is hidden is no such evidence: a phone readily cuts a hidden
+ * page's stream though audio still plays (#1200), so it counts only once the
+ * page is visible again. Surfaces read `offline` and never decide on their own.
  */
 const browserOnline = readable(true, (set) => {
 	if (typeof window === 'undefined') return;
@@ -22,11 +24,32 @@ const browserOnline = readable(true, (set) => {
 	};
 });
 
-const resourceStreamReachable = writable(true);
+const pageVisible = readable(true, (set) => {
+	if (typeof document === 'undefined') return;
+	const sync = (): void => set(document.visibilityState === 'visible');
+	sync();
+	document.addEventListener('visibilitychange', sync);
+	return () => document.removeEventListener('visibilitychange', sync);
+});
+
+type ResourceStream = 'reachable' | 'cut-while-visible' | 'cut-while-hidden';
+
+const resourceStream = writable<ResourceStream>('reachable');
+
+function streamAfterReport(current: ResourceStream, reachable: boolean): ResourceStream {
+	if (reachable) return 'reachable';
+	if (get(pageVisible)) return 'cut-while-visible';
+	return current === 'reachable' ? 'cut-while-hidden' : current;
+}
 
 export function reportResourceStreamReachable(reachable: boolean): void {
-	resourceStreamReachable.set(reachable);
+	resourceStream.update((current) => streamAfterReport(current, reachable));
 }
+
+const resourceStreamReachable = derived(
+	[resourceStream, pageVisible],
+	([stream, visible]) => stream === 'reachable' || (stream === 'cut-while-hidden' && !visible)
+);
 
 const sessionCheckReachable = writable(true);
 
@@ -171,6 +194,6 @@ function failureToName(
 }
 
 export function resetConnectivityForTests(): void {
-	resourceStreamReachable.set(true);
+	resourceStream.set('reachable');
 	sessionCheckReachable.set(true);
 }
