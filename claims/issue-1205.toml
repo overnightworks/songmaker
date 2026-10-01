@@ -1,0 +1,8 @@
+claim_id = "0c1e5cd59fde417c989eb6c8f5c8e604"
+agent = "claude-head"
+role = "builder"
+base = "8aa07af089c7404668b520f470b047403c57cd9e"
+branch = "claude-head/issue-1205-history-controller-installed"
+scope = ["frontend/src/lib/history", "frontend/src/lib/stores/detail-back.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/app-navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/(library)/+page.svelte", "frontend/src/routes/(library)/page.test.ts", "frontend/src/routes/+layout.svelte", "scripts/dead-exports.allow"]
+opened_commit = "7981db38d141eeb1e54cef58d3afdbd06b76f38a"
+whole_reason = "installing the one popstate owner touches both history modules, the layout and their fakes"
