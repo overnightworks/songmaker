@@ -101,7 +101,7 @@ def test_class_methods_and_nested_functions_are_outside_the_module_rule(run_gate
         run_gate(
             {
                 "owner.py": "class Live:\n def method(self):\n  def local(): pass\n",
-                "consumer.py": "from owner import Live",
+                "consumer.py": "from owner import Live\nLive()",
             }
         )[0]
         == 0
@@ -131,3 +131,36 @@ def test_same_file_strings_and_docstrings_do_not_keep_a_symbol_alive(run_gate, u
 
 def test_same_file_attribute_reference_keeps_a_symbol_alive(run_gate):
     assert run_gate({"owner.py": "def alive(): pass\nowner.alive()\n"})[0] == 0
+
+
+@pytest.mark.parametrize(
+    "re_export",
+    [
+        "from songmaker_cli.db.queries.auth import list_audit_log as list_audit_log",
+        "from songmaker_cli.db.queries.auth import list_audit_log",
+        "from .auth import list_audit_log as list_audit_log",
+    ],
+)
+def test_a_re_export_used_only_by_tests_does_not_keep_a_symbol_alive(run_gate, re_export):
+    status, output = run_gate(
+        {
+            "songmaker_cli/db/queries/auth.py": "def list_audit_log(session): pass\n",
+            "songmaker_cli/db/queries/__init__.py": f"{re_export}\n",
+            "tests/test_admin_api.py": "from songmaker_cli.db.queries import list_audit_log\n",
+        }
+    )
+    assert status == 1
+    assert "songmaker_cli/db/queries/auth.py:list_audit_log" in output
+
+
+def test_a_re_export_used_by_production_code_keeps_the_symbol_alive(run_gate):
+    assert (
+        run_gate(
+            {
+                "queries/auth.py": "def create_user(session): pass\n",
+                "queries/__init__.py": "from queries.auth import create_user as create_user\n",
+                "admin_api.py": "from queries import create_user\ncreate_user(None)\n",
+            }
+        )[0]
+        == 0
+    )
