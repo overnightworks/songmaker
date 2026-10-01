@@ -229,7 +229,6 @@ class AudioPlayer {
 
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
-		this.streamEndSignaled = false;
 		this.mode = 'classic';
 
 		if (sameGen && this.audio && this.status !== 'error' && !restart) {
@@ -247,20 +246,14 @@ class AudioPlayer {
 		}
 
 		this.clearStandby();
-		this.clearStallRecoveryTimer();
-		this.recoveryAttempts = 0;
-		this.stillChecks = 0;
+		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
-		this.lastObservedTime = 0;
 		this.autoplayPending = autoplay;
 		const el = this.ensureAudio();
 		this.status = 'loading';
 		this.pauseElement(el);
 		this.setCurrent(info);
 		this.currentUrl = url;
-		this.failure = null;
-		this.currentTime = 0;
-		this.duration = 0;
 		this.loadSource(el, url);
 	}
 
@@ -276,11 +269,7 @@ class AudioPlayer {
 		if (opts.resumeAt !== undefined) this.streamEngine.resumeAt(opts.resumeAt);
 		this.clearStandby();
 		const el = this.ensureAudio();
-		this.clearStallRecoveryTimer();
-		this.recoveryAttempts = 0;
-		this.stillChecks = 0;
-		this.pendingRecoverySeek = null;
-		this.lastObservedTime = 0;
+		this.resetTakeState();
 		this.mode = 'stream';
 		this.autoplayPending = autoplay;
 		this.status = 'loading';
@@ -289,7 +278,6 @@ class AudioPlayer {
 		this.currentUrl = manifest.stream_url;
 		this.currentTime = streamState.currentTime;
 		this.duration = streamState.duration;
-		this.failure = null;
 		this.loadSource(el, manifest.stream_url);
 		// The start-track seek is applied on loadedmetadata, never eagerly:
 		// browsers accept a currentTime assignment before metadata without
@@ -312,20 +300,14 @@ class AudioPlayer {
 		opts: { autoplay: boolean; startAt: number | undefined }
 	): void {
 		const previous = this.audio;
-		this.clearStallRecoveryTimer();
-		this.stopProgressWatchdog();
+		this.resetTakeState();
 		this.audio = promoted;
 		this.standby = previous;
 		this.standbyUrl = null;
-		this.recoveryAttempts = 0;
-		this.stillChecks = 0;
 		this.pauseRequestedByApp = false;
-		this.autoplayPending = false;
 		this.pendingRecoverySeek = opts.startAt ?? null;
-		this.lastObservedTime = 0;
 		this.currentTime = promoted.currentTime;
 		this.duration = promoted.duration || 0;
-		this.failure = null;
 		this.status = 'ready';
 		this.setCurrent(info);
 		this.currentUrl = url;
@@ -450,61 +432,54 @@ class AudioPlayer {
 	// into the logged-in app never finds a synthetic share PlaybackInfo still
 	// sitting in the transport bar.
 	unload(): void {
-		this.autoplayPending = false;
-		this.clearStallRecoveryTimer();
-		this.stopProgressWatchdog();
+		this.resetTakeState();
 		this.clearStandby();
 		if (this.audio) {
 			this.pauseElement(this.audio);
 			this.audio.src = '';
 			this.audio.removeAttribute('src');
 		}
-		this.status = 'idle';
-		this.setCurrent(null);
-		this.currentUrl = null;
-		this.mode = 'classic';
-		this.currentTime = 0;
-		this.duration = 0;
-		this.failure = null;
-		this.streamEngine.clear();
-		this.syncStreamBoundaries();
-		this.recoveryAttempts = 0;
-		this.stillChecks = 0;
-		this.pendingRecoverySeek = null;
-		this.lastObservedTime = 0;
-		this.streamEndSignaled = false;
+		this.forgetTake();
 	}
 
 	destroy(): void {
-		this.streamEndSignaled = false;
+		this.resetTakeState();
 		// The graph is bound to these elements for good, so it goes with them.
 		this.closeAudioGraph();
 		this.clearStandby();
 		this.standby = null;
-		if (!this.audio) {
-			this.streamEngine.clear();
-			this.syncStreamBoundaries();
-			return;
+		if (this.audio) {
+			this.pauseElement(this.audio);
+			this.audio.src = '';
+			this.audio.removeAttribute('src');
+			this.audio = null;
 		}
+		this.forgetTake();
+	}
+
+	// What one take's playback and recovery leave behind, cleared so the next
+	// take — or none — starts from nothing.
+	private resetTakeState(): void {
 		this.clearStallRecoveryTimer();
 		this.stopProgressWatchdog();
-		this.pauseElement(this.audio);
-		this.audio.src = '';
-		this.audio.removeAttribute('src');
-		this.audio = null;
-		this.currentUrl = null;
-		this.status = 'idle';
-		this.setCurrent(null);
-		this.mode = 'classic';
-		this.currentTime = 0;
-		this.duration = 0;
-		this.failure = null;
-		this.streamEngine.clear();
-		this.syncStreamBoundaries();
 		this.recoveryAttempts = 0;
 		this.stillChecks = 0;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
+		this.autoplayPending = false;
+		this.streamEndSignaled = false;
+		this.failure = null;
+		this.currentTime = 0;
+		this.duration = 0;
+	}
+
+	private forgetTake(): void {
+		this.status = 'idle';
+		this.setCurrent(null);
+		this.currentUrl = null;
+		this.mode = 'classic';
+		this.streamEngine.clear();
+		this.syncStreamBoundaries();
 	}
 
 	private ensureAudio(): HTMLAudioElement {
