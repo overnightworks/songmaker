@@ -7,7 +7,7 @@
 		selectAlbumCoverSuggestion
 	} from '$lib/api/albums';
 	import { cancelJob } from '$lib/api/jobs';
-	import type { AlbumItem, CoverSuggestionsResponse } from '$lib/api/types';
+	import type { AlbumItem, CoverSuggestionsResponse, JobItem } from '$lib/api/types';
 	import {
 		albumCoverStageLabel,
 		albumCoverSuggestionAlt,
@@ -85,6 +85,7 @@
 	let completedCoverJobId: string | null = null;
 	let chosenSlot = $state<number | null>(null);
 	let runningSuggestionJobId: string | null = null;
+	let followedRunId = $state<string | null>(null);
 	let discardedAlbumId: string | null = null;
 	let albumVisit = new AbortController();
 	let swipeStart: { pointerId: number; x: number; y: number } | null = null;
@@ -127,10 +128,16 @@
 	const canSuggestCover = $derived(
 		!isCoverSuggestionGenerating && !coverSuggestionsLoading && !dailyLimitNote
 	);
+	// At the daily limit the limit is the one word the editor says, so the
+	// failure of a run from before this visit stays silent beside it; a run
+	// this visit followed still names how it ended (#1202).
+	const latestRunFailureShown = $derived(
+		latestCoverJob?.status === 'failed' && (!dailyLimitNote || latestCoverJob.id === followedRunId)
+	);
 	const coverSuggestionFailure = $derived(
 		coverSuggestionsFailure ??
-			(latestCoverJob?.status === 'failed'
-				? (latestCoverJob.error ?? ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
+			(latestRunFailureShown
+				? (latestCoverJob?.error ?? ALBUM_COVER_SUGGESTION_FAILED_FALLBACK)
 				: null)
 	);
 	const coverSuggestionsProgress = $derived(
@@ -173,6 +180,7 @@
 			...COVER_SUGGESTIONS_SETTLED,
 			isLoading: true
 		};
+		followedRunId = null;
 		coverSuggestionsReloads.stop();
 		const visit = new AbortController();
 		albumVisit = visit;
@@ -226,7 +234,7 @@
 					? response.job
 					: null;
 			runningSuggestionJobId = runningJob?.id ?? null;
-			if (runningJob) trackJob(runningJob, { albumId });
+			if (runningJob) followRun(runningJob, albumId);
 		} catch (error) {
 			if (request !== suggestionsRequest || albumId !== currentAlbumId) return;
 			const outcome = coverSuggestionsOutcomeOf(error);
@@ -284,7 +292,7 @@
 				return;
 			}
 			runningSuggestionJobId = job.id;
-			trackJob(job, { albumId });
+			followRun(job, albumId);
 			void loadCoverSuggestions(albumId);
 		} catch (error) {
 			if (albumId !== currentAlbumId) return;
@@ -294,6 +302,11 @@
 			}
 			showSuggestFailure(albumId, error);
 		}
+	}
+
+	function followRun(job: JobItem, albumId: string): void {
+		followedRunId = job.id;
+		trackJob(job, { albumId });
 	}
 
 	function showSuggestFailure(albumId: string, error: unknown): void {
@@ -313,13 +326,17 @@
 	// tab or a new day may have moved them -- so both are read again. Only a
 	// count that says today's suggestions are spent makes a 429 the daily
 	// limit, with the server's words beside it. A 409 needs no word of its own:
-	// the reread either follows the run that still goes or shows how it ended.
+	// the reread either follows the run that still goes or shows how it ended,
+	// so that run counts as followed even when it already ended.
 	// Any other 429 (the request throttle) is an ordinary failure that the next
 	// Suggest may retry.
 	async function rereadAfterRefusal(albumId: string, refusal: ApiError): Promise<void> {
 		await loadCoverSuggestions(albumId);
 		if (albumId !== currentAlbumId || coverSuggestions === null) return;
-		if (refusal.status === HTTP_CONFLICT) return;
+		if (refusal.status === HTTP_CONFLICT) {
+			followedRunId = latestCoverJob?.id ?? null;
+			return;
+		}
 		if (refusal.status === HTTP_TOO_MANY_REQUESTS && dailySuggestionsSpent) {
 			const limitNote = describeFailure(refusal, ALBUM_COVER_DAILY_LIMIT_REACHED);
 			updateCoverSuggestionsState(albumId, (state) => ({ ...state, limitNote }));
