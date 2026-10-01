@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { historyLayerState } from '$lib/stores/navigation';
-	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
+	import { historyLayerState } from '$lib/stores/layers';
+	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import {
 		COLLECTION_MENU_CLOSE_LABEL,
 		SONG_MENU_ADD_TO_PLAYLIST_LABEL,
@@ -33,10 +33,15 @@
 		if (menu) focusFirstIn(menu);
 	}
 
-	function closeMenu(restoreFocus = true): void {
-		if (!$menuOpen) return;
+	let menuWasOpen = false;
+	$effect(() => {
+		const isOpen = $menuOpen;
+		if (menuWasOpen && !isOpen) refocusIfDropped(triggerButton);
+		menuWasOpen = isOpen;
+	});
+
+	function closeMenu(): void {
 		$menuOpen = false;
-		if (restoreFocus) queueMicrotask(() => triggerButton?.focus());
 	}
 
 	function toggleMenu(): void {
@@ -46,7 +51,7 @@
 
 	function onWindowKeydown(event: KeyboardEvent): void {
 		if (!$menuOpen || !menu) return;
-		handleFocusTrapKeydown(menu, event, () => closeMenu());
+		handleFocusTrapKeydown(menu, event);
 	}
 
 	function runAndClose(action: () => void): void {

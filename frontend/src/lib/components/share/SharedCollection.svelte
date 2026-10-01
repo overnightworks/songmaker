@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		collectionSubtitle,
 		playableTracks,
@@ -36,7 +37,7 @@
 	const playback = new SharePlayback();
 	let coverFailed = $state(false);
 	let mobileTransport = $state(false);
-	let nowPlayingOpen = $state(false);
+	const nowPlayingOpen = historyLayerState('shared-now-playing', false);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
@@ -58,7 +59,7 @@
 	});
 
 	$effect(() => {
-		if (!playback.currentTrack) nowPlayingOpen = false;
+		if (!playback.currentTrack) $nowPlayingOpen = false;
 	});
 
 	$effect(() => {
@@ -192,18 +193,18 @@
 		onTogglePlay={() => audioPlayer.toggle()}
 		onSeek={(seconds) => audioPlayer.seek(seconds)}
 		{trackInfo}
-		{nowPlayingOpen}
-		onOpenNowPlaying={() => (nowPlayingOpen = true)}
+		nowPlayingOpen={$nowPlayingOpen}
+		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
 		nowPlayingDisabled={false}
 		{mobileTransport}
 	/>
 {/if}
 
-{#if nowPlayingOpen && audioPlayer.current}
+{#if $nowPlayingOpen && audioPlayer.current}
 	<NowPlayingFrame
 		info={audioPlayer.current}
 		{coverUrl}
-		onclose={() => (nowPlayingOpen = false)}
+		onclose={() => ($nowPlayingOpen = false)}
 		canPrev={playback.canPrev}
 		canNext={playback.canNext}
 		onprev={() => playback.prev()}

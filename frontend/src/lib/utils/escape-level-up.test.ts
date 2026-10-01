@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { closeTopLayer, holdLayer, resetNavigationForTests } from '$lib/stores/navigation';
+import { closeTopLayer, holdLayer, resetLayersForTests } from '$lib/stores/layers';
 import { escapeLevelUpTarget, handleGlobalEscape, isEditableElement } from './escape-level-up';
 
 describe('escapeLevelUpTarget', () => {
-	it('leaves the docked Now Playing panel before any navigation level', () => {
+	it('leaves an open Now Playing that is not a layer before any navigation level', () => {
 		expect(escapeLevelUpTarget(true, true, true)).toBe('now-playing');
 	});
 
@@ -44,7 +44,7 @@ describe('isEditableElement', () => {
 
 describe('handleGlobalEscape', () => {
 	afterEach(() => {
-		resetNavigationForTests();
+		resetLayersForTests();
 		document.body.replaceChildren();
 	});
 

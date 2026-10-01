@@ -129,12 +129,9 @@ vi.mock('$lib/api/client', async (importOriginal) => ({
 import {
 	albumTrackNeighbors,
 	backToCollection,
-	closeTopLayer,
 	followAppPageLink,
 	followShellLayers,
 	goBack,
-	historyLayerState,
-	holdLayer,
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
@@ -151,6 +148,7 @@ import {
 	selectNeighborSong,
 	selectSong
 } from './navigation';
+import { closeTopLayer, historyLayerState } from '$lib/stores/layers';
 import {
 	discardDraft,
 	editLyrics,

@@ -1,4 +1,4 @@
-import { closeTopLayer } from '$lib/stores/navigation';
+import { closeTopLayer } from '$lib/stores/layers';
 
 const FOCUSABLE_SELECTOR = [
 	'a[href]',
@@ -11,6 +11,14 @@ const FOCUSABLE_SELECTOR = [
 
 function focusableElements(container: HTMLElement): HTMLElement[] {
 	return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR));
+}
+
+// A surface that closes -- by Escape, Back or a click away -- while focus sat
+// inside it leaves focus on the page itself; the control that opened it takes
+// it back. Focus the person moved elsewhere stays where it is.
+export function refocusIfDropped(opener: HTMLElement | undefined): void {
+	const active = document.activeElement;
+	if (active === null || active === document.body) opener?.focus();
 }
 
 export function focusFirstIn(container: HTMLElement): void {
@@ -48,8 +56,7 @@ function trapTabKey(container: HTMLElement, event: KeyboardEvent): void {
 export function handleFocusTrapKeydown(container: HTMLElement, event: KeyboardEvent): void {
 	if (event.defaultPrevented) return;
 	if (event.key === 'Escape') {
-		event.preventDefault();
-		closeTopLayer();
+		if (closeTopLayer()) event.preventDefault();
 		return;
 	}
 	if (event.key !== 'Tab') return;

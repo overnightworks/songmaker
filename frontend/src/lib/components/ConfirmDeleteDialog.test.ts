@@ -1,23 +1,18 @@
 import { flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
-import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 
 const TITLE = 'Delete song?';
 
 let openDialog: ReturnType<typeof mount> | null = null;
-let globalEscapeFired = false;
-
-function onWindowKeydown(event: KeyboardEvent): void {
-	if (shouldHandleGlobalEscape(event, document)) globalEscapeFired = true;
-}
+let stopListeningForEscape: () => void = () => undefined;
 
 afterEach(async () => {
-	window.removeEventListener('keydown', onWindowKeydown);
+	stopListeningForEscape();
 	if (openDialog) await unmount(openDialog);
 	openDialog = null;
-	globalEscapeFired = false;
 	document.body.replaceChildren();
 });
 
@@ -129,11 +124,12 @@ describe('ConfirmDeleteDialog', () => {
 	});
 
 	it('closes only itself on Escape, never also taking the page one level up', async () => {
-		window.addEventListener('keydown', onWindowKeydown);
+		const levelUp = vi.fn();
+		stopListeningForEscape = listenForGlobalEscape(levelUp);
 		const dialog = await openFrom(renderOpener());
 		pressKey(button(dialog, 'Cancel'), 'Escape');
 		expect(document.querySelector('[role="dialog"]')).toBeNull();
-		expect(globalEscapeFired).toBe(false);
+		expect(levelUp).not.toHaveBeenCalled();
 	});
 
 	it('is labelled by its title', async () => {

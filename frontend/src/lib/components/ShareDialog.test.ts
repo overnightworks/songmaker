@@ -41,16 +41,28 @@ describe('ShareDialog', () => {
 		expect(target.querySelector('[role="dialog"]')).toBeNull();
 	});
 
-	it('closes on the primary action, the backdrop, and Escape', async () => {
+	it.each([
+		{
+			way: 'the primary action',
+			press: (target: HTMLElement) =>
+				target.querySelector<HTMLButtonElement>('.confirm-btn')?.click()
+		},
+		{
+			way: 'the backdrop',
+			press: (target: HTMLElement) =>
+				target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click()
+		},
+		{
+			way: 'Escape',
+			press: () =>
+				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+		}
+	])('closes once on $way', async ({ press }) => {
 		const { target, props } = await render();
-		target.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
-		expect(props.onclose).toHaveBeenCalledTimes(1);
 
-		target.querySelector<HTMLButtonElement>('.overlay-backdrop')?.click();
-		expect(props.onclose).toHaveBeenCalledTimes(2);
+		press(target);
 
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-		expect(props.onclose).toHaveBeenCalledTimes(3);
+		expect(props.onclose).toHaveBeenCalledOnce();
 	});
 
 	it('marks the dialog aria-modal', async () => {

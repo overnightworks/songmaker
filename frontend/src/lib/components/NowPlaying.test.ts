@@ -28,6 +28,7 @@ import { openCollection, resetCollectionForTests } from '$lib/stores/collection'
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
+	expandNowPlaying,
 	curationActive,
 	ensureGenerationsLoaded,
 	libraryQueueSkipped,
@@ -49,6 +50,8 @@ import { HITBOX_FREQUENT_PX, UNREACHABLE_RELOAD_DELAYS_MS } from '$lib/constants
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { toasts } from '$lib/stores/toast';
 import { describeBackClosesOverlay } from '$lib/test-utils/library-history';
+import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
+import { followShellLayers, resetNavigationForTests } from '$lib/stores/navigation';
 import {
 	clearHitboxStyles,
 	injectHitboxStyles,
@@ -259,21 +262,37 @@ describe('NowPlaying', () => {
 		expect(get(nowPlayingSurface)).toBe('closed');
 	});
 
-	it('closes on Escape where no docked panel fits', async () => {
-		await renderSurface(info());
+	describe('as the layer the app layout follows', () => {
+		let stopFollowingShellLayers: () => void = () => undefined;
 
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+		beforeEach(() => {
+			stopFollowingShellLayers = followShellLayers();
+		});
 
-		expect(get(nowPlayingSurface)).toBe('closed');
-	});
+		afterEach(() => {
+			stopFollowingShellLayers();
+			resetNavigationForTests();
+			setDesktopNowPlayingSurface('docked');
+		});
 
-	it('steps back to the docked panel on Escape where one fits', async () => {
-		nowPlayingDockable.set(true);
-		await renderSurface(info());
+		it('closes on Escape where no docked panel fits', async () => {
+			await renderSurface(info());
+			expandNowPlaying();
 
-		window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+			window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
 
-		expect(get(nowPlayingSurface)).toBe('docked');
+			expect(get(nowPlayingSurface)).toBe('closed');
+		});
+
+		it('steps back to the docked panel on Escape where one fits', async () => {
+			nowPlayingDockable.set(true);
+			await renderSurface(info());
+			expandNowPlaying();
+
+			window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+			expect(get(nowPlayingSurface)).toBe('docked');
+		});
 	});
 
 	it('goes to the playing song and leaves Now Playing behind', async () => {
@@ -599,7 +618,9 @@ describeBackClosesOverlay({
 		{
 			way: 'Escape',
 			close: () =>
-				window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+				)
 		}
 	],
 	over: { name: 'Now Playing', isShown: () => get(nowPlayingOpen) }

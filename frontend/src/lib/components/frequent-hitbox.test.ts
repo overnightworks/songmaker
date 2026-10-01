@@ -20,7 +20,8 @@ import { albumList, songList } from '$lib/stores/libraryData';
 import { resetCollectionForTests, setOpenCollection } from '$lib/stores/collection';
 import { playlistList, playlistLoad, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { currentUser, authLoading } from '$lib/stores/auth';
-import { closeSidebar, theme, toggleSidebar } from '$lib/stores/ui';
+import { closeSidebar, sidebarOpen, theme, toggleSidebar } from '$lib/stores/ui';
+import { get } from 'svelte/store';
 import { HITBOX_STYLE } from '$lib/styles/hitbox';
 import {
 	clearHitboxStyles,
@@ -701,8 +702,13 @@ describe('Escape yields to an open popover before the global one-level-up shortc
 		);
 	}
 
-	it('closes the PlaylistPicker and does not run the global one-level-up navigation', async () => {
+	it('closes the drawer opened last, then the PlaylistPicker, and never runs the global one-level-up navigation', async () => {
 		const { playlistPickerOnClose } = await renderInventory();
+
+		pressEscape();
+		await tick();
+		expect(get(sidebarOpen)).toBe(false);
+		expect(playlistPickerOnClose).not.toHaveBeenCalled();
 
 		pressEscape();
 		await tick();

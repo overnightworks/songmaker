@@ -8,7 +8,8 @@ import {
 	loadLibraryHistoryPageForTests,
 	type LibraryHistoryState
 } from '$lib/stores/libraryContext';
-import { initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
 import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
 
 // The one place tests touch the browser history: they seed and read entries,
@@ -85,12 +86,17 @@ export function plannedHistoryIndex(): number {
 }
 
 // A library page with the history layer stack running, the way the app layout
-// starts it; the returned function stops it.
+// starts it -- the shell's own layers followed and Escape listened for; the
+// returned function stops it.
 function startLibraryHistory(): () => void {
 	replaceHistoryEntry('/');
+	const stopFollowingShellLayers = followShellLayers();
+	const stopListening = listenForGlobalEscape();
 	const stopNavigation = initNavigation();
 	return () => {
 		stopNavigation();
+		stopListening();
+		stopFollowingShellLayers();
 		resetNavigationForTests();
 	};
 }

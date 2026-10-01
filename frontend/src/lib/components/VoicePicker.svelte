@@ -3,7 +3,8 @@
 	import { onMount } from 'svelte';
 	import { editGenParams, setDraftGenParams } from '$lib/stores/editor';
 	import { loras, loadLoras, isLoraActive } from '$lib/stores/loras';
-	import { followAppPageLink, historyLayerState } from '$lib/stores/navigation';
+	import { followAppPageLink } from '$lib/stores/navigation';
+	import { historyLayerState } from '$lib/stores/layers';
 	import { recipeModel } from '$lib/stores/recipe';
 	import {
 		VOICE_PICKER_CREATE_LABEL,
@@ -76,7 +77,6 @@
 			aria-expanded={$open}
 			aria-controls="voice-picker-options"
 			onclick={() => ($open = !$open)}
-			onkeydown={(event) => event.key === 'Escape' && ($open = false)}
 		>
 			<span>{selectedLabel}</span>
 			<span aria-hidden="true">⌄</span>

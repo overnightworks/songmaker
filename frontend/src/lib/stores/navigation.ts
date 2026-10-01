@@ -1,6 +1,15 @@
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { get, writable, type Writable } from 'svelte/store';
+import { get, writable } from 'svelte/store';
+import {
+	dropLayersFrom,
+	keepLayerHistory,
+	layerSwitch,
+	resetLayersForTests,
+	stackedLayers,
+	type Layer,
+	type LayerHistory
+} from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
 import { handleSave, isDirty } from '$lib/stores/editor';
@@ -598,86 +607,45 @@ async function saveDirtyDraftBeforePopstate(): Promise<void> {
 	await savingDraft;
 }
 
-// Layers (issues #1002, #1114, #1182): every open overlay -- a menu, picker,
-// sheet, dialog, the phone drawer, full Now Playing, the cover editor, Edit
-// details -- holds one place on this stack while it shows, and Escape and
-// Back both close the topmost one. Only with nothing open does Escape move a
-// page level up (utils/escape-level-up.ts).
-//
-// On a library page a layer also owns one history entry on top of the library
-// it covers, at the same address. Back then closes the topmost layer and
-// leaves that library exactly as it was -- no workspace re-apply, no
+// History layers (issues #1002, #1114): while the library history runs, every
+// layer opened on the stack (stores/layers.ts) owns one history entry on top
+// of the library it covers, at the same address. Back then closes the topmost
+// layer and leaves that library exactly as it was -- no workspace re-apply, no
 // dirty-draft save -- instead of applying whatever entry sits below it while
 // the overlay stays on top. The entry is a copy of that library marked with
-// the layer's id, and replace writes keep the mark (libraryContext.ts). A
-// layer leaves when its overlay closes any other way (×, Done, Escape, a
-// surface change); leaving steps back off its entry, so no stale copy of the
-// library is left for Back to land on. Off the library (Settings) a layer owns
-// no entry: Back leaves the page as it always has.
-interface Layer {
-	id: string;
-	close: () => void;
-	// The library entry under the history entry this layer owns; null when it
-	// owns none.
-	below: LibraryHistoryState | null;
-}
-
-const openLayers: Layer[] = [];
+// the layer's id, and replace writes keep the mark (libraryContext.ts). A layer
+// that leaves any other way (×, Done, Escape, a surface change) steps back off
+// its entry, so no stale copy of the library is left for Back to land on. Off
+// the library (Settings) a layer owns no entry: Back leaves the page as it
+// always has.
+//
+// The library entry under each layer's own entry, for the layers that own one.
+const libraryBelowLayer = new Map<Layer, LibraryHistoryState>();
 // Step-backs issued here rather than by the browser: their popstates land on
 // an entry whose library is already showing, so they apply nothing.
 let ownLayerStepBacks = 0;
-let libraryHistoryRunning = false;
 
-// Holds a layer until the returned leave runs. `close` is how Escape and Back
-// close the overlay; the overlay leaves when it has closed.
-export function holdLayer(id: string, close: () => void): () => void {
-	const layer: Layer = { id, close, below: libraryEntryToCover() };
-	openLayers.push(layer);
-	if (layer.below) {
+const libraryLayerHistory: LayerHistory = {
+	held(layer) {
+		const below = currentLibraryHistoryState();
+		if (!isLibraryHistoryState(below)) return;
+		libraryBelowLayer.set(layer, below);
 		void writeLibraryHistory(
-			{ ...layer.below, index: layer.below.index + 1, layer: id },
-			urlFromState(layer.below),
+			{ ...below, index: below.index + 1, layer: layer.id },
+			urlFromState(below),
 			'push'
 		);
+	},
+	left(layer) {
+		const below = libraryBelowLayer.get(layer);
+		libraryBelowLayer.delete(layer);
+		if (below && ownsTopEntry(layer, below)) stepBackOnto(below);
 	}
-	return () => leaveLayer(layer);
-}
+};
 
-function libraryEntryToCover(): LibraryHistoryState | null {
-	const current = currentLibraryHistoryState();
-	return libraryHistoryRunning && isLibraryHistoryState(current) ? current : null;
-}
-
-// Closes the topmost open layer the way its own close would, stepping back off
-// its entry first so a navigation the close starts lands after it. Says
-// whether there was one to close.
-export function closeTopLayer(): boolean {
-	const top = openLayers.at(-1);
-	if (!top) return false;
-	leaveLayer(top);
-	top.close();
-	return true;
-}
-
-// A layer closed from below the top takes the layers above it along.
-function leaveLayer(layer: Layer): void {
-	const depth = openLayers.indexOf(layer);
-	if (depth === -1) return;
-	for (const leaving of openLayers.splice(depth).reverse()) {
-		if (leaving !== layer) leaving.close();
-		const landing = libraryBelowOwnedTopEntry(leaving);
-		if (landing) stepBackOnto(landing);
-	}
-}
-
-function libraryBelowOwnedTopEntry(layer: Layer): LibraryHistoryState | null {
+function ownsTopEntry(layer: Layer, below: LibraryHistoryState): boolean {
 	const top = currentLibraryHistoryState();
-	const ownsTop =
-		layer.below !== null &&
-		isLibraryHistoryState(top) &&
-		top.layer === layer.id &&
-		top.index === layer.below.index + 1;
-	return ownsTop ? layer.below : null;
+	return isLibraryHistoryState(top) && top.layer === layer.id && top.index === below.index + 1;
 }
 
 function stepBackOnto(landing: LibraryHistoryState): void {
@@ -686,7 +654,8 @@ function stepBackOnto(landing: LibraryHistoryState): void {
 }
 
 function leftByStepTo(layer: Layer, landing: number): boolean {
-	return layer.below === null || layer.below.index >= landing;
+	const below = libraryBelowLayer.get(layer);
+	return below === undefined || below.index >= landing;
 }
 
 // A popstate that leaves layer entries closes those layers, topmost first.
@@ -699,11 +668,12 @@ function popsHistoryLayers(state: unknown): boolean {
 		return true;
 	}
 	const landing = isLibraryHistoryState(state) ? state.index : -1;
-	let depth = openLayers.length;
-	while (depth > 0 && leftByStepTo(openLayers[depth - 1], landing)) depth -= 1;
-	const left = openLayers.splice(depth);
-	const lowestLeft = left[0];
-	for (const leaving of left.reverse()) leaving.close();
+	const layers = stackedLayers();
+	let depth = layers.length;
+	while (depth > 0 && leftByStepTo(layers[depth - 1], landing)) depth -= 1;
+	const left = dropLayersFrom(depth);
+	const lowestLeftBelow = left.length > 0 ? libraryBelowLayer.get(left[0]) : undefined;
+	for (const layer of left) libraryBelowLayer.delete(layer);
 	const staleLanding = staleLayerEntryLanding(state);
 	if (staleLanding) {
 		// The copy may be out of date -- the entry below can be rewritten after
@@ -712,7 +682,7 @@ function popsHistoryLayers(state: unknown): boolean {
 		void backLibraryHistory(staleLanding, urlFromState(staleLanding));
 		return true;
 	}
-	return lowestLeft?.below?.index === landing;
+	return lowestLeftBelow?.index === landing;
 }
 
 // Layers stack (a menu over Now Playing), so the last of this module's own
@@ -743,47 +713,11 @@ function historyMovesOnFrom(state: unknown): boolean {
 // old entry lands already sits above the Now Playing entry that step reaches.
 function staleLayerEntryLanding(state: unknown): LibraryHistoryState | null {
 	if (!isLibraryHistoryState(state) || state.layer === undefined) return null;
-	const ownedByOpenLayer = openLayers.some(
-		(layer) => layer.id === state.layer && layer.below?.index === state.index - 1
+	const ownedByOpenLayer = Array.from(libraryBelowLayer).some(
+		([layer, below]) => layer.id === state.layer && below.index === state.index - 1
 	);
 	if (ownedByOpenLayer) return null;
 	return { ...state, index: state.index - 1, layer: undefined };
-}
-
-// Holds and leaves one overlay's layer as its shown value changes. Escape and
-// Back close it through `close`, which lands here again with `false` after the
-// stack has already let go of the layer.
-function layerSwitch(id: string, close: () => void): (isShown: boolean) => void {
-	let leave: (() => void) | null = null;
-	return (isShown) => {
-		if (isShown === (leave !== null)) return;
-		if (isShown) {
-			leave = holdLayer(id, close);
-			return;
-		}
-		const leaving = leave;
-		leave = null;
-		leaving?.();
-	};
-}
-
-// A menu, list or sheet a component owns (issue #1119) keeps what it shows in
-// this store rather than in local state, `closed` meaning nothing is open.
-// Every write holds or leaves its layer synchronously -- a close path that
-// navigates straight afterwards has its step back queued ahead of the push,
-// which an effect running after that push could not promise -- and Escape and
-// Back close it by writing `closed`. The owner unmounting while open drops the
-// last subscriber, which leaves the layer too.
-export function historyLayerState<T>(id: string, closed: T): Writable<T> {
-	let value = closed;
-	const show = layerSwitch(id, () => set(closed));
-	const shown = writable(closed, () => () => show(false));
-	function set(next: T): void {
-		value = next;
-		show(next !== closed);
-		shown.set(next);
-	}
-	return { subscribe: shown.subscribe, set, update: (change) => set(change(value)) };
 }
 
 // The shell's own overlays -- full Now Playing and the phone drawer -- live in
@@ -848,7 +782,7 @@ export function initNavigation(): () => void {
 	}
 
 	window.addEventListener('popstate', onPopstate);
-	libraryHistoryRunning = true;
+	keepLayerHistory(libraryLayerHistory);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		forgetLayerEntries();
@@ -858,15 +792,15 @@ export function initNavigation(): () => void {
 // The library history stops: the overlays still open keep their layers, which
 // own no history entry any more.
 export function forgetLayerEntries(): void {
-	libraryHistoryRunning = false;
+	keepLayerHistory(null);
+	libraryBelowLayer.clear();
 	ownLayerStepBacks = 0;
-	for (const layer of openLayers) layer.below = null;
 }
 
 export function resetNavigationForTests(): void {
 	suppressPush = false;
 	forgetLayerEntries();
-	openLayers.length = 0;
+	resetLayersForTests();
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
 	addressedSong = null;
