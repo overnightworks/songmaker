@@ -1,0 +1,7 @@
+claim_id = "a52871589a4a4aaa9c4d4c2428dc3ebc"
+agent = "claude-head"
+role = "builder"
+base = "0f76722170903da62f5fa3f4222bf7460b54b451"
+branch = "claude-head/issue-1200-offline-follows-browser"
+scope = ["frontend/src/lib/stores/connectivity.test.ts", "frontend/src/lib/stores/connectivity.ts"]
+opened_commit = "0de7ffd4bcfec7894d1702a18c8b764873b6ad7b"
