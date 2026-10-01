@@ -1326,20 +1326,38 @@ describe('error handling', () => {
 		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
-	it('keeps a take paused when the listener pauses while the mid-track probe is out', async () => {
-		let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
-		fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+	it.each([
+		{
+			interruption: 'the listener pauses',
+			interrupt: () => audioPlayer.pause(),
+			status: 'paused'
+		},
+		{
+			interruption: 'a Play press fails',
+			interrupt: () => {
+				fakeAudio.playMock.mockImplementationOnce(() => Promise.reject('plain string'));
+				audioPlayer.play();
+			},
+			status: 'error'
+		}
+	])(
+		'keeps the take $status when $interruption while the mid-track probe is out',
+		async ({ interrupt, status }) => {
+			let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+			fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
 
-		failPartWayThrough();
-		audioPlayer.pause();
-		answerProbe({ ok: true, status: 200 });
-		await new Promise((r) => setTimeout(r, 0));
+			failPartWayThrough();
+			interrupt();
+			await new Promise((r) => setTimeout(r, 0));
+			answerProbe({ ok: true, status: 200 });
+			await new Promise((r) => setTimeout(r, 0));
 
-		expect({ status: audioPlayer.status, src: fakeAudio.src }).toEqual({
-			status: 'paused',
-			src: '/audio/a1/song_v1.mp3'
-		});
-	});
+			expect({ status: audioPlayer.status, src: fakeAudio.src }).toEqual({
+				status,
+				src: '/audio/a1/song_v1.mp3'
+			});
+		}
+	);
 
 	it.each([
 		{ answer: 401, outcome: { signInAsked: true, error: 'Playback failed. Press Retry.' } },
