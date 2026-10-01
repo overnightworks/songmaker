@@ -13,6 +13,7 @@ import {
 	NOW_PLAYING_SWIPE_RISE_PX,
 	OFFLINE_STRIP_MESSAGE,
 	openNowPlayingLabel,
+	PLAYER_WAITING_FOR_NETWORK,
 	RAIL_LIBRARY_LABEL,
 	REDUCED_MOTION_MEDIA,
 	TRANSPORT_PAUSE_LABEL,
@@ -395,20 +396,20 @@ describe('PlayerBar shuffle', () => {
 	});
 });
 
+function playButton(): HTMLButtonElement {
+	const button = target.querySelector<HTMLButtonElement>('.play-btn');
+	if (!button) throw new Error('Expected a play control in the transport bar');
+	return button;
+}
+
+async function press(button: HTMLButtonElement = playButton()): Promise<void> {
+	button.click();
+	await tick();
+	await Promise.resolve();
+	await tick();
+}
+
 describe('PlayerBar transport labels', () => {
-	function playButton(): HTMLButtonElement {
-		const button = target.querySelector<HTMLButtonElement>('.play-btn');
-		if (!button) throw new Error('Expected a play control in the transport bar');
-		return button;
-	}
-
-	async function press(): Promise<void> {
-		playButton().click();
-		await tick();
-		await Promise.resolve();
-		await tick();
-	}
-
 	it('names the transport button after the state its click leaves', async () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
@@ -1133,5 +1134,114 @@ describe('PlayerBar while typing on the phone', () => {
 		expect(audio.paused).toBe(false);
 		stopWatching();
 		closeKeyboard();
+	});
+});
+
+describe('PlayerBar while a take stalls (#1234)', () => {
+	const STALL_LOOK_MS = 5000;
+	const PAST_THE_RECOVERY_DEADLINE_MS = 3 * 60 * 1000;
+
+	afterEach(() => {
+		vi.useRealTimers();
+		resetConnectivityForTests();
+	});
+
+	async function stallWhilePlaying(arrange: () => void = () => {}): Promise<void> {
+		vi.useFakeTimers({
+			toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date']
+		});
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+		arrange();
+		loadTake();
+		component = mount(PlayerBar, { target });
+		await tick();
+		await audio.play();
+		audio.fire('playing');
+		audio.fire('waiting');
+		await tick();
+	}
+
+	async function giveUpWhileOffline(arrange: () => void = () => {}): Promise<void> {
+		await stallWhilePlaying(arrange);
+		reportResourceStreamReachable(false);
+		await vi.advanceTimersByTimeAsync(PAST_THE_RECOVERY_DEADLINE_MS);
+		await tick();
+	}
+
+	function waitingRetry(): HTMLButtonElement {
+		const button = target.querySelector<HTMLButtonElement>('.waiting-retry');
+		if (!button) throw new Error('Expected a small Retry beside the waiting words');
+		return button;
+	}
+
+	it.each([
+		{ moment: 'while it buffers', wait: 0 },
+		{ moment: 'while a recovery reload runs', wait: STALL_LOOK_MS }
+	])('offers Pause $moment, and Pause stops the recovery', async ({ wait }) => {
+		await stallWhilePlaying();
+		await vi.advanceTimersByTimeAsync(wait);
+		await tick();
+		const whileRecovering = playButton().getAttribute('aria-label');
+		const load = vi.spyOn(audio, 'load');
+
+		await press();
+		await vi.advanceTimersByTimeAsync(60_000);
+		await tick();
+
+		expect({
+			whileRecovering,
+			afterPause: playButton().getAttribute('aria-label'),
+			spinner: target.querySelector('.play-btn .spinner') !== null,
+			reloads: load.mock.calls.length
+		}).toEqual({
+			whileRecovering: TRANSPORT_PAUSE_LABEL,
+			afterPause: TRANSPORT_PLAY_LABEL,
+			spinner: false,
+			reloads: 0
+		});
+	});
+
+	it.each([
+		{ layout: 'phone', arrange: () => {} },
+		{ layout: 'desktop', arrange: useDesktopLayout }
+	])('given up offline, the $layout bar waits calmly with a small Retry', async ({ arrange }) => {
+		await giveUpWhileOffline(arrange);
+
+		expect({
+			words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
+			redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
+			main: playButton().getAttribute('aria-label'),
+			smallRetry: waitingRetry().textContent?.trim()
+		}).toEqual({
+			words: PLAYER_WAITING_FOR_NETWORK,
+			redFailure: false,
+			main: TRANSPORT_PAUSE_LABEL,
+			smallRetry: TRANSPORT_RETRY_LABEL
+		});
+	});
+
+	it('the small Retry fetches the take again at once', async () => {
+		await giveUpWhileOffline();
+		const load = vi.spyOn(audio, 'load');
+
+		await press(waitingRetry());
+
+		expect(load).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		// The lock screen's pause action is the player's own pause (stores/player.ts).
+		{ how: 'from the lock screen', pause: async () => audioPlayer.pause() },
+		{ how: "with the bar's Pause", pause: () => press() }
+	])('a take given up offline and paused $how shows Paused at once', async ({ pause }) => {
+		await giveUpWhileOffline();
+
+		await pause();
+		await tick();
+
+		expect({
+			main: playButton().getAttribute('aria-label'),
+			waiting: target.querySelector('.waiting-notice') !== null
+		}).toEqual({ main: TRANSPORT_PLAY_LABEL, waiting: false });
 	});
 });

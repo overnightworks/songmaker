@@ -179,10 +179,9 @@
 
 {#if playback.currentTrack}
 	<TransportBarFrame
-		{isPlaying}
-		isLoading={audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'}
-		isError={audioPlayer.status === 'error'}
+		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
+		onRetry={() => audioPlayer.play()}
 		currentTime={audioPlayer.currentTime}
 		duration={audioPlayer.duration}
 		{formatTime}
