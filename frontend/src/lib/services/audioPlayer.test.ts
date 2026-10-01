@@ -1147,6 +1147,32 @@ describe('patient recovery while the screen is off', () => {
 			}).toEqual({ status: 'ready', error: null, paused: true });
 		}
 	);
+
+	it.each([
+		{ moment: 'before its first byte', startAt: null },
+		{ moment: 'in its first second', startAt: 0.5 },
+		{ moment: 'forty seconds in', startAt: 40 }
+	])('a take stalling $moment waits like any other', async ({ startAt }) => {
+		fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+		audioPlayer.load(makeInfo());
+		if (startAt !== null) startPlayingAt(startAt);
+		fakeAudio.fire('waiting');
+		await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+		fakeAudio.error = { code: MediaError.MEDIA_ERR_NETWORK } as MediaError;
+		fakeAudio.fire('error');
+		await vi.advanceTimersByTimeAsync(0);
+		const afterTheReloadFailed = { status: audioPlayer.status, error: audioPlayer.error };
+		await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+		expect({
+			afterTheReloadFailed,
+			aMinuteLater: { status: audioPlayer.status, error: audioPlayer.error }
+		}).toEqual({
+			afterTheReloadFailed: { status: 'loading', error: null },
+			aMinuteLater: { status: 'loading', error: null }
+		});
+	});
 });
 
 describe('stream playback', () => {

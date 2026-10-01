@@ -828,9 +828,10 @@ class AudioPlayer {
 	}
 
 	// An error before the take ever played is the take's own (gone,
-	// unreadable): it is probed and named at once, never retried.
+	// unreadable): it is probed and named at once, never retried. An error
+	// while a stall is being recovered is the stall's, however early it came.
 	private failedPartWayThrough(el: HTMLAudioElement): boolean {
-		return !el.ended && this.reachedPosition(el) >= 1;
+		return !el.ended && (this.recoveryStartedAt !== null || this.reachedPosition(el) >= 1);
 	}
 
 	private recoverPlayback(reason: RecoveryReason): boolean {
