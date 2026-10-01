@@ -13,12 +13,13 @@
 		ALBUM_DETAILS_SAVE_LABEL,
 		ALBUM_SUBTITLE_LABEL,
 		ALBUM_SUBTITLE_MAX_LENGTH,
-		ALBUM_TITLE_LABEL,
-		ALBUM_TITLE_MAX_LENGTH,
 		ALBUM_YEAR_LABEL,
 		ALBUM_YEAR_MAX_LENGTH,
-		COLLECTION_MENU_EDIT_DETAILS_LABEL
+		COLLECTION_MENU_EDIT_DETAILS_LABEL,
+		NEW_ALBUM_TITLE_LABEL,
+		NEW_PLACE_TEXT_MAX_LENGTH
 	} from '$lib/constants';
+	import { shouldHandleGlobalEscape } from '$lib/utils/escape-level-up';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -33,10 +34,30 @@
 	const draft: AlbumDetails = $state(untrack(() => ({ ...details })));
 	let saving = $state(false);
 	let titleInput: HTMLInputElement | undefined = $state();
+	let form: HTMLFormElement | undefined = $state();
 
 	const canSave = $derived(draft.title.trim() !== '' && !saving);
 
 	onMount(() => titleInput?.focus());
+
+	function isEscapeTypedInForm(event: KeyboardEvent): boolean {
+		return (
+			event.key === 'Escape' &&
+			!event.defaultPrevented &&
+			event.target instanceof Node &&
+			form?.contains(event.target) === true
+		);
+	}
+
+	$effect(() => {
+		function closeOnEscape(event: KeyboardEvent): void {
+			if (!isEscapeTypedInForm(event) && !shouldHandleGlobalEscape(event, document)) return;
+			event.preventDefault();
+			if (!saving) onclose();
+		}
+		document.addEventListener('keydown', closeOnEscape);
+		return () => document.removeEventListener('keydown', closeOnEscape);
+	});
 
 	async function save(event: SubmitEvent): Promise<void> {
 		event.preventDefault();
@@ -56,26 +77,32 @@
 	}
 </script>
 
-<form class="album-details" aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL} onsubmit={save}>
+<form
+	bind:this={form}
+	class="album-details"
+	aria-label={COLLECTION_MENU_EDIT_DETAILS_LABEL}
+	onsubmit={save}
+>
 	<div class="details-head">
 		<span class="details-title">{COLLECTION_MENU_EDIT_DETAILS_LABEL}</span>
 		<button
 			type="button"
 			class="close-btn"
 			aria-label={ALBUM_DETAILS_CLOSE_LABEL}
+			disabled={saving}
 			onclick={onclose}
 		>
 			<Icon name="x" size={18} />
 		</button>
 	</div>
 	<label class="field">
-		<span class="field-label">{ALBUM_TITLE_LABEL}</span>
+		<span class="field-label">{NEW_ALBUM_TITLE_LABEL}</span>
 		<input
 			bind:this={titleInput}
 			bind:value={draft.title}
 			type="text"
 			autocomplete="off"
-			maxlength={ALBUM_TITLE_MAX_LENGTH}
+			maxlength={NEW_PLACE_TEXT_MAX_LENGTH}
 			required
 		/>
 	</label>
