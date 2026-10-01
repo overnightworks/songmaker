@@ -62,6 +62,7 @@ class FakeAudio {
 	src = '';
 	preload = '';
 	crossOrigin: string | null = null;
+	buffered = { length: 0, end: () => 0 };
 	ended = false;
 	private listeners = new Map<string, Array<(event: Event) => void>>();
 
