@@ -1349,6 +1349,18 @@ async function playAlbumFromGeneration(
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	playNativeAlbumTakes(albumId, [toPlaybackInfo(gen, song)], 0, opts);
+	await gatherAlbumQueueAround(albumId, song, gen, seq);
+}
+
+// Turns the one-take album queue a start loaded into the whole album, its
+// takes in place around the one playing, unless a newer start superseded it.
+async function gatherAlbumQueueAround(
+	albumId: string,
+	song: SongItem,
+	gen: GenerationItem,
+	seq: number
+): Promise<void> {
+	if (!playStartIsCurrent(seq)) return;
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
 	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
@@ -1603,6 +1615,11 @@ function recordFirstTakeListen(): void {
 	});
 }
 
+function handlePlaybackStarted(): void {
+	recordFirstTakeListen();
+	gatherRestoredAlbumQueue();
+}
+
 function handleCurrentChange(current: PlaybackInfo | null): void {
 	updateMediaSessionMetadata(current);
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
@@ -1633,7 +1650,7 @@ function resumePlaybackOnReturn(): void {
 // restores this one on destroy.
 const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onEnded: handlePlaybackEnded,
-	onPlaybackStarted: recordFirstTakeListen,
+	onPlaybackStarted: handlePlaybackStarted,
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
@@ -1682,12 +1699,29 @@ export async function restoreLastPlayback(): Promise<void> {
 	};
 	const { source } = saved;
 	if (source.type === 'album') {
-		await playAlbumFromGeneration(found.song.album_id, found.song, found.take, start);
+		restoreAlbumTake(found.song, found.take, start);
 	} else if (source.type === 'library') {
 		await playLibraryFromGeneration(found.take, start);
 	} else {
 		await restorePlaylistQueue(source.playlistId, found.take, start);
 	}
+}
+
+// Gathering an album's takes costs a request per song, so a restored album
+// take names its album queue at once but gathers the album's other takes only
+// once it plays, not on every reload (#1236).
+let restoredAlbumQueueToGather: (() => Promise<void>) | null = null;
+
+function restoreAlbumTake(song: SongItem, take: GenerationItem, start: QueueStart): void {
+	const { seq } = beginPlayStart();
+	playNativeAlbumTakes(song.album_id, [toPlaybackInfo(take, song)], 0, start);
+	restoredAlbumQueueToGather = () => gatherAlbumQueueAround(song.album_id, song, take, seq);
+}
+
+function gatherRestoredAlbumQueue(): void {
+	const gather = restoredAlbumQueueToGather;
+	restoredAlbumQueueToGather = null;
+	gather?.().catch(toastAlbumSongsFailure);
 }
 
 // A take saved at or past its end would end the moment it plays, so it comes

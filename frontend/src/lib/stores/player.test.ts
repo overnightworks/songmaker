@@ -3853,6 +3853,13 @@ describe('restoring the last playback after a reload', () => {
 		return vi.mocked(audioPlayer.load).mock.calls[0]?.[1];
 	}
 
+	async function playTheRestoredTake(): Promise<void> {
+		audioPlayer.currentCallbacks.onPlaybackStarted?.();
+		await vi.waitFor(() =>
+			expect(vi.mocked(audioPlayer.preload).mock.lastCall?.[0]?.generation.id).toBe(nextTake.id)
+		);
+	}
+
 	it('shows the saved take paused at its saved position', async () => {
 		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
 
@@ -3884,11 +3891,23 @@ describe('restoring the last playback after a reload', () => {
 
 			await restoreLastPlayback();
 			expect(restoredLoad()).toMatchObject({ autoplay: false, startAt: SAVED_POSITION });
+			await playTheRestoredTake();
 			audioPlayer.currentCallbacks.onEnded?.('normal');
 
 			expect(audioPlayer.current?.generation.id).toBe(nextTake.id);
 		}
 	);
+
+	it("a reload asks for the saved song alone; the album's takes wait until it plays", async () => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+		QUEUES.album.serve();
+
+		await restoreLastPlayback();
+		expect(fetchSongs).not.toHaveBeenCalled();
+		await playTheRestoredTake();
+
+		expect(fetchSongs).toHaveBeenCalled();
+	});
 
 	it.each([
 		{ id: 'song', record: { songId: 's-saved' } },
