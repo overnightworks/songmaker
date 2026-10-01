@@ -8,6 +8,7 @@ import {
 	offline,
 	reloadWhileUnreachable,
 	reportResourceStreamReachable,
+	reportSessionCheckReachable,
 	resetConnectivityForTests,
 	whenBackOnline
 } from './connectivity';
@@ -87,6 +88,16 @@ describe('connectivity', () => {
 		reportResourceStreamReachable(false);
 
 		browserReportsOnline(false);
+
+		expect(get(offline)).toBe(true);
+		stop();
+	});
+
+	it('a failed session check while hidden still marks offline', () => {
+		const stop = offline.subscribe(() => {});
+		pageBecomes('hidden');
+
+		reportSessionCheckReachable(false);
 
 		expect(get(offline)).toBe(true);
 		stop();
