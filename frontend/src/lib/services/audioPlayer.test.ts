@@ -1326,6 +1326,21 @@ describe('error handling', () => {
 		expect(fakeAudio.currentTime).toBe(39.25);
 	});
 
+	it('keeps a take paused when the listener pauses while the mid-track probe is out', async () => {
+		let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+		fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+
+		failPartWayThrough();
+		audioPlayer.pause();
+		answerProbe({ ok: true, status: 200 });
+		await new Promise((r) => setTimeout(r, 0));
+
+		expect({ status: audioPlayer.status, src: fakeAudio.src }).toEqual({
+			status: 'paused',
+			src: '/audio/a1/song_v1.mp3'
+		});
+	});
+
 	it.each([
 		{ answer: 401, outcome: { signInAsked: true, error: 'Playback failed. Press Retry.' } },
 		{ answer: 404, outcome: { signInAsked: false, error: 'Audio file not found.' } }

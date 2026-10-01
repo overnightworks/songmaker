@@ -786,7 +786,8 @@ class AudioPlayer {
 	// A take that fails part-way through is asked first whether the server
 	// still serves it, as a stream is: a lost session or a deleted take is
 	// named at once instead of being reloaded until the deadline. While the
-	// owner reports the network gone the probe could only fail too.
+	// owner reports the network gone the probe could only fail too. A pause
+	// or a failure that lands while the probe is out has the last word.
 	private async recoverFromMediaError(mediaError: MediaError | null): Promise<void> {
 		const target = this.current;
 		const url = this.currentUrl;
@@ -797,7 +798,7 @@ class AudioPlayer {
 			!this.callbacks.networkFailureIsAnnounced()
 		) {
 			const probe = await this.probeUrl(url);
-			if (this.current !== target || this.gaveUpOnStall) return;
+			if (this.current !== target || this.status === 'paused' || this.status === 'error') return;
 			if (await this.answeredARefusal(probe)) return;
 		}
 		if (!this.recoverPlayback('media-error')) this.handleMediaError(mediaError);
