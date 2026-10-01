@@ -1658,7 +1658,10 @@ describe('starting library playback from a take', () => {
 
 	it('preserves whether the library skip report is complete', async () => {
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
-			makePoolQueue({ skipped_complete: false })
+			makePoolQueue({
+				takes: [makePoolTake(), makePoolTake({ generation_id: 'g2', song_id: 's2' })],
+				skipped_complete: false
+			})
 		);
 		await playTake(makeGen(genDefaults), makeSong(queuedSongDefaults()));
 		expect(get(libraryQueueSkippedComplete)).toBe(false);
@@ -1761,7 +1764,12 @@ describe('starting library playback from a take', () => {
 			});
 		});
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
-			makePoolQueue({ takes: [makePoolTake({ generation_id: 'g-second', song_title: 'Second' })] })
+			makePoolQueue({
+				takes: [
+					makePoolTake({ generation_id: 'g-second', song_title: 'Second' }),
+					makePoolTake({ generation_id: 'g-after', song_id: 's2' })
+				]
+			})
 		);
 
 		const first = playTake(
@@ -2069,6 +2077,23 @@ describe('the queue names its next take', () => {
 		await playPlaylistEntryAndShowNowPlaying(playlistOf(1), 0);
 
 		expect(preloadedGenerationId()).toBeNull();
+	});
+
+	it('a take row whose pool holds only that take continues through its album', async () => {
+		songList.set([albumSong(1), albumSong(2), albumSong(3)]);
+		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(makePoolQueue({ takes: [poolTake(2)] }));
+
+		await playTake(albumSong(2).generations[0], albumSong(2));
+
+		const ctx = get(queueContext);
+		expect(ctx).toEqual(expect.objectContaining({ type: 'album', albumId: 'a1' }));
+		expect(ctx.type === 'album' && ctx.takes?.map((take) => take.generation.id)).toEqual([
+			'g1',
+			'g2',
+			'g3'
+		]);
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(preloadedGenerationId()).toBe('g3');
 	});
 });
 
