@@ -84,7 +84,7 @@ export function savedPlayback(): SavedPlayback | null {
 	return saved;
 }
 
-export interface PlaybackToFollow {
+interface PlaybackToFollow {
 	/** The queue the take plays from; null while the player is not the app's own. */
 	queueSource: () => ResumeQueueSource | null;
 	/** The take the queue plays after the current one, if any. */
