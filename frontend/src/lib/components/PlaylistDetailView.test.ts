@@ -432,6 +432,13 @@ describeBackClosesOverlay({
 				document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
 		},
 		{
+			way: 'Escape from one of its items',
+			close: (target) =>
+				requireElement<HTMLButtonElement>(target, '.entry-overflow-item').dispatchEvent(
+					new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+				)
+		},
+		{
 			way: 'choosing Open song in editor',
 			close: (target) => requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click(),
 			actionSawHistoryAt: () => openSongSawHistoryAt
