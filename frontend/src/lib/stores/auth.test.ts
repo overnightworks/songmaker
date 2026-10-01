@@ -41,7 +41,10 @@ import {
 	resetAuthForTests
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
-import { AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
+import {
+	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
+	AUTH_SESSION_EXPIRED_DETAIL
+} from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
@@ -128,11 +131,17 @@ describe('checkAuth', () => {
 		expect(get(authCheckError)).toBeNull();
 	});
 
-	it('says nothing about an expired session on a first visit', async () => {
-		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
-		await checkAuth(vi.fn());
-		expect(get(authNotice)).toBeNull();
-	});
+	it.each([
+		['a first visit without a session', 'Authentication required', null],
+		['a reload whose session has expired', AUTH_SESSION_EXPIRED_DETAIL, 'unauthorized']
+	])(
+		'tells %s about an expired session only when there was one',
+		async (_label, detail, notice) => {
+			mockFetchMe.mockRejectedValueOnce(new ApiError(401, detail, AUTH_ME_PATH));
+			await checkAuth(vi.fn());
+			expect(get(authNotice)).toBe(notice);
+		}
+	);
 
 	it('keeps the expiry notice of a session that ended through the next session check', async () => {
 		currentUser.set(KNOWN_USER);

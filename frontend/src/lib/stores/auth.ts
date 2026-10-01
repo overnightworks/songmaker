@@ -7,7 +7,8 @@ import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
 	AUTH_CHECK_RETURN_PROBE_INTERVAL_MS,
-	AUTH_CHECK_SERVER_ERROR
+	AUTH_CHECK_SERVER_ERROR,
+	AUTH_SESSION_EXPIRED_DETAIL
 } from '$lib/constants/auth';
 import { reportSessionCheckReachable } from '$lib/stores/connectivity';
 import { resetGenerationFailures } from '$lib/stores/jobs';
@@ -69,9 +70,7 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 		return user;
 	} catch (err) {
 		const failure = classifyAuthFailure(err);
-		// A 401 alone cannot tell a first visit from an expiry; the session-lost
-		// reaction already left the expiry notice when a session existed (#1215).
-		if (failure !== 'unauthorized') authNotice.set(failure === 'disabled' ? failure : null);
+		noteFailedSessionCheck(err, failure);
 		authCheckError.set(null);
 		if (err instanceof NetworkError) {
 			rememberUnreachableSessionCheck();
@@ -87,6 +86,16 @@ export async function checkAuth(checkAgain: () => void): Promise<AuthUser | null
 	} finally {
 		authLoading.set(false);
 	}
+}
+
+// Only a 401 for a session the server no longer holds says the session
+// expired: a request without a session cookie is a first visit or a signed-out
+// deep link, and keeps whatever the session-lost reaction left (#1215).
+function noteFailedSessionCheck(error: unknown, failure: AuthFailureKind): void {
+	if (failure === 'disabled') authNotice.set('disabled');
+	else if (failure !== 'unauthorized') authNotice.set(null);
+	else if (error instanceof ApiError && error.detail === AUTH_SESSION_EXPIRED_DETAIL)
+		authNotice.set('unauthorized');
 }
 
 function rememberUnreachableSessionCheck(): void {
