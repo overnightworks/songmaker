@@ -1107,7 +1107,8 @@ def test_generation_defaults_rejects_unknown_keys(tmp_path: Path) -> None:
 
 def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path) -> None:
     admin = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-    admin.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
+    saved = admin.put("/api/settings/generation-defaults", json={"turbo": {"inference_steps": 12}})
+    assert saved.status_code == 200
     musician = make_router_app(
         make_router_ctx(tmp_path, db=init_db(tmp_path / "test.db")),
         user=make_authenticated_user("u-musician", role="user", username="musician"),
