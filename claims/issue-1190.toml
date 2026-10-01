@@ -1,0 +1,8 @@
+claim_id = "cd5756479ace4551b71224f8eddaf4ce"
+agent = "claude-head"
+role = "builder"
+base = "72e3e2ddc5f303c8fa43a4e4329af03c33c93bd4"
+branch = "claude-head/issue-1190-dead-verticals"
+scope = ["CLAUDE.md", "docs/architecture.md", "docs/security.md", "frontend/src/lib/api/library.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/auth.test.ts", "frontend/src/lib/stores/auth.ts", "frontend/src/lib/stores/librarySearch.test.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/stores/shares.test.ts", "frontend/src/lib/stores/shares.ts", "scripts/dead-exports.allow", "scripts/dead-symbols.allow", "scripts/generate_types.py", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api.py", "src/songmaker_cli/api_models", "src/songmaker_cli/chat_api.py", "src/songmaker_cli/constants.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/library.py", "src/songmaker_cli/db/queries/sharing.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/server.py", "src/songmaker_cli/settings.py", "src/songmaker_cli/settings_api.py", "tests/test_admin_api.py", "tests/test_api.py", "tests/test_auth_api.py", "tests/test_chat_api.py", "tests/test_cowriter_providers.py", "tests/test_sharing.py"]
+opened_commit = "33220b6af23cb285e68f7d42e67997f8a54788a3"
+whole_reason = "one deletion lane: three ruled verticals share the regenerated types.ts"
