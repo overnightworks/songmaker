@@ -37,7 +37,9 @@
 		onunshare: () => Promise<void>;
 		ondelete: () => void;
 		onarchive?: () => void;
+		/** Playlist-only: an album's cover changes through its coverEditor. */
 		oncover?: () => void;
+		/** Playlist-only, like oncover. */
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		oncurate?: () => void;
@@ -213,7 +215,7 @@
 		{ondelete}
 		{onarchive}
 		{oncover}
-		oncoveredit={coverEditor && showCover ? openCoverEditing : undefined}
+		oncoveredit={coverEditor ? openCoverEditing : undefined}
 		hasCover={showCover}
 		{onremovecover}
 		{onaddtoplaylist}

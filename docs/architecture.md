@@ -382,14 +382,18 @@ presentational cover/Play markup with no store or auth coupling — so the
 share surface (below) can reuse the identical frame with a plain title in
 place of `EditableTitle`/`Breadcrumb`/`CollectionMenu`. There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
-"Playlist · <title>"), then album entries are Share album · Cover… · Remove
-cover (only when a cover is set) · Rename · Add to playlist · Delete album,
-playlist entries are Share playlist · Save offline · Rename · Delete
-playlist. The Share row embeds the existing `ShareButton` component as its
-control (same toggle/clipboard/toast logic, not reimplemented); Rename
-forwards to the same `EditableTitle` click affordance the title itself uses
-(`EditableTitle` exposes an imperative `startEdit()` via `bind:this` for
-exactly this). Album rows carry their own Play button
+"Playlist · <title>"). The album menu then has exactly seven rows, each a
+bare verb with one icon: Edit details · Cover · Curate · Add to playlist ·
+Share · Archive · Delete (red, last). Edit details opens `AlbumMetaEditor`
+in place of the title, where title, subtitle and year change together;
+Cover opens the album's cover editor (`AlbumCoverEditor`) in place of the
+cover, which owns upload, suggestions and removal. Playlist entries are
+Share playlist · Upload… · Remove cover (only when a cover is set) · Save
+offline · Rename · Delete playlist. The Share row embeds the existing
+`ShareButton` component as its control (same toggle/clipboard/toast logic,
+not reimplemented); a playlist's Rename forwards to the same `EditableTitle`
+click affordance the title itself uses (`EditableTitle` exposes an
+imperative `startEdit()` via `bind:this` for exactly this). Album rows carry their own Play button
 (`playAlbumFromGeneration` on the song's picked/first generation) beside the
 existing click-to-open-song target. Album rows are songs — clicking the row
 body opens the song in the editor. Playlist rows are takes — clicking the row

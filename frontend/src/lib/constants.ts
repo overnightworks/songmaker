@@ -517,7 +517,6 @@ export const ALBUM_COVER_SUGGESTION_ALREADY_RUNNING = 'A cover suggestion is alr
 // The server's own words for a spent daily limit, so the editor says it the
 // same way whether it knew before asking or was refused.
 export const ALBUM_COVER_DAILY_LIMIT_REACHED = 'Daily cover suggestion limit reached';
-export const ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL = 'Replace…';
 export const ALBUM_COVER_SUGGESTIONS_RETRY_LABEL = 'Try again';
 // A sideways drag on the cover this far, and more sideways than up or down,
 // shows the neighbouring suggestion; anything less is a tap or a scroll.
@@ -558,14 +557,15 @@ export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';
 
 export const COLLECTION_MENU_LABEL = 'More';
 export const COLLECTION_MENU_CLOSE_LABEL = 'Close menu';
-export const COLLECTION_MENU_SHARE_PREFIX = 'Share';
-export const COLLECTION_MENU_DELETE_PREFIX = 'Delete';
+export const COLLECTION_MENU_SHARE_LABEL = 'Share';
+export const COLLECTION_MENU_DELETE_LABEL = 'Delete';
+export const COLLECTION_MENU_COVER_LABEL = 'Cover';
 export const COLLECTION_MENU_COVER_REMOVE_LABEL = 'Remove cover';
 export const COLLECTION_MENU_RENAME_LABEL = 'Rename';
 export const COLLECTION_MENU_EDIT_DETAILS_LABEL = 'Edit details';
 export const COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL = 'Add to playlist';
-export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive album';
-export const COLLECTION_MENU_CURATE_LABEL = 'Curate album';
+export const COLLECTION_MENU_ARCHIVE_LABEL = 'Archive';
+export const COLLECTION_MENU_CURATE_LABEL = 'Curate';
 export const COLLECTION_MENU_SAVE_OFFLINE_LABEL = 'Save offline';
 export const COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL = 'Saving…';
 export const COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL = 'Saved offline · Remove';

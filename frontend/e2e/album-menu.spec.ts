@@ -2,8 +2,7 @@
 // sit on their own row under cover and title (#1135, #915 F1+F5). Both are
 // layout promises jsdom cannot measure, so only a real browser at a phone and
 // a laptop width shows them: the operator's phone cut the album menu off past
-// the left edge of the screen. The album's details -- title, subtitle and year
-// -- change through the ⋯'s Edit details, where × and Back discard (#1177).
+// the left edge of the screen.
 
 import { expect, test, type Locator, type Page, type TestInfo } from '@playwright/test';
 import {

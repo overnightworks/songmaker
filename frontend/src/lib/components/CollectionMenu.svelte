@@ -1,21 +1,21 @@
 <script lang="ts">
 	import type { ShareResult, UnplayableSongSummary } from '$lib/api/types';
 	import {
-		ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL,
 		ALBUM_COVER_UPLOAD_LABEL,
 		COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 		COLLECTION_MENU_ARCHIVE_LABEL,
 		COLLECTION_MENU_CLOSE_LABEL,
+		COLLECTION_MENU_COVER_LABEL,
 		COLLECTION_MENU_COVER_REMOVE_LABEL,
 		COLLECTION_MENU_CURATE_LABEL,
-		COLLECTION_MENU_DELETE_PREFIX,
+		COLLECTION_MENU_DELETE_LABEL,
 		COLLECTION_MENU_EDIT_DETAILS_LABEL,
 		COLLECTION_MENU_LABEL,
 		COLLECTION_MENU_RENAME_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL,
 		COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL,
-		COLLECTION_MENU_SHARE_PREFIX
+		COLLECTION_MENU_SHARE_LABEL
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import MenuPopover from './MenuPopover.svelte';
@@ -29,14 +29,18 @@
 		shareSlug: string | null | undefined;
 		onshare: () => Promise<ShareResult>;
 		onunshare: () => Promise<void>;
-		/** Albums edit title, subtitle and year together; offering it replaces Rename. */
+		/** Album-only: title, subtitle and year are edited together here. */
 		oneditdetails?: () => void;
+		/** Playlist-only: renames through the title. */
 		onrename?: () => void;
 		ondelete: () => void;
 		onarchive?: () => void;
+		/** Playlist-only: picks a cover file to upload. */
 		oncover?: () => void;
+		/** Album-only: opens the cover editor, which uploads, suggests and removes. */
 		oncoveredit?: () => void;
 		hasCover?: boolean;
+		/** Playlist-only: removes the cover once one is set. */
 		onremovecover?: () => void;
 		onaddtoplaylist?: () => void;
 		oncurate?: () => void;
@@ -70,8 +74,12 @@
 	}: Props = $props();
 
 	const kindLabel = $derived(kind === 'album' ? 'Album' : 'Playlist');
-	const shareLabel = $derived(`${COLLECTION_MENU_SHARE_PREFIX} ${kind}`);
-	const deleteLabel = $derived(`${COLLECTION_MENU_DELETE_PREFIX} ${kind}`);
+	const shareLabel = $derived(
+		kind === 'album' ? COLLECTION_MENU_SHARE_LABEL : `${COLLECTION_MENU_SHARE_LABEL} ${kind}`
+	);
+	const deleteLabel = $derived(
+		kind === 'album' ? COLLECTION_MENU_DELETE_LABEL : `${COLLECTION_MENU_DELETE_LABEL} ${kind}`
+	);
 
 	let popover: MenuPopover | undefined = $state();
 	let missingTakeSongs: UnplayableSongSummary[] = $state([]);
@@ -98,6 +106,22 @@
 	}
 </script>
 
+{#snippet actionRow(label: string, action: () => void, icon?: string)}
+	<button class="menu-item" onclick={() => runAndClose(action)}>
+		{#if icon}<Icon name={icon} size={14} />{/if}
+		{label}
+	</button>
+{/snippet}
+
+{#snippet shareRow(icon?: string)}
+	<div class="menu-row">
+		<span class="menu-row-label"
+			>{#if icon}<Icon name={icon} size={14} />{/if}{shareLabel}</span
+		>
+		<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
+	</div>
+{/snippet}
+
 <div class="collection-menu">
 	<MenuPopover
 		bind:this={popover}
@@ -107,59 +131,49 @@
 	>
 		{#snippet trigger()}<Icon name="more-horizontal" size={18} />{/snippet}
 		<p class="menu-heading">{kindLabel} · {title}</p>
-		<div class="menu-row">
-			<span class="menu-row-label">{shareLabel}</span>
-			<ShareButton {isShared} {shareSlug} onshare={shareAndWarnIfIncomplete} {onunshare} />
-		</div>
-		{#if oncover}
-			<button class="menu-item" onclick={() => runAndClose(oncover)}
-				>{ALBUM_COVER_UPLOAD_LABEL}</button
-			>
-		{/if}
-		{#if kind === 'album' && oncoveredit}
-			<button class="menu-item" onclick={() => runAndClose(oncoveredit)}
-				>{ALBUM_COVER_SUGGESTIONS_REPLACE_LABEL}</button
-			>
-		{/if}
-		{#if hasCover && onremovecover}
-			<button class="menu-item" onclick={() => runAndClose(onremovecover)}
-				>{COLLECTION_MENU_COVER_REMOVE_LABEL}</button
-			>
-		{/if}
-		{#if kind === 'playlist' && onsaveoffline}
-			<button class="menu-item" onclick={() => runAndClose(onsaveoffline)} disabled={offlineSaving}>
-				{#if offlineSaved}
-					{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
-				{:else if offlineSaving}
-					{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
-				{:else}
-					{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
-				{/if}
-			</button>
-		{/if}
-		{#if oneditdetails}
-			<button class="menu-item" onclick={() => runAndClose(oneditdetails)}
-				>{COLLECTION_MENU_EDIT_DETAILS_LABEL}</button
-			>
-		{:else if onrename}
-			<button class="menu-item" onclick={() => runAndClose(onrename)}
-				>{COLLECTION_MENU_RENAME_LABEL}</button
-			>
-		{/if}
-		{#if kind === 'album' && onaddtoplaylist}
-			<button class="menu-item" onclick={() => runAndClose(onaddtoplaylist)}
-				>{COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL}</button
-			>
-		{/if}
-		{#if kind === 'album' && oncurate}
-			<button class="menu-item" onclick={() => runAndClose(oncurate)}
-				>{COLLECTION_MENU_CURATE_LABEL}</button
-			>
-		{/if}
-		{#if kind === 'album' && onarchive}
-			<button class="menu-item" onclick={() => runAndClose(onarchive)}
-				>{COLLECTION_MENU_ARCHIVE_LABEL}</button
-			>
+		{#if kind === 'album'}
+			{#if oneditdetails}
+				{@render actionRow(COLLECTION_MENU_EDIT_DETAILS_LABEL, oneditdetails, 'pencil')}
+			{/if}
+			{#if oncoveredit}
+				{@render actionRow(COLLECTION_MENU_COVER_LABEL, oncoveredit, 'image')}
+			{/if}
+			{#if oncurate}
+				{@render actionRow(COLLECTION_MENU_CURATE_LABEL, oncurate, 'wand')}
+			{/if}
+			{#if onaddtoplaylist}
+				{@render actionRow(COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, onaddtoplaylist, 'list-plus')}
+			{/if}
+			{@render shareRow('share')}
+			{#if onarchive}
+				{@render actionRow(COLLECTION_MENU_ARCHIVE_LABEL, onarchive, 'archive')}
+			{/if}
+		{:else}
+			{@render shareRow()}
+			{#if oncover}
+				{@render actionRow(ALBUM_COVER_UPLOAD_LABEL, oncover)}
+			{/if}
+			{#if hasCover && onremovecover}
+				{@render actionRow(COLLECTION_MENU_COVER_REMOVE_LABEL, onremovecover)}
+			{/if}
+			{#if onsaveoffline}
+				<button
+					class="menu-item"
+					onclick={() => runAndClose(onsaveoffline)}
+					disabled={offlineSaving}
+				>
+					{#if offlineSaved}
+						{COLLECTION_MENU_SAVE_OFFLINE_REMOVE_LABEL}
+					{:else if offlineSaving}
+						{offlineProgressLabel ?? COLLECTION_MENU_SAVE_OFFLINE_SAVING_LABEL}
+					{:else}
+						{COLLECTION_MENU_SAVE_OFFLINE_LABEL}
+					{/if}
+				</button>
+			{/if}
+			{#if onrename}
+				{@render actionRow(COLLECTION_MENU_RENAME_LABEL, onrename)}
+			{/if}
 		{/if}
 		<button class="menu-item destructive" onclick={() => runAndClose(ondelete)}>
 			<Icon name="trash" size={14} />
@@ -192,6 +206,9 @@
 	}
 
 	.menu-row-label {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-size: 0.87rem;
 		color: var(--text);
 	}

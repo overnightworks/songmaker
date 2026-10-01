@@ -1,4 +1,4 @@
-import { mount, tick, unmount } from 'svelte';
+import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '$lib/api/types';
 import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
@@ -44,7 +44,7 @@ function defaultProps() {
 	};
 }
 
-async function render(overrides: Partial<ReturnType<typeof defaultProps>> = {}) {
+async function render(overrides: Partial<ComponentProps<typeof CollectionMenu>> = {}) {
 	const target = document.createElement('div');
 	document.body.append(target);
 	const props = { ...defaultProps(), ...overrides };
@@ -133,6 +133,62 @@ function menuItemLabels(target: HTMLElement): string[] {
 	);
 }
 
+function menuRowLabels(target: HTMLElement): string[] {
+	return Array.from(target.querySelectorAll('.menu-item, .menu-row-label')).map(
+		(row) => row.textContent?.trim() ?? ''
+	);
+}
+
+function albumMenuProps() {
+	return {
+		oneditdetails: vi.fn(),
+		oncoveredit: vi.fn(),
+		oncover: vi.fn(),
+		onremovecover: vi.fn(),
+		hasCover: true,
+		oncurate: vi.fn(),
+		onaddtoplaylist: vi.fn(),
+		onarchive: vi.fn()
+	};
+}
+
+describe('CollectionMenu album rows', () => {
+	it('lists exactly Edit details · Cover · Curate · Add to playlist · Share · Archive · Delete, Delete red and last', async () => {
+		const { target } = await render(albumMenuProps());
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+
+		expect(menuRowLabels(target)).toEqual([
+			'Edit details',
+			'Cover',
+			'Curate',
+			'Add to playlist',
+			'Share',
+			'Archive',
+			'Delete'
+		]);
+		const items = target.querySelectorAll('.menu-item');
+		expect(items[items.length - 1].classList.contains('destructive')).toBe(true);
+	});
+
+	it('opens the cover editor from Cover and closes the menu, leaving upload and remove to it', async () => {
+		const handlers = albumMenuProps();
+		const { target } = await render(handlers);
+		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
+		await tick();
+
+		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
+			.find((item) => item.textContent?.trim() === 'Cover')
+			?.click();
+		await tick();
+
+		expect(handlers.oncoveredit).toHaveBeenCalledTimes(1);
+		expect(handlers.oncover).not.toHaveBeenCalled();
+		expect(handlers.onremovecover).not.toHaveBeenCalled();
+		expect(target.querySelector('.menu-panel')).toBeNull();
+	});
+});
+
 describe('CollectionMenu Edit details', () => {
 	it('offers Edit details in place of Rename and hands the tap over, closing the menu', async () => {
 		const oneditdetails = vi.fn();
@@ -170,6 +226,7 @@ describeBackClosesOverlay({
 	render: async () =>
 		(
 			await render({
+				kind: 'playlist',
 				onrename: vi.fn(() => {
 					renameSawHistoryAt = plannedHistoryIndex();
 				})
