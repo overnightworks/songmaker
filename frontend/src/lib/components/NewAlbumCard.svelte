@@ -40,6 +40,8 @@
 	closeLabel={NEW_ALBUM_CLOSE_LABEL}
 	hint={NEW_ALBUM_HINT}
 	failedMessage={NEW_ALBUM_FAILED}
+	draftKey="album"
+	bind:title
 	ready={title.trim() !== ''}
 	create={createListedAlbum}
 	open={openAlbum}
