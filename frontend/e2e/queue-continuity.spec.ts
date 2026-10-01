@@ -17,7 +17,6 @@ import {
 	runMarker,
 	seedUnpickedLibrary,
 	STORAGE_STATE_FILE,
-	type AccountRole,
 	type SeededTrack,
 	type SeededUnpickedLibrary
 } from './seed';
@@ -26,9 +25,6 @@ import {
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 const TAKE_ENDED_BINDING = 'reportTakeEnded';
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
-// The musician of a single-user deployment administers it too; a non-admin
-// song page asks for the admin-only generation defaults and is refused.
-const ACCOUNT_ROLE: AccountRole = 'admin';
 
 /**
  * When each take's audio was first requested and first ended, on one clock.
@@ -110,7 +106,7 @@ test.describe('on a fresh account', () => {
 	test.beforeAll(async () => {
 		adminApi = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
 		const username = `e2e-queue-${test.info().project.name}-${runMarker()}`;
-		accountId = await createAccount(adminApi, username, ACCOUNT_PASSWORD, ACCOUNT_ROLE);
+		accountId = await createAccount(adminApi, username, ACCOUNT_PASSWORD);
 		accountApi = await request.newContext({ baseURL: BASE_URL });
 		unpicked = await seedUnpickedLibrary(accountApi, { username, password: ACCOUNT_PASSWORD });
 	});
