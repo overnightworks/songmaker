@@ -205,15 +205,12 @@
 		if (get(authCheckError) || get(authCheckUnreachable)) {
 			return;
 		}
+		const signIn = signInAddress(page.url.pathname + page.url.search);
 		try {
 			const { required } = await checkSetupRequired();
-			if (required) {
-				await goto('/setup', { replaceState: true });
-			} else {
-				await goto(signInAddress(page.url.pathname + page.url.search), { replaceState: true });
-			}
+			await goto(required ? '/setup' : signIn, { replaceState: true });
 		} catch {
-			await goto(signInAddress(page.url.pathname + page.url.search), { replaceState: true });
+			await goto(signIn, { replaceState: true });
 		}
 	}
 
