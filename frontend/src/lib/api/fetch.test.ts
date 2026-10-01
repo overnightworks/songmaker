@@ -33,7 +33,9 @@ import {
 	ApiError,
 	NetworkError,
 	describeFailure,
-	handleSessionLost
+	handleSessionLost,
+	signInAddress,
+	signInReturnPath
 } from './fetch';
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
@@ -506,6 +508,7 @@ describe('session lost (401)', () => {
 		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
 
 		expect(clearAuth).toHaveBeenCalledOnce();
+		expect(clearAuth).toHaveBeenCalledWith('unauthorized');
 		expect(goto).toHaveBeenCalledOnce();
 		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent('/album/a1/song-1')}`);
 	});
@@ -586,11 +589,16 @@ describe('session-lost redirect target', () => {
 	});
 
 	it.each([
-		['/album/a1/song-1?tab=lyrics#top', '/album/a1/song-1?tab=lyrics'],
-		['//attacker.example/x', '/'],
-		['///attacker.example/x', '/'],
-		['/%2F%2Fattacker.example/x', '/%2F%2Fattacker.example/x'],
-		['/', '/']
+		[
+			'/album/a1/song-1?tab=lyrics#top',
+			`/login?redirect=${encodeURIComponent('/album/a1/song-1?tab=lyrics')}`
+		],
+		['//attacker.example/x', '/login'],
+		['///attacker.example/x', '/login'],
+		[
+			'/%2F%2Fattacker.example/x',
+			`/login?redirect=${encodeURIComponent('/%2F%2Fattacker.example/x')}`
+		]
 	])('returns from %s only to a same-origin path', async (path, expected) => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
@@ -600,6 +608,49 @@ describe('session-lost redirect target', () => {
 		await handleSessionLost();
 
 		expect(get(currentUser)).toBeNull();
-		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent(expected)}`);
+		expect(goto).toHaveBeenCalledWith(expected);
+	});
+});
+
+describe('sign-in address', () => {
+	it.each([
+		[
+			'/album/northern-lights/glass-river',
+			'/login?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river'
+		],
+		['/album/a1?tab=lyrics', `/login?redirect=${encodeURIComponent('/album/a1?tab=lyrics')}`],
+		['/', '/login'],
+		['/login', '/login'],
+		['/login?redirect=%2Fx', '/login'],
+		['//attacker.example/x', '/login']
+	])('asks to return from %s as %s', (returnTo, expected) => {
+		expect(signInAddress(returnTo)).toBe(expected);
+	});
+});
+
+describe('sign-in return path', () => {
+	function signInPage(query: string): URL {
+		return new URL(`/login${query}`, window.location.origin);
+	}
+
+	it.each([
+		[
+			'the asked-for song',
+			'?redirect=%2Falbum%2Fnorthern-lights%2Fglass-river',
+			'/album/northern-lights/glass-river'
+		],
+		[
+			'a same-origin path with its query',
+			`?redirect=${encodeURIComponent('/album/a1?tab=lyrics')}`,
+			'/album/a1?tab=lyrics'
+		],
+		['no target', '', '/'],
+		['an absolute URL', `?redirect=${encodeURIComponent('https://attacker.example/x')}`, '/'],
+		['a protocol-relative host', `?redirect=${encodeURIComponent('//attacker.example/x')}`, '/'],
+		['a backslash host', `?redirect=${encodeURIComponent('/\\attacker.example/x')}`, '/'],
+		['a script URL', `?redirect=${encodeURIComponent('javascript:alert(1)')}`, '/'],
+		['the sign-in page itself', `?redirect=${encodeURIComponent('/login?redirect=/x')}`, '/']
+	])('lands on %s', (_label, query, expected) => {
+		expect(signInReturnPath(signInPage(query))).toBe(expected);
 	});
 });

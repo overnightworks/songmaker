@@ -4,6 +4,7 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
+	import { signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
@@ -209,10 +210,10 @@
 			if (required) {
 				await goto('/setup', { replaceState: true });
 			} else {
-				await goto('/login', { replaceState: true });
+				await goto(signInAddress(page.url.pathname + page.url.search), { replaceState: true });
 			}
 		} catch {
-			await goto('/login', { replaceState: true });
+			await goto(signInAddress(page.url.pathname + page.url.search), { replaceState: true });
 		}
 	}
 

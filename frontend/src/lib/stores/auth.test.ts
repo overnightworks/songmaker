@@ -126,6 +126,19 @@ describe('checkAuth', () => {
 		expect(get(currentUser)).toBeNull();
 		expect(get(authLoading)).toBe(false);
 		expect(get(authCheckError)).toBeNull();
+	});
+
+	it('says nothing about an expired session on a first visit', async () => {
+		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+		await checkAuth(vi.fn());
+		expect(get(authNotice)).toBeNull();
+	});
+
+	it('keeps the expiry notice of a session that ended through the next session check', async () => {
+		currentUser.set(KNOWN_USER);
+		clearAuth('unauthorized');
+		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
+		await checkAuth(vi.fn());
 		expect(get(authNotice)).toBe('unauthorized');
 	});
 
@@ -201,7 +214,6 @@ describe('checkAuth with the server out of reach', () => {
 
 		expect(get(offline)).toBe(false);
 		expect(get(authCheckUnreachable)).toBe(false);
-		expect(get(authNotice)).toBe('unauthorized');
 	});
 });
 
@@ -246,6 +258,15 @@ describe('clearAuth', () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		clearAuth();
 		expect(get(currentUser)).toBeNull();
+	});
+
+	it.each([
+		['an expired session', 'unauthorized' as const, 'unauthorized'],
+		['a sign-out', undefined, null]
+	])('leaves the sign-in page the notice of %s', (_label, notice, expected) => {
+		authNotice.set('disabled');
+		clearAuth(notice);
+		expect(get(authNotice)).toBe(expected);
 	});
 
 	it('wipes the per-user playlist and generation-failure caches so the next session starts clean', () => {
