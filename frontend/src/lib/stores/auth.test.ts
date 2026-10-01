@@ -382,7 +382,11 @@ describe('logout', () => {
 });
 
 describe('the remembered playback across the session', () => {
-	followPlaybackForResume(() => ({ type: 'album', albumId: 'a-session' }));
+	followPlaybackForResume({
+		playsTheAppsTakes: () => true,
+		queueSource: () => ({ type: 'album', albumId: 'a-session' }),
+		takeAfterCurrent: () => null
+	});
 
 	function rememberAPlayingTake(): void {
 		const song = makeSong({ id: 's-session' });
@@ -417,7 +421,7 @@ describe('the remembered playback across the session', () => {
 
 	it('logout forgets the record', async () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
-		expect(storedRecord()).not.toBeNull();
+		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 
 		await logout();
 

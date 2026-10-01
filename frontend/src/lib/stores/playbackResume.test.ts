@@ -3,13 +3,17 @@ import { flushSync } from 'svelte';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { currentUser } from '$lib/stores/auth';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
-import { followPlaybackForResume, type ResumeQueueSource } from './playbackResume';
+import { followPlaybackForResume, savedPlayback, type ResumeQueueSource } from './playbackResume';
 
 const LISTENER = { id: 'u-listener', username: 'listener', role: 'user' as const };
 const OTHER_LISTENER = { id: 'u-other', username: 'other', role: 'user' as const };
 const ALBUM_QUEUE: ResumeQueueSource = { type: 'album', albumId: 'a-resume' };
 
-followPlaybackForResume(() => ALBUM_QUEUE);
+followPlaybackForResume({
+	playsTheAppsTakes: () => true,
+	queueSource: () => ALBUM_QUEUE,
+	takeAfterCurrent: () => null
+});
 
 function recordKey(userId: string): string {
 	return `playbackResume:${userId}`;
@@ -34,7 +38,7 @@ function savedPoint(userId = LISTENER.id): { generationId: string; position: num
 	return record && { generationId: record.generationId, position: record.position };
 }
 
-function playTake(generationId: string): void {
+function playTake(generationId: string, status: 'playing' | 'loading' | 'error' = 'playing'): void {
 	const song = makeSong({ id: `s-${generationId}` });
 	audioPlayer.current = {
 		generation: makeGeneration({ id: generationId, song_id: song.id }),
@@ -45,7 +49,7 @@ function playTake(generationId: string): void {
 		lyrics: null
 	};
 	audioPlayer.currentTime = 0;
-	audioPlayer.status = 'playing';
+	audioPlayer.status = status;
 	flushSync();
 }
 
@@ -113,19 +117,58 @@ describe('playback resume record', () => {
 		expect(savedPoint()).toEqual({ generationId: 'g-progress', position: 5.25 });
 	});
 
-	it("another user's record is never read", () => {
+	it('a take started under user A is never saved under user B', () => {
 		playTake('g-shared-device');
 		playTo(42);
 		setPageVisibility('hidden');
 
 		currentUser.set(OTHER_LISTENER);
-		playTo(44);
+		playTo(48);
+		audioPlayer.status = 'paused';
+		flushSync();
+		setPageVisibility('hidden');
+
+		expect(savedPoint(OTHER_LISTENER.id)).toBeNull();
+		expect(savedPoint(LISTENER.id)).toEqual({ generationId: 'g-shared-device', position: 42 });
+	});
+
+	it("a take started under user B is saved under B's own record", () => {
+		currentUser.set(OTHER_LISTENER);
+		playTake('g-started-by-other');
+		playTo(7);
 
 		expect(savedPoint(OTHER_LISTENER.id)).toEqual({
-			generationId: 'g-shared-device',
-			position: 44
+			generationId: 'g-started-by-other',
+			position: 7
 		});
-		expect(savedPoint(LISTENER.id)).toEqual({ generationId: 'g-shared-device', position: 42 });
+		expect(savedPoint(LISTENER.id)).toBeNull();
+	});
+
+	it("pause saves the element's current time", () => {
+		playTake('g-paused');
+		playTo(2.5);
+		vi.spyOn(audioPlayer, 'getElement').mockReturnValue({
+			currentTime: 2.75
+		} as HTMLAudioElement);
+
+		audioPlayer.status = 'paused';
+		flushSync();
+
+		expect(savedPoint()).toEqual({ generationId: 'g-paused', position: 2.75 });
+	});
+
+	it('saving reads storage at most once per window', () => {
+		const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new DOMException('storage is full', 'QuotaExceededError');
+		});
+		const getItem = vi.spyOn(Storage.prototype, 'getItem');
+
+		playTake('g-window');
+		setItem.mockClear();
+		getItem.mockClear();
+		for (let second = 0.25; second < 5; second += 0.25) playTo(second);
+
+		expect(setItem.mock.calls.length + getItem.mock.calls.length).toBe(0);
 	});
 
 	it('a logout in another tab stops this tab saving the record again', () => {
@@ -159,21 +202,83 @@ describe('playback resume record', () => {
 		expect(localStorage.length).toBe(0);
 	});
 
-	it('replaces a damaged record on the next tick', () => {
-		playTake('g-damaged');
-		localStorage.setItem(recordKey(LISTENER.id), '{"generationId": 7');
+	it("reads the signed-in user's saved take", () => {
+		playTake('g-read-back');
+		playTo(12);
 
-		playTo(1);
-
-		expect(savedPoint()).toEqual({ generationId: 'g-damaged', position: 1 });
+		expect(savedPlayback()).toEqual({
+			source: ALBUM_QUEUE,
+			songId: 's-g-read-back',
+			generationId: 'g-read-back',
+			position: 12
+		});
 	});
+
+	const WHOLE_RECORD = { source: ALBUM_QUEUE, songId: 's-x', generationId: 'g-x', position: 3 };
+
+	it.each([
+		{ record: 'a damaged record', stored: '{"generationId": 7' },
+		{
+			record: 'a record without a take',
+			stored: JSON.stringify({ ...WHOLE_RECORD, generationId: undefined })
+		},
+		{
+			record: 'a record without its queue',
+			stored: JSON.stringify({ ...WHOLE_RECORD, source: undefined })
+		},
+		{
+			record: 'a record naming an unknown library pool',
+			stored: JSON.stringify({
+				...WHOLE_RECORD,
+				source: { type: 'library', pool: 'keeps', shuffle: false }
+			})
+		},
+		{
+			record: 'a record with a negative position',
+			stored: JSON.stringify({ ...WHOLE_RECORD, position: -1 })
+		}
+	])('$record reads as nothing saved', ({ stored }) => {
+		localStorage.setItem(recordKey(LISTENER.id), stored);
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it('unreadable storage reads as nothing saved', () => {
+		vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+			throw new DOMException('storage is blocked', 'SecurityError');
+		});
+
+		expect(savedPlayback()).toBeNull();
+	});
+
+	it.each(['loading', 'error'] as const)(
+		'a restored take keeps its saved position while %s',
+		(status) => {
+			playTake('g-before-the-kill');
+			localStorage.setItem(
+				recordKey(LISTENER.id),
+				JSON.stringify({
+					source: ALBUM_QUEUE,
+					songId: 's-g-restored',
+					generationId: 'g-restored',
+					position: 42
+				})
+			);
+			audioPlayer.current = null;
+			audioPlayer.status = 'idle';
+			flushSync();
+
+			savedPlayback();
+			playTake('g-restored', status);
+			setPageVisibility('hidden');
+
+			expect(savedPoint()).toEqual({ generationId: 'g-restored', position: 42 });
+		}
+	);
 
 	it('with storage unavailable saves nothing and plays on silently', () => {
 		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
 			throw new DOMException('storage is full', 'QuotaExceededError');
-		});
-		vi.spyOn(Storage.prototype, 'getItem').mockImplementationOnce(() => {
-			throw new DOMException('storage is blocked', 'SecurityError');
 		});
 
 		expect(() => {
@@ -181,6 +286,6 @@ describe('playback resume record', () => {
 			playTo(6);
 			setPageVisibility('hidden');
 		}).not.toThrow();
-		expect(savedPoint()).toBeNull();
+		expect(localStorage.length).toBe(0);
 	});
 });

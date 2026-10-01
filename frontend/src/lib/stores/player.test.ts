@@ -82,6 +82,7 @@ import {
 	nowPlayingSurface,
 	openNowPlaying,
 	playTake,
+	restoreLastPlayback,
 	playTakeAndShowNowPlaying,
 	playPlaylistEntryAndShowNowPlaying,
 	registerNowPlayingTrigger,
@@ -3604,7 +3605,11 @@ describe('remembering what the app plays', () => {
 		},
 		{
 			kind: 'library',
-			queue: { type: 'library' },
+			queue: {
+				type: 'library',
+				takes: [makePlayback(makeGen({ ...genDefaults, id: 'g-resume-queue' }), song)],
+				index: 0
+			},
 			source: { type: 'library', pool: 'all', shuffle: true }
 		}
 	])('saves the $kind queue the take plays from', ({ queue, source }) => {
@@ -3615,6 +3620,35 @@ describe('remembering what the app plays', () => {
 		playAndHide('g-resume-queue');
 
 		expect(storedRecord()).toMatchObject({ source, generationId: 'g-resume-queue' });
+	});
+
+	function albumQueueOf(generationIds: string[]): QueueContext {
+		const takes = generationIds.map((id) =>
+			makePlayback(makeGen({ ...genDefaults, id, song_id: song.id }), song)
+		);
+		return { type: 'album', albumId: 'a-resume', takes, index: 0 };
+	}
+
+	function endTheTake(): void {
+		audioPlayer.status = 'idle';
+		audioPlayer.currentTime = 0;
+		flushSync();
+	}
+
+	it.each<[string, string[], string | null]>([
+		['the next take at 0', ['g-ending', 'g-after'], 'g-after'],
+		['nothing without a next take', ['g-ending'], null]
+	])('an ended take saves %s', (_next, queue, saved) => {
+		queueContext.set(albumQueueOf(queue));
+		playAndHide('g-ending');
+		audioPlayer.currentTime = 30;
+		flushSync();
+
+		endTheTake();
+
+		expect(storedRecord()).toEqual(
+			saved === null ? null : expect.objectContaining({ generationId: saved, position: 0 })
+		);
 	});
 
 	it('share playback is never saved', () => {
@@ -3636,5 +3670,106 @@ describe('remembering what the app plays', () => {
 		sharePlayback.stop();
 
 		expect(storedRecord()).toBeNull();
+	});
+});
+
+describe('restoring the last playback after a reload', () => {
+	const LISTENER = { id: 'u-restore', username: 'listener', role: 'user' as const };
+	const SAVED_POSITION = 42;
+	const savedTake = makeGen({ ...genDefaults, id: 'g-saved', song_id: 's-saved' });
+	const savedSong = makeSong({ ...queuedSongDefaults(), id: 's-saved', generations: [savedTake] });
+
+	function saveRecord(): void {
+		localStorage.setItem(
+			`playbackResume:${LISTENER.id}`,
+			JSON.stringify({
+				source: { type: 'album', albumId: savedSong.album_id },
+				songId: savedSong.id,
+				generationId: savedTake.id,
+				position: SAVED_POSITION,
+				savedAt: 0
+			})
+		);
+	}
+
+	beforeEach(() => {
+		currentUser.set(LISTENER);
+		saveRecord();
+	});
+
+	afterEach(() => {
+		currentUser.set(null);
+		localStorage.clear();
+	});
+
+	function storedRecord(): unknown {
+		return JSON.parse(localStorage.getItem(`playbackResume:${LISTENER.id}`) ?? 'null');
+	}
+
+	it('shows the saved take paused at its saved position', async () => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(makePlayback(savedTake, savedSong), {
+			autoplay: false,
+			startAt: SAVED_POSITION
+		});
+		expect(audioPlayer.current?.generation.id).toBe(savedTake.id);
+	});
+
+	it.each([
+		{ take: 'a deleted song', answer: () => Promise.reject(new ApiError(404, 'gone', '/x')) },
+		{ take: 'a foreign song', answer: () => Promise.reject(new ApiError(403, 'no', '/x')) },
+		{
+			take: 'a deleted take',
+			answer: () => Promise.resolve({ ...savedSong, generations: [] })
+		},
+		{
+			take: 'an archived take',
+			answer: () =>
+				Promise.resolve({ ...savedSong, generations: [{ ...savedTake, is_archived: true }] })
+		},
+		{
+			take: 'an unreachable server',
+			answer: () => Promise.reject(new NetworkError('/x', new TypeError('Failed to fetch')))
+		}
+	])('a deleted, archived or foreign take restores nothing ($take)', async ({ answer }) => {
+		vi.mocked(fetchSong).mockImplementationOnce(answer);
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.current).toBeNull();
+		expect(get(toasts)).toEqual([]);
+	});
+
+	it.each<{ after: string; statuses: ('playing' | 'paused')[] }>([
+		{ after: 'it stands paused', statuses: ['paused'] },
+		{ after: 'it plays and pauses', statuses: ['playing', 'paused'] }
+	])('a restored take keeps the queue its record names once $after', async ({ statuses }) => {
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+
+		await restoreLastPlayback();
+		for (const status of statuses) {
+			audioPlayer.status = status;
+			flushSync();
+		}
+
+		expect(storedRecord()).toMatchObject({
+			source: { type: 'album', albumId: savedSong.album_id },
+			generationId: savedTake.id
+		});
+	});
+
+	it('never replaces a take started while the saved one loads', async () => {
+		const tapped = makePlayback(makeGen({ ...genDefaults, id: 'g-tapped' }), savedSong);
+		vi.mocked(fetchSong).mockImplementationOnce(async () => {
+			audioPlayer.current = tapped;
+			return savedSong;
+		});
+
+		await restoreLastPlayback();
+
+		expect(audioPlayer.current?.generation.id).toBe(tapped.generation.id);
 	});
 });
