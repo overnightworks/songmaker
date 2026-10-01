@@ -17,8 +17,8 @@ from webauth.passwords import hash_password
 from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
-from songmaker_cli.db.models import UserSession
-from songmaker_cli.db.queries import create_user, list_audit_log
+from songmaker_cli.db.models import AuditLog, UserSession
+from songmaker_cli.db.queries import create_user
 
 _PROXY_NETWORK = "172.16.0.0/12"
 _TRUSTED_PEER = "172.18.0.1"
@@ -449,7 +449,7 @@ def test_setup_integrity_error_returns_403(client: TestClient) -> None:
 
 def _audit_log_is_empty(client: TestClient) -> bool:
     with client.app.state.ctx.db() as session:
-        return list_audit_log(session) == []
+        return session.query(AuditLog).count() == 0
 
 
 def test_setup_and_own_password_change_do_not_create_audit_entries(client: TestClient) -> None:
