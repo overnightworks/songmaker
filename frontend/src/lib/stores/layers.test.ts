@@ -94,4 +94,33 @@ describe('a layer held open while its overlay saves (#1184 K1)', () => {
 		await saved;
 		expect(stackedIds()).toEqual([]);
 	});
+
+	it('holds nothing again when one Back jumps past the overlay as well', async () => {
+		let formOpen = true;
+		holdLayer('details-editing', () => (formOpen = false));
+		const save = pendingWork();
+		const saved = holdOpenWhile('details-saving', save.work);
+
+		dropLayersFrom(0);
+
+		expect(formOpen).toBe(false);
+		expect(stackedIds()).toEqual([]);
+		save.settle();
+		await saved;
+		expect(stackedIds()).toEqual([]);
+	});
+
+	it('keeps a layer opened above it during the save open when the save is refused', async () => {
+		holdLayer('details-editing', () => undefined);
+		const save = pendingWork();
+		const saved = holdOpenWhile('details-saving', save.work).catch(() => undefined);
+		let drawerOpen = true;
+		holdLayer('rail-drawer', () => (drawerOpen = false));
+
+		save.fail();
+		await saved;
+
+		expect(drawerOpen).toBe(true);
+		expect(stackedIds()).toEqual(['details-editing', 'rail-drawer']);
+	});
 });
