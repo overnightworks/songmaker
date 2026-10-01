@@ -691,8 +691,9 @@ class AudioPlayer {
 		else this.failure = { kind: 'stalled', message: ERROR_MSG_STALLED };
 	}
 
-	// A failed take is no longer watched: only Retry, or the network's return
-	// after an 'unreachable' failure, sets it going again.
+	// A failed take is no longer watched: only Retry, the network's return
+	// after an 'unreachable' or 'awaiting-network' failure, or a late canplay
+	// after a given-up stall sets it going again.
 	private fail(failure: Failure): void {
 		this.clearStallRecoveryTimer();
 		this.status = 'error';
