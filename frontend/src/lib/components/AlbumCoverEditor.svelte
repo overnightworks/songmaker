@@ -36,6 +36,7 @@
 	import { addToast } from '$lib/stores/toast';
 	import { activeJobs, removeJob, trackJob } from '$lib/stores/jobs';
 	import { offline, reloadWhileUnreachable } from '$lib/stores/connectivity';
+	import { holdOpenWhile } from '$lib/stores/layers';
 	import Icon from './Icon.svelte';
 
 	interface Props {
@@ -43,6 +44,8 @@
 		onclose: () => void;
 		onupload: () => void;
 		onremove: () => void;
+		/** An upload or removal the album page is saving, which × waits for. */
+		saving: boolean;
 	}
 
 	interface CoverSuggestionsState {
@@ -73,7 +76,7 @@
 		limitNote: null
 	};
 
-	let { album, onclose, onupload, onremove }: Props = $props();
+	let { album, onclose, onupload, onremove, saving }: Props = $props();
 
 	const currentAlbumId = $derived(album.id);
 
@@ -398,9 +401,10 @@
 		const albumId = currentAlbumId;
 		coverSuggestionsBusyAlbumId = albumId;
 		try {
-			const updated = await selectAlbumCoverSuggestion(albumId, {
-				suggestion_id: suggestionId
-			});
+			const updated = await holdOpenWhile(
+				'cover-saving',
+				selectAlbumCoverSuggestion(albumId, { suggestion_id: suggestionId })
+			);
 			try {
 				await discardUnused(albumId, null);
 			} catch (error) {
@@ -552,7 +556,7 @@
 			data-hitbox="frequent"
 			aria-label={ALBUM_COVER_EDITING_CLOSE_LABEL}
 			title={ALBUM_COVER_EDITING_CLOSE_LABEL}
-			disabled={coverSuggestionsBusy}
+			disabled={coverSuggestionsBusy || saving}
 			onclick={discardAndClose}
 		>
 			<Icon name="x" size={20} />

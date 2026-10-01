@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import AlbumMetaEditor from './AlbumMetaEditor.svelte';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { field, type } from '$lib/test-utils/new-place-card';
+import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
+import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -36,7 +38,12 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	resetLayersForTests();
 });
+
+function pressEscape(): void {
+	window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', cancelable: true }));
+}
 
 describe('AlbumMetaEditor', () => {
 	it('opens as Edit details on the current title, subtitle and year, the title in focus', async () => {
@@ -88,6 +95,58 @@ describe('AlbumMetaEditor', () => {
 
 		expect(close.disabled).toBe(true);
 		expect(props.onclose).not.toHaveBeenCalled();
+	});
+
+	it('Escape during a save closes nothing; the form closes once the save has finished', async () => {
+		let finishSave!: () => void;
+		const onclose = vi.fn();
+		const props = baseProps({
+			onsave: vi.fn(() => new Promise<void>((resolve) => (finishSave = resolve))),
+			onclose
+		});
+		holdLayer('details-editing', onclose);
+		const stopListening = listenForGlobalEscape();
+		const target = await render(props);
+
+		type(field(target, 'Year'), '2026');
+		await submit(target);
+		pressEscape();
+
+		expect(onclose).not.toHaveBeenCalled();
+		expect(field(target, 'Year').value).toBe('2026');
+
+		finishSave();
+		await tick();
+		await tick();
+		stopListening();
+		expect(onclose).toHaveBeenCalledOnce();
+		expect(stackedLayers().map((layer) => layer.id)).toEqual(['details-editing']);
+	});
+
+	it('a refused save after Escape leaves the form open with the typed text', async () => {
+		let refuseSave!: () => void;
+		const onclose = vi.fn();
+		const props = baseProps({
+			onsave: vi.fn(
+				() => new Promise<void>((_, reject) => (refuseSave = () => reject(new Error('refused'))))
+			),
+			onclose
+		});
+		holdLayer('details-editing', onclose);
+		const stopListening = listenForGlobalEscape();
+		const target = await render(props);
+
+		type(field(target, 'Year'), '1850');
+		await submit(target);
+		pressEscape();
+		refuseSave();
+		await tick();
+		await tick();
+		stopListening();
+
+		expect(onclose).not.toHaveBeenCalled();
+		expect(field(target, 'Year').value).toBe('1850');
+		expect(getByRoleButton(target, 'Save').disabled).toBe(false);
 	});
 
 	it('offers no Save while the title is blank and names why beside the title', async () => {

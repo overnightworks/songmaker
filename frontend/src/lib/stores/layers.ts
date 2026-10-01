@@ -23,6 +23,7 @@ export interface LayerHistory {
 }
 
 const openLayers: Layer[] = [];
+const layersHeldOpen = new WeakSet<Layer>();
 let layerHistory: LayerHistory | null = null;
 
 export function keepLayerHistory(history: LayerHistory | null): void {
@@ -48,24 +49,26 @@ export function holdLayer(id: string, close: () => void): () => void {
 export function closeTopLayer(): boolean {
 	const top = openLayers.at(-1);
 	if (!top) return false;
+	if (layersHeldOpen.has(top)) return true;
 	leaveLayer(top);
 	top.close();
 	return true;
 }
 
-// A layer closed from below the top takes the layers above it along.
+// A layer closed from below the top takes the layers above it along; one held
+// open goes without holding itself again, its overlay having closed under it.
 function leaveLayer(layer: Layer): void {
 	const depth = openLayers.indexOf(layer);
 	if (depth === -1) return;
 	for (const leaving of openLayers.splice(depth).reverse()) {
-		if (leaving !== layer) leaving.close();
+		if (leaving !== layer && !layersHeldOpen.has(leaving)) leaving.close();
 		layerHistory?.left(leaving);
 	}
 }
 
 // Back has already stepped off the entries of the layers from `depth` up, so
-// they close, topmost first, without stepping back again. Returns them, lowest
-// first.
+// they close, topmost first, without stepping back again; one held open holds
+// itself again, with a fresh entry. Returns them, lowest first.
 export function dropLayersFrom(depth: number): Layer[] {
 	const dropped = openLayers.splice(depth);
 	for (const leaving of [...dropped].reverse()) leaving.close();
@@ -106,6 +109,43 @@ export function historyLayerState<T>(id: string, closed: T): Writable<T> {
 		shown.set(next);
 	}
 	return { subscribe: shown.subscribe, set, update: (change) => set(change(value)) };
+}
+
+// While `work` runs, Escape and Back close nothing (issue #1184): an overlay
+// saving what the person typed holds this layer on top of its own, so the
+// close waits for the save -- which closes the overlay on success, or leaves it
+// open with the typed text and the reason on failure. Back has already stepped
+// off the layer's entry when it reaches the stack, so the layer holds itself
+// again, with a new entry for the next Back -- unless that Back jumped past the
+// overlay too, which then has closed and needs no holding. Settling lets go of
+// this layer alone: a layer opened above it during the save stays open.
+export async function holdOpenWhile<T>(id: string, work: Promise<T>): Promise<T> {
+	const guarded = openLayers.at(-1);
+	function holdOpen(): Layer {
+		const layer: Layer = {
+			id,
+			close: () => {
+				if (guarded && openLayers.includes(guarded)) held = holdOpen();
+			}
+		};
+		layersHeldOpen.add(layer);
+		openLayers.push(layer);
+		layerHistory?.held(layer);
+		return layer;
+	}
+	let held = holdOpen();
+	try {
+		return await work;
+	} finally {
+		letGoOf(held);
+	}
+}
+
+function letGoOf(layer: Layer): void {
+	const depth = openLayers.indexOf(layer);
+	if (depth === -1) return;
+	openLayers.splice(depth, 1);
+	layerHistory?.left(layer);
 }
 
 export function resetLayersForTests(): void {

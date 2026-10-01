@@ -35,6 +35,8 @@
 	closeLabel={NEW_PLAYLIST_CLOSE_LABEL}
 	hint={NEW_PLAYLIST_HINT}
 	failedMessage={NEW_PLAYLIST_FAILED}
+	draftKey="playlist"
+	bind:title={name}
 	ready={name.trim() !== ''}
 	create={createListedPlaylist}
 	open={openPlaylist}
