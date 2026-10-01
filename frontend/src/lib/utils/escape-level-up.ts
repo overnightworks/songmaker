@@ -1,11 +1,12 @@
 // Global Escape (issue #1182): close the topmost open layer -- the one Back
-// closes too, through stores/navigation's `closeTopLayer`, which the layout
-// hands in -- and only with nothing open move one level up (song -> collection
-// interior, collection -> the wall). Mounted once in +layout.svelte. A focus trap asks the same stack and claims
-// the key (utils/focus-trap.ts), as does a component with an Escape of its own
-// that is not a layer (clearing the rail search, cancelling a title edit):
-// both prevent the default, which this yields to. A text field's Escape still
-// closes the layer it sits in, but never leaves the page.
+// closes too, through stores/layers' `closeTopLayer`, which the layout hands
+// in -- and only with nothing open move one level up (song -> collection
+// interior, collection -> the wall). Mounted once in +layout.svelte. A focus
+// trap asks the same stack and claims the key (utils/focus-trap.ts), as does a
+// component with an Escape of its own that is not a layer (clearing the rail
+// search, cancelling a title edit): both prevent the default, which this
+// yields to. A text field's Escape still closes the layer it sits in, but
+// never leaves the page.
 export function isEditableElement(target: EventTarget | null): boolean {
 	if (!(target instanceof HTMLElement)) return false;
 	if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return true;
