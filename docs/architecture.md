@@ -523,7 +523,8 @@ writing it back. After auth, the `(library)` layout calls
 the saved song, finds the take, and rebuilds the queue the record names around
 it with autoplay off at the saved position: `playLibraryFromGeneration`, after
 the device's library pool and shuffle settings take on the ones the record
-names, since those settings build and save every library queue, or
+names, since those settings build and save every library queue (they keep
+them even when that restore then fails; the record came from this device), or
 `startPlaylistQueue` on the fetched playlist, the same starts a tap uses; an
 album take loads as a one-take queue of the song's album and gathers the
 album's other takes (`gatherAlbumQueueAround`, a request per song) only once
@@ -532,8 +533,9 @@ before the take loads, so the first save after a restore keeps the album or
 playlist source, the transport shows the take paused, one tap plays it, and
 its end plays the next take of the same queue, waiting for the album to be
 gathered when the take ends first. A position in the take's last second, or
-past its end, restores at 0, so Play does not skip straight to the next take. A record whose song, take or playlist id is no
-UUID is read as nothing saved, so it sends no request. A song the
+past its end, restores at 0, so Play does not skip straight to the next take.
+A record whose song, take or playlist id is no UUID is read as nothing saved,
+so it sends no request. A song the
 server no longer serves (deleted, or not this user's: 404), a take deleted or
 archived since, a playlist gone or no longer holding the take, a library pool
 that no longer serves it, or a server out of reach restores nothing and says
