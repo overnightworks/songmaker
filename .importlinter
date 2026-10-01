@@ -1,6 +1,10 @@
 # The application may build on the independent packages; none of them may
-# depend on the application. CI runs `lint-imports` over the real import
-# graph, so an indirect chain is caught as well as a direct import.
+# depend on the application. CI runs `lint-imports` over the in-tree import
+# graph, so a chain through another in-tree package is caught as well as a
+# direct import. include_external_packages records an import of an installed
+# package (agent_providers, webauth) as one opaque node and never scans that
+# package's own imports, so a chain reaching the application through one of
+# them is not caught here.
 [importlinter]
 include_external_packages = True
 root_packages =
