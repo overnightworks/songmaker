@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "e4fafb7e994c31d355f89f25c16808314de9bddc"
 branch = "claude/issue-1174-drawer-block"
-scope = ["docs/architecture.md", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library.spec.ts", "frontend/src/lib/components/AccountMenu.svelte", "frontend/src/lib/components/AccountMenu.test.ts", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailDrawer.svelte", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings"]
+scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/AccountMenu.svelte", "frontend/src/lib/components/AccountMenu.test.ts", "frontend/src/lib/components/shell/Rail.svelte", "frontend/src/lib/components/shell/Rail.test.ts", "frontend/src/lib/components/shell/RailDrawer.svelte", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts", "frontend/src/routes/settings"]
 opened_commit = "bb0e4c5b7364b8c4bb8e0a45173a779fa456dd5e"
 whole_reason = "the phone drawer without its bottom block plus the account/settings follow-ups"
