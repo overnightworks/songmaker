@@ -1,8 +1,0 @@
-claim_id = "bc1489f500824126b20490b1cf6442be"
-agent = "claude-head"
-role = "builder"
-base = "0f76722170903da62f5fa3f4222bf7460b54b451"
-branch = "claude-head/issue-1199-queue-preload"
-scope = ["docs/architecture.md", "frontend/src/lib/components/shell/RailSearch.test.ts", "frontend/src/lib/components/shell/RailSettings.test.ts", "frontend/src/lib/settingsSections.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/routes/settings/page.test.ts", "frontend/src/routes/settings/playback"]
-opened_commit = "e40f37a9a6e455b8c86228e2cca3e07d71a1f071"
-whole_reason = "next-take decider plus the settings section it empties, with every test listing the sections"
