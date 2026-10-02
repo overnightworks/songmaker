@@ -945,6 +945,7 @@ export function enterAlbumOfSong(song: SongItem): void {
 }
 
 async function hydrateSelectedSong(songId: string, generation: number): Promise<void> {
+	if (generation !== historyApplyGeneration) return;
 	const listed = get(songList).find((song) => song.id === songId);
 	if (listed && listed.generations.length >= listed.generation_count) {
 		enterAlbumOfSong(listed);

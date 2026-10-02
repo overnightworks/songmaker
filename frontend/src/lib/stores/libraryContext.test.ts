@@ -30,6 +30,7 @@ import {
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
 import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
+import { selectSong } from '$lib/stores/navigation';
 import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import {
 	playlistList,
@@ -76,6 +77,8 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
+	fetchLastFailedGeneration: vi.fn().mockResolvedValue(null),
+	fetchActiveGeneration: vi.fn().mockResolvedValue(null),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -1133,6 +1136,36 @@ describe('a song opened from its address sets its album', () => {
 
 		expect(get(selectedSongId)).toBe('s9');
 		expect(get(selectedAlbumId)).toBe('a9');
+	});
+
+	it('leaves the album of a song tapped while that restore still waited', async () => {
+		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
+		fetchAlbum.mockImplementationOnce(
+			() =>
+				new Promise<AlbumItem>((resolve) => {
+					resolveAlbum = resolve;
+				})
+		);
+		const tide = song({ id: 's9', album_id: 'a9', generation_count: 0 });
+		fetchSongs.mockImplementation(async (albumId: string | null) => ({
+			...emptyPage(albumId === 'a2' ? [] : [tide]),
+			limit: 200
+		}));
+		songList.set([tide]);
+		const restore = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: 'a9' },
+			songId: 's9'
+		});
+		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
+
+		await selectSong('s2', song({ id: 's2', album_id: 'a2', generation_count: 0 }));
+		resolveAlbum?.(album({ id: 'a9' }));
+		await restore;
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(selectedAlbumId)).toBe('a2');
 	});
 });
 
