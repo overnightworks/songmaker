@@ -40,7 +40,7 @@ class PlaybackDiagnosticEvent(BaseModel):
     at_ms: int = Field(ge=0)
     kind: PlaybackDiagnosticKind
     take_id: str | None = Field(pattern=TAKE_ID_PATTERN)
-    position: float = Field(ge=0)
+    position: float = Field(ge=0, allow_inf_nan=False)
     ready_state: int = Field(ge=0, le=HTML_MEDIA_READY_STATE_MAX)
     deck: Literal["active", "standby"]
     visibility: Literal["visible", "hidden"]

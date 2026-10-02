@@ -111,12 +111,17 @@ def test_rejects_a_signed_in_upload_without_the_csrf_header(signed_in) -> None:
         pytest.param(_report([_event(detail="x" * 201)]), id="detail-over-200-chars"),
         pytest.param(_report([_event(deck="third")]), id="unknown-deck"),
         pytest.param(_report([_event(take_id="not-a-uuid")]), id="take-id-not-a-uuid"),
+        pytest.param(_report([_event(position=float("inf"))]), id="infinite-position"),
     ],
 )
 def test_rejects_a_malformed_report(signed_in, report: dict) -> None:
     apply_csrf_header(signed_in)
 
-    response = signed_in.post(_ENDPOINT, json=report)
+    response = signed_in.post(
+        _ENDPOINT,
+        content=json.dumps(report),
+        headers={"Content-Type": "application/json"},
+    )
 
     assert response.status_code == 422
 
