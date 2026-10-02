@@ -5,7 +5,7 @@ import { offline, whenBackOnline } from '$lib/stores/connectivity';
 const TOAST_DURATION_MS = 5000;
 
 /** How long Undo stays offered: a few seconds for a light change, a longer grace for a deletion. */
-export type UndoToastLength = 'brief' | 'long';
+type UndoToastLength = 'brief' | 'long';
 
 const UNDO_TOAST_DURATION_MS: Record<UndoToastLength, number> = {
 	brief: TOAST_DURATION_MS,
