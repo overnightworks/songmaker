@@ -1,0 +1,8 @@
+claim_id = "77770a50dabb42f182bf1bdb177cc167"
+agent = "claude-head"
+role = "builder"
+base = "03a12afa5e0826633bc81523d1de8bd246ad08cf"
+branch = "claude-head/issue-1246-playback-diagnostics-endpoint"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "src/songmaker_cli/api.py", "src/songmaker_cli/api_models/playback_diagnostics.py", "src/songmaker_cli/playback_diagnostics_api.py", "tests/test_playback_diagnostics_api.py"]
+opened_commit = "fdb322907450c9a9a1e02eff76a477d4f58ff792"
+whole_reason = "one new endpoint with its model, router, test, generated types and doc"
