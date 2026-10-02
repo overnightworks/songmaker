@@ -58,7 +58,7 @@ function sentDetails(): string[] {
 }
 
 // Lets every answer the fake server gave reach the recorder.
-async function settle(): Promise<void> {
+async function letTheServerAnswer(): Promise<void> {
 	await Promise.allSettled(fetchMock.mock.results.map((result) => result.value));
 	await new Promise((resolve) => setTimeout(resolve, 0));
 }
@@ -90,7 +90,7 @@ describe('playback diagnostics recorder', () => {
 		recordMany(505);
 
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		const details = sentDetails();
 		expect(details).toHaveLength(500);
@@ -103,7 +103,7 @@ describe('playback diagnostics recorder', () => {
 		recordMany(250);
 
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentReports().map((report) => report.events.length)).toEqual([100, 100, 51]);
 		for (const [url, init] of fetchMock.mock.calls) {
@@ -118,7 +118,7 @@ describe('playback diagnostics recorder', () => {
 		recorder.recordPlaybackEvent(note('before the page went'));
 
 		window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()).toEqual(['before the page went', 'persisted=false']);
 		expect(sentReports()[0].events[1].kind).toBe('page_hide');
@@ -131,7 +131,7 @@ describe('playback diagnostics recorder', () => {
 
 		await openPage();
 		startFor(LISTENER);
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()).toEqual(['last words']);
 		expect(fetchMock.mock.calls[0][1].keepalive).toBe(false);
@@ -141,11 +141,11 @@ describe('playback diagnostics recorder', () => {
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('once'));
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		await openPage();
 		startFor(LISTENER);
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()).toEqual(['once', 'hidden']);
 	});
@@ -157,13 +157,13 @@ describe('playback diagnostics recorder', () => {
 			recorder.recordPlaybackEvent(note('kept'));
 			answerStatus = status;
 			hidePage();
-			await settle();
+			await letTheServerAnswer();
 			fetchMock.mockClear();
 			answerStatus = 204;
 
 			await openPage();
 			startFor(LISTENER);
-			await settle();
+			await letTheServerAnswer();
 
 			expect(sentDetails()).toEqual(['kept', 'hidden']);
 		}
@@ -177,7 +177,7 @@ describe('playback diagnostics recorder', () => {
 		startFor(OTHER_LISTENER);
 		recorder.recordPlaybackEvent(note('second listener'));
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()).toEqual(['second listener', 'hidden']);
 	});
@@ -188,11 +188,11 @@ describe('playback diagnostics recorder', () => {
 		recorder.forgetPlaybackDiagnostics(LISTENER);
 		recorder.recordPlaybackEvent(note('after logout'));
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		await openPage();
 		startFor(LISTENER);
-		await settle();
+		await letTheServerAnswer();
 
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
@@ -201,7 +201,7 @@ describe('playback diagnostics recorder', () => {
 		recorder.recordPlaybackEvent(note('nobody'));
 		startFor(LISTENER);
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()).toEqual(['hidden']);
 	});
@@ -212,7 +212,7 @@ describe('playback diagnostics recorder', () => {
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('take event'));
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 		Reflect.deleteProperty(document, 'wasDiscarded');
 
 		const [report] = sentReports();
@@ -245,7 +245,7 @@ describe('playback diagnostics recorder', () => {
 		startFor(LISTENER);
 		target.dispatchEvent(event());
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentReports()[0].events[0].kind).toBe(kind);
 	});
@@ -258,7 +258,7 @@ describe('playback diagnostics recorder', () => {
 		vi.advanceTimersByTime(15_000);
 		vi.useRealTimers();
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		const [gap] = sentReports()[0].events;
 		expect(gap.kind).toBe('timer_gap');
@@ -269,7 +269,7 @@ describe('playback diagnostics recorder', () => {
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('x'.repeat(250)));
 		hidePage();
-		await settle();
+		await letTheServerAnswer();
 
 		expect(sentDetails()[0]).toHaveLength(200);
 	});
