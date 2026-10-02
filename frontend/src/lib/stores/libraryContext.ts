@@ -35,7 +35,12 @@ import {
 	songList,
 	upsertSongInList
 } from '$lib/stores/libraryData';
-import { ensureGenerationsLoaded, selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import {
+	ensureGenerationsLoaded,
+	selectedAlbumId,
+	selectedGenerationId,
+	selectedSongId
+} from '$lib/stores/player';
 import { deselectPlaylist, loadPlaylistDetail, playlistList } from '$lib/stores/playlists';
 import {
 	albumRoutePath,
@@ -931,9 +936,18 @@ async function hydrateMissingCollectionAlbum(
 	}
 }
 
+// The album a song belongs to is the queue its takes play in (#997), however
+// the song was opened: from the album's track list, a rail row, its address,
+// a reload or a Back.
+export function enterAlbumOfSong(song: SongItem): void {
+	selectedAlbumId.set(song.album_id);
+	void loadSongsForAlbum(song.album_id);
+}
+
 async function hydrateSelectedSong(songId: string, generation: number): Promise<void> {
 	const listed = get(songList).find((song) => song.id === songId);
 	if (listed && listed.generations.length >= listed.generation_count) {
+		enterAlbumOfSong(listed);
 		await hydrateSongAlbum(listed.album_id, generation);
 		return;
 	}
@@ -941,6 +955,7 @@ async function hydrateSelectedSong(songId: string, generation: number): Promise<
 		const song = await fetchSong(songId);
 		if (generation !== historyApplyGeneration) return;
 		songList.update((list) => upsertReplace(list, song));
+		enterAlbumOfSong(song);
 		await hydrateSongAlbum(song.album_id, generation);
 	} catch (err) {
 		if (generation !== historyApplyGeneration) return;
