@@ -46,6 +46,11 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   `navigation.html` für die Songseite (keine Albumzeile mit Prev/Next) und die
   Take-Zeile in `song-editor-take.html` auf beiden Breiten (sechs-zeiliges
   Menü, keine beschrifteten Zeilenaktionen).
+- `song-versions.html` — Versionen auf der Songseite (#1245). Freigegeben
+  02.10.2026 (Operator: „ja passen! die bilder!"). Erweitert
+  `song-page-phone.html` auf beiden Breiten: eine Version antippen lädt sie als
+  Entwurf in den Edit-Tab, kein Nur-Lesen-Zustand; die Take-Gruppen und Now
+  Playing verlinken auf ihre Version.
 - `vocabulary.html` — das Komponentenvokabular (#924). Freigegeben
   20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
   #924). Besitzer jeder Komponentenform; jede UI-Lane zitiert sie, Farbwerte
