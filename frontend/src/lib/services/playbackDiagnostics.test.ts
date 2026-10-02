@@ -46,6 +46,11 @@ function recordMany(count: number): void {
 	for (let index = 0; index < count; index += 1) recorder.recordPlaybackEvent(note(`e${index}`));
 }
 
+function recordLarge(count: number): void {
+	for (let index = 0; index < count; index += 1)
+		recorder.recordPlaybackEvent(note('x'.repeat(200)));
+}
+
 function hidePage(): void {
 	visibility = 'hidden';
 	document.dispatchEvent(new Event('visibilitychange'));
@@ -132,8 +137,7 @@ describe('playback diagnostics recorder', () => {
 
 	it('sends on hide only the reports that fit the 64 KiB keepalive budget, the rest at the next start', async () => {
 		startFor(LISTENER);
-		for (let index = 0; index < 400; index += 1)
-			recorder.recordPlaybackEvent(note('x'.repeat(200)));
+		recordLarge(400);
 
 		hidePage();
 		await letTheServerAnswer();
@@ -149,17 +153,30 @@ describe('playback diagnostics recorder', () => {
 		expect(sentOnHide + sentDetails().length).toBe(401);
 	});
 
-	it('counts what an unanswered send on hide still has in flight against the budget of a pagehide right after', () => {
-		serverAnswers = false;
-		startFor(LISTENER);
-		for (let index = 0; index < 400; index += 1)
-			recorder.recordPlaybackEvent(note('x'.repeat(200)));
+	it.each([
+		['within one sign-in', () => {}],
+		[
+			'across a sign-in change',
+			() => {
+				recorder.forgetPlaybackDiagnostics(LISTENER);
+				startFor(OTHER_LISTENER);
+				recordLarge(400);
+			}
+		]
+	])(
+		'counts what an unanswered send on hide still has in flight against a pagehide right after, %s',
+		(_case, between) => {
+			serverAnswers = false;
+			startFor(LISTENER);
+			recordLarge(400);
 
-		hidePage();
-		window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+			hidePage();
+			between();
+			window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
 
-		expect(keepaliveBytesSent()).toBeLessThanOrEqual(64 * 1024);
-	});
+			expect(keepaliveBytesSent()).toBeLessThanOrEqual(64 * 1024);
+		}
+	);
 
 	it('sends on pagehide with keepalive', async () => {
 		startFor(LISTENER);

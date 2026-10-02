@@ -58,10 +58,10 @@ interface Recording {
 const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
 const BUFFER_CAPACITY = 500;
 const EVENTS_PER_REPORT = 100;
-// Browsers refuse a keepalive request once the keepalive bodies in flight pass
-// 64 KiB together, so a send before the page goes counts what earlier ones
-// still have in flight, stops at that budget and leaves the rest for the next
-// start.
+// The Fetch standard lets a page keep at most 64 KiB of keepalive request
+// bodies in flight at once and fails any request past that, which loses its
+// events when the page is going. A send before the page goes therefore stops
+// at that budget and leaves the rest in the buffer for the next start.
 const KEEPALIVE_BODY_BUDGET_BYTES = 64 * 1024;
 const HEARTBEAT_MS = 15_000;
 const TIMER_GAP_MS = 30_000;
@@ -76,6 +76,8 @@ const STATUSES_KEEPING_THE_EVENTS: ReadonlySet<number> = new Set([401, 403, 429]
 const NO_TAKE: PlaybackTakeState = { takeId: null, position: 0, readyState: 0, deck: 'active' };
 
 let recording: Recording | null = null;
+// The budget belongs to the page, not to one recording: the send on hide, the
+// pagehide right after it and a sign-in change in between all draw on it.
 let keepaliveBytesInFlight = 0;
 
 /**
