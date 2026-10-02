@@ -3,9 +3,10 @@
 // repeated wrong passwords, signing out, coming back to a reloaded tab, being
 // refused the admin page, and returning to a session that has outlived its
 // absolute maximum age -- and, since #1215, a logged-out deep link that signs
-// in onto the address it asked for.
+// in onto the address it asked for. Since #1230 the phone also loses its
+// session behind an open song page and is sent to the door from there.
 //
-// This is here rather than in the unit suite because each of those six
+// This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
 // address bar ends on, whether the cookie is still carried, what the person
 // reads when a refusal arrives -- and, the one B5 made structural, whether the
@@ -21,9 +22,10 @@
 // suite, while the lockout counts per *account* and therefore stays on this
 // spec's own throwaway user.
 //
-// Both shells drive all six flows: the compact one at 375px, which is where the
-// rail is a drawer and Log out is reached through the account circle in the
-// app bar (issue #1158).
+// Both shells drive all seven flows: the compact one at 375px, which is where
+// the rail is a drawer and Log out is reached through the account circle in
+// the app bar (issue #1158). The session lost behind the drawer is the phone's
+// own flow.
 
 import {
 	expect,
@@ -42,7 +44,9 @@ import {
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	ADMIN_TABS_LABEL,
-	HITBOX_FREQUENT_PX
+	HITBOX_FREQUENT_PX,
+	RAIL_DRAWER_OPEN_LABEL,
+	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
 import { FlowGuard, MOBILE_VIEWPORT, openRailNav, shellOf, workspace, type Shell } from './helpers';
 import {
@@ -50,19 +54,22 @@ import {
 	STORAGE_STATE_FILE,
 	ageSessionPastAbsoluteLimit,
 	createAccount,
-	deleteAccount
+	deleteAccount,
+	seedOwnSongAddress
 } from './seed';
 
 /**
  * What each test costs the API, measured on a green run of both shells against
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
- * page, 13/12 for the expired session, 11/11 for the lockout. One ceiling for
- * the file, the same way `admin-models.spec.ts` carries one for its four. The
- * budget is a ceiling, not a knob: a flow that suddenly needs several more
- * round trips is a regression, so find the extra requests instead of raising
- * this number -- see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the
- * full reasoning.
+ * page, 13/12 for the expired session, 11/11 for the lockout, 23/26 for the
+ * deep-link sign-in, and 28 at 375px for the phone's session lost behind its
+ * menu, which runs on the phone only. One ceiling for the file, the same way
+ * `admin-models.spec.ts` carries one for its four. The budget is a ceiling,
+ * not a knob: a flow that suddenly needs several more round trips is a
+ * regression, so find the extra requests instead of raising this number --
+ * see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full
+ * reasoning.
  */
 const AUTH_FLOW_API_REQUEST_BUDGET = 30;
 
@@ -79,16 +86,17 @@ const REFUSED_PATHS = [
 	ADMIN_SESSIONS_PATH,
 	ADMIN_LOGIN_ATTEMPTS_PATH
 ];
+// The library lists the phone drawer reads as it opens, which a session lost
+// behind it refuses. Only the flow tagged with this expects that refusal; in
+// every other flow it still fails the guard.
+const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
+const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
 const ADMIN_PAGE_PATH = '/settings/users';
 const SESSION_COOKIE = 'session_id';
-const CSRF_COOKIE = 'csrf_token';
-const CSRF_HEADER = 'x-csrf-token';
 
-// The song the deep-link flow asks for: the account's own, so the sign-in
-// that follows may open it. Plain ASCII, so its slug is the lowercased,
-// hyphenated title (`api_helpers.unique_song_slug`).
+// The song the deep-link flows ask for: the account's own, so the sign-in
+// that follows may open it.
 const DEEP_LINK_SONG_TITLE = 'Glass River';
-const DEEP_LINK_SONG_SLUG = 'glass-river';
 
 // The narrowest phone the shell is drawn for -- the mobile project's own
 // viewport is 390, and #872 rules this chain at 375.
@@ -164,13 +172,16 @@ test.afterAll(async () => {
 	await adminApi.dispose();
 });
 
-test.beforeEach(async ({ page, isMobile }) => {
+test.beforeEach(async ({ page, isMobile }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
 	// Every refusal this file drives is one of its six sentences: the login it
 	// locks out, the `/api/auth/me` a dead session answers, the admin calls a
 	// non-admin makes. A refusal anywhere else, and any 5xx at all, still fails
 	// the flow.
-	guard = new FlowGuard(page, { refusalsExpectedOn: REFUSED_PATHS });
+	const refusalsExpectedOn = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
+		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
+		: REFUSED_PATHS;
+	guard = new FlowGuard(page, { refusalsExpectedOn });
 });
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
@@ -242,40 +253,29 @@ async function expectAccountLocked(refusal: Response): Promise<void> {
 	expect((await refusal.json()).detail).toBe(ACCOUNT_LOCKED_DETAIL);
 }
 
-/**
- * Gives the account one album with one song, through a session of its own
- * outside the browser, and returns that song's address.
- */
-async function seedOwnSongAddress(): Promise<string> {
+/** The account's own song, seeded through a session of its own outside the browser. */
+async function seedOwnSong(): Promise<string> {
 	const api = await request.newContext({ baseURL: BASE_URL });
 	try {
-		const login = await api.post(AUTH_LOGIN_PATH, {
-			data: { username: account.username, password: account.password }
-		});
-		expect(login.status()).toBe(200);
-		const { cookies } = await api.storageState();
-		const csrf = cookies.find((cookie) => cookie.name === CSRF_COOKIE)?.value ?? '';
-		const headers = { [CSRF_HEADER]: csrf, origin: BASE_URL };
-		const album = await api.post('/api/albums', {
-			headers,
-			data: { title: `E2E sign-in return ${Date.now().toString(36)}`, artist: account.username }
-		});
-		expect(album.ok()).toBe(true);
-		const albumId = ((await album.json()) as { id: string }).id;
-		const song = await api.post('/api/songs', {
-			headers,
-			data: {
-				title: DEEP_LINK_SONG_TITLE,
-				album_id: albumId,
-				lyrics: `${DEEP_LINK_SONG_TITLE} lyrics`,
-				prompt: 'calm test tone'
-			}
-		});
-		expect(song.ok()).toBe(true);
-		return `/album/${albumId}/${DEEP_LINK_SONG_SLUG}`;
+		return await seedOwnSongAddress(api, account, DEEP_LINK_SONG_TITLE);
 	} finally {
 		await api.dispose();
 	}
+}
+
+/**
+ * Opens the account's own song the way a logged-out tab does: through the
+ * door, which says nothing about a session the tab never had.
+ */
+async function signInOnto(page: Page, songAddress: string): Promise<void> {
+	await page.goto(songAddress);
+	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
+	const response = await submitLogin(page, account.username, account.password);
+	expect(response.status()).toBe(200);
+	await expect(page).toHaveURL(new RegExp(`${songAddress}$`));
+	await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
 }
 
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
@@ -428,21 +428,35 @@ test('a session past its absolute maximum age lands on the login page', async ({
 });
 
 test('a logged-out deep link signs in onto the song it asked for', async ({ page }, testInfo) => {
-	const songAddress = await seedOwnSongAddress();
+	await signInOnto(page, await seedOwnSong());
 
-	await page.goto(songAddress);
-
-	await expect(page).toHaveURL(LOGIN_PAGE_URL);
-	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
-	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
-
-	const response = await submitLogin(page, account.username, account.password);
-	expect(response.status()).toBe(200);
-
-	await expect(page).toHaveURL(new RegExp(`${songAddress}$`));
-	await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
 	await attachShot(page, testInfo, 'auth-deep-link-returned');
 });
+
+test(
+	'a session lost behind a song page on the phone is sent to sign-in from the menu',
+	{ tag: LIBRARY_LISTS_REFUSED_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		test.skip(!isMobile, 'The drawer the menu opens is the phone shell.');
+		const songAddress = await seedOwnSong();
+		await signInOnto(page, songAddress);
+		const signedIn = await sessionCookie(page.context());
+		expect(signedIn).toBeDefined();
+
+		await ageSessionPastAbsoluteLimit(sessionIdOf(signedIn as Cookie));
+		await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+
+		// Not a dark page on the song's own address: the door, asked to bring the
+		// person back to that song, saying why they are there.
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' &&
+				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === songAddress
+		);
+		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
+		await attachShot(page, testInfo, 'auth-phone-session-lost');
+	}
+);
 
 test('wrong passwords lock the account, in words and for as long as it says', async ({
 	page
