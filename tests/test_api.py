@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.app_context import AppContext
+from songmaker_cli.config import build_ace_config
 from songmaker_cli.constants import GZIP_COMPRESS_LEVEL, GZIP_MINIMUM_SIZE_BYTES
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import (
@@ -31,6 +32,7 @@ from songmaker_cli.db.models import (
     User,
     Version,
 )
+from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
 
 _DEFAULT_USER_ID = "u-test"
@@ -1041,6 +1043,28 @@ def test_update_song_omit_keeps_generation_params(client: TestClient) -> None:
     resp = client.put("/api/songs/s1", json={"lyrics": "new lyrics"})
     assert resp.status_code == 200
     assert resp.json()["generation_params"] == {"shift": 4.0}
+
+
+def test_update_song_language_reaches_the_next_generation(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={"vocal_language": "ja"})
+    resp = client.put("/api/songs/s1", json={"vocal_language": "en"})
+
+    assert resp.status_code == 200
+    assert resp.json()["vocal_language"] == "en"
+    version_id = client.get("/api/songs/s1/versions").json()[0]["id"]
+    meta, _ = _load_song_meta("s1", version_id, client.app.state.ctx.db)
+    assert build_ace_config(meta).vocal_language == "en"
+
+
+def test_update_song_omit_keeps_language(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={"vocal_language": "de"})
+    resp = client.put("/api/songs/s1", json={"lyrics": "neue Zeilen"})
+    assert resp.json()["vocal_language"] == "de"
+
+
+def test_update_song_rejects_too_long_language(client: TestClient) -> None:
+    resp = client.put("/api/songs/s1", json={"vocal_language": "x" * 11})
+    assert resp.status_code == 422
 
 
 def test_update_song_invalid_generation_params(client: TestClient) -> None:
