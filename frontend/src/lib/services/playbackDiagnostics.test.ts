@@ -89,13 +89,14 @@ describe('playback diagnostics recorder', () => {
 		startFor(LISTENER);
 		recordMany(505);
 
-		hidePage();
+		await openPage();
+		startFor(LISTENER);
 		await letTheServerAnswer();
 
 		const details = sentDetails();
 		expect(details).toHaveLength(500);
-		expect(details[0]).toBe('e6');
-		expect(sentReports().at(-1)?.events.at(-1)?.kind).toBe('visibility_change');
+		expect(details[0]).toBe('e5');
+		expect(details.at(-1)).toBe('e504');
 	});
 
 	it('sends on hide with keepalive and the CSRF header, at most 100 events per report', async () => {
@@ -111,6 +112,27 @@ describe('playback diagnostics recorder', () => {
 			expect(init.keepalive).toBe(true);
 			expect((init.headers as Record<string, string>)['X-CSRF-Token']).toBe('csrf-abc');
 		}
+	});
+
+	it('sends on hide only the reports that fit the 64 KiB keepalive budget, the rest at the next start', async () => {
+		startFor(LISTENER);
+		for (let index = 0; index < 400; index += 1)
+			recorder.recordPlaybackEvent(note('x'.repeat(200)));
+
+		hidePage();
+		await letTheServerAnswer();
+		const keepaliveBytes = fetchMock.mock.calls
+			.map(([, init]) => new Blob([init.body as string]).size)
+			.reduce((sum, size) => sum + size, 0);
+		const sentOnHide = sentDetails().length;
+		fetchMock.mockClear();
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(keepaliveBytes).toBeLessThanOrEqual(64 * 1024);
+		expect(sentOnHide).toBeGreaterThan(0);
+		expect(sentOnHide + sentDetails().length).toBe(401);
 	});
 
 	it('sends on pagehide with keepalive', async () => {

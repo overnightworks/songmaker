@@ -44,9 +44,11 @@ interface Recording {
 const ENDPOINT = '/api/playback-diagnostics';
 const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
 const BUFFER_CAPACITY = 500;
-// Browsers refuse keepalive requests once the bodies in flight pass 64 KiB
-// together; a report of 100 events stays far below that.
 const EVENTS_PER_REPORT = 100;
+// Browsers refuse a keepalive request once the keepalive bodies in flight pass
+// 64 KiB together, so a send before the page goes stops at that budget and
+// leaves the rest for the next start.
+const KEEPALIVE_BODY_BUDGET_BYTES = 64 * 1024;
 const HEARTBEAT_MS = 15_000;
 const TIMER_GAP_MS = 30_000;
 const DETAIL_MAX_LENGTH = 200;
@@ -180,7 +182,15 @@ function startHeartbeat(): () => void {
 
 function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void {
 	const waiting = from.events.filter((buffered) => !from.inFlight.has(buffered));
-	for (const batch of reportBatches(waiting)) void deliver(from, batch, opts.keepalive);
+	let keepaliveBytesLeft = KEEPALIVE_BODY_BUDGET_BYTES;
+	for (const batch of reportBatches(waiting)) {
+		const body = JSON.stringify(reportOf(batch));
+		if (opts.keepalive) {
+			keepaliveBytesLeft -= new Blob([body]).size;
+			if (keepaliveBytesLeft < 0) return;
+		}
+		void deliver(from, batch, body, opts.keepalive);
+	}
 }
 
 // One report speaks for one page session, so a batch never mixes sessions.
@@ -198,9 +208,14 @@ function reportBatches(events: BufferedEvent[]): BufferedEvent[][] {
 	return batches;
 }
 
-async function deliver(from: Recording, batch: BufferedEvent[], keepalive: boolean): Promise<void> {
+async function deliver(
+	from: Recording,
+	batch: BufferedEvent[],
+	body: string,
+	keepalive: boolean
+): Promise<void> {
 	for (const buffered of batch) from.inFlight.add(buffered);
-	const done = await post(reportOf(batch), keepalive);
+	const done = await post(body, keepalive);
 	for (const buffered of batch) from.inFlight.delete(buffered);
 	if (!done) return;
 	const sent = new Set(batch);
@@ -216,14 +231,14 @@ function reportOf(batch: BufferedEvent[]): PlaybackDiagnosticsReport {
 	};
 }
 
-async function post(report: PlaybackDiagnosticsReport, keepalive: boolean): Promise<boolean> {
+async function post(body: string, keepalive: boolean): Promise<boolean> {
 	const init = addCsrfToken(
 		{
 			method: 'POST',
 			credentials: 'include',
 			keepalive,
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify(report)
+			body
 		},
 		'POST'
 	);
