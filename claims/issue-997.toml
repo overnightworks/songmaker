@@ -1,8 +1,0 @@
-claim_id = "f8556697c2984d398163969bed59b05b"
-agent = "claude-head"
-role = "builder"
-base = "c6343aa6ba984be1f13ed1981313c5f6dee81dfa"
-branch = "claude-head/issue-997-address-song-album-queue"
-scope = ["frontend/e2e/song-phone.spec.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts"]
-opened_commit = "672e6876f325cb7aa0ef47ee6d1fcc7ed3c7ed16"
-whole_reason = "the address-open path and its owner with their tests, one e2e row and the merged-tree test fixes"
