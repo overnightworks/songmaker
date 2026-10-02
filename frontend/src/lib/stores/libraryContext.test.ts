@@ -94,7 +94,7 @@ vi.mock('$lib/api/client', () => ({
 import { goto, pushState, replaceState } from '$app/navigation';
 import { listenForLandings, replaceEntry } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
-import { fakePage } from '$lib/test-utils/app-navigation';
+import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
@@ -735,7 +735,8 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	// Issue #1263: a song tapped as soon as its album shows -- opened from the
 	// wall, or left onto by the song before it -- while the router still mounts
 	// the album's route. The library already shows the song, so its entry stands
-	// in the same task, and a Back pressed then returns to the album.
+	// in the same task; the song's route mounts over it once the router has
+	// loaded it, and a Back then returns to the album.
 	it.each([
 		{ albumWrite: 'push', from: '/', fromState: libraryRootState() },
 		{
@@ -747,13 +748,19 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		"writes a push into history at once while the album's $albumWrite still mounts its route",
 		async ({ albumWrite, from, fromState }) => {
 			replaceHistoryEntry(from, fromState);
-			vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+			const routesLoaded = holdRouteLoads();
 			void writeLibraryHistory(albumState, albumRoutePath('a2'), albumWrite);
 			const song = { ...albumState, index: 1, songId: 's1' };
 
-			void writeLibraryHistory(song, songRoutePath('a2', 's1'), 'push');
+			const songMounted = writeLibraryHistory(song, songRoutePath('a2', 's1'), 'push');
 
 			expect(location.pathname).toBe(songRoutePath('a2', 's1'));
+			expect(historyEntry()).toEqual(song);
+			const songEntry = standingHistoryEntry();
+			routesLoaded();
+			await songMounted;
+			expect(fakePage.url.pathname).toBe(songRoutePath('a2', 's1'));
+			expect(standingHistoryEntry()).toEqual(songEntry);
 			expect(historyEntry()).toEqual(song);
 			await pressBack();
 			expect(location.pathname).toBe(albumRoutePath('a2'));

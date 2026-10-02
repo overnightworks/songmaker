@@ -85,10 +85,10 @@ async function traverseHistory(step: () => void): Promise<void> {
 }
 
 // A reload onto the entry history stands on, the way the app goes through
-// one: the library reads the entry while the router loads it, SvelteKit's
-// start writes its own entry over it, and the app layout holds library
-// history until the router reports the start -- which the returned function
-// does.
+// one: the history controller reads the entry while the router loads it,
+// SvelteKit's start writes its own entry over it, and the library it carried
+// goes back onto it once the router reports the start -- which the returned
+// function does.
 export function reloadLibraryPageBeforeRouterStarts(): () => void {
 	loadLibraryHistoryPageForTests();
 	startFakeRouter();
