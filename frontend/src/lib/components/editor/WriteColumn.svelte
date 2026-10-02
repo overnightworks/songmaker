@@ -125,7 +125,7 @@
 				oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
 		</label>
 		<div class="edit-field">
-			<span class="field-head">
+			<span>
 				<label for={lyricsFieldId}>{EDITOR_LYRICS_LABEL}</label>
 				<VersionsSheet {song} onload={loadVersion} />
 			</span>

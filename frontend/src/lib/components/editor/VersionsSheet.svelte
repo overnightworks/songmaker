@@ -38,9 +38,15 @@
 		firstLine: string;
 	}
 
+	const POPOVER_WIDTH_PX = 340;
+	const VIEWPORT_MARGIN_PX = 8;
+	const CHIP_GAP_PX = 8;
+
 	const open = historyLayerState('versions-sheet', false);
 	let chip: HTMLButtonElement | undefined = $state();
 	let panel: HTMLDivElement | undefined = $state();
+	let popoverTop = $state(0);
+	let popoverLeft = $state(0);
 
 	const latest = $derived<VersionItem | null>($versions[0] ?? null);
 	const chipLabel = $derived(latest ? versionChipLabel(latest.version_number, $isDirty) : '');
@@ -78,7 +84,18 @@
 		wasOpen = isOpen;
 	});
 
+	// The desktop popover stands in the viewport under the chip, so the editor
+	// column's own scroll box cannot clip it; the phone sheet ignores this.
+	function placeUnderChip(): void {
+		if (!chip) return;
+		const anchor = chip.getBoundingClientRect();
+		const lastLeft = window.innerWidth - VIEWPORT_MARGIN_PX - POPOVER_WIDTH_PX;
+		popoverTop = anchor.bottom + CHIP_GAP_PX;
+		popoverLeft = Math.max(VIEWPORT_MARGIN_PX, Math.min(anchor.left, lastLeft));
+	}
+
 	async function openSheet(): Promise<void> {
+		placeUnderChip();
 		$open = true;
 		await tick();
 		if (panel) focusFirstIn(panel);
@@ -93,6 +110,8 @@
 	}
 </script>
 
+<svelte:window onresize={() => $open && placeUnderChip()} />
+
 {#if latest}
 	<span class="versions">
 		<button
@@ -100,14 +119,16 @@
 			type="button"
 			class="version-chip"
 			class:draft={$isDirty}
-			data-hitbox="frequent"
+			data-hitbox="text"
 			aria-haspopup="dialog"
 			aria-expanded={$open}
 			aria-label={versionsChipAccessibleLabel(chipLabel)}
 			onclick={() => ($open ? ($open = false) : void openSheet())}
 		>
-			<span class="chip-text">{chipLabel}</span>
-			<Icon name="chevron-down" size={14} />
+			<span class="chip-face">
+				<span class="chip-text">{chipLabel}</span>
+				<Icon name="chevron-down" size={14} />
+			</span>
 		</button>
 		{#if $open}
 			<button
@@ -124,6 +145,9 @@
 				aria-modal="true"
 				aria-label={VERSIONS_SHEET_LABEL}
 				tabindex="-1"
+				style:--popover-top="{popoverTop}px"
+				style:--popover-left="{popoverLeft}px"
+				style:--popover-width="{POPOVER_WIDTH_PX}px"
 				onkeydown={onPanelKeydown}
 			>
 				<div class="versions-head">
@@ -153,7 +177,7 @@
 									<span class="version-takes">
 										{versionTakesLabel(row.takes.count)}
 										{#if row.takes.holdsPick}
-											· <span class="version-pick">★</span> {VERSION_PICKED_LABEL}
+											· ★ {VERSION_PICKED_LABEL}
 										{/if}
 										{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
 									</span>
@@ -170,19 +194,16 @@
 
 <style>
 	.versions {
-		position: relative;
 		display: inline-flex;
 	}
 
+	/* The chip draws 24px but answers on the whole touch-height box around it. */
 	.version-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.2rem;
-		height: 24px;
-		padding: 0 0.35rem 0 0.5rem;
-		border: 1px solid var(--border);
-		border-radius: 12px;
-		background: var(--surface);
+		padding: 0;
+		background: none;
+		border: none;
 		color: var(--text);
 		font-family: var(--font-body);
 		font-size: 0.74rem;
@@ -191,12 +212,23 @@
 		cursor: pointer;
 	}
 
-	.version-chip :global(svg) {
+	.chip-face {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		height: 24px;
+		padding: 0 0.35rem 0 0.5rem;
+		border: 1px solid var(--border);
+		border-radius: 12px;
+		background: var(--surface);
+	}
+
+	.chip-face :global(svg) {
 		color: var(--text-subtle);
 	}
 
-	.version-chip:hover,
-	.version-chip[aria-expanded='true'] {
+	.version-chip:hover .chip-face,
+	.version-chip[aria-expanded='true'] .chip-face {
 		border-color: var(--accent);
 	}
 
@@ -215,11 +247,11 @@
 	}
 
 	.versions-panel {
-		position: absolute;
-		top: calc(100% + 8px);
-		left: 0;
+		position: fixed;
+		top: var(--popover-top);
+		left: var(--popover-left);
 		z-index: 301;
-		width: 340px;
+		width: var(--popover-width);
 		max-height: min(60vh, 28rem);
 		display: flex;
 		flex-direction: column;
@@ -338,7 +370,6 @@
 		}
 
 		.versions-panel {
-			position: fixed;
 			top: auto;
 			left: 0;
 			right: 0;
