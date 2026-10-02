@@ -1,7 +1,8 @@
 import {
 	historyEntry,
 	replaceHistoryEntry,
-	standingHistoryEntry
+	standingHistoryEntry,
+	watchBack
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { pushEntry } from '$lib/history/historyController';
@@ -18,8 +19,10 @@ import {
 	COMPACT_LAYOUT_MEDIA,
 	HITBOX_FREQUENT_PX,
 	OFFLINE_STRIP_MESSAGE,
+	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
+import { handleSessionLost, signInAddress } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -952,6 +955,34 @@ describe('signing out on the phone', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
 		expect(standingHistoryEntry()?.layer).toBe('account-menu');
+	});
+});
+
+// The phone drawer holds a history entry of its own; a step back off it,
+// queued as the drawer closes with the shell, used to land after the sign-in
+// navigation and put the page's address back over an empty shell (#1230).
+describe('a session lost behind the open phone drawer', () => {
+	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		replaceHistoryEntry('/');
+		const target = await renderLayout('/');
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL).click();
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('rail-drawer'));
+
+		const back = watchBack();
+		let backPresses: number;
+		try {
+			await handleSessionLost();
+			await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
+			backPresses = back.presses();
+		} finally {
+			back.stop();
+		}
+
+		expect(goto).toHaveBeenCalledWith(signInAddress('/'));
+		expect(backPresses).toBe(0);
 	});
 });
 
