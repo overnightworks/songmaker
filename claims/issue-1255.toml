@@ -1,7 +1,0 @@
-claim_id = "6415b56955394e2f9805da30f1ed0244"
-agent = "claude-head"
-role = "builder"
-base = "e7457fd064347d8422e9634053ca4040ce560430"
-branch = "claude-head/issue-1255-red-main-continuous-deck-test"
-scope = ["frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
-opened_commit = "156fb4f7cfc90eee2981a068a0ce7064886b34ff"
