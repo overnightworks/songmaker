@@ -52,6 +52,7 @@ import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { followPlaybackForResume } from '$lib/stores/playbackResume';
+import { recordPlaybackEvent, startPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
@@ -371,6 +372,21 @@ describe('logout', () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 		await logout();
 		expect(get(currentUser)).toBeNull();
+	});
+
+	it('forgets the playback diagnostics recorded for the user', async () => {
+		const diagnosticsKey = 'playbackDiagnostics:u1';
+		const stopRecording = startPlaybackDiagnostics('u1');
+		recordPlaybackEvent({ kind: 'freeze', detail: '', take: null });
+		const recordedBefore = localStorage.getItem(diagnosticsKey);
+		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		mockApiLogout.mockResolvedValueOnce(undefined);
+
+		await logout();
+		stopRecording();
+
+		expect(recordedBefore).not.toBeNull();
+		expect(localStorage.getItem(diagnosticsKey)).toBeNull();
 	});
 
 	it('clears user even if API fails', async () => {

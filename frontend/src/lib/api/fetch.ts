@@ -255,7 +255,7 @@ function abortOnCallerOrTimeout(
 	return callerSignal ? AbortSignal.any([callerSignal, timeoutSignal]) : timeoutSignal;
 }
 
-function addCsrfToken(init: RequestInit, method: string): RequestInit {
+export function addCsrfToken(init: RequestInit, method: string): RequestInit {
 	if (method === 'GET' || method === 'HEAD') return init;
 	const token = getCsrfToken();
 	if (!token) return init;

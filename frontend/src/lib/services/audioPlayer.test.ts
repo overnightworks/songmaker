@@ -2,6 +2,9 @@ import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+import { recordPlaybackEvent } from './playbackDiagnostics';
+
+vi.mock('./playbackDiagnostics', () => ({ recordPlaybackEvent: vi.fn() }));
 
 const NO_STRIP_SHOWN = (): boolean => false;
 const SECOND = 1000;
@@ -52,6 +55,10 @@ function preloadReady(
 	const standby = createdAudios[createdAudios.length - 1];
 	standby.readyState = readyState;
 	return standby;
+}
+
+function recordedNotes(): Parameters<typeof recordPlaybackEvent>[0][] {
+	return vi.mocked(recordPlaybackEvent).mock.calls.map(([note]) => note);
 }
 
 function recoveryUrlOf(url: string): RegExp {
@@ -197,6 +204,7 @@ beforeEach(() => {
 	vi.stubGlobal('fetch', fetchMock);
 	audioPlayer.destroy();
 	audioPlayer.swapCallbacks(callbacks());
+	vi.mocked(recordPlaybackEvent).mockClear();
 });
 
 afterEach(() => {
@@ -863,16 +871,17 @@ describe('frozen-clock watchdog', () => {
 			}
 		}
 	])('records a pause that came from the $source', ({ source, pauseIt }) => {
-		const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
 		startPlayingAt(40);
 
 		pauseIt();
 
-		expect(debug).toHaveBeenCalledWith('Audio paused', expect.objectContaining({ source }));
+		expect(recordedNotes().at(-1)).toMatchObject({
+			kind: 'pause',
+			detail: expect.stringContaining(`source=${source}`)
+		});
 	});
 
 	it('records a later pause from outside after a take change swallowed the app pause event', () => {
-		const debug = vi.spyOn(console, 'debug').mockImplementation(() => {});
 		startPlayingAt(40);
 		vi.spyOn(fakeAudio, 'pause').mockImplementationOnce(() => {
 			fakeAudio.paused = true;
@@ -882,10 +891,10 @@ describe('frozen-clock watchdog', () => {
 		startPlayingAt(40);
 		fakeAudio.pause();
 
-		expect(debug).toHaveBeenLastCalledWith(
-			'Audio paused',
-			expect.objectContaining({ source: 'outside' })
-		);
+		expect(recordedNotes().at(-1)).toMatchObject({
+			kind: 'pause',
+			detail: expect.stringContaining('source=outside')
+		});
 	});
 });
 
@@ -2395,6 +2404,49 @@ describe('standby deck', () => {
 		expect(standby.src).toBe('');
 	});
 
+	it.each([
+		{ decision: 'promote', readyState: 3, asked: next, matched: true },
+		{ decision: 'fresh_load', readyState: 2, asked: next, matched: true },
+		{ decision: 'fresh_load', readyState: 3, asked: other, matched: false }
+	])(
+		'records a $decision for a standby at readyState $readyState whose URL matched: $matched',
+		({ decision, readyState, asked, matched }) => {
+			playFirst();
+			preloadReady(next, readyState);
+			vi.mocked(recordPlaybackEvent).mockClear();
+
+			audioPlayer.load(asked);
+
+			expect(recordedNotes()).toContainEqual({
+				kind: decision,
+				detail: `standby_ready_state=${readyState} url_matched=${matched}`,
+				take: expect.objectContaining({ takeId: asked.generation.id, deck: 'active' })
+			});
+		}
+	);
+
+	it.each([
+		{ deck: 'standby', takeId: null, fire: (standby: FakeAudio) => standby.fire('canplay') },
+		{ deck: 'active', takeId: 'g1', fire: () => fakeAudio.fire('canplay') }
+	])("records a media event on the $deck deck with that deck's state", ({ deck, takeId, fire }) => {
+		playFirst();
+		const standby = preloadReady(next);
+		const firing = deck === 'standby' ? standby : fakeAudio;
+		firing.currentTime = 7;
+		firing.bufferedUntil = 42;
+		vi.mocked(recordPlaybackEvent).mockClear();
+
+		fire(standby);
+
+		expect(recordedNotes()).toEqual([
+			{
+				kind: 'media_event',
+				detail: expect.stringMatching(/^canplay .*buffered=42\.0/),
+				take: { takeId, position: 7, readyState: firing.readyState, deck }
+			}
+		]);
+	});
+
 	it('preloading the take already standing by does not fetch it again', () => {
 		const standby = preloadReady(next);
 		const loadSpy = vi.spyOn(standby, 'load');
@@ -2630,5 +2682,45 @@ describe('audio graph', () => {
 		audioPlayer.resumeAudioGraph();
 
 		expect(fake.context.resume).toHaveBeenCalledOnce();
+	});
+});
+
+describe('what the player writes down for diagnostics (#1250)', () => {
+	it('records a refused play by the error name', async () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('canplay');
+		fakeAudio.playMock.mockImplementation(() =>
+			Promise.reject(Object.assign(new Error('autoplay blocked'), { name: 'NotAllowedError' }))
+		);
+
+		audioPlayer.play();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(recordedNotes()).toContainEqual(
+			expect.objectContaining({ kind: 'play_rejected', detail: 'NotAllowedError' })
+		);
+	});
+
+	it('records each reload with its reason and then the give-up', async () => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.fire('canplay');
+		fakeAudio.paused = false;
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+		fakeAudio.currentTime = 41;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('stalled');
+
+		await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE + 10 * SECOND);
+
+		const recovery = recordedNotes().filter(
+			(note) => note.kind === 'retry' || note.kind === 'give_up'
+		);
+		expect(recovery[0]).toMatchObject({
+			kind: 'retry',
+			detail: expect.stringContaining('reason=stall-timeout')
+		});
+		expect(recovery.at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
 	});
 });

@@ -1,4 +1,5 @@
 import type { PlaybackInfo } from './audioPlayer.svelte';
+import { recordPlaybackEvent } from './playbackDiagnostics';
 
 interface MediaHandlers {
 	play: () => void;
@@ -57,14 +58,27 @@ export function updateMediaSessionPositionState(position: number, duration: numb
 function applyMediaSessionHandlers(handlers: MediaHandlers): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 	const mediaSession = navigator.mediaSession;
-	safeSetHandler(mediaSession, 'play', handlers.play);
-	safeSetHandler(mediaSession, 'pause', handlers.pause);
-	safeSetHandler(mediaSession, 'stop', handlers.stop);
-	safeSetHandler(mediaSession, 'nexttrack', handlers.next);
-	safeSetHandler(mediaSession, 'previoustrack', handlers.prev);
-	safeSetHandler(mediaSession, 'seekto', (details: MediaSessionActionDetails) => {
+	const set = (action: MediaSessionAction, handler: MediaSessionActionHandler) =>
+		safeSetHandler(mediaSession, action, recordedAction(action, handler));
+	set('play', handlers.play);
+	set('pause', handlers.pause);
+	set('stop', handlers.stop);
+	set('nexttrack', handlers.next);
+	set('previoustrack', handlers.prev);
+	set('seekto', (details: MediaSessionActionDetails) => {
 		if (typeof details.seekTime === 'number') handlers.seekTo(details.seekTime);
 	});
+}
+
+function recordedAction(
+	action: MediaSessionAction,
+	handler: MediaSessionActionHandler
+): MediaSessionActionHandler {
+	return (details) => {
+		const detail = typeof details.seekTime === 'number' ? `${action} ${details.seekTime}` : action;
+		recordPlaybackEvent({ kind: 'media_session_action', detail, take: null });
+		handler(details);
+	};
 }
 
 function clearMediaSessionHandlers(): void {

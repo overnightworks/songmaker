@@ -631,6 +631,7 @@ export const LIBRARY_SHARES_COPY_LABEL = 'Copy link';
 
 export const COWRITER_TURN_PATH = '/api/chat/turn';
 export const RESOURCE_EVENT_STREAM_PATH = '/api/resource-events/stream';
+export const PLAYBACK_DIAGNOSTICS_PATH = '/api/playback-diagnostics';
 export const RESOURCE_EVENT_HELLO = 'hello';
 export const RESOURCE_EVENT_RESYNC = 'resync';
 export const RESOURCE_EVENT_GENERATION_CREATED = 'generation.created';

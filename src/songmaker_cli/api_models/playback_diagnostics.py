@@ -12,6 +12,7 @@ PLAYBACK_DIAGNOSTIC_DETAIL_MAX_LENGTH: Final = 200
 PLAYBACK_DIAGNOSTICS_SESSION_ID_MAX_LENGTH: Final = 64
 PLAYBACK_DIAGNOSTICS_USER_AGENT_MAX_LENGTH: Final = 512
 HTML_MEDIA_READY_STATE_MAX: Final = 4
+PAGE_CLOCK_MAX_MS: Final = 7 * 24 * 60 * 60 * 1000
 TAKE_ID_PATTERN: Final = r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
 
 
@@ -34,10 +35,14 @@ class PlaybackDiagnosticKind(StrEnum):
     RESUME = "resume"
     TIMER_GAP = "timer_gap"
     MEDIA_SESSION_ACTION = "media_session_action"
+    MEDIA_EVENT = "media_event"
+    ONLINE = "online"
+    OFFLINE = "offline"
 
 
 class PlaybackDiagnosticEvent(BaseModel):
-    at_ms: int = Field(ge=0)
+    sequence: int = Field(ge=0)
+    at_ms: int = Field(ge=0, le=PAGE_CLOCK_MAX_MS)
     kind: PlaybackDiagnosticKind
     take_id: str | None = Field(pattern=TAKE_ID_PATTERN)
     position: float = Field(ge=0, allow_inf_nan=False)

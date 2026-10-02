@@ -3,6 +3,7 @@ import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
 import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
+import { forgetPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
@@ -163,10 +164,10 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 	resetTitleDrafts();
 }
 
-// Only a deliberate logout forgets what was playing; a session that merely
-// ran out (401, clearAuth above) keeps it for the same user's next sign-in.
-// It is forgotten after clearAuth, once no signed-in user is left for a take
-// still playing to save it under again.
+// Only a deliberate logout forgets what was playing and what the player
+// recorded; a session that merely ran out (401, clearAuth above) keeps both
+// for the same user's next sign-in. They are forgotten after clearAuth, once
+// no signed-in user is left for a take still playing to save them under again.
 export async function logout(): Promise<void> {
 	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
 	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
@@ -178,6 +179,9 @@ export async function logout(): Promise<void> {
 		// swallow — always clear local state
 	} finally {
 		clearAuth();
-		if (user) forgetPlaybackResume(user.id);
+		if (user) {
+			forgetPlaybackResume(user.id);
+			forgetPlaybackDiagnostics(user.id);
+		}
 	}
 }
