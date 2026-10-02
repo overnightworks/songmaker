@@ -1007,6 +1007,7 @@ export interface SongUpdateRequest {
 	bpm?: number | null;
 	audio_duration?: number | null;
 	key_scale?: string | null;
+	vocal_language?: string | null;
 	generation_params?: VersionGenerationParams | null;
 }
 
