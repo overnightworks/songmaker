@@ -1,4 +1,4 @@
-import type { AfterNavigate, NavigationTarget } from '@sveltejs/kit';
+import type { AfterNavigate, BeforeNavigate, NavigationTarget } from '@sveltejs/kit';
 import { flushSync, onMount } from 'svelte';
 import { vi } from 'vitest';
 import { stateProxy } from '../../tests/reactive-fixtures.svelte';
@@ -10,9 +10,11 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 //     (await import('$lib/test-utils/app-navigation')).fakeAppState());
 // It writes history the way SvelteKit does: `goto` adds (or, with
 // `replaceState`, rewrites) a router entry and tells every mounted
-// `afterNavigate` callback; `pushState` and `replaceState` are shallow
-// routing, which keeps the page state under the entry's states key and the
-// address of the page it was written over beside it. Like SvelteKit, it keeps
+// `afterNavigate` callback; a Back or Forward that navigates tells every
+// mounted `beforeNavigate` callback first, and a `goto` one of them starts
+// supersedes it before it loads anything; `pushState` and `replaceState` are
+// shallow routing, which keeps the page state under the entry's states key and
+// the address of the page it was written over beside it. Like SvelteKit, it keeps
 // its place in history in memory and reads it back from an entry only when it
 // starts or a Back or Forward lands, and a landing on the entry of another
 // navigation is a navigation of its own -- and so is a landing on an entry of
@@ -57,6 +59,10 @@ let hasNavigated = false;
 let highestHistoryIndex = 0;
 
 const afterNavigateCallbacks = new Set<(navigation: AfterNavigate) => void>();
+const beforeNavigateCallbacks = new Set<(navigation: BeforeNavigate) => void>();
+// Every `goto` starts a navigation that supersedes the one still loading, the
+// way SvelteKit's navigation token does.
+let navigationsStarted = 0;
 
 // Every navigation the fake router reported since it last started, in order,
 // with the address of the page it navigated to.
@@ -122,6 +128,7 @@ function stepHistoryIndexUp(): void {
 }
 
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
+	navigationsStarted += 1;
 	if (!options.replaceState) {
 		stepHistoryIndexUp();
 		currentNavigationIndex += 1;
@@ -188,16 +195,37 @@ function moveWithTraversal(event: PopStateEvent): void {
 	}
 	const from = fakePage.url;
 	const pageUrl = landing[ROUTER_PAGE_URL];
+	const landedPage = new URL(typeof pageUrl === 'string' ? pageUrl : location.href);
+	const landedState = (landing[ROUTER_STATES] ?? {}) as App.PageState;
 	const navigationIndex = routerIndex(landing, ROUTER_NAVIGATION_INDEX);
 	const onlyHashChanges = withoutHash(location) === withoutHash(from);
 	const shallow = navigationIndex === currentNavigationIndex && (hasNavigated || onlyHashChanges);
 	currentHistoryIndex = historyIndex;
-	fakePage.url = new URL(typeof pageUrl === 'string' ? pageUrl : location.href);
-	fakePage.state = (landing[ROUTER_STATES] ?? {}) as App.PageState;
-	if (shallow || navigationIndex === undefined) return;
+	if (shallow || navigationIndex === undefined) {
+		fakePage.url = landedPage;
+		fakePage.state = landedState;
+		return;
+	}
 	currentNavigationIndex = navigationIndex;
 	hasNavigated = true;
+	if (supersededBeforeLoading(from, landedPage)) return;
+	fakePage.url = landedPage;
+	fakePage.state = landedState;
 	reportNavigation('popstate', from);
+}
+
+function supersededBeforeLoading(from: URL, to: URL): boolean {
+	const started = navigationsStarted;
+	const navigation = {
+		type: 'popstate',
+		from: navigationTarget(from),
+		to: navigationTarget(to),
+		willUnload: false,
+		cancel: () => undefined,
+		complete: Promise.resolve()
+	} as BeforeNavigate;
+	for (const callback of beforeNavigateCallbacks) callback(navigation);
+	return navigationsStarted !== started;
 }
 
 window.addEventListener('popstate', followTraversal);
@@ -209,6 +237,17 @@ function fakeAfterNavigate(callback: (navigation: AfterNavigate) => void): void 
 	});
 }
 
+// What the app layout's `beforeNavigate` hears, for a test that mounts no
+// layout; the returned function stops it.
+export function followBeforeNavigate(callback: (navigation: BeforeNavigate) => void): () => void {
+	beforeNavigateCallbacks.add(callback);
+	return () => beforeNavigateCallbacks.delete(callback);
+}
+
+function fakeBeforeNavigate(callback: (navigation: BeforeNavigate) => void): void {
+	onMount(() => followBeforeNavigate(callback));
+}
+
 export function fakeAppNavigation() {
 	return {
 		goto: vi.fn(fakeGoto),
@@ -218,7 +257,8 @@ export function fakeAppNavigation() {
 		replaceState: vi.fn((url: string | URL, state: App.PageState) =>
 			writeShallowEntry(url, state, 'replace')
 		),
-		afterNavigate: vi.fn(fakeAfterNavigate)
+		afterNavigate: vi.fn(fakeAfterNavigate),
+		beforeNavigate: vi.fn(fakeBeforeNavigate)
 	};
 }
 

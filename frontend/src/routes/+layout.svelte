@@ -1,7 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import '../app.css';
-	import { afterNavigate, goto } from '$app/navigation';
+	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
 	import { signInAddress } from '$lib/api/fetch';
@@ -32,7 +32,7 @@
 	} from '$lib/stores/navigation';
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
-	import { stampNavigatedEntry } from '$lib/history/historyController';
+	import { mountRouteOfLandedAddress, stampNavigatedEntry } from '$lib/history/historyController';
 	import {
 		startLibraryResourceSync,
 		stopLibraryResourceSync,
@@ -149,12 +149,15 @@
 
 	// Every entry a navigation writes gets its history entry id, and library
 	// history -- shallow routing, which waits for the router -- goes once the
-	// first navigation it reports, the page it started on, has its id back.
+	// first navigation it reports, the page it started on, has its id back. A
+	// Back or Forward the router would mount under another address than the
+	// one it lands on mounts the route of that address instead.
 	const reportRouterStarted = holdLibraryHistoryUntilRouterStarts();
 	afterNavigate((navigation) => {
 		stampNavigatedEntry(navigation.type);
 		reportRouterStarted();
 	});
+	beforeNavigate(mountRouteOfLandedAddress);
 
 	// The live-sync stream and the history listener outlive a route swap
 	// between the library's three addresses, so this layout owns them rather

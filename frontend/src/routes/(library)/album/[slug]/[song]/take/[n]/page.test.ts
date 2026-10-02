@@ -1,4 +1,4 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { mountAddressRoute } from '$lib/test-utils/library-history';
 import {
 	makeAlbum as album,
 	makeGeneration as generation,
@@ -34,16 +34,18 @@ const api = vi.hoisted(() => ({
 }));
 
 const routeParams = vi.hoisted(() => ({ slug: 'anfield', song: 'stadion-lauf-a', n: '1' }));
-const routeSearch = vi.hoisted(() => new URLSearchParams());
 
-vi.mock('$app/state', () => ({
-	page: {
-		params: routeParams,
-		get url() {
-			return { searchParams: routeSearch };
+vi.mock('$app/state', async () => {
+	const { fakePage } = await import('$lib/test-utils/app-navigation');
+	return {
+		page: {
+			params: routeParams,
+			get url() {
+				return fakePage.url;
+			}
 		}
-	}
-}));
+	};
+});
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
 vi.mock('$app/navigation', async () =>
@@ -153,8 +155,7 @@ function coldTabAt(pathname: string): void {
 	routeParams.slug = albumSlug;
 	routeParams.song = songSlug ?? '';
 	routeParams.n = takeNumber ?? '';
-	routeSearch.forEach((_, key) => routeSearch.delete(key));
-	replaceHistoryEntry(pathname);
+	mountAddressRoute(pathname);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);
