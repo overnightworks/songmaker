@@ -53,7 +53,15 @@ interface Recording {
 	inFlight: Set<EventKey>;
 	taken: Set<EventKey>;
 	written: Set<EventKey>;
+	lastWrite: number;
 	openGap: TimerGap | null;
+}
+
+// What storage holds for one user: the events of every page, and for each
+// page that wrote recently the number of its last write this value grew from.
+interface StoredBuffer {
+	events: BufferedEvent[];
+	grownFrom: Record<string, number>;
 }
 
 // What became of one report: the server is done with it, wants it again
@@ -68,6 +76,8 @@ const EVENTS_PER_REPORT = 100;
 // events when the page is going. A send before the page goes therefore stops
 // at that budget and leaves the rest in the buffer for the next start.
 const KEEPALIVE_BODY_BUDGET_BYTES = 64 * 1024;
+// Pages of one user that a stored buffer remembers the last write of.
+const REMEMBERED_WRITERS = 20;
 const HEARTBEAT_MS = 15_000;
 const TIMER_GAP_MS = 30_000;
 const DETAIL_MAX_LENGTH = 200;
@@ -95,10 +105,11 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 		userId,
 		session: bootFacts(),
 		nextSequence: 0,
-		events: readEvents(userId),
+		events: readBuffer(userId).events,
 		inFlight: new Set(),
 		taken: new Set(),
 		written: new Set(),
+		lastWrite: 0,
 		openGap: null
 	};
 	recording = started;
@@ -343,15 +354,29 @@ function storageKey(userId: string): string {
 	return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
-function readEvents(userId: string): BufferedEvent[] {
+const EMPTY_BUFFER: StoredBuffer = { events: [], grownFrom: {} };
+
+function readBuffer(userId: string): StoredBuffer {
 	const stored = readStorage(storageKey(userId));
-	if (stored === null) return [];
+	if (stored === null) return EMPTY_BUFFER;
 	try {
 		const parsed: unknown = JSON.parse(stored);
-		return Array.isArray(parsed) ? parsed.filter(isBufferedEvent).slice(-BUFFER_CAPACITY) : [];
+		if (typeof parsed !== 'object' || parsed === null) return EMPTY_BUFFER;
+		const { events, grownFrom } = parsed as Partial<Record<keyof StoredBuffer, unknown>>;
+		return {
+			events: Array.isArray(events) ? events.filter(isBufferedEvent).slice(-BUFFER_CAPACITY) : [],
+			grownFrom: lastWritesIn(grownFrom)
+		};
 	} catch {
-		return [];
+		return EMPTY_BUFFER;
 	}
+}
+
+function lastWritesIn(value: unknown): Record<string, number> {
+	if (typeof value !== 'object' || value === null) return {};
+	return Object.fromEntries(
+		Object.entries(value).filter((entry): entry is [string, number] => typeof entry[1] === 'number')
+	);
 }
 
 function isBufferedEvent(value: unknown): value is BufferedEvent {
@@ -366,36 +391,64 @@ function isBufferedEvent(value: unknown): value is BufferedEvent {
 }
 
 function writeEvents(from: Recording, reinstated: BufferedEvent[] = []): void {
-	from.events = mergedWithStored(from, reinstated).slice(-BUFFER_CAPACITY);
-	if (writeStorage(storageKey(from.userId), JSON.stringify(from.events)))
+	const stored = readBuffer(from.userId);
+	from.events = mergedWithStored(from, stored, reinstated).slice(-BUFFER_CAPACITY);
+	const write = from.lastWrite + 1;
+	const buffer: StoredBuffer = {
+		events: from.events,
+		grownFrom: withLastWrite(stored.grownFrom, from.session.session_id, write)
+	};
+	if (writeStorage(storageKey(from.userId), JSON.stringify(buffer))) {
+		from.lastWrite = write;
 		from.written = new Set(from.events.filter((buffered) => isOwn(from, buffered)).map(keyOf));
+	}
+}
+
+function withLastWrite(
+	grownFrom: Record<string, number>,
+	sessionId: string,
+	write: number
+): Record<string, number> {
+	const others = Object.entries(grownFrom).filter(([writer]) => writer !== sessionId);
+	const latest: [string, number] = [sessionId, write];
+	return Object.fromEntries([...others, latest].slice(-REMEMBERED_WRITERS));
 }
 
 // Another tab of the same user writes the same key, so a write starts from
 // what is stored now: storage owns everyone else's events, minus what this
-// page already sent of them, and this page owns its own session's events only
-// until they reach storage, since another tab may send them from there.
-function mergedWithStored(from: Recording, reinstated: BufferedEvent[]): BufferedEvent[] {
-	const stored = readEvents(from.userId);
-	const storedKeys = new Set(stored.map(keyOf));
+// page already sent of them, and this page owns its own session's events until
+// another tab sends them from storage.
+function mergedWithStored(
+	from: Recording,
+	stored: StoredBuffer,
+	reinstated: BufferedEvent[]
+): BufferedEvent[] {
+	const storedKeys = new Set(stored.events.map(keyOf));
 	for (const key of from.taken) if (!storedKeys.has(key)) from.taken.delete(key);
 	const others = [
-		...stored.filter((buffered) => !isOwn(from, buffered) && !from.taken.has(keyOf(buffered))),
+		...stored.events.filter(
+			(buffered) => !isOwn(from, buffered) && !from.taken.has(keyOf(buffered))
+		),
 		...reinstated.filter((buffered) => !isOwn(from, buffered) && !storedKeys.has(keyOf(buffered)))
 	];
 	const own = from.events.filter(
-		(buffered) => isOwn(from, buffered) && !sentByAnotherTab(from, buffered, storedKeys)
+		(buffered) => isOwn(from, buffered) && !sentByAnotherTab(from, buffered, stored, storedKeys)
 	);
 	return inSessionOrder([...others, ...own]);
 }
 
+// Tabs write storage without a lock, so a tab that had not yet seen this
+// page's last write may have written over it. Only a stored value grown from
+// that write tells by missing one of its events that another tab sent it.
 function sentByAnotherTab(
 	from: Recording,
 	buffered: BufferedEvent,
+	stored: StoredBuffer,
 	storedKeys: ReadonlySet<EventKey>
 ): boolean {
 	const key = keyOf(buffered);
-	return from.written.has(key) && !storedKeys.has(key);
+	const grownFromLastWrite = stored.grownFrom[from.session.session_id] === from.lastWrite;
+	return grownFromLastWrite && from.written.has(key) && !storedKeys.has(key);
 }
 
 function inSessionOrder(events: BufferedEvent[]): BufferedEvent[] {

@@ -79,6 +79,25 @@ function missHeartbeat(lateByMs: number): void {
 	vi.advanceTimersByTime(15_000);
 }
 
+// Runs `write` in a tab that has not yet seen what is stored now, as when two
+// tabs in different processes write in the same moment: its write lands on
+// top of the other tab's instead of growing from it.
+function writeUnseen(storedBefore: string | null, write: () => void): void {
+	const key = `playbackDiagnostics:${LISTENER}`;
+	const readStorage = Storage.prototype.getItem;
+	const staleRead = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(function (
+		this: Storage,
+		read: string
+	) {
+		return read === key ? storedBefore : readStorage.call(this, read);
+	});
+	try {
+		write();
+	} finally {
+		staleRead.mockRestore();
+	}
+}
+
 // Lets every answer the fake server gave reach the recorder.
 async function letTheServerAnswer(): Promise<void> {
 	await Promise.allSettled(fetchMock.mock.results.map((result) => result.value));
@@ -273,6 +292,35 @@ describe('playback diagnostics recorder', () => {
 
 		expect(sentDetails()).toEqual(['offline', 'hidden']);
 		expect(fetchMock.mock.calls.every(([, init]) => !init.keepalive)).toBe(true);
+	});
+
+	it('keeps an event another tab wrote over in the same moment', async () => {
+		const firstTab = recorder;
+		const stopFirstTab = firstTab.startPlaybackDiagnostics(LISTENER);
+		vi.resetModules();
+		const secondTab: Recorder = await import('./playbackDiagnostics');
+		const stopSecondTab = secondTab.startPlaybackDiagnostics(LISTENER);
+		await letTheServerAnswer();
+		firstTab.recordPlaybackEvent(note('first tab, before'));
+
+		const storedBefore = localStorage.getItem(`playbackDiagnostics:${LISTENER}`);
+		firstTab.recordPlaybackEvent(note('first tab, written over'));
+		writeUnseen(storedBefore, () => secondTab.recordPlaybackEvent(note('second tab, same moment')));
+		firstTab.recordPlaybackEvent(note('first tab, after'));
+		stopFirstTab();
+		stopSecondTab();
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(sentDetails().sort()).toEqual(
+			[
+				'first tab, before',
+				'first tab, written over',
+				'second tab, same moment',
+				'first tab, after'
+			].sort()
+		);
 	});
 
 	it('sends every event of two tabs of the same user exactly once, whichever tab writes last', async () => {
