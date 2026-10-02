@@ -56,6 +56,7 @@ export async function updateSong(
 		audio_duration?: number;
 		key_scale?: string;
 		generation_params?: import('./types').VersionGenerationParams | null;
+		new_version?: boolean;
 	}
 ): Promise<SongItem> {
 	return apiFetch<SongItem>(`/api/songs/${songId}`, {

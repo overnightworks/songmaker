@@ -49,11 +49,15 @@ interface SeededVersions {
 }
 
 /**
- * A song with two versions that both carry a take: v1 from the seed, v2 saved
- * over it with other lyrics and given a take of its own, so a save from the
- * editor makes v3 rather than overwriting a take-less v2 in place.
+ * A song with two versions: v1 from the seed with its take, v2 saved over it
+ * with other lyrics -- with a take of its own unless `secondVersionTaken` is
+ * false, which leaves the take-less latest version every plain Save makes.
  */
-async function seedTwoVersions(page: Page, testInfo: TestInfo): Promise<SeededVersions> {
+async function seedTwoVersions(
+	page: Page,
+	testInfo: TestInfo,
+	secondVersionTaken = true
+): Promise<SeededVersions> {
 	const library = readSeededLibrary();
 	// A per-attempt title: a CI retry re-seeding the same title into the same
 	// shared album would leave two rows starting with it.
@@ -64,6 +68,7 @@ async function seedTwoVersions(page: Page, testInfo: TestInfo): Promise<SeededVe
 		data: { lyrics: SECOND_VERSION_LYRICS }
 	});
 	expect(saved.ok(), `Saving v2 failed: ${await saved.text()}`).toBeTruthy();
+	if (!secondVersionTaken) return { songId, title, albumId: library.songPhoneAlbumId };
 	const jobId = await seedRunningGenerationJob(songId, {
 		progress: 0.5,
 		takeIndex: 1,
@@ -136,46 +141,51 @@ async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 }
 
 test.describe('the versions of a song', () => {
-	test('tapping v1 loads it as the draft, and Generate makes v3 while v1 stays as it was', async ({
-		page
-	}, testInfo) => {
-		await reportOneWorkerOnline(page);
-		const song = await seedTwoVersions(page, testInfo);
-		await openSongEditor(page, song);
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+	for (const { secondVersionTaken, v2 } of [
+		{ secondVersionTaken: true, v2: 'v2 with a take' },
+		{ secondVersionTaken: false, v2: 'a take-less v2' }
+	]) {
+		test(`tapping v1 loads it as the draft, and Generate makes v3 while v1 and ${v2} stay as they were`, async ({
+			page
+		}, testInfo) => {
+			await reportOneWorkerOnline(page);
+			const song = await seedTwoVersions(page, testInfo, secondVersionTaken);
+			await openSongEditor(page, song);
+			await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
 
-		await tapVersion(page, 1);
+			await tapVersion(page, 1);
 
-		await expect(versionsSheet(page)).toBeHidden();
-		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
-		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
-		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
-		await expect(loadedToast(page)).toBeVisible();
-		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
+			await expect(versionsSheet(page)).toBeHidden();
+			await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
+			await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+			await expect(loadedToast(page)).toBeVisible();
+			expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 
-		// On the phone the toast stands over the Generate bar.
-		await loadedToast(page).getByRole('button', { name: TOAST_DISMISS_LABEL }).click();
-		const queued = page.waitForResponse(
-			(response) =>
-				response.url().endsWith(`/api/songs/${song.songId}/generate`) &&
-				response.request().method() === 'POST'
-		);
-		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate) })
-			.click();
-		// The worker-less stack may refuse the job itself; what counts here is
-		// the version Generate saved before it asked for one.
-		await queued;
+			// On the phone the toast stands over the Generate bar.
+			await loadedToast(page).getByRole('button', { name: TOAST_DISMISS_LABEL }).click();
+			const queued = page.waitForResponse(
+				(response) =>
+					response.url().endsWith(`/api/songs/${song.songId}/generate`) &&
+					response.request().method() === 'POST'
+			);
+			await workspace(page)
+				.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate) })
+				.click();
+			// The worker-less stack may refuse the job itself; what counts here is
+			// the version Generate saved before it asked for one.
+			await queued;
 
-		await expect(versionChip(page)).toHaveText(versionChipLabel(3, false));
-		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeHidden();
-		const [newest, second, first] = await readVersions(page, song.songId);
-		expect(newest?.version_number).toBe(3);
-		expect(newest?.lyrics).toBe(FIRST_VERSION_LYRICS);
-		expect(second?.lyrics).toBe(SECOND_VERSION_LYRICS);
-		expect(first?.version_number).toBe(1);
-		expect(first?.lyrics).toBe(FIRST_VERSION_LYRICS);
-	});
+			await expect(versionChip(page)).toHaveText(versionChipLabel(3, false));
+			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeHidden();
+			const [newest, second, first] = await readVersions(page, song.songId);
+			expect(newest?.version_number).toBe(3);
+			expect(newest?.lyrics).toBe(FIRST_VERSION_LYRICS);
+			expect(second?.lyrics).toBe(SECOND_VERSION_LYRICS);
+			expect(first?.version_number).toBe(1);
+			expect(first?.lyrics).toBe(FIRST_VERSION_LYRICS);
+		});
+	}
 
 	test('a dirty draft is asked about first; Cancel keeps it, Undo after Replace brings it back, Back closes the sheet', async ({
 		page

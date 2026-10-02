@@ -51,6 +51,7 @@
 		loadVersionAsDraft,
 		handleSave,
 		computeDraftVersionNumber,
+		draftSavesAsNewVersion,
 		discardDraft,
 		pinnedSeed,
 		editBpm,
@@ -188,7 +189,7 @@
 	// version number — the two diverge once any version has been deleted, so
 	// neither label below may use it. See computeDraftVersionNumber().
 	const draftVersionNumber = $derived(
-		computeDraftVersionNumber($versions, song?.generations ?? [])
+		computeDraftVersionNumber($versions, song?.generations ?? [], $draftSavesAsNewVersion)
 	);
 	const latestVersionNumber = $derived($versions[0]?.version_number ?? song?.version_count ?? 1);
 

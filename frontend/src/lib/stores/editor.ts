@@ -80,6 +80,9 @@ export const draftLoadedFrom = derived([editorState, isDirty], ([s, dirty]) =>
 	dirty ? s.loadedFrom : null
 );
 
+/** A draft loaded from an older version is saved as the next version, never over the latest. */
+export const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
+
 export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
 export const editPrompt = derived(editorState, (s) => s.draft.prompt);
 export const editBpm = derived(editorState, (s) => s.draft.bpm);
@@ -186,20 +189,21 @@ export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
 /**
  * Predicts the version number a save will produce, mirroring the backend's
  * `update_song()`: the highest existing version is overwritten in place
- * (its own number, no increment) when it has no takes yet; otherwise a save
- * creates `version_number + 1`. `versions` must be newest-first, matching
+ * (its own number, no increment) when it has no takes yet and the save does
+ * not ask for a new version; otherwise a save creates `version_number + 1`. `versions` must be newest-first, matching
  * `fetchVersions()`. Never derive this from `song.version_count` — that is a
  * *count* of surviving versions, not the highest version number, and the two
  * diverge as soon as any version has been deleted.
  */
 export function computeDraftVersionNumber(
 	versions: VersionItem[],
-	generations: GenerationItem[]
+	generations: GenerationItem[],
+	savesAsNewVersion: boolean
 ): number {
 	const latest = versions[0];
 	if (!latest) return 1;
 	const latestHasTakes = generations.some((g) => g.version_number === latest.version_number);
-	return latestHasTakes ? latest.version_number + 1 : latest.version_number;
+	return latestHasTakes || savesAsNewVersion ? latest.version_number + 1 : latest.version_number;
 }
 
 /**
@@ -216,7 +220,8 @@ export async function handleSave(songId: string): Promise<SongItem> {
 		bpm: draft.bpm,
 		audio_duration: draft.audio_duration,
 		key_scale: draft.key_scale,
-		generation_params: draft.genParams
+		generation_params: draft.genParams,
+		new_version: get(draftSavesAsNewVersion)
 	});
 	editorState.update((s) => ({ ...s, saved: { ...s.draft }, loadedFrom: null }));
 	replaceSongInList(updated);

@@ -566,6 +566,13 @@ class SongUpdateRequest(BaseModel):
     key_scale: str | None = Field(None, max_length=10)
     vocal_language: str | None = Field(None, max_length=10)
     generation_params: GenerationParams | None = None
+    new_version: bool = Field(
+        False,
+        description=(
+            "Save as the next version even when the latest version has no takes yet, "
+            "so a draft loaded from an older version never overwrites the latest one."
+        ),
+    )
 
 
 class SongMoveRequest(BaseModel):

@@ -1028,6 +1028,7 @@ export interface SongUpdateRequest {
 	key_scale?: string | null;
 	vocal_language?: string | null;
 	generation_params?: VersionGenerationParams | null;
+	new_version: boolean;
 }
 
 export interface StatusResponse {

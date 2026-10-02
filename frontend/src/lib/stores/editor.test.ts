@@ -202,6 +202,22 @@ describe('loadVersionAsDraft', () => {
 		expect(get(isDirty)).toBe(false);
 	});
 
+	it.each([
+		{ draft: 'a loaded older version', load: true, newVersion: true },
+		{ draft: 'an edit of the latest version', load: false, newVersion: false }
+	])('saving $draft asks for a new version: $newVersion', async ({ load, newVersion }) => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		openSongWithTwoVersions();
+		if (load) loadVersionAsDraft(older);
+		else setDraftLyrics('an edited line');
+		await handleSave('s1');
+		expect(updateSong).toHaveBeenLastCalledWith(
+			's1',
+			expect.objectContaining({ new_version: newVersion })
+		);
+	});
+
 	it('the hint goes once the loaded draft is saved', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
@@ -276,7 +292,7 @@ describe('computeDraftVersionNumber', () => {
 		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
 		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 2 })];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(3);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(3);
 	});
 
 	it('predicts the current version number when the take-less latest version will be overwritten in place', () => {
@@ -285,7 +301,14 @@ describe('computeDraftVersionNumber', () => {
 		const versions = [makeVersion()];
 		const generations: GenerationItem[] = [];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(1);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(1);
+	});
+
+	it('predicts version_number + 1 when a loaded draft is saved over a take-less latest version', () => {
+		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
+		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 1 })];
+
+		expect(computeDraftVersionNumber(versions, generations, true)).toBe(3);
 	});
 
 	it('predicts from the highest surviving version_number, not the count, after a middle version was deleted', () => {
@@ -297,11 +320,11 @@ describe('computeDraftVersionNumber', () => {
 			makeGeneration({ seed: null, created_at: '', id: 'g2' })
 		];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(4);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(4);
 	});
 
 	it('returns 1 when the song has no versions yet', () => {
-		expect(computeDraftVersionNumber([], [])).toBe(1);
+		expect(computeDraftVersionNumber([], [], false)).toBe(1);
 	});
 });
 
