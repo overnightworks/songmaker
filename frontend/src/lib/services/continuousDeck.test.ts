@@ -233,6 +233,16 @@ function concatenated(chunks: Uint8Array[]): Uint8Array {
 	return whole;
 }
 
+// A deep toEqual walks a typed array one element at a time, which takes
+// seconds for a take-sized file under coverage instrumentation.
+function firstDifferingByte(actual: Uint8Array, expected: Uint8Array): number | null {
+	const shorter = Math.min(actual.byteLength, expected.byteLength);
+	for (let index = 0; index < shorter; index += 1) {
+		if (actual[index] !== expected[index]) return index;
+	}
+	return actual.byteLength === expected.byteLength ? null : shorter;
+}
+
 const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('ContinuousDeck', () => {
@@ -384,7 +394,7 @@ describe('ContinuousDeck', () => {
 			{ url: '/audio/take.mp3', range: null },
 			{ url: '/audio/take.mp3', range: 'bytes=300000-' }
 		]);
-		expect(concatenated(buffer.appended)).toEqual(file);
+		expect(firstDifferingByte(concatenated(buffer.appended), file)).toBeNull();
 		expect(audio.src).toBe(OBJECT_URL);
 	});
 
