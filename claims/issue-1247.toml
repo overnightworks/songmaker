@@ -1,0 +1,7 @@
+claim_id = "005405b38f7e4cd9bf862ae01a2d2ffe"
+agent = "claude-head"
+role = "builder"
+base = "03a12afa5e0826633bc81523d1de8bd246ad08cf"
+branch = "claude-head/issue-1247-continuous-deck-engine"
+scope = ["frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts", "scripts/dead-exports.allow"]
+opened_commit = "89c546ccdc7824b6e72ea6fe1f0b2d5cf339ee28"
