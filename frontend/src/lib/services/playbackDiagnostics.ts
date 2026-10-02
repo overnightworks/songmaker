@@ -1,5 +1,6 @@
 import { addCsrfToken } from '$lib/api/fetch';
 import type { PlaybackDiagnosticEvent, PlaybackDiagnosticsReport } from '$lib/api/types';
+import { PLAYBACK_DIAGNOSTICS_PATH } from '$lib/constants';
 
 // A transient recorder for #1187: what the player and the page did on the
 // listener's phone, written down per user on this device so that it survives
@@ -41,7 +42,6 @@ interface Recording {
 	inFlight: Set<BufferedEvent>;
 }
 
-const ENDPOINT = '/api/playback-diagnostics';
 const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
 const BUFFER_CAPACITY = 500;
 const EVENTS_PER_REPORT = 100;
@@ -243,7 +243,7 @@ async function post(body: string, keepalive: boolean): Promise<boolean> {
 		'POST'
 	);
 	try {
-		const response = await fetch(ENDPOINT, init);
+		const response = await fetch(PLAYBACK_DIAGNOSTICS_PATH, init);
 		return response.status < 500 && !STATUSES_KEEPING_THE_EVENTS.has(response.status);
 	} catch {
 		return false;
