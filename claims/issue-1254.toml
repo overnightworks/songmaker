@@ -1,0 +1,8 @@
+claim_id = "edbd013830d94963a247e4e8627707c1"
+agent = "claude-head"
+role = "builder"
+base = "a7e7e7a016f2081f3dce3634b32b94bce4f1b548"
+branch = "claude-head/issue-1254-continuous-deck-player"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/playback-diagnostics.spec.ts", "frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts", "frontend/src/lib/services/mediaSession.test.ts", "frontend/src/lib/services/mediaSession.ts", "frontend/src/lib/services/playbackDiagnostics.test.ts", "frontend/src/lib/services/playbackDiagnostics.ts", "frontend/src/lib/services/queueStreamEngine.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "b005c785b4851b987d885bd17c3deb58a5bd3c27"
+whole_reason = "wiring the continuous deck into the player across the player service, deck, queue store, media session, diagnostics recorder and the e2e proof"
