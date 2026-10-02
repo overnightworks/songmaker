@@ -564,6 +564,7 @@ class SongUpdateRequest(BaseModel):
     bpm: int | None = Field(None, ge=0, le=999)
     audio_duration: int | None = Field(None, ge=0, le=600)
     key_scale: str | None = Field(None, max_length=10)
+    vocal_language: str | None = Field(None, max_length=10)
     generation_params: GenerationParams | None = None
 
 

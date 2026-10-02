@@ -199,6 +199,7 @@ def api_update_song(
         "bpm": req.bpm,
         "audio_duration": req.audio_duration,
         "key_scale": req.key_scale,
+        "vocal_language": req.vocal_language,
     }
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_json(req.generation_params)
