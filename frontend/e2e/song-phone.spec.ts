@@ -46,6 +46,7 @@ import {
 import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
+	nowPlayingOpenSourceLabel,
 	nowPlayingTakeLabel,
 	takeGroupLabel,
 	takeRowLabel
@@ -79,6 +80,7 @@ const ACCOUNT_SECTION = 'Account';
 const SONG_PHONE_VERSION_NUMBER = 7;
 const SONG_PHONE_TAKE_COUNT = 2;
 const SECOND_TAKE_LABEL = nowPlayingTakeLabel(SONG_PHONE_VERSION_NUMBER, SONG_PHONE_TAKE_COUNT);
+const PLAYS_FROM_AN_ALBUM = new RegExp(`^${nowPlayingOpenSourceLabel('album', '.+')}$`);
 const RUNNING_JOB_TAKE_INDEX = 1;
 const RUNNING_JOB_TAKE_COUNT = 2;
 // A cold start: the job begins by loading the model, which names no percent
@@ -171,16 +173,10 @@ test.describe('song page at phone width', () => {
 		// is current rather than naming Edit and Takes separately.
 		const panel = page.getByRole('tabpanel');
 
-		// Opens through the album's own song row (selectSong), not a direct deep
-		// link to the song address: only that in-app selection sets
-		// selectedAlbumId (navigation.ts's applySelectedSong), which is what
-		// playing a take needs to queue from this album rather than falling
-		// back to the library-wide pool — the same real path a musician walks
-		// from the rail into an album into a song.
-		await page.goto(`/album/${library.songPhoneAlbumId}`);
-		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
-			.click();
+		// A cold open of the song's own address (a reload, a shared link, a
+		// bookmark) stands in its album exactly as a track-list open does, so
+		// a non-pick take queues the album, not the library pool (#997).
+		await page.goto(songAddress);
 		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
@@ -207,6 +203,7 @@ test.describe('song page at phone width', () => {
 			.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
 			.click();
 		const nowPlaying = page.getByRole('dialog', { name: songTitle });
+		await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
 		await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
 		await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
 		await expect(nowPlaying).toBeHidden();

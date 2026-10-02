@@ -30,7 +30,8 @@ import {
 	resetLibrarySearchForTests
 } from '$lib/stores/librarySearch';
 import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded, songList } from '$lib/stores/libraryData';
-import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
+import { selectSong } from '$lib/stores/navigation';
+import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stores/player';
 import {
 	playlistList,
 	playlistLoad,
@@ -76,6 +77,8 @@ vi.mock('$lib/api/client', () => ({
 	fetchPlaylist: (...args: unknown[]) => fetchPlaylist(...args),
 	fetchSongs: (...args: unknown[]) => fetchSongs(...args),
 	fetchSong: (...args: unknown[]) => fetchSong(...args),
+	fetchLastFailedGeneration: vi.fn().mockResolvedValue(null),
+	fetchActiveGeneration: vi.fn().mockResolvedValue(null),
 	createPlaylist: vi.fn(),
 	deletePlaylistApi: vi.fn(),
 	updatePlaylist: vi.fn(),
@@ -162,6 +165,7 @@ beforeEach(() => {
 	albumList.set([]);
 	allAlbumsLoad.set({ status: 'idle', error: null });
 	songList.set([]);
+	selectedAlbumId.set(null);
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	playlistLoad.set({ status: 'idle', error: null });
@@ -1096,6 +1100,72 @@ describe('openSongAddress', () => {
 
 		expect(get(selectedGenerationId)).toBe('g1');
 		expect(get(detailTab)).toBe('takes');
+	});
+});
+
+// The album a song belongs to is the queue its takes play in (#997): a song
+// reached by its address must stand in its album exactly as one opened from
+// the album's track list does.
+describe('a song opened from its address sets its album', () => {
+	it.each([
+		{
+			way: 'a deep link',
+			open: async () => {
+				fetchSongs.mockResolvedValueOnce({
+					...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', generation_count: 0 })]),
+					limit: 200
+				});
+				replaceHistoryEntry('/album/a9/tide');
+				await openSongAddress('a9', 'tide');
+			}
+		},
+		{
+			way: 'a reload',
+			open: async () => {
+				replaceHistoryEntry('/album/a9/s9', {
+					...libraryRootState(),
+					surface: 'detail',
+					collection: { kind: 'album', id: 'a9' },
+					songId: 's9'
+				});
+				await hydrateLibraryFromHistory();
+			}
+		}
+	])('through $way', async ({ open }) => {
+		await open();
+
+		expect(get(selectedSongId)).toBe('s9');
+		expect(get(selectedAlbumId)).toBe('a9');
+	});
+
+	it('leaves the album of a song tapped while that restore still waited', async () => {
+		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
+		fetchAlbum.mockImplementationOnce(
+			() =>
+				new Promise<AlbumItem>((resolve) => {
+					resolveAlbum = resolve;
+				})
+		);
+		const tide = song({ id: 's9', album_id: 'a9', generation_count: 0 });
+		fetchSongs.mockImplementation(async (albumId: string | null) => ({
+			...emptyPage(albumId === 'a2' ? [] : [tide]),
+			limit: 200
+		}));
+		songList.set([tide]);
+		const restore = applyLibraryHistory({
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: 'a9' },
+			songId: 's9'
+		});
+		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
+
+		await selectSong('s2', song({ id: 's2', album_id: 'a2', generation_count: 0 }));
+		resolveAlbum?.(album({ id: 'a9' }));
+		await restore;
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(selectedAlbumId)).toBe('a2');
 	});
 });
 
