@@ -1,0 +1,8 @@
+claim_id = "e4dcde5f7bb54d8e9b35a46be303e82e"
+agent = "claude-head"
+role = "builder"
+base = "28f086bd34973a0ad6ce0d0932fc9fd8b1ca2382"
+branch = "claude-head/issue-1258-history-route-convergence"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/src/lib/components/shell/RailDrawer.svelte", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/routes/(library)/+page.svelte", "frontend/src/routes/(library)/page.test.ts", "frontend/src/routes/+layout.svelte"]
+opened_commit = "53be99e052c01fa0d5f2923d584a0344596a6580"
+whole_reason = "route convergence across the history owner, the library context, navigation, the drawer and their tests"
