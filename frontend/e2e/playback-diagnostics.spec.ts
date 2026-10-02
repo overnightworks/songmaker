@@ -10,7 +10,10 @@ import { accountCircle } from './helpers';
  * listener and across a page that hides and then reloads.
  */
 
-/** More than the newest 500 a buffer keeps, so the hide fills its keepalive budget. */
+/** The newest events a listener's buffer keeps. */
+const BUFFER_CAPACITY = 500;
+
+/** More than a buffer keeps, so the hide fills its keepalive budget. */
 const EVENTS_BEFORE_THE_HIDE = 620;
 
 /** Three times the network goes and comes back: six events per tab. */
@@ -85,7 +88,7 @@ test('two tabs of one listener each report every time the network went and came 
 	await expect.poll(networkEventsPerTab).toEqual([2 * NETWORK_DROPS, 2 * NETWORK_DROPS]);
 });
 
-test('a page that hides and then reloads sends every event it recorded exactly once', async ({
+test('a page that hides and then reloads sends every event its buffer kept exactly once', async ({
 	page
 }) => {
 	// The trace lives in the tab's sessionStorage, so the sends of the page that
@@ -148,7 +151,25 @@ test('a page that hides and then reloads sends every event it recorded exactly o
 	await expect.poll(pageHides).toHaveProperty('size', 1);
 	await expect.poll(hiddenAgain).toBeGreaterThanOrEqual(2);
 
-	const keys = (await sentEvents()).map((event) => `${event.session}:${event.sequence}`);
+	const sent = await sentEvents();
+	const keys = sent.map((event) => `${event.session}:${event.sequence}`);
 	const sentTwice = keys.filter((key, index) => keys.indexOf(key) !== index);
 	expect(sentTwice).toEqual([]);
+
+	const [reloadedSession] = await pageHides();
+	const ofReloadedSession = sent.filter((event) => event.session === reloadedSession);
+	const sequences = [...new Set(ofReloadedSession.map((event) => event.sequence))].sort(
+		(a, b) => a - b
+	);
+	const hiddenAt = Math.min(
+		...ofReloadedSession
+			.filter((event) => event.kind === 'visibility_change')
+			.map((event) => event.sequence)
+	);
+	const oldestKept = hiddenAt - BUFFER_CAPACITY + 1;
+	const keptAndAfter = Array.from(
+		{ length: Math.max(...sequences) - oldestKept + 1 },
+		(_, offset) => oldestKept + offset
+	);
+	expect(sequences).toEqual(keptAndAfter);
 });
