@@ -137,14 +137,9 @@ const DIAGNOSED_MEDIA_EVENTS: readonly (keyof HTMLMediaElementEventMap)[] = [
 	'volumechange',
 	'waiting'
 ];
-const MEDIA_EVENTS_WITH_THEIR_OWN_KIND: ReadonlySet<string> = new Set<PlaybackDiagnosticKind>([
-	'play',
-	'pause',
-	'ended',
-	'waiting',
-	'stalled',
-	'error'
-]);
+const MEDIA_EVENTS_WITH_THEIR_OWN_KIND: ReadonlyMap<string, PlaybackDiagnosticKind> = new Map(
+	(['play', 'pause', 'ended', 'waiting', 'stalled', 'error'] as const).map((kind) => [kind, kind])
+);
 
 class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
@@ -893,10 +888,7 @@ class AudioPlayer {
 	private noteMediaEvent(el: HTMLAudioElement, name: keyof HTMLMediaElementEventMap): void {
 		const facts = [name, `network=${el.networkState}`, `buffered=${bufferedUntil(el).toFixed(1)}`];
 		if (name === 'pause' && el === this.audio) facts.push(`source=${this.pauseSource(el)}`);
-		const kind = MEDIA_EVENTS_WITH_THEIR_OWN_KIND.has(name)
-			? (name as PlaybackDiagnosticKind)
-			: 'media_event';
-		this.note(kind, facts.join(' '), el);
+		this.note(MEDIA_EVENTS_WITH_THEIR_OWN_KIND.get(name) ?? 'media_event', facts.join(' '), el);
 	}
 
 	private note(
