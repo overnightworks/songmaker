@@ -12,9 +12,9 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 // `replaceState`, rewrites) a router entry and tells every mounted
 // `afterNavigate` callback; a Back or Forward that navigates tells every
 // mounted `beforeNavigate` callback first, and a `goto` one of them starts
-// supersedes it before it loads anything; `pushState` and `replaceState` are shallow
-// routing, which keeps the page state under the entry's states key and the
-// address of the page it was written over beside it. Like SvelteKit, it keeps
+// supersedes it before it loads anything; `pushState` and `replaceState` are
+// shallow routing, which keeps the page state under the entry's states key and
+// the address of the page it was written over beside it. Like SvelteKit, it keeps
 // its place in history in memory and reads it back from an entry only when it
 // starts or a Back or Forward lands, and a landing on the entry of another
 // navigation is a navigation of its own -- and so is a landing on an entry of
