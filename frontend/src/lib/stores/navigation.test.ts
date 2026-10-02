@@ -317,7 +317,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(historyEntry()).not.toHaveProperty('filter');
 	});
 
-	it('keeps a second write behind the crossing one it follows', async () => {
+	it('lands a second write right after the crossing one it follows', async () => {
 		replaceHistoryEntry('/album/a1');
 		songList.set([song({ ...navigableSongDefaults(), slug: 's1', generations: [generation()] })]);
 
@@ -326,8 +326,8 @@ describe('history writes across the route boundary (issue #269)', () => {
 		persistLibraryHistory();
 
 		// Pinning the take crosses a second time (issue #281: the take is its
-		// own route file too), queued behind the song's own crossing write.
-		await vi.waitFor(() => expect(historyEntry().generationId).toBe('g1'));
+		// own route file too), and stands at once like the song's own write.
+		expect(historyEntry().generationId).toBe('g1');
 		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
@@ -345,19 +345,40 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
 
-	// Issue #1165: the song shows the moment it opens, a task before the router
-	// has loaded its route, and a Back pressed then must step once.
-	it('lands a Back pressed while the song route still loads on the album it was opened from', async () => {
-		await openAlbum('a1');
-		const album = historyEntry();
+	// Issues #1165 and #1263: the song shows the moment it opens, before the
+	// router has loaded its route -- or even the route of the album it was
+	// opened from -- so its address moves with it, and a Back pressed then
+	// steps once, onto the album.
+	function nextRouteNeverLoads(): void {
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+	}
 
-		void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		await pressBack();
+	it.each([
+		{ stillLoading: "the song's route", openTheAlbum: () => openAlbum('a1') },
+		{
+			stillLoading: "the album's route",
+			openTheAlbum: () => {
+				nextRouteNeverLoads();
+				void openAlbum('a1');
+			}
+		}
+	])(
+		'lands a Back pressed while $stillLoading still loads on the album the song was opened from',
+		async ({ openTheAlbum }) => {
+			replaceHistoryEntry('/', libraryRootState());
+			await openTheAlbum();
+			const album = historyEntry();
+			nextRouteNeverLoads();
 
-		expect(window.location.pathname).toBe('/album/a1');
-		expect(historyEntry()).toEqual(album);
-	});
+			void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+
+			expect(window.location.pathname).toBe('/album/a1/s1');
+			expect(historyEntry().songId).toBe('s1');
+			await pressBack();
+			expect(window.location.pathname).toBe('/album/a1');
+			expect(historyEntry()).toEqual(album);
+		}
+	);
 
 	// An address its route stated as unknown or unreachable wrote no library
 	// state, so Back onto it must load that route again to state it once more
@@ -1399,7 +1420,7 @@ describe('revealPlayingSong', () => {
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		// The song's own address crosses the route boundary once; the take is
 		// its own route file too (issue #281), so pinning it crosses a second
-		// time, queued behind the first.
+		// time, right after the first.
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
