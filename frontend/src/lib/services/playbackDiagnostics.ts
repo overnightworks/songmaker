@@ -56,6 +56,10 @@ interface Recording {
 	openGap: TimerGap | null;
 }
 
+// What became of one report: the server is done with it, wants it again
+// later, or the page never read an answer.
+type ReportFate = 'done' | 'wanted_later' | 'unanswered';
+
 const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
 const BUFFER_CAPACITY = 500;
 const EVENTS_PER_REPORT = 100;
@@ -148,9 +152,12 @@ function recordPageEvent(kind: PlaybackDiagnosticKind, detail = ''): void {
 }
 
 // A hidden page may be frozen or killed before an ordinary request answers,
-// so only these last sends ask the browser to finish them on its own.
+// so only these last sends ask the browser to finish them on its own. Without
+// a network the browser refuses such a send at once, and a refusal the page
+// cannot tell from a delivery would lose the events; they wait for the next
+// start instead.
 function sendBeforeThePageGoes(): void {
-	if (recording !== null) sendWaitingEvents(recording, { keepalive: true });
+	if (recording !== null && navigator.onLine) sendWaitingEvents(recording, { keepalive: true });
 }
 
 function watchThePage(): () => void {
@@ -238,7 +245,9 @@ function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void 
 
 // The page may be gone before the answer comes, so what the browser takes
 // over leaves the buffer at once: a reload must not send it a second time.
-// Only an answer that reaches a living page puts a refused report back.
+// Chromium even fails the send of a page that is navigating away while it
+// still delivers it, so a send without an answer counts as sent; only a
+// refusal that reaches a living page puts the report back.
 function handOff(from: Recording, batches: BufferedEvent[][]): void {
 	const handedOff: BufferedEvent[][] = [];
 	for (const batch of batches) {
@@ -251,8 +260,8 @@ function handOff(from: Recording, batches: BufferedEvent[][]): void {
 			.finally(() => {
 				keepaliveBytesInFlight -= bodyBytes;
 			})
-			.then((done) => {
-				if (!done && recording === from) putBack(from, batch);
+			.then((fate) => {
+				if (fate === 'wanted_later' && recording === from) putBack(from, batch);
 			});
 	}
 	if (handedOff.length > 0) takeOut(from, handedOff.flat());
@@ -276,9 +285,9 @@ function reportBatches(events: BufferedEvent[]): BufferedEvent[][] {
 async function deliver(from: Recording, batch: BufferedEvent[]): Promise<void> {
 	const keys = batch.map(keyOf);
 	for (const key of keys) from.inFlight.add(key);
-	const done = await post(JSON.stringify(reportOf(batch)), false);
+	const fate = await post(JSON.stringify(reportOf(batch)), false);
 	for (const key of keys) from.inFlight.delete(key);
-	if (done && recording === from) takeOut(from, batch);
+	if (fate === 'done' && recording === from) takeOut(from, batch);
 }
 
 function takeOut(from: Recording, sent: BufferedEvent[]): void {
@@ -310,7 +319,7 @@ function reportOf(batch: BufferedEvent[]): PlaybackDiagnosticsReport {
 	};
 }
 
-async function post(body: string, keepalive: boolean): Promise<boolean> {
+async function post(body: string, keepalive: boolean): Promise<ReportFate> {
 	const init = addCsrfToken(
 		{
 			method: 'POST',
@@ -323,9 +332,10 @@ async function post(body: string, keepalive: boolean): Promise<boolean> {
 	);
 	try {
 		const response = await fetch(PLAYBACK_DIAGNOSTICS_PATH, init);
-		return response.status < 500 && !STATUSES_KEEPING_THE_EVENTS.has(response.status);
+		const wantedLater = response.status >= 500 || STATUSES_KEEPING_THE_EVENTS.has(response.status);
+		return wantedLater ? 'wanted_later' : 'done';
 	} catch {
-		return false;
+		return 'unanswered';
 	}
 }
 

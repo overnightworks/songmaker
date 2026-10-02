@@ -154,8 +154,8 @@ function isClosedOnPurpose(url: string): boolean {
 // The playback recorder (#1187) tells the server what it saw as the page
 // hides, so every reload or navigation away of a signed-in page sends one
 // report, and Chromium reports that send, cut from the page that made it, as
-// aborted. The recorder keeps every event the server did not confirm for its
-// next start, so the abort loses nothing.
+// aborted. The browser still delivers a keepalive send it cut from the page,
+// so the abort loses nothing.
 function isSentAsThePageLeaves(url: string): boolean {
 	return new URL(url).pathname === PLAYBACK_DIAGNOSTICS_PATH;
 }

@@ -12,8 +12,10 @@ let stopRecording: (() => void) | null = null;
 let visibility: DocumentVisibilityState = 'visible';
 let answerStatus = 204;
 let serverAnswers = true;
-const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => {
+let leavingPageLosesKeepaliveAnswers = false;
+const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
 	if (!serverAnswers) return new Promise<Response>(() => {});
+	if (leavingPageLosesKeepaliveAnswers && init.keepalive) throw new TypeError('Failed to fetch');
 	return new Response(null, { status: answerStatus });
 });
 
@@ -88,6 +90,7 @@ beforeEach(async () => {
 	fetchMock.mockClear();
 	answerStatus = 204;
 	serverAnswers = true;
+	leavingPageLosesKeepaliveAnswers = false;
 	visibility = 'visible';
 	Object.defineProperty(document, 'visibilityState', {
 		configurable: true,
@@ -238,6 +241,38 @@ describe('playback diagnostics recorder', () => {
 		await letTheServerAnswer();
 
 		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it('sends again on pagehide nothing the hide handed to the browser, though the leaving page never saw the answer', async () => {
+		leavingPageLosesKeepaliveAnswers = true;
+		startFor(LISTENER);
+		recorder.recordPlaybackEvent(note('handed off'));
+		hidePage();
+		await letTheServerAnswer();
+
+		window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+		await letTheServerAnswer();
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(sentDetails()).toEqual(['handed off', 'hidden', 'persisted=false']);
+	});
+
+	it('keeps the events for the next start when the page hides without a network', async () => {
+		const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+		startFor(LISTENER);
+		recorder.recordPlaybackEvent(note('offline'));
+		hidePage();
+		await letTheServerAnswer();
+		offline.mockRestore();
+
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(sentDetails()).toEqual(['offline', 'hidden']);
+		expect(fetchMock.mock.calls.every(([, init]) => !init.keepalive)).toBe(true);
 	});
 
 	it('sends every event of two tabs of the same user exactly once, whichever tab writes last', async () => {
