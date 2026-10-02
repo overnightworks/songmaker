@@ -96,6 +96,7 @@ songmaker_cli/main.py:_launcher # Cyclopts CLI dispatcher: app.meta.default
 songmaker_cli/main.py:list_users_cmd # Cyclopts CLI dispatcher: app.command(name='list-users')
 songmaker_cli/main.py:reset_password # Cyclopts CLI dispatcher: app.command(name='reset-password')
 songmaker_cli/music_worker.py:MusicWorkerSettings # arq CLI entry point selected by docker-compose.yml music-worker command
+songmaker_cli/playback_diagnostics_api.py:record_playback_diagnostics # HTTP dispatcher: router.post('/playback-diagnostics', status_code=status.HTTP_204_NO_CONTENT)
 songmaker_cli/playlist_api.py:api_add_album_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/album', responses={404: {'description': 'Playlist or album not found'}})
 songmaker_cli/playlist_api.py:api_add_generation_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/generation', responses={404: {'description': 'Playlist or generation not found'}})
 songmaker_cli/playlist_api.py:api_add_song_to_playlist # HTTP dispatcher: router.post('/playlists/{playlist_id}/entries/song', responses={400: {'description': 'Song has no playable take'}, 404: {'description': 'Playlist or song not found'}})

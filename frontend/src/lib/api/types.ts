@@ -567,6 +567,25 @@ export interface PinModelOnWorkerRequest {
 	mode: string;
 }
 
+export interface PlaybackDiagnosticEvent {
+	at_ms: number;
+	kind: 'promote' | 'fresh_load' | 'play' | 'play_rejected' | 'pause' | 'ended' | 'waiting' | 'stalled' | 'error' | 'retry' | 'give_up' | 'visibility_change' | 'page_hide' | 'page_show' | 'freeze' | 'resume' | 'timer_gap' | 'media_session_action';
+	take_id: string | null;
+	position: number;
+	ready_state: number;
+	deck: 'active' | 'standby';
+	visibility: 'visible' | 'hidden';
+	detail: string;
+}
+
+export interface PlaybackDiagnosticsReport {
+	session_id: string;
+	user_agent: string;
+	mse_mp3_supported: boolean;
+	was_discarded: boolean;
+	events: PlaybackDiagnosticEvent[];
+}
+
 export interface PlaylistAlbumSkipItem {
 	song_id: string;
 	title: string;
