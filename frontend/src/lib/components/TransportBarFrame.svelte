@@ -1,12 +1,15 @@
 <script lang="ts">
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		audioPlayer,
+		transportButtonLabel,
+		transportOffersPause,
+		type TransportState
+	} from '$lib/services/audioPlayer.svelte';
 	import {
 		NOW_PLAYING_LABEL,
 		NOW_PLAYING_SWIPE_RISE_PX,
-		TRANSPORT_PAUSE_LABEL,
-		TRANSPORT_PLAY_LABEL,
 		TRANSPORT_RETRY_LABEL
 	} from '$lib/constants';
 	import {
@@ -20,10 +23,10 @@
 	} from '$lib/utils/visualizer';
 
 	interface Props {
-		isPlaying: boolean;
-		isLoading: boolean;
-		isError: boolean;
+		transport: TransportState;
 		errorMsg?: string | null;
+		// A take waiting for the network keeps a small Retry beside its words.
+		onRetry: () => void;
 		currentTime: number;
 		duration: number;
 		formatTime: (seconds: number) => string;
@@ -55,10 +58,9 @@
 	}
 
 	let {
-		isPlaying,
-		isLoading,
-		isError,
+		transport,
 		errorMsg = null,
+		onRetry,
 		currentTime,
 		duration,
 		formatTime,
@@ -98,11 +100,18 @@
 	// its own press feedback.
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
-	const phoneFailureId = $props.id();
+	const isPlaying = $derived(transport === 'playing');
+	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
+	const isError = $derived(transport === 'failed');
+	const waitingForNetwork = $derived(transport === 'waiting-for-network');
+	const offersPause = $derived(transportOffersPause(transport));
+
+	const phoneNoticeId = $props.id();
 	const playbackFailure = $derived(isError ? errorMsg : null);
 	const nowPlayingTargetDescribedBy = $derived(
-		[nowPlayingTargetDescriptionId, playbackFailure && phoneFailureId].filter(Boolean).join(' ') ||
-			undefined
+		[nowPlayingTargetDescriptionId, (playbackFailure || waitingForNetwork) && phoneNoticeId]
+			.filter(Boolean)
+			.join(' ') || undefined
 	);
 
 	const viz = new AudioVisualizer();
@@ -244,18 +253,14 @@
 		class:playing={isPlaying}
 		class:errored={isError}
 		onclick={onTogglePlay}
-		aria-label={isError
-			? TRANSPORT_RETRY_LABEL
-			: isPlaying
-				? TRANSPORT_PAUSE_LABEL
-				: TRANSPORT_PLAY_LABEL}
+		aria-label={transportButtonLabel(transport)}
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>
 			{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
 					name="refresh-cw"
 					size={24}
-				/>{:else}<Icon name={isPlaying ? 'pause' : 'play'} size={26} />{/if}
+				/>{:else}<Icon name={offersPause ? 'pause' : 'play'} size={26} />{/if}
 		</span>
 	</button>
 	<button
@@ -268,6 +273,15 @@
 	>
 		<Icon name="skip-forward" size={21} />
 	</button>
+{/snippet}
+
+<!-- Calm words, not a failure: the network's return retries by itself, so
+	Retry is offered small and nobody is asked to press it. -->
+{#snippet waitingNotice(wordsId?: string)}
+	<span class="waiting-notice">
+		<span role="status" id={wordsId}>{errorMsg}</span>
+		<button type="button" class="waiting-retry" onclick={onRetry}>{TRANSPORT_RETRY_LABEL}</button>
+	</span>
 {/snippet}
 
 <svelte:document
@@ -314,7 +328,9 @@
 			<!-- The empty right side is only a wider tap target for the same
 				action, so keyboards and screen readers meet the one on the left.
 				It is also the only room wide enough to say why playback stopped. -->
-			{#if nowPlayingDisabled}
+			{#if waitingForNetwork}
+				<div class="phone-side">{@render waitingNotice(phoneNoticeId)}</div>
+			{:else if nowPlayingDisabled}
 				<span class="phone-side"></span>
 			{:else}
 				<button
@@ -323,7 +339,7 @@
 					tabindex="-1"
 					aria-hidden="true"
 				>
-					{#if playbackFailure}<span class="phone-failure" id={phoneFailureId}
+					{#if playbackFailure}<span class="phone-failure" id={phoneNoticeId}
 							>{playbackFailure}</span
 						>{/if}
 				</button>
@@ -349,6 +365,7 @@
 				{@render trackInfo(trackTitleGlowStyle, playbackFailure)}
 			</div>
 			<div class="timeline">
+				{#if waitingForNetwork}{@render waitingNotice()}{/if}
 				<span class="time">{formatTime(currentTime)}</span>
 				<input
 					class="timeline-range"
@@ -731,6 +748,32 @@
 		line-height: 1.25;
 		color: #d34;
 		overflow: hidden;
+	}
+	.waiting-notice {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 4px 10px;
+		font-size: 0.73rem;
+		line-height: 1.25;
+		color: var(--text-muted);
+	}
+	.timeline .waiting-notice {
+		grid-column: 1 / -1;
+	}
+	.phone-side .waiting-notice {
+		height: 100%;
+		padding-left: 8px;
+	}
+	.waiting-retry {
+		min-height: 24px;
+		padding: 2px 10px;
+		border: 1px solid var(--border);
+		border-radius: var(--btn-radius-sm);
+		background: none;
+		color: var(--text);
+		font: inherit;
+		cursor: pointer;
 	}
 	.open-now-playing {
 		margin: 0;

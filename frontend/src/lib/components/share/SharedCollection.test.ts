@@ -180,6 +180,25 @@ describe('SharedCollection track rows', () => {
 		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
 	});
 
+	it('offers Pause in the header while a stalled take recovers, and a press pauses', async () => {
+		vi.stubGlobal(
+			'matchMedia',
+			vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+		);
+		const target = await renderShare(null, [], 'playlist', [sharedTrack('e1', 'Tide')]);
+		target.querySelector<HTMLButtonElement>('.track-row')?.click();
+		await tick();
+		const header = target.querySelector('.collection-header');
+		if (!header) throw new Error('Expected the collection header');
+
+		audioPlayer.status = 'buffering';
+		await tick();
+		getByRoleButton(header, collectionPauseLabel('playlist')).click();
+		await tick();
+
+		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+	});
+
 	it('dims the header play circle of a share without audio', async () => {
 		const target = await renderShare(null);
 
