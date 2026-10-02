@@ -1,7 +1,0 @@
-claim_id = "b873066846ad42528538257f50e1ab37"
-agent = "claude-head"
-role = "builder"
-base = "6a0b2e7048669ef3aaaf7f66b91c578bf6fb9d5b"
-branch = "claude-head/issue-1237-history-storage-fallback"
-scope = ["frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts"]
-opened_commit = "1b608f99607cb935f9f7e2cf439719e2399b9612"
