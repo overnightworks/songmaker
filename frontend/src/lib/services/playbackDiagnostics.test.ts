@@ -66,6 +66,12 @@ function sentDetails(): string[] {
 	return sentReports().flatMap((report) => report.events.map((event) => event.detail));
 }
 
+// One heartbeat that fires `lateByMs` after it should have, as after a frozen page.
+function missHeartbeat(lateByMs: number): void {
+	vi.setSystemTime(Date.now() + lateByMs);
+	vi.advanceTimersByTime(15_000);
+}
+
 // Lets every answer the fake server gave reach the recorder.
 async function letTheServerAnswer(): Promise<void> {
 	await Promise.allSettled(fetchMock.mock.results.map((result) => result.value));
@@ -295,16 +301,34 @@ describe('playback diagnostics recorder', () => {
 	it('records a timer gap when much more time passed than the heartbeat asked for', async () => {
 		vi.useFakeTimers();
 		startFor(LISTENER);
-		vi.advanceTimersByTime(15_000);
-		vi.setSystemTime(Date.now() + 45_000);
-		vi.advanceTimersByTime(15_000);
+		missHeartbeat(45_000);
 		vi.useRealTimers();
 		hidePage();
 		await letTheServerAnswer();
 
 		const [gap] = sentReports()[0].events;
 		expect(gap.kind).toBe('timer_gap');
-		expect(gap.detail).toBe('elapsed_ms=60000');
+		expect(gap.detail).toBe('count=1 total_ms=60000');
+	});
+
+	it('merges consecutive timer gaps into one event until something else is recorded', async () => {
+		vi.useFakeTimers();
+		startFor(LISTENER);
+		missHeartbeat(45_000);
+		missHeartbeat(30_000);
+		missHeartbeat(20_000);
+		recorder.recordPlaybackEvent(note('woke up'));
+		missHeartbeat(45_000);
+		vi.useRealTimers();
+		hidePage();
+		await letTheServerAnswer();
+
+		expect(sentDetails()).toEqual([
+			'count=3 total_ms=140000',
+			'woke up',
+			'count=1 total_ms=60000',
+			'hidden'
+		]);
 	});
 
 	it('cuts a detail to the 200 characters the server accepts', async () => {

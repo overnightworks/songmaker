@@ -35,11 +35,19 @@ interface BufferedEvent {
 	event: PlaybackDiagnosticEvent;
 }
 
+// The page sleeping through one stretch: consecutive missed heartbeats.
+interface TimerGap {
+	recorded: BufferedEvent;
+	count: number;
+	totalMs: number;
+}
+
 interface Recording {
 	userId: string;
 	session: SessionFacts;
 	events: BufferedEvent[];
 	inFlight: Set<BufferedEvent>;
+	openGap: TimerGap | null;
 }
 
 const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
@@ -75,7 +83,8 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 		userId,
 		session: bootFacts(),
 		events: readEvents(userId),
-		inFlight: new Set()
+		inFlight: new Set(),
+		openGap: null
 	};
 	recording = started;
 	const stopWatching = watchThePage();
@@ -177,9 +186,35 @@ function startHeartbeat(): () => void {
 		const now = Date.now();
 		const elapsed = now - lastBeat;
 		lastBeat = now;
-		if (elapsed > TIMER_GAP_MS) recordPageEvent('timer_gap', `elapsed_ms=${elapsed}`);
+		if (elapsed > TIMER_GAP_MS) recordTimerGap(elapsed);
 	}, HEARTBEAT_MS);
 	return () => clearInterval(heartbeat);
+}
+
+// Chrome's intensive throttling misses a heartbeat every minute of a night, so
+// gaps with nothing recorded between them grow one event instead of filling the
+// ring and pushing the media evidence out of it.
+function recordTimerGap(elapsedMs: number): void {
+	if (recording === null) return;
+	const gap = recording.openGap;
+	if (gap !== null && continuesTheGap(recording, gap)) {
+		gap.count += 1;
+		gap.totalMs += elapsedMs;
+		gap.recorded.event.detail = timerGapDetail(gap);
+		writeEvents(recording);
+		return;
+	}
+	recordPageEvent('timer_gap', timerGapDetail({ count: 1, totalMs: elapsedMs }));
+	const recorded = recording.events.at(-1);
+	if (recorded !== undefined) recording.openGap = { recorded, count: 1, totalMs: elapsedMs };
+}
+
+function continuesTheGap(from: Recording, gap: TimerGap): boolean {
+	return from.events.at(-1) === gap.recorded && !from.inFlight.has(gap.recorded);
+}
+
+function timerGapDetail(gap: Pick<TimerGap, 'count' | 'totalMs'>): string {
+	return `count=${gap.count} total_ms=${gap.totalMs}`;
 }
 
 function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void {
