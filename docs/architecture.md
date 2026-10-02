@@ -1215,6 +1215,7 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
+| POST | `/api/playback-diagnostics` | user | Transient player-event upload for #1187 (CSRF via the `X-CSRF-Token` header, so the client sends a `keepalive` fetch, not `sendBeacon`). At most 500 events; answers 204 and writes one structured log line per event with the user id under logger `songmaker.playback_diagnostics`. Nothing is stored in PostgreSQL or Redis; the endpoint is deleted together with the client recorder when #1187 closes. |
 | * | `/api/admin/*` | admin | User CRUD, sessions, login attempts, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
