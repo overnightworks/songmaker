@@ -1,0 +1,8 @@
+claim_id = "f743b7ec7c6e4a948b26f935315e5310"
+agent = "claude-head"
+role = "builder"
+base = "ce94574505a1e31d236a77491c44d417c0184dfb"
+branch = "claude-head/issue-1262-versions-sheet-load"
+scope = ["frontend/e2e/song-versions.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/VersionsSheet.svelte", "frontend/src/lib/components/editor/VersionsSheet.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/contexts/generation-actions.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "6480245df85faebde06b7e8e0db3748edc342752"
+whole_reason = "version chip, sheet, load-as-draft, confirm, undo and hint across the song view, a new sheet, the editor store and an e2e spec"
