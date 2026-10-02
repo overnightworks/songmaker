@@ -45,6 +45,28 @@ function memoryStorage(): Pick<Storage, 'getItem' | 'setItem'> {
 	};
 }
 
+function storageQuotaExceeded(): DOMException {
+	return new DOMException('The quota has been exceeded.', 'QuotaExceededError');
+}
+
+function storageAccessDenied(): DOMException {
+	return new DOMException('Access is denied for this document.', 'SecurityError');
+}
+
+function sessionStorageRefusingWritesAfter(acceptedWrites: number): void {
+	const acceptWrite = Storage.prototype.setItem;
+	let writes = 0;
+	vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (
+		this: Storage,
+		key: string,
+		value: string
+	) {
+		writes += 1;
+		if (writes > acceptedWrites) throw storageQuotaExceeded();
+		acceptWrite.call(this, key, value);
+	});
+}
+
 describe('landing reducer', () => {
 	it('an own step lands on the expected id', () => {
 		const outcome = land(ledger({ stepBacks: [6] }), { id: 6 });
@@ -220,6 +242,77 @@ describe('history adapter', () => {
 
 		expect(landings.slice(1).map(({ stepOff }) => stepOff)).toEqual([true, false]);
 		expect(history.state['sveltekit:states'].entry).toEqual(page);
+	});
+
+	it('keeps stamping and pushing entries when session storage refuses writes', () => {
+		sessionStorageRefusingWritesAfter(0);
+		seedForeignEntry('/album/a');
+
+		const first = replaceEntry('/album/a', {});
+		const pushed = pushEntry('/album/b', {});
+
+		expect(first).toEqual({ id: 1 });
+		expect(pushed).toEqual({ id: 2 });
+		expect(standingEntry()).toEqual(pushed);
+	});
+
+	it('ids stay monotonic after session storage starts refusing writes', () => {
+		sessionStorageRefusingWritesAfter(2);
+
+		const ids = ['/album/a', '/album/b', '/album/c', '/album/d'].map(
+			(url) => pushEntry(url, {}).id
+		);
+
+		expect(ids).toEqual([1, 2, 3, 4]);
+	});
+
+	it('ids stay above the entry a reload lands on while session storage refuses writes', () => {
+		sessionStorageRefusingWritesAfter(0);
+		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+		resetHistoryControllerForTests();
+
+		const layer = pushEntry('/album/c', {}, 'now-playing');
+
+		expect(layer.id).toBe(4);
+	});
+
+	it('ids stay above an entry Forward lands on after a reload while session storage refuses writes', async () => {
+		sessionStorageRefusingWritesAfter(0);
+		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
+		await traverse(() => history.back());
+		resetHistoryControllerForTests();
+		await traverse(() => history.forward());
+
+		const layer = pushEntry('/album/c', {}, 'now-playing');
+
+		expect(layer.id).toBe(4);
+	});
+
+	it.each([
+		['reaching session storage', () => vi.spyOn(window, 'sessionStorage', 'get')],
+		['reading session storage', () => vi.spyOn(Storage.prototype, 'getItem')],
+		['writing session storage', () => vi.spyOn(Storage.prototype, 'setItem')]
+	])(
+		'loads and keeps stamping entries when the browser denies %s',
+		async (_denied, spyOnStorageAccess) => {
+			spyOnStorageAccess().mockImplementation(() => {
+				throw storageAccessDenied();
+			});
+			vi.resetModules();
+
+			const loaded = await import('$lib/history/historyController');
+			const ids = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
+
+			expect(ids).toEqual([1, 2]);
+		}
+	);
+
+	it('a session storage write failing for another reason is not swallowed', () => {
+		vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+			throw new TypeError('broken storage');
+		});
+
+		expect(() => pushEntry('/album/a', {})).toThrow(/broken storage/);
 	});
 
 	it('an id-less entry on top gets its first id', () => {

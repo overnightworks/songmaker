@@ -92,7 +92,7 @@ export function land(ledger: HistoryLedger, landed: HistoryEntry | null): Landin
 // Read and incremented on every allocation, never cached: a reload, a
 // bfcache restore or a return from another document starts this module afresh
 // in the same tab, and must still never hand out an id an entry already has.
-export function allocateEntryId(storage: Pick<Storage, 'getItem' | 'setItem'>): number {
+export function allocateEntryId(storage: TabStorage): number {
 	const id = lastAllocatedEntryId(storage) + 1;
 	storage.setItem(ENTRY_ID_COUNTER_KEY, String(id));
 	return id;
@@ -102,12 +102,72 @@ function lastAllocatedEntryId(storage: Pick<Storage, 'getItem'>): number {
 	return storedCount(storage, ENTRY_ID_COUNTER_KEY, 'history entry counter');
 }
 
+// Storage that refused writes forgets the counter with the document, while the
+// tab's entries keep their ids: the counter catches up with every entry this
+// document meets, so an id it hands out never repeats or undercuts one below.
+// With storage that keeps the counter, no entry ever outranks it.
+function countEntryMet(storage: TabStorage, met: HistoryEntry | null): void {
+	if (met !== null && met.id > lastAllocatedEntryId(storage)) {
+		storage.setItem(ENTRY_ID_COUNTER_KEY, String(met.id));
+	}
+}
+
 function storedCount(storage: Pick<Storage, 'getItem'>, key: string, what: string): number {
 	const stored = storage.getItem(key) ?? '0';
 	if (!/^\d+$/.test(stored)) {
 		throw new Error(`The ${what} holds ${JSON.stringify(stored)}, not a count`);
 	}
 	return Number(stored);
+}
+
+type TabStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+// The names a browser refuses storage under: a full quota, a private mode that
+// offers storage but will not keep anything in it, or site data blocked so that
+// even reaching session storage is denied.
+const STORAGE_REFUSALS: ReadonlySet<string> = new Set(['QuotaExceededError', 'SecurityError']);
+
+function isStorageRefusal(error: unknown): boolean {
+	return error instanceof DOMException && STORAGE_REFUSALS.has(error.name);
+}
+
+// The tab's counts live in session storage so that a reload keeps them. Once
+// the browser refuses storage -- reaching it, reading it or writing it -- they
+// live in this document's memory instead, seeded by whatever storage still
+// gives and raised by every entry the document meets, rather than the page
+// failing to render. Storage is reached on use, never while the module loads.
+function tabStorage(reachStorage: () => TabStorage): TabStorage {
+	let memoryAfterRefusal: Map<string, string> | null = null;
+
+	function memoryAfter(error: unknown): Map<string, string> {
+		if (!isStorageRefusal(error)) throw error;
+		memoryAfterRefusal ??= new Map();
+		return memoryAfterRefusal;
+	}
+
+	return {
+		getItem: (key) => {
+			const remembered = memoryAfterRefusal?.get(key);
+			if (remembered !== undefined) return remembered;
+			try {
+				return reachStorage().getItem(key);
+			} catch (error) {
+				memoryAfter(error);
+				return null;
+			}
+		},
+		setItem: (key, value) => {
+			if (memoryAfterRefusal !== null) {
+				memoryAfterRefusal.set(key, value);
+				return;
+			}
+			try {
+				reachStorage().setItem(key, value);
+			} catch (error) {
+				memoryAfter(error).set(key, value);
+			}
+		}
+	};
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -156,7 +216,8 @@ export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 // SvelteKit's start writes its own entry over the one the page loads onto and
 // drops the page state that entry carried, so the state is read while this
 // module loads, before the router starts.
-let stateOnLoad: unknown = history.state;
+let historyStorage = tabStorage(() => sessionStorage);
+let stateOnLoad: unknown = readStateOnLoad();
 let ledger: HistoryLedger = EMPTY_LEDGER;
 // Whether history stands on its top entry, the only place an id-less entry may
 // get an id: ids grow bottom to top, so a first id given further down would
@@ -174,9 +235,14 @@ let loadingMount: NavigateOptions | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
 
+function readStateOnLoad(): unknown {
+	countEntryMet(historyStorage, entryOfHistoryState(history.state));
+	return history.state;
+}
+
 function standsOnTopOnLoad(): boolean {
 	const loaded = entryOfHistoryState(stateOnLoad);
-	if (loaded !== null) return loaded.id === lastAllocatedEntryId(sessionStorage);
+	if (loaded !== null) return loaded.id === lastAllocatedEntryId(historyStorage);
 	return !documentReturnedTo();
 }
 
@@ -193,7 +259,7 @@ export function historyStateOnLoad(): unknown {
 }
 
 function newEntry(layer?: string): HistoryEntry {
-	const id = allocateEntryId(sessionStorage);
+	const id = allocateEntryId(historyStorage);
 	return layer === undefined ? { id } : { id, layer };
 }
 
@@ -202,7 +268,7 @@ function newEntry(layer?: string): HistoryEntry {
 function firstIdOnTop(): HistoryEntry | null {
 	if (!standsOnTop) return null;
 	const entry = newEntry();
-	if (history.length === 1) sessionStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
+	if (history.length === 1) historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
 	return entry;
 }
 
@@ -316,7 +382,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	lastRouterIndex = routerIndexOf(history.state);
 	const carried = entryOfHistoryState(history.state);
 	if (carried !== null) {
-		if (carried.id === lastAllocatedEntryId(sessionStorage)) standsOnTop = true;
+		if (carried.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
 		if (routerPushed) pushedPage(carried);
 		else settleOnPage(carried);
 		return;
@@ -354,8 +420,8 @@ export function stepBackTo(target: number): Promise<void> {
 }
 
 function firstEntryOfTab(): number {
-	if (sessionStorage.getItem(FIRST_ENTRY_KEY) === null) return FOREIGN_ENTRY_RANK;
-	return storedCount(sessionStorage, FIRST_ENTRY_KEY, 'first history entry');
+	if (historyStorage.getItem(FIRST_ENTRY_KEY) === null) return FOREIGN_ENTRY_RANK;
+	return storedCount(historyStorage, FIRST_ENTRY_KEY, 'first history entry');
 }
 
 // From an entry with an id, any landing below it is the step's; from a
@@ -401,9 +467,10 @@ function settleStillness(): void {
 // waits for it to stand still, since an entry pushed meanwhile would land
 // under the step's own landing. A layer held while a route only mounts gets
 // its entry at once, or a Back pressed before the route has loaded would
-// leave the page under it instead of closing it. A layer leaving from the entry history stands
-// on steps back off it; one whose entry stands lower leaves it to the landing
-// that reaches it, which steps off an entry no open layer owns.
+// leave the page under it instead of closing it. A layer leaving from the
+// entry history stands on steps back off it; one whose entry stands lower
+// leaves it to the landing that reaches it, which steps off an entry no open
+// layer owns.
 const layerEntries: LayerHistory = {
 	held(layer) {
 		if (ownStepBacksUnderway() || navigationsUnderway > 0) {
@@ -476,6 +543,7 @@ export function listenForLandings(
 ): () => void {
 	function onPopstate(event: PopStateEvent): void {
 		const landed = landedEntry(event);
+		countEntryMet(historyStorage, landed);
 		const landing = land(ledger, landed);
 		ledger = landing.ledger;
 		standsOnTop = false;
@@ -498,12 +566,13 @@ export function listenForLandings(
 // A page load, as far as history goes: the state the page loaded onto is read
 // again, the way this module's own load reads it.
 export function loadHistoryPageForTests(): void {
-	stateOnLoad = history.state;
+	stateOnLoad = readStateOnLoad();
 	standsOnTop = standsOnTopOnLoad();
 }
 
 export function resetHistoryControllerForTests(): void {
-	stateOnLoad = history.state;
+	historyStorage = tabStorage(() => sessionStorage);
+	stateOnLoad = readStateOnLoad();
 	ledger = EMPTY_LEDGER;
 	standsOnTop = true;
 	lastRouterIndex = routerIndexOf(history.state);
