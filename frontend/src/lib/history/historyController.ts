@@ -360,7 +360,7 @@ function standsOnAddress(url: string): boolean {
 // address on while the landed route loads. The address wins (issue #1006, H3):
 // the route of the address history stands on is mounted over it, under the
 // same entry, superseding the other route's load if it is still loading.
-export type RouteOnAddress = 'stands' | 'remounts';
+type RouteOnAddress = 'stands' | 'remounts';
 
 export function mountAddressOver(routeUrl: string): RouteOnAddress {
 	if (new URL(routeUrl, location.href).pathname === location.pathname) return 'stands';
