@@ -385,6 +385,19 @@ describe('playback diagnostics recorder', () => {
 		expect(sentDetails()).toEqual(['second listener', 'hidden']);
 	});
 
+	it('never sends the events of a user who signed out to the next user of the same page', async () => {
+		startFor(LISTENER);
+		recorder.recordPlaybackEvent(note('first listener'));
+		recorder.forgetPlaybackDiagnostics(LISTENER);
+
+		startFor(OTHER_LISTENER);
+		recorder.recordPlaybackEvent(note('second listener'));
+		hidePage();
+		await letTheServerAnswer();
+
+		expect(sentDetails()).toEqual(['second listener', 'hidden']);
+	});
+
 	it('forgets a user’s events so nothing of theirs is sent later', async () => {
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('before logout'));

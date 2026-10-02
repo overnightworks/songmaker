@@ -354,21 +354,24 @@ function storageKey(userId: string): string {
 	return `${STORAGE_KEY_PREFIX}${userId}`;
 }
 
-const EMPTY_BUFFER: StoredBuffer = { events: [], grownFrom: {} };
+// A fresh value per read: the recorder grows the events it is given.
+function emptyBuffer(): StoredBuffer {
+	return { events: [], grownFrom: {} };
+}
 
 function readBuffer(userId: string): StoredBuffer {
 	const stored = readStorage(storageKey(userId));
-	if (stored === null) return EMPTY_BUFFER;
+	if (stored === null) return emptyBuffer();
 	try {
 		const parsed: unknown = JSON.parse(stored);
-		if (typeof parsed !== 'object' || parsed === null) return EMPTY_BUFFER;
+		if (typeof parsed !== 'object' || parsed === null) return emptyBuffer();
 		const { events, grownFrom } = parsed as Partial<Record<keyof StoredBuffer, unknown>>;
 		return {
 			events: Array.isArray(events) ? events.filter(isBufferedEvent).slice(-BUFFER_CAPACITY) : [],
 			grownFrom: lastWritesIn(grownFrom)
 		};
 	} catch {
-		return EMPTY_BUFFER;
+		return emptyBuffer();
 	}
 }
 
