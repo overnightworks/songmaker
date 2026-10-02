@@ -1,7 +1,0 @@
-claim_id = "8aca01beab964e8a9c1d1332e4b3404e"
-agent = "claude-head"
-role = "builder"
-base = "28f086bd34973a0ad6ce0d0932fc9fd8b1ca2382"
-branch = "claude-head/issue-1259-versions-picture-freeze"
-scope = ["docs/design/README.md", "docs/design/song-page-phone.html", "docs/design/song-versions.html"]
-opened_commit = "00b5498de774df80efafbac6a400f0f1e2feffe2"
