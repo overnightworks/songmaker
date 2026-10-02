@@ -52,6 +52,7 @@ interface Recording {
 	events: BufferedEvent[];
 	inFlight: Set<EventKey>;
 	taken: Set<EventKey>;
+	written: Set<EventKey>;
 	openGap: TimerGap | null;
 }
 
@@ -93,6 +94,7 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 		events: readEvents(userId),
 		inFlight: new Set(),
 		taken: new Set(),
+		written: new Set(),
 		openGap: null
 	};
 	recording = started;
@@ -354,12 +356,14 @@ function isBufferedEvent(value: unknown): value is BufferedEvent {
 
 function writeEvents(from: Recording, reinstated: BufferedEvent[] = []): void {
 	from.events = mergedWithStored(from, reinstated).slice(-BUFFER_CAPACITY);
-	writeStorage(storageKey(from.userId), JSON.stringify(from.events));
+	if (writeStorage(storageKey(from.userId), JSON.stringify(from.events)))
+		from.written = new Set(from.events.filter((buffered) => isOwn(from, buffered)).map(keyOf));
 }
 
 // Another tab of the same user writes the same key, so a write starts from
-// what is stored now: this page owns its own session's events, storage owns
-// everyone else's, minus what this page already sent of them.
+// what is stored now: storage owns everyone else's events, minus what this
+// page already sent of them, and this page owns its own session's events only
+// until they reach storage, since another tab may send them from there.
 function mergedWithStored(from: Recording, reinstated: BufferedEvent[]): BufferedEvent[] {
 	const stored = readEvents(from.userId);
 	const storedKeys = new Set(stored.map(keyOf));
@@ -368,8 +372,19 @@ function mergedWithStored(from: Recording, reinstated: BufferedEvent[]): Buffere
 		...stored.filter((buffered) => !isOwn(from, buffered) && !from.taken.has(keyOf(buffered))),
 		...reinstated.filter((buffered) => !isOwn(from, buffered) && !storedKeys.has(keyOf(buffered)))
 	];
-	const own = from.events.filter((buffered) => isOwn(from, buffered));
+	const own = from.events.filter(
+		(buffered) => isOwn(from, buffered) && !sentByAnotherTab(from, buffered, storedKeys)
+	);
 	return inSessionOrder([...others, ...own]);
+}
+
+function sentByAnotherTab(
+	from: Recording,
+	buffered: BufferedEvent,
+	storedKeys: ReadonlySet<EventKey>
+): boolean {
+	const key = keyOf(buffered);
+	return from.written.has(key) && !storedKeys.has(key);
 }
 
 function inSessionOrder(events: BufferedEvent[]): BufferedEvent[] {
@@ -394,11 +409,12 @@ function readStorage(key: string): string | null {
 	}
 }
 
-function writeStorage(key: string, value: string): void {
+function writeStorage(key: string, value: string): boolean {
 	try {
 		localStorage.setItem(key, value);
+		return true;
 	} catch {
-		// Kept in memory; see readStorage.
+		return false;
 	}
 }
 

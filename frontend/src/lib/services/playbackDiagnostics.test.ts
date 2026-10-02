@@ -240,7 +240,7 @@ describe('playback diagnostics recorder', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
-	it('keeps what one tab recorded when a second tab of the same user writes', async () => {
+	it('sends every event of two tabs of the same user exactly once, whichever tab writes last', async () => {
 		const firstTab = recorder;
 		const stopFirstTab = firstTab.startPlaybackDiagnostics(LISTENER);
 		firstTab.recordPlaybackEvent(note('first tab, before the second opened'));
@@ -249,16 +249,21 @@ describe('playback diagnostics recorder', () => {
 		const stopSecondTab = secondTab.startPlaybackDiagnostics(LISTENER);
 		await letTheServerAnswer();
 
-		firstTab.recordPlaybackEvent(note('first tab, after the second opened'));
 		secondTab.recordPlaybackEvent(note('second tab'));
+		firstTab.recordPlaybackEvent(note('first tab, after the second opened'));
 		stopFirstTab();
 		stopSecondTab();
-		fetchMock.mockClear();
 		await openPage();
 		startFor(LISTENER);
 		await letTheServerAnswer();
 
-		expect(sentDetails()).toEqual(['first tab, after the second opened', 'second tab']);
+		expect(sentDetails().sort()).toEqual(
+			[
+				'first tab, before the second opened',
+				'second tab',
+				'first tab, after the second opened'
+			].sort()
+		);
 	});
 
 	it.each([401, 403])(
