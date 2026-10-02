@@ -57,6 +57,7 @@ class FakeSourceBuffer extends EventTarget {
 			throw new DOMException('buffer full', 'QuotaExceededError');
 		}
 		this.log.push('append');
+		this.dispatchEvent(new Event('updatestart'));
 		this.pending = () => {
 			const end = this.timestampOffset + secondsOf(data.byteLength);
 			this.span = [this.span?.[0] ?? this.timestampOffset, end];
@@ -69,6 +70,7 @@ class FakeSourceBuffer extends EventTarget {
 	remove(start: number, end: number): void {
 		this.beginUpdate();
 		this.removals.push([start, end]);
+		this.dispatchEvent(new Event('updatestart'));
 		this.pending = () => {
 			if (this.span) this.span = [Math.max(this.span[0], end), this.span[1]];
 		};
@@ -83,6 +85,12 @@ class FakeSourceBuffer extends EventTarget {
 		this.updating = false;
 		if (this.undecodable) this.dispatchEvent(new Event('error'));
 		this.dispatchEvent(new Event('updateend'));
+	}
+
+	untilUpdateStarts(): Promise<void> {
+		return new Promise((resolve) =>
+			this.addEventListener('updatestart', () => resolve(), { once: true })
+		);
 	}
 
 	appendedBytes(): number[] {
@@ -122,6 +130,20 @@ class FakeMediaSource extends EventTarget {
 class FakeAudio extends EventTarget {
 	src = '';
 	currentTime = 0;
+	private readonly playbackWatchers: (() => void)[] = [];
+
+	override addEventListener(
+		type: string,
+		listener: EventListenerOrEventListenerObject | null,
+		options?: AddEventListenerOptions | boolean
+	): void {
+		super.addEventListener(type, listener, options);
+		if (type === 'timeupdate') for (const notify of this.playbackWatchers.splice(0)) notify();
+	}
+
+	untilDeckWaitsForPlayback(): Promise<void> {
+		return new Promise((resolve) => this.playbackWatchers.push(resolve));
+	}
 
 	playTo(seconds: number): void {
 		this.currentTime = seconds;
@@ -233,7 +255,15 @@ function concatenated(chunks: Uint8Array[]): Uint8Array {
 	return whole;
 }
 
-const nextTask = () => new Promise((resolve) => setTimeout(resolve, 0));
+// A deep toEqual walks a typed array one element at a time, which takes
+// seconds for a take-sized file under coverage instrumentation.
+function firstDifferingByte(actual: Uint8Array, expected: Uint8Array): number | null {
+	const shorter = Math.min(actual.byteLength, expected.byteLength);
+	for (let index = 0; index < shorter; index += 1) {
+		if (actual[index] !== expected[index]) return index;
+	}
+	return actual.byteLength === expected.byteLength ? null : shorter;
+}
 
 describe('ContinuousDeck', () => {
 	afterEach(() => {
@@ -284,11 +314,11 @@ describe('ContinuousDeck', () => {
 		network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
-		await nextTask();
+		await audio.untilDeckWaitsForPlayback();
 		expect(buffer.appendedBytes()).toEqual([MEGABYTE]);
 
 		audio.playTo(10);
-		await nextTask();
+		await audio.untilDeckWaitsForPlayback();
 		expect(buffer.appendedBytes()).toEqual([MEGABYTE, MEGABYTE]);
 
 		audio.playTo(75);
@@ -303,13 +333,13 @@ describe('ContinuousDeck', () => {
 		buffer.autoSettle = false;
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
-		await nextTask();
-		await nextTask();
+		await buffer.untilUpdateStarts();
 		expect(buffer.updating).toBe(true);
 		expect(buffer.appendedBytes()).toEqual([]);
 
+		const nextAppend = buffer.untilUpdateStarts();
 		buffer.settle();
-		await nextTask();
+		await nextAppend;
 		expect(buffer.updating).toBe(true);
 		expect(buffer.appendedBytes()).toEqual([MEGABYTE]);
 
@@ -325,9 +355,9 @@ describe('ContinuousDeck', () => {
 
 		void deck.appendTake('first', '/audio/first.mp3');
 		const second = deck.appendTake('second', '/audio/second.mp3');
-		await nextTask();
+		await audio.untilDeckWaitsForPlayback();
 		audio.playTo(20);
-		await nextTask();
+		await audio.untilDeckWaitsForPlayback();
 		expect(buffer.removals).toEqual([]);
 
 		audio.playTo(40);
@@ -384,7 +414,7 @@ describe('ContinuousDeck', () => {
 			{ url: '/audio/take.mp3', range: null },
 			{ url: '/audio/take.mp3', range: 'bytes=300000-' }
 		]);
-		expect(concatenated(buffer.appended)).toEqual(file);
+		expect(firstDifferingByte(concatenated(buffer.appended), file)).toBeNull();
 		expect(audio.src).toBe(OBJECT_URL);
 	});
 
