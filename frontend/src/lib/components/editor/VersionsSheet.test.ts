@@ -73,7 +73,7 @@ async function renderSheet(onload: (versionId: string) => Promise<boolean>): Pro
 	return target;
 }
 
-function chip(target: HTMLElement): HTMLButtonElement {
+function versionChip(target: HTMLElement): HTMLButtonElement {
 	const button = target.querySelector<HTMLButtonElement>('button[aria-haspopup="dialog"]');
 	if (!button) throw new Error('Expected the version chip');
 	return button;
@@ -83,14 +83,14 @@ function sheet(target: HTMLElement): HTMLElement | null {
 	return target.querySelector<HTMLElement>(`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`);
 }
 
-function rowTexts(target: HTMLElement): string[] {
+function versionRowTexts(target: HTMLElement): string[] {
 	return Array.from(target.querySelectorAll('.version-row')).map((row) =>
 		(row.textContent ?? '').replace(/\s+/g, ' ').trim()
 	);
 }
 
 async function openSheet(target: HTMLElement): Promise<HTMLElement> {
-	chip(target).click();
+	versionChip(target).click();
 	await tick();
 	await tick();
 	const open = sheet(target);
@@ -109,18 +109,18 @@ function clickRow(target: HTMLElement, versionNumber: number): void {
 describe('VersionsSheet', () => {
 	it('names the latest version on the chip, and the draft once it differs', async () => {
 		const target = await renderSheet(vi.fn());
-		expect(chip(target).textContent?.trim()).toBe('v7');
-		expect(chip(target).getAttribute('aria-label')).toBe(versionsChipAccessibleLabel('v7'));
+		expect(versionChip(target).textContent?.trim()).toBe('v7');
+		expect(versionChip(target).getAttribute('aria-label')).toBe(versionsChipAccessibleLabel('v7'));
 
 		setDraftLyrics('an unsaved line');
 		await tick();
-		expect(chip(target).textContent?.trim()).toBe('v7 · draft');
+		expect(versionChip(target).textContent?.trim()).toBe('v7 · draft');
 	});
 
 	it('lists every version newest first with its takes, the pick, its day and first sung line', async () => {
 		const target = await renderSheet(vi.fn());
 		await openSheet(target);
-		expect(rowTexts(target)).toEqual([
+		expect(versionRowTexts(target)).toEqual([
 			'v7 2 takes current today 14:02 · Headlights cut the rain in two',
 			'v6 1 take · ★ picked yesterday 09:30 · Headlights cut the rain in two',
 			'v4 no takes 20 Sep · Rain on the window, the city asleep'
@@ -153,7 +153,7 @@ describe('VersionsSheet', () => {
 		expect(closeTopLayer()).toBe(true);
 		await tick();
 		expect(sheet(target)).toBeNull();
-		expect(chip(target).getAttribute('aria-expanded')).toBe('false');
+		expect(versionChip(target).getAttribute('aria-expanded')).toBe('false');
 	});
 
 	it('offers no delete on a row', async () => {
