@@ -211,6 +211,14 @@ describe('loadVersionAsDraft', () => {
 		expect(get(draftLoadedFrom)).toBeNull();
 	});
 
+	it('the hint stays gone after a discard, even once the draft is edited again', () => {
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		discardDraft();
+		setDraftLyrics('a fresh line');
+		expect(get(draftLoadedFrom)).toBeNull();
+	});
+
 	it('the hint goes when another song is opened', () => {
 		openSongWithTwoVersions();
 		loadVersionAsDraft(older);

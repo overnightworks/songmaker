@@ -148,7 +148,7 @@ export function loadSongData(s: SongItem): void {
 
 /** Resets the draft back to the last-saved values, discarding unsaved edits. */
 export function discardDraft(): void {
-	editorState.update((s) => ({ ...s, draft: { ...s.saved } }));
+	editorState.update((s) => ({ ...s, draft: { ...s.saved }, loadedFrom: null }));
 }
 
 async function loadVersions(songId: string): Promise<void> {
