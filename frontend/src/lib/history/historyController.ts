@@ -1,4 +1,4 @@
-import type { NavigationType } from '@sveltejs/kit';
+import type { BeforeNavigate, NavigationType } from '@sveltejs/kit';
 import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
 import {
@@ -135,7 +135,8 @@ function isStorageRefusal(error: unknown): boolean {
 // the browser refuses storage -- reaching it, reading it or writing it -- they
 // live in this document's memory instead, seeded by whatever storage still
 // gives and raised by every entry the document meets, rather than the page
-// failing to render. Storage is reached on use, never while the module loads.
+// failing to render. Storage is never reached unguarded: not on use, and not
+// while the module loads onto an entry and counts it.
 function tabStorage(reachStorage: () => TabStorage): TabStorage {
 	let memoryAfterRefusal: Map<string, string> | null = null;
 
@@ -349,6 +350,37 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 
 function standsOnAddress(url: string): boolean {
 	return new URL(url, location.href).href === location.href;
+}
+
+// Shallow routing leaves the mounted route where the last navigation put it,
+// so a route can mount, or resolve, under an address it does not name: Back
+// from another page onto an entry shallow routing wrote has the router load
+// the route of the page that entry was written over (album A, album B opened
+// over it, Settings, Back), and an entry put back over a landing moves the
+// address on while the landed route loads. The address wins (issue #1006, H3):
+// the route of the address history stands on is mounted over it, under the
+// same entry, superseding the other route's load if it is still loading.
+type RouteOnAddress = 'stands' | 'remounts';
+
+export function mountAddressOver(routeUrl: string): RouteOnAddress {
+	if (new URL(routeUrl, location.href).pathname === location.pathname) return 'stands';
+	const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
+	void navigateTo(location.href, {
+		replaceState: true,
+		noScroll: true,
+		keepFocus: true,
+		state: pageState
+	});
+	return 'remounts';
+}
+
+// A Back or Forward that navigates mounts the address it lands on before the
+// router loads anything of the page under it. Every other navigation's target
+// is an address history has yet to move to.
+export function mountRouteOfLandedAddress(navigation: Pick<BeforeNavigate, 'type' | 'to'>): void {
+	if (navigation.type === 'popstate' && navigation.to !== null) {
+		mountAddressOver(navigation.to.url.href);
+	}
 }
 
 // A shallow write while a route mounts issues the mount again over the entry

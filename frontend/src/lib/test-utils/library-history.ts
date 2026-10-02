@@ -16,7 +16,7 @@ import {
 	type HistoryEntry
 } from '$lib/history/historyController';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
+import { fakePage, startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
 
 // The one place tests touch the browser history: they seed and read entries,
 // and press Back and Forward, through these helpers, so the shape an entry is
@@ -24,6 +24,13 @@ import { startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigati
 
 export function replaceHistoryEntry(url: string, entry: unknown = null): void {
 	writeHistoryEntry(entry, url, 'replace');
+}
+
+// The router mounted an address route under `url`, the way it does for a
+// typed-in address: history stands on it and the route's page names it.
+export function mountAddressRoute(url: string, entry: unknown = null): void {
+	replaceHistoryEntry(url, entry);
+	fakePage.url = new URL(url, location.href);
 }
 
 export function pushHistoryEntry(url: string, entry: unknown = null): void {
