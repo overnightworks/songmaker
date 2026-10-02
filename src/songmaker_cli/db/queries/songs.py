@@ -331,6 +331,7 @@ def update_song(
     bpm: int | None = None,
     audio_duration: int | None = None,
     key_scale: str | None = None,
+    vocal_language: str | None = None,
     generation_params: dict | None | _Unset = UNSET,
     force_new_version: bool = False,
     edited_by: str | None = None,
@@ -339,7 +340,9 @@ def update_song(
 
     Editors keep a generation-free draft in place. Co-writer writes pass
     ``force_new_version`` so each tool invocation leaves an immutable
-    snapshot for existing and future takes. A save that changes the content
+    snapshot for existing and future takes. The vocal language belongs to
+    the song rather than a version, so the next take uses it whichever
+    version it renders. A save that changes the content
     counts as ``edited_by``'s own work on the song; one that changes nothing
     does not.
     """
@@ -371,7 +374,12 @@ def update_song(
         or new_audio_duration != prev.audio_duration
         or new_key_scale != prev.key_scale
     )
-    content_changed = creative_changed or new_gen_params != prev.generation_params
+    language_changed = vocal_language is not None and vocal_language != song.vocal_language
+    if language_changed:
+        song.vocal_language = vocal_language
+    content_changed = (
+        creative_changed or language_changed or new_gen_params != prev.generation_params
+    )
     if edited_by is not None and content_changed:
         record_song_work(session, user_id=edited_by, song_id=song_id, work=SongWork.EDITED)
 
