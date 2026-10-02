@@ -35,6 +35,12 @@ const VERSION_ROWS = [
 		version_number: 4,
 		lyrics: '\n[Intro]\n\nRain on the window, the city asleep',
 		created_at: new Date(2026, 8, 20, 8, 0).toISOString()
+	}),
+	makeVersion({
+		id: 'v3',
+		version_number: 3,
+		lyrics: '[Chorus]\n',
+		created_at: new Date(2026, 8, 18, 8, 0).toISOString()
 	})
 ];
 const SONG = makeSong({
@@ -117,13 +123,14 @@ describe('VersionsSheet', () => {
 		expect(versionChip(target).textContent?.trim()).toBe('v7 · draft');
 	});
 
-	it('lists every version newest first with its takes, the pick, its day and first sung line', async () => {
+	it('lists every version newest first with its takes, the pick, its day and first sung line, if it has one', async () => {
 		const target = await renderSheet(vi.fn());
 		await openSheet(target);
 		expect(versionRowTexts(target)).toEqual([
 			'v7 2 takes current today 14:02 · Headlights cut the rain in two',
 			'v6 1 take · ★ picked yesterday 09:30 · Headlights cut the rain in two',
-			'v4 no takes 20 Sep · Rain on the window, the city asleep'
+			'v4 no takes 20 Sep · Rain on the window, the city asleep',
+			'v3 no takes 18 Sep'
 		]);
 	});
 

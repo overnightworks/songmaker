@@ -181,7 +181,10 @@
 										{/if}
 										{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
 									</span>
-									<span class="version-meta">{row.when} · {row.firstLine}</span>
+									<span class="version-meta">
+										{row.when}
+										{#if row.firstLine}· {row.firstLine}{/if}
+									</span>
 								</span>
 							</button>
 						</li>
