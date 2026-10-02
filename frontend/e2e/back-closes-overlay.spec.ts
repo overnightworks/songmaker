@@ -348,6 +348,15 @@ async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 	await expectSettingsStands(page);
 }
 
+// The rail's library list, with its group expanded -- inside the drawer on the
+// phone.
+async function railLibrary(page: Page, shell: Shell): Promise<Locator> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	return rail.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL });
+}
+
 // Issue #1165: Back leaves Settings for the playlist it was opened over, with
 // the playlist on screen, and Forward shows Settings again.
 async function backThenForwardReturnsToSettings(page: Page, pages: Pages): Promise<void> {
@@ -649,6 +658,89 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await expectReached(page, pages, 'wall');
 		guard.assertClean();
 	});
+
+	// The phone drawer carries navigation only, so its way to Settings is the
+	// search's page hit: it leaves the drawer and pushes one entry of its own.
+	test('a drawer link to Settings pushes one entry over the playlist, and Back returns to it', async ({
+		page,
+		request
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const { pages } = await openSeededPlaylist(page, request);
+		const entriesOnPlaylist = await page.evaluate(() => history.length);
+
+		await openVoicesFromDrawerSearch(page);
+		await expectSettingsStands(page);
+		expect(await page.evaluate(() => history.length)).toBe(entriesOnPlaylist + 1);
+
+		await page.goBack();
+
+		await expectPlaylistStands(page, pages);
+		await expect(railDrawer(page)).toBeHidden();
+		guard.assertClean();
+	});
+});
+
+// Issue #1006 (H3): a library page opened over another of the same kind is
+// written without loading its route, so Back from Settings onto it would load
+// the route of the page under it. The history entry wins: Back shows the page
+// left, at its own address.
+test.describe('Back from Settings onto a page opened over another of its kind', () => {
+	test('album A, album B, Settings, Back shows album B at its address', async ({
+		page
+	}, testInfo) => {
+		const shell = shellOf(testInfo);
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const albumA = surface.getByRole('heading', { name: library.albumTitle });
+		const albumB = surface.getByRole('heading', { name: library.secondAlbumTitle });
+		await page.goto(`/album/${library.albumId}`);
+		await expect(albumA).toBeVisible();
+		const albumAAddress = page.url();
+		await openAlbumFromRail(page, shell, library.secondAlbumTitle);
+		await expect(albumB).toBeVisible();
+		await expect(page).not.toHaveURL(albumAAddress);
+		const albumBAddress = page.url();
+
+		await openVoicesSettings(page, shell);
+		await page.goBack();
+
+		await expect(albumB).toBeVisible();
+		await expect(albumA).toBeHidden();
+		expect(page.url()).toBe(albumBAddress);
+		guard.assertClean();
+	});
+
+	test('a song, the next song, Settings, Back shows the next song at its address', async ({
+		page
+	}, testInfo) => {
+		const shell = shellOf(testInfo);
+		const guard = new FlowGuard(page);
+		const [song, nextSong] = readSeededLibrary().albumTracks;
+		await page.goto(`/album/${readSeededLibrary().albumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(song.songTitle) })
+			.click();
+		await expectSongStands(page, shell, song.songTitle);
+		const songAddress = page.url();
+		await (
+			await railLibrary(page, shell)
+		)
+			.getByRole('button', { name: nameStartingWith(nextSong.songTitle) })
+			.click();
+		await expectSongStands(page, shell, nextSong.songTitle);
+		await expect(page).not.toHaveURL(songAddress);
+		const nextSongAddress = page.url();
+
+		await openVoicesSettings(page, shell);
+		await page.goBack();
+
+		await expectSongStands(page, shell, nextSong.songTitle);
+		expect(page.url()).toBe(nextSongAddress);
+		guard.assertClean();
+	});
 });
 
 // Issue #1165: the library shows a song the moment it opens, before the
@@ -692,12 +784,10 @@ test('one Back right after a song opens from its album returns to the album', as
 // of milliseconds, so each crossing is opened and left many times.
 const QUEUED_CROSSINGS = 20;
 const PHONE_LAYERS_ONLY = 'The drawer and the full Now Playing are phone layers.';
-async function openAlbumFromRailDrawer(page: Page, albumTitle: string): Promise<void> {
-	const rail = await openRailNav(page, 'mobile');
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	await rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+async function openAlbumFromRail(page: Page, shell: Shell, albumTitle: string): Promise<void> {
+	await (
+		await railLibrary(page, shell)
+	)
 		.getByRole('listitem')
 		.filter({ hasText: albumTitle })
 		.getByRole('button', { name: containing(albumTitle) })
@@ -725,7 +815,7 @@ test.describe('one Back right after a crossing out of a phone layer', () => {
 		const album = workspace(page).getByRole('heading', { name: library.albumTitle });
 
 		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
-			await openAlbumFromRailDrawer(page, library.albumTitle);
+			await openAlbumFromRail(page, 'mobile', library.albumTitle);
 			await expect(album).toBeVisible();
 
 			await page.goBack();

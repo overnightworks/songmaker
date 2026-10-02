@@ -20,7 +20,13 @@ import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
-import { fakePage, reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
+import {
+	fakePage,
+	followBeforeNavigate,
+	reportedNavigations,
+	startFakeRouter
+} from '$lib/test-utils/app-navigation';
+import { mountRouteOfLandedAddress } from '$lib/history/historyController';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
@@ -86,6 +92,7 @@ const fetchActiveGeneration = vi.fn();
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
 }));
@@ -688,12 +695,17 @@ describe('Back and Forward across an app page', () => {
 		return reportedNavigations.at(-1);
 	}
 
+	let stopMountingLandedAddresses: () => void;
+
 	beforeEach(() => {
 		fetchPlaylists.mockResolvedValue([
 			playlistItem({ share_slug: null }),
 			playlistItem({ share_slug: null, id: 'p2', slug: 'morning-run', title: 'Morning Run' })
 		]);
+		stopMountingLandedAddresses = followBeforeNavigate(mountRouteOfLandedAddress);
 	});
+
+	afterEach(() => stopMountingLandedAddresses());
 
 	it('Back from Settings returns to the playlist left, and Forward to Settings', async () => {
 		await openPlaylist('p1');
@@ -715,19 +727,21 @@ describe('Back and Forward across an app page', () => {
 	});
 
 	// The second playlist is shallow routing over the first one's page, so Back
-	// loads that page's route; its address route yields to the entry.
-	it('Back from Settings onto a playlist opened over another shows the one left', async () => {
+	// would load that page's route; the route of the address it lands on is
+	// mounted instead, under the same entry.
+	it('Back from Settings onto a playlist opened over another mounts the one left', async () => {
 		await openPlaylist('p1');
 		await openPlaylist('p2');
+		const left = historyEntry();
 		await goto(resolve(SETTINGS));
 
 		await pressBack();
 
-		expect(fakePage.url.pathname).toBe('/playlist/night-drive');
+		expect(fakePage.url.pathname).toBe('/playlist/morning-run');
 		expect(location.pathname).toBe('/playlist/morning-run');
-		await expect(openPlaylistAddress('night-drive')).resolves.toBe('found');
+		await expect(openPlaylistAddress('morning-run')).resolves.toBe('found');
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p2' });
-		expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p2' });
+		expect(historyEntry()).toEqual(left);
 	});
 
 	// SvelteKit cannot tell two entries of one navigation apart after a reload,
@@ -1651,7 +1665,8 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 
 	// After a reload, Back onto the song opened before the one shown is a
 	// router navigation, which resolves that song's address while the question
-	// about the draft left behind is still open.
+	// about the draft left behind is still open -- and the song put back over
+	// the landing has moved the address on, so the shown song's route mounts.
 	it('keeps the song shown when the address route Back loads resolves while it asks', async () => {
 		const tide = song({ ...navigableSongDefaults(), slug: 's1' });
 		const other = song({ ...navigableSongDefaults(), id: 's2', slug: 's2', album_id: 'a2' });
@@ -1669,6 +1684,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 
 		expect(get(selectedSongId)).toBe('s2');
 		expect(window.location.pathname).toBe('/album/a2/s2');
+		expect(fakePage.url.pathname).toBe('/album/a2/s2');
 		expect(unsavedChangesDialog()).not.toBeNull();
 		expect(updateSong).not.toHaveBeenCalled();
 	});
