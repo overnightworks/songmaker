@@ -223,12 +223,37 @@ describe('playback diagnostics recorder', () => {
 		expect(fetchMock).not.toHaveBeenCalled();
 	});
 
+	it('keeps what one tab recorded when a second tab of the same user writes', async () => {
+		const firstTab = recorder;
+		const stopFirstTab = firstTab.startPlaybackDiagnostics(LISTENER);
+		firstTab.recordPlaybackEvent(note('first tab, before the second opened'));
+		vi.resetModules();
+		const secondTab: Recorder = await import('./playbackDiagnostics');
+		const stopSecondTab = secondTab.startPlaybackDiagnostics(LISTENER);
+		await letTheServerAnswer();
+
+		firstTab.recordPlaybackEvent(note('first tab, after the second opened'));
+		secondTab.recordPlaybackEvent(note('second tab'));
+		stopFirstTab();
+		stopSecondTab();
+		fetchMock.mockClear();
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(sentDetails()).toEqual(['first tab, after the second opened', 'second tab']);
+	});
+
 	it.each([401, 403])(
 		'keeps the events for a later send when the server answers %i',
 		async (status) => {
 			startFor(LISTENER);
-			recorder.recordPlaybackEvent(note('kept'));
+			recorder.recordPlaybackEvent(note('left by an earlier page'));
+			await openPage();
 			answerStatus = status;
+			startFor(LISTENER);
+			await letTheServerAnswer();
+			recorder.recordPlaybackEvent(note('kept'));
 			hidePage();
 			await letTheServerAnswer();
 			fetchMock.mockClear();
@@ -238,7 +263,7 @@ describe('playback diagnostics recorder', () => {
 			startFor(LISTENER);
 			await letTheServerAnswer();
 
-			expect(sentDetails()).toEqual(['kept', 'hidden']);
+			expect(sentDetails()).toEqual(['left by an earlier page', 'kept', 'hidden']);
 		}
 	);
 

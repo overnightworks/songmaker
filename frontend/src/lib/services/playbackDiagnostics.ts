@@ -42,12 +42,16 @@ interface TimerGap {
 	totalMs: number;
 }
 
+// Session and sequence name one event across tabs, reloads and the log.
+type EventKey = string;
+
 interface Recording {
 	userId: string;
 	session: SessionFacts;
 	nextSequence: number;
 	events: BufferedEvent[];
-	inFlight: Set<BufferedEvent>;
+	inFlight: Set<EventKey>;
+	taken: Set<EventKey>;
 	openGap: TimerGap | null;
 }
 
@@ -86,6 +90,7 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 		nextSequence: 0,
 		events: readEvents(userId),
 		inFlight: new Set(),
+		taken: new Set(),
 		openGap: null
 	};
 	recording = started;
@@ -212,7 +217,7 @@ function recordTimerGap(elapsedMs: number): void {
 }
 
 function continuesTheGap(from: Recording, gap: TimerGap): boolean {
-	return from.events.at(-1) === gap.recorded && !from.inFlight.has(gap.recorded);
+	return from.events.at(-1) === gap.recorded && !from.inFlight.has(keyOf(gap.recorded));
 }
 
 function timerGapDetail(gap: Pick<TimerGap, 'count' | 'totalMs'>): string {
@@ -220,7 +225,7 @@ function timerGapDetail(gap: Pick<TimerGap, 'count' | 'totalMs'>): string {
 }
 
 function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void {
-	const waiting = from.events.filter((buffered) => !from.inFlight.has(buffered));
+	const waiting = from.events.filter((buffered) => !from.inFlight.has(keyOf(buffered)));
 	const batches = reportBatches(waiting);
 	if (opts.keepalive) handOff(from, batches);
 	else for (const batch of batches) void deliver(from, batch);
@@ -237,10 +242,13 @@ function handOff(from: Recording, batches: BufferedEvent[][]): void {
 		if (keepaliveBytesInFlight + bodyBytes > KEEPALIVE_BODY_BUDGET_BYTES) break;
 		keepaliveBytesInFlight += bodyBytes;
 		handedOff.push(batch);
-		void post(body, true).then((done) => {
-			keepaliveBytesInFlight -= bodyBytes;
-			if (!done && recording === from) putBack(from, batch);
-		});
+		void post(body, true)
+			.finally(() => {
+				keepaliveBytesInFlight -= bodyBytes;
+			})
+			.then((done) => {
+				if (!done && recording === from) putBack(from, batch);
+			});
 	}
 	if (handedOff.length > 0) takeOut(from, handedOff.flat());
 }
@@ -261,21 +269,32 @@ function reportBatches(events: BufferedEvent[]): BufferedEvent[][] {
 }
 
 async function deliver(from: Recording, batch: BufferedEvent[]): Promise<void> {
-	for (const buffered of batch) from.inFlight.add(buffered);
+	const keys = batch.map(keyOf);
+	for (const key of keys) from.inFlight.add(key);
 	const done = await post(JSON.stringify(reportOf(batch)), false);
-	for (const buffered of batch) from.inFlight.delete(buffered);
+	for (const key of keys) from.inFlight.delete(key);
 	if (done && recording === from) takeOut(from, batch);
 }
 
 function takeOut(from: Recording, sent: BufferedEvent[]): void {
-	const leaving = new Set(sent);
-	from.events = from.events.filter((buffered) => !leaving.has(buffered));
+	const leaving = new Set(sent.map(keyOf));
+	from.events = from.events.filter((buffered) => !leaving.has(keyOf(buffered)));
+	for (const buffered of sent) if (!isOwn(from, buffered)) from.taken.add(keyOf(buffered));
 	writeEvents(from);
 }
 
 function putBack(from: Recording, refused: BufferedEvent[]): void {
-	from.events = [...refused, ...from.events];
-	writeEvents(from);
+	for (const buffered of refused) from.taken.delete(keyOf(buffered));
+	from.events = [...refused.filter((buffered) => isOwn(from, buffered)), ...from.events];
+	writeEvents(from, refused);
+}
+
+function isOwn(from: Recording, buffered: BufferedEvent): boolean {
+	return buffered.session.session_id === from.session.session_id;
+}
+
+function keyOf(buffered: BufferedEvent): EventKey {
+	return `${buffered.session.session_id}:${buffered.event.sequence}`;
 }
 
 function reportOf(batch: BufferedEvent[]): PlaybackDiagnosticsReport {
@@ -331,9 +350,36 @@ function isBufferedEvent(value: unknown): value is BufferedEvent {
 	);
 }
 
-function writeEvents(from: Recording): void {
-	from.events = from.events.slice(-BUFFER_CAPACITY);
+function writeEvents(from: Recording, reinstated: BufferedEvent[] = []): void {
+	from.events = mergedWithStored(from, reinstated).slice(-BUFFER_CAPACITY);
 	writeStorage(storageKey(from.userId), JSON.stringify(from.events));
+}
+
+// Another tab of the same user writes the same key, so a write starts from
+// what is stored now: this page owns its own session's events, storage owns
+// everyone else's, minus what this page already sent of them.
+function mergedWithStored(from: Recording, reinstated: BufferedEvent[]): BufferedEvent[] {
+	const stored = readEvents(from.userId);
+	const storedKeys = new Set(stored.map(keyOf));
+	for (const key of from.taken) if (!storedKeys.has(key)) from.taken.delete(key);
+	const others = [
+		...stored.filter((buffered) => !isOwn(from, buffered) && !from.taken.has(keyOf(buffered))),
+		...reinstated.filter((buffered) => !isOwn(from, buffered) && !storedKeys.has(keyOf(buffered)))
+	];
+	const own = from.events.filter((buffered) => isOwn(from, buffered));
+	return inSessionOrder([...others, ...own]);
+}
+
+function inSessionOrder(events: BufferedEvent[]): BufferedEvent[] {
+	const sessions = new Map<string, BufferedEvent[]>();
+	for (const buffered of events) {
+		const session = sessions.get(buffered.session.session_id);
+		if (session === undefined) sessions.set(buffered.session.session_id, [buffered]);
+		else session.push(buffered);
+	}
+	return [...sessions.values()].flatMap((session) =>
+		session.sort((a, b) => a.event.sequence - b.event.sequence)
+	);
 }
 
 // Storage a private window or a full quota refuses keeps the events in
