@@ -1,8 +1,0 @@
-claim_id = "2dad8c0885bf4bc88a4b7d703ebb6cb3"
-agent = "claude-head"
-role = "builder"
-base = "eedd3c0a80048ca74c154805efdf7c807b965bd1"
-branch = "claude-head/issue-1236-restore-queue-next"
-scope = ["docs/architecture.md", "frontend/e2e/playback-restore.spec.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/playbackResume.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
-opened_commit = "ac2002f987cc162059369e43ad8f68fe1a81e5b8"
-whole_reason = "restore queue and next-take decider share player.ts and the resume store"
