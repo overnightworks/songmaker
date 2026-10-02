@@ -13,7 +13,10 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
-	NOW_PLAYING_NO_LYRICS
+	NOW_PLAYING_NO_LYRICS,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
@@ -392,6 +395,21 @@ describe('NowPlaying', () => {
 		expect(after?.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
 		expect(target.querySelector('[aria-label*="repeat" i]')).toBeNull();
 	});
+
+	it.each([
+		{ transport: 'recovering', named: TRANSPORT_PAUSE_LABEL },
+		{ transport: 'waiting-for-network', named: TRANSPORT_PAUSE_LABEL },
+		{ transport: 'failed', named: TRANSPORT_RETRY_LABEL },
+		{ transport: 'paused', named: TRANSPORT_PLAY_LABEL }
+	] as const)(
+		'names its play button $named while the take is $transport, as the bar does (#1234)',
+		async ({ transport, named }) => {
+			vi.spyOn(audioPlayer, 'transport', 'get').mockReturnValue(transport);
+			await renderSurface(info());
+
+			expect(target.querySelector('.transport .play-btn')?.getAttribute('aria-label')).toBe(named);
+		}
+	);
 
 	it('shows queue skip feedback while playing the library queue', async () => {
 		queueContext.set({ type: 'library' });

@@ -1,5 +1,10 @@
 import type { QueueStreamManifest } from '$lib/api/types';
-import { PLAYER_WAITING_FOR_NETWORK } from '$lib/constants';
+import {
+	PLAYER_WAITING_FOR_NETWORK,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '$lib/constants';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -7,6 +12,38 @@ export type { PlaybackInfo } from './playbackTypes';
 export type { StreamFallbackState } from './queueStreamEngine';
 
 type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
+
+// What every surface that draws the transport shows. A stalled take that is
+// being brought back is 'recovering' and one given up while the offline strip
+// names the cause is 'waiting-for-network': the listener asked for sound in
+// both, so both offer Pause. A given-up take the listener paused is 'paused'.
+export type TransportState =
+	'idle' | 'loading' | 'playing' | 'recovering' | 'paused' | 'waiting-for-network' | 'failed';
+
+const TRANSPORT_OFFERING_PAUSE: ReadonlySet<TransportState> = new Set([
+	'playing',
+	'recovering',
+	'waiting-for-network'
+]);
+
+export function transportOffersPause(transport: TransportState): boolean {
+	return TRANSPORT_OFFERING_PAUSE.has(transport);
+}
+
+export function transportButtonLabel(transport: TransportState): string {
+	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
+	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
+}
+
+const TRANSPORT_OF_SETTLED_STATUS: Readonly<
+	Record<Exclude<PlayerStatus, 'loading' | 'error'>, TransportState>
+> = {
+	idle: 'idle',
+	ready: 'paused',
+	playing: 'playing',
+	paused: 'paused',
+	buffering: 'recovering'
+};
 
 type StreamEndReason = 'normal' | 'window-end';
 
@@ -87,6 +124,18 @@ class AudioPlayer {
 		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
 	}
 
+	get transport(): TransportState {
+		if (this.status === 'loading')
+			return this.recoveryStartedAt === null ? 'loading' : 'recovering';
+		if (this.status === 'error') return this.failedTransport;
+		return TRANSPORT_OF_SETTLED_STATUS[this.status];
+	}
+
+	private get failedTransport(): TransportState {
+		if (this.gaveUpOnStall && !this.autoplayPending) return 'paused';
+		return this.failure?.kind === 'awaiting-network' ? 'waiting-for-network' : 'failed';
+	}
+
 	private callbacks: AudioPlayerCallbacks = NO_CALLBACKS;
 	private audio: HTMLAudioElement | null = null;
 	private currentUrl: string | null = null;
@@ -95,10 +144,10 @@ class AudioPlayer {
 	// gap in which Android may freeze a page whose screen is off.
 	private standby: HTMLAudioElement | null = null;
 	private standbyUrl: string | null = null;
-	private autoplayPending = false;
+	private autoplayPending = $state(false);
 	private readonly streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
-	private recoveryStartedAt: number | null = null;
+	private recoveryStartedAt = $state<number | null>(null);
 	private pendingRecoverySeek: number | null = null;
 	private lastObservedTime = 0;
 	private progressWatchdog: ReturnType<typeof setInterval> | null = null;
@@ -364,7 +413,7 @@ class AudioPlayer {
 
 	play(): void {
 		if (!this.audio || !this.current) return;
-		if (this.status === 'error') {
+		if (this.status === 'error' || this.pausedOnAFailedLoad) {
 			this.reloadOnPlay('media-error');
 			return;
 		}
@@ -390,6 +439,10 @@ class AudioPlayer {
 
 	toggle(): void {
 		if (!this.audio || !this.current) return;
+		if (transportOffersPause(this.transport)) {
+			this.pause();
+			return;
+		}
 		if (this.status === 'error') {
 			this.play();
 			return;
@@ -401,8 +454,7 @@ class AudioPlayer {
 			this.autoplayPending = !this.autoplayPending;
 			return;
 		}
-		if (this.audio.paused) this.play();
-		else this.pause();
+		this.play();
 	}
 
 	seek(seconds: number): void {
@@ -744,6 +796,13 @@ class AudioPlayer {
 		if (this.steadyChecks >= STEADY_CHECKS_BEFORE_RECOVERY_ENDS) this.recoveryStartedAt = null;
 	}
 
+	// A recovery reload that failed while the network was gone leaves the
+	// element holding no take; the listener's pause hid that failure, so the
+	// next play must fetch the take again instead of resuming the element.
+	private get pausedOnAFailedLoad(): boolean {
+		return this.status === 'paused' && this.audio !== null && this.audio.error !== null;
+	}
+
 	// Survives a pause on purpose: pause and play on an element whose clock
 	// stood still leave it silent, so the next play must reload instead.
 	private get clockStoodStill(): boolean {
@@ -951,10 +1010,13 @@ class AudioPlayer {
 	// resurrect the exact defect stream mode exists to fix. Recovery is
 	// status-aware and stays in-stream.
 	// While a probe is out, whatever else asks for recovery — the element's
-	// error, the network's return — is answered by that probe's reload.
+	// error, the network's return — is answered by that probe's reload. A
+	// pause, a failure or another take that lands while the probe or the
+	// rebuild is out has the last word.
 	private async recoverStream(reason: RecoveryReason): Promise<void> {
 		const el = this.audio;
 		if (!el || !this.streamEngine.active || this.streamProbe !== null) return;
+		const target = this.current;
 		const state = this.streamEngine.fallbackState(this.currentTime, el.currentTime);
 		if (!state) return;
 		const step = this.nextRecoveryStep(reason);
@@ -978,12 +1040,13 @@ class AudioPlayer {
 			(track?.start_offset ?? 0) + state.trackTime - RECOVERY_SEEK_BACK_SECONDS
 		);
 		const probe = await this.probeStream(state.manifest.stream_url);
-		if (probe === null) return;
+		if (probe === null || this.streamRecoveryInterrupted(target)) return;
 
 		if (probe.status === 404) {
 			// Snapshot reaped server-side (TTL) — rebuild it from the manifest's
 			// own track list and resume at the same track position.
 			const fresh = await this.callbacks.onStreamRebuild?.(state);
+			if (this.streamRecoveryInterrupted(target)) return;
 			if (fresh && fresh.tracks.length > 0) {
 				const currentId = track?.generation_id;
 				const matched = fresh.tracks.findIndex((item) => item.generation_id === currentId);
@@ -1005,6 +1068,10 @@ class AudioPlayer {
 		});
 		this.streamEngine.resumeAt(absoluteTime);
 		this.reloadSource(el, state.manifest.stream_url);
+	}
+
+	private streamRecoveryInterrupted(target: PlaybackInfo | null): boolean {
+		return this.current !== target || this.status !== 'loading';
 	}
 
 	// Null when the take changed while the probe was out: its answer is stale.

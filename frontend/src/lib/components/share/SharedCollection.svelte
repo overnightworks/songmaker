@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { audioPlayer, transportOffersPause } from '$lib/services/audioPlayer.svelte';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		collectionSubtitle,
@@ -42,7 +42,7 @@
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
 	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
-	const isPlaying = $derived(audioPlayer.status === 'playing');
+	const offersPause = $derived(transportOffersPause(audioPlayer.transport));
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
 
 	$effect(() => {
@@ -146,7 +146,7 @@
 			initials={titleInitials(view.title)}
 			artFill={null}
 			kind={view.kind}
-			playing={playback.currentTrack !== null && isPlaying}
+			playing={playback.currentTrack !== null && offersPause}
 			onplay={tracks.length > 0 ? onHeaderPlay : null}
 			{titleArea}
 			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
@@ -179,10 +179,9 @@
 
 {#if playback.currentTrack}
 	<TransportBarFrame
-		{isPlaying}
-		isLoading={audioPlayer.status === 'loading' || audioPlayer.status === 'buffering'}
-		isError={audioPlayer.status === 'error'}
+		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
+		onRetry={() => audioPlayer.play()}
 		currentTime={audioPlayer.currentTime}
 		duration={audioPlayer.duration}
 		{formatTime}

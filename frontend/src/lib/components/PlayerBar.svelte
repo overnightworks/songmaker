@@ -28,7 +28,7 @@
 		selectedPlaylistDetail
 	} from '$lib/stores/playlists';
 	import { transportBarHidden } from '$lib/stores/transportBar';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { audioPlayer, transportOffersPause } from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
@@ -58,15 +58,14 @@
 	let nowPlayingTrigger: HTMLButtonElement | undefined = $state();
 
 	const current = $derived(audioPlayer.current);
-	const status = $derived(audioPlayer.status);
+	const transport = $derived(audioPlayer.transport);
 	const errorMsg = $derived(audioPlayer.error);
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
 
-	const isPlaying = $derived(status === 'playing');
-	const isLoading = $derived(status === 'loading' || status === 'buffering');
-	const isError = $derived(status === 'error');
+	const isPlaying = $derived(transport === 'playing');
+	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
 
 	const songs = $derived($songList);
 	const docked = $derived($nowPlayingSurface === 'docked');
@@ -149,7 +148,9 @@
 	});
 
 	$effect(() => {
-		updateMediaSessionPlaybackState(isPlaying ? 'playing' : current ? 'paused' : 'none');
+		updateMediaSessionPlaybackState(
+			transportOffersPause(transport) ? 'playing' : current ? 'paused' : 'none'
+		);
 		updateMediaSessionPositionState(currentTime, duration);
 	});
 
@@ -218,10 +219,9 @@
 {#if !$transportBarHidden}
 	<OfflineStrip />
 	<TransportBarFrame
-		{isPlaying}
-		{isLoading}
-		{isError}
+		{transport}
 		{errorMsg}
+		onRetry={() => audioPlayer.play()}
 		{currentTime}
 		{duration}
 		{formatTime}

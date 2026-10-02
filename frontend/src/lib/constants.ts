@@ -146,8 +146,9 @@ export function collectionShuffleLabel(kind: CollectionPlayKind): string {
 }
 
 // The transport's play button is named after the state its click leaves:
-// "Pause" while audio is really playing, "Retry" once it errored, otherwise
-// "Play". A flow reads the name to tell a sounding take from a dead one.
+// "Pause" while the listener asked for sound — playing, a stalled take
+// recovering, or one waiting for the network — "Retry" once it failed,
+// otherwise "Play". A flow reads the name to tell a sounding take from a dead one.
 export const TRANSPORT_PLAY_LABEL = 'Play';
 export const TRANSPORT_PAUSE_LABEL = 'Pause';
 export const TRANSPORT_RETRY_LABEL = 'Retry';
