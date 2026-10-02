@@ -1,0 +1,8 @@
+claim_id = "6b9d521955784379aa8dcaca55c2865a"
+agent = "claude-head"
+role = "builder"
+base = "7bec4fdbc5ebd1b387b540bffeb50cee8966e9d8"
+branch = "claude-head/issue-1263-history-synchronous-writes"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/app-navigation.ts", "frontend/src/lib/test-utils/library-history.ts"]
+opened_commit = "4ae54144ec1617e29719217abb128a8d57a7e28f"
+whole_reason = "synchronous history writes across the history owner, library context, navigation and their fakes and e2e"
