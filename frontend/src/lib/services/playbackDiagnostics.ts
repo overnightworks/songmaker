@@ -204,7 +204,8 @@ function startHeartbeat(): () => void {
 
 // Chrome's intensive throttling misses a heartbeat every minute of a night, so
 // gaps with nothing recorded between them grow one event instead of filling the
-// ring and pushing the media evidence out of it.
+// ring and pushing the media evidence out of it. Another tab may have sent the
+// open gap meanwhile; the write then drops it, and this miss opens a new gap.
 function recordTimerGap(elapsedMs: number): void {
 	if (recording === null) return;
 	const gap = recording.openGap;
@@ -213,7 +214,7 @@ function recordTimerGap(elapsedMs: number): void {
 		gap.totalMs += elapsedMs;
 		gap.recorded.event.detail = timerGapDetail(gap);
 		writeEvents(recording);
-		return;
+		if (recording.events.includes(gap.recorded)) return;
 	}
 	recordPageEvent('timer_gap', timerGapDetail({ count: 1, totalMs: elapsedMs }));
 	const recorded = recording.events.at(-1);

@@ -403,6 +403,30 @@ describe('playback diagnostics recorder', () => {
 		]);
 	});
 
+	it('keeps every missed heartbeat when another tab sent the open timer gap', async () => {
+		vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval', 'Date'] });
+		const firstTab = recorder;
+		const stopFirstTab = firstTab.startPlaybackDiagnostics(LISTENER);
+		missHeartbeat(45_000);
+		vi.resetModules();
+		const secondTab: Recorder = await import('./playbackDiagnostics');
+		const stopSecondTab = secondTab.startPlaybackDiagnostics(LISTENER);
+		await letTheServerAnswer();
+		stopSecondTab();
+
+		missHeartbeat(45_000);
+		stopFirstTab();
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		const gaps = sentReports()
+			.flatMap((report) => report.events)
+			.filter((event) => event.kind === 'timer_gap')
+			.map((event) => event.detail);
+		expect(gaps).toEqual(['count=1 total_ms=60000', 'count=1 total_ms=60000']);
+	});
+
 	it('cuts a detail to the 200 characters the server accepts', async () => {
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('x'.repeat(250)));
