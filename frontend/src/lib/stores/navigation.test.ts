@@ -92,6 +92,7 @@ const fetchActiveGeneration = vi.fn();
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$app/paths', () => ({
 	resolve: vi.fn((path: string) => path)
 }));

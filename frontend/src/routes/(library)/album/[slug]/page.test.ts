@@ -1,4 +1,4 @@
-import { replaceHistoryEntry } from '$lib/test-utils/library-history';
+import { mountAddressRoute } from '$lib/test-utils/library-history';
 import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -30,7 +30,17 @@ const api = vi.hoisted(() => ({
 
 const routeParams = vi.hoisted(() => ({ slug: 'anfield' }));
 
-vi.mock('$app/state', () => ({ page: { params: routeParams } }));
+vi.mock('$app/state', async () => {
+	const { fakePage } = await import('$lib/test-utils/app-navigation');
+	return {
+		page: {
+			params: routeParams,
+			get url() {
+				return fakePage.url;
+			}
+		}
+	};
+});
 // Stands in for the router the way the real one behaves for this app: it
 // moves the history entry, but nothing here re-resolves the mounted route.
 vi.mock('$app/navigation', async () =>
@@ -126,7 +136,7 @@ function openAddress(): HTMLElement {
 // routes/+layout.svelte starts for every signed-in library route.
 function coldTabAt(pathname: string): void {
 	routeParams.slug = pathname.slice('/album/'.length);
-	replaceHistoryEntry(pathname);
+	mountAddressRoute(pathname);
 	albumList.set([]);
 	songList.set([]);
 	selectedSongId.set(null);

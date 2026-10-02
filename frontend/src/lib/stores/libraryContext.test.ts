@@ -1,6 +1,7 @@
 import {
 	historyEntry,
 	historyLength,
+	mountAddressRoute,
 	pressBack,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
@@ -55,6 +56,7 @@ const searchLibrary = vi.fn();
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 
 vi.mock('$lib/api/library', () => ({
 	searchLibrary: (...args: unknown[]) => searchLibrary(...args)
@@ -846,7 +848,7 @@ describe('a page load', () => {
 	};
 
 	beforeEach(() => {
-		replaceHistoryEntry('/playlist/p', playlistState);
+		mountAddressRoute('/playlist/p', playlistState);
 	});
 
 	it('puts the library its entry carried back onto the entry once the router started', async () => {
@@ -908,7 +910,7 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		replaceHistoryEntry('/album/a9/tide');
+		mountAddressRoute('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
@@ -951,7 +953,7 @@ describe('openSongAddress', () => {
 				limit: 200,
 				has_more: false
 			});
-		replaceHistoryEntry('/album/a9/tide');
+		mountAddressRoute('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
@@ -974,7 +976,7 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		replaceHistoryEntry('/album/a9/ghost-song');
+		mountAddressRoute('/album/a9/ghost-song');
 
 		await expect(openSongAddress('a9', 'ghost-song')).resolves.toBe('unknown-song');
 
@@ -985,7 +987,7 @@ describe('openSongAddress', () => {
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		replaceHistoryEntry('/album/ghost/tide');
+		mountAddressRoute('/album/ghost/tide');
 
 		await expect(openSongAddress('ghost', 'tide')).resolves.toBe('unknown-album');
 
@@ -1013,7 +1015,7 @@ describe('openSongAddress', () => {
 			songId: 's9',
 			scrollAnchor: 320
 		};
-		replaceHistoryEntry('/album/a9/tide', restored);
+		mountAddressRoute('/album/a9/tide', restored);
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
@@ -1036,7 +1038,7 @@ describe('openSongAddress', () => {
 		});
 		showSongTab('s9', 'takes');
 		detailTab.set('edit');
-		replaceHistoryEntry('/album/a9/tide');
+		mountAddressRoute('/album/a9/tide');
 
 		await expect(openSongAddress('a9', 'tide')).resolves.toBe('found');
 
@@ -1065,7 +1067,7 @@ describe('openSongAddress', () => {
 				]),
 				limit: 200
 			});
-			replaceHistoryEntry('/album/a9/tide', {
+			mountAddressRoute('/album/a9/tide', {
 				...libraryRootState(),
 				surface: 'detail',
 				collection: { kind: 'album', id: 'a9' },
@@ -1095,7 +1097,7 @@ describe('openSongAddress', () => {
 			]),
 			limit: 200
 		});
-		replaceHistoryEntry('/album/a9/tide?gen=g1');
+		mountAddressRoute('/album/a9/tide?gen=g1');
 
 		await expect(openSongAddress('a9', 'tide', 'g1')).resolves.toBe('found');
 
@@ -1116,7 +1118,7 @@ describe('a song opened from its address sets its album', () => {
 					...emptyPage([song({ id: 's9', slug: 'tide', album_id: 'a9', generation_count: 0 })]),
 					limit: 200
 				});
-				replaceHistoryEntry('/album/a9/tide');
+				mountAddressRoute('/album/a9/tide');
 				await openSongAddress('a9', 'tide');
 			}
 		},
@@ -1171,34 +1173,46 @@ describe('a song opened from its address sets its album', () => {
 });
 
 describe('openTakeAddress', () => {
-	it('makes the library restore the addressed take on a tab that knows nothing else', async () => {
-		fetchSongs.mockResolvedValueOnce({
-			...emptyPage([
-				song({
-					title: 'Tide',
-					id: 's9',
-					slug: 'tide',
-					album_id: 'a9',
-					album_title: 'Remote',
-					generation_count: 1,
-					generations: [
-						generation({ song_id: 's9', mp3_path: '/audio/g1.mp3', seed: 1, generation_number: 3 })
-					]
-				})
-			]),
-			limit: 200
-		});
-		replaceHistoryEntry('/album/a9/tide/take/3');
+	it.each([
+		{ typed: '/album/a9/tide/take/3', form: 'its own form' },
+		{ typed: '/album/a9/tide/take/03', form: 'another form of the same number' }
+	])(
+		'makes the library restore the addressed take on a tab that knows nothing else, typed in $form',
+		async ({ typed }) => {
+			fetchSongs.mockResolvedValueOnce({
+				...emptyPage([
+					song({
+						title: 'Tide',
+						id: 's9',
+						slug: 'tide',
+						album_id: 'a9',
+						album_title: 'Remote',
+						generation_count: 1,
+						generations: [
+							generation({
+								song_id: 's9',
+								mp3_path: '/audio/g1.mp3',
+								seed: 1,
+								generation_number: 3
+							})
+						]
+					})
+				]),
+				limit: 200
+			});
+			mountAddressRoute(typed);
 
-		await expect(openTakeAddress('a9', 'tide', 3)).resolves.toBe('found');
+			await expect(openTakeAddress('a9', 'tide', 3)).resolves.toBe('found');
 
-		expect(historyEntry().songId).toBe('s9');
-		expect(historyEntry().generationId).toBe('g1');
-		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
-		expect(get(selectedSongId)).toBe('s9');
-		expect(get(selectedGenerationId)).toBe('g1');
-		expect(get(detailTab)).toBe('takes');
-	});
+			expect(location.pathname).toBe('/album/a9/tide/take/3');
+			expect(historyEntry().songId).toBe('s9');
+			expect(historyEntry().generationId).toBe('g1');
+			expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
+			expect(get(selectedSongId)).toBe('s9');
+			expect(get(selectedGenerationId)).toBe('g1');
+			expect(get(detailTab)).toBe('takes');
+		}
+	);
 
 	it('loads the rest of the song generations to find a take the listing did not carry yet', async () => {
 		fetchSongs.mockResolvedValueOnce({
@@ -1235,7 +1249,7 @@ describe('openTakeAddress', () => {
 				]
 			})
 		);
-		replaceHistoryEntry('/album/a9/tide/take/2');
+		mountAddressRoute('/album/a9/tide/take/2');
 
 		await expect(openTakeAddress('a9', 'tide', 2)).resolves.toBe('found');
 
@@ -1258,7 +1272,7 @@ describe('openTakeAddress', () => {
 			]),
 			limit: 200
 		});
-		replaceHistoryEntry('/album/a9/tide/take/9');
+		mountAddressRoute('/album/a9/tide/take/9');
 
 		await expect(openTakeAddress('a9', 'tide', 9)).resolves.toBe('unknown-take');
 
@@ -1280,7 +1294,7 @@ describe('openTakeAddress', () => {
 			]),
 			limit: 200
 		});
-		replaceHistoryEntry('/album/a9/ghost-song/take/1');
+		mountAddressRoute('/album/a9/ghost-song/take/1');
 
 		await expect(openTakeAddress('a9', 'ghost-song', 1)).resolves.toBe('unknown-song');
 
@@ -1290,7 +1304,7 @@ describe('openTakeAddress', () => {
 	it('reports an unknown album even when the song lookup also comes back empty', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		replaceHistoryEntry('/album/ghost/tide/take/1');
+		mountAddressRoute('/album/ghost/tide/take/1');
 
 		await expect(openTakeAddress('ghost', 'tide', 1)).resolves.toBe('unknown-album');
 
@@ -1396,7 +1410,7 @@ describe('resolveLegacySongQueryAddress', () => {
 
 describe('openAlbumAddress', () => {
 	it('makes the library restore the addressed album on a tab that knows nothing else', async () => {
-		replaceHistoryEntry('/album/a9');
+		mountAddressRoute('/album/a9');
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
@@ -1407,7 +1421,7 @@ describe('openAlbumAddress', () => {
 	it('reports an unknown slug without opening anything', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(404, 'not found', '/api/albums/ghost'));
-		replaceHistoryEntry('/album/ghost');
+		mountAddressRoute('/album/ghost');
 
 		await expect(openAlbumAddress('ghost')).resolves.toBe('unknown');
 
@@ -1422,7 +1436,7 @@ describe('openAlbumAddress', () => {
 			collection: { kind: 'album' as const, id: 'a9' },
 			scrollAnchor: 320
 		};
-		replaceHistoryEntry('/album/a9', restored);
+		mountAddressRoute('/album/a9', restored);
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
@@ -1430,7 +1444,7 @@ describe('openAlbumAddress', () => {
 	});
 
 	it('lets the address overrule a restore state that opens a different album', async () => {
-		replaceHistoryEntry('/album/a9', {
+		mountAddressRoute('/album/a9', {
 			...libraryRootState(),
 			surface: 'detail',
 			collection: { kind: 'album', id: 'other' }
@@ -1444,6 +1458,7 @@ describe('openAlbumAddress', () => {
 	// History moved on while the route resolved its params (issue #1006, H3).
 	it('mounts the route of the address history stands on when the params name another', async () => {
 		const left = { ...libraryRootState(), surface: 'detail' as const, scrollAnchor: 640 };
+		mountAddressRoute('/album/a9');
 		replaceEntry('/album/a2', { library: { ...left, collection: { kind: 'album', id: 'a2' } } });
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
@@ -1475,7 +1490,7 @@ describe('openPlaylistAddress', () => {
 				title: 'Friday Night'
 			})
 		);
-		replaceHistoryEntry('/playlist/friday-night');
+		mountAddressRoute('/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 
@@ -1486,7 +1501,7 @@ describe('openPlaylistAddress', () => {
 
 	it('reports an unknown slug without opening anything', async () => {
 		fetchPlaylists.mockResolvedValueOnce([]);
-		replaceHistoryEntry('/playlist/ghost');
+		mountAddressRoute('/playlist/ghost');
 
 		await expect(openPlaylistAddress('ghost')).resolves.toBe('unknown');
 
@@ -1504,7 +1519,7 @@ describe('openPlaylistAddress', () => {
 			collection: { kind: 'playlist' as const, id: 'p9' },
 			scrollAnchor: 320
 		};
-		replaceHistoryEntry('/playlist/friday-night', restored);
+		mountAddressRoute('/playlist/friday-night', restored);
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 
@@ -1515,7 +1530,7 @@ describe('openPlaylistAddress', () => {
 		fetchPlaylists.mockResolvedValueOnce([
 			playlistItem({ title: 'P', share_slug: null, id: 'p9', slug: 'friday-night' })
 		]);
-		replaceHistoryEntry('/playlist/friday-night', {
+		mountAddressRoute('/playlist/friday-night', {
 			...libraryRootState(),
 			surface: 'detail',
 			collection: { kind: 'playlist', id: 'other' }
@@ -1546,7 +1561,7 @@ describe('openPlaylistAddress', () => {
 				title: 'Friday Night'
 			})
 		);
-		replaceHistoryEntry('/playlist/friday-night');
+		mountAddressRoute('/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).resolves.toBe('found');
 

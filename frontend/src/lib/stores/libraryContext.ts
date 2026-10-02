@@ -1,5 +1,6 @@
 import { untrack } from 'svelte';
 import { get, writable } from 'svelte/store';
+import { page } from '$app/state';
 import { fetchAlbum } from '$lib/api/albums';
 import {
 	historyStateOnLoad,
@@ -469,8 +470,10 @@ type AlbumAddress = 'found' | 'unknown';
 // address bar — see the note there before turning any of these back into a
 // bare history.replaceState.
 export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
+	const mountedUrl = mountedRouteUrl();
 	if (!(await albumIsKnown(albumId))) return 'unknown';
 	await showResolvedAddress({
+		mountedUrl,
 		routePath: albumRoutePath(albumId),
 		historyOpens: () => historyAlreadyOpens(albumId),
 		addressState: () => albumAddressState(albumId),
@@ -479,22 +482,34 @@ export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
 	return 'found';
 }
 
-// What an address route resolved its params to: the page's address, whether
-// history already opens it, the library state that opens it afresh, and
-// whether the library already shows it.
+// What an address route resolved its params to: the address the route was
+// mounted under, the page's own address, whether history already opens it,
+// the library state that opens it afresh, and whether the library already
+// shows it.
 interface ResolvedAddress {
+	readonly mountedUrl: string;
 	readonly routePath: string;
 	readonly historyOpens: () => boolean;
 	readonly addressState: () => LibraryHistoryState;
 	readonly shown: () => boolean;
 }
 
-// The tail every address route shares. Its params may name another address
-// than history stands on by the time they resolve (see `mountAddressOver`):
-// they then resolve nothing, and the route of the address history stands on
-// is mounted instead, whose own resolution follows.
+// The address the route was mounted under, read as its resolution starts:
+// shallow routing leaves `page.url` on the route, and its params name exactly
+// that address, in whatever form it was typed (`/take/03`, a lowercase
+// percent-escape), which the page's own address then replaces. Read untracked,
+// so the route's effect that starts the resolution does not re-run when a Back
+// moves `page.url`.
+function mountedRouteUrl(): string {
+	return untrack(() => page.url.href);
+}
+
+// The tail every address route shares. History may stand on another address
+// than the route was mounted under by the time its params resolve (see
+// `mountAddressOver`): they then resolve nothing, and the route of the address
+// history stands on is mounted instead, whose own resolution follows.
 async function showResolvedAddress(address: ResolvedAddress): Promise<void> {
-	if (mountAddressOver(address.routePath) === 'remounts') return;
+	if (mountAddressOver(address.mountedUrl) === 'remounts') return;
 	const opened = address.historyOpens();
 	const state = opened
 		? (currentLibraryHistoryState() as LibraryHistoryState)
@@ -562,6 +577,7 @@ export async function openSongAddress(
 	songSlug: string,
 	generationId: string | null = null
 ): Promise<SongAddress> {
+	const mountedUrl = mountedRouteUrl();
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
@@ -569,6 +585,7 @@ export async function openSongAddress(
 	if (!albumKnown) return 'unknown-album';
 	if (!song) return 'unknown-song';
 	await showResolvedAddress({
+		mountedUrl,
 		routePath: songRoutePath(albumId, songSlug),
 		historyOpens: () => historyAlreadyOpensSong(song.id),
 		addressState: () => songAddressState(song, generationId),
@@ -597,6 +614,7 @@ export async function openTakeAddress(
 	songSlug: string,
 	takeNumber: number
 ): Promise<TakeAddress> {
+	const mountedUrl = mountedRouteUrl();
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
@@ -608,6 +626,7 @@ export async function openTakeAddress(
 	const generation = loadedSong.generations.find((item) => item.generation_number === takeNumber);
 	if (!generation) return 'unknown-take';
 	await showResolvedAddress({
+		mountedUrl,
 		routePath: takeRoutePath(albumId, songSlug, takeNumber),
 		historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
 		addressState: () => songAddressState(song, generation.id),
@@ -624,9 +643,11 @@ type PlaylistAddress = 'found' | 'unknown';
 // album to nest inside, so unlike openSongAddress there is only the one
 // resolution, not two run concurrently.
 export async function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
+	const mountedUrl = mountedRouteUrl();
 	const playlist = await resolvePlaylistBySlug(slug);
 	if (!playlist) return 'unknown';
 	await showResolvedAddress({
+		mountedUrl,
 		routePath: playlistRoutePath(slug),
 		historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
 		addressState: () => playlistAddressState(playlist.id),
