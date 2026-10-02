@@ -10,6 +10,7 @@ import {
 import {
 	ACCOUNT_MENU_LABEL,
 	COWRITER_TURN_PATH,
+	PLAYBACK_DIAGNOSTICS_PATH,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -148,6 +149,15 @@ function isClosedOnPurpose(url: string): boolean {
 	return (
 		path === RESOURCE_EVENT_STREAM_PATH || path === COWRITER_TURN_PATH || JOB_STREAM_PATH.test(path)
 	);
+}
+
+// The playback recorder (#1187) tells the server what it saw as the page
+// hides, so every reload or navigation away of a signed-in page sends one
+// report, and Chromium reports that send, cut from the page that made it, as
+// aborted. The browser still delivers a keepalive send it cut from the page,
+// so the abort loses nothing.
+function isSentAsThePageLeaves(url: string): boolean {
+	return new URL(url).pathname === PLAYBACK_DIAGNOSTICS_PATH;
 }
 
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
@@ -376,11 +386,13 @@ export class FlowGuard {
 		});
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
-			// Chromium reports a stream the client cancelled in flight as a failed
-			// request with exactly this error, indistinguishable from any other
+			// Chromium reports a stream the client cancelled in flight, and a send
+			// the leaving page cut off, as a failed request with exactly this error, indistinguishable from any other
 			// intentional client-side abort. Every other reason still fails the
 			// flow, including a 429 or 5xx on the same path (handled below).
-			if (errorText === 'net::ERR_ABORTED' && isClosedOnPurpose(request.url())) {
+			const cutOffOnPurpose =
+				isClosedOnPurpose(request.url()) || isSentAsThePageLeaves(request.url());
+			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
 			if (losesNetworkOnPurpose && failedWithTheNetwork(page, errorText)) return;

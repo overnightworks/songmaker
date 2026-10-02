@@ -5,6 +5,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
+import { recordPlaybackEvent, type PlaybackDiagnosticKind } from './playbackDiagnostics';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -111,6 +112,34 @@ const STILL_CHECKS_BEFORE_RECOVERY = 4;
 // Playback that has played on for as long as a freeze takes to detect has
 // recovered; its next freeze is a new one, not a failed recovery.
 const STEADY_CHECKS_BEFORE_RECOVERY_ENDS = STILL_CHECKS_BEFORE_RECOVERY;
+// Every media event either deck fires, for the diagnostics recorder (#1187).
+// timeupdate and progress are left out: they fire several times a second and
+// would push a night's evidence out of the recorder's buffer.
+const DIAGNOSED_MEDIA_EVENTS: readonly (keyof HTMLMediaElementEventMap)[] = [
+	'abort',
+	'canplay',
+	'canplaythrough',
+	'durationchange',
+	'emptied',
+	'ended',
+	'error',
+	'loadeddata',
+	'loadedmetadata',
+	'loadstart',
+	'pause',
+	'play',
+	'playing',
+	'ratechange',
+	'seeked',
+	'seeking',
+	'stalled',
+	'suspend',
+	'volumechange',
+	'waiting'
+];
+const MEDIA_EVENTS_WITH_THEIR_OWN_KIND: ReadonlyMap<string, PlaybackDiagnosticKind> = new Map(
+	(['play', 'pause', 'ended', 'waiting', 'stalled', 'error'] as const).map((kind) => [kind, kind])
+);
 
 class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
@@ -305,9 +334,11 @@ class AudioPlayer {
 			return;
 		}
 
+		const standbyFacts = `standby_ready_state=${this.standby?.readyState ?? 'none'} url_matched=${this.standbyUrl === url}`;
 		const readyStandby = this.standbyReadyFor(url);
 		if (readyStandby) {
 			this.promote(readyStandby, info, url, { autoplay, startAt: opts.startAt });
+			this.note('promote', standbyFacts);
 			return;
 		}
 
@@ -321,6 +352,7 @@ class AudioPlayer {
 		this.setCurrent(info);
 		this.currentUrl = url;
 		this.loadSource(el, url);
+		this.note('fresh_load', standbyFacts);
 	}
 
 	loadStream(
@@ -581,6 +613,8 @@ class AudioPlayer {
 	// Every handler acts for the active deck only: the standby loads, and
 	// clearing a deck can fire error, without either touching what is shown.
 	private attachListeners(el: HTMLAudioElement): void {
+		for (const name of DIAGNOSED_MEDIA_EVENTS)
+			el.addEventListener(name, () => this.noteMediaEvent(el, name));
 		const on = (name: keyof HTMLMediaElementEventMap, handler: () => void): void => {
 			el.addEventListener(name, () => {
 				if (el === this.audio) handler();
@@ -643,7 +677,7 @@ class AudioPlayer {
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		on('pause', () => {
-			this.recordPauseSource(el);
+			this.pauseRequestedByApp = false;
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
 			if (this.status === 'loading') return;
@@ -734,6 +768,7 @@ class AudioPlayer {
 		);
 		this.autoplayPending = listenerWantsSound;
 		if (this.audio) this.pauseElement(this.audio);
+		this.note('give_up', this.failure?.kind ?? '');
 	}
 
 	// A listener who paused while the take waited is not woken by the network:
@@ -845,17 +880,32 @@ class AudioPlayer {
 		this.scheduleStallRecovery();
 	}
 
-	// Android pauses the element on its own (audio focus, another app's sound);
-	// a debug line per pause tells that apart from the app's own pauses and
-	// from the pause a browser fires just before 'ended'.
-	private recordPauseSource(el: HTMLAudioElement): void {
-		const source = this.pauseSource(el);
-		this.pauseRequestedByApp = false;
-		console.debug('Audio paused', {
-			source,
-			status: this.status,
-			currentTime: el.currentTime,
-			generationId: this.current?.generation.id
+	// Registered before the deck's own handlers, so a pause is written down
+	// before the 'pause' handler settles the app's pause marker. Android pauses
+	// the element on its own (audio focus, another app's sound); the source
+	// tells that apart from the app's own pauses and from the pause a browser
+	// fires just before 'ended'.
+	private noteMediaEvent(el: HTMLAudioElement, name: keyof HTMLMediaElementEventMap): void {
+		const facts = [name, `network=${el.networkState}`, `buffered=${bufferedUntil(el).toFixed(1)}`];
+		if (name === 'pause' && el === this.audio) facts.push(`source=${this.pauseSource(el)}`);
+		this.note(MEDIA_EVENTS_WITH_THEIR_OWN_KIND.get(name) ?? 'media_event', facts.join(' '), el);
+	}
+
+	private note(
+		kind: PlaybackDiagnosticKind,
+		detail: string,
+		el: HTMLAudioElement | null = this.audio
+	): void {
+		const active = el === this.audio;
+		recordPlaybackEvent({
+			kind,
+			detail,
+			take: el && {
+				takeId: active ? (this.current?.generation.id ?? null) : null,
+				position: el.currentTime,
+				readyState: el.readyState,
+				deck: active ? 'active' : 'standby'
+			}
 		});
 	}
 
@@ -951,12 +1001,7 @@ class AudioPlayer {
 		this.autoplayPending = true;
 		this.clearStallRecoveryTimer();
 
-		console.debug('Recovering audio playback', {
-			reason,
-			seekTime,
-			generationId: this.current.generation.id
-		});
-
+		this.note('retry', `reason=${reason} seek=${seekTime.toFixed(1)}`);
 		this.reloadSource(el, this.currentUrl);
 	}
 
@@ -1062,10 +1107,7 @@ class AudioPlayer {
 		}
 		if (await this.answeredARefusal(probe)) return;
 
-		console.debug('Recovering stream playback', {
-			reason,
-			absoluteTime
-		});
+		this.note('retry', `reason=${reason} stream_at=${absoluteTime.toFixed(1)}`);
 		this.streamEngine.resumeAt(absoluteTime);
 		this.reloadSource(el, state.manifest.stream_url);
 	}
@@ -1099,6 +1141,7 @@ class AudioPlayer {
 
 	private handlePlayRejection(err: unknown): void {
 		const name = err instanceof Error ? err.name : '';
+		this.note('play_rejected', name);
 		if (name === 'AbortError') return;
 		if (name === 'NotAllowedError') {
 			this.status = 'paused';
