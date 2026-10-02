@@ -462,10 +462,11 @@
 	function loadVersionWithUndo(version: VersionItem): void {
 		const undo = loadVersionAsDraft(version);
 		if (!undo) return;
-		addUndoToast(versionLoadedToastLabel(version.version_number), {
-			label: TOAST_UNDO_LABEL,
-			handler: undo
-		});
+		addUndoToast(
+			versionLoadedToastLabel(version.version_number),
+			{ label: TOAST_UNDO_LABEL, handler: undo },
+			'brief'
+		);
 	}
 
 	async function onRenameSong(newTitle: string): Promise<void> {

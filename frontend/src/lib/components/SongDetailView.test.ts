@@ -1754,7 +1754,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(target.textContent).toContain(versionLoadedFromLabel(1));
 		expect(addUndoToast).toHaveBeenCalledWith(
 			versionLoadedToastLabel(1),
-			expect.objectContaining({ label: TOAST_UNDO_LABEL })
+			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
+			'brief'
 		);
 		expect(updateSong).not.toHaveBeenCalled();
 	});

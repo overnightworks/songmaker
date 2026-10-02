@@ -40,7 +40,6 @@ const SONG_TITLE = 'Song Versions';
 const FIRST_VERSION_LYRICS = 'Song Phone Takes seeded lyrics';
 const SECOND_VERSION_LYRICS = 'Rain on the window, the city asleep';
 const UNSAVED_LINE = 'a line nobody saved';
-const TOAST_DISMISS_LABEL = 'Dismiss';
 
 interface SeededVersions {
 	songId: string;
@@ -134,6 +133,13 @@ function replaceDraftDialog(page: Page): Locator {
 	return page.getByRole('dialog', { name: VERSION_REPLACE_DRAFT_TITLE });
 }
 
+type Box = { x: number; y: number; width: number; height: number };
+
+function boxesOverlap(a: Box | null, b: Box | null): boolean {
+	if (!a || !b) throw new Error('Expected both boxes on screen');
+	return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
 async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 	await versionChip(page).click();
 	await expect(versionsSheet(page)).toBeVisible();
@@ -160,18 +166,22 @@ test.describe('the versions of a song', () => {
 			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
 			await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
 			await expect(loadedToast(page)).toBeVisible();
+			const generate = workspace(page).getByRole('button', {
+				name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate)
+			});
+			// On the phone the toast rises above the docked Generate bar, so
+			// Generate takes the tap while the toast still shows.
+			expect(
+				boxesOverlap(await loadedToast(page).boundingBox(), await generate.boundingBox())
+			).toBe(false);
 			expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 
-			// On the phone the toast stands over the Generate bar.
-			await loadedToast(page).getByRole('button', { name: TOAST_DISMISS_LABEL }).click();
 			const queued = page.waitForResponse(
 				(response) =>
 					response.url().endsWith(`/api/songs/${song.songId}/generate`) &&
 					response.request().method() === 'POST'
 			);
-			await workspace(page)
-				.getByRole('button', { name: nameStartingWith(EDITOR_GENERATE_MODE_LABELS.generate) })
-				.click();
+			await generate.click();
 			// The worker-less stack may refuse the job itself; what counts here is
 			// the version Generate saved before it asked for one.
 			await queued;

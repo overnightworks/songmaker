@@ -3,7 +3,14 @@ import { get, writable } from 'svelte/store';
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
 
 const TOAST_DURATION_MS = 5000;
-const UNDO_TOAST_DURATION_MS = 30000;
+
+/** How long Undo stays offered: a few seconds for a light change, a longer grace for a deletion. */
+export type UndoToastLength = 'brief' | 'long';
+
+const UNDO_TOAST_DURATION_MS: Record<UndoToastLength, number> = {
+	brief: TOAST_DURATION_MS,
+	long: 30000
+};
 
 type ToastType = 'error' | 'success' | 'info';
 
@@ -57,7 +64,11 @@ export function addToast(message: string, type: ToastType = 'info'): number {
 	return id;
 }
 
-export function addUndoToast(message: string, action: ToastAction): void {
+export function addUndoToast(
+	message: string,
+	action: ToastAction,
+	length: UndoToastLength = 'long'
+): void {
 	const id = nextId++;
 	const wrapped: ToastAction = {
 		label: action.label,
@@ -69,7 +80,7 @@ export function addUndoToast(message: string, action: ToastAction): void {
 	toasts.update((t) => [...t, { id, message, type: 'info', action: wrapped }]);
 	setTimeout(() => {
 		toasts.update((t) => t.filter((toast) => toast.id !== id));
-	}, UNDO_TOAST_DURATION_MS);
+	}, UNDO_TOAST_DURATION_MS[length]);
 }
 
 export function dismissToast(id: number): void {
