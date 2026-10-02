@@ -102,11 +102,9 @@ import {
 	cancelLibraryHistoryApply,
 	captureLibraryScroll,
 	detailTab,
-	currentLibraryHistoryState,
 	holdLibraryRestoresUntil,
 	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
-	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
@@ -734,20 +732,34 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 		expect(historyEntry()).toEqual(libraryRootState());
 	});
 
-	// A song tapped as soon as its album shows: the router may still be
-	// mounting the album's route, and the song's entry must not wait for it.
-	it('installs a crossing push at once while the route of the one before it still mounts', () => {
-		replaceHistoryEntry('/', libraryRootState());
-		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
-		void writeLibraryHistory(albumState, albumRoutePath('a2'), 'push');
-		const lengthBefore = historyLength();
+	// Issue #1263: a song tapped as soon as its album shows -- opened from the
+	// wall, or left onto by the song before it -- while the router still mounts
+	// the album's route. The library already shows the song, so its entry stands
+	// in the same task, and a Back pressed then returns to the album.
+	it.each([
+		{ albumWrite: 'push', from: '/', fromState: libraryRootState() },
+		{
+			albumWrite: 'replace',
+			from: songRoutePath('a2', 's9'),
+			fromState: { ...albumState, songId: 's9' }
+		}
+	] as const)(
+		"writes a push into history at once while the album's $albumWrite still mounts its route",
+		async ({ albumWrite, from, fromState }) => {
+			replaceHistoryEntry(from, fromState);
+			vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+			void writeLibraryHistory(albumState, albumRoutePath('a2'), albumWrite);
+			const song = { ...albumState, index: 1, songId: 's1' };
 
-		void writeLibraryHistory(libraryRootState(), songRoutePath('a2', 's1'), 'push');
+			void writeLibraryHistory(song, songRoutePath('a2', 's1'), 'push');
 
-		expect(location.pathname).toBe(songRoutePath('a2', 's1'));
-		expect(historyEntry()).toEqual(libraryRootState());
-		expect(historyLength()).toBe(lengthBefore + 1);
-	});
+			expect(location.pathname).toBe(songRoutePath('a2', 's1'));
+			expect(historyEntry()).toEqual(song);
+			await pressBack();
+			expect(location.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumState);
+		}
+	);
 
 	// The phone drawer closing, or Go to song leaving a history layer, steps
 	// back before the crossing it opens: once that step lands, the crossing's
@@ -837,8 +849,8 @@ describe('writeLibraryHistory through the router (issues #265 S7, #1165)', () =>
 	});
 });
 
-// SvelteKit's start writes its own entry over the one a page loads onto, and
-// shallow routing may not run before that start is over (issue #1165).
+// SvelteKit's start writes its own entry over the one a page loads onto
+// (issue #1165).
 describe('a page load', () => {
 	const playlistState: LibraryHistoryState = {
 		...libraryRootState(),
@@ -856,42 +868,25 @@ describe('a page load', () => {
 
 		expect(historyEntry()).toEqual(playlistState);
 		expect(location.pathname).toBe('/playlist/p');
-	});
-
-	it('holds a write until the router started, answering it meanwhile', async () => {
-		const reportRouterStarted = reloadLibraryPageBeforeRouterStarts();
-		const scrolled = { ...playlistState, scrollAnchor: 960 };
-
-		const written = writeLibraryHistory(scrolled, '/playlist/p', 'replace');
-		await Promise.resolve();
-
-		expect(replaceState).not.toHaveBeenCalled();
-		expect(pushState).not.toHaveBeenCalled();
-		expect(currentLibraryHistoryState()).toEqual(scrolled);
-
-		reportRouterStarted();
-		await written;
-
 		const loadedOnto = `${location.origin}/playlist/p`;
 		const writes = vi.mocked(replaceState).mock.calls;
 		expect(writes).toEqual([
 			[loadedOnto, { entry: { id: expect.any(Number) } }],
-			[loadedOnto, stampedLibrary(playlistState)],
-			['/playlist/p', stampedLibrary(scrolled)]
+			[loadedOnto, stampedLibrary(playlistState)]
 		]);
 		expect(new Set(writes.map(([, state]) => state.entry?.id)).size).toBe(1);
-		expect(historyEntry()).toEqual(scrolled);
 	});
 
-	it('answers the library it carried while the router starts, so the address keeps it', async () => {
-		fetchPlaylists.mockResolvedValue([playlistItem({ id: 'p1', slug: 'p' })]);
+	// Issue #1263: only a step back of the history controller holds a write.
+	it('writes at once before the router reports its start, and the start keeps that newer library', () => {
 		const reportRouterStarted = reloadLibraryPageBeforeRouterStarts();
+		const scrolled = { ...playlistState, scrollAnchor: 960 };
 
-		await expect(openPlaylistAddress('p')).resolves.toBe('found');
+		void writeLibraryHistory(scrolled, '/playlist/p', 'replace');
+
+		expect(historyEntry()).toEqual(scrolled);
 		reportRouterStarted();
-		await libraryHistoryStepsLanded();
-
-		expect(historyEntry()).toEqual(playlistState);
+		expect(historyEntry()).toEqual(scrolled);
 	});
 });
 
@@ -1471,6 +1466,7 @@ describe('openAlbumAddress', () => {
 	it('propagates a failure that is not a missing album instead of calling it unknown', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchAlbum.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/albums/a9'));
+		mountAddressRoute('/album/a9');
 
 		await expect(openAlbumAddress('a9')).rejects.toThrow('boom');
 	});
@@ -1544,6 +1540,7 @@ describe('openPlaylistAddress', () => {
 	it('propagates a failure that is not a missing playlist instead of calling it unknown', async () => {
 		const { ApiError } = await import('$lib/api/fetch');
 		fetchPlaylists.mockRejectedValueOnce(new ApiError(500, 'boom', '/api/playlists'));
+		mountAddressRoute('/playlist/friday-night');
 
 		await expect(openPlaylistAddress('friday-night')).rejects.toThrow('boom');
 	});
@@ -1567,4 +1564,82 @@ describe('openPlaylistAddress', () => {
 
 		expect(fetchPlaylists).not.toHaveBeenCalled();
 	});
+});
+
+// Issue #1263, from H3's review: history may move on before an address route
+// resolves its params, or while it does. The params then name an address
+// history has left, and the route of the address it stands on is mounted
+// instead -- never a verdict about the address left behind.
+describe('an address route whose history moves on', () => {
+	const albumLeftFor = {
+		...libraryRootState(),
+		surface: 'detail' as const,
+		collection: { kind: 'album' as const, id: 'a2' }
+	};
+
+	function moveHistoryOn(): void {
+		replaceEntry(albumRoutePath('a2'), { library: albumLeftFor });
+	}
+
+	const notFound = new ApiError(404, 'not found', '/api/lookup');
+	const resolvers = [
+		{
+			route: 'album',
+			mountedAt: '/album/ghost',
+			lookup: fetchAlbum,
+			lookupFindsNothing: async () => Promise.reject(notFound),
+			resolve: () => openAlbumAddress('ghost')
+		},
+		{
+			route: 'song',
+			mountedAt: '/album/a9/ghost',
+			lookup: fetchSongs,
+			lookupFindsNothing: async () => emptyPage(),
+			resolve: () => openSongAddress('a9', 'ghost')
+		},
+		{
+			route: 'take',
+			mountedAt: '/album/a9/ghost/take/1',
+			lookup: fetchSongs,
+			lookupFindsNothing: async () => emptyPage(),
+			resolve: () => openTakeAddress('a9', 'ghost', 1)
+		},
+		{
+			route: 'playlist',
+			mountedAt: '/playlist/ghost',
+			lookup: fetchPlaylists,
+			lookupFindsNothing: async () => [],
+			resolve: () => openPlaylistAddress('ghost')
+		}
+	];
+
+	it.each(resolvers)(
+		'mounts the $route route over the address history moved on to before it resolved',
+		async ({ mountedAt, lookup, resolve }) => {
+			mountAddressRoute(mountedAt);
+			moveHistoryOn();
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(lookup).not.toHaveBeenCalled();
+			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
+
+	it.each(resolvers)(
+		'mounts the $route route over the address history moved on to while it resolved, instead of calling it unknown',
+		async ({ mountedAt, lookup, lookupFindsNothing, resolve }) => {
+			mountAddressRoute(mountedAt);
+			lookup.mockImplementationOnce(async () => {
+				moveHistoryOn();
+				return lookupFindsNothing();
+			});
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
 });

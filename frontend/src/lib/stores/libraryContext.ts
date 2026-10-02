@@ -106,11 +106,7 @@ const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
-let historyWrites: Promise<void> = Promise.resolve();
-let queuedHistoryWrites = 0;
-let plannedHistory: PlannedHistory | null = null;
 let librarySnapshotTaken = false;
-let restoredHistory: unknown = libraryHistoryEntry(historyStateOnLoad());
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -226,38 +222,35 @@ type HistoryWriteMode = 'push' | 'replace';
 // included -- lands where the router expects instead of on an entry it cannot
 // place.
 //
-// A write that changes which route file the address names (`/`,
-// `/album/<slug>`, `/album/<slug>/<song>`, `/album/<slug>/<song>/take/<n>`,
-// `/playlist/<slug>`; `libraryRouteShape` names which) is a navigation:
-// `goto`, carrying the library as its page state. The frequent same-shape
-// churn -- filter, sort, scroll, search cursor, another song of the open
-// album, another take of the open song -- is shallow routing (`pushState`/`replaceState`), synchronous and without a
-// route resolution. Issue #276 measured what a `goto` costs per write against
-// how often that churn fires, which is why only a crossing navigates.
-//
-// The library shows a new page the moment its stores change, but `goto`
-// installs its entry only once the route has loaded, a task later. A Back
-// pressed in between would leave the entry under the one the page came from
-// (issue #1165: album, song, Back showed the wall). So a crossing that pushes
-// from a library page -- an entry carrying a library state -- installs its
-// entry at once by shallow routing, and a `goto` then mounts the route by
-// writing that entry over again. A mount is
-// no queued step: it only brings the router to the entry that already stands,
-// a newer navigation supersedes it and a Back aborts it, so a song tapped while
-// its album's route still loads installs its own entry at once too, and a
-// crossing queued behind a step back (the phone drawer closing, Go to song out
-// of full Now Playing) installs its entry the moment that step lands: a write
-// waits for every step back the history controller has underway, since one
-// issued meanwhile would land under the step's own landing. A write
-// that keeps the route while a mount is loading re-issues the mount for the
-// entry now standing, or the older mount would land on it with the library it
+// The library shows a new page the moment its stores change, so its entry
+// stands in the same task (issue #1263): the address moves with the screen,
+// and a Back pressed at once steps onto the entry the page was opened from.
+// A write from a library page -- an entry carrying a library state -- is
+// therefore shallow routing (`pushState`/`replaceState`), synchronous and
+// without a route resolution. When it changes which route file the address
+// names (`/`, `/album/<slug>`, `/album/<slug>/<song>`,
+// `/album/<slug>/<song>/take/<n>`, `/playlist/<slug>`; `libraryRouteShape`
+// names which), a `goto` then mounts the route of that address over the entry
+// already standing, carrying the library as its page state. A mount moves no
+// entry: a newer one supersedes it and a Back aborts it, and a write that
+// keeps the route while a mount is loading re-issues the mount over the entry
+// now standing, or the older mount would land on it with the library it
 // started with. Such an entry keeps the navigation index of the library entry
 // under it, so Back or Forward between the two is shallow: the library applies
-// the entry and the mounted route stays, as it does for same-shape churn. From
-// any other page -- an app page, or an address its route states as unknown,
-// unreachable or still loading, which writes no library state -- the library
-// shows nothing before its route loads, so there it is one `goto`, and Back
-// onto that page navigates and loads its route again.
+// the entry and the mounted route stays, as it does for same-shape churn --
+// filter, sort, scroll, search cursor, another song of the open album, another
+// take of the open song -- which never mounts anything. Issue #276 measured
+// what a `goto` costs per write against how often that churn fires, which is
+// why only a crossing mounts. From any other page -- an app page, or an
+// address its route states as unknown, unreachable or still loading, which
+// writes no library state -- the library shows nothing before its route
+// loads, so there the write is one `goto`, and Back onto that page navigates
+// and loads its route again.
+//
+// Only a step back the history controller has underway holds a write (the
+// phone drawer closing, Go to song leaving full Now Playing): one issued
+// meanwhile would land under the step's own landing, so it stands the moment
+// the step lands.
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
@@ -267,41 +260,32 @@ type HistoryWriteMode = 'push' | 'replace';
 // the page the address bar shows. Nothing reads the library from `page.state`
 // or `page.url`: every reader asks `currentLibraryHistoryState`, every
 // popstate `libraryHistoryEntry`.
-//
-// Writes are serialized because a crossing one is asynchronous: a caller that
-// writes twice in a row (open a song, then pin its take) must not have its
-// second write overtake the first, and must see the entry the first one is
-// going to install -- which is what `currentLibraryHistoryState` answers. A
-// page load holds every write until the router has started (see
-// `holdLibraryHistoryUntilRouterStarts`), since shallow routing needs it.
 export function writeLibraryHistory(
 	state: LibraryHistoryState,
 	url: string,
 	mode: HistoryWriteMode
 ): Promise<void> {
-	const pathname = pathnameOf(url);
-	const from = plannedHistory?.pathname ?? window.location.pathname;
-	const crossesRoutes = libraryRouteShape(from) !== libraryRouteShape(pathname);
-	const historyStandsStill = queuedHistoryWrites === 0 && !ownStepBacksUnderway();
-	if (historyStandsStill && !crossesRoutes) {
-		return writeLibraryHistoryKeepingRoute(state, url, mode);
+	if (ownStepBacksUnderway()) {
+		return ownStepBacksLanded().then(() => writeLibraryHistoryNow(state, url, mode));
 	}
-	if (historyStandsStill && mode === 'push' && historyStandsOnLibraryPage()) {
-		return pushEntryAndMountItsRoute(state, url);
+	return writeLibraryHistoryNow(state, url, mode);
+}
+
+function writeLibraryHistoryNow(
+	state: LibraryHistoryState,
+	url: string,
+	mode: HistoryWriteMode
+): Promise<void> {
+	const crossesRoutes =
+		libraryRouteShape(window.location.pathname) !== libraryRouteShape(pathnameOf(url));
+	if (!crossesRoutes) {
+		const written = writeShallowLibraryHistory(state, url, mode);
+		return remountOverStandingEntry(url, libraryPageState(written));
 	}
-	let mounted: Promise<void> = Promise.resolve();
-	const landed = queueHistoryStep({ pathname, state }, async () => {
-		if (!crossesRoutes) {
-			await writeLibraryHistoryKeepingRoute(state, url, mode);
-			return;
-		}
-		if (mode === 'push' && historyStandsOnLibraryPage()) {
-			mounted = pushEntryAndMountItsRoute(state, url);
-			return;
-		}
-		await navigateLibraryRoute(url, state, mode);
-	});
-	return landed.then(() => mounted);
+	if (historyStandsOnLibraryPage()) {
+		return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, mode));
+	}
+	return navigateLibraryRoute(url, state, mode);
 }
 
 function historyStandsOnLibraryPage(): boolean {
@@ -309,19 +293,6 @@ function historyStandsOnLibraryPage(): boolean {
 		libraryRouteShape(window.location.pathname) !== 'external' &&
 		isLibraryHistoryState(libraryHistoryEntry())
 	);
-}
-
-function pushEntryAndMountItsRoute(state: LibraryHistoryState, url: string): Promise<void> {
-	return mountRouteOfEntry(url, writeShallowLibraryHistory(state, url, 'push'));
-}
-
-function writeLibraryHistoryKeepingRoute(
-	state: LibraryHistoryState,
-	url: string,
-	mode: HistoryWriteMode
-): Promise<void> {
-	const written = writeShallowLibraryHistory(state, url, mode);
-	return remountOverStandingEntry(url, libraryPageState(written));
 }
 
 function mountRouteOfEntry(url: string, entry: LibraryHistoryState): Promise<void> {
@@ -341,37 +312,13 @@ function navigateLibraryRoute(
 	});
 }
 
-// Resolves once every queued history step has landed, and every step back
-// the history controller has underway. A navigation that leaves the library
-// (an app page) writes no LibraryHistoryState, so it cannot join the queue;
-// it waits here instead, or a step back still in flight (the unsaved-changes
-// dialog leaving its own entry) lands after its push and takes the address
-// back to the song (issue #1143).
+// Resolves once every step back the history controller has underway has
+// landed. A navigation that leaves the library (an app page) writes no
+// LibraryHistoryState, so it waits here, or a step back still in flight (the
+// unsaved-changes dialog leaving its own entry) lands after its push and takes
+// the address back to the song (issue #1143).
 export function libraryHistoryStepsLanded(): Promise<void> {
-	return historyWrites.then(ownStepBacksLanded);
-}
-
-interface PlannedHistory {
-	pathname: string;
-	state: LibraryHistoryState;
-}
-
-function queueHistoryStep(
-	planned: PlannedHistory | null,
-	step: () => Promise<void>
-): Promise<void> {
-	if (planned) plannedHistory = planned;
-	queuedHistoryWrites += 1;
-	const write = historyWrites.then(() =>
-		ownStepBacksUnderway() ? ownStepBacksLanded().then(step) : step()
-	);
-	historyWrites = write
-		.catch(() => undefined)
-		.finally(() => {
-			queuedHistoryWrites -= 1;
-			if (queuedHistoryWrites === 0) plannedHistory = null;
-		});
-	return write;
+	return ownStepBacksLanded();
 }
 
 function pathnameOf(url: string): string {
@@ -379,43 +326,32 @@ function pathnameOf(url: string): string {
 }
 
 // SvelteKit's single-page start writes its own entry over the one a page
-// loads onto, dropping the library a reload or a restored tab comes back to,
-// and shallow routing may not run before that start is over. So the library
-// the entry carried is read once, from what the history controller read while
-// the router loaded, and the app layout holds every write from its first
-// render until the router reports the start; the first write then puts that
-// library back onto its entry, under the id the controller gave back to it.
-// Meanwhile `currentLibraryHistoryState` already answers it, so an address
-// route resolving early keeps the richer entry rather than overwriting it.
+// loads onto, dropping the library a reload or a restored tab comes back to.
+// The history controller read that entry while the router loaded; once the
+// router reports the start, the library it carried goes back onto the entry,
+// under the id the controller gave back to it -- unless a write since has
+// given the entry a library of its own, which is newer. The app layout reports
+// every navigation; only the first is the start.
 export function holdLibraryHistoryUntilRouterStarts(): () => void {
-	const restored = restoredHistory;
-	restoredHistory = null;
-	let reportStart = (): void => undefined;
-	const started = new Promise<void>((resolve) => {
-		reportStart = resolve;
-	});
-	const planned = isLibraryHistoryState(restored)
-		? { pathname: window.location.pathname, state: restored }
-		: null;
-	void queueHistoryStep(planned, async () => {
-		await started;
-		if (planned) writeShallowLibraryHistory(planned.state, window.location.href, 'replace');
-	});
-	return reportStart;
+	let loaded: unknown = libraryHistoryEntry(historyStateOnLoad());
+	return () => {
+		const restored = loaded;
+		loaded = null;
+		if (!isLibraryHistoryState(restored) || isLibraryHistoryState(libraryHistoryEntry())) return;
+		writeShallowLibraryHistory(restored, window.location.href, 'replace');
+	};
 }
 
-// A page load, as far as the restored library goes: reads it the way this
-// module's own load does.
+// A page load, as far as the library's history goes: the history controller
+// reads the entry the page loaded onto again.
 export function loadLibraryHistoryPageForTests(): void {
 	loadHistoryPageForTests();
-	restoredHistory = libraryHistoryEntry(historyStateOnLoad());
 }
 
-// The library history entry as it will stand once every queued write has
-// landed. Every reader of the restore state goes through this instead of
-// `history.state`, which lags while a crossing write navigates.
+// The library history entry history stands on. Every write stands at once, so
+// this is the entry the next write starts from.
 export function currentLibraryHistoryState(): unknown {
-	return plannedHistory ? plannedHistory.state : libraryHistoryEntry();
+	return libraryHistoryEntry();
 }
 
 // What a history entry says about the library, whichever way it was written:
@@ -469,25 +405,22 @@ type AlbumAddress = 'found' | 'unknown';
 // write which changes the route pattern reaches the router instead of only the
 // address bar — see the note there before turning any of these back into a
 // bare history.replaceState.
-export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
-	const mountedUrl = mountedRouteUrl();
-	if (!(await albumIsKnown(albumId))) return 'unknown';
-	await showResolvedAddress({
-		mountedUrl,
-		routePath: albumRoutePath(albumId),
-		historyOpens: () => historyAlreadyOpens(albumId),
-		addressState: () => albumAddressState(albumId),
-		shown: () => albumAlreadyShown(albumId)
+export function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
+	return resolveMountedAddress(async (): Promise<ResolvedAddress | AlbumAddress> => {
+		if (!(await albumIsKnown(albumId))) return 'unknown';
+		return {
+			routePath: albumRoutePath(albumId),
+			historyOpens: () => historyAlreadyOpens(albumId),
+			addressState: () => albumAddressState(albumId),
+			shown: () => albumAlreadyShown(albumId)
+		};
 	});
-	return 'found';
 }
 
-// What an address route resolved its params to: the address the route was
-// mounted under, the page's own address, whether history already opens it,
-// the library state that opens it afresh, and whether the library already
-// shows it.
+// What an address route resolved its params to: the page's own address,
+// whether history already opens it, the library state that opens it afresh,
+// and whether the library already shows it.
 interface ResolvedAddress {
-	readonly mountedUrl: string;
 	readonly routePath: string;
 	readonly historyOpens: () => boolean;
 	readonly addressState: () => LibraryHistoryState;
@@ -504,12 +437,24 @@ function mountedRouteUrl(): string {
 	return untrack(() => page.url.href);
 }
 
-// The tail every address route shares. History may stand on another address
-// than the route was mounted under by the time its params resolve (see
-// `mountAddressOver`): they then resolve nothing, and the route of the address
-// history stands on is mounted instead, whose own resolution follows.
+// The frame every address route shares. History may stand on another address
+// than the route was mounted under (see `mountAddressOver`) before its params
+// resolve, or move on while they do: they then resolve nothing and state no
+// verdict, and the route of the address history stands on is mounted instead,
+// whose own resolution follows (issue #1263).
+async function resolveMountedAddress<Verdict extends string>(
+	resolveParams: () => Promise<ResolvedAddress | Verdict>
+): Promise<Verdict | 'found'> {
+	const mountedUrl = mountedRouteUrl();
+	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+	const resolved = await resolveParams();
+	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+	if (typeof resolved === 'string') return resolved;
+	await showResolvedAddress(resolved);
+	return 'found';
+}
+
 async function showResolvedAddress(address: ResolvedAddress): Promise<void> {
-	if (mountAddressOver(address.mountedUrl) === 'remounts') return;
 	const opened = address.historyOpens();
 	const state = opened
 		? (currentLibraryHistoryState() as LibraryHistoryState)
@@ -572,26 +517,25 @@ type SongAddress = 'found' | 'unknown-song' | 'unknown-album';
 // it -- a cold paste of a song address that names a take must not silently
 // drop it. It only seeds a fresh open; an address that already opens this
 // song keeps whatever take the session already has selected.
-export async function openSongAddress(
+export function openSongAddress(
 	albumId: string,
 	songSlug: string,
 	generationId: string | null = null
 ): Promise<SongAddress> {
-	const mountedUrl = mountedRouteUrl();
-	const [albumKnown, song] = await Promise.all([
-		albumIsKnown(albumId),
-		resolveSongInAlbum(albumId, songSlug)
-	]);
-	if (!albumKnown) return 'unknown-album';
-	if (!song) return 'unknown-song';
-	await showResolvedAddress({
-		mountedUrl,
-		routePath: songRoutePath(albumId, songSlug),
-		historyOpens: () => historyAlreadyOpensSong(song.id),
-		addressState: () => songAddressState(song, generationId),
-		shown: () => songAlreadyShown(song.id)
+	return resolveMountedAddress(async (): Promise<ResolvedAddress | SongAddress> => {
+		const [albumKnown, song] = await Promise.all([
+			albumIsKnown(albumId),
+			resolveSongInAlbum(albumId, songSlug)
+		]);
+		if (!albumKnown) return 'unknown-album';
+		if (!song) return 'unknown-song';
+		return {
+			routePath: songRoutePath(albumId, songSlug),
+			historyOpens: () => historyAlreadyOpensSong(song.id),
+			addressState: () => songAddressState(song, generationId),
+			shown: () => songAlreadyShown(song.id)
+		};
 	});
-	return 'found';
 }
 
 type TakeAddress = 'found' | 'unknown-take' | 'unknown-song' | 'unknown-album';
@@ -609,30 +553,29 @@ type TakeAddress = 'found' | 'unknown-take' | 'unknown-song' | 'unknown-album';
 // along (the same partial-retain gap ensureGenerationsLoaded already guards
 // for player.ts's own callers), so this ensures that before it looks for the
 // number.
-export async function openTakeAddress(
+export function openTakeAddress(
 	albumId: string,
 	songSlug: string,
 	takeNumber: number
 ): Promise<TakeAddress> {
-	const mountedUrl = mountedRouteUrl();
-	const [albumKnown, song] = await Promise.all([
-		albumIsKnown(albumId),
-		resolveSongInAlbum(albumId, songSlug)
-	]);
-	if (!albumKnown) return 'unknown-album';
-	if (!song) return 'unknown-song';
-	await ensureGenerationsLoaded(song.id);
-	const loadedSong = get(songList).find((item) => item.id === song.id) ?? song;
-	const generation = loadedSong.generations.find((item) => item.generation_number === takeNumber);
-	if (!generation) return 'unknown-take';
-	await showResolvedAddress({
-		mountedUrl,
-		routePath: takeRoutePath(albumId, songSlug, takeNumber),
-		historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
-		addressState: () => songAddressState(song, generation.id),
-		shown: () => takeAlreadyShown(song.id, generation.id)
+	return resolveMountedAddress(async (): Promise<ResolvedAddress | TakeAddress> => {
+		const [albumKnown, song] = await Promise.all([
+			albumIsKnown(albumId),
+			resolveSongInAlbum(albumId, songSlug)
+		]);
+		if (!albumKnown) return 'unknown-album';
+		if (!song) return 'unknown-song';
+		await ensureGenerationsLoaded(song.id);
+		const loadedSong = get(songList).find((item) => item.id === song.id) ?? song;
+		const generation = loadedSong.generations.find((item) => item.generation_number === takeNumber);
+		if (!generation) return 'unknown-take';
+		return {
+			routePath: takeRoutePath(albumId, songSlug, takeNumber),
+			historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
+			addressState: () => songAddressState(song, generation.id),
+			shown: () => takeAlreadyShown(song.id, generation.id)
+		};
 	});
-	return 'found';
 }
 
 type PlaylistAddress = 'found' | 'unknown';
@@ -642,18 +585,17 @@ type PlaylistAddress = 'found' | 'unknown';
 // a verdict the route states, never a silent fall back. A playlist has no
 // album to nest inside, so unlike openSongAddress there is only the one
 // resolution, not two run concurrently.
-export async function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
-	const mountedUrl = mountedRouteUrl();
-	const playlist = await resolvePlaylistBySlug(slug);
-	if (!playlist) return 'unknown';
-	await showResolvedAddress({
-		mountedUrl,
-		routePath: playlistRoutePath(slug),
-		historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
-		addressState: () => playlistAddressState(playlist.id),
-		shown: () => playlistAlreadyShown(playlist.id)
+export function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
+	return resolveMountedAddress(async (): Promise<ResolvedAddress | PlaylistAddress> => {
+		const playlist = await resolvePlaylistBySlug(slug);
+		if (!playlist) return 'unknown';
+		return {
+			routePath: playlistRoutePath(slug),
+			historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
+			addressState: () => playlistAddressState(playlist.id),
+			shown: () => playlistAlreadyShown(playlist.id)
+		};
 	});
-	return 'found';
 }
 
 // Checks the already-loaded playlists first -- the in-app route to a
@@ -1056,11 +998,7 @@ export function captureLibraryScroll(scrollTop: number): void {
 
 export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
-	historyWrites = Promise.resolve();
-	queuedHistoryWrites = 0;
-	plannedHistory = null;
 	librarySnapshotTaken = false;
-	restoredHistory = null;
 	heldRestores = null;
 	resetHistoryControllerForTests();
 	librarySurface.set('browse');
