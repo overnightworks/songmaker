@@ -90,8 +90,9 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto, pushState, replaceState } from '$app/navigation';
-import { listenForLandings } from '$lib/history/historyController';
+import { listenForLandings, replaceEntry } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
+import { fakePage } from '$lib/test-utils/app-navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
 
 import {
@@ -1440,17 +1441,16 @@ describe('openAlbumAddress', () => {
 		expect(historyEntry().collection).toEqual({ kind: 'album', id: 'a9' });
 	});
 
-	// Back from Settings onto an album entry shallow routing wrote over
-	// another album's page loads that page's route (issue #1165).
-	it('shows the album its entry names when the route params name the page under it', async () => {
+	// History moved on while the route resolved its params (issue #1006, H3).
+	it('mounts the route of the address history stands on when the params name another', async () => {
 		const left = { ...libraryRootState(), surface: 'detail' as const, scrollAnchor: 640 };
-		replaceHistoryEntry('/album/a2', { ...left, collection: { kind: 'album', id: 'a2' } });
+		replaceEntry('/album/a2', { library: { ...left, collection: { kind: 'album', id: 'a2' } } });
 
 		await expect(openAlbumAddress('a9')).resolves.toBe('found');
 
-		expect(get(openCollection)).toEqual({ kind: 'album', id: 'a2' });
+		expect(fakePage.url.pathname).toBe('/album/a2');
+		expect(get(openCollection)).not.toEqual({ kind: 'album', id: 'a9' });
 		expect(historyEntry()).toEqual({ ...left, collection: { kind: 'album', id: 'a2' } });
-		expect(fetchAlbum).not.toHaveBeenCalledWith('a9');
 	});
 
 	it('propagates a failure that is not a missing album instead of calling it unknown', async () => {

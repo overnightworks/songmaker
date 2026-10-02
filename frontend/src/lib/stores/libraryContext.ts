@@ -4,6 +4,7 @@ import { fetchAlbum } from '$lib/api/albums';
 import {
 	historyStateOnLoad,
 	loadHistoryPageForTests,
+	mountAddressOver,
 	navigateTo,
 	ownStepBacksLanded,
 	ownStepBacksUnderway,
@@ -259,11 +260,12 @@ type HistoryWriteMode = 'push' | 'replace';
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
-// it from another page loads that page's route. The address routes therefore
-// yield to the entry whenever their params name a page the address bar does
-// not show (see `entryOutranksStaleAddress`), and nothing reads the library
-// from `page.state` or `page.url`: every reader asks
-// `currentLibraryHistoryState`, every popstate `libraryHistoryEntry`.
+// it from another page would load that page's route. The history controller
+// mounts the route of the address history stands on instead
+// (`mountAddressOver`), so an address route only resolves params that name
+// the page the address bar shows. Nothing reads the library from `page.state`
+// or `page.url`: every reader asks `currentLibraryHistoryState`, every
+// popstate `libraryHistoryEntry`.
 //
 // Writes are serialized because a crossing one is asynchronous: a caller that
 // writes twice in a row (open a song, then pin its take) must not have its
@@ -444,19 +446,6 @@ function writeShallowLibraryHistory(
 	return state;
 }
 
-// Back from another page onto an entry shallow routing wrote loads the route
-// of the page that entry was written over (see writeLibraryHistory), so an
-// address route can mount with params naming a page the address bar does not
-// show. The entry names the library the person left there, so it wins: it is
-// applied as it stands and the stale params resolve nothing.
-async function entryOutranksStaleAddress(routePath: string): Promise<boolean> {
-	const entry = currentLibraryHistoryState();
-	if (!isLibraryHistoryState(entry)) return false;
-	if (pathnameOf(routePath) === window.location.pathname) return false;
-	await applyLibraryHistory(entry);
-	return true;
-}
-
 type AlbumAddress = 'found' | 'unknown';
 
 // The entry point of the /album/<slug> route (issue #269). A pasted address is
@@ -480,17 +469,38 @@ type AlbumAddress = 'found' | 'unknown';
 // address bar — see the note there before turning any of these back into a
 // bare history.replaceState.
 export async function openAlbumAddress(albumId: string): Promise<AlbumAddress> {
-	if (await entryOutranksStaleAddress(albumRoutePath(albumId))) return 'found';
 	if (!(await albumIsKnown(albumId))) return 'unknown';
-	const opened = historyAlreadyOpens(albumId);
+	await showResolvedAddress({
+		routePath: albumRoutePath(albumId),
+		historyOpens: () => historyAlreadyOpens(albumId),
+		addressState: () => albumAddressState(albumId),
+		shown: () => albumAlreadyShown(albumId)
+	});
+	return 'found';
+}
+
+// What an address route resolved its params to: the page's address, whether
+// history already opens it, the library state that opens it afresh, and
+// whether the library already shows it.
+interface ResolvedAddress {
+	readonly routePath: string;
+	readonly historyOpens: () => boolean;
+	readonly addressState: () => LibraryHistoryState;
+	readonly shown: () => boolean;
+}
+
+// The tail every address route shares. Its params may name another address
+// than history stands on by the time they resolve (see `mountAddressOver`):
+// they then resolve nothing, and the route of the address history stands on
+// is mounted instead, whose own resolution follows.
+async function showResolvedAddress(address: ResolvedAddress): Promise<void> {
+	if (mountAddressOver(address.routePath) === 'remounts') return;
+	const opened = address.historyOpens();
 	const state = opened
 		? (currentLibraryHistoryState() as LibraryHistoryState)
-		: albumAddressState(albumId);
-	if (!opened) {
-		await writeLibraryHistory(state, albumRoutePath(albumId), 'replace');
-	}
-	if (!albumAlreadyShown(albumId)) await applyLibraryHistory(state);
-	return 'found';
+		: address.addressState();
+	if (!opened) await writeLibraryHistory(state, address.routePath, 'replace');
+	if (!address.shown()) await applyLibraryHistory(state);
 }
 
 // Both short circuits keep the address from re-asking what the library has
@@ -552,21 +562,18 @@ export async function openSongAddress(
 	songSlug: string,
 	generationId: string | null = null
 ): Promise<SongAddress> {
-	if (await entryOutranksStaleAddress(songRoutePath(albumId, songSlug))) return 'found';
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
 	]);
 	if (!albumKnown) return 'unknown-album';
 	if (!song) return 'unknown-song';
-	const opened = historyAlreadyOpensSong(song.id);
-	const state = opened
-		? (currentLibraryHistoryState() as LibraryHistoryState)
-		: songAddressState(song, generationId);
-	if (!opened) {
-		await writeLibraryHistory(state, songRoutePath(albumId, songSlug), 'replace');
-	}
-	if (!songAlreadyShown(song.id)) await applyLibraryHistory(state);
+	await showResolvedAddress({
+		routePath: songRoutePath(albumId, songSlug),
+		historyOpens: () => historyAlreadyOpensSong(song.id),
+		addressState: () => songAddressState(song, generationId),
+		shown: () => songAlreadyShown(song.id)
+	});
 	return 'found';
 }
 
@@ -590,9 +597,6 @@ export async function openTakeAddress(
 	songSlug: string,
 	takeNumber: number
 ): Promise<TakeAddress> {
-	if (await entryOutranksStaleAddress(takeRoutePath(albumId, songSlug, takeNumber))) {
-		return 'found';
-	}
 	const [albumKnown, song] = await Promise.all([
 		albumIsKnown(albumId),
 		resolveSongInAlbum(albumId, songSlug)
@@ -603,14 +607,12 @@ export async function openTakeAddress(
 	const loadedSong = get(songList).find((item) => item.id === song.id) ?? song;
 	const generation = loadedSong.generations.find((item) => item.generation_number === takeNumber);
 	if (!generation) return 'unknown-take';
-	const opened = historyAlreadyOpensTake(song.id, generation.id);
-	const state = opened
-		? (currentLibraryHistoryState() as LibraryHistoryState)
-		: songAddressState(song, generation.id);
-	if (!opened) {
-		await writeLibraryHistory(state, takeRoutePath(albumId, songSlug, takeNumber), 'replace');
-	}
-	if (!takeAlreadyShown(song.id, generation.id)) await applyLibraryHistory(state);
+	await showResolvedAddress({
+		routePath: takeRoutePath(albumId, songSlug, takeNumber),
+		historyOpens: () => historyAlreadyOpensTake(song.id, generation.id),
+		addressState: () => songAddressState(song, generation.id),
+		shown: () => takeAlreadyShown(song.id, generation.id)
+	});
 	return 'found';
 }
 
@@ -622,17 +624,14 @@ type PlaylistAddress = 'found' | 'unknown';
 // album to nest inside, so unlike openSongAddress there is only the one
 // resolution, not two run concurrently.
 export async function openPlaylistAddress(slug: string): Promise<PlaylistAddress> {
-	if (await entryOutranksStaleAddress(playlistRoutePath(slug))) return 'found';
 	const playlist = await resolvePlaylistBySlug(slug);
 	if (!playlist) return 'unknown';
-	const opened = historyAlreadyOpensPlaylist(playlist.id);
-	const state = opened
-		? (currentLibraryHistoryState() as LibraryHistoryState)
-		: playlistAddressState(playlist.id);
-	if (!opened) {
-		await writeLibraryHistory(state, playlistRoutePath(slug), 'replace');
-	}
-	if (!playlistAlreadyShown(playlist.id)) await applyLibraryHistory(state);
+	await showResolvedAddress({
+		routePath: playlistRoutePath(slug),
+		historyOpens: () => historyAlreadyOpensPlaylist(playlist.id),
+		addressState: () => playlistAddressState(playlist.id),
+		shown: () => playlistAlreadyShown(playlist.id)
+	});
 	return 'found';
 }
 

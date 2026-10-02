@@ -7,6 +7,7 @@ import {
 	landedEntry,
 	listenForLandings,
 	loadHistoryPageForTests,
+	mountRouteOfLandedAddress,
 	navigateTo,
 	pageStateOfHistoryState,
 	pushEntry,
@@ -17,7 +18,12 @@ import {
 	type HistoryEntry
 } from '$lib/history/historyController';
 import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layers';
-import { startFakeRouter } from '$lib/test-utils/app-navigation';
+import {
+	fakePage,
+	followBeforeNavigate,
+	reportedNavigations,
+	startFakeRouter
+} from '$lib/test-utils/app-navigation';
 
 type Ledger = Parameters<typeof land>[0];
 type Landing = ReturnType<typeof land>;
@@ -453,4 +459,82 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual(loaded);
 		expect(location.pathname).toBe('/album/a');
 	});
+});
+
+describe('route convergence after a landing', () => {
+	let stopListening: () => void;
+	let stopConverging: () => void;
+
+	beforeEach(async () => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/');
+		resetHistoryControllerForTests();
+		startFakeRouter();
+		stopListening = listenForLandings(() => undefined);
+		stopConverging = followBeforeNavigate(mountRouteOfLandedAddress);
+		await vi.mocked(goto)('/album/a');
+		stampNavigatedEntry('goto');
+	});
+
+	afterEach(() => {
+		stopConverging();
+		stopListening();
+		vi.restoreAllMocks();
+	});
+
+	function standingEntry(): unknown {
+		return pageStateOfHistoryState(history.state)?.entry;
+	}
+
+	async function backFromSettings(): Promise<void> {
+		await vi.mocked(goto)('/settings');
+		stampNavigatedEntry('goto');
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+	}
+
+	it('Back onto an entry written over another page mounts the route of its own address', async () => {
+		const albumB = pushEntry('/album/b', {});
+
+		await backFromSettings();
+
+		expect(fakePage.url.pathname).toBe('/album/b');
+		expect(location.pathname).toBe('/album/b');
+		expect(standingEntry()).toEqual(albumB);
+		expect(fakePage.state).toEqual({ entry: albumB });
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/b' });
+	});
+
+	it('Back onto an entry the router wrote at its own address mounts it as it is', async () => {
+		const albumA = standingEntry();
+
+		await backFromSettings();
+
+		expect(fakePage.url.pathname).toBe('/album/a');
+		expect(standingEntry()).toEqual(albumA);
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/a' });
+	});
+
+	it.each(['link', 'goto'] as const)(
+		'a %s navigation to another address is left to the router',
+		(type) => {
+			const navigated = reportedNavigations.length;
+
+			mountRouteOfLandedAddress({
+				type,
+				to: {
+					url: new URL('/settings', location.href),
+					params: {},
+					route: { id: null },
+					scroll: null
+				}
+			});
+
+			expect(reportedNavigations).toHaveLength(navigated);
+			expect(location.pathname).toBe('/album/a');
+		}
+	);
 });
