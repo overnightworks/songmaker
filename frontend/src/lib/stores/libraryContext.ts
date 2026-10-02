@@ -3,12 +3,13 @@ import { get, writable } from 'svelte/store';
 import { page } from '$app/state';
 import { fetchAlbum } from '$lib/api/albums';
 import {
+	historyMoves,
+	historyStandsStill,
 	historyStateOnLoad,
 	loadHistoryPageForTests,
 	mountAddressOver,
 	navigateTo,
 	ownStepBacksLanded,
-	ownStepBacksUnderway,
 	pageStateOfHistoryState,
 	pushEntry,
 	remountOverStandingEntry,
@@ -247,10 +248,13 @@ type HistoryWriteMode = 'push' | 'replace';
 // loads, so there the write is one `goto`, and Back onto that page navigates
 // and loads its route again.
 //
-// Only a step back the history controller has underway holds a write (the
-// phone drawer closing, Go to song leaving full Now Playing): one issued
-// meanwhile would land under the step's own landing, so it stands the moment
-// the step lands.
+// Only history the controller has moving holds a write: a step back it has
+// underway (the phone drawer closing, Go to song leaving full Now Playing),
+// whose landing a write issued meanwhile would land under, or that one `goto`
+// from another page, whose entry stands only once its route has loaded -- a
+// second write issued meanwhile would supersede it and stand in its place
+// (Settings, a song, another song of its album, Back skipped Settings). The
+// held write stands the moment history stands still.
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
@@ -265,8 +269,8 @@ export function writeLibraryHistory(
 	url: string,
 	mode: HistoryWriteMode
 ): Promise<void> {
-	if (ownStepBacksUnderway()) {
-		return ownStepBacksLanded().then(() => writeLibraryHistoryNow(state, url, mode));
+	if (historyMoves()) {
+		return historyStandsStill().then(() => writeLibraryHistory(state, url, mode));
 	}
 	return writeLibraryHistoryNow(state, url, mode);
 }

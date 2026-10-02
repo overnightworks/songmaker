@@ -23,6 +23,7 @@ import { resolve } from '$app/paths';
 import {
 	fakePage,
 	followBeforeNavigate,
+	holdRouteLoads,
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
@@ -689,6 +690,38 @@ describe('opening a collection from off the library route', () => {
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
+
+	// From an app page the library's entry stands only once its route has
+	// loaded, so a write made meanwhile waits for it: written at once, its
+	// navigation would supersede the first one and stand in place of its entry.
+	it.each([
+		{
+			opened: 'another song of the same album',
+			first: () => selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })),
+			second: () => selectSong('s2', song({ ...navigableSongDefaults(), id: 's2', slug: 's2' })),
+			backLandsOn: '/settings/voices'
+		},
+		{
+			opened: 'a song of the album',
+			first: () => openAlbum('a1'),
+			second: () => selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })),
+			backLandsOn: '/album/a1'
+		}
+	])(
+		'keeps the entry of a library page opened from Settings when $opened opens before its route loads',
+		async ({ first, second, backLandsOn }) => {
+			replaceHistoryEntry('/settings/voices');
+			const routesLoaded = holdRouteLoads();
+
+			const firstWritten = first();
+			const secondWritten = second();
+			routesLoaded();
+			await Promise.all([firstWritten, secondWritten]);
+
+			await pressBack();
+			expect(window.location.pathname).toBe(backLandsOn);
+		}
+	);
 
 	// The one pairing removing the guard put at risk: openLibraryWall's own
 	// write always targets '/', and before libraryRouteShape gained its

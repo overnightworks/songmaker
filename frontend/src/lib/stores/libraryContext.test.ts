@@ -884,7 +884,7 @@ describe('a page load', () => {
 		expect(new Set(writes.map(([, state]) => state.entry?.id)).size).toBe(1);
 	});
 
-	// Issue #1263: only a step back of the history controller holds a write.
+	// Issue #1263: only history the controller has moving holds a write.
 	it('writes at once before the router reports its start, and the start keeps that newer library', () => {
 		const reportRouterStarted = reloadLibraryPageBeforeRouterStarts();
 		const scrolled = { ...playlistState, scrollAnchor: 960 };

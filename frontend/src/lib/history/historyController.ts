@@ -231,6 +231,7 @@ let standsOnTop = standsOnTopOnLoad();
 let lastRouterIndex = routerIndexOf(history.state);
 const stepBackWaiters = new Map<number, (() => void)[]>();
 let stepBacksLandedWaiters: (() => void)[] = [];
+let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
 let loadingMount: NavigateOptions | null = null;
 const entryOfLayer = new Map<Layer, number>();
@@ -481,15 +482,33 @@ export function ownStepBacksLanded(): Promise<void> {
 	return new Promise((resolve) => stepBacksLandedWaiters.push(resolve));
 }
 
-// Once history stands still -- no own step-back underway and no navigation
-// loading -- the layers opened meanwhile get their entries, in the order they
-// opened, on top of the entry that then stands.
+// History moves while one of the controller's own step-backs is underway or a
+// navigation is loading the route it writes its entry for: an entry written
+// meanwhile would land under the step's landing, or be superseded along with
+// the navigation's own entry.
+export function historyMoves(): boolean {
+	return ownStepBacksUnderway() || navigationsUnderway > 0;
+}
+
+// Resolves once history stands still, so a write issued while it moves stands
+// on the entry the move lands on.
+export function historyStandsStill(): Promise<void> {
+	if (!historyMoves()) return Promise.resolve();
+	return new Promise((resolve) => stillnessWaiters.push(resolve));
+}
+
+// Once history stands still the writes and the layers held meanwhile get
+// their entries, in the order they were held, on top of the entry that then
+// stands.
 function settleStillness(): void {
 	if (ownStepBacksUnderway()) return;
 	const waiting = stepBacksLandedWaiters;
 	stepBacksLandedWaiters = [];
 	for (const resolve of waiting) resolve();
 	if (navigationsUnderway > 0) return;
+	const still = stillnessWaiters;
+	stillnessWaiters = [];
+	for (const resolve of still) resolve();
 	const awaiting = layersAwaitingEntry;
 	layersAwaitingEntry = [];
 	for (const layer of awaiting) pushLayerEntry(layer);
@@ -505,7 +524,7 @@ function settleStillness(): void {
 // layer owns.
 const layerEntries: LayerHistory = {
 	held(layer) {
-		if (ownStepBacksUnderway() || navigationsUnderway > 0) {
+		if (historyMoves()) {
 			layersAwaitingEntry = [...layersAwaitingEntry, layer];
 			return;
 		}
@@ -610,6 +629,7 @@ export function resetHistoryControllerForTests(): void {
 	lastRouterIndex = routerIndexOf(history.state);
 	stepBackWaiters.clear();
 	stepBacksLandedWaiters = [];
+	stillnessWaiters = [];
 	navigationsUnderway = 0;
 	loadingMount = null;
 	entryOfLayer.clear();
