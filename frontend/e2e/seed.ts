@@ -1038,6 +1038,30 @@ export async function seedUnpickedLibrary(
 	return { albumId: album.id, tracks: songs.map((song) => song.track) };
 }
 
+/**
+ * Signs `api` in as a flow's own account and gives it one album holding one
+ * song titled `songTitle`, returning that song's address -- a page only that
+ * account may open.
+ */
+export async function seedOwnSongAddress(
+	api: APIRequestContext,
+	credentials: Credentials,
+	songTitle: string
+): Promise<string> {
+	const seed = await SeedApi.login(api, credentials);
+	const album = await seed.postJson<CreatedResource>('/api/albums', {
+		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
+		artist: credentials.username
+	});
+	const song = await seed.postJson<CreatedSong>('/api/songs', {
+		title: songTitle,
+		album_id: album.id,
+		lyrics: `${songTitle} lyrics`,
+		prompt: 'calm test tone'
+	});
+	return `/album/${album.id}/${song.slug}`;
+}
+
 /** Removes an account created for a flow, rows and all. */
 export async function deleteAccount(api: APIRequestContext, userId: string): Promise<void> {
 	const seed = await SeedApi.fromSession(api);
