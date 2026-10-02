@@ -23,6 +23,7 @@ interface PlaybackResumeRecord {
 }
 
 const STORAGE_KEY_PREFIX = 'playbackResume:';
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const PROGRESS_SAVE_EVERY_SECONDS = 5;
 
 function storageKey(userId: string): string {
@@ -89,7 +90,11 @@ interface PlaybackToFollow {
 	playsTheAppsTakes: () => boolean;
 	/** The queue the take plays from; null while the app holds none for it yet. */
 	queueSource: () => ResumeQueueSource | null;
-	/** The take the queue plays after the current one, if any. */
+	/**
+	 * The take a reopened page should show once the current one has ended, at
+	 * its start: the queue's next one, or the ended one again where the queue
+	 * goes on from it; null when the queue holds nothing more to play.
+	 */
 	takeAfterCurrent: () => PlaybackInfo | null;
 }
 
@@ -106,7 +111,7 @@ let knownRecord: (SavedPlayback & { userId: string }) | null = null;
 /**
  * Called once by the app's player. Saves on a take change, on pause, when
  * the page hides, and about every 5 s of playback in between; a take that
- * ended leaves the take after it, at its start.
+ * ended leaves the take the queue names after it, at its start.
  */
 export function followPlaybackForResume(follow: PlaybackToFollow): void {
 	const save = () => saveWhatIsPlaying(follow);
@@ -254,10 +259,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 	return typeof value === 'object' && value !== null;
 }
 
+// A restore sends the record's ids to the server, so a record edited by hand
+// or written by a broken build is refused here rather than requested.
+function isUuid(value: unknown): value is string {
+	return typeof value === 'string' && UUID_PATTERN.test(value);
+}
+
 function isResumeQueueSource(value: unknown): value is ResumeQueueSource {
 	if (!isRecord(value)) return false;
 	if (value.type === 'album') return typeof value.albumId === 'string';
-	if (value.type === 'playlist') return typeof value.playlistId === 'string';
+	if (value.type === 'playlist') return isUuid(value.playlistId);
 	return (
 		value.type === 'library' &&
 		typeof value.shuffle === 'boolean' &&
@@ -269,8 +280,8 @@ function isSavedPlayback(value: unknown): value is SavedPlayback {
 	if (!isRecord(value)) return false;
 	return (
 		isResumeQueueSource(value.source) &&
-		typeof value.songId === 'string' &&
-		typeof value.generationId === 'string' &&
+		isUuid(value.songId) &&
+		isUuid(value.generationId) &&
 		typeof value.position === 'number' &&
 		Number.isFinite(value.position) &&
 		value.position >= 0

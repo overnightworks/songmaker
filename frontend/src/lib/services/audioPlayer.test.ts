@@ -125,6 +125,8 @@ class FakeAudio {
 	bufferedUntil = 0;
 	private listeners = new Map<string, Set<EventListener>>();
 	playMock = vi.fn(() => {
+		if (this.error?.code === MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED)
+			return Promise.reject(new DOMException('no supported source', 'NotSupportedError'));
 		this.paused = false;
 		queueMicrotask(() => this.fire('play'));
 		return Promise.resolve();
@@ -155,6 +157,7 @@ class FakeAudio {
 		return this.playMock();
 	}
 	load(): void {
+		this.error = null;
 		this.fire('loadstart');
 	}
 	fire(name: string, init?: Partial<Event>): void {
@@ -1147,6 +1150,153 @@ describe('patient recovery while the screen is off', () => {
 			}).toEqual({ status: 'ready', error: null, paused: true });
 		}
 	);
+
+	describe('what the transport offers (#1234)', () => {
+		it.each([
+			{ moment: 'while it buffers', wait: 0 },
+			{ moment: 'while a recovery reload runs', wait: 5 * SECOND }
+		])('a stalled take offers Pause $moment', async ({ wait }) => {
+			loseTheNetworkWhilePlayingAt(40, false);
+			await vi.advanceTimersByTimeAsync(wait);
+
+			expect(audioPlayer.transport).toBe('recovering');
+		});
+
+		it('Pause on a stalled take stops its recovery and leaves it paused', async () => {
+			loseTheNetworkWhilePlayingAt(40, false);
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
+			const load = vi.spyOn(fakeAudio, 'load');
+
+			audioPlayer.toggle();
+			await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+			expect({
+				transport: audioPlayer.transport,
+				status: audioPlayer.status,
+				reloads: load.mock.calls.length
+			}).toEqual({ transport: 'paused', status: 'paused', reloads: 0 });
+		});
+
+		it.each([
+			{ answer: 'the stream still serves', probe: { ok: true, status: 200 } },
+			{ answer: 'its snapshot expired', probe: { ok: false, status: 404 } }
+		])(
+			'Pause while a stalled stream is probed has the last word when $answer',
+			async ({ probe }) => {
+				let answerProbe: (answer: { ok: boolean; status: number }) => void = () => {};
+				fetchMock.mockReturnValueOnce(new Promise((resolve) => (answerProbe = resolve)));
+				audioPlayer.swapCallbacks(
+					callbacks({ onStreamRebuild: vi.fn().mockResolvedValue(makeStreamManifest()) })
+				);
+				audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+				startPlayingAt(12);
+				fakeAudio.fire('stalled');
+				await vi.advanceTimersByTimeAsync(5 * SECOND);
+				const whileProbing = audioPlayer.transport;
+				const load = vi.spyOn(fakeAudio, 'load');
+
+				audioPlayer.toggle();
+				answerProbe(probe);
+				await vi.advanceTimersByTimeAsync(60 * SECOND);
+
+				expect({
+					whileProbing,
+					transport: audioPlayer.transport,
+					reloads: load.mock.calls.length
+				}).toEqual({ whileProbing: 'recovering', transport: 'paused', reloads: 0 });
+			}
+		);
+
+		it.each([
+			{
+				interruption: 'Pause is pressed',
+				interrupt: () => audioPlayer.toggle(),
+				afterwards: { song: 'Second', transport: 'paused' }
+			},
+			{
+				interruption: 'another take loads',
+				interrupt: () =>
+					audioPlayer.load(makeInfo({ songTitle: 'Next take' }), { autoplay: false }),
+				afterwards: { song: 'Next take', transport: 'loading' }
+			}
+		])(
+			'a snapshot rebuild that answers after $interruption leaves the player alone',
+			async ({ interrupt, afterwards }) => {
+				let answerRebuild: (fresh: QueueStreamManifest) => void = () => {};
+				fetchMock.mockResolvedValueOnce({ ok: false, status: 404 });
+				audioPlayer.swapCallbacks(
+					callbacks({
+						onStreamRebuild: () => new Promise((resolve) => (answerRebuild = resolve))
+					})
+				);
+				audioPlayer.loadStream(makeStreamManifest(), 0, { autoplay: false });
+				startPlayingAt(12);
+				fakeAudio.fire('stalled');
+				await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+				interrupt();
+				answerRebuild(makeStreamManifest());
+				await vi.advanceTimersByTimeAsync(0);
+
+				expect({
+					song: audioPlayer.current?.songTitle,
+					transport: audioPlayer.transport
+				}).toEqual(afterwards);
+			}
+		);
+
+		it.each([
+			{ strip: 'the offline strip says so', announced: true, givenUp: 'waiting-for-network' },
+			{ strip: 'nothing says so', announced: false, givenUp: 'failed' }
+		])('a take given up when $strip shows $givenUp', async ({ announced, givenUp }) => {
+			loseTheNetworkWhilePlayingAt(40, announced);
+			await vi.advanceTimersByTimeAsync(3 * 60 * SECOND);
+
+			expect(audioPlayer.transport).toBe(givenUp);
+		});
+
+		it('Play after pausing a Retry that failed offline fetches the take again once the network is back', async () => {
+			await giveUpOnAThreeMinuteOutage();
+			audioPlayer.play();
+			fakeAudio.error = { code: MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED } as MediaError;
+			fakeAudio.fire('error');
+			await vi.advanceTimersByTimeAsync(0);
+			audioPlayer.toggle();
+			const paused = audioPlayer.transport;
+			networkGone = false;
+			audioPlayer.resumeAfterNetworkReturn();
+
+			audioPlayer.toggle();
+			await answerLate();
+
+			expect({
+				paused,
+				transport: audioPlayer.transport,
+				error: audioPlayer.error,
+				src: fakeAudio.src
+			}).toEqual({
+				paused: 'paused',
+				transport: 'playing',
+				error: null,
+				src: expect.stringMatching(recoveryUrlOf('/audio/a1/song_v1.mp3'))
+			});
+		});
+
+		it.each([
+			{ how: 'from the lock screen', pause: () => audioPlayer.pause() },
+			{ how: 'with the transport button', pause: () => audioPlayer.toggle() }
+		])('a take waiting for the network is paused at once $how', async ({ pause }) => {
+			await giveUpOnAThreeMinuteOutage();
+			const load = vi.spyOn(fakeAudio, 'load');
+
+			pause();
+
+			expect({ transport: audioPlayer.transport, reloads: load.mock.calls.length }).toEqual({
+				transport: 'paused',
+				reloads: 0
+			});
+		});
+	});
 
 	it.each([
 		{ moment: 'before its first byte', startAt: null },

@@ -489,14 +489,18 @@ shuffle setting. Navigation reads playback only through `idlePlayTarget()`
 
 **The queue names its next take once.** `nextQueueTake(ctx, current)` in
 `stores/player.ts` is the one decider of which take follows the current one:
-Next plays it, and every queue load and album rebuild hands it to
-`audioPlayer.preload`, so the standby deck is already loading the next take
-while the current one plays and a track change needs no network round trip
-before the next note. A queue wraps around; the library window's last take is
-followed by the window's end and a one-take queue by nothing, so both preload
-nothing. A take row never plays alone: when the library pool holds only the
-tapped take (nothing picked yet), the queue continues through that take's
-album instead.
+Next plays it, the transport's Next button (`canPlayNextSong`) and Now
+Playing's Up next (`buildQueueViewModel`) show it, and every queue load and
+album rebuild hands it to `audioPlayer.preload`, so the standby deck is
+already loading the next take while the current one plays and a track change
+needs no network round trip before the next note. A queue wraps around; the
+library window's last take is followed by the window's end and a one-take
+queue by nothing, so both preload nothing and Up next shows nothing. An album
+queue plays each song's pick: picking another take of a song still ahead in
+it puts that take in the song's place and re-aims the preload; songs already
+played keep their take. A take row never plays alone: when the library pool
+holds only the tapped take (nothing picked yet), the queue continues through
+that take's album instead.
 
 **What was playing survives a killed page (#1187 P2).** `stores/playbackResume.ts`
 owns one record per user on this device, `localStorage["playbackResume:<userId>"]`:
@@ -506,7 +510,9 @@ written on a take change, on pause, when the page hides, and about every 5 s
 of playback in between; the last save is kept in memory, so that rhythm reads
 no storage per tick. A take is only ever saved under the user it started
 under, a pause saves the element's own clock, and a take that ended leaves the
-queue's next take (`nextQueueTake`) at 0, or no record when nothing follows.
+queue's next take (`nextQueueTake`) at 0; at a library window's end the ended
+take itself stays saved at 0, since its next window starts from it, and when
+nothing follows no record is left.
 A take still loading, or failed to load, keeps the position its record
 already holds, and a take the app holds no queue for yet (a restored one, or
 one still playing while a library queue builds) keeps the queue its record
@@ -514,10 +520,26 @@ names instead of the library settings of the moment. Share playback is never sav
 that merely ran out keeps it), and a logout in another tab stops this tab
 writing it back. After auth, the `(library)` layout calls
 `restoreLastPlayback()` in `stores/player.ts`: with nothing loaded, it fetches
-the saved song, finds the take, and loads it with autoplay off at the saved
-position, so the transport shows it paused and one tap plays it. A song the
+the saved song, finds the take, and rebuilds the queue the record names around
+it with autoplay off at the saved position: `playLibraryFromGeneration`, after
+the device's library pool and shuffle settings take on the ones the record
+names, since those settings build and save every library queue (they keep
+them even when that restore then fails; the record came from this device), or
+`startPlaylistQueue` on the fetched playlist, the same starts a tap uses; an
+album take loads as a one-take queue of the song's album and gathers the
+album's other takes (`gatherAlbumQueueAround`, a request per song) only once
+it starts playing, so a reload costs one song fetch. The queue context is set
+before the take loads, so the first save after a restore keeps the album or
+playlist source, the transport shows the take paused, one tap plays it, and
+its end plays the next take of the same queue, waiting for the album to be
+gathered when the take ends first. A position in the take's last second, or
+past its end, restores at 0, so Play does not skip straight to the next take.
+A record whose song, take or playlist id is no UUID is read as nothing saved,
+so it sends no request. A song the
 server no longer serves (deleted, or not this user's: 404), a take deleted or
-archived since, or a server out of reach restores nothing and says nothing.
+archived since, a playlist gone or no longer holding the take, a library pool
+that no longer serves it, or a server out of reach restores nothing and says
+nothing: no toast, no notice, no Retry.
 `e2e/playback-restore.spec.ts` drives the reload on both shells.
 
 Queue-stream admission is owned by `queue_stream_api.py`: both authenticated
@@ -1215,6 +1237,7 @@ close the stream.
 | PUT | `/api/memory/songs/{id}` | user | Replace song-scope co-writer memory |
 | PUT | `/api/memory/albums/{id}` | user | Replace album-scope co-writer notes |
 | GET | `/api/capabilities` | user | Feature flags |
+| POST | `/api/playback-diagnostics` | user | Transient player-event upload for #1187 (CSRF via the `X-CSRF-Token` header, so the client sends a `keepalive` fetch, not `sendBeacon`). At most 500 events; answers 204 and writes one structured log line per event with the user id under logger `songmaker.playback_diagnostics`. Nothing is stored in PostgreSQL or Redis; the endpoint is deleted together with the client recorder when #1187 closes. |
 | * | `/api/admin/*` | admin | User CRUD, sessions, login attempts, ACE-Step control |
 | * | `/api/auth/*` | public | Login, logout, setup, password change |
 | GET | `/health` | public | Per-worker status, DB, Redis, ACE-Step, queue depths |
