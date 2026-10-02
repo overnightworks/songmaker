@@ -25,7 +25,7 @@ def _seed_listener(session) -> None:
 
 def _event(**overrides) -> dict:
     return {
-        "at_ms": 1_759_400_000_000,
+        "at_ms": 125_000,
         "kind": "promote",
         "take_id": "6f1c2a4e-9b0d-4c3e-8a51-2f7d9e0b1c34",
         "position": 12.5,
@@ -112,6 +112,7 @@ def test_rejects_a_signed_in_upload_without_the_csrf_header(signed_in) -> None:
         pytest.param(_report([_event(deck="third")]), id="unknown-deck"),
         pytest.param(_report([_event(take_id="not-a-uuid")]), id="take-id-not-a-uuid"),
         pytest.param(_report([_event(position=float("inf"))]), id="infinite-position"),
+        pytest.param(_report([_event(at_ms=7 * 24 * 3600 * 1000 + 1)]), id="at-ms-beyond-a-week"),
     ],
 )
 def test_rejects_a_malformed_report(signed_in, report: dict) -> None:
@@ -137,6 +138,7 @@ def test_logs_one_line_per_event_carrying_the_user_id(
     events = [
         _event(kind="fresh_load", deck="standby", visibility="visible"),
         _event(kind="play_rejected", take_id=None, detail="NotAllowedError"),
+        _event(kind="media_event", detail="canplay"),
     ]
 
     response = signed_in.post(_ENDPOINT, json=_report(events))
@@ -146,6 +148,7 @@ def test_logs_one_line_per_event_carrying_the_user_id(
     assert [(line["user_id"], line["kind"], line["take_id"]) for line in lines] == [
         (listener_id, "fresh_load", events[0]["take_id"]),
         (listener_id, "play_rejected", None),
+        (listener_id, "media_event", events[2]["take_id"]),
     ]
     assert {line["session_id"] for line in lines} == {"a1b2c3"}
     assert all(line["was_discarded"] is False for line in lines)
