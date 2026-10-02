@@ -38,8 +38,12 @@ function savedPoint(userId = LISTENER.id): { generationId: string; position: num
 	return record && { generationId: record.generationId, position: record.position };
 }
 
-function playTake(generationId: string, status: 'playing' | 'loading' | 'error' = 'playing'): void {
-	const song = makeSong({ id: `s-${generationId}` });
+function playTake(
+	generationId: string,
+	status: 'playing' | 'loading' | 'error' = 'playing',
+	songId = `s-${generationId}`
+): void {
+	const song = makeSong({ id: songId });
 	audioPlayer.current = {
 		generation: makeGeneration({ id: generationId, song_id: song.id }),
 		songId: song.id,
@@ -203,18 +207,20 @@ describe('playback resume record', () => {
 	});
 
 	it("reads the signed-in user's saved take", () => {
-		playTake('g-read-back');
+		const songId = '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d03';
+		const generationId = '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d04';
+		playTake(generationId, 'playing', songId);
 		playTo(12);
 
-		expect(savedPlayback()).toEqual({
-			source: ALBUM_QUEUE,
-			songId: 's-g-read-back',
-			generationId: 'g-read-back',
-			position: 12
-		});
+		expect(savedPlayback()).toEqual({ source: ALBUM_QUEUE, songId, generationId, position: 12 });
 	});
 
-	const WHOLE_RECORD = { source: ALBUM_QUEUE, songId: 's-x', generationId: 'g-x', position: 3 };
+	const WHOLE_RECORD = {
+		source: ALBUM_QUEUE,
+		songId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d01',
+		generationId: '7e1d2c3b-4a59-4f6e-8d7c-6b5a4f3e2d02',
+		position: 3
+	};
 
 	it.each([
 		{ record: 'a damaged record', stored: '{"generationId": 7' },
@@ -257,22 +263,17 @@ describe('playback resume record', () => {
 			playTake('g-before-the-kill');
 			localStorage.setItem(
 				recordKey(LISTENER.id),
-				JSON.stringify({
-					source: ALBUM_QUEUE,
-					songId: 's-g-restored',
-					generationId: 'g-restored',
-					position: 42
-				})
+				JSON.stringify({ ...WHOLE_RECORD, position: 42 })
 			);
 			audioPlayer.current = null;
 			audioPlayer.status = 'idle';
 			flushSync();
 
 			savedPlayback();
-			playTake('g-restored', status);
+			playTake(WHOLE_RECORD.generationId, status, WHOLE_RECORD.songId);
 			setPageVisibility('hidden');
 
-			expect(savedPoint()).toEqual({ generationId: 'g-restored', position: 42 });
+			expect(savedPoint()).toEqual({ generationId: WHOLE_RECORD.generationId, position: 42 });
 		}
 	);
 
