@@ -135,7 +135,8 @@ function isStorageRefusal(error: unknown): boolean {
 // the browser refuses storage -- reaching it, reading it or writing it -- they
 // live in this document's memory instead, seeded by whatever storage still
 // gives and raised by every entry the document meets, rather than the page
-// failing to render. Storage is reached on use, never while the module loads.
+// failing to render. Storage is never reached unguarded: not on use, and not
+// while the module loads onto an entry and counts it.
 function tabStorage(reachStorage: () => TabStorage): TabStorage {
 	let memoryAfterRefusal: Map<string, string> | null = null;
 

@@ -288,22 +288,30 @@ describe('history adapter', () => {
 		expect(layer.id).toBe(4);
 	});
 
+	const reachingSessionStorage = () => vi.spyOn(window, 'sessionStorage', 'get');
+	const readingSessionStorage = () => vi.spyOn(Storage.prototype, 'getItem');
+	const writingSessionStorage = () => vi.spyOn(Storage.prototype, 'setItem');
+
 	it.each([
-		['reaching session storage', () => vi.spyOn(window, 'sessionStorage', 'get')],
-		['reading session storage', () => vi.spyOn(Storage.prototype, 'getItem')],
-		['writing session storage', () => vi.spyOn(Storage.prototype, 'setItem')]
+		{ denied: 'reaching', spyOn: reachingSessionStorage, loadedOnto: null, ids: [1, 2] },
+		{ denied: 'reading', spyOn: readingSessionStorage, loadedOnto: null, ids: [1, 2] },
+		{ denied: 'writing', spyOn: writingSessionStorage, loadedOnto: null, ids: [1, 2] },
+		{ denied: 'reaching', spyOn: reachingSessionStorage, loadedOnto: 3, ids: [4, 5] }
 	])(
-		'loads and keeps stamping entries when the browser denies %s',
-		async (_denied, spyOnStorageAccess) => {
-			spyOnStorageAccess().mockImplementation(() => {
+		'loads onto entry $loadedOnto and keeps stamping entries when the browser denies $denied session storage',
+		async ({ spyOn, loadedOnto, ids }) => {
+			if (loadedOnto !== null) {
+				history.replaceState({ 'sveltekit:states': { entry: { id: loadedOnto } } }, '', '/album/c');
+			}
+			spyOn().mockImplementation(() => {
 				throw storageAccessDenied();
 			});
 			vi.resetModules();
 
 			const loaded = await import('$lib/history/historyController');
-			const ids = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
+			const pushed = ['/album/a', '/album/b'].map((url) => loaded.pushEntry(url, {}).id);
 
-			expect(ids).toEqual([1, 2]);
+			expect(pushed).toEqual(ids);
 		}
 	);
 
