@@ -94,6 +94,9 @@ let recording: Recording | null = null;
 // The budget belongs to the page, not to one recording: the send on hide, the
 // pagehide right after it and a sign-in change in between all draw on it.
 let keepaliveBytesInFlight = 0;
+// From the moment a page starts to navigate away until it is shown again: a
+// mailto link or a refused navigation leaves the page where it was.
+let pageIsLeaving = false;
 
 /**
  * Records for `userId` until the returned stop is called, and sends what an
@@ -175,13 +178,19 @@ function watchThePage(): () => void {
 	const onVisibilityChange = () => {
 		recordPageEvent('visibility_change', document.visibilityState);
 		if (document.visibilityState === 'hidden') sendBeforeThePageGoes();
+		else pageIsLeaving = false;
 	};
 	const onPageHide = (event: PageTransitionEvent) => {
 		recordPageEvent('page_hide', `persisted=${event.persisted}`);
 		sendBeforeThePageGoes();
 	};
-	const onPageShow = (event: PageTransitionEvent) =>
+	const onPageShow = (event: PageTransitionEvent) => {
+		pageIsLeaving = false;
 		recordPageEvent('page_show', `persisted=${event.persisted}`);
+	};
+	const onBeforeUnload = () => {
+		pageIsLeaving = true;
+	};
 	const onFreeze = () => recordPageEvent('freeze');
 	const onResume = () => recordPageEvent('resume');
 	const onOnline = () => recordPageEvent('online');
@@ -192,6 +201,7 @@ function watchThePage(): () => void {
 	document.addEventListener('resume', onResume);
 	window.addEventListener('pagehide', onPageHide);
 	window.addEventListener('pageshow', onPageShow);
+	window.addEventListener('beforeunload', onBeforeUnload);
 	window.addEventListener('online', onOnline);
 	window.addEventListener('offline', onOffline);
 	const stopHeartbeat = startHeartbeat();
@@ -202,6 +212,7 @@ function watchThePage(): () => void {
 		document.removeEventListener('resume', onResume);
 		window.removeEventListener('pagehide', onPageHide);
 		window.removeEventListener('pageshow', onPageShow);
+		window.removeEventListener('beforeunload', onBeforeUnload);
 		window.removeEventListener('online', onOnline);
 		window.removeEventListener('offline', onOffline);
 	};
@@ -256,9 +267,8 @@ function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void 
 
 // The page may be gone before the answer comes, so what the browser takes
 // over leaves the buffer at once: a reload must not send it a second time.
-// Chromium even fails the send of a page that is navigating away while it
-// still delivers it, so a send without an answer counts as sent; only a
-// refusal that reaches a living page puts the report back.
+// A report comes back when the server wants it later, or when the send failed
+// on a page that stays.
 function handOff(from: Recording, batches: BufferedEvent[][]): void {
 	const handedOff: BufferedEvent[][] = [];
 	for (const batch of batches) {
@@ -272,10 +282,17 @@ function handOff(from: Recording, batches: BufferedEvent[][]): void {
 				keepaliveBytesInFlight -= bodyBytes;
 			})
 			.then((fate) => {
-				if (fate === 'wanted_later' && recording === from) putBack(from, batch);
+				if (comesBack(fate) && recording === from) putBack(from, batch);
 			});
 	}
 	if (handedOff.length > 0) takeOut(from, handedOff.flat());
+}
+
+// Chromium fails the sends of a page that is navigating away while it still
+// delivers them, so there a send without an answer counts as sent. A page that
+// stays, hidden on a dropping mobile link, keeps what it could not send.
+function comesBack(fate: ReportFate): boolean {
+	return fate === 'wanted_later' || (fate === 'unanswered' && !pageIsLeaving);
 }
 
 // One report speaks for one page session, so a batch never mixes sessions.

@@ -12,10 +12,10 @@ let stopRecording: (() => void) | null = null;
 let visibility: DocumentVisibilityState = 'visible';
 let answerStatus = 204;
 let serverAnswers = true;
-let leavingPageLosesKeepaliveAnswers = false;
+let keepaliveSendsFail = false;
 const fetchMock = vi.fn(async (_url: string, init: RequestInit) => {
 	if (!serverAnswers) return new Promise<Response>(() => {});
-	if (leavingPageLosesKeepaliveAnswers && init.keepalive) throw new TypeError('Failed to fetch');
+	if (keepaliveSendsFail && init.keepalive) throw new TypeError('Failed to fetch');
 	return new Response(null, { status: answerStatus });
 });
 
@@ -56,6 +56,16 @@ function recordLarge(count: number): void {
 function hidePage(): void {
 	visibility = 'hidden';
 	document.dispatchEvent(new Event('visibilitychange'));
+}
+
+function showPage(): void {
+	visibility = 'visible';
+	document.dispatchEvent(new Event('visibilitychange'));
+}
+
+// The page starts to navigate away, as on a reload or a link to another site.
+function startLeaving(): void {
+	window.dispatchEvent(new Event('beforeunload'));
 }
 
 function sentReports(): PlaybackDiagnosticsReport[] {
@@ -109,7 +119,7 @@ beforeEach(async () => {
 	fetchMock.mockClear();
 	answerStatus = 204;
 	serverAnswers = true;
-	leavingPageLosesKeepaliveAnswers = false;
+	keepaliveSendsFail = false;
 	visibility = 'visible';
 	Object.defineProperty(document, 'visibilityState', {
 		configurable: true,
@@ -263,10 +273,11 @@ describe('playback diagnostics recorder', () => {
 	});
 
 	it('sends again on pagehide nothing the hide handed to the browser, though the leaving page never saw the answer', async () => {
-		leavingPageLosesKeepaliveAnswers = true;
+		keepaliveSendsFail = true;
 		startFor(LISTENER);
 		recorder.recordPlaybackEvent(note('handed off'));
 		hidePage();
+		startLeaving();
 		await letTheServerAnswer();
 
 		window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
@@ -277,6 +288,41 @@ describe('playback diagnostics recorder', () => {
 
 		expect(sentDetails()).toEqual(['handed off', 'hidden', 'persisted=false']);
 	});
+
+	it.each([
+		{
+			next: 'hide',
+			sendAgain: () => {
+				showPage();
+				hidePage();
+			},
+			sent: ['unsent', 'hidden', 'visible', 'hidden']
+		},
+		{
+			next: 'start',
+			sendAgain: async () => {
+				await openPage();
+				startFor(LISTENER);
+			},
+			sent: ['unsent', 'hidden']
+		}
+	])(
+		'sends on the next $next what a hidden page that stays could not send',
+		async ({ sendAgain, sent }) => {
+			keepaliveSendsFail = true;
+			startFor(LISTENER);
+			recorder.recordPlaybackEvent(note('unsent'));
+			hidePage();
+			await letTheServerAnswer();
+			keepaliveSendsFail = false;
+			fetchMock.mockClear();
+
+			await sendAgain();
+			await letTheServerAnswer();
+
+			expect(sentDetails()).toEqual(sent);
+		}
+	);
 
 	it('keeps the events for the next start when the page hides without a network', async () => {
 		const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
