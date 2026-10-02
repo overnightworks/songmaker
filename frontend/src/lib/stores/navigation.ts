@@ -17,7 +17,6 @@ import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData'
 import {
 	selectedSongId,
 	selectedGenerationId,
-	selectedAlbumId,
 	selectedSong,
 	selectSong as playerSelectSong,
 	clearGenerationSelection as playerClearGeneration,
@@ -42,6 +41,7 @@ import {
 	cancelLibraryHistoryApply,
 	currentLibraryHistoryState,
 	detailTab,
+	enterAlbumOfSong,
 	holdLibraryRestoresUntil,
 	isLibraryHistoryState,
 	libraryHistoryEntry,
@@ -429,11 +429,7 @@ function applySelectedSong(
 	storeDeselectPlaylist();
 	if (knownSong) hydrateSongIntoLibrary(knownSong);
 	const song = get(songList).find((item) => item.id === songId) ?? knownSong;
-	const albumId = song?.album_id ?? null;
-	if (albumId) {
-		selectedAlbumId.set(albumId);
-		void loadSongsForAlbum(albumId);
-	}
+	if (song) enterAlbumOfSong(song);
 	playerSelectSong(songId);
 	void loadSongContext(songId);
 	showSongTab(songId, tab === 'keep' ? get(detailTab) : rememberedSongTab(songId));

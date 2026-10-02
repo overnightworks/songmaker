@@ -70,22 +70,28 @@ export const RAIL_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 };
 
 /**
- * What `song-phone.spec.ts` costs the API, measured on a green run against a
- * clean stack: opening the album, selecting the song, the Takes tab, playing
- * a take, a second cold open of the same song for the seeded running job,
- * then its Takes-tab and Write-tab views once that job is failed live over
- * its own open SSE stream — measured 49 requests. The running-job and
- * failed-job seeding themselves never touch this budget at all, since both
- * run directly against the database (`seedRunningGenerationJob`,
- * `failGenerationJob` in `seed.ts`), the same way the rail's filler albums
- * and the kinetic-strip takes do. Mobile-only, matching the spec's own
- * project restriction — no desktop number to carry. The flow has grown since:
- * main's own Boot stack jobs measured 52, 54, 55, 55 and 55, and a lane's run
- * of the same green flow hit 56 and 57 on retry, so a ceiling at main's
- * observed maximum failed green runs by chance. The ceiling of 62 keeps about
- * 12 % headroom over that maximum while a refetch loop still breaks it.
+ * What `song-phone.spec.ts` costs the API: a cold open of the song's own
+ * address, the Takes tab, playing a take, a second cold open of the same song
+ * for the seeded running job, then its Takes-tab and Write-tab views once that
+ * job is failed live over its own open SSE stream. The running-job and
+ * failed-job seeding never touch this budget, since both run directly against
+ * the database (`seedRunningGenerationJob`, `failGenerationJob` in `seed.ts`),
+ * the same way the rail's filler albums and the kinetic-strip takes do.
+ * Mobile-only, matching the spec's own project restriction.
+ *
+ * The count grows with the seeded album, not with this flow: playing a take
+ * queues the album, and gathering that queue fetches every sibling song's
+ * takes (`GET /api/songs/{id}` once each, `collectAlbumEntries` in
+ * `stores/player.ts`). Other specs seed their songs into the same album
+ * first, so in the full CI run that is 19 extra requests. Measured 02.10.2026
+ * on one build with 19 sibling songs: 64 for this cold address open and 64,
+ * request for request, for the former album-page-then-song-row open; alone
+ * against a fresh album, 45 for both. Repeated green runs measured 64 to 66
+ * (CI: 63 and 64), the spread being the cold open's race with the live
+ * stream's own bootstrap. The ceiling of 70 holds that spread while a
+ * refetch loop still breaks it.
  */
-export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 62;
+export const SONG_PHONE_FLOW_API_REQUEST_BUDGET = 70;
 
 /**
  * What `take-arrives.spec.ts` costs the API, measured on a green run against a
