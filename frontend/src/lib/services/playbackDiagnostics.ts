@@ -46,8 +46,9 @@ const STORAGE_KEY_PREFIX = 'playbackDiagnostics:';
 const BUFFER_CAPACITY = 500;
 const EVENTS_PER_REPORT = 100;
 // Browsers refuse a keepalive request once the keepalive bodies in flight pass
-// 64 KiB together, so a send before the page goes stops at that budget and
-// leaves the rest for the next start.
+// 64 KiB together, so a send before the page goes counts what earlier ones
+// still have in flight, stops at that budget and leaves the rest for the next
+// start.
 const KEEPALIVE_BODY_BUDGET_BYTES = 64 * 1024;
 const HEARTBEAT_MS = 15_000;
 const TIMER_GAP_MS = 30_000;
@@ -62,6 +63,7 @@ const STATUSES_KEEPING_THE_EVENTS: ReadonlySet<number> = new Set([401, 403, 429]
 const NO_TAKE: PlaybackTakeState = { takeId: null, position: 0, readyState: 0, deck: 'active' };
 
 let recording: Recording | null = null;
+let keepaliveBytesInFlight = 0;
 
 /**
  * Records for `userId` until the returned stop is called, and sends what an
@@ -182,14 +184,18 @@ function startHeartbeat(): () => void {
 
 function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void {
 	const waiting = from.events.filter((buffered) => !from.inFlight.has(buffered));
-	let keepaliveBytesLeft = KEEPALIVE_BODY_BUDGET_BYTES;
 	for (const batch of reportBatches(waiting)) {
 		const body = JSON.stringify(reportOf(batch));
-		if (opts.keepalive) {
-			keepaliveBytesLeft -= new Blob([body]).size;
-			if (keepaliveBytesLeft < 0) return;
+		if (!opts.keepalive) {
+			void deliver(from, batch, body, false);
+			continue;
 		}
-		void deliver(from, batch, body, opts.keepalive);
+		const bodyBytes = new Blob([body]).size;
+		if (keepaliveBytesInFlight + bodyBytes > KEEPALIVE_BODY_BUDGET_BYTES) return;
+		keepaliveBytesInFlight += bodyBytes;
+		void deliver(from, batch, body, true).finally(() => {
+			keepaliveBytesInFlight -= bodyBytes;
+		});
 	}
 }
 

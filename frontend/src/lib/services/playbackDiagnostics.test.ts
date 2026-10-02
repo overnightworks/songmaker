@@ -11,7 +11,9 @@ let recorder: Recorder;
 let stopRecording: (() => void) | null = null;
 let visibility: DocumentVisibilityState = 'visible';
 let answerStatus = 204;
+let serverAnswers = true;
 const fetchMock = vi.fn(async (_url: string, _init: RequestInit) => {
+	if (!serverAnswers) return new Promise<Response>(() => {});
 	return new Response(null, { status: answerStatus });
 });
 
@@ -53,6 +55,13 @@ function sentReports(): PlaybackDiagnosticsReport[] {
 	return fetchMock.mock.calls.map(([, init]) => JSON.parse(init.body as string));
 }
 
+function keepaliveBytesSent(): number {
+	return fetchMock.mock.calls
+		.filter(([, init]) => init.keepalive)
+		.map(([, init]) => new Blob([init.body as string]).size)
+		.reduce((sum, size) => sum + size, 0);
+}
+
 function sentDetails(): string[] {
 	return sentReports().flatMap((report) => report.events.map((event) => event.detail));
 }
@@ -67,6 +76,7 @@ beforeEach(async () => {
 	localStorage.clear();
 	fetchMock.mockClear();
 	answerStatus = 204;
+	serverAnswers = true;
 	visibility = 'visible';
 	Object.defineProperty(document, 'visibilityState', {
 		configurable: true,
@@ -121,9 +131,7 @@ describe('playback diagnostics recorder', () => {
 
 		hidePage();
 		await letTheServerAnswer();
-		const keepaliveBytes = fetchMock.mock.calls
-			.map(([, init]) => new Blob([init.body as string]).size)
-			.reduce((sum, size) => sum + size, 0);
+		const keepaliveBytes = keepaliveBytesSent();
 		const sentOnHide = sentDetails().length;
 		fetchMock.mockClear();
 		await openPage();
@@ -133,6 +141,18 @@ describe('playback diagnostics recorder', () => {
 		expect(keepaliveBytes).toBeLessThanOrEqual(64 * 1024);
 		expect(sentOnHide).toBeGreaterThan(0);
 		expect(sentOnHide + sentDetails().length).toBe(401);
+	});
+
+	it('counts what an unanswered send on hide still has in flight against the budget of a pagehide right after', () => {
+		serverAnswers = false;
+		startFor(LISTENER);
+		for (let index = 0; index < 400; index += 1)
+			recorder.recordPlaybackEvent(note('x'.repeat(200)));
+
+		hidePage();
+		window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false }));
+
+		expect(keepaliveBytesSent()).toBeLessThanOrEqual(64 * 1024);
 	});
 
 	it('sends on pagehide with keepalive', async () => {
