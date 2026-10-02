@@ -1,8 +1,0 @@
-claim_id = "53386c3833ee4906ba73bfd40dad950f"
-agent = "claude-head"
-role = "builder"
-base = "c6343aa6ba984be1f13ed1981313c5f6dee81dfa"
-branch = "claude-head/issue-1252-song-vocal-language-editable"
-scope = ["frontend/src/lib/api/types.ts", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/mcp_server/schemas.py", "src/songmaker_cli/song_api.py", "tests/test_api.py"]
-opened_commit = "048777e22e0985545cdc298e2e5deca787b058b2"
-whole_reason = "one song field made editable through model, endpoint, query, generated types and its mirrors"
