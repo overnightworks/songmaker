@@ -34,7 +34,6 @@
 		albumTrackNeighbors,
 		backToCollection,
 		compareAlbumTracks,
-		navigateToSongTab,
 		openCollectionEntry,
 		openLibraryWall,
 		openEditTab,
@@ -49,7 +48,7 @@
 		isDirty,
 		versions,
 		loadSongData,
-		loadVersion,
+		loadVersionAsDraft,
 		handleSave,
 		computeDraftVersionNumber,
 		discardDraft,
@@ -80,7 +79,7 @@
 		type SourceMode
 	} from '$lib/stores/recipe';
 	import { setGenerationActions, takeActionsFor } from '$lib/contexts/generation-actions';
-	import type { GenerationItem, SongItem } from '$lib/api/types';
+	import type { GenerationItem, SongItem, VersionItem } from '$lib/api/types';
 	import {
 		EXPIRY_WARN_DAYS,
 		LIBRARY_NARROW_MEDIA,
@@ -97,7 +96,12 @@
 		EDITOR_UNSAVED_MESSAGE,
 		EDITOR_UNSAVED_SAVE_LABEL,
 		EDITOR_UNSAVED_DISCARD_LABEL,
-		TAKES_ERROR
+		TAKES_ERROR,
+		TOAST_UNDO_LABEL,
+		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+		VERSION_REPLACE_DRAFT_TITLE,
+		versionLoadedToastLabel,
+		versionReplaceDraftMessage
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
@@ -117,6 +121,10 @@
 	import PlaylistPicker from './PlaylistPicker.svelte';
 
 	let showDeleteConfirm = $state(false);
+	let versionAwaitingReplace = $state<{
+		version: VersionItem;
+		answer: (loaded: boolean) => void;
+	} | null>(null);
 	let compact = $state(false);
 	let songRail = $state(false);
 	let takesStatus = $state<'loading' | 'ready' | 'error'>('ready');
@@ -430,10 +438,33 @@
 		if (compact) openEditTab();
 	}
 
-	function onVersionClick(versionId: string): void {
-		const idx = $versions.findIndex((v) => v.id === versionId);
-		if (idx !== -1) loadVersion(idx);
-		navigateToSongTab('edit');
+	function onVersionClick(versionId: string): Promise<boolean> {
+		const version = get(versions).find((v) => v.id === versionId);
+		if (!version) return Promise.resolve(false);
+		if (!get(isDirty)) {
+			loadVersionWithUndo(version);
+			return Promise.resolve(true);
+		}
+		return new Promise((answer) => {
+			versionAwaitingReplace = { version, answer };
+		});
+	}
+
+	function answerVersionReplace(replace: boolean): void {
+		const awaiting = versionAwaitingReplace;
+		versionAwaitingReplace = null;
+		if (!awaiting) return;
+		if (replace) loadVersionWithUndo(awaiting.version);
+		awaiting.answer(replace);
+	}
+
+	function loadVersionWithUndo(version: VersionItem): void {
+		const undo = loadVersionAsDraft(version);
+		if (!undo) return;
+		addUndoToast(versionLoadedToastLabel(version.version_number), {
+			label: TOAST_UNDO_LABEL,
+			handler: undo
+		});
 	}
 
 	async function onRenameSong(newTitle: string): Promise<void> {
@@ -778,6 +809,16 @@
 		secondaryLabel={EDITOR_UNSAVED_DISCARD_LABEL}
 		onsecondary={() => void resolveDirtyNavigation('discard')}
 		oncancel={() => void resolveDirtyNavigation('cancel')}
+	/>
+{/if}
+
+{#if versionAwaitingReplace}
+	<ConfirmDialog
+		title={VERSION_REPLACE_DRAFT_TITLE}
+		message={versionReplaceDraftMessage(versionAwaitingReplace.version.version_number)}
+		confirmLabel={VERSION_REPLACE_DRAFT_CONFIRM_LABEL}
+		onconfirm={() => answerVersionReplace(true)}
+		oncancel={() => answerVersionReplace(false)}
 	/>
 {/if}
 

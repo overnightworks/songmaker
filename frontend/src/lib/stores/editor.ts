@@ -35,11 +35,14 @@ const EMPTY_SONG_DATA: SongData = {
 interface EditorState {
 	saved: SongData;
 	draft: SongData;
+	/** The version number an older version was loaded from into the draft, until it is saved. */
+	loadedFrom: number | null;
 }
 
 const editorState = writable<EditorState>({
 	saved: { ...EMPTY_SONG_DATA },
-	draft: { ...EMPTY_SONG_DATA }
+	draft: { ...EMPTY_SONG_DATA },
+	loadedFrom: null
 });
 
 function genParamsEqual(
@@ -57,19 +60,25 @@ function genParamsEqual(
 	return true;
 }
 
-export const isDirty = derived(editorState, (s) => {
-	const { saved, draft } = s;
+function songDataEqual(a: SongData, b: SongData): boolean {
 	return (
-		draft.lyrics !== saved.lyrics ||
-		draft.prompt !== saved.prompt ||
-		draft.bpm !== saved.bpm ||
-		draft.audio_duration !== saved.audio_duration ||
-		draft.key_scale !== saved.key_scale ||
-		!genParamsEqual(draft.genParams, saved.genParams)
+		a.lyrics === b.lyrics &&
+		a.prompt === b.prompt &&
+		a.bpm === b.bpm &&
+		a.audio_duration === b.audio_duration &&
+		a.key_scale === b.key_scale &&
+		genParamsEqual(a.genParams, b.genParams)
 	);
-});
+}
+
+export const isDirty = derived(editorState, (s) => !songDataEqual(s.draft, s.saved));
 
 export const savedSongData = derived(editorState, (s) => s.saved);
+
+/** Which older version the unsaved draft came from; null once nothing of it is left to save. */
+export const draftLoadedFrom = derived([editorState, isDirty], ([s, dirty]) =>
+	dirty ? s.loadedFrom : null
+);
 
 export const editLyrics = derived(editorState, (s) => s.draft.lyrics);
 export const editPrompt = derived(editorState, (s) => s.draft.prompt);
@@ -133,7 +142,7 @@ function songDataFromVersion(v: VersionItem): SongData {
 
 export function loadSongData(s: SongItem): void {
 	const data = songDataFromSong(s);
-	editorState.set({ saved: data, draft: { ...data } });
+	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
 	loadVersions(s.id);
 }
 
@@ -147,13 +156,31 @@ async function loadVersions(songId: string): Promise<void> {
 	currentVersionIndex.set(0);
 }
 
-export function loadVersion(index: number): void {
-	const vers = get(versions);
-	const v = vers[index];
-	if (!v) return;
-	currentVersionIndex.set(index);
+function resetToVersion(v: VersionItem): void {
 	const data = songDataFromVersion(v);
-	editorState.set({ saved: data, draft: { ...data } });
+	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
+}
+
+/**
+ * Loads a version into the draft only: the latest version stays saved, so a
+ * save or Generate makes the next version and the loaded one is never
+ * touched. Loading the latest version itself is the way back to the saved
+ * state. Nothing reaches the server. Answers the undo, which puts back the
+ * draft this load replaced -- unless the editor has moved to another song --
+ * or null when the draft already held that version and nothing changed.
+ */
+export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
+	const songId = get(selectedSongId);
+	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = get(editorState);
+	const isLatest = version.id === get(versions)[0]?.id;
+	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
+	const loadedFrom = isLatest ? null : version.version_number;
+	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) return null;
+	editorState.update((s) => ({ ...s, draft, loadedFrom }));
+	return () => {
+		if (get(selectedSongId) !== songId) return;
+		editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
+	};
 }
 
 /**
@@ -191,7 +218,7 @@ export async function handleSave(songId: string): Promise<SongItem> {
 		key_scale: draft.key_scale,
 		generation_params: draft.genParams
 	});
-	editorState.update((s) => ({ ...s, saved: { ...s.draft } }));
+	editorState.update((s) => ({ ...s, saved: { ...s.draft }, loadedFrom: null }));
 	replaceSongInList(updated);
 	await loadVersions(songId);
 	return updated;
@@ -209,6 +236,7 @@ export async function handleDeleteVersion(
 	if (get(selectedSongId) !== songId) return;
 	await loadVersions(songId);
 	if (get(selectedSongId) !== songId) return;
-	if (get(versions)[0]) loadVersion(0);
+	const latest = get(versions)[0];
+	if (latest) resetToVersion(latest);
 	else loadSongData(updated);
 }

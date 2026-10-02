@@ -369,6 +369,40 @@ export const EDITOR_UNSAVED_MESSAGE =
 export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_SAVE_FAILED = 'Save failed';
+export const VERSION_CHIP_DRAFT_LABEL = 'draft';
+export const VERSIONS_SHEET_LABEL = 'Versions';
+export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';
+export const VERSION_CURRENT_TAG = 'current';
+export const VERSION_PICKED_LABEL = 'picked';
+export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
+export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
+export const TOAST_UNDO_LABEL = 'Undo';
+
+export function versionLabel(versionNumber: number): string {
+	return `v${versionNumber}`;
+}
+
+export function versionChipLabel(versionNumber: number, dirty: boolean): string {
+	const version = versionLabel(versionNumber);
+	return dirty ? `${version} · ${VERSION_CHIP_DRAFT_LABEL}` : version;
+}
+
+export function versionTakesLabel(count: number): string {
+	if (count === 0) return 'no takes';
+	return `${count} take${count === 1 ? '' : 's'}`;
+}
+
+export function versionLoadedFromLabel(versionNumber: number): string {
+	return `Loaded from ${versionLabel(versionNumber)}`;
+}
+
+export function versionLoadedToastLabel(versionNumber: number): string {
+	return `${versionLabel(versionNumber)} loaded`;
+}
+
+export function versionReplaceDraftMessage(versionNumber: number): string {
+	return `Your draft has changes that are not in any version. Loading ${versionLabel(versionNumber)} replaces them. You can undo right after.`;
+}
 
 export const SONG_SHARE_LABEL = 'Share song';
 export const SONG_TITLE_LABEL = 'Song title';
