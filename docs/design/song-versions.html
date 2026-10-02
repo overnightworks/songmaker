@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Songmaker — song versions</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;700&family=Open+Sans:wght@400;600&display=swap">
+<style>
+/* ── tokens: copied from frontend/src/app.css, light theme + phone media ── */
+:root {
+	--action: #7a18c0;
+	--bg: #f4f4f6;
+	--bg-deep: #e8e8ec;
+	--surface: #ffffff;
+	--surface-hover: #ebebed;
+	--border: #d0d0d4;
+	--text: #1a1a1e;
+	--text-muted: #555;
+	--text-subtle: #555;
+	--text-disabled: #9a9a9a;
+	--text-light: #333;
+	--header-bg: #f0f0f2;
+	--score-good-bg: #e0f5e0;
+	--score-good: #1e7a1e;
+	--score-ok-bg: #fef3e0;
+	--score-ok: #b07000;
+	--score-bad-bg: #fde8e8;
+	--score-bad: #c02020;
+	--keep: #c03040;
+	--font-display: 'Oswald', Impact, sans-serif;
+	--font-body: 'Open Sans', Arial, sans-serif;
+	--header-height: 46px;
+	--player-height: 64px;
+	--editor-generate-bar-height: 56px;
+	--btn-radius-pill: 16px;
+	--btn-radius-sm: 4px;
+	--btn-font-size: 1rem;
+	--btn-font-size-sm: 0.8rem;
+	--btn-letter-spacing: 0.5px;
+	--input-radius: 4px;
+	--card-radius: 6px;
+	--label-font-size: 11px;
+	--tab-font-size: 12px;
+	--hitbox-frequent: 44px;
+	--keyboard-height: 290px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+	background: #e4e2e8;
+	font-family: var(--font-body);
+	font-size: 15px;
+	color: #1b1a20;
+	padding: 40px 32px 56px;
+}
+
+.board { display: flex; gap: 28px; align-items: flex-start; }
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+figcaption {
+	font-family: var(--font-display);
+	font-size: 13px;
+	letter-spacing: .4px;
+	color: #4a4552;
+	max-width: 390px;
+}
+figcaption b { color: #1b1a20; font-weight: 500; }
+
+/* ── the phone screen: exactly 390 × 844 ───────────────────────────────── */
+.device {
+	position: relative;
+	width: 390px;
+	height: 844px;
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font-body);
+	font-size: 15px;
+	overflow: hidden;
+	border-radius: 10px;
+	box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 14px 40px rgba(0,0,0,.12);
+}
+/* frame 6 carries two half screens in one 390 × 844 picture */
+.split { width: 390px; height: 844px; display: flex; flex-direction: column; gap: 4px; }
+.split .device { height: 420px; }
+
+/* ── icons ─────────────────────────────────────────────────────────────── */
+.ic { width: 20px; height: 20px; display: block; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ic.solid { fill: currentColor; stroke: none; }
+.ic.sm { width: 16px; height: 16px; }
+.ic.lg { width: 44px; height: 44px; stroke-width: 1.1; }
+
+/* ── the one button vocabulary ─────────────────────────────────────────── */
+/* primary: flat --primary fill, radius 4, Oswald uppercase — GenerateButton's
+   .primary-button and ConfirmDeleteDialog's confirm, without the gradient */
+.btn-primary {
+	height: var(--hitbox-frequent);
+	padding: 0 1.5rem;
+	border: 1px solid var(--action);
+	border-radius: var(--btn-radius-sm);
+	background: var(--action);
+	color: #fff;
+	font-family: var(--font-display);
+	font-size: var(--btn-font-size);
+	letter-spacing: var(--btn-letter-spacing);
+	text-transform: uppercase;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	gap: .45rem;
+}
+/* disabled reads by shape first: the fill is gone, the outline stays */
+.btn-primary.off {
+	background: none;
+	border-color: var(--border);
+	color: var(--text-disabled);
+}
+/* failed is the same box again: fill gone, failure ink, a triangle inside */
+.btn-primary.failed {
+	background: none;
+	border-color: var(--score-bad);
+	color: var(--score-bad);
+}
+/* the worker's sentence: clamped to one line, the chevron says there is more */
+.fail-line {
+	flex: 0 0 100%;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	font: inherit;
+	font-size: .8rem;
+	line-height: 1.4;
+	color: var(--score-bad);
+	background: none;
+	border: none;
+	text-align: left;
+	min-height: var(--hitbox-frequent);
+	display: flex;
+	align-items: center;
+	gap: .2rem;
+	padding: 0;
+}
+.fail-line .msg {
+	flex: 1 1 auto;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.fail-line .chev {
+	width: var(--hitbox-frequent);
+	height: var(--hitbox-frequent);
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+/* opened: the whole sentence wraps, same ink, the chevron flips and holds the first line */
+.fail-line.open {
+	align-items: flex-start;
+	padding-bottom: .35rem;
+}
+.fail-line.open .msg {
+	white-space: normal;
+	overflow: visible;
+	text-overflow: clip;
+	padding-top: 13px;
+}
+/* opening the line steals height from the page, so the page shows its bottom;
+   the shift is a whole card plus its gap — no element is left half-drawn */
+.body.scrolled > :first-child { margin-top: -66px; }
+
+/* icon-only: one 44px touch box, the face sits inside it */
+.icon-btn {
+	width: var(--hitbox-frequent);
+	height: var(--hitbox-frequent);
+	flex: none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	background: none;
+	border: none;
+	color: var(--text-muted);
+}
+.icon-btn.ink { color: var(--text); }
+.icon-btn.bad { color: var(--score-bad); }
+.icon-btn .face {
+	width: 34px; height: 34px;
+	border-radius: 50%;
+	border: 1px solid var(--border);
+	background: var(--surface);
+	display: flex; align-items: center; justify-content: center;
+	color: var(--text);
+}
+.icon-btn.on .face { border-color: var(--action); color: var(--action); }
+.icon-btn.star { color: var(--text-disabled); }
+.icon-btn.star.on { color: var(--text); }
+.icon-btn.heart { color: var(--text-disabled); }
+.icon-btn.heart.on { color: var(--keep); }
+
+/* ── app bar: drawer ☰ · song · more — navigation.html state (f) ───────── */
+.appbar {
+	height: var(--header-height);
+	flex: none;
+	display: flex;
+	align-items: center;
+	padding: 0 .1rem;
+	background: var(--header-bg);
+	border-bottom: 1px solid var(--border);
+}
+.appbar h1 {
+	flex: 1;
+	min-width: 0;
+	font-family: var(--font-display);
+	font-weight: 500;
+	font-size: 1.2rem;
+	letter-spacing: .3px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	padding: 0 .3rem;
+}
+
+/* ── tab strip: Edit / Co-writer / Takes (n), the song's own row ─────── */
+.tabs {
+	flex: none;
+	display: flex;
+	gap: 2px;
+	padding: 0 .55rem;
+	background: var(--header-bg);
+	border-bottom: 1px solid var(--border);
+}
+.tabs button {
+	min-height: var(--hitbox-frequent);
+	padding: 0 1rem;
+	background: none;
+	border: none;
+	border-bottom: 2px solid transparent;
+	color: var(--text-muted);
+	font-family: var(--font-display);
+	font-size: var(--tab-font-size);
+	text-transform: uppercase;
+	letter-spacing: .5px;
+	white-space: nowrap;
+	display: inline-flex;
+	align-items: center;
+	gap: .4rem;
+}
+.tabs button.active { color: var(--action); border-color: var(--action); }
+.tabs .count { color: var(--text-disabled); font-size: .78rem; }
+.tabs button.active .count { color: var(--action); }
+/* busy on the other tab: a ring, because it is running, not finished */
+.tabs .ring {
+	width: 9px; height: 9px; border-radius: 50%;
+	border: 2px solid var(--score-ok);
+	flex: none;
+}
+/* offline: the job's result cannot arrive yet, so the ring loses its amber */
+.tabs .ring.stale { border-color: var(--text-disabled); }
+
+/* ── the page: one scroller, nothing nested ───────────────────────────── */
+.body {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: .75rem;
+	padding: .75rem;
+	overflow: hidden;
+}
+/* the page scrolls: nothing on it is squeezed to fit the viewport */
+.body > *, .takes > *, .chat > * { flex: none; }
+.body > .state-block { flex: 1; }
+
+/* ── field label — WriteColumn's .style-field span ────────────────────── */
+.field { display: flex; flex-direction: column; gap: .3rem; }
+.field > .label {
+	display: flex;
+	align-items: baseline;
+	gap: .5rem;
+	font-size: var(--label-font-size);
+	color: var(--text-muted);
+	text-transform: uppercase;
+	font-family: var(--font-display);
+	letter-spacing: 1px;
+}
+.field-stamp { font-size: .7rem; color: var(--text-subtle); text-transform: none; letter-spacing: 0; font-family: var(--font-body); }
+
+.textbox {
+	padding: .65rem .85rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--input-radius);
+	color: var(--text);
+	font-size: 1rem;
+	line-height: 1.45;
+}
+.lyrics-area {
+	font-family: 'Courier New', monospace;
+	font-size: .95rem;
+	line-height: 1.6;
+	white-space: pre-wrap;
+}
+.lyrics-area .mark { font-family: var(--font-display); color: var(--text-subtle); }
+
+/* ── the row shape every list row on this page uses ───────────────────── */
+.row {
+	display: flex;
+	align-items: center;
+	gap: .35rem;
+	padding: .5rem .5rem .5rem .6rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--card-radius);
+	width: 100%;
+	text-align: left;
+	color: var(--text);
+	font: inherit;
+	min-width: 0;
+}
+.row .grow { flex: 1; min-width: 0; }
+
+/* recipe: collapsed and expanded are the same card */
+.card {
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--card-radius);
+	overflow: hidden;
+}
+.card-head {
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	width: 100%;
+	padding: .25rem .25rem .25rem .7rem;
+	background: none;
+	border: none;
+	font: inherit;
+	color: var(--text);
+	text-align: left;
+}
+.card-head .grow { display: flex; flex-direction: column; gap: .05rem; flex: 1; min-width: 0; }
+.card-head .lbl { font-size: .72rem; color: var(--text-subtle); }
+.summary-line {
+	font-size: .85rem;
+	color: var(--text);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* recipe fields — RecipePanel's groups as label/value rows */
+.group-title {
+	font-family: var(--font-display);
+	text-transform: uppercase;
+	letter-spacing: .5px;
+	font-size: .7rem;
+	color: var(--text-subtle);
+	padding: .45rem .7rem .15rem;
+	background: var(--bg);
+	border-top: 1px solid var(--border);
+}
+.kv {
+	display: flex;
+	align-items: center;
+	gap: .6rem;
+	min-height: var(--hitbox-frequent);
+	padding: 0 .55rem 0 .7rem;
+	border-top: 1px solid var(--border);
+}
+.kv .k { color: var(--text-muted); font-size: .87rem; flex: 1; min-width: 0; }
+.kv .v { color: var(--text); font-size: .9rem; display: inline-flex; align-items: center; gap: .4rem; }
+.kv .caret { color: var(--text-disabled); display: inline-flex; }
+.card-foot {
+	padding: .5rem .7rem .55rem;
+	border-top: 1px solid var(--border);
+	font-size: .72rem;
+	color: var(--text-subtle);
+	background: var(--bg);
+}
+
+/* state: shape plus word, never colour alone */
+.state { display: inline-flex; align-items: center; gap: .3rem; font-size: .72rem; color: var(--text-muted); }
+.state .shape { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.state.ok .shape { background: var(--score-good); }
+.state.ok { color: var(--score-good); }
+
+/* ── take rows — TakesList.svelte ─────────────────────────────────────── */
+.version-header {
+	font-size: var(--label-font-size);
+	color: var(--text-subtle);
+	font-family: var(--font-display);
+	letter-spacing: .5px;
+	padding: .15rem 0 0;
+}
+.takes {
+	display: flex;
+	flex-direction: column;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--card-radius);
+	overflow: hidden;
+}
+.takes .row { border: none; border-radius: 0; }
+.takes .row + .row { border-top: 1px solid var(--border); }
+.take-row.playing { background: color-mix(in srgb, var(--action) 7%, var(--surface)); }
+.take-row.playing .take-label { color: var(--action); }
+.take-label {
+	font-family: var(--font-body);
+	font-size: 15px;
+	flex: 1;
+	min-width: 0;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.take-meta { display: flex; align-items: center; gap: .45rem; flex: none; }
+.take-duration { font-size: .75rem; color: var(--text-subtle); }
+.score {
+	display: inline-flex;
+	align-items: center;
+	gap: .25rem;
+	font-family: var(--font-display);
+	font-size: .95rem;
+}
+.score .shape { width: 8px; height: 8px; flex: none; }
+.score.good { color: var(--score-good); }
+.score.good .shape { background: var(--score-good); border-radius: 50%; }
+.score.ok { color: var(--score-ok); }
+.score.ok .shape { border: 2px solid var(--score-ok); border-radius: 50%; }
+.score.bad { color: var(--score-bad); }
+.score.bad .shape { background: var(--score-bad); }
+.score.pending { font-family: var(--font-body); font-size: .75rem; color: var(--text-muted); }
+/* a take that arrived while you looked away: a thin grey edge for a few seconds */
+.take-row.arrived { box-shadow: inset 3px 0 0 var(--text-muted); }
+
+/* ── the status slot: the one place a run or a failure speaks ─────────── */
+.status-slot {
+	display: flex;
+	flex-direction: column;
+	gap: .4rem;
+	padding: .2rem .25rem .6rem .7rem;
+	background: var(--surface);
+	border: 1px dashed var(--border);
+	border-radius: var(--card-radius);
+}
+.status-head { display: flex; align-items: center; gap: .5rem; }
+.status-title {
+	font-family: var(--font-display);
+	letter-spacing: .4px;
+	font-size: .85rem;
+	color: var(--text-muted);
+	flex: 1;
+	min-width: 0;
+	display: inline-flex;
+	align-items: center;
+	gap: .4rem;
+}
+.status-title b { color: var(--score-ok); font-weight: 500; }
+.bar { height: 4px; background: var(--border); border-radius: 2px; overflow: hidden; margin-right: .45rem; }
+.bar span { display: block; height: 100%; background: var(--score-ok); }
+.status-line { font-size: .78rem; color: var(--text-muted); padding-right: .45rem; }
+.status-line.reason { color: var(--text-subtle); }
+/* offline (#1039): not live — the amber leaves, the ticking numbers leave,
+   the bar holds its last width in grey, and cancel is unavailable while offline */
+.status-slot.reconnecting .status-title b { color: var(--text-light); }
+.status-slot.reconnecting .bar span { background: var(--text-disabled); }
+.status-slot.reconnecting .status-line { color: var(--text-subtle); }
+.status-slot.reconnecting .icon-btn[aria-disabled="true"] { color: var(--text-disabled); }
+
+/* ── empty and error states ───────────────────────────────────────────── */
+.state-block {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: .7rem;
+	color: var(--text-subtle);
+	padding-bottom: 2rem;
+}
+.state-block .glyph { color: var(--text-disabled); }
+.state-block p { font-size: .95rem; }
+
+/* ── the one action bar, Edit only ────────────────────────────────────── */
+.actionbar {
+	flex: none;
+	min-height: var(--editor-generate-bar-height);
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: .3rem;
+	padding: 6px .5rem 6px .75rem;
+	background: var(--header-bg);
+	border-top: 1px solid var(--border);
+}
+.actionbar .btn-primary { flex: 1; }
+
+.progress-btn {
+	flex: 1;
+	position: relative;
+	height: var(--hitbox-frequent);
+	border: 1px solid var(--score-ok);
+	border-radius: var(--btn-radius-sm);
+	background: var(--surface);
+	overflow: hidden;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text);
+	font-family: var(--font-display);
+	font-size: .93rem;
+	letter-spacing: var(--btn-letter-spacing);
+}
+.progress-btn .fill {
+	position: absolute;
+	inset: 0 auto 0 0;
+	background: color-mix(in srgb, var(--score-ok) 20%, transparent);
+}
+.progress-btn .t { position: relative; }
+
+/* ── mini player ──────────────────────────────────────────────────────── */
+.player {
+	flex: none;
+	height: var(--player-height);
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	padding: 0 .25rem 0 .7rem;
+	background: var(--surface);
+	border-top: 1px solid var(--border);
+}
+.cover { width: 40px; height: 40px; border-radius: var(--btn-radius-sm); flex: none; background: linear-gradient(135deg, var(--action), #2b2545); }
+.track { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+.track-title { font-family: var(--font-display); font-size: .92rem; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-detail { font-size: .72rem; color: var(--text-subtle); }
+.player .line { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--border); }
+.player .line span { display: block; height: 100%; width: 38%; background: var(--action); }
+
+/* ── the one offline notice (vocabulary.html §7, #1039): a neutral strip on the mini-player's top edge ── */
+.offline-strip {
+	flex: none;
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: .55rem;
+	padding: 0 .85rem;
+	background: var(--bg-deep);
+	border-top: 1px solid var(--border);
+	color: var(--text-light);
+	font-size: .82rem;
+}
+.offline-strip .ic { color: var(--text-muted); }
+
+/* ── frame 1b: typing — the page has scrolled, the field has focus ────── */
+/* the tabs went up with the content; the page now starts mid-Style, under the app bar */
+.body.typing { padding-top: 0; padding-bottom: 0; }
+.body.typing > .scrolled-off { margin-top: -62px; }
+/* the focused field takes every pixel down to the keyboard; its box continues beneath it */
+.body.typing > .field.focused { flex: 1; min-height: 0; }
+.body.typing > .field.focused .textbox {
+	flex: 1;
+	min-height: 0;
+	margin-bottom: -8px;
+	border-color: var(--action);
+	box-shadow: 0 0 0 1px var(--action);
+}
+.type-caret {
+	display: inline-block;
+	width: 2px;
+	height: 1.15em;
+	margin-left: 1px;
+	vertical-align: text-bottom;
+	background: var(--action);
+}
+
+/* the on-screen keyboard: a neutral block, drawn only so the space it takes is honest */
+.keyboard {
+	flex: none;
+	height: var(--keyboard-height);
+	display: flex;
+	flex-direction: column;
+	gap: 9px;
+	padding: 8px 5px 0;
+	background: #d3d5db;
+	color: var(--text-muted);
+	font-family: var(--font-body);
+	font-size: 15px;
+	user-select: none;
+}
+.keyboard .suggest {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	justify-content: space-around;
+	font-size: 14px;
+	color: var(--text);
+}
+.keyboard .suggest span { flex: 1; text-align: center; }
+.keyboard .suggest span + span { border-left: 1px solid rgba(0,0,0,.12); }
+.keyboard .krow { display: flex; justify-content: center; gap: 6px; height: 42px; }
+.keyboard .krow.inset { padding: 0 19px; }
+.keyboard .key {
+	flex: 1 1 0;
+	max-width: 33px;
+	border-radius: 5px;
+	background: #fcfcfd;
+	box-shadow: 0 1px 0 rgba(0,0,0,.28);
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	color: var(--text);
+	font-size: 17px;
+}
+.keyboard .key.wide { max-width: 45px; flex-basis: 45px; background: #aeb2bd; font-size: 13px; }
+.keyboard .key.space { max-width: 183px; flex-basis: 183px; font-size: 13px; }
+.keyboard .key.ret { max-width: 88px; flex-basis: 88px; background: #aeb2bd; font-size: 13px; }
+.keyboard .key.num { max-width: 88px; flex-basis: 88px; background: #aeb2bd; font-size: 13px; }
+.keyboard .home {
+	margin-top: auto;
+	height: 24px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.keyboard .home span { width: 134px; height: 5px; border-radius: 3px; background: var(--text); }
+
+/* ── the "…" menu: one popover, the destructive row last ─────────────── */
+.scrim { position: absolute; inset: 0; background: rgba(20, 16, 28, .22); }
+.popover {
+	position: absolute;
+	top: 186px;
+	right: 8px;
+	width: 214px;
+	display: flex;
+	flex-direction: column;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--card-radius);
+	box-shadow: 0 10px 30px rgba(0,0,0,.22);
+	overflow: hidden;
+}
+.popover .phead {
+	padding: .5rem .8rem;
+	font-size: .75rem;
+	color: var(--text-subtle);
+	border-bottom: 1px solid var(--border);
+	background: var(--bg);
+}
+.popover button {
+	min-height: var(--hitbox-frequent);
+	display: flex;
+	align-items: center;
+	gap: .65rem;
+	padding: 0 .8rem;
+	background: none;
+	border: none;
+	font: inherit;
+	font-size: .93rem;
+	color: var(--text);
+	text-align: left;
+}
+.popover button + button { border-top: 1px solid var(--border); }
+.popover button.del { color: var(--score-bad); }
+
+/* ── co-writer tab ────────────────────────────────────────────────────── */
+/* the conversation's own line under the tabs: provider, since when, its menu */
+.convo {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	padding: 0 .1rem 0 .75rem;
+	min-height: 40px;
+	font-size: .78rem;
+	color: var(--text-subtle);
+	border-bottom: 1px solid var(--border);
+}
+.convo .grow { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.convo b { color: var(--text-light); font-weight: 600; }
+.chat { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .7rem; padding: .85rem .75rem; overflow: hidden; }
+.who { font-size: .74rem; color: var(--text-subtle); }
+.msg { font-size: .93rem; line-height: 1.55; }
+.msg.them { color: var(--text); max-width: 305px; }
+.msg.me {
+	align-self: flex-end;
+	max-width: 275px;
+	padding: .55rem .8rem;
+	border-radius: 14px 14px 4px 14px;
+	background: var(--surface);
+	border: 1px solid var(--border);
+}
+.msg .lines { display: block; font-family: 'Courier New', monospace; font-size: .88rem; line-height: 1.6; white-space: pre-wrap; margin-top: .5rem; padding-left: .7rem; border-left: 2px solid var(--border); color: var(--text-light); }
+.tool-chip {
+	align-self: flex-start;
+	display: inline-flex;
+	align-items: center;
+	gap: .35rem;
+	padding: .25rem .6rem;
+	border: 1px solid color-mix(in srgb, var(--action) 45%, var(--border));
+	border-radius: var(--btn-radius-pill);
+	background: var(--surface);
+	color: var(--action);
+	font-size: .74rem;
+}
+.composer {
+	flex: none;
+	display: flex;
+	align-items: center;
+	gap: .5rem;
+	padding: .6rem .6rem .6rem .75rem;
+	background: var(--header-bg);
+	border-top: 1px solid var(--border);
+}
+.composer .input {
+	flex: 1;
+	min-height: var(--hitbox-frequent);
+	display: flex;
+	align-items: center;
+	padding: .5rem .85rem;
+	background: var(--surface);
+	border: 1px solid var(--border);
+	border-radius: var(--input-radius);
+	color: var(--text-disabled);
+	font-size: .95rem;
+}
+/* frame 7b: the message being written is real text, not the placeholder */
+.composer .input.draft { display: block; color: var(--text); }
+.composer .input.focused { border-color: var(--action); box-shadow: 0 0 0 1px var(--action); }
+
+.freeze-note {
+	font-family: "IBM Plex Sans", system-ui, sans-serif;
+	font-size: .86rem;
+	color: var(--text-muted);
+	max-width: 68ch;
+	margin: 0 auto;
+	padding: .75rem 1.5rem 0;
+}
+
+/* ── frame 1b's rule sentences: the note lives with its frame, not the page ── */
+.frame-note {
+	font-family: "IBM Plex Sans", system-ui, sans-serif;
+	font-size: .8rem;
+	line-height: 1.55;
+	color: var(--text-muted);
+	max-width: 390px;
+}
+.frame-note p + p { margin-top: .5rem; }
+.frame-note b { color: var(--text); font-weight: 600; }
+
+/* ══ bild-versionen additions (not in the frozen owner) ══════════════════ */
+.board { flex-wrap: wrap; row-gap: 40px; }
+h2.row-title { width: 100%; font-family: var(--font-display); font-weight: 500; font-size: 20px; letter-spacing: .5px; color: #1b1a20; margin-bottom: -18px; }
+h2.row-title small { font-family: var(--font-body); font-size: 13px; color: #6a6472; letter-spacing: 0; font-weight: 400; margin-left: .5rem; }
+.new { outline: 2px dashed #e0457b; outline-offset: 2px; border-radius: 4px; }
+.legend { font-family: var(--font-body); font-size: 13px; color: #4a4552; max-width: 1200px; margin: 0 0 24px; }
+.legend .swatch { display: inline-block; width: 22px; height: 12px; outline: 2px dashed #e0457b; border-radius: 3px; vertical-align: -1px; margin-right: .3rem; }
+
+/* the version chip: the stamp next to "Lyrics" becomes the door to the versions */
+.ver-chip {
+	display: inline-flex; align-items: center; gap: .2rem;
+	height: 24px; padding: 0 .35rem 0 .5rem;
+	border: 1px solid var(--border); border-radius: 12px;
+	background: var(--surface);
+	font-family: var(--font-body); font-size: .74rem; color: var(--text); text-transform: none; letter-spacing: 0;
+}
+.ver-chip .ic { width: 14px; height: 14px; color: var(--text-subtle); }
+.ver-chip .draft { color: var(--action); }
+.field > .label { display: flex; align-items: center; gap: .45rem; }
+
+.actionbar .btn-primary .ic { width: 18px; height: 18px; }
+
+/* the versions sheet (phone) and popover (desktop): one list, newest first */
+.sheet {
+	position: absolute; left: 0; right: 0; bottom: 0;
+	background: var(--surface); border-radius: 14px 14px 0 0;
+	box-shadow: 0 -10px 30px rgba(0,0,0,.18);
+	display: flex; flex-direction: column; padding-bottom: 10px;
+}
+.sheet .grab { width: 36px; height: 4px; border-radius: 2px; background: var(--border); margin: 8px auto 4px; }
+.sheet .shead { display: flex; align-items: center; padding: .2rem .25rem .4rem 1rem; font-family: var(--font-display); font-size: 1rem; letter-spacing: .4px; }
+.sheet .shead .grow { flex: 1; }
+.vrow {
+	display: flex; align-items: center; gap: .6rem;
+	min-height: 60px; padding: .35rem .1rem .35rem 1rem;
+	border-top: 1px solid var(--border);
+}
+.vrow .vnum { font-family: var(--font-display); font-size: 1.05rem; width: 2.1rem; flex: none; }
+.vrow .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .1rem; }
+.vrow .l1 { font-size: .86rem; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrow .l2 { font-size: .74rem; color: var(--text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vrow .tag { font-size: .68rem; padding: 0 .35rem; border-radius: 8px; border: 1px solid var(--action); color: var(--action); margin-left: .3rem; vertical-align: 1px; }
+.vrow .tag.muted { border-color: var(--border); color: var(--text-subtle); }
+.vrow.current { background: color-mix(in srgb, var(--action) 5%, var(--surface)); }
+.vrow.current .vnum { color: var(--action); }
+.vrow.pressed { background: var(--surface-hover); }
+.vrow.draft .vnum { color: var(--action); font-size: .9rem; }
+.vrow .icon-btn.del { color: var(--text-subtle); }
+.star-mini { color: var(--text); }
+
+/* takes tab: the group header is a link to its version */
+.version-link {
+	display: flex; align-items: center; gap: .3rem;
+	min-height: 32px; padding: 0 .1rem; width: 100%; background: none; border: none; text-align: left;
+	font-size: var(--label-font-size); color: var(--text-light);
+	font-family: var(--font-display); letter-spacing: .5px;
+}
+.version-link .ic { width: 14px; height: 14px; color: var(--text-subtle); }
+.version-link .open { margin-left: auto; font-family: var(--font-body); letter-spacing: 0; font-size: .74rem; color: var(--action); display: inline-flex; align-items: center; gap: .1rem; }
+.draft-banner { font-size: .78rem; color: var(--text-muted); padding: .5rem .75rem; border: 1px dashed var(--action); border-radius: var(--card-radius); background: color-mix(in srgb, var(--action) 4%, var(--surface)); }
+
+/* after loading an older version: one quiet line under the Lyrics label, gone on the next save or generate */
+.loaded-hint { font-size: .74rem; color: var(--text-subtle); margin-top: -.1rem; display: inline-flex; align-items: center; gap: .3rem; }
+.loaded-hint .ic { width: 13px; height: 13px; }
+#p4 .dialog { top: 120px; }
+figure:has(.desk) figcaption { max-width: 900px; }
+.desk .toast { left: auto; right: 24px; bottom: 84px; width: 380px; }
+
+/* toast */
+.toast {
+	position: absolute; left: 12px; right: 12px; bottom: 132px;
+	display: flex; align-items: center; gap: .6rem;
+	min-height: 44px; padding: 0 .3rem 0 .9rem;
+	background: #2a2730; color: #fff; border-radius: 6px; font-size: .86rem;
+	box-shadow: 0 6px 18px rgba(0,0,0,.25);
+}
+.toast .grow { flex: 1; }
+.toast button { background: none; border: none; color: #d6b4ff; font-family: var(--font-display); text-transform: uppercase; letter-spacing: .5px; font-size: .86rem; padding: 0 .7rem; min-height: 44px; }
+
+/* confirm dialog */
+.dialog {
+	position: absolute; left: 20px; right: 20px; top: 250px;
+	background: var(--surface); border-radius: var(--card-radius);
+	box-shadow: 0 14px 40px rgba(0,0,0,.28); padding: 1.1rem 1rem .8rem;
+	display: flex; flex-direction: column; gap: .6rem;
+}
+.dialog h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.1rem; letter-spacing: .3px; }
+.dialog p { font-size: .88rem; color: var(--text-muted); line-height: 1.45; }
+.dialog .btns { display: flex; justify-content: flex-end; gap: .5rem; margin-top: .3rem; }
+.btn-text { height: 44px; padding: 0 .9rem; background: none; border: none; font-family: var(--font-display); text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); font-size: .95rem; }
+.btn-danger { height: 44px; padding: 0 1rem; background: var(--score-bad); border: 1px solid var(--score-bad); color: #fff; border-radius: var(--btn-radius-sm); font-family: var(--font-display); text-transform: uppercase; letter-spacing: .5px; font-size: .95rem; }
+
+/* now playing (phone, full screen) — only the take heading's link is new */
+.np { background: var(--bg); }
+.np-top { display: flex; align-items: center; padding: 4px 6px; height: 52px; }
+.np-top .grow { flex: 1; text-align: center; font-family: var(--font-display); font-size: .8rem; color: var(--text-subtle); letter-spacing: .5px; text-transform: uppercase; }
+.np-cover { width: 200px; height: 200px; margin: 6px auto 12px; border-radius: 8px; background: linear-gradient(135deg, #4a1580, #9a2a6a 60%, #d0603a); }
+.np-title { text-align: center; font-family: var(--font-display); font-size: 1.6rem; letter-spacing: .5px; }
+.np-sub { text-align: center; font-size: .85rem; color: var(--text-subtle); margin-top: .1rem; }
+.np-line { height: 3px; background: var(--border); margin: 14px 20px 4px; border-radius: 2px; }
+.np-line span { display: block; width: 38%; height: 100%; background: var(--action); border-radius: 2px; }
+.np-times { display: flex; justify-content: space-between; padding: 0 20px; font-size: .72rem; color: var(--text-subtle); }
+.np-tabs { display: flex; margin: 14px 12px 0; border-bottom: 1px solid var(--border); }
+.np-tabs span { flex: 1; text-align: center; padding: .55rem 0; font-family: var(--font-display); font-size: var(--tab-font-size); letter-spacing: .5px; text-transform: uppercase; color: var(--text-subtle); border-bottom: 2px solid transparent; }
+.np-tabs span.active { color: var(--action); border-color: var(--action); }
+.np-take { padding: .7rem 16px 0; display: flex; flex-direction: column; gap: .5rem; flex: 1; min-height: 0; overflow: hidden; }
+.np-take-head { display: flex; align-items: center; gap: .5rem; }
+.np-take-head h3 { font-family: var(--font-display); font-weight: 500; font-size: 1rem; letter-spacing: .3px; flex: 1; }
+.ver-link { display: inline-flex; align-items: center; gap: .15rem; min-height: 36px; padding: 0 .55rem; border: 1px solid var(--border); border-radius: 18px; font-size: .78rem; color: var(--action); background: var(--surface); }
+.ver-link .ic { width: 14px; height: 14px; }
+.np-lyrics { font-family: 'Courier New', monospace; font-size: .86rem; line-height: 1.6; white-space: pre-line; color: var(--text); }
+.np-lyrics .mark { font-family: var(--font-display); color: var(--text-subtle); }
+.np-empty { font-size: .88rem; color: var(--text-muted); padding: .7rem .8rem; border: 1px dashed var(--border); border-radius: var(--card-radius); line-height: 1.45; }
+
+
+/* desktop frame */
+.desk {
+	position: relative; width: 1440px; height: 900px; flex: none;
+	display: grid; grid-template-columns: 248px 1fr; grid-template-rows: 1fr 64px;
+	background: var(--bg); color: var(--text); border-radius: 10px; overflow: hidden;
+	box-shadow: 0 2px 4px rgba(0,0,0,.08), 0 14px 40px rgba(0,0,0,.12);
+}
+.rail { grid-row: 1; background: var(--header-bg); border-right: 1px solid var(--border); padding: 14px 12px; display: flex; flex-direction: column; gap: .3rem; font-size: .88rem; }
+.rail .brand { font-family: var(--font-display); font-size: 1.1rem; letter-spacing: 1px; margin-bottom: .6rem; }
+.rail .item { padding: .35rem .5rem; border-radius: 4px; color: var(--text-light); }
+.rail .item.sec { font-family: var(--font-display); font-size: .74rem; color: var(--text-subtle); letter-spacing: .5px; text-transform: uppercase; margin-top: .6rem; }
+.rail .item.on { background: color-mix(in srgb, var(--action) 9%, transparent); color: var(--action); }
+.dmain { grid-row: 1; display: flex; flex-direction: column; min-width: 0; }
+.dhead { display: flex; align-items: center; gap: .8rem; height: 60px; padding: 0 20px; border-bottom: 1px solid var(--border); background: var(--header-bg); }
+.dhead h1 { font-family: var(--font-display); font-weight: 500; font-size: 1.4rem; letter-spacing: .5px; }
+.dhead .crumb { font-size: .82rem; color: var(--text-subtle); }
+.dhead .grow { flex: 1; }
+.dhead .toggle { height: 34px; padding: 0 .8rem; border: 1px solid var(--border); border-radius: 4px; font-family: var(--font-display); font-size: .85rem; letter-spacing: .5px; text-transform: uppercase; display: inline-flex; align-items: center; color: var(--text-light); background: var(--surface); }
+.dcols { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 0; }
+.dcol { padding: 16px 20px; display: flex; flex-direction: column; gap: .8rem; min-width: 0; overflow: hidden; }
+.dcol + .dcol { border-left: 1px solid var(--border); }
+.dplayer { grid-column: 1 / -1; display: flex; align-items: center; gap: .8rem; padding: 0 20px; border-top: 1px solid var(--border); background: var(--header-bg); position: relative; }
+.dplayer .line { position: absolute; left: 0; right: 0; top: 0; height: 2px; background: var(--border); }
+.dplayer .line span { display: block; width: 38%; height: 100%; background: var(--action); }
+.desk .actions-row { display: flex; gap: .6rem; }
+
+</style>
+</head>
+<body>
+<p class="freeze-note"><b>Bild Versionen — freigegeben 02.10.2026</b> (Operator: „ja passen! die bilder!“, <code>#1245</code>, aus <code>~/songmaker-mockups/bild-versionen/</code>). Erweitert <code>song-page-phone.html</code> (Besitzer der Songseite). Aus #1213 Befund 9: „Earlier versions cannot be viewed or restored, only deleted.“ Operator-Entscheid 01.10.2026: kein Nur-Lesen-Zustand — eine Version antippen lädt sie als Entwurf in den Editor. Neu Eingezeichnetes ist <span style="outline:2px dashed #e0457b;padding:0 .3rem">gestrichelt pink</span> umrandet.</p>
+<div class="board">
+<h2 class="row-title">Der Versions-Chip <small>phone 390 × 844</small></h2>
+<figure><figcaption><b>P1 · Edit — current version</b> — the stamp next to “Lyrics” is now a chip: <i>v7 ▾</i>. It is the one door to the versions. Nothing else on the page changed.</figcaption><div class="device" id="p1"><header class="appbar">
+	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+	<h1>AMIF</h1>
+	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+<div class="field"><span class="label">Lyrics <button class="ver-chip  new">v7<svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to storm
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div><div class="actionbar"><button class="btn-primary">Generate</button></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div></div><div class="frame-note"><p><b>Tap target.</b> The chip draws 24 px but answers on a 44 px box. It says only the version; once the draft differs it reads <i>v7 · draft</i> (P3, P4).</p></div></figure><figure><figcaption><b>P2 · Versions sheet</b> — tap the chip: every version, newest first. Takes count, ★ if the album pick lives there, date and first lyric line. Tap a row to load that version into the editor (P3); 🗑 deletes it (with its takes, after a confirm).</figcaption><div class="device" id="p2"><header class="appbar">
+	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+	<h1>AMIF</h1>
+	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+<div class="field"><span class="label">Lyrics <button class="ver-chip  new">v7<svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to storm
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div><div class="actionbar"><button class="btn-primary">Generate</button></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div><div class="scrim"></div><div class="sheet new"><div class="grab"></div>
+<div class="shead"><span class="grow">Versions</span><button class="icon-btn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<div class="vrow current"><span class="vnum">v7</span><span class="grow"><span class="l1">4 takes<span class="tag">current</span></span><span class="l2">today 14:02 · Headlights cut the rain in two</span></span><button class="icon-btn del" aria-label="Delete v7"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v6</span><span class="grow"><span class="l1">2 takes · <span class="star-mini">★</span> picked</span><span class="l2">yesterday · Headlights cut the rain in two</span></span><button class="icon-btn del" aria-label="Delete v6"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v5</span><span class="grow"><span class="l1">2 takes</span><span class="l2">28 Sep · Rain on the window, the city asleep</span></span><button class="icon-btn del" aria-label="Delete v5"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v4</span><span class="grow"><span class="l1">no takes</span><span class="l2">27 Sep · Rain on the window, the city asleep</span></span><button class="icon-btn del" aria-label="Delete v4"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v2</span><span class="grow"><span class="l1">1 take</span><span class="l2">25 Sep · Rain on the window, the night asleep</span></span><button class="icon-btn del" aria-label="Delete v2"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v1</span><span class="grow"><span class="l1">3 takes</span><span class="l2">24 Sep · First draft, nothing rhymes yet</span></span><button class="icon-btn del" aria-label="Delete v1"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+</div></div><div class="frame-note"><p><b>Delete lives here and only here.</b> The trash icon on the desktop take-group header goes away; one place per task. v3 is missing because it was deleted earlier — numbers are never reused.</p></div></figure><figure><figcaption><b>P3 · Tapped v5, draft was clean</b> — the sheet closes and v5 (recipe, style, lyrics) is now the draft, editable at once. The chip reads <i>v7 · draft</i>, one line says <i>Loaded from v5</i>, Generate is on. Generate makes <b>v8</b> with v5's text; v5 stays as it is.</figcaption><div class="device" id="p3"><header class="appbar">
+	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+	<h1>AMIF</h1>
+	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:30 · 84 BPM · F minor · ×2</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">slow synthwave ballad, soft pads, female alto, rain on glass</div></div>
+<div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><span class="loaded-hint new"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>Loaded from v5</span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Rain on the window, the city asleep
+Every mile is a promise I keep
+Radio whispers your name in the static
+nothing between us but the night
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div><div class="actionbar"><button class="btn-primary">Generate</button></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div><div class="toast new"><span class="grow">v5 loaded</span><button>Undo</button></div></div><div class="frame-note"><p><b>No viewing mode.</b> Tapping a version is loading it. There is no read-only state and no Restore button.</p><p><b>Undo</b> in the toast puts back exactly the draft you had before. <i>Loaded from v5</i> stays until the next save or generate, then the chip reads <i>v8</i>.</p></div></figure><figure><figcaption><b>P4 · Tapped v5 over an unsaved draft</b> — only when the draft differs from v7 (here: one edited lyric line). Replace loads v5 as in P3; Cancel leaves the draft and the sheet as they were. A clean draft loads without asking.</figcaption><div class="device" id="p4"><header class="appbar">
+	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+	<h1>AMIF</h1>
+	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+</header><nav class="tabs"><button class="active" aria-current="page">Edit</button><button>Co-writer</button><button>Takes <span class="count">(6)</span></button></nav><div class="body"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:00 · 96 BPM · A minor · ×1</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">dark synthwave, analog drum machine, wide reverb, male baritone, 1984 Berlin night</div></div>
+<div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Headlights cut the rain in two
+Every mile is a mile of you
+I keep the radio low and warm
+so the quiet never turns to stone
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div><div class="actionbar"><button class="btn-primary">Generate</button></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div><div class="scrim"></div><div class="sheet new"><div class="grab"></div>
+<div class="shead"><span class="grow">Versions</span><button class="icon-btn" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+<div class="vrow current"><span class="vnum">v7</span><span class="grow"><span class="l1">4 takes<span class="tag">current</span></span><span class="l2">today 14:02 · Headlights cut the rain in two</span></span><button class="icon-btn del" aria-label="Delete v7"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v6</span><span class="grow"><span class="l1">2 takes · <span class="star-mini">★</span> picked</span><span class="l2">yesterday · Headlights cut the rain in two</span></span><button class="icon-btn del" aria-label="Delete v6"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow pressed"><span class="vnum">v5</span><span class="grow"><span class="l1">2 takes</span><span class="l2">28 Sep · Rain on the window, the city asleep</span></span><button class="icon-btn del" aria-label="Delete v5"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v4</span><span class="grow"><span class="l1">no takes</span><span class="l2">27 Sep · Rain on the window, the city asleep</span></span><button class="icon-btn del" aria-label="Delete v4"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v2</span><span class="grow"><span class="l1">1 take</span><span class="l2">25 Sep · Rain on the window, the night asleep</span></span><button class="icon-btn del" aria-label="Delete v2"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+<div class="vrow "><span class="vnum">v1</span><span class="grow"><span class="l1">3 takes</span><span class="l2">24 Sep · First draft, nothing rhymes yet</span></span><button class="icon-btn del" aria-label="Delete v1"><svg class="ic sm" viewBox="0 0 24 24"><path d="M4.5 7h15"/><path d="M10 7V4.8h4V7"/><path d="M6.6 7l.9 12.2h9l.9-12.2"/></svg></button></div>
+</div><div class="scrim"></div><div class="dialog new"><h3>Replace your unsaved draft?</h3><p>Your draft has changes that are not in any version. Loading v5 replaces them. You can undo right after.</p><div class="btns"><button class="btn-text">Cancel</button><button class="btn-primary">Replace</button></div></div></div></figure>
+<h2 class="row-title">Wo eine Version sonst auftaucht <small>Takes-Header, Now Playing</small></h2>
+<figure><figcaption><b>P6 · Takes</b> — each group header names its version and loads it: <i>Open v5 ›</i> switches to Edit with v5 as the draft (P3, or P4 first when the draft is unsaved). Imported takes have no version and say so; their header is plain text.</figcaption><div class="device" id="p6"><header class="appbar">
+	<button class="icon-btn ink" aria-label="Open navigation"><svg class="ic" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+	<h1>AMIF</h1>
+	<button class="icon-btn" aria-label="Share song"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button>
+	<button class="icon-btn" aria-label="Song menu"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+</header><nav class="tabs"><button>Edit</button><button>Co-writer</button><button class="active" aria-current="page">Takes <span class="count">(6)</span></button></nav><div class="body"><div class="draft-banner">Draft — differs from v7. Generate creates v8.</div>
+<button class="version-link new">v7 · 4 takes<span class="open">Open v7<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 4</span>
+<span class="take-meta"><span class="take-duration">2:58</span><span class="score bad"><span class="shape"></span>34</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 3</span>
+<span class="take-meta"><span class="take-duration">3:02</span><span class="score ok"><span class="shape"></span>58</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row playing"><button class="icon-btn on"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button><span class="take-label">Take 2</span>
+<span class="take-meta"><span class="take-duration">3:05</span><span class="score good"><span class="shape"></span>82</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
+<span class="take-meta"><span class="take-duration">3:04</span><span class="score ok"><span class="shape"></span>61</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
+<button class="version-link new">v5 · 2 takes<span class="open">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 2</span>
+<span class="take-meta"><span class="take-duration">3:31</span><span class="score good"><span class="shape"></span>77</span></span>
+<button class="icon-btn star on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
+<span class="take-meta"><span class="take-duration">3:29</span><span class="score ok"><span class="shape"></span>49</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
+<div class="version-header">Imported · 1 take</div><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
+<span class="take-meta"><span class="take-duration">2:41</span><span class="score ok"><span class="shape"></span>55</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div></div><div class="player"><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span>
+	<button class="icon-btn ink" aria-label="Pause"><svg class="ic solid" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg></button><button class="icon-btn" aria-label="Next take"><svg class="ic solid" viewBox="0 0 24 24"><path d="M6 5l10 7-10 7z"/><rect x="17" y="5" width="2.6" height="14" rx="1"/></svg></button><span class="line"><span></span></span></div></div><div class="frame-note"><p><b>No version actions in the take list.</b> The take ⋯ menu stays at its ruled rows; the group header is only a link. A version without takes (v4) appears only in the sheet.</p></div></figure><figure><figcaption><b>P7 · Now Playing — a take from v5</b> — the lyrics shown are v5's (already so, #43). New: <i>Open v5 ›</i> next to the take name closes Now Playing and loads v5 into the song's Edit tab (P3, or P4 first), so you can keep working from what you hear.</figcaption><div class="device" id="p7"><div class="np-top"><button class="icon-btn ink" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><span class="grow">Now playing</span><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+<div class="np-cover"></div><div class="np-title">AMIF</div><div class="np-sub">Nightdrive · Mara</div>
+<div class="np-line"><span></span></div><div class="np-times"><span>1:19</span><span>3:31</span></div>
+<div class="np-tabs"><span>Queue</span><span class="active">This take</span></div>
+<div class="np-take"><div class="np-take-head"><h3>v5 · take 2 · ★</h3><button class="ver-link new">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
+<div class="np-lyrics"><span class="mark">[Verse 1]</span>
+Rain on the window, the city asleep
+Every mile is a promise I keep
+Radio whispers your name in the static
+nothing between us but the night
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div></figure><figure><figcaption><b>P7b · Now Playing — an imported take</b> — no version, no link. Today it says “No lyrics for this take”; it now says <i>why</i>.</figcaption><div class="device" id="p7b"><div class="np-top"><button class="icon-btn ink" aria-label="Close"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button><span class="grow">Now playing</span><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div>
+<div class="np-cover"></div><div class="np-title">AMIF</div><div class="np-sub">Nightdrive · Mara</div>
+<div class="np-line"><span></span></div><div class="np-times"><span>0:42</span><span>2:41</span></div>
+<div class="np-tabs"><span>Queue</span><span class="active">This take</span></div>
+<div class="np-take"><div class="np-take-head"><h3>Imported take</h3></div>
+<div class="np-empty new">This take was imported, so no lyrics were saved with it. The song's own lyrics may not match what is sung.</div></div></div></figure>
+
+<h2 class="row-title">Desktop 1440 — v5 geladen <small>dieselbe Logik; die Versionsliste ist am Desktop ein Popover am Chip statt eines Sheets</small></h2><figure><figcaption><b>D1 · Desktop — tapped v5, draft was clean</b>: the Write column holds v5 as the editable draft (chip <i>v7 · draft</i>, <i>Loaded from v5</i>); Generate in the header is on and makes v8. The Takes column is unchanged.</figcaption><div class="desk" id="d1"><aside class="rail"><div class="brand">SONGMAKER</div><div class="item">Library</div><div class="item sec">Nightdrive</div>
+<div class="item">1 · Neon Vows</div><div class="item on">2 · AMIF</div><div class="item">3 · Exit 9</div><div class="item">4 · Afterglow</div><div class="item">5 · Last Train</div>
+<div style="flex:1"></div><div class="item">Settings</div><div class="item">Felix</div></aside><div class="dmain"><div class="dhead"><span class="crumb">Nightdrive ›</span><h1>AMIF</h1><button class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.4"/><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="18.5" r="2.4"/><path d="M8.2 10.8l7.6-4.1M8.2 13.2l7.6 4.1"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button><span class="grow"></span><span class="toggle">Co-writer</span><span class="toggle">Recipe</span><span style="width:1px;height:28px;background:var(--border)"></span><button class="btn-primary" style="height:36px">Generate</button></div>
+<div class="dcols"><div class="dcol"><div class="card"><button class="card-head"><span class="grow"><span class="lbl">Recipe</span><span class="summary-line">XL-TURBO · 3:30 · 84 BPM · F minor · ×2</span></span><span class="icon-btn"><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></span></button></div><div class="field"><span class="label">Style</span><div class="textbox">slow synthwave ballad, soft pads, female alto, rain on glass</div></div>
+<div class="field"><span class="label">Lyrics <button class="ver-chip new">v7 <span class="draft">· draft</span><svg class="ic" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg></button></span><span class="loaded-hint new"><svg class="ic" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>Loaded from v5</span><div class="textbox lyrics-area"><span class="mark">[Verse 1]</span>
+Rain on the window, the city asleep
+Every mile is a promise I keep
+Radio whispers your name in the static
+nothing between us but the night
+
+<span class="mark">[Chorus]</span>
+All mine if I follow
+all mine if I stay
+the road keeps the promise
+the morning gives away</div></div></div><div class="dcol">
+<button class="version-link">v7 · 4 takes<span class="open">Open v7<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 4</span>
+<span class="take-meta"><span class="take-duration">2:58</span><span class="score bad"><span class="shape"></span>34</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 3</span>
+<span class="take-meta"><span class="take-duration">3:02</span><span class="score ok"><span class="shape"></span>58</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row playing"><button class="icon-btn on"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16" rx="1"/><rect x="14" y="4" width="4" height="16" rx="1"/></svg></span></button><span class="take-label">Take 2</span>
+<span class="take-meta"><span class="take-duration">3:05</span><span class="score good"><span class="shape"></span>82</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
+<span class="take-meta"><span class="take-duration">3:04</span><span class="score ok"><span class="shape"></span>61</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div>
+<button class="version-link">v5 · 2 takes<span class="open">Open v5<svg class="ic" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></span></button><div class="takes"><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 2</span>
+<span class="take-meta"><span class="take-duration">3:31</span><span class="score good"><span class="shape"></span>77</span></span>
+<button class="icon-btn star on"><svg class="ic solid" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div><div class="take-row row"><button class="icon-btn"><span class="face"><svg class="ic sm solid" viewBox="0 0 24 24"><path d="M7 4l13 8-13 8z"/></svg></span></button><span class="take-label">Take 1</span>
+<span class="take-meta"><span class="take-duration">3:29</span><span class="score ok"><span class="shape"></span>49</span></span>
+<button class="icon-btn star"><svg class="ic" viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.7 6.2.5-4.7 4.1 1.4 6-5.4-3.2-5.4 3.2 1.4-6L3.3 9.8l6.2-.5z"/></svg></button><button class="icon-btn heart"><svg class="ic" viewBox="0 0 24 24"><path d="M12 20S3.8 14.6 3.8 9.3A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8.2 2.3C20.2 14.6 12 20 12 20z"/></svg></button><button class="icon-btn"><svg class="ic solid" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button></div></div></div></div></div>
+<div class="dplayer"><span class="line"><span></span></span><span class="cover"></span><span class="track"><span class="track-title">AMIF</span><span class="track-detail">v7 · take 2</span></span></div>
+<div class="toast new"><span class="grow">v5 loaded</span><button>Undo</button></div></div></figure>
+</div>
+</body>
+</html>
