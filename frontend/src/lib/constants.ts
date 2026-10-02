@@ -387,6 +387,10 @@ export function versionChipLabel(versionNumber: number, dirty: boolean): string 
 	return dirty ? `${version} · ${VERSION_CHIP_DRAFT_LABEL}` : version;
 }
 
+export function versionsChipAccessibleLabel(chipLabel: string): string {
+	return `${VERSIONS_SHEET_LABEL}: ${chipLabel}`;
+}
+
 export function versionTakesLabel(count: number): string {
 	if (count === 0) return 'no takes';
 	return `${count} take${count === 1 ? '' : 's'}`;

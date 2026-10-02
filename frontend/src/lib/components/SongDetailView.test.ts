@@ -40,7 +40,15 @@ import {
 	TAKE_PLAYLIST_LABEL,
 	TAKES_ERROR,
 	TAKES_LOADING,
-	TAKES_RETRY_LABEL
+	TAKES_RETRY_LABEL,
+	DIALOG_CANCEL_LABEL,
+	TOAST_UNDO_LABEL,
+	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
+	VERSION_REPLACE_DRAFT_TITLE,
+	VERSIONS_SHEET_LABEL,
+	versionLoadedFromLabel,
+	versionLoadedToastLabel,
+	versionReplaceDraftMessage
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
@@ -177,7 +185,7 @@ import {
 } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
-import { addToast } from '$lib/stores/toast';
+import { addToast, addUndoToast } from '$lib/stores/toast';
 import { loras } from '$lib/stores/loras';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 
@@ -1667,5 +1675,169 @@ describe('the editor answers to its own width, not the viewport', () => {
 				widthQueries.map(() => `@media (max-width: ${COMPACT_LAYOUT_MAX_PX}px)`)
 			);
 		}
+	});
+});
+
+describe.each([false, true])('SongDetailView loading a version, phone layout %s', (phone) => {
+	const LATEST = version({
+		id: 'v2',
+		version_number: 2,
+		lyrics: 'verse',
+		prompt: 'dark folk',
+		created_at: '2026-10-02T12:00:00+00:00'
+	});
+	const FIRST = version({
+		id: 'v1',
+		version_number: 1,
+		lyrics: 'first draft',
+		prompt: 'slow ballad',
+		bpm: 84,
+		created_at: '2026-09-24T12:00:00+00:00'
+	});
+
+	beforeEach(async () => {
+		recipeModel.set('turbo');
+		stubLibraryMedia({ narrow: phone });
+		openEditTab();
+		const { fetchVersions } = await import('$lib/api/client');
+		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST, FIRST]);
+		vi.mocked(addUndoToast).mockClear();
+		vi.mocked(updateSong).mockClear();
+	});
+
+	function versionChip(target: HTMLElement): HTMLButtonElement {
+		const chip = target.querySelector<HTMLButtonElement>('.version-chip');
+		if (!chip) throw new Error('Expected the version chip');
+		return chip;
+	}
+
+	function versionsSheet(target: HTMLElement): HTMLElement | null {
+		return target.querySelector<HTMLElement>(
+			`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
+		);
+	}
+
+	function replaceDialog(): HTMLElement | null {
+		return document.querySelector<HTMLElement>(
+			`[role="dialog"][aria-label="${VERSION_REPLACE_DRAFT_TITLE}"]`
+		);
+	}
+
+	async function tapVersion(target: HTMLElement, versionNumber: number): Promise<void> {
+		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
+		versionChip(target).click();
+		await tick();
+		const row = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-row')).find((el) =>
+			el.textContent?.trim().startsWith(`v${versionNumber}`)
+		);
+		if (!row) throw new Error(`Expected the v${versionNumber} row`);
+		row.click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+	}
+
+	function undoLastLoad(): void {
+		const [, action] = vi.mocked(addUndoToast).mock.calls.at(-1) ?? [];
+		if (!action) throw new Error('Expected an undo toast');
+		void action.handler();
+	}
+
+	it('a clean draft loads the tapped version without asking; the chip stays on the latest', async () => {
+		const target = await renderView();
+		await tapVersion(target, 1);
+
+		expect(replaceDialog()).toBeNull();
+		expect(versionsSheet(target)).toBeNull();
+		expect(get(editLyrics)).toBe('first draft');
+		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
+		expect(target.textContent).toContain(versionLoadedFromLabel(1));
+		expect(addUndoToast).toHaveBeenCalledWith(
+			versionLoadedToastLabel(1),
+			expect.objectContaining({ label: TOAST_UNDO_LABEL })
+		);
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('over a dirty draft asks first, and Cancel keeps the edit and the sheet', async () => {
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+		await tapVersion(target, 1);
+
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
+		clickNamed(dialog, DIALOG_CANCEL_LABEL);
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(replaceDialog()).toBeNull();
+		expect(versionsSheet(target)).not.toBeNull();
+		expect(get(editLyrics)).toBe('unsaved edit');
+		expect(addUndoToast).not.toHaveBeenCalled();
+	});
+
+	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+		await tapVersion(target, 1);
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(versionsSheet(target)).toBeNull();
+		expect(get(editLyrics)).toBe('first draft');
+
+		undoLastLoad();
+		await tick();
+		expect(get(editLyrics)).toBe('unsaved edit');
+		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
+		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+		await tapVersion(target, 2);
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
+		await tick();
+
+		expect(get(editLyrics)).toBe('verse');
+		expect(versionChip(target).textContent?.trim()).toBe('v2');
+	});
+
+	it('Generate after a load saves the loaded text as the next version; the hint goes', async () => {
+		const { fetchVersions } = await import('$lib/api/client');
+		const next = version({ id: 'v3', version_number: 3, lyrics: 'first draft' });
+		vi.mocked(updateSong).mockResolvedValueOnce(
+			song({ ...editableSongDefaults(), lyrics: 'first draft', version_count: 3 })
+		);
+		vi.mocked(fetchVersions).mockResolvedValueOnce([next, LATEST, FIRST]);
+		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
+		const target = await renderView();
+		await tapVersion(target, 1);
+
+		getByRoleButton(
+			target.querySelector<HTMLElement>('.generate-action') ?? target,
+			EDITOR_GENERATE_MODE_LABELS.generate
+		).click();
+		await vi.waitFor(() => expect(generateSong).toHaveBeenCalledTimes(1));
+
+		expect(vi.mocked(updateSong).mock.calls[0]?.[1]).toEqual(
+			expect.objectContaining({ lyrics: 'first draft', prompt: 'slow ballad', bpm: 84 })
+		);
+		expect(generateSong.mock.calls[0]?.[3]).toBe('v3');
+		await tick();
+		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
+		expect(versionChip(target).textContent?.trim()).toBe('v3');
 	});
 });
