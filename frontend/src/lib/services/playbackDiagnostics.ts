@@ -9,7 +9,7 @@ import type { PlaybackDiagnosticEvent, PlaybackDiagnosticsReport } from '$lib/ap
 export type PlaybackDiagnosticKind = PlaybackDiagnosticEvent['kind'];
 
 /** The take an event concerns, as the deck holding it saw it. */
-export interface PlaybackTakeState {
+interface PlaybackTakeState {
 	takeId: string | null;
 	position: number;
 	readyState: number;
@@ -17,7 +17,7 @@ export interface PlaybackTakeState {
 }
 
 /** One thing that happened; `take` is null for an event of the page alone. */
-export interface PlaybackNote {
+interface PlaybackNote {
 	kind: PlaybackDiagnosticKind;
 	detail: string;
 	take: PlaybackTakeState | null;

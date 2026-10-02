@@ -2,7 +2,7 @@ import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
-import { recordPlaybackEvent, type PlaybackNote } from './playbackDiagnostics';
+import { recordPlaybackEvent } from './playbackDiagnostics';
 
 vi.mock('./playbackDiagnostics', () => ({ recordPlaybackEvent: vi.fn() }));
 
@@ -57,7 +57,7 @@ function preloadReady(
 	return standby;
 }
 
-function recordedNotes(): PlaybackNote[] {
+function recordedNotes(): Parameters<typeof recordPlaybackEvent>[0][] {
 	return vi.mocked(recordPlaybackEvent).mock.calls.map(([note]) => note);
 }
 

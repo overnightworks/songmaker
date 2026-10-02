@@ -1,8 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlaybackDiagnosticsReport } from '$lib/api/types';
-import type { PlaybackNote } from './playbackDiagnostics';
-
 type Recorder = typeof import('./playbackDiagnostics');
+type PlaybackNote = Parameters<Recorder['recordPlaybackEvent']>[0];
 
 const LISTENER = 'listener-id';
 const OTHER_LISTENER = 'other-listener-id';
