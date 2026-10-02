@@ -122,6 +122,7 @@ from songmaker_cli.db.queries.generations import get_generation as get_generatio
 from songmaker_cli.db.queries.generations import (
     get_generation_by_slug as get_generation_by_slug,
 )
+from songmaker_cli.db.queries.generations import get_generations as get_generations
 from songmaker_cli.db.queries.generations import keep_generation as keep_generation
 from songmaker_cli.db.queries.generations import (
     list_generations_expired_for_archive as list_generations_expired_for_archive,

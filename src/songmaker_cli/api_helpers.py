@@ -57,6 +57,7 @@ from songmaker_cli.db.queries import (
     create_job,
     get_album,
     get_generation,
+    get_generations,
     get_playlist,
     get_song,
     list_worker_identities,
@@ -590,6 +591,24 @@ def check_generation_access(
     if not can_access_album(album, user, require_owner=require_owner):
         raise HTTPException(404, GENERATION_NOT_FOUND_DETAIL)
     return gen
+
+
+def check_generations_access(
+    session: Session, gen_ids: list[str], user: AuthenticatedUser,
+) -> list[Generation]:
+    """Load every generation and verify the caller reaches each one.
+
+    Raises 404 when any of them is missing or out of reach, so a caller acting
+    on the whole set touches none of them.
+    """
+    generations = get_generations(session, gen_ids)
+    reachable = [
+        gen for gen in generations
+        if can_access_album(gen.song.album if gen.song else None, user)
+    ]
+    if len(reachable) != len(set(gen_ids)):
+        raise HTTPException(404, "One or more generations not found")
+    return reachable
 
 
 def check_own_generation_access(

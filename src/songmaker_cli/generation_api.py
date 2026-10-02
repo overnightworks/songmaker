@@ -18,6 +18,7 @@ from webauth.dependencies import AuthenticatedUser
 from songmaker_cli.acestep_state import read_worker_state, worker_is_online
 from songmaker_cli.api_helpers import (
     check_generation_access,
+    check_generations_access,
     check_lora_ready_for_generation,
     check_redis_health,
     check_song_access,
@@ -268,17 +269,13 @@ def api_bulk_delete_generations(
     if not req.generation_ids:
         return BulkDeleteResponse(deleted=0)
     deduplicated_ids = list(set(req.generation_ids))
-    try:
-        count, paths = bulk_delete_generations(session, deduplicated_ids, user.id)
-    except ValueError:
-        raise HTTPException(404, "One or more generations not found")
-    except PermissionError:
-        raise HTTPException(404, "One or more generations not found")
+    generations = check_generations_access(session, deduplicated_ids, user)
+    paths = bulk_delete_generations(session, generations)
     for gen_id in deduplicated_ids:
         record_audit(session, user.id, AuditAction.DELETE, ResourceType.GENERATION, gen_id)
     session.commit()
     cleanup_generation_files(ctx.audio_dir, paths)
-    return BulkDeleteResponse(deleted=count)
+    return BulkDeleteResponse(deleted=len(generations))
 
 
 # ── Generation + Scoring ─────────────────────────────────────────────

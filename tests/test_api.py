@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 from conftest import make_authenticated_user, make_router_app, make_router_ctx
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session, sessionmaker
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.app_context import AppContext
@@ -4094,14 +4095,17 @@ def test_bulk_delete_not_found(client: TestClient) -> None:
     assert resp.status_code == 404
 
 
-def test_bulk_delete_other_user(tmp_path: Path) -> None:
+def _client_beside_a_foreign_take(
+    tmp_path: Path, role: str,
+) -> tuple[TestClient, sessionmaker[Session], Path]:
+    """A musician with one take of their own beside another musician's take on disk."""
     other_user_id = "u-other"
 
     factory = init_db(tmp_path / "test.db")
     with factory() as session:
         session.add(User(
             id="u-test", username="test_user",
-            password_hash="unused", role="user",
+            password_hash="unused", role=role,
         ))
         session.add(User(
             id=other_user_id, username="other_user",
@@ -4127,30 +4131,60 @@ def test_bulk_delete_other_user(tmp_path: Path) -> None:
 
         gen_mine = Generation(
             id="g-mine", song_id="s-mine", version_id="v-mine",
-            generation_number=1, mp3_path="mine.mp3",
+            generation_number=1, mp3_path="u-test/g-mine.mp3",
         )
         gen_other = Generation(
             id="g-other", song_id="s-other", version_id="v-other",
-            generation_number=1, mp3_path="other.mp3",
+            generation_number=1, mp3_path=f"{other_user_id}/g-other.mp3",
         )
         session.add_all([gen_mine, gen_other])
         session.commit()
 
+    foreign_take_file = tmp_path / "audio" / other_user_id / "g-other.mp3"
+    foreign_take_file.parent.mkdir(parents=True)
+    foreign_take_file.write_bytes(b"fake")
+
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory),
-        user=make_authenticated_user("u-test", username="test_user"),
+        user=make_authenticated_user("u-test", username="test_user", role=role),
     )
-    tc = TestClient(app)
+    return TestClient(app), factory, foreign_take_file
 
-    resp = tc.post(
-        "/api/generations/bulk-delete",
-        json={"generation_ids": ["g-mine", "g-other"]},
-    )
-    assert resp.status_code == 404
+
+def _delete_takes(tc: TestClient, route: str, take_ids: list[str]) -> int:
+    if route == "bulk":
+        return tc.post(
+            "/api/generations/bulk-delete", json={"generation_ids": take_ids},
+        ).status_code
+    statuses = {tc.delete(f"/api/generations/{take_id}").status_code for take_id in take_ids}
+    assert len(statuses) == 1
+    return statuses.pop()
+
+
+@pytest.mark.parametrize("route", ["bulk", "single"])
+def test_admin_deletes_the_takes_of_a_foreign_song(tmp_path: Path, route: str) -> None:
+    tc, _, foreign_take_file = _client_beside_a_foreign_take(tmp_path, role="admin")
+
+    assert _delete_takes(tc, route, ["g-mine", "g-other"]) == 200
+
+    assert tc.get("/api/generations/g-mine").status_code == 404
+    assert tc.get("/api/generations/g-other").status_code == 404
+    assert not foreign_take_file.exists()
+
+
+@pytest.mark.parametrize("route", ["bulk", "single"])
+def test_musician_cannot_delete_a_foreign_take_and_nothing_is_touched(
+    tmp_path: Path, route: str,
+) -> None:
+    tc, factory, foreign_take_file = _client_beside_a_foreign_take(tmp_path, role="user")
+    take_ids = ["g-mine", "g-other"] if route == "bulk" else ["g-other"]
+
+    assert _delete_takes(tc, route, take_ids) == 404
 
     with factory() as session:
-        assert session.query(Generation).filter_by(id="g-mine").first() is not None
-        assert session.query(Generation).filter_by(id="g-other").first() is not None
+        remaining = {gen.id for gen in session.query(Generation).all()}
+    assert remaining == {"g-mine", "g-other"}
+    assert foreign_take_file.exists()
 
 
 def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
