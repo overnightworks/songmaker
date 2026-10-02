@@ -198,6 +198,31 @@ describe('playback diagnostics recorder', () => {
 		expect(sentDetails()).toEqual(['once', 'hidden']);
 	});
 
+	it('numbers the events of a page session in the order they happened', async () => {
+		startFor(LISTENER);
+		recordMany(2);
+		hidePage();
+		await letTheServerAnswer();
+
+		const [report] = sentReports();
+		expect(report.events.map((event) => event.sequence)).toEqual([0, 1, 2]);
+	});
+
+	it('never sends again after a reload what the page handed to the browser on hide', async () => {
+		serverAnswers = false;
+		startFor(LISTENER);
+		recorder.recordPlaybackEvent(note('handed off'));
+		hidePage();
+		fetchMock.mockClear();
+		serverAnswers = true;
+
+		await openPage();
+		startFor(LISTENER);
+		await letTheServerAnswer();
+
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
 	it.each([401, 403])(
 		'keeps the events for a later send when the server answers %i',
 		async (status) => {

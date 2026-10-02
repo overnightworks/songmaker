@@ -41,6 +41,7 @@ class PlaybackDiagnosticKind(StrEnum):
 
 
 class PlaybackDiagnosticEvent(BaseModel):
+    sequence: int = Field(ge=0)
     at_ms: int = Field(ge=0, le=PAGE_CLOCK_MAX_MS)
     kind: PlaybackDiagnosticKind
     take_id: str | None = Field(pattern=TAKE_ID_PATTERN)

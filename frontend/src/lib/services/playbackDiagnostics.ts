@@ -45,6 +45,7 @@ interface TimerGap {
 interface Recording {
 	userId: string;
 	session: SessionFacts;
+	nextSequence: number;
 	events: BufferedEvent[];
 	inFlight: Set<BufferedEvent>;
 	openGap: TimerGap | null;
@@ -82,6 +83,7 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 	const started: Recording = {
 		userId,
 		session: bootFacts(),
+		nextSequence: 0,
 		events: readEvents(userId),
 		inFlight: new Set(),
 		openGap: null
@@ -97,9 +99,8 @@ export function startPlaybackDiagnostics(userId: string): () => void {
 
 export function recordPlaybackEvent(note: PlaybackNote): void {
 	if (recording === null) return;
-	recording.events.push({ session: recording.session, event: eventOf(note) });
-	if (recording.events.length > BUFFER_CAPACITY)
-		recording.events.splice(0, recording.events.length - BUFFER_CAPACITY);
+	const sequence = recording.nextSequence++;
+	recording.events.push({ session: recording.session, event: eventOf(note, sequence) });
 	writeEvents(recording);
 }
 
@@ -118,9 +119,10 @@ function bootFacts(): SessionFacts {
 	};
 }
 
-function eventOf(note: PlaybackNote): PlaybackDiagnosticEvent {
+function eventOf(note: PlaybackNote, sequence: number): PlaybackDiagnosticEvent {
 	const take = note.take ?? NO_TAKE;
 	return {
+		sequence,
 		at_ms: Math.round(performance.now()),
 		kind: note.kind,
 		take_id: take.takeId,
@@ -219,19 +221,28 @@ function timerGapDetail(gap: Pick<TimerGap, 'count' | 'totalMs'>): string {
 
 function sendWaitingEvents(from: Recording, opts: { keepalive: boolean }): void {
 	const waiting = from.events.filter((buffered) => !from.inFlight.has(buffered));
-	for (const batch of reportBatches(waiting)) {
+	const batches = reportBatches(waiting);
+	if (opts.keepalive) handOff(from, batches);
+	else for (const batch of batches) void deliver(from, batch);
+}
+
+// The page may be gone before the answer comes, so what the browser takes
+// over leaves the buffer at once: a reload must not send it a second time.
+// Only an answer that reaches a living page puts a refused report back.
+function handOff(from: Recording, batches: BufferedEvent[][]): void {
+	const handedOff: BufferedEvent[][] = [];
+	for (const batch of batches) {
 		const body = JSON.stringify(reportOf(batch));
-		if (!opts.keepalive) {
-			void deliver(from, batch, body, false);
-			continue;
-		}
 		const bodyBytes = new Blob([body]).size;
-		if (keepaliveBytesInFlight + bodyBytes > KEEPALIVE_BODY_BUDGET_BYTES) return;
+		if (keepaliveBytesInFlight + bodyBytes > KEEPALIVE_BODY_BUDGET_BYTES) break;
 		keepaliveBytesInFlight += bodyBytes;
-		void deliver(from, batch, body, true).finally(() => {
+		handedOff.push(batch);
+		void post(body, true).then((done) => {
 			keepaliveBytesInFlight -= bodyBytes;
+			if (!done && recording === from) putBack(from, batch);
 		});
 	}
+	if (handedOff.length > 0) takeOut(from, handedOff.flat());
 }
 
 // One report speaks for one page session, so a batch never mixes sessions.
@@ -249,19 +260,22 @@ function reportBatches(events: BufferedEvent[]): BufferedEvent[][] {
 	return batches;
 }
 
-async function deliver(
-	from: Recording,
-	batch: BufferedEvent[],
-	body: string,
-	keepalive: boolean
-): Promise<void> {
+async function deliver(from: Recording, batch: BufferedEvent[]): Promise<void> {
 	for (const buffered of batch) from.inFlight.add(buffered);
-	const done = await post(body, keepalive);
+	const done = await post(JSON.stringify(reportOf(batch)), false);
 	for (const buffered of batch) from.inFlight.delete(buffered);
-	if (!done) return;
-	const sent = new Set(batch);
-	from.events = from.events.filter((buffered) => !sent.has(buffered));
-	if (recording === from) writeEvents(from);
+	if (done && recording === from) takeOut(from, batch);
+}
+
+function takeOut(from: Recording, sent: BufferedEvent[]): void {
+	const leaving = new Set(sent);
+	from.events = from.events.filter((buffered) => !leaving.has(buffered));
+	writeEvents(from);
+}
+
+function putBack(from: Recording, refused: BufferedEvent[]): void {
+	from.events = [...refused, ...from.events];
+	writeEvents(from);
 }
 
 function reportOf(batch: BufferedEvent[]): PlaybackDiagnosticsReport {
@@ -309,10 +323,16 @@ function readEvents(userId: string): BufferedEvent[] {
 function isBufferedEvent(value: unknown): value is BufferedEvent {
 	if (typeof value !== 'object' || value === null) return false;
 	const { session, event } = value as Partial<BufferedEvent>;
-	return typeof session?.session_id === 'string' && typeof event === 'object' && event !== null;
+	return (
+		typeof session?.session_id === 'string' &&
+		typeof event === 'object' &&
+		event !== null &&
+		typeof event.sequence === 'number'
+	);
 }
 
 function writeEvents(from: Recording): void {
+	from.events = from.events.slice(-BUFFER_CAPACITY);
 	writeStorage(storageKey(from.userId), JSON.stringify(from.events));
 }
 

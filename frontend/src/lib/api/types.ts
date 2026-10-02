@@ -568,6 +568,7 @@ export interface PinModelOnWorkerRequest {
 }
 
 export interface PlaybackDiagnosticEvent {
+	sequence: number;
 	at_ms: number;
 	kind: 'promote' | 'fresh_load' | 'play' | 'play_rejected' | 'pause' | 'ended' | 'waiting' | 'stalled' | 'error' | 'retry' | 'give_up' | 'visibility_change' | 'page_hide' | 'page_show' | 'freeze' | 'resume' | 'timer_gap' | 'media_session_action' | 'media_event' | 'online' | 'offline';
 	take_id: string | null;
