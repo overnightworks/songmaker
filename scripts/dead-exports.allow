@@ -7,3 +7,4 @@ frontend/src/lib/history/historyController.ts:land # the pure landing reducer is
 frontend/src/lib/history/historyController.ts:allocateEntryId # the id allocator is exported for its tests over an in-memory Storage (#1194).
 frontend/src/lib/history/historyController.ts:landedEntry # the popstate reader is exported for its codec tests (#1194).
 frontend/src/lib/history/historyController.ts:stepBackTo # exported for its first-entry test; layers step back through it inside the controller (#1219), and #1006 H6 (legal) calls it directly.
+frontend/src/lib/services/continuousDeck.ts:ContinuousDeck # the continuous-deck append engine lands ahead of its caller; wired by #1187 M2 (audioPlayer plays a queue through it).
