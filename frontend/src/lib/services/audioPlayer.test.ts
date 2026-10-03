@@ -704,15 +704,16 @@ describe('frozen-clock watchdog', () => {
 	}
 
 	it.each(playbackModes)(
-		'pauses $mode when it gives up, so the sound agrees with the stalled message',
+		'never pauses $mode when it gives up, so a late answer plays on',
 		async ({ loadMode }) => {
 			loadMode();
 			await freezeUntilTheDeadlinePasses();
 
-			expect({ status: audioPlayer.status, paused: fakeAudio.paused }).toEqual({
-				status: 'error',
-				paused: true
-			});
+			expect({
+				status: audioPlayer.status,
+				transport: audioPlayer.transport,
+				paused: fakeAudio.paused
+			}).toEqual({ status: 'error', transport: 'failed', paused: false });
 		}
 	);
 
@@ -792,14 +793,10 @@ describe('frozen-clock watchdog', () => {
 
 			expect({
 				beforeTheDeadline,
-				afterTheDeadline: {
-					status: audioPlayer.status,
-					error: audioPlayer.error,
-					paused: fakeAudio.paused
-				}
+				afterTheDeadline: { status: audioPlayer.status, error: audioPlayer.error }
 			}).toEqual({
 				beforeTheDeadline: { status: 'loading', retried: true },
-				afterTheDeadline: { status: 'error', error: STALLED, paused: true }
+				afterTheDeadline: { status: 'error', error: STALLED }
 			});
 		}
 	);
@@ -1380,7 +1377,8 @@ describe('patient recovery while the screen is off', () => {
 
 		it.each([
 			{ how: 'from the lock screen', pause: () => audioPlayer.pause() },
-			{ how: 'with the transport button', pause: () => audioPlayer.toggle() }
+			{ how: 'with the transport button', pause: () => audioPlayer.toggle() },
+			{ how: 'by the system pausing the element', pause: () => fakeAudio.pause() }
 		])('a take waiting for the network is paused at once $how', async ({ pause }) => {
 			await giveUpOnAThreeMinuteOutage();
 			const load = vi.spyOn(fakeAudio, 'load');
@@ -2951,6 +2949,16 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(fakeAudio.currentTime).toBe(15);
 	});
 
+	it('a seek clamps to the part of the take the deck holds', () => {
+		playFirstWithSecondAppended();
+		holds([first, 0, 10], [second, 10, 12]);
+		playTo(12);
+
+		audioPlayer.seek(17);
+
+		expect(fakeAudio.currentTime).toBe(22);
+	});
+
 	it.each([
 		{ load: 'Next onto the take handed last', at: 4, take: second, opts: {}, landsAt: 10 },
 		{
@@ -3057,6 +3065,30 @@ describe('continuous deck (#1187 M2)', () => {
 
 		fakeAudio.fire('ended');
 		expect(onEnded).toHaveBeenCalledOnce();
+	});
+
+	it.each([
+		{
+			name: 'does not end while the queue names a next take',
+			next: third,
+			after: { ended: false, transport: 'recovering' }
+		},
+		{
+			name: 'ends when the queue names none',
+			next: null,
+			after: { ended: true, transport: 'playing' }
+		}
+	])('at the end of what it holds, the deck $name', ({ next, after }) => {
+		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? next : null);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+		playFirstWithSecondAppended();
+		playTo(29.9);
+		fakeAudio.bufferedUntil = 30;
+
+		fakeAudio.fire('waiting');
+
+		expect({ ended: deck().ended, transport: audioPlayer.transport }).toEqual(after);
+		expect(onEnded).not.toHaveBeenCalled();
 	});
 
 	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {

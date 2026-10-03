@@ -504,14 +504,24 @@ class AudioPlayer {
 		return entry ? takeDuration(entry) : null;
 	}
 
-	// The playhead ran out of audio with nothing more on its way: the queue has
-	// ended, and only an ended stream lets the element fire ended.
+	// The playhead ran out of audio in the queue's last take: the queue has
+	// ended, and only an ended stream lets the element fire ended. Running out
+	// while the queue names a next take is buffering, which recovery rides out
+	// until that take is appended.
 	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
-		if (session.deck.appending || bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS)
+		if (
+			session.deck.appending ||
+			this.queueNamesATakeAfter(session.playing) ||
+			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
+		)
 			return false;
 		this.note('media_event', 'deck_end');
 		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
 		return true;
+	}
+
+	private queueNamesATakeAfter(entry: Readonly<DeckEntry<PlaybackInfo>> | null): boolean {
+		return entry !== null && (this.callbacks.takeAfter?.(entry.take) ?? null) !== null;
 	}
 
 	// A dropped take the playhead has not reached only shortens the stream;
@@ -699,8 +709,9 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
-		const takeStart = this.deckSession?.playing?.start_offset ?? 0;
-		this.audio.currentTime = takeStart + Math.max(0, Math.min(seconds, this.duration));
+		const entry = this.deckSession?.playing;
+		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
+		this.audio.currentTime = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 	}
 
 	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
@@ -893,6 +904,7 @@ class AudioPlayer {
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		on('pause', () => {
+			if (this.gaveUpOnStall && !this.pauseRequestedByApp) this.autoplayPending = false;
 			this.pauseRequestedByApp = false;
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
@@ -974,9 +986,10 @@ class AudioPlayer {
 		if (!this.recoverPlayback(reason)) this.giveUpOnStall();
 	}
 
-	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message. The listener's wish to hear the take outlives it, so
-	// a late answer plays on unless the listener pauses in the meantime.
+	// The player never pauses itself (#1187 P3): with the screen off a pause is
+	// the moment Android may freeze the page. The listener's wish to hear the
+	// take outlives the give-up, so a late answer plays on unless the listener
+	// pauses in the meantime.
 	private giveUpOnStall(): void {
 		const listenerWantsSound =
 			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
@@ -988,7 +1001,6 @@ class AudioPlayer {
 				: { kind: 'stalled', message: ERROR_MSG_STALLED }
 		);
 		this.autoplayPending = listenerWantsSound;
-		if (this.audio) this.pauseElement(this.audio);
 		this.note('give_up', this.failure?.kind ?? '');
 	}
 
