@@ -52,7 +52,14 @@ import {
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
-import { editLyrics, pinnedSeed, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
+import {
+	editLyrics,
+	pinnedSeed,
+	setDraftLyrics,
+	setDraftPrompt,
+	versions
+} from '$lib/stores/editor';
+import { openVersionLabel } from '$lib/constants/now-playing';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import {
 	detailTab,
@@ -1768,6 +1775,34 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			'brief'
 		);
 		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	function takeGroupOpenLink(target: HTMLElement, versionNumber: number): HTMLButtonElement {
+		const link = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
+			(button) => button.textContent?.includes(openVersionLabel(versionNumber))
+		);
+		if (!link) throw new Error(`Expected the Open v${versionNumber} link on its take group`);
+		return link;
+	}
+
+	it('Open v1 on a take group loads v1 as the draft and shows it on Edit', async () => {
+		navigateToSongTab('takes');
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+
+		takeGroupOpenLink(target, 1).click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft');
+		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
+		expect(target.textContent).toContain(versionLoadedFromLabel(1));
+		expect(addUndoToast).toHaveBeenCalledWith(
+			versionLoadedToastLabel(1),
+			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
+			'brief'
+		);
 	});
 
 	it('over a dirty draft asks first, and Cancel keeps the edit and the sheet', async () => {

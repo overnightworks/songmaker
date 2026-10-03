@@ -26,6 +26,7 @@
 	} from '$lib/constants';
 	import {
 		nowPlayingTakeLabel,
+		openVersionLabel,
 		takeBatchReductionLabel,
 		takeRowLabel,
 		takeGroupLabel,
@@ -110,6 +111,7 @@
 
 	interface VersionGroup {
 		versionNumber: number | null;
+		versionId: string | null;
 		generations: GenerationItem[];
 	}
 
@@ -120,6 +122,7 @@
 			if (!map[key]) {
 				map[key] = {
 					versionNumber: gen.version_number,
+					versionId: gen.version_id,
 					generations: []
 				};
 			}
@@ -273,7 +276,7 @@
 	async function confirmDeleteVersion(): Promise<void> {
 		const group = deleteVersionFor;
 		deleteVersionFor = null;
-		const versionId = group?.generations[0]?.version_id;
+		const versionId = group?.versionId;
 		if (!group || !versionId) return;
 		try {
 			await handleDeleteVersion(song.id, versionId, true);
@@ -349,9 +352,29 @@
 		{#each groups as group (group.versionNumber ?? 'unknown')}
 			<div class="version-section">
 				<div class="version-header-row">
-					<span class="version-header"
-						>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
-					>
+					{#if group.versionNumber !== null && group.versionId !== null}
+						{@const versionId = group.versionId}
+						<button
+							type="button"
+							class="version-link"
+							data-hitbox="text"
+							onclick={() => void actions.clickVersion(versionId)}
+						>
+							<span class="version-header"
+								>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
+							>
+							<span class="version-open"
+								>{openVersionLabel(group.versionNumber)}<Icon
+									name="chevron-right"
+									size={14}
+								/></span
+							>
+						</button>
+					{:else}
+						<span class="version-header"
+							>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
+						>
+					{/if}
 					{#if group.versionNumber !== null}
 						<button
 							type="button"
@@ -632,6 +655,28 @@
 		color: var(--text-subtle);
 		font-family: var(--font-body);
 		padding: 0.3rem 0;
+	}
+
+	.version-link {
+		display: flex;
+		flex: 1;
+		align-items: center;
+		gap: 0.3rem;
+		min-width: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		text-align: left;
+		cursor: pointer;
+	}
+
+	.version-open {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1rem;
+		margin-left: auto;
+		font-size: var(--label-font-size);
+		color: var(--accent);
 	}
 
 	.version-delete-btn {

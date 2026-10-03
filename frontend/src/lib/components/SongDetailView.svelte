@@ -439,7 +439,13 @@
 		if (compact) openEditTab();
 	}
 
-	function onVersionClick(versionId: string): Promise<boolean> {
+	async function onVersionClick(versionId: string): Promise<boolean> {
+		const loaded = await askToLoadVersion(versionId);
+		if (loaded && compact) openEditTab();
+		return loaded;
+	}
+
+	function askToLoadVersion(versionId: string): Promise<boolean> {
 		const version = get(versions).find((v) => v.id === versionId);
 		if (!version) return Promise.resolve(false);
 		if (!get(isDirty)) {
