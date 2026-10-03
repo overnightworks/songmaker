@@ -334,10 +334,7 @@
 		{/if}
 
 		{#each groups as group (groupKey(group.version))}
-			{@const label = takeGroupLabel(
-				group.version?.versionNumber ?? null,
-				group.generations.length
-			)}
+			{@const label = takeGroupLabel(group.version, group.generations.length)}
 			<div class="version-section">
 				<div class="version-header-row">
 					{#if group.version}

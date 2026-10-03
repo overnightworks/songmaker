@@ -9,6 +9,7 @@
 		TAKE_RESCORING_LABEL
 	} from '$lib/constants';
 	import {
+		NOW_PLAYING_IMPORTED_TAKE_HEADING,
 		NOW_PLAYING_DEVIATIONS_EMPTY,
 		NOW_PLAYING_DEVIATIONS_LABEL,
 		NOW_PLAYING_DEVIATIONS_UNAVAILABLE,
@@ -232,26 +233,29 @@
 		void openTakeVersion(song, generation.id, versionId);
 	}
 
+	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
 	// "v · take · duration · mode" — the same take-description formatter every
 	// other surface uses (TakesList's row, the queue), so this panel can never
-	// drift into describing a take differently from the rest of the app.
-	const takeMeta = $derived(
-		nowPlayingTakeMeta({
-			artist: null,
-			versionNumber: generation.version_number,
-			generationNumber: generation.generation_number,
-			durationSec: generation.audio_duration_sec ?? null,
-			modelMode: generation.model_mode
-		})
+	// drift into describing a take differently from the rest of the app. An
+	// imported take has no version and no model of ours to name.
+	const takeHeading = $derived(
+		openableVersion
+			? nowPlayingTakeMeta({
+					artist: null,
+					versionNumber: openableVersion.versionNumber,
+					generationNumber: generation.generation_number,
+					durationSec: generation.audio_duration_sec ?? null,
+					modelMode: generation.model_mode
+				})
+			: NOW_PLAYING_IMPORTED_TAKE_HEADING
 	);
-	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
 
 	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
 
 <div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
 	<div class="take-heading-row">
-		<h3 class="take-heading">{takeMeta}</h3>
+		<h3 class="take-heading">{takeHeading}</h3>
 		{#if openableVersion}
 			{@const versionId = openableVersion.versionId}
 			<button

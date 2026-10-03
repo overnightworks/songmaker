@@ -48,10 +48,13 @@ import {
 	versionsChipAccessibleLabel
 } from '../src/lib/constants';
 import {
+	NOW_PLAYING_IMPORTED_TAKE_HEADING,
 	NOW_PLAYING_TAKE_TAB,
 	openVersionLabel,
 	takeGroupLabel,
-	takeRowLabel
+	takeRowLabel,
+	takeVersion,
+	type TakeVersion
 } from '../src/lib/constants/now-playing';
 import type { SongItem, VersionItem } from '../src/lib/api/types';
 import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
@@ -73,6 +76,8 @@ interface SeededVersions {
 	songId: string;
 	title: string;
 	albumId: string;
+	v1: TakeVersion;
+	v2: TakeVersion;
 }
 
 // Every song seeded here joins song-phone.spec.ts's dedicated album, whose
@@ -108,7 +113,15 @@ async function seedTwoVersions(
 		data: { lyrics: SECOND_VERSION_LYRICS }
 	});
 	expect(saved.ok(), `Saving v2 failed: ${await saved.text()}`).toBeTruthy();
-	if (!secondVersionTaken) return { songId, title, albumId: library.songPhoneAlbumId };
+	const versions = await readVersions(page, songId);
+	const seeded = {
+		songId,
+		title,
+		albumId: library.songPhoneAlbumId,
+		v1: seededVersion(versions, 1),
+		v2: seededVersion(versions, 2)
+	};
+	if (!secondVersionTaken) return seeded;
 	const jobId = await seedRunningGenerationJob(songId, {
 		progress: 0.5,
 		takeIndex: 1,
@@ -116,7 +129,14 @@ async function seedTwoVersions(
 		phase: 'loading_model'
 	});
 	await completeGenerationJobWithoutEvent(jobId);
-	return { songId, title, albumId: library.songPhoneAlbumId };
+	return seeded;
+}
+
+function seededVersion(versions: VersionItem[], versionNumber: number): TakeVersion {
+	const seeded = versions.find((version) => version.version_number === versionNumber);
+	const version = seeded ? takeVersion(seeded.id, seeded.version_number) : null;
+	if (!version) throw new Error(`Expected the seeded song to have v${versionNumber}`);
+	return version;
 }
 
 /** Saves the latest lyrics again as `count` more versions, so a song has more than the popover shows. */
@@ -210,10 +230,10 @@ async function showTakes(page: Page): Promise<void> {
 	if (await takesTab.isVisible()) await takesTab.click();
 }
 
-function takeGroup(page: Page, versionNumber: number | null, takeCount: number): Locator {
+function takeGroup(page: Page, version: TakeVersion | null, takeCount: number): Locator {
 	return workspace(page)
 		.locator('.version-section')
-		.filter({ hasText: takeGroupLabel(versionNumber, takeCount) });
+		.filter({ hasText: takeGroupLabel(version, takeCount) });
 }
 
 // The phone's full Now Playing carries the transport while it covers the
@@ -505,7 +525,7 @@ test.describe('the versions of a song', () => {
 		await openSongEditor(page, song);
 		await showTakes(page);
 
-		await takeGroup(page, 1, 1)
+		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: new RegExp(openVersionLabel(1)) })
 			.click();
 
@@ -522,7 +542,7 @@ test.describe('the versions of a song', () => {
 		const song = await seedTwoVersions(page, testInfo);
 		await openSongEditor(page, song);
 		await showTakes(page);
-		await takeGroup(page, 1, 1)
+		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
 			.click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
@@ -561,8 +581,8 @@ test.describe('the versions of a song', () => {
 		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await showTakes(page);
-		await expect(takeGroup(page, 2, 1)).toBeVisible();
-		await expect(takeGroup(page, 1, 1)).toHaveCount(0);
+		await expect(takeGroup(page, song.v2, 1)).toBeVisible();
+		await expect(takeGroup(page, song.v1, 1)).toHaveCount(0);
 	});
 
 	test('the delete confirm over an unsaved draft says the draft goes too, and Cancel keeps it', async ({
@@ -622,7 +642,7 @@ test.describe('the versions of a song', () => {
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([3, 2, 1]);
 	});
 
-	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
+	test('an imported take groups as Imported with no Open link, and Now Playing names it "Imported take" and says why it has no lyrics', async ({
 		page
 	}) => {
 		const library = readSeededLibrary();
@@ -639,6 +659,9 @@ test.describe('the versions of a song', () => {
 		await imported.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) }).click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(page.getByText(NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS)).toBeVisible();
+		await expect(
+			page.getByRole('heading', { name: NOW_PLAYING_IMPORTED_TAKE_HEADING, exact: true })
+		).toBeVisible();
 		await expect(page.getByRole('button', { name: /^Open v/ })).toHaveCount(0);
 	});
 });

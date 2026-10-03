@@ -21,7 +21,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { openVersionLabel, takeGroupLabel } from '$lib/constants/now-playing';
+import { openVersionLabel, takeGroupLabel, takeVersion } from '$lib/constants/now-playing';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
@@ -346,7 +346,9 @@ describe('TakesList', () => {
 		openVersionLink(target, 5)?.click();
 		await tick();
 
-		expect(openVersionLink(target, 7)?.textContent).toContain(takeGroupLabel(7, 1));
+		expect(openVersionLink(target, 7)?.textContent).toContain(
+			takeGroupLabel(takeVersion('ver-7', 7), 1)
+		);
 		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
 	});
 
