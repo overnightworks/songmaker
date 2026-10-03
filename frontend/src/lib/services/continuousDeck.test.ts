@@ -168,6 +168,7 @@ class FakeNetwork {
 	private readonly files = new Map<string, Uint8Array>();
 	private readonly breaks = new Map<string, number[]>();
 	private readonly refusals = new Map<string, number>();
+	private readonly rangesAnsweredFromTheStart = new Map<string, 200 | 206>();
 
 	serve(url: string, bytes: number): Uint8Array {
 		const file = Uint8Array.from({ length: bytes }, (_, index) => index % 251);
@@ -183,6 +184,10 @@ class FakeNetwork {
 		this.refusals.set(url, status);
 	}
 
+	answerRangesFromTheStart(url: string, status: 200 | 206): void {
+		this.rangesAnsweredFromTheStart.set(url, status);
+	}
+
 	readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const range = new Headers(init?.headers).get('Range');
@@ -192,13 +197,17 @@ class FakeNetwork {
 		if (refusal) return new Response(null, { status: refusal });
 		const file = this.files.get(url);
 		if (!file) throw new TypeError(`no file served at ${url}`);
-		const from = range ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
+		const startAnswer = range ? this.rangesAnsweredFromTheStart.get(url) : undefined;
+		const from = range && !startAnswer ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
+		const status = startAnswer ?? (range ? 206 : 200);
 		const breakPosition = this.breaks.get(url)?.shift();
+		const headers: Record<string, string> =
+			status === 206
+				? { 'Content-Range': `bytes ${from}-${file.byteLength - 1}/${file.byteLength}` }
+				: {};
 		return new Response(
 			piecewise(file.subarray(from, breakPosition), breakPosition !== undefined, init?.signal),
-			{
-				status: range ? 206 : 200
-			}
+			{ status, headers }
 		);
 	};
 }
@@ -446,6 +455,28 @@ describe('ContinuousDeck', () => {
 		expect(audio.src).toBe(OBJECT_URL);
 	});
 
+	it.each([
+		{ answer: 206 as const, refusal: 'Content-Range mismatch' },
+		{ answer: 200 as const, refusal: 'ignored Range' }
+	])(
+		'refuses a resume answered $answer from the first byte as $refusal and appends nothing twice',
+		async ({ answer, refusal }) => {
+			const { deck, buffer, network } = openDeck();
+			const file = network.serve('/audio/take.mp3', 0.75 * MEGABYTE);
+			network.breakAt('/audio/take.mp3', 300_000);
+			network.answerRangesFromTheStart('/audio/take.mp3', answer);
+
+			const step = deck.appendTake('take', '/audio/take.mp3');
+
+			await expect(step).rejects.toMatchObject({ reason: 'not-fetched' });
+			await expect(step).rejects.toThrow(refusal);
+			expect(network.requests.map((request) => request.range)).toEqual([null, 'bytes=300000-']);
+			const appended = concatenated(buffer.appended);
+			expect(appended.byteLength).toBeLessThanOrEqual(300_000);
+			expect(firstDifferingByte(appended, file.subarray(0, appended.byteLength))).toBeNull();
+		}
+	);
+
 	it('gives up on a download that keeps breaking after three attempts', async () => {
 		const { deck, network } = openDeck();
 		network.serve('/audio/take.mp3', MEGABYTE / 2);
@@ -576,8 +607,9 @@ describe('ContinuousDeck', () => {
 
 		expect(deck.entryAt(secondStart - 1)?.take).toBe('first');
 		expect(deck.entryAt(secondStart)?.take).toBe('second');
-		expect(deck.playableEntryOf((take) => take === 'second')?.start_offset).toBe(secondStart);
-		expect(deck.playableEntryOf((take) => take === 'first')).toBeUndefined();
+		const [firstEntry, secondEntry] = deck.manifest;
+		expect(deck.isPlayableFromStart(secondEntry)).toBe(true);
+		expect(deck.isPlayableFromStart(firstEntry)).toBe(false);
 	});
 
 	describe('once closed', () => {

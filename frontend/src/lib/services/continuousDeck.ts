@@ -20,8 +20,8 @@ interface ContinuousDeckPorts {
 }
 
 class TakeRefused extends Error {
-	constructor(url: string, status: number) {
-		super(`${url} answered ${status}`);
+	constructor(url: string, refusal: string) {
+		super(`${url} ${refusal}`);
 		this.name = 'TakeRefused';
 	}
 }
@@ -95,12 +95,10 @@ export class ContinuousDeck<Take> {
 		return this.entries.findLast((entry) => entry.start_offset <= seconds);
 	}
 
-	// The latest entry of a take whose start is still buffered, so that a seek
-	// to its offset plays it from the beginning.
-	playableEntryOf(isTake: (take: Take) => boolean): Readonly<DeckEntry<Take>> | undefined {
-		return this.entries.findLast(
-			(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
-		);
+	// Whether the entry's start is still buffered, so that a seek to its offset
+	// plays it from the beginning.
+	isPlayableFromStart(entry: Readonly<DeckEntry<Take>>): boolean {
+		return entry.start_offset >= this.playableFrom;
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
@@ -186,9 +184,9 @@ export class ContinuousDeck<Take> {
 			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
 			signal: this.closing.signal
 		});
-		const expectedStatus = resuming ? 206 : 200;
-		if (response.status !== expectedStatus || !response.body)
-			throw new TakeRefused(url, response.status);
+		const refusal = refusalOf(response, fromByte);
+		if (refusal) throw new TakeRefused(url, refusal);
+		if (!response.body) throw new TakeRefused(url, `answered ${response.status} without a body`);
 		return response.body;
 	}
 
@@ -253,6 +251,19 @@ async function attachSourceBuffer(ports: ContinuousDeckPorts): Promise<SourceBuf
 	const buffer = mediaSource.addSourceBuffer(MP3_MIME_TYPE);
 	buffer.mode = 'sequence';
 	return buffer;
+}
+
+// A resume appends behind the bytes already received, so an answer starting
+// anywhere else would duplicate or skip audio inside the take.
+function refusalOf(response: Response, fromByte: number): string | null {
+	const resuming = fromByte > 0;
+	if (resuming && response.status === 200) return 'ignored Range';
+	if (response.status !== (resuming ? 206 : 200)) return `answered ${response.status}`;
+	if (!resuming) return null;
+	const contentRange = response.headers.get('Content-Range');
+	const answeredFrom = Number(/^bytes (\d+)-/.exec(contentRange ?? '')?.[1]);
+	if (answeredFrom === fromByte) return null;
+	return `Content-Range mismatch: asked from byte ${fromByte}, answered ${contentRange}`;
 }
 
 function asError(error: unknown): Error {
