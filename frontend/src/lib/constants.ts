@@ -181,6 +181,7 @@ export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
 export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
+export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';

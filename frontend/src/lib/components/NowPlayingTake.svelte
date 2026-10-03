@@ -26,10 +26,14 @@
 		NOW_PLAYING_SCORES_LABEL,
 		NOW_PLAYING_UNKEEP_LABEL,
 		NOW_PLAYING_UNPICK_LABEL,
-		nowPlayingTakeMeta
+		nowPlayingTakeMeta,
+		openVersionLabel,
+		takeVersion
 	} from '$lib/constants/now-playing';
+	import { get } from 'svelte/store';
+	import { isDirty, pendingVersionLoad } from '$lib/stores/editor';
 	import { revealPlayingSong } from '$lib/stores/navigation';
-	import { closeNowPlaying } from '$lib/stores/player';
+	import { closeNowPlaying, selectedSongId } from '$lib/stores/player';
 	import { pendingSource } from '$lib/stores/recipe';
 	import {
 		pinSeed,
@@ -225,6 +229,15 @@
 		void revealPlayingSong(song, generation.id);
 	}
 
+	// The open song's own page asks before a load replaces its dirty draft;
+	// leaving and re-entering that same song would ask about the draft twice.
+	function openVersion(versionId: string): void {
+		pendingVersionLoad.set({ songId: song.id, versionId });
+		closeNowPlaying();
+		if (get(isDirty) && get(selectedSongId) === song.id) return;
+		void revealPlayingSong(song, generation.id);
+	}
+
 	// "v · take · duration · mode" — the same take-description formatter every
 	// other surface uses (TakesList's row, the queue), so this panel can never
 	// drift into describing a take differently from the rest of the app.
@@ -237,6 +250,7 @@
 			modelMode: generation.model_mode
 		})
 	);
+	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
 
 	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
@@ -244,6 +258,19 @@
 <div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
 	<div class="take-heading-row">
 		<h3 class="take-heading">{takeMeta}</h3>
+		{#if openableVersion}
+			{@const versionId = openableVersion.versionId}
+			<button
+				type="button"
+				class="open-version"
+				data-hitbox="text"
+				onclick={() => openVersion(versionId)}
+				>{openVersionLabel(openableVersion.versionNumber)}<Icon
+					name="chevron-right"
+					size={14}
+				/></button
+			>
+		{/if}
 		<div class="take-badges">
 			<button
 				type="button"
@@ -433,6 +460,19 @@
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
 		color: var(--text-muted);
+	}
+	.open-version {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.15rem;
+		padding: 0 0.55rem;
+		border: 1px solid var(--border);
+		border-radius: 18px;
+		background: var(--surface);
+		color: var(--accent);
+		font-size: 0.78rem;
+		white-space: nowrap;
+		cursor: pointer;
 	}
 	.take-badges {
 		display: flex;

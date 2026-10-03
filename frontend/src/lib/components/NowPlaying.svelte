@@ -8,8 +8,10 @@
 		NOW_PLAYING_TAKE_TAB,
 		nowPlayingCurateProgress,
 		type NowPlayingSource,
-		type PlaybackSource
+		type PlaybackSource,
+		takeVersion
 	} from '$lib/constants/now-playing';
+	import { NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
 	import { albumList, songList } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import {
@@ -106,6 +108,14 @@
 	const song = $derived(songs.find((s) => s.id === info.songId) ?? null);
 	const playingGeneration = $derived(
 		song?.generations.find((g) => g.id === info.generation.id) ?? null
+	);
+	// Only the resolved take knows it has no version: a library-pool stub
+	// carries no version number either.
+	const lyricsEmptyLabel = $derived(
+		playingGeneration &&
+			takeVersion(playingGeneration.version_id, playingGeneration.version_number) === null
+			? NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS
+			: NOW_PLAYING_NO_LYRICS
 	);
 
 	// Curation mode (issue #228) only ever plays an album's own queue. The
@@ -320,6 +330,7 @@
 	rightPanelLabel={mobileTriggerLabel}
 	sheetLabel={NOW_PLAYING_RIGHT_PANEL_LABEL}
 	rightPanelOpenOnMount={rightPanelTab === 'take'}
+	{lyricsEmptyLabel}
 	lyricsCues={playingGeneration?.whisper_cues ?? null}
 	whisperText={playingGeneration?.whisper_text ?? null}
 	{rightPanel}

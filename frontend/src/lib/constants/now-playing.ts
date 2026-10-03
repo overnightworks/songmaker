@@ -36,9 +36,31 @@ export function takeRowLabel(generationNumber: number): string {
 	return `Take ${generationNumber}`;
 }
 
+// A take with no version was imported: no lyrics or recipe were saved with
+// it, so its group names where it came from instead of a version.
+const IMPORTED_TAKES_GROUP = 'Imported';
+
 export function takeGroupLabel(versionNumber: number | null, count: number): string {
-	const version = versionNumber === null ? 'Unknown version' : `v${versionNumber}`;
-	return `${version}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
+	const origin = versionNumber === null ? IMPORTED_TAKES_GROUP : `v${versionNumber}`;
+	return `${origin}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
+}
+
+interface TakeVersion {
+	versionId: string;
+	versionNumber: number;
+}
+
+// The one place that decides whether a take has a version to open; null
+// means it was imported.
+export function takeVersion(
+	versionId: string | null,
+	versionNumber: number | null
+): TakeVersion | null {
+	return versionId === null || versionNumber === null ? null : { versionId, versionNumber };
+}
+
+export function openVersionLabel(versionNumber: number): string {
+	return `Open v${versionNumber}`;
 }
 
 interface TakeMetaParts {

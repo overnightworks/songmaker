@@ -13,6 +13,7 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
+	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
 	NOW_PLAYING_NO_LYRICS,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
@@ -226,9 +227,20 @@ describe('NowPlaying', () => {
 		expect(target.textContent).not.toContain('latest draft');
 	});
 
-	it('shows a named empty state when the take has no lyrics', async () => {
-		await renderSurface(info({ lyrics: null }));
-		expect(target.textContent).toContain(NOW_PLAYING_NO_LYRICS);
+	it.each([
+		{ take: 'a take of a version', versioned: true, empty: NOW_PLAYING_NO_LYRICS },
+		{ take: 'an imported take', versioned: false, empty: NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS }
+	])('names why $take shows no lyrics', async ({ versioned, empty }) => {
+		const take = generation({
+			generation_number: 2,
+			mp3_path: 'a.mp3',
+			version_lyrics: null,
+			...(versioned ? {} : { version_id: null, version_number: null })
+		});
+		songList.set([song({ ...playingSongDefaults(), generations: [take] })]);
+		await renderSurface(info({ generation: take, lyrics: null }));
+
+		expect(target.textContent).toContain(empty);
 		expect(target.querySelector('.lyrics')).toBeNull();
 	});
 
