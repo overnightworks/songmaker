@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
 
@@ -19,6 +19,14 @@ interface ToastAction {
 	handler: () => void | Promise<void>;
 }
 
+/**
+ * An undo that can stop holding before its toast times out -- once it would
+ * restore nothing, its toast closes, so a shown Undo always restores.
+ */
+interface UndoAction extends ToastAction {
+	holds?: Readable<boolean>;
+}
+
 interface Toast {
 	id: number;
 	message: string;
@@ -27,6 +35,8 @@ interface Toast {
 }
 
 let nextId = 0;
+
+const stopWatchingUndo = new Map<number, () => void>();
 
 export const toasts = writable<Toast[]>([]);
 
@@ -66,7 +76,7 @@ export function addToast(message: string, type: ToastType = 'info'): number {
 
 export function addUndoToast(
 	message: string,
-	action: ToastAction,
+	action: UndoAction,
 	length: UndoToastLength = 'long'
 ): void {
 	const id = nextId++;
@@ -78,11 +88,17 @@ export function addUndoToast(
 		}
 	};
 	toasts.update((t) => [...t, { id, message, type: 'info', action: wrapped }]);
-	setTimeout(() => {
-		toasts.update((t) => t.filter((toast) => toast.id !== id));
-	}, UNDO_TOAST_DURATION_MS[length]);
+	if (action.holds) {
+		const stop = action.holds.subscribe((holds) => {
+			if (!holds) dismissToast(id);
+		});
+		stopWatchingUndo.set(id, stop);
+	}
+	setTimeout(() => dismissToast(id), UNDO_TOAST_DURATION_MS[length]);
 }
 
 export function dismissToast(id: number): void {
+	stopWatchingUndo.get(id)?.();
+	stopWatchingUndo.delete(id);
 	toasts.update((t) => t.filter((toast) => toast.id !== id));
 }

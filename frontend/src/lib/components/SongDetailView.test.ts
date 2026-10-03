@@ -1701,9 +1701,19 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		openEditTab();
 		const { fetchVersions } = await import('$lib/api/client');
 		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST, FIRST]);
-		vi.mocked(addUndoToast).mockClear();
+		const shown = await shownToasts();
+		shown.toasts.set([]);
+		vi.mocked(addUndoToast).mockClear().mockImplementation(shown.addUndoToast);
 		vi.mocked(updateSong).mockClear();
 	});
+
+	afterEach(() => {
+		vi.mocked(addUndoToast).mockReset();
+	});
+
+	function shownToasts(): Promise<typeof import('$lib/stores/toast')> {
+		return vi.importActual<typeof import('$lib/stores/toast')>('$lib/stores/toast');
+	}
 
 	function versionChip(target: HTMLElement): HTMLButtonElement {
 		const chip = target.querySelector<HTMLButtonElement>('.version-chip');
@@ -1816,7 +1826,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(versionChip(target).textContent?.trim()).toBe('v2');
 	});
 
-	it('Generate after a load saves the loaded text as the next version; the hint goes', async () => {
+	it('Generate after a load saves the loaded text as the next version; the hint and the Undo toast go', async () => {
 		const { fetchVersions } = await import('$lib/api/client');
 		const next = version({ id: 'v3', version_number: 3, lyrics: 'first draft' });
 		vi.mocked(updateSong).mockResolvedValueOnce(
@@ -1826,6 +1836,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
 		const target = await renderView();
 		await tapVersion(target, 1);
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((t) => t.message)).toEqual([versionLoadedToastLabel(1)]);
 
 		getByRoleButton(
 			target.querySelector<HTMLElement>('.generate-action') ?? target,
@@ -1840,5 +1852,6 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await tick();
 		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
 		expect(versionChip(target).textContent?.trim()).toBe('v3');
+		expect(get(toasts)).toEqual([]);
 	});
 });

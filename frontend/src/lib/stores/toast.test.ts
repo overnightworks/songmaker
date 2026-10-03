@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { get } from 'svelte/store';
+import { get, writable } from 'svelte/store';
 import { toasts, addToast, addUndoToast, dismissToast } from './toast';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 
@@ -42,6 +42,14 @@ describe('toast store', () => {
 		vi.advanceTimersByTime(lastsMs - 1);
 		expect(get(toasts)).toHaveLength(1);
 		vi.advanceTimersByTime(1);
+		expect(get(toasts)).toHaveLength(0);
+	});
+
+	it('an undo toast closes as soon as its undo stops holding, so a shown Undo always restores', () => {
+		const holds = writable(true);
+		addUndoToast('v1 loaded', { label: 'Undo', handler: () => {}, holds }, 'brief');
+		expect(get(toasts)).toHaveLength(1);
+		holds.set(false);
 		expect(get(toasts)).toHaveLength(0);
 	});
 

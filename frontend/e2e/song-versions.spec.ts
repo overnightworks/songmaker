@@ -188,6 +188,7 @@ test.describe('the versions of a song', () => {
 
 			await expect(versionChip(page)).toHaveText(versionChipLabel(3, false));
 			await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeHidden();
+			await expect(loadedToast(page)).toBeHidden();
 			const [newest, second, first] = await readVersions(page, song.songId);
 			expect(newest?.version_number).toBe(3);
 			expect(newest?.lyrics).toBe(FIRST_VERSION_LYRICS);

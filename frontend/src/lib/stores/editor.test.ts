@@ -177,7 +177,7 @@ describe('loadVersionAsDraft', () => {
 		openSongWithTwoVersions();
 		setDraftLyrics('an unsaved line');
 		setDraftGenParams({ shift: 3 });
-		loadVersionAsDraft(older)?.();
+		loadVersionAsDraft(older)?.undo();
 		expect(get(editLyrics)).toBe('an unsaved line');
 		expect(get(editGenParams)).toEqual({ shift: 3 });
 		expect(get(savedSongData).lyrics).toBe('hello');
@@ -187,31 +187,34 @@ describe('loadVersionAsDraft', () => {
 	it('undo of a second load brings back the first load and its hint', () => {
 		openSongWithTwoVersions();
 		loadVersionAsDraft(older);
-		loadVersionAsDraft(latest)?.();
+		loadVersionAsDraft(latest)?.undo();
 		expect(get(editLyrics)).toBe('v1 lyrics');
 		expect(get(draftLoadedFrom)).toBe(1);
 	});
 
 	it('undo leaves another song alone once the editor has moved on', () => {
 		openSongWithTwoVersions();
-		const undo = loadVersionAsDraft(older);
+		const load = loadVersionAsDraft(older);
 		selectedSongId.set('s2');
 		loadSongData(makeSong({ ...songDefaults, id: 's2', lyrics: 'other song' }));
-		undo?.();
+		load?.undo();
 		expect(get(editLyrics)).toBe('other song');
 		expect(get(isDirty)).toBe(false);
+		expect(load && get(load.holds)).toBe(false);
 	});
 
 	it('undo ends once the loaded draft is saved, keeping what was typed after the load', async () => {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
 		openSongWithTwoVersions();
-		const undo = loadVersionAsDraft(older);
+		const load = loadVersionAsDraft(older);
 		setDraftLyrics('v1 lyrics\nidea typed after load');
+		expect(load && get(load.holds)).toBe(true);
 		await handleSave('s1');
-		undo?.();
+		load?.undo();
 		expect(get(editLyrics)).toBe('v1 lyrics\nidea typed after load');
 		expect(get(isDirty)).toBe(false);
+		expect(load && get(load.holds)).toBe(false);
 	});
 
 	it.each([

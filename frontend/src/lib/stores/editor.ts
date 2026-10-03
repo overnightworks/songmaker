@@ -1,4 +1,4 @@
-import { writable, derived, get } from 'svelte/store';
+import { writable, derived, get, type Readable } from 'svelte/store';
 import {
 	fetchVersions,
 	updateSong,
@@ -164,17 +164,24 @@ function resetToVersion(v: VersionItem): void {
 	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
 }
 
+/** The way back from a version load, and whether it still holds. */
+export interface VersionLoadUndo {
+	undo: () => void;
+	holds: Readable<boolean>;
+}
+
 /**
  * Loads a version into the draft only: the latest version stays saved, so a
  * save or Generate makes the next version and the loaded one is never
  * touched. Loading the latest version itself is the way back to the saved
  * state. Nothing reaches the server. Answers the undo, which puts back the
- * draft this load replaced -- unless the editor has moved to another song or
- * the draft has been saved since, because a save or Generate made the load
- * the new saved version and putting back the older draft would overwrite it --
- * or null when the draft already held that version and nothing changed.
+ * draft this load replaced, for as long as it holds: it ends once the editor
+ * has moved to another song or the draft has been saved since, because a
+ * save or Generate made the load the new saved version and putting back the
+ * older draft would overwrite it. Answers null when the draft already held
+ * that version and nothing changed.
  */
-export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
+export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null {
 	const songId = get(selectedSongId);
 	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = get(editorState);
 	const isLatest = version.id === get(versions)[0]?.id;
@@ -182,9 +189,16 @@ export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
 	const loadedFrom = isLatest ? null : version.version_number;
 	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) return null;
 	editorState.update((s) => ({ ...s, draft, loadedFrom }));
-	return () => {
-		if (get(selectedSongId) !== songId || get(editorState).saved !== saved) return;
-		editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
+	const holds = derived(
+		[selectedSongId, editorState],
+		([$selectedSongId, $editorState]) => $selectedSongId === songId && $editorState.saved === saved
+	);
+	return {
+		holds,
+		undo: () => {
+			if (!get(holds)) return;
+			editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
+		}
 	};
 }
 
