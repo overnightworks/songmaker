@@ -3020,6 +3020,37 @@ describe('continuous deck (#1187 M2)', () => {
 			expect(audioPlayer.current).toBe(firstAgain);
 			expect(onCurrentChange.mock.lastCall?.[0]).toBe(firstAgain);
 		});
+
+		it('Next and Previous between the two places move the audio with the place', () => {
+			playFirstWithSecondAppended(firstAgain);
+			playTo(4);
+
+			audioPlayer.load(firstAgain);
+
+			expect(fakeAudio.currentTime).toBe(10);
+			expect(audioPlayer.current).toBe(firstAgain);
+			expect(continuousDecks.attached).toHaveLength(1);
+
+			playTo(10.5);
+			audioPlayer.load(first);
+
+			expect(continuousDecks.attached).toHaveLength(2);
+			expect(deck().requests.map((request) => request.take)).toEqual([first]);
+			expect(audioPlayer.current).toBe(first);
+		});
+	});
+
+	it('plays on through a load of the playing take built outside the queue, keeping the take it holds', () => {
+		playFirstWithSecondAppended();
+		playTo(4);
+		const seekSpy = vi.spyOn(deck(), 'seekTo');
+
+		audioPlayer.load({ ...first });
+
+		expect(seekSpy).not.toHaveBeenCalled();
+		expect(fakeAudio.currentTime).toBe(4);
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(audioPlayer.current).toBe(first);
 	});
 
 	it('reads the position within the take from the element clock at once', () => {
@@ -3085,6 +3116,13 @@ describe('continuous deck (#1187 M2)', () => {
 			load: 'a rebuild of the playing take at a position',
 			at: 12,
 			take: second,
+			opts: { restart: true, startAt: 1.5 },
+			landsAt: 11.5
+		},
+		{
+			load: 'a rebuilt queue handing the playing take anew at a position',
+			at: 12,
+			take: { ...second },
 			opts: { restart: true, startAt: 1.5 },
 			landsAt: 11.5
 		}

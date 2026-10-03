@@ -77,8 +77,9 @@ type LoadOptions = { autoplay?: boolean; restart?: boolean; startAt?: number };
 // A queue playing on the continuous deck (#1187): the takes after the current
 // one are appended into the same element, so a track change is the playhead
 // crossing into the next take, with no ended, no pause and no new source.
-// A take is told apart by its PlaybackInfo object, never by its URL: the queue
-// hands over one object per place, so one take in two places is two takes.
+// A take the deck was handed is told apart by its PlaybackInfo object, never
+// by its URL: the queue hands over one object per place, so one take in two
+// places is two takes (see isTheSameTake).
 interface DeckSession {
 	deck: ContinuousDeck<PlaybackInfo>;
 	// The entry the playhead was last seen in; entering another is a track change.
@@ -394,23 +395,28 @@ class AudioPlayer {
 	}
 
 	// A load of the take already playing plays on where it is, unless it is
-	// asked to restart; any load leaves a queue stream.
+	// asked to restart; any load leaves a queue stream. On the deck the take
+	// playing stays the object the deck holds, so that its crossings and
+	// failures are still told apart by identity.
 	private continueCurrentTake(info: PlaybackInfo, url: string, opts: LoadOptions): boolean {
-		const sameTake =
-			!this.streamEngine.active &&
-			this.current?.generation.id === info.generation.id &&
-			this.currentUrl === url;
+		const sameTake = !this.streamEngine.active && this.isCurrentTake(info, url);
 
 		this.streamEngine.clear();
 		this.syncStreamBoundaries();
 		this.mode = 'classic';
 
 		if (!sameTake || !this.audio || this.status === 'error' || opts.restart) return false;
-		this.setCurrent(info);
+		if (!this.deckSession) this.setCurrent(info);
 		this.currentUrl = url;
 		this.failure = null;
 		if ((opts.autoplay ?? true) && (this.status !== 'playing' || this.clockStoodStill)) this.play();
 		return true;
+	}
+
+	private isCurrentTake(info: PlaybackInfo, url: string): boolean {
+		const { current, deckSession } = this;
+		if (current && deckSession) return isTheSameTake(deckSession, current, info);
+		return current?.generation.id === info.generation.id && this.currentUrl === url;
 	}
 
 	// A take that starts from nothing on the active element: whatever played or
@@ -492,7 +498,7 @@ class AudioPlayer {
 		this.currentTime = startAt;
 		this.lastObservedTime = startAt;
 		this.duration = takeDuration(entry);
-		this.setCurrent(info);
+		this.setCurrent(entry.take);
 		this.note('promote', 'deck_seek');
 		if (opts.autoplay ?? true) this.play();
 		else this.pause();
@@ -1577,8 +1583,22 @@ function continuableEntry(
 	const next =
 		handedLast?.take === session.tail && deck.manifest.at(-2) === playing ? handedLast : undefined;
 	return [playing, next].find(
-		(entry) => entry !== undefined && entry.take === take && deck.isPlayableFromStart(entry)
+		(entry) =>
+			entry !== undefined &&
+			isTheSameTake(session, entry.take, take) &&
+			deck.isPlayableFromStart(entry)
 	);
+}
+
+// A take built outside the queue (a song row, a queue rebuilt around the
+// playing take) names no place the deck was handed, so only its audio can
+// tell which take it means.
+function isTheSameTake(session: DeckSession, held: PlaybackInfo, take: PlaybackInfo): boolean {
+	return wasHandedTo(session, take) ? take === held : audioUrlOf(take) === audioUrlOf(held);
+}
+
+function wasHandedTo(session: DeckSession, take: PlaybackInfo): boolean {
+	return session.tail === take || session.deck.manifest.some((entry) => entry.take === take);
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {
