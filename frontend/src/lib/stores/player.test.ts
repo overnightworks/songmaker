@@ -2440,6 +2440,15 @@ describe('the queue names its next take', () => {
 			{
 				queue: 'playlist',
 				start: async () => playPlaylist(playlistOfTwo, 'top')
+			},
+			{
+				queue: 'library window',
+				start: async () => {
+					vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+						makePoolQueue({ takes: [poolTake(1), poolTake(2)], skipped_complete: false })
+					);
+					await playTake(albumSong(1).generations[0], albumSong(1));
+				}
 			}
 		];
 
