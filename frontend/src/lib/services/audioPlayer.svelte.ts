@@ -504,14 +504,24 @@ class AudioPlayer {
 		return entry ? takeDuration(entry) : null;
 	}
 
-	// The playhead ran out of audio with nothing more on its way: the queue has
-	// ended, and only an ended stream lets the element fire ended.
+	// The playhead ran out of audio in the queue's last take: the queue has
+	// ended, and only an ended stream lets the element fire ended. Running out
+	// while the queue names a next take is buffering, which recovery rides out
+	// until that take is appended.
 	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
-		if (session.deck.appending || bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS)
+		if (
+			session.deck.appending ||
+			this.queueNamesATakeAfter(session.playing) ||
+			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
+		)
 			return false;
 		this.note('media_event', 'deck_end');
 		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
 		return true;
+	}
+
+	private queueNamesATakeAfter(entry: Readonly<DeckEntry<PlaybackInfo>> | null): boolean {
+		return entry !== null && (this.callbacks.takeAfter?.(entry.take) ?? null) !== null;
 	}
 
 	// A dropped take the playhead has not reached only shortens the stream;

@@ -3000,6 +3000,30 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).toHaveBeenCalledOnce();
 	});
 
+	it.each([
+		{
+			name: 'does not end while the queue names a next take',
+			next: third,
+			after: { ended: false, transport: 'recovering' }
+		},
+		{
+			name: 'ends when the queue names none',
+			next: null,
+			after: { ended: true, transport: 'playing' }
+		}
+	])('at the end of what it holds, the deck $name', ({ next, after }) => {
+		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? next : null);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+		playFirstWithSecondAppended();
+		playTo(29.9);
+		fakeAudio.bufferedUntil = 30;
+
+		fakeAudio.fire('waiting');
+
+		expect({ ended: deck().ended, transport: audioPlayer.transport }).toEqual(after);
+		expect(onEnded).not.toHaveBeenCalled();
+	});
+
 	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {
 		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
 		const skipped: PlaybackInfo[] = [];
