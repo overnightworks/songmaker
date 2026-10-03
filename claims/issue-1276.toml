@@ -1,0 +1,8 @@
+claim_id = "1d19566c21ba4ccdbeb9aa27fbe9a77a"
+agent = "claude-head"
+role = "builder"
+base = "e58a55ef6199dc912cfd61559b70e55f003d5af4"
+branch = "claude-head/issue-1276-deck-continue-rule"
+scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
+opened_commit = "6bb0614d6754a77956458eb0d8e2a8b27a07a524"
+whole_reason = "the deck continues only into its tail after the playhead or within the playing take"
