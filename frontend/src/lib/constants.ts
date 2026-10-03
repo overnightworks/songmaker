@@ -377,7 +377,6 @@ export const VERSION_PICKED_LABEL = 'picked';
 export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
 export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
 export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
-export const VERSION_DELETE_PICK_WARNING = 'The album pick is one of them.';
 export const VERSION_DELETE_DRAFT_GOES = 'Your unsaved draft goes too.';
 export const VERSION_DELETE_EMPTIES_EDITOR = 'Its lyrics leave the editor, which will be empty.';
 export const VERSION_NO_LYRICS = 'No lyrics';
@@ -411,8 +410,20 @@ export function versionDeleteTitle(versionNumber: number, takeCount: number): st
 	return `Delete ${version} and its ${versionTakesLabel(takeCount)}?`;
 }
 
+export function versionDeletePickWarning(takeCount: number): string {
+	return takeCount === 1 ? 'It is the album pick.' : 'The album pick is one of them.';
+}
+
 export function versionDeleteReplacedBy(versionNumber: number): string {
-	return `Its lyrics leave the editor; ${versionLabel(versionNumber)} takes their place.`;
+	return `Its lyrics leave the editor; ${versionLabel(versionNumber)} replaces them.`;
+}
+
+export function versionDeleteLoadedDraftGoes(loadedFrom: number): string {
+	return `The draft loaded from ${versionLabel(loadedFrom)} goes too.`;
+}
+
+export function versionDeleteLoadedDraftReplacedBy(loadedFrom: number, replacedBy: number): string {
+	return `The draft loaded from ${versionLabel(loadedFrom)} leaves the editor; ${versionLabel(replacedBy)} replaces it.`;
 }
 
 export function versionLoadedFromLabel(versionNumber: number): string {
