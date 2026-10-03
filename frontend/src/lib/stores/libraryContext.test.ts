@@ -419,9 +419,8 @@ describe('applyLibraryHistory', () => {
 
 	// Issue #1006 H5: an apply belongs to the entry it landed on, so a Back that
 	// leaves that entry stops it even when nothing in the library heard the Back
-	// -- the second of two quick Backs from Settings -- and the library entry
-	// history landed on is applied instead.
-	it('follows history to the entry a Back nobody heard landed on', async () => {
+	// -- the second of two quick Backs from Settings.
+	it('applies nothing more once history has left the entry it landed on', async () => {
 		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
 		fetchAlbum.mockImplementationOnce(
 			() => new Promise<AlbumItem>((resolve) => (resolveAlbum = resolve))
@@ -441,8 +440,6 @@ describe('applyLibraryHistory', () => {
 
 		await expect(applying).resolves.toBe(false);
 		expect(get(albumList).some((item) => item.id === 'a1')).toBe(false);
-		expect(get(librarySurface)).toBe('browse');
-		expect(get(openCollection)).toBeNull();
 		// Back to the top entry: a later push must not cut an entry above it.
 		await pressForward();
 	});
