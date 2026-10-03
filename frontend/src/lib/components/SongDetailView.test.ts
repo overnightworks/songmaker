@@ -1822,6 +1822,26 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
+	it.runIf(!phone)(
+		'an untouched load says how it differs, not that it is unsaved; a typed edit says it is unsaved',
+		async () => {
+			const target = await renderView();
+			const statusLine = () => target.querySelector('.write-save-hint')?.textContent?.trim();
+			await tapVersion(target, 1);
+
+			expect(statusLine()).toBe('');
+			expect(writeSaveButton(target).disabled).toBe(false);
+			expect(target.querySelector('.draft-banner')?.textContent?.trim()).toMatch(
+				/^Draft — differs from v2\. Generate creates v\d+\.$/
+			);
+
+			setDraftLyrics('first draft, edited');
+			await tick();
+
+			expect(statusLine()).toBe('Unsaved changes');
+		}
+	);
+
 	it.each([
 		{ next: 2, lyrics: 'verse' },
 		{ next: 1, lyrics: 'first draft' }

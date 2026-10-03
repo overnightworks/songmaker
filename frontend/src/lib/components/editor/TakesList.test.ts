@@ -379,12 +379,18 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('shows the draft banner with the next version number only when dirty', async () => {
+	it('shows the draft banner, naming the version it differs from and the one Generate creates, only when dirty', async () => {
 		const { target: clean } = await render({ dirty: false });
 		expect(clean.querySelector('.draft-banner')).toBeNull();
 
-		const { target: dirty } = await render({ dirty: true, draftVersionNumber: 4 });
-		expect(dirty.querySelector('.draft-banner')?.textContent).toContain('v4');
+		const { target: dirty } = await render({
+			dirty: true,
+			latestVersionNumber: 3,
+			draftVersionNumber: 4
+		});
+		expect(dirty.querySelector('.draft-banner')?.textContent?.trim()).toBe(
+			'Draft — differs from v3. Generate creates v4.'
+		);
 	});
 
 	it.each([true, false])(

@@ -45,7 +45,8 @@ import {
 	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
-	versionsChipAccessibleLabel
+	versionsChipAccessibleLabel,
+	takesDraftBanner
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_IMPORTED_TAKE_HEADING,
@@ -402,6 +403,23 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
 		await expect(replaceDraftDialog(page)).toHaveCount(0);
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+	});
+
+	test('an untouched load says how it differs, not that it is unsaved; a typed edit says it is unsaved', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+
+		await expect(page.getByText(EDITOR_UNSAVED_TITLE, { exact: true })).toHaveCount(0);
+		await showTakes(page);
+		await expect(workspace(page).getByText(takesDraftBanner(2, 3), { exact: true })).toBeVisible();
+		if (shellOf(testInfo) === 'mobile') return;
+
+		await lyricsField(page).fill(`${FIRST_VERSION_LYRICS}\n${UNSAVED_LINE}`);
+		await expect(workspace(page).getByText(EDITOR_UNSAVED_TITLE, { exact: true })).toBeVisible();
 	});
 
 	test('leaving an untouched load asks nothing: Escape goes to the album without the unsaved-changes question', async ({

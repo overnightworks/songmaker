@@ -207,8 +207,9 @@ export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
 export const TAKES_RETRY_LABEL = 'Try again';
-// {version} is replaced with the version number Generate would create next.
-export const TAKES_DRAFT_BANNER_TEMPLATE = 'Draft — unsaved changes. Generate creates v{version}.';
+export function takesDraftBanner(latestVersionNumber: number, nextVersionNumber: number): string {
+	return `Draft — differs from v${latestVersionNumber}. Generate creates v${nextVersionNumber}.`;
+}
 export const EDITOR_QUEUED_LABEL = 'Queued';
 export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';
 // Named when an admin panel's first read fails while no offline strip says why.

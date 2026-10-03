@@ -14,14 +14,14 @@
 		TAKE_PICK_LABEL,
 		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL,
-		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
 		TAKES_ERROR,
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
 		TAKES_RETRY_LABEL,
 		TRANSPORT_PLAY_LABEL,
-		TRANSPORT_PAUSE_LABEL
+		TRANSPORT_PAUSE_LABEL,
+		takesDraftBanner
 	} from '$lib/constants';
 	import {
 		nowPlayingTakeLabel,
@@ -329,7 +329,7 @@
 
 		{#if dirty}
 			<div class="draft-banner">
-				{TAKES_DRAFT_BANNER_TEMPLATE.replace('{version}', String(draftVersionNumber))}
+				{takesDraftBanner(latestVersionNumber, draftVersionNumber)}
 			</div>
 		{/if}
 

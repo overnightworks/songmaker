@@ -713,7 +713,7 @@
 	{#snippet saveAction()}
 		<div class="write-save">
 			<p class="write-save-hint" role="status">
-				{#if dirty}{EDITOR_UNSAVED_TITLE}{/if}
+				{#if $draftHasUnversionedChanges}{EDITOR_UNSAVED_TITLE}{/if}
 			</p>
 			<button
 				type="button"
