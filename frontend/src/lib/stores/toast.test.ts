@@ -37,12 +37,15 @@ describe('toast store', () => {
 	it.each([
 		{ length: 'brief' as const, lastsMs: 5000 },
 		{ length: 'long' as const, lastsMs: 30000 }
-	])('a $length undo toast lasts $lastsMs ms', ({ length, lastsMs }) => {
-		addUndoToast('v1 loaded', { label: 'Undo', handler: () => {} }, length);
+	])('a $length undo toast lasts $lastsMs ms, then ends its offer', ({ length, lastsMs }) => {
+		const expire = vi.fn();
+		addUndoToast('v1 loaded', { label: 'Undo', handler: () => {}, expire }, length);
 		vi.advanceTimersByTime(lastsMs - 1);
 		expect(get(toasts)).toHaveLength(1);
+		expect(expire).not.toHaveBeenCalled();
 		vi.advanceTimersByTime(1);
 		expect(get(toasts)).toHaveLength(0);
+		expect(expire).toHaveBeenCalledOnce();
 	});
 
 	it('an undo toast closes as soon as its undo stops holding, so a shown Undo always restores', () => {

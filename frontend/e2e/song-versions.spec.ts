@@ -6,7 +6,11 @@
 // in Now Playing loads a version the same way, and imported takes say they
 // have no version (issue #1273, #1245 rules 7-8). A version is deleted from
 // its row in the sheet, behind a confirm that names its takes and the album
-// pick among them (issue #1284, #1245 rule 10).
+// pick among them (issue #1284, #1245 rule 10). A draft equal to a saved
+// version loads the next one without asking, tapping the version the draft
+// already holds changes nothing and keeps its Undo, the delete confirm says an
+// unsaved draft goes too, and the sheet stands over the whole page: the
+// phone's backdrop dims all of it (issue #1286).
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -25,6 +29,7 @@ import {
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_PICK_WARNING,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
@@ -65,6 +70,18 @@ interface SeededVersions {
 	albumId: string;
 }
 
+// Every song seeded here joins song-phone.spec.ts's dedicated album, whose
+// request budget grows with each sibling song left in it, so a test removes
+// the songs it seeded.
+const songsSeededByThisTest: string[] = [];
+
+async function deleteSeededSong(page: Page, songId: string): Promise<void> {
+	const deleted = await page.request.delete(`/api/songs/${songId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(deleted.ok(), `Deleting a seeded song failed: ${await deleted.text()}`).toBeTruthy();
+}
+
 /**
  * A song with two versions: v1 from the seed with its take, v2 saved over it
  * with other lyrics -- with a take of its own unless `secondVersionTaken` is
@@ -80,6 +97,7 @@ async function seedTwoVersions(
 	// shared album would leave two rows starting with it.
 	const title = `${SONG_TITLE} ${shellOf(testInfo)} ${runMarker()}`;
 	const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 1);
+	songsSeededByThisTest.push(songId);
 	const saved = await page.request.put(`/api/songs/${songId}`, {
 		headers: await csrfHeaders(page),
 		data: { lyrics: SECOND_VERSION_LYRICS }
@@ -94,6 +112,17 @@ async function seedTwoVersions(
 	});
 	await completeGenerationJobWithoutEvent(jobId);
 	return { songId, title, albumId: library.songPhoneAlbumId };
+}
+
+/** Saves the latest lyrics again as `count` more versions, so a song has more than the popover shows. */
+async function saveFurtherVersions(page: Page, songId: string, count: number): Promise<void> {
+	for (let saves = 0; saves < count; saves += 1) {
+		const saved = await page.request.put(`/api/songs/${songId}`, {
+			headers: await csrfHeaders(page),
+			data: { lyrics: SECOND_VERSION_LYRICS, new_version: true }
+		});
+		expect(saved.ok(), `Saving a further version failed: ${await saved.text()}`).toBeTruthy();
+	}
 }
 
 async function reportOneWorkerOnline(page: Page): Promise<void> {
@@ -195,6 +224,10 @@ async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 }
 
 test.describe('the versions of a song', () => {
+	test.afterEach(async ({ page }) => {
+		for (const songId of songsSeededByThisTest.splice(0)) await deleteSeededSong(page, songId);
+	});
+
 	for (const { secondVersionTaken, v2 } of [
 		{ secondVersionTaken: true, v2: 'v2 with a take' },
 		{ secondVersionTaken: false, v2: 'a take-less v2' }
@@ -308,6 +341,96 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 	});
 
+	test('tapping the version the draft already holds changes nothing: the sheet closes and the Undo still brings the typed edit back', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(editedLyrics);
+		await tapVersion(page, 1);
+		await replaceDraftDialog(page)
+			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+			.click();
+		await expect(loadedToast(page)).toBeVisible();
+
+		await tapVersion(page, 1);
+
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(replaceDraftDialog(page)).toHaveCount(0);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await expect(lyricsField(page)).toHaveValue(editedLyrics);
+	});
+
+	test('a draft equal to a saved version is clean: after an untouched v1, v2 loads without asking', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+
+		await tapVersion(page, 2);
+
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+		await expect(replaceDraftDialog(page)).toHaveCount(0);
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+	});
+
+	test('the sheet stands over the whole page: the phone dims all of it, the desktop popover sits under the chip and shows whole rows only', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		if (shellOf(testInfo) === 'desktop') await saveFurtherVersions(page, song.songId, 6);
+		await openSongEditor(page, song);
+		await versionChip(page).click();
+		await expect(versionsSheet(page)).toBeVisible();
+
+		if (shellOf(testInfo) === 'mobile') {
+			const topOfThePage = await page.evaluate(() => {
+				const hit = document.elementFromPoint(window.innerWidth / 2, 4);
+				return {
+					label: hit?.getAttribute('aria-label') ?? null,
+					background: hit ? getComputedStyle(hit).backgroundColor : null
+				};
+			});
+			expect(topOfThePage.label).toBe(VERSIONS_SHEET_CLOSE_LABEL);
+			expect(topOfThePage.background).not.toBe('rgba(0, 0, 0, 0)');
+			return;
+		}
+		const chip = await versionChip(page).boundingBox();
+		const popover = await versionsSheet(page).boundingBox();
+		if (!chip || !popover) throw new Error('Expected the chip and the popover on screen');
+		expect(popover.y).toBeGreaterThan(chip.y + chip.height);
+		expect(popover.y).toBeLessThan(chip.y + chip.height + 16);
+		expect(popover.y + popover.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+
+		const list = versionsSheet(page).getByRole('list');
+		const rowsInView = await list.evaluate((element) => {
+			const rowHeight = element.querySelector('li')?.getBoundingClientRect().height ?? 0;
+			return element.clientHeight / rowHeight;
+		});
+		expect(rowsInView).toBeGreaterThanOrEqual(2);
+		expect(Math.abs(rowsInView - Math.round(rowsInView))).toBeLessThan(0.02);
+		await list.evaluate((element) => {
+			const rowHeight = element.querySelector('li')?.getBoundingClientRect().height ?? 0;
+			element.scrollBy({ top: rowHeight * 1.4 });
+		});
+		await expect
+			.poll(() =>
+				list.evaluate((element) => {
+					const top = element.getBoundingClientRect().top;
+					const rowEdgeAtTop = Array.from(element.querySelectorAll('li')).some(
+						(row) => Math.abs(row.getBoundingClientRect().top - top) < 1
+					);
+					return element.scrollTop > 0 && rowEdgeAtTop;
+				})
+			)
+			.toBe(true);
+	});
+
 	test('Open v1 on its take group loads v1 as the draft on Edit', async ({ page }, testInfo) => {
 		const song = await seedTwoVersions(page, testInfo);
 		await openSongEditor(page, song);
@@ -371,6 +494,27 @@ test.describe('the versions of a song', () => {
 		await showTakes(page);
 		await expect(takeGroup(page, 2, 1)).toBeVisible();
 		await expect(takeGroup(page, 1, 1)).toHaveCount(0);
+	});
+
+	test('the delete confirm over an unsaved draft says the draft goes too, and Cancel keeps it', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(editedLyrics);
+
+		await versionChip(page).click();
+		await versionsSheet(page)
+			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
+			.click();
+		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
+		await expect(confirm).toContainText(VERSION_DELETE_DRAFT_GOES);
+		await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+
+		await expect(confirm).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(editedLyrics);
+		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 	});
 
 	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({

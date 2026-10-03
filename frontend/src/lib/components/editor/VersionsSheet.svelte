@@ -2,7 +2,9 @@
 	import { tick } from 'svelte';
 	import {
 		isDirty,
-		retireVersionLoadUndo,
+		retireSetAsideVersionLoadUndo,
+		setAsideVersionLoadUndo,
+		versionDeleteEditorLoss,
 		versionDeleteRequest,
 		versions
 	} from '$lib/stores/editor';
@@ -13,6 +15,7 @@
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import {
 		VERSION_CURRENT_TAG,
+		VERSION_NO_LYRICS,
 		VERSION_PICKED_LABEL,
 		VERSIONS_SHEET_CLOSE_LABEL,
 		VERSIONS_SHEET_LABEL,
@@ -81,16 +84,28 @@
 			version,
 			takes: takes[version.version_number] ?? NO_TAKES,
 			when: activityTimeLabel(version.created_at, now),
-			firstLine: version.lyrics.split('\n').find(isSungLine)?.trim() ?? ''
+			firstLine: version.lyrics.split('\n').find(isSungLine)?.trim() ?? VERSION_NO_LYRICS
 		}));
 	});
 
 	let wasOpen = false;
 	$effect(() => {
 		const isOpen = $open;
-		if (wasOpen && !isOpen) refocusIfDropped(chip);
+		if (wasOpen && !isOpen) {
+			retireSetAsideVersionLoadUndo();
+			refocusIfDropped(chip);
+		}
 		wasOpen = isOpen;
 	});
+
+	// The editor body is a size container, and so the containing block of
+	// every fixed box inside it: the backdrop would dim only the editor and the
+	// popover would scroll and clip with it. The layer stands in the document
+	// body instead. It must stay its block's only node, which Svelte removes.
+	function standInDocumentBody(layer: HTMLElement): () => void {
+		document.body.append(layer);
+		return () => layer.remove();
+	}
 
 	// The desktop popover stands in the viewport under the chip, so the editor
 	// column's own scroll box cannot clip it; the phone sheet ignores this.
@@ -103,7 +118,7 @@
 	}
 
 	async function openSheet(): Promise<void> {
-		retireVersionLoadUndo();
+		setAsideVersionLoadUndo();
 		placeUnderChip();
 		$open = true;
 		await tick();
@@ -119,7 +134,8 @@
 			songId: song.id,
 			version: row.version,
 			takeCount: row.takes.count,
-			holdsPick: row.takes.holdsPick
+			holdsPick: row.takes.holdsPick,
+			editorLoss: versionDeleteEditorLoss(row.version)
 		});
 	}
 
@@ -154,69 +170,70 @@
 			</span>
 		</button>
 		{#if $open}
-			<button
-				type="button"
-				class="versions-backdrop"
-				tabindex="-1"
-				aria-label={VERSIONS_SHEET_CLOSE_LABEL}
-				onclick={() => ($open = false)}
-			></button>
-			<div
-				bind:this={panel}
-				class="versions-panel"
-				role="dialog"
-				aria-modal="true"
-				aria-label={VERSIONS_SHEET_LABEL}
-				tabindex="-1"
-				style:--popover-top="{popoverTop}px"
-				style:--popover-left="{popoverLeft}px"
-				style:--popover-width="{POPOVER_WIDTH_PX}px"
-				onkeydown={onPanelKeydown}
-			>
-				<div class="versions-head">
-					<span class="versions-title">{VERSIONS_SHEET_LABEL}</span>
-					<button
-						type="button"
-						class="versions-close"
-						data-hitbox="frequent"
-						aria-label={VERSIONS_SHEET_CLOSE_LABEL}
-						onclick={() => ($open = false)}
-					>
-						<Icon name="x" size={18} />
-					</button>
+			<div class="versions-layer" {@attach standInDocumentBody}>
+				<button
+					type="button"
+					class="versions-backdrop"
+					tabindex="-1"
+					aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+					onclick={() => ($open = false)}
+				></button>
+				<div
+					bind:this={panel}
+					class="versions-panel"
+					role="dialog"
+					aria-modal="true"
+					aria-label={VERSIONS_SHEET_LABEL}
+					tabindex="-1"
+					style:--popover-top="{popoverTop}px"
+					style:--popover-left="{popoverLeft}px"
+					style:--popover-width="{POPOVER_WIDTH_PX}px"
+					onkeydown={onPanelKeydown}
+				>
+					<div class="versions-head">
+						<span class="versions-title">{VERSIONS_SHEET_LABEL}</span>
+						<button
+							type="button"
+							class="versions-close"
+							data-hitbox="frequent"
+							aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+							onclick={() => ($open = false)}
+						>
+							<Icon name="x" size={18} />
+						</button>
+					</div>
+					<ul class="versions-list">
+						{#each rows as row (row.version.id)}
+							{@const isCurrent = row.version.id === latest.id}
+							<li class="version-item" class:current={isCurrent}>
+								<button type="button" class="version-row" onclick={() => void choose(row.version)}>
+									<span class="version-number">{versionLabel(row.version.version_number)}</span>
+									<span class="version-lines">
+										<span class="version-takes">
+											{versionTakesLabel(row.takes.count)}
+											{#if row.takes.holdsPick}
+												· ★ {VERSION_PICKED_LABEL}
+											{/if}
+											{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
+										</span>
+										<span class="version-meta">
+											{row.when} · {row.firstLine}
+										</span>
+									</span>
+								</button>
+								<button
+									type="button"
+									class="version-delete"
+									data-hitbox="frequent"
+									aria-label={versionDeleteLabel(row.version.version_number)}
+									onclick={() => askToDelete(row)}
+								>
+									<Icon name="trash" size={16} />
+								</button>
+							</li>
+						{/each}
+					</ul>
 				</div>
-				<ul class="versions-list">
-					{#each rows as row (row.version.id)}
-						{@const isCurrent = row.version.id === latest.id}
-						<li class="version-item" class:current={isCurrent}>
-							<button type="button" class="version-row" onclick={() => void choose(row.version)}>
-								<span class="version-number">{versionLabel(row.version.version_number)}</span>
-								<span class="version-lines">
-									<span class="version-takes">
-										{versionTakesLabel(row.takes.count)}
-										{#if row.takes.holdsPick}
-											· ★ {VERSION_PICKED_LABEL}
-										{/if}
-										{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
-									</span>
-									<span class="version-meta">
-										{row.when}
-										{#if row.firstLine}· {row.firstLine}{/if}
-									</span>
-								</span>
-							</button>
-							<button
-								type="button"
-								class="version-delete"
-								data-hitbox="frequent"
-								aria-label={versionDeleteLabel(row.version.version_number)}
-								onclick={() => askToDelete(row)}
-							>
-								<Icon name="trash" size={16} />
-							</button>
-						</li>
-					{/each}
-				</ul>
 			</div>
 		{/if}
 	</span>
@@ -282,7 +299,8 @@
 		left: var(--popover-left);
 		z-index: 301;
 		width: var(--popover-width);
-		max-height: min(60vh, 28rem);
+		--version-row-height: calc(3.75rem + 1px);
+		--versions-room: min(60vh, 28rem);
 		display: flex;
 		flex-direction: column;
 		background: var(--surface);
@@ -317,19 +335,26 @@
 		color: var(--text-muted);
 	}
 
+	/* The list shows whole rows only and comes to rest on a row's top edge,
+	   so no row stands half hidden under the head with its glyphs cut. The
+	   first max-height is for a browser without round(). */
 	.versions-list {
 		margin: 0;
 		padding: 0;
 		list-style: none;
 		overflow-y: auto;
-		min-height: 0;
+		scroll-snap-type: y mandatory;
+		max-height: calc(var(--versions-room) - 3.5rem);
+		max-height: round(down, calc(var(--versions-room) - 3.5rem), var(--version-row-height));
 	}
 
 	.version-item {
 		display: flex;
 		align-items: center;
+		height: var(--version-row-height);
 		padding-right: 0.25rem;
 		border-top: 1px solid var(--border);
+		scroll-snap-align: start;
 	}
 
 	.version-item.current {
@@ -342,7 +367,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		min-height: 60px;
+		align-self: stretch;
 		padding: 0.35rem 0.25rem 0.35rem 1rem;
 		background: none;
 		border: none;
@@ -410,10 +435,12 @@
 	}
 
 	/* A phone opens the list as a sheet along the screen's bottom edge; a
-	   wider window keeps it as a popover under the chip. */
+	   wider window keeps it as a popover under the chip. The sheet dims the
+	   page as the phone's rail drawer does: the picture's light grey left the
+	   dark theme undimmed. */
 	@media (max-width: 768px) {
 		.versions-backdrop {
-			background: rgba(20, 16, 28, 0.22);
+			background: color-mix(in srgb, #000 42%, transparent);
 		}
 
 		.versions-panel {
@@ -422,7 +449,7 @@
 			right: 0;
 			bottom: 0;
 			width: auto;
-			max-height: 70vh;
+			--versions-room: 70vh;
 			padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
 			border-radius: 14px 14px 0 0;
 			box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.18);

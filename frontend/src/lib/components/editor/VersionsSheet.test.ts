@@ -90,12 +90,14 @@ function versionChip(target: HTMLElement): HTMLButtonElement {
 	return button;
 }
 
-function sheet(target: HTMLElement): HTMLElement | null {
-	return target.querySelector<HTMLElement>(`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`);
+function sheet(): HTMLElement | null {
+	return document.querySelector<HTMLElement>(
+		`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
+	);
 }
 
-function versionRowTexts(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.version-row')).map((row) =>
+function versionRowTexts(): string[] {
+	return Array.from(document.querySelectorAll('.version-row')).map((row) =>
 		(row.textContent ?? '').replace(/\s+/g, ' ').trim()
 	);
 }
@@ -104,13 +106,13 @@ async function openSheet(target: HTMLElement): Promise<HTMLElement> {
 	versionChip(target).click();
 	await tick();
 	await tick();
-	const open = sheet(target);
+	const open = sheet();
 	if (!open) throw new Error('Expected the versions sheet');
 	return open;
 }
 
-function clickRow(target: HTMLElement, versionNumber: number): void {
-	const row = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-row')).find((el) =>
+function clickRow(versionNumber: number): void {
+	const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find((el) =>
 		el.textContent?.trim().startsWith(`v${versionNumber}`)
 	);
 	if (!row) throw new Error(`Expected the v${versionNumber} row`);
@@ -143,14 +145,14 @@ describe('VersionsSheet', () => {
 		expect(versionChip(target).textContent?.trim()).toBe('v7 · draft');
 	});
 
-	it('lists every version newest first with its takes, the pick, its day and first sung line, if it has one', async () => {
+	it('lists every version newest first with its takes, the pick, its day and first sung line, or that it has no lyrics', async () => {
 		const target = await renderSheet(vi.fn());
 		await openSheet(target);
-		expect(versionRowTexts(target)).toEqual([
+		expect(versionRowTexts()).toEqual([
 			'v7 2 takes current today 14:02 · Headlights cut the rain in two',
 			'v6 1 take · ★ picked yesterday 09:30 · Headlights cut the rain in two',
 			'v4 no takes 20 Sep · Rain on the window, the city asleep',
-			'v3 no takes 18 Sep'
+			'v3 no takes 18 Sep · No lyrics'
 		]);
 	});
 
@@ -158,8 +160,8 @@ describe('VersionsSheet', () => {
 		const onload = vi.fn().mockResolvedValue(true);
 		const target = await renderSheet(onload);
 		await openSheet(target);
-		clickRow(target, 4);
-		await vi.waitFor(() => expect(sheet(target)).toBeNull());
+		clickRow(4);
+		await vi.waitFor(() => expect(sheet()).toBeNull());
 		expect(onload).toHaveBeenCalledWith('v4');
 	});
 
@@ -167,11 +169,18 @@ describe('VersionsSheet', () => {
 		const onload = vi.fn().mockResolvedValue(false);
 		const target = await renderSheet(onload);
 		await openSheet(target);
-		clickRow(target, 6);
+		clickRow(6);
 		await Promise.resolve();
 		await tick();
 		expect(onload).toHaveBeenCalledWith('v6');
-		expect(sheet(target)).not.toBeNull();
+		expect(sheet()).not.toBeNull();
+	});
+
+	it('stands outside the editor it opens from, so its backdrop can dim the whole page', async () => {
+		const target = await renderSheet(vi.fn());
+		const open = await openSheet(target);
+		expect(target.contains(open)).toBe(false);
+		expect(document.body.contains(open)).toBe(true);
 	});
 
 	it('is a layer Back closes', async () => {
@@ -179,7 +188,7 @@ describe('VersionsSheet', () => {
 		await openSheet(target);
 		expect(closeTopLayer()).toBe(true);
 		await tick();
-		expect(sheet(target)).toBeNull();
+		expect(sheet()).toBeNull();
 		expect(versionChip(target).getAttribute('aria-expanded')).toBe('false');
 	});
 
@@ -190,12 +199,24 @@ describe('VersionsSheet', () => {
 	});
 
 	it.each([
-		{ versionNumber: 6, takeCount: 1, holdsPick: true, takes: 'its one take with the album pick' },
-		{ versionNumber: 7, takeCount: 2, holdsPick: false, takes: 'its two takes' },
-		{ versionNumber: 4, takeCount: 0, holdsPick: false, takes: 'no takes' }
+		{
+			versionNumber: 6,
+			takeCount: 1,
+			holdsPick: true,
+			editorLoss: null,
+			takes: 'its one take with the album pick'
+		},
+		{
+			versionNumber: 7,
+			takeCount: 2,
+			holdsPick: false,
+			editorLoss: { kind: 'current-lyrics', replacedBy: 6 },
+			takes: 'its two takes and the lyrics in the editor'
+		},
+		{ versionNumber: 4, takeCount: 0, holdsPick: false, editorLoss: null, takes: 'no takes' }
 	])(
 		'the delete on v$versionNumber asks to delete it with $takes, loading nothing',
-		async ({ versionNumber, takeCount, holdsPick }) => {
+		async ({ versionNumber, takeCount, holdsPick, editorLoss }) => {
 			const onload = vi.fn();
 			const target = await renderSheet(onload);
 			const open = await openSheet(target);
@@ -205,10 +226,11 @@ describe('VersionsSheet', () => {
 				songId: SONG.id,
 				version: VERSION_ROWS.find((version) => version.version_number === versionNumber),
 				takeCount,
-				holdsPick
+				holdsPick,
+				editorLoss
 			});
 			expect(onload).not.toHaveBeenCalled();
-			expect(sheet(target)).not.toBeNull();
+			expect(sheet()).not.toBeNull();
 		}
 	);
 });
