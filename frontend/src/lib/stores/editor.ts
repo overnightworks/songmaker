@@ -75,20 +75,22 @@ function draftIsSaved(s: EditorState): boolean {
 	return songDataEqual(s.draft, s.saved);
 }
 
-export const isDirty = derived(editorState, (s) => !draftIsSaved(s));
+/**
+ * Whether the draft still awaits a save: it differs from the latest version,
+ * or it came from an older version, which a save or Generate makes the next
+ * version even when its text matches the latest (#1245 rules 3 and 6). The one
+ * rule for the `· draft` chip and the "Loaded from vN" hint together.
+ */
+function draftAwaitsSave(s: EditorState): boolean {
+	return s.loadedFrom !== null || !draftIsSaved(s);
+}
+
+export const isDirty = derived(editorState, draftAwaitsSave);
 
 export const savedSongData = derived(editorState, (s) => s.saved);
 
-/**
- * Which older version the unsaved draft came from; null once nothing of it is
- * left to save. The one rule for the "Loaded from vN" hint, so a load shows it
- * exactly when the chip reads `· draft`.
- */
-function shownLoadedFrom(s: EditorState): number | null {
-	return draftIsSaved(s) ? null : s.loadedFrom;
-}
-
-export const draftLoadedFrom = derived(editorState, shownLoadedFrom);
+/** Which older version the draft came from, until it is saved; see {@link draftAwaitsSave}. */
+export const draftLoadedFrom = derived(editorState, (s) => s.loadedFrom);
 
 /** A draft loaded from an older version is saved as the next version, never over the latest. */
 export const draftSavesAsNewVersion = derived(draftLoadedFrom, (from) => from !== null);
@@ -237,15 +239,11 @@ const offeredVersionLoad = writable<symbol | null>(null);
  */
 export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null {
 	const songId = get(selectedSongId);
-	const replacedState = get(editorState);
-	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = replacedState;
+	const { saved, draft: replaced, loadedFrom: replacedLoadedFrom } = get(editorState);
 	const isLatest = version.id === get(versions)[0]?.id;
 	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
 	const loadedFrom = isLatest ? null : version.version_number;
-	const changesNothingShown =
-		songDataEqual(draft, replaced) &&
-		shownLoadedFrom({ saved, draft, loadedFrom }) === shownLoadedFrom(replacedState);
-	if (changesNothingShown) return null;
+	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) return null;
 	const thisLoad = Symbol('version load');
 	editorState.update((s) => ({ ...s, draft, loadedFrom }));
 	offeredVersionLoad.set(thisLoad);

@@ -200,20 +200,40 @@ describe('loadVersionAsDraft', () => {
 		prompt: 'rock'
 	});
 
+	const allShown = { toast: true, hint: true, draftChip: true };
+
 	it.each([
-		{ load: 'an older version', version: older, shown: true },
-		{ load: 'an older version with the text the draft holds', version: twinOfLatest, shown: false }
+		{ load: 'an older version', version: older, typed: false, shown: allShown },
+		{
+			load: 'an older version with the text of the current one',
+			version: twinOfLatest,
+			typed: false,
+			shown: allShown
+		},
+		{
+			load: 'an older version with the text of the current one over a typed draft',
+			version: twinOfLatest,
+			typed: true,
+			shown: allShown
+		},
+		{
+			load: 'the current version over a typed draft, back to saved',
+			version: latest,
+			typed: true,
+			shown: { toast: true, hint: false, draftChip: false }
+		}
 	])(
-		'a load of $load shows the toast, the hint and the draft chip together, or none of them',
-		({ version, shown }) => {
+		'a load of $load shows the toast, the hint and the draft chip together, or only the toast',
+		({ version, typed, shown }) => {
 			openSongWithTwoVersions();
-			versions.set([latest, version]);
+			versions.set(version === latest ? [latest, older] : [latest, version]);
+			if (typed) setDraftLyrics('an unsaved line');
 			const load = loadVersionAsDraft(version);
 			expect({
 				toast: load !== null,
 				hint: get(draftLoadedFrom) !== null,
 				draftChip: get(isDirty)
-			}).toEqual({ toast: shown, hint: shown, draftChip: shown });
+			}).toEqual(shown);
 		}
 	);
 
