@@ -27,7 +27,7 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
-import { mountRouteOfLandedAddress } from '$lib/history/historyController';
+import { mountRouteOfLandedAddress, stampNavigatedEntry } from '$lib/history/historyController';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
@@ -839,6 +839,25 @@ describe('Back and Forward across an app page', () => {
 			expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p1' });
 		}
 	);
+
+	// Issue #1006 H5: the library listens on its page only once that page has
+	// loaded, so a second Back pressed meanwhile lands unheard on the wall.
+	it('shows the wall two quick Backs from Settings reached once the library listens', async () => {
+		let stopNavigation = initNavigation();
+		await openAlbum('a1');
+		await goto(resolve(SETTINGS));
+		stampNavigatedEntry('link');
+		stopNavigation();
+
+		await pressBack();
+		await pressBack();
+		stopNavigation = initNavigation();
+
+		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
+		expect(get(openCollection)).toBeNull();
+		expect(location.pathname).toBe('/');
+		stopNavigation();
+	});
 
 	it('Back from Settings after a reload returns to the playlist with what it showed', async () => {
 		await openPlaylist('p1');

@@ -606,13 +606,30 @@ export function forgetLayerEntries(): void {
 	settleStillness();
 }
 
+type LandingHandler = (landing: Landing, landedState: unknown) => void;
+
+// Nobody listens between two pages of the library history -- back from
+// Settings, the library listens only once its page has loaded -- so a Back
+// pressed meanwhile lands unheard: the second of two quick Backs from
+// Settings stands on the wall while the screen still shows the album the
+// first one reached (issue #1006, H5). A page entry history stands on that is
+// not the page the screen shows is heard as the landing it was once the
+// handler listens. Before the controller has seen any page there is nothing
+// to tell it from.
+function hearLandingMissedWhileNotListening(onLanding: LandingHandler): void {
+	const standing = standingEntry();
+	if (standing === null || standing.layer !== undefined || ledger.current === null) return;
+	if (isSameEntry(standing, ledger.current)) return;
+	const landing = land(ledger, standing);
+	ledger = landing.ledger;
+	onLanding(landing, history.state);
+}
+
 // The landing handler hears each landing once the controller has closed the
 // layers it left, settled its step-backs and, on a layer entry no open layer
 // owns, started stepping off it. While it listens, every layer opened owns an
 // entry.
-export function listenForLandings(
-	onLanding: (landing: Landing, event: PopStateEvent) => void
-): () => void {
+export function listenForLandings(onLanding: LandingHandler): () => void {
 	function onPopstate(event: PopStateEvent): void {
 		const landed = landedEntry(event);
 		countEntryMet(historyStorage, landed);
@@ -624,11 +641,12 @@ export function listenForLandings(
 		for (const target of landing.settled) settleStepBack(target);
 		if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
 		settleStillness();
-		onLanding(landing, event);
+		onLanding(landing, event.state);
 	}
 	window.addEventListener('popstate', onPopstate);
 	keepLayerHistory(layerEntries);
 	stepOffUnownedLayerEntry();
+	hearLandingMissedWhileNotListening(onLanding);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		forgetLayerEntries();

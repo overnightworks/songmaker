@@ -402,6 +402,25 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual({ id: expect.any(Number) });
 	});
 
+	it('a Back while nobody listened is heard once the handler listens again, and only once', async () => {
+		const album = pushEntry('/album/a', {});
+		pushEntry('/album/b', {});
+		stopListening();
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+
+		const heard: Landing[] = [];
+		stopListening = listenForLandings((landing) => heard.push(landing));
+		stopListening();
+		stopListening = listenForLandings((landing) => heard.push(landing));
+
+		expect(heard).toHaveLength(1);
+		expect(heard[0]).toMatchObject({ apply: true, ledger: { current: album } });
+	});
+
 	it('the page entry under an open layer is the page the layer covers', () => {
 		const page = pushEntry('/album/a', {});
 
