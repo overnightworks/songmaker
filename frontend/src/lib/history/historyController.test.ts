@@ -11,6 +11,7 @@ import {
 	navigateTo,
 	pageStateOfHistoryState,
 	pushEntry,
+	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
@@ -21,6 +22,7 @@ import { holdLayer, resetLayersForTests, stackedLayers } from '$lib/stores/layer
 import {
 	fakePage,
 	followBeforeNavigate,
+	holdRouteLoads,
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
@@ -516,6 +518,29 @@ describe('route convergence after a landing', () => {
 		expect(fakePage.url.pathname).toBe('/album/a');
 		expect(standingEntry()).toEqual(albumA);
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'popstate', pathname: '/album/a' });
+	});
+
+	// Issue #1263: a page pushed while the router still loads the route of the
+	// entry below stands at once; the mount issued again over it lands on it,
+	// and the older one, superseded, writes nothing.
+	it('a page pushed while a route mounts stands at once, and the mount issued over it lands on it', async () => {
+		const routesLoaded = holdRouteLoads();
+		const albumMounted = navigateTo(location.href, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
+
+		const albumB = pushEntry('/album/b', {});
+		const albumBMounted = remountOverStandingEntry('/album/b', {});
+
+		expect(location.pathname).toBe('/album/b');
+		expect(standingEntry()).toEqual(albumB);
+		routesLoaded();
+		await Promise.all([albumMounted, albumBMounted]);
+		expect(fakePage.url.pathname).toBe('/album/b');
+		expect(standingEntry()).toEqual(albumB);
 	});
 
 	it.each(['link', 'goto'] as const)(
