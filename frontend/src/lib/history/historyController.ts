@@ -230,7 +230,6 @@ let standsOnTop = standsOnTopOnLoad();
 // looked, which tells a router push from a router replace.
 let lastRouterIndex = routerIndexOf(history.state);
 const stepBackWaiters = new Map<number, (() => void)[]>();
-let stepBacksLandedWaiters: (() => void)[] = [];
 let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
 let loadingMount: NavigateOptions | null = null;
@@ -475,13 +474,6 @@ export function ownStepBacksUnderway(): boolean {
 	return ledger.stepBacks.length > 0;
 }
 
-// Resolves once none of the controller's own step-backs is still underway: a
-// write issued after one lands on the entry it steps back to.
-export function ownStepBacksLanded(): Promise<void> {
-	if (!ownStepBacksUnderway()) return Promise.resolve();
-	return new Promise((resolve) => stepBacksLandedWaiters.push(resolve));
-}
-
 // History moves while one of the controller's own step-backs is underway or a
 // navigation is loading the route it writes its entry for: an entry written
 // meanwhile would land under the step's landing, or be superseded along with
@@ -501,11 +493,7 @@ export function historyStandsStill(): Promise<void> {
 // their entries, in the order they were held, on top of the entry that then
 // stands.
 function settleStillness(): void {
-	if (ownStepBacksUnderway()) return;
-	const waiting = stepBacksLandedWaiters;
-	stepBacksLandedWaiters = [];
-	for (const resolve of waiting) resolve();
-	if (navigationsUnderway > 0) return;
+	if (historyMoves()) return;
 	const still = stillnessWaiters;
 	stillnessWaiters = [];
 	for (const resolve of still) resolve();
@@ -628,7 +616,6 @@ export function resetHistoryControllerForTests(): void {
 	standsOnTop = true;
 	lastRouterIndex = routerIndexOf(history.state);
 	stepBackWaiters.clear();
-	stepBacksLandedWaiters = [];
 	stillnessWaiters = [];
 	navigationsUnderway = 0;
 	loadingMount = null;

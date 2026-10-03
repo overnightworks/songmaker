@@ -9,7 +9,6 @@ import {
 	loadHistoryPageForTests,
 	mountAddressOver,
 	navigateTo,
-	ownStepBacksLanded,
 	pageStateOfHistoryState,
 	pushEntry,
 	remountOverStandingEntry,
@@ -316,13 +315,15 @@ function navigateLibraryRoute(
 	});
 }
 
-// Resolves once every step back the history controller has underway has
-// landed. A navigation that leaves the library (an app page) writes no
-// LibraryHistoryState, so it waits here, or a step back still in flight (the
-// unsaved-changes dialog leaving its own entry) lands after its push and takes
-// the address back to the song (issue #1143).
-export function libraryHistoryStepsLanded(): Promise<void> {
-	return ownStepBacksLanded();
+// Resolves once history stands still and every library write held while it
+// moved has been written. A navigation that leaves the library (an app page)
+// writes no LibraryHistoryState, so it waits here: a step back still in flight
+// (the unsaved-changes dialog leaving its own entry) would land after its push
+// and take the address back to the song (issue #1143), and a held write would
+// navigate over the page the user went to last. A held write that navigates
+// moves history again, so the wait starts over until nothing is left to land.
+export async function libraryHistoryStepsLanded(): Promise<void> {
+	while (historyMoves()) await historyStandsStill();
 }
 
 function pathnameOf(url: string): string {

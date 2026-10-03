@@ -149,6 +149,7 @@ import {
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
+	openAppPage,
 	openCollectionEntry,
 	openLibraryWall,
 	openPlaylist,
@@ -722,6 +723,26 @@ describe('opening a collection from off the library route', () => {
 			expect(window.location.pathname).toBe(backLandsOn);
 		}
 	);
+
+	// An app page opened while a library write still waits for its entry
+	// waits for that write too, so the page lands last and the album and its
+	// song stand under it.
+	it('lands on an app page opened while a song of the album waits for the album route', async () => {
+		replaceHistoryEntry('/settings');
+		const routesLoaded = holdRouteLoads();
+
+		const albumWritten = openAlbum('a1');
+		const songWritten = selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+		const pageOpened = openAppPage('/settings/voices');
+		routesLoaded();
+		await Promise.all([albumWritten, songWritten, pageOpened]);
+
+		expect(window.location.pathname).toBe('/settings/voices');
+		await pressBack();
+		expect(window.location.pathname).toBe('/album/a1/s1');
+		await pressBack();
+		expect(window.location.pathname).toBe('/album/a1');
+	});
 
 	// The one pairing removing the guard put at risk: openLibraryWall's own
 	// write always targets '/', and before libraryRouteShape gained its
