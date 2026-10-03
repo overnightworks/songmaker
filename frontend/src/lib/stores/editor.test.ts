@@ -202,6 +202,18 @@ describe('loadVersionAsDraft', () => {
 		expect(get(isDirty)).toBe(false);
 	});
 
+	it('undo ends once the loaded draft is saved, keeping what was typed after the load', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		openSongWithTwoVersions();
+		const undo = loadVersionAsDraft(older);
+		setDraftLyrics('v1 lyrics\nidea typed after load');
+		await handleSave('s1');
+		undo?.();
+		expect(get(editLyrics)).toBe('v1 lyrics\nidea typed after load');
+		expect(get(isDirty)).toBe(false);
+	});
+
 	it.each([
 		{ draft: 'a loaded older version', load: true, newVersion: true },
 		{ draft: 'an edit of the latest version', load: false, newVersion: false }

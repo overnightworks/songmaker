@@ -169,7 +169,9 @@ function resetToVersion(v: VersionItem): void {
  * save or Generate makes the next version and the loaded one is never
  * touched. Loading the latest version itself is the way back to the saved
  * state. Nothing reaches the server. Answers the undo, which puts back the
- * draft this load replaced -- unless the editor has moved to another song --
+ * draft this load replaced -- unless the editor has moved to another song or
+ * the draft has been saved since, because a save or Generate made the load
+ * the new saved version and putting back the older draft would overwrite it --
  * or null when the draft already held that version and nothing changed.
  */
 export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
@@ -181,7 +183,7 @@ export function loadVersionAsDraft(version: VersionItem): (() => void) | null {
 	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) return null;
 	editorState.update((s) => ({ ...s, draft, loadedFrom }));
 	return () => {
-		if (get(selectedSongId) !== songId) return;
+		if (get(selectedSongId) !== songId || get(editorState).saved !== saved) return;
 		editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
 	};
 }
