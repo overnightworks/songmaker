@@ -34,7 +34,7 @@ import {
 	draftHasUnversionedChanges,
 	loadSongData,
 	loadVersionAsDraft,
-	retireSetAsideVersionLoadUndo,
+	offerSetAsideVersionLoadUndoAgain,
 	retireVersionLoadUndo,
 	setAsideVersionLoadUndo,
 	savedSongData,
@@ -42,7 +42,8 @@ import {
 	handleDeleteVersion,
 	discardDraft,
 	computeDraftVersionNumber,
-	versionDeleteEditorLoss
+	versionDeleteEditorLoss,
+	type VersionLoadUndo
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -303,50 +304,53 @@ describe('loadVersionAsDraft', () => {
 		expect(get(editLyrics)).toBe(lyrics);
 	});
 
-	it.each([
-		{ after: 'the opened Versions list', end: () => {}, undone: 'an unsaved line' },
-		{
-			after: 'the opened Versions list, then a retire',
-			end: retireVersionLoadUndo,
-			undone: 'v1 lyrics'
-		},
-		{
-			after: 'the opened Versions list, then its close',
-			end: retireSetAsideVersionLoadUndo,
-			undone: 'v1 lyrics'
-		},
-		{
-			after: 'the opened Versions list, then its toast timing out',
-			end: (load: { expire: () => void } | null) => load?.expire(),
-			undone: 'v1 lyrics'
-		}
-	])(
-		'a load that changes nothing offers the set-aside undo again, after $after',
-		({ end, undone }) => {
-			openSongWithTwoVersions();
-			setDraftLyrics('an unsaved line');
-			const load = loadVersionAsDraft(older);
-			setAsideVersionLoadUndo();
-			expect(load && get(load.holds)).toBe(false);
-			end(load);
+	function offered(load: VersionLoadUndo | null): boolean {
+		return load !== null && get(load.holds) && !get(load.setAside);
+	}
 
-			loadVersionAsDraft(older)?.undo();
-
-			expect(get(editLyrics)).toBe(undone);
-		}
-	);
-
-	it('the Versions list closing keeps an undo a load from it offered again', () => {
+	it('the opened Versions list sets the undo aside: it is not offered, and Undo restores nothing', () => {
 		openSongWithTwoVersions();
 		setDraftLyrics('an unsaved line');
-		loadVersionAsDraft(older);
+		const load = loadVersionAsDraft(older);
 		setAsideVersionLoadUndo();
-		const offeredAgain = loadVersionAsDraft(older);
-		retireSetAsideVersionLoadUndo();
 
-		offeredAgain?.undo();
+		expect(offered(load)).toBe(false);
+		load?.undo();
+		expect(get(editLyrics)).toBe('v1 lyrics');
+	});
 
+	it.each([
+		{ end: 'a load that changes nothing', act: () => loadVersionAsDraft(older) },
+		{ end: 'the list closing without a load', act: offerSetAsideVersionLoadUndoAgain }
+	])('$end offers the set-aside undo again', ({ act }) => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+		setAsideVersionLoadUndo();
+
+		act();
+
+		expect(offered(load)).toBe(true);
+		load?.undo();
 		expect(get(editLyrics)).toBe('an unsaved line');
+	});
+
+	it.each([
+		{ end: 'loading another version from it', act: () => loadVersionAsDraft(latest) },
+		{ end: 'a retire', act: retireVersionLoadUndo },
+		{ end: 'its toast timing out', act: (load: VersionLoadUndo | null) => load?.expire() }
+	])('the set-aside undo is not offered again after $end', ({ act }) => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+		setAsideVersionLoadUndo();
+		act(load);
+
+		offerSetAsideVersionLoadUndoAgain();
+
+		expect(offered(load)).toBe(false);
+		load?.undo();
+		expect(get(editLyrics)).not.toBe('an unsaved line');
 	});
 
 	it('an earlier load timing out leaves the newer load its undo', () => {

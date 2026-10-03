@@ -1975,43 +1975,84 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
-	it.each([
-		{
-			ended: 'its toast timed out',
-			end: () => vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS),
-			reload: (target: HTMLElement) => tapVersion(target, 1)
-		},
-		{
-			ended: 'the chip closed without a load',
-			end: async (target: HTMLElement) => {
-				versionChip(target).click();
-				await tick();
-				versionChip(target).click();
-				await tick();
-			},
-			reload: async (target: HTMLElement) => {
-				navigateToSongTab('takes');
-				await tick();
-				takeGroupOpenLink(target, 1).click();
-				await tick();
-			}
-		}
-	])(
-		'loading the version the draft already holds raises no toast once its Undo ended: $ended',
-		async ({ end, reload }) => {
-			const target = await renderView();
-			vi.useFakeTimers();
-			await replaceTypedDraftWith(target, 1);
+	it('loading the version the draft already holds raises no toast once its Undo timed out', async () => {
+		const target = await renderView();
+		vi.useFakeTimers();
+		await replaceTypedDraftWith(target, 1);
 
-			await end(target);
-			const { toasts } = await shownToasts();
-			expect(get(toasts)).toEqual([]);
-			await reload(target);
+		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS);
+		const { toasts } = await shownToasts();
+		expect(get(toasts)).toEqual([]);
+		await tapVersion(target, 1);
 
-			expect(get(editLyrics)).toBe('first draft');
-			expect(get(toasts)).toEqual([]);
-		}
-	);
+		expect(get(editLyrics)).toBe('first draft');
+		expect(get(toasts)).toEqual([]);
+	});
+
+	async function toggleVersionsChip(target: HTMLElement): Promise<void> {
+		versionChip(target).click();
+		await tick();
+	}
+
+	function versionRowButton(versionNumber: number): HTMLButtonElement {
+		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
+			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
+		);
+		if (!row) throw new Error(`Expected the v${versionNumber} row`);
+		return row;
+	}
+
+	it('a peek at the Versions list keeps the Undo: its toast leaves while the list is open and comes back once it closes', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
+		const { toasts } = await shownToasts();
+
+		await toggleVersionsChip(target);
+		expect(get(toasts)).toEqual([]);
+		await toggleVersionsChip(target);
+
+		expect(versionsSheet()).toBeNull();
+		const [loaded, ...others] = get(toasts);
+		expect(others).toEqual([]);
+		expect(loaded?.message).toBe(versionLoadedToastLabel(1));
+		await loaded?.action?.handler();
+		await tick();
+		expect(get(editLyrics)).toBe('unsaved edit');
+	});
+
+	it('the Undo toast keeps its time while the list is open: a tap on the loaded version brings it back with the time it had left', async () => {
+		const target = await renderView();
+		vi.useFakeTimers();
+		await replaceTypedDraftWith(target, 1);
+		vi.advanceTimersByTime(1000);
+		await toggleVersionsChip(target);
+		vi.advanceTimersByTime(4 * BRIEF_UNDO_TOAST_MS);
+
+		versionRowButton(1).click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(1)]);
+		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS - 1001);
+		expect(get(toasts)).toHaveLength(1);
+		vi.advanceTimersByTime(1);
+		expect(get(toasts)).toEqual([]);
+	});
+
+	it('loading another version from the opened list retires the Undo of the last load', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
+
+		await tapVersion(target, 2);
+
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(2)]);
+		const [, firstLoadUndo] = vi.mocked(addUndoToast).mock.calls[0] ?? [];
+		await firstLoadUndo?.handler();
+		expect(get(editLyrics)).toBe('verse');
+	});
 
 	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
 		const target = await renderView();
@@ -2186,10 +2227,6 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 	it.each([
 		{ action: 'typing in the draft', act: typeInLyrics },
-		{
-			action: 'opening the version chip',
-			act: (target: HTMLElement) => versionChip(target).click()
-		},
 		{
 			action: 'Generate',
 			act: (target: HTMLElement) =>

@@ -532,7 +532,13 @@
 		if (!load) return;
 		addUndoToast(
 			versionLoadedToastLabel(version.version_number),
-			{ label: TOAST_UNDO_LABEL, handler: load.undo, holds: load.holds, expire: load.expire },
+			{
+				label: TOAST_UNDO_LABEL,
+				handler: load.undo,
+				holds: load.holds,
+				setAside: load.setAside,
+				expire: load.expire
+			},
 			'brief'
 		);
 	}

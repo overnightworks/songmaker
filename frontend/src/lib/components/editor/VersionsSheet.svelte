@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import {
 		isDirty,
-		retireSetAsideVersionLoadUndo,
+		offerSetAsideVersionLoadUndoAgain,
 		setAsideVersionLoadUndo,
 		versionDeleteEditorLoss,
 		versionDeleteRequest,
@@ -92,7 +92,7 @@
 	$effect(() => {
 		const isOpen = $open;
 		if (wasOpen && !isOpen) {
-			retireSetAsideVersionLoadUndo();
+			offerSetAsideVersionLoadUndoAgain();
 			refocusIfDropped(chip);
 		}
 		wasOpen = isOpen;
