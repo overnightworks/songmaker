@@ -1,21 +1,34 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { isDirty, retireVersionLoadUndo, versions } from '$lib/stores/editor';
+	import {
+		handleDeleteVersion,
+		isDirty,
+		retireVersionLoadUndo,
+		versions
+	} from '$lib/stores/editor';
 	import { historyLayerState } from '$lib/stores/layers';
+	import { addToast } from '$lib/stores/toast';
+	import { describeFailure } from '$lib/api/fetch';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import { activityTimeLabel } from '$lib/utils/format';
 	import { isSungLine } from '$lib/utils/lyrics-align';
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import {
 		VERSION_CURRENT_TAG,
+		VERSION_DELETE_CONFIRM_LABEL,
+		VERSION_DELETE_PICK_WARNING,
 		VERSION_PICKED_LABEL,
 		VERSIONS_SHEET_CLOSE_LABEL,
 		VERSIONS_SHEET_LABEL,
 		versionChipLabel,
+		versionDeleteLabel,
+		versionDeleteTitle,
 		versionLabel,
 		versionTakesLabel,
 		versionsChipAccessibleLabel
 	} from '$lib/constants';
+	import { takeVersion } from '$lib/constants/now-playing';
+	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -47,6 +60,7 @@
 	let panel: HTMLDivElement | undefined = $state();
 	let popoverTop = $state(0);
 	let popoverLeft = $state(0);
+	let deleteFor = $state<VersionRow | null>(null);
 
 	const latest = $derived<VersionItem | null>($versions[0] ?? null);
 	const chipLabel = $derived(latest ? versionChipLabel(latest.version_number, $isDirty) : '');
@@ -56,9 +70,10 @@
 	function takesByVersion(): Record<number, VersionTakes> {
 		const byVersion: Record<number, VersionTakes> = {};
 		for (const take of song.generations) {
-			if (take.version_number === null) continue;
-			const takes = byVersion[take.version_number] ?? NO_TAKES;
-			byVersion[take.version_number] = {
+			const origin = takeVersion(take.version_id, take.version_number);
+			if (!origin) continue;
+			const takes = byVersion[origin.versionNumber] ?? NO_TAKES;
+			byVersion[origin.versionNumber] = {
 				count: takes.count + 1,
 				holdsPick: takes.holdsPick || take.is_picked
 			};
@@ -104,6 +119,21 @@
 
 	async function choose(version: VersionItem): Promise<void> {
 		if (await onload(version.id)) $open = false;
+	}
+
+	// The sheet stays open, so the list shows what is left once the row goes.
+	async function confirmDelete(): Promise<void> {
+		const row = deleteFor;
+		deleteFor = null;
+		if (!row) return;
+		try {
+			await handleDeleteVersion(song.id, row.version.id, true);
+			addToast(`Deleted ${versionLabel(row.version.version_number)}`, 'success');
+		} catch (e) {
+			addToast(describeFailure(e, 'Delete failed'), 'error');
+		}
+		await tick();
+		if (panel) refocusIfDropped(panel);
 	}
 
 	function onPanelKeydown(event: KeyboardEvent): void {
@@ -166,13 +196,8 @@
 				<ul class="versions-list">
 					{#each rows as row (row.version.id)}
 						{@const isCurrent = row.version.id === latest.id}
-						<li>
-							<button
-								type="button"
-								class="version-row"
-								class:current={isCurrent}
-								onclick={() => void choose(row.version)}
-							>
+						<li class="version-item" class:current={isCurrent}>
+							<button type="button" class="version-row" onclick={() => void choose(row.version)}>
 								<span class="version-number">{versionLabel(row.version.version_number)}</span>
 								<span class="version-lines">
 									<span class="version-takes">
@@ -188,12 +213,31 @@
 									</span>
 								</span>
 							</button>
+							<button
+								type="button"
+								class="version-delete"
+								data-hitbox="frequent"
+								aria-label={versionDeleteLabel(row.version.version_number)}
+								onclick={() => (deleteFor = row)}
+							>
+								<Icon name="trash" size={16} />
+							</button>
 						</li>
 					{/each}
 				</ul>
 			</div>
 		{/if}
 	</span>
+{/if}
+
+{#if deleteFor}
+	<ConfirmDeleteDialog
+		title={versionDeleteTitle(deleteFor.version.version_number, deleteFor.takes.count)}
+		items={deleteFor.takes.holdsPick ? [VERSION_DELETE_PICK_WARNING] : []}
+		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
+		onconfirm={() => void confirmDelete()}
+		oncancel={() => (deleteFor = null)}
+	/>
 {/if}
 
 <style>
@@ -299,16 +343,27 @@
 		min-height: 0;
 	}
 
+	.version-item {
+		display: flex;
+		align-items: center;
+		padding-right: 0.25rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.version-item.current {
+		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+	}
+
 	.version-row {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		width: 100%;
 		min-height: 60px;
-		padding: 0.35rem 1rem;
+		padding: 0.35rem 0.25rem 0.35rem 1rem;
 		background: none;
 		border: none;
-		border-top: 1px solid var(--border);
 		color: var(--text);
 		text-align: left;
 		cursor: pointer;
@@ -318,8 +373,14 @@
 		background: var(--surface-hover);
 	}
 
-	.version-row.current {
-		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+	.version-delete {
+		background: none;
+		border: none;
+		color: var(--text-subtle);
+	}
+
+	.version-delete:hover {
+		color: var(--score-bad);
 	}
 
 	.version-number {
@@ -329,7 +390,7 @@
 		font-size: 1.05rem;
 	}
 
-	.version-row.current .version-number {
+	.version-item.current .version-number {
 		color: var(--accent);
 	}
 
