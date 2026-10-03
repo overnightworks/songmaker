@@ -1,0 +1,8 @@
+claim_id = "501ebc2764e94182ba387d20f82e187c"
+agent = "claude-head"
+role = "builder"
+base = "3ddf76fc1212ad421da3188599ce247402b386bb"
+branch = "claude-head/issue-1299-deck-trim-ahead"
+scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
+opened_commit = "1f1d1e9fdf1fe27a0da0114ef2ac2abe5768043d"
+whole_reason = "trim ahead, exact shuffle position, identity continuation"
