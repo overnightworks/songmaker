@@ -1226,39 +1226,50 @@ describe('SongDetailView unsaved-draft guard', () => {
 		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
 	});
 
-	it('cross-song Repaint/Cover or Open vN: Cancel leaves it unapplied and drops what was pending', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+	it.each([
+		{ choice: 'Cancel', button: 'Cancel', saveFails: false },
+		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true }
+	])(
+		'cross-song Repaint/Cover or Open vN: $choice leaves it unapplied and drops what was pending',
+		async ({ button, saveFails }) => {
+			if (saveFails) {
+				const { updateSong } = await import('$lib/api/client');
+				vi.mocked(updateSong).mockRejectedValueOnce(new Error('save failed'));
+			}
+			songList.set(albumSongs());
+			const target = await renderView();
+			setDraftLyrics('unsaved edit');
+			await tick();
 
-		const targetGen = generation({
-			...sourceRecipeDefaults(),
-			id: 'g-last',
-			song_id: 's-last'
-		});
-		pendingSource.set({ generation: targetGen, mode: 'repaint' });
-		pendingVersionLoad.set({ songId: 's-last', versionId: 'v-last' });
-		selectSong(
-			's-last',
-			song({
-				...editableSongDefaults(),
-				id: 's-last',
-				title: 'Last',
-				generations: [targetGen]
-			})
-		);
-		await tick();
-		expect(get(sourceGeneration)).toBeNull();
+			const targetGen = generation({
+				...sourceRecipeDefaults(),
+				id: 'g-last',
+				song_id: 's-last'
+			});
+			pendingSource.set({ generation: targetGen, mode: 'repaint' });
+			pendingVersionLoad.set({ songId: 's-last', versionId: 'v-last' });
+			selectSong(
+				's-last',
+				song({
+					...editableSongDefaults(),
+					id: 's-last',
+					title: 'Last',
+					generations: [targetGen]
+				})
+			);
+			await tick();
+			expect(get(sourceGeneration)).toBeNull();
 
-		clickNamed(target, 'Cancel');
-		await tick();
+			const dialog = target.querySelector<HTMLElement>('.dialog');
+			if (!dialog) throw new Error('Expected the unsaved-changes dialog');
+			clickNamed(dialog, button);
 
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(pendingSource)).toBeNull();
-		expect(get(pendingVersionLoad)).toBeNull();
-		expect(get(sourceGeneration)).toBeNull();
-	});
+			await vi.waitFor(() => expect(get(pendingVersionLoad)).toBeNull());
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(pendingSource)).toBeNull();
+			expect(get(sourceGeneration)).toBeNull();
+		}
+	);
 
 	it('cross-song Repaint/Cover: Discard applies the source once the target song opens', async () => {
 		songList.set(albumSongs());

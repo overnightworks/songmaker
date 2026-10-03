@@ -27,7 +27,8 @@
 		NOW_PLAYING_UNKEEP_LABEL,
 		NOW_PLAYING_UNPICK_LABEL,
 		nowPlayingTakeMeta,
-		openVersionLabel
+		openVersionLabel,
+		takeVersion
 	} from '$lib/constants/now-playing';
 	import { get } from 'svelte/store';
 	import { isDirty, pendingVersionLoad } from '$lib/stores/editor';
@@ -249,6 +250,7 @@
 			modelMode: generation.model_mode
 		})
 	);
+	const openableVersion = $derived(takeVersion(generation.version_id, generation.version_number));
 
 	const recipeGroups = $derived(buildTakeRecipe(generation, song));
 </script>
@@ -256,14 +258,14 @@
 <div class="np-take" aria-label="{NOW_PLAYING_TAKE_PREFIX} {generation.generation_number}">
 	<div class="take-heading-row">
 		<h3 class="take-heading">{takeMeta}</h3>
-		{#if generation.version_id !== null && generation.version_number !== null}
-			{@const versionId = generation.version_id}
+		{#if openableVersion}
+			{@const versionId = openableVersion.versionId}
 			<button
 				type="button"
 				class="open-version"
 				data-hitbox="text"
 				onclick={() => openVersion(versionId)}
-				>{openVersionLabel(generation.version_number)}<Icon
+				>{openVersionLabel(openableVersion.versionNumber)}<Icon
 					name="chevron-right"
 					size={14}
 				/></button

@@ -28,6 +28,7 @@
 		nowPlayingTakeLabel,
 		openVersionLabel,
 		takeBatchReductionLabel,
+		takeVersion,
 		takeRowLabel,
 		takeGroupLabel,
 		TAKE_SELECT_LABEL,
@@ -350,21 +351,21 @@
 		{/if}
 
 		{#each groups as group (group.versionNumber ?? 'unknown')}
+			{@const openableVersion = takeVersion(group.versionId, group.versionNumber)}
 			<div class="version-section">
 				<div class="version-header-row">
-					{#if group.versionNumber !== null && group.versionId !== null}
-						{@const versionId = group.versionId}
+					{#if openableVersion}
 						<button
 							type="button"
 							class="version-link"
 							data-hitbox="text"
-							onclick={() => void actions.clickVersion(versionId)}
+							onclick={() => void actions.clickVersion(openableVersion.versionId)}
 						>
 							<span class="version-header"
 								>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
 							>
 							<span class="version-open"
-								>{openVersionLabel(group.versionNumber)}<Icon
+								>{openVersionLabel(openableVersion.versionNumber)}<Icon
 									name="chevron-right"
 									size={14}
 								/></span

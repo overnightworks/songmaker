@@ -8,7 +8,8 @@
 		NOW_PLAYING_TAKE_TAB,
 		nowPlayingCurateProgress,
 		type NowPlayingSource,
-		type PlaybackSource
+		type PlaybackSource,
+		takeVersion
 	} from '$lib/constants/now-playing';
 	import { NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS, NOW_PLAYING_NO_LYRICS } from '$lib/constants';
 	import { albumList, songList } from '$lib/stores/libraryData';
@@ -111,7 +112,8 @@
 	// Only the resolved take knows it has no version: a library-pool stub
 	// carries no version number either.
 	const lyricsEmptyLabel = $derived(
-		playingGeneration?.version_number === null
+		playingGeneration &&
+			takeVersion(playingGeneration.version_id, playingGeneration.version_number) === null
 			? NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS
 			: NOW_PLAYING_NO_LYRICS
 	);

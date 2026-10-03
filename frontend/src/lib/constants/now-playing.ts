@@ -45,6 +45,20 @@ export function takeGroupLabel(versionNumber: number | null, count: number): str
 	return `${origin}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
 }
 
+export interface TakeVersion {
+	versionId: string;
+	versionNumber: number;
+}
+
+// The one place that decides whether a take has a version to open; null
+// means it was imported.
+export function takeVersion(
+	versionId: string | null,
+	versionNumber: number | null
+): TakeVersion | null {
+	return versionId === null || versionNumber === null ? null : { versionId, versionNumber };
+}
+
 export function openVersionLabel(versionNumber: number): string {
 	return `Open v${versionNumber}`;
 }

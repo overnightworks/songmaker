@@ -639,6 +639,8 @@
 				await handleSave(song.id);
 			} catch (e) {
 				addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
+				pendingSource.set(null);
+				pendingVersionLoad.set(null);
 				return;
 			}
 		} else {

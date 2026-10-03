@@ -8,7 +8,8 @@ import {
 	nowPlayingTakeMeta,
 	openVersionLabel,
 	takeBatchReductionLabel,
-	takeGroupLabel
+	takeGroupLabel,
+	takeVersion
 } from './now-playing';
 
 describe('nowPlayingTakeLabel', () => {
@@ -29,6 +30,20 @@ describe('takeGroupLabel', () => {
 		{ versionNumber: null, count: 1, label: 'Imported · 1 take' }
 	])('names the group "$label"', ({ versionNumber, count, label }) => {
 		expect(takeGroupLabel(versionNumber, count)).toBe(label);
+	});
+});
+
+describe('takeVersion', () => {
+	it('opens the version a generated take came from', () => {
+		expect(takeVersion('ver-5', 5)).toEqual({ versionId: 'ver-5', versionNumber: 5 });
+	});
+
+	it.each([
+		{ versionId: null, versionNumber: null },
+		{ versionId: 'ver-5', versionNumber: null },
+		{ versionId: null, versionNumber: 5 }
+	])('treats a take missing its version as imported ($versionId, $versionNumber)', (fields) => {
+		expect(takeVersion(fields.versionId, fields.versionNumber)).toBeNull();
 	});
 });
 
