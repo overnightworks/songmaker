@@ -13,7 +13,9 @@ import {
 	pushEntry,
 	remountOverStandingEntry,
 	replaceEntry,
-	resetHistoryControllerForTests
+	resetHistoryControllerForTests,
+	showStandingPage,
+	standingPageEntryId
 } from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
@@ -105,8 +107,9 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
-let historyApplyGeneration = 0;
+let runningApply: HistoryApply | null = null;
 let librarySnapshotTaken = false;
+let latestHeldWrite: LibraryHistoryState | null = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -253,7 +256,8 @@ type HistoryWriteMode = 'push' | 'replace';
 // from another page, whose entry stands only once its route has loaded -- a
 // second write issued meanwhile would supersede it and stand in its place
 // (Settings, a song, another song of its album, Back skipped Settings). The
-// held write stands the moment history stands still.
+// held write stands the moment history stands still, and until then it is
+// the entry the next write builds on (`currentLibraryHistoryState`).
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
@@ -269,7 +273,11 @@ export function writeLibraryHistory(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	if (historyMoves()) {
-		return historyStandsStill().then(() => writeLibraryHistory(state, url, mode));
+		latestHeldWrite = state;
+		return historyStandsStill().then(() => {
+			if (latestHeldWrite === state) latestHeldWrite = null;
+			return writeLibraryHistory(state, url, mode);
+		});
 	}
 	return writeLibraryHistoryNow(state, url, mode);
 }
@@ -353,10 +361,11 @@ export function loadLibraryHistoryPageForTests(): void {
 	loadHistoryPageForTests();
 }
 
-// The library history entry history stands on. Every write stands at once, so
-// this is the entry the next write starts from.
+// The library history entry the next write starts from: the entry history
+// stands on, or -- while history the controller has moving holds a write --
+// the latest held write, which is what will stand once history stands still.
 export function currentLibraryHistoryState(): unknown {
-	return libraryHistoryEntry();
+	return latestHeldWrite ?? libraryHistoryEntry();
 }
 
 // What a history entry says about the library, whichever way it was written:
@@ -445,15 +454,24 @@ function mountedRouteUrl(): string {
 // The frame every address route shares. History may stand on another address
 // than the route was mounted under (see `mountAddressOver`) before its params
 // resolve, or move on while they do: they then resolve nothing and state no
-// verdict, and the route of the address history stands on is mounted instead,
-// whose own resolution follows (issue #1263).
+// verdict -- not even a failed lookup's -- and the route of the address
+// history stands on is mounted instead, whose own resolution follows (issues
+// #1263, #1267). Nor do params the router left from the page before, under a
+// route it mounted over the address: the library shows the entry history
+// stands on itself, as it does every landing (issue #1006, H5).
 async function resolveMountedAddress<Verdict extends string>(
 	resolveParams: () => Promise<ResolvedAddress | Verdict>
 ): Promise<Verdict | 'found'> {
 	const mountedUrl = mountedRouteUrl();
-	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
-	const resolved = await resolveParams();
-	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
+	let resolved: ResolvedAddress | Verdict;
+	try {
+		resolved = await resolveParams();
+	} catch (failure) {
+		if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
+		throw failure;
+	}
+	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
 	if (typeof resolved === 'string') return resolved;
 	await showResolvedAddress(resolved);
 	return 'found';
@@ -824,10 +842,33 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 	return settled;
 }
 
+// An apply belongs to the page entry it landed on (issue #1006): history
+// leaving that entry stops it, and so do a newer apply and a write
+// (`cancelLibraryHistoryApply`). A Back the library heard starts the newer
+// apply; one it did not -- the second of two quick Backs from Settings,
+// pressed before the library on the first one's page listens -- is heard once
+// it does (`listenForLandings`), and meanwhile the apply for the entry it left
+// neither finishes over the entry history stands on nor writes its library
+// there. An entry without an id tells nothing apart, so there only the newer
+// apply and the write stop it.
+interface HistoryApply {
+	readonly entry: number | null;
+}
+
+function startHistoryApply(): HistoryApply {
+	runningApply = { entry: showStandingPage() };
+	return runningApply;
+}
+
+function applyStands(apply: HistoryApply): boolean {
+	if (runningApply !== apply) return false;
+	return apply.entry === null || standingPageEntryId() === apply.entry;
+}
+
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
-	const generation = ++historyApplyGeneration;
+	const apply = startHistoryApply();
 	if (heldRestores !== null) await heldRestores;
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
@@ -836,18 +877,18 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	if (state.query.trim()) {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
-	if (generation !== historyApplyGeneration) return false;
-	await hydrateSelectedResources(state, generation);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
+	await hydrateSelectedResources(state, apply);
+	if (!applyStands(apply)) return false;
 	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
 	if (shownAlbum) await loadSongsForAlbum(shownAlbum);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
 }
@@ -865,7 +906,7 @@ export function albumWhoseSongsShow(
 }
 
 export function cancelLibraryHistoryApply(): void {
-	historyApplyGeneration += 1;
+	runningApply = null;
 }
 
 async function hydrateCollection(collection: CollectionSnapshot): Promise<void> {
@@ -881,24 +922,24 @@ async function hydrateCollection(collection: CollectionSnapshot): Promise<void> 
 
 async function hydrateSelectedResources(
 	state: LibraryHistoryState,
-	generation: number
+	apply: HistoryApply
 ): Promise<void> {
-	await hydrateMissingCollectionAlbum(state.collection, generation);
-	if (state.songId) await hydrateSelectedSong(state.songId, generation);
+	await hydrateMissingCollectionAlbum(state.collection, apply);
+	if (state.songId) await hydrateSelectedSong(state.songId, apply);
 }
 
 async function hydrateMissingCollectionAlbum(
 	collection: CollectionSnapshot,
-	generation: number
+	apply: HistoryApply
 ): Promise<void> {
 	if (collection?.kind !== 'album') return;
 	if (get(albumList).some((album) => album.id === collection.id)) return;
 	try {
 		const album = await fetchAlbum(collection.id);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		albumList.update((list) => upsertReplace(list, album));
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) setOpenCollection(null);
 	}
 }
@@ -911,22 +952,22 @@ export function enterAlbumOfSong(song: SongItem): void {
 	void loadSongsForAlbum(song.album_id);
 }
 
-async function hydrateSelectedSong(songId: string, generation: number): Promise<void> {
-	if (generation !== historyApplyGeneration) return;
+async function hydrateSelectedSong(songId: string, apply: HistoryApply): Promise<void> {
+	if (!applyStands(apply)) return;
 	const listed = get(songList).find((song) => song.id === songId);
 	if (listed && listed.generations.length >= listed.generation_count) {
 		enterAlbumOfSong(listed);
-		await hydrateSongAlbum(listed.album_id, generation);
+		await hydrateSongAlbum(listed.album_id, apply);
 		return;
 	}
 	try {
 		const song = await fetchSong(songId);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		songList.update((list) => upsertReplace(list, song));
 		enterAlbumOfSong(song);
-		await hydrateSongAlbum(song.album_id, generation);
+		await hydrateSongAlbum(song.album_id, apply);
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) {
 			selectedSongId.set(null);
 			selectedGenerationId.set(null);
@@ -934,14 +975,14 @@ async function hydrateSelectedSong(songId: string, generation: number): Promise<
 	}
 }
 
-async function hydrateSongAlbum(albumId: string, generation: number): Promise<void> {
+async function hydrateSongAlbum(albumId: string, apply: HistoryApply): Promise<void> {
 	if (get(albumList).some((album) => album.id === albumId)) return;
 	try {
 		const album = await fetchAlbum(albumId);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		albumList.update((list) => upsertReplace(list, album));
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) return;
 	}
 }
@@ -1002,8 +1043,9 @@ export function captureLibraryScroll(scrollTop: number): void {
 }
 
 export function resetLibraryContextForTests(): void {
-	historyApplyGeneration += 1;
+	runningApply = null;
 	librarySnapshotTaken = false;
+	latestHeldWrite = null;
 	heldRestores = null;
 	resetHistoryControllerForTests();
 	librarySurface.set('browse');

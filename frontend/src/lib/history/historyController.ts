@@ -1,6 +1,7 @@
 import type { BeforeNavigate, NavigationType } from '@sveltejs/kit';
 import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
+import { page } from '$app/state';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -210,6 +211,23 @@ function routerIndexOf(state: unknown): number | undefined {
 	return typeof index === 'number' ? index : undefined;
 }
 
+// The page entry history stands on: the standing entry, or under an open
+// layer's entry the page that layer covers. An entry without an id has none.
+export function standingPageEntryId(): number | null {
+	const standing = standingEntry();
+	if (standing?.layer !== undefined) return ledger.current?.id ?? null;
+	return standing?.id ?? null;
+}
+
+// The library starts showing the page entry history stands on, so that entry
+// is the page the screen shows from now on, whichever of the library's paths
+// showed it -- a landing on it is no news, and one elsewhere it did not hear
+// is (`listenForLandings`). Answers that entry's id.
+export function showStandingPage(): number | null {
+	settleOnPage(standingEntry());
+	return standingPageEntryId();
+}
+
 export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 	return entryOfHistoryState(event.state);
 }
@@ -233,6 +251,7 @@ const stepBackWaiters = new Map<number, (() => void)[]>();
 let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
 let loadingMount: NavigateOptions | null = null;
+let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
 
@@ -335,6 +354,7 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
 		: newEntry();
 	const mount = options.replaceState && standsOnAddress(url) ? options : null;
+	keepTrackOfKeptPage(url);
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
@@ -346,6 +366,15 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 		else if (loadingMount === mount) loadingMount = null;
 		settleStillness();
 	}
+}
+
+// A navigation to the address the router's page names keeps that page, so a
+// route it mounts there stands under the params of the route before
+// (`mountAddressOver`) until the router reports a navigation to another
+// address (`stampNavigatedEntry`).
+function keepTrackOfKeptPage(url: string): void {
+	const target = new URL(url, location.href).href;
+	if (target === untrack(() => page.url.href)) addressMountedUnderKeptPage = target;
 }
 
 function standsOnAddress(url: string): boolean {
@@ -360,10 +389,26 @@ function standsOnAddress(url: string): boolean {
 // address on while the landed route loads. The address wins (issue #1006, H3):
 // the route of the address history stands on is mounted over it, under the
 // same entry, superseding the other route's load if it is still loading.
-type RouteOnAddress = 'stands' | 'remounts';
+//
+// The router keeps the page it shows -- its route and its params -- when it
+// navigates to the address that page already names, whatever route it mounts
+// there. A Back it routes shallowly moves that page's address on without
+// mounting anything (see `mountRouteOfLandedAddress`), so the route mounted
+// over the address afterwards stands under the params of the page before --
+// none for Settings -- until the router navigates to another address: its
+// params name no page of the address, and resolving them would write the page
+// they do name over the entry (issue #1006, H5).
+type RouteOnAddress = 'stands' | 'remounts' | 'stands-under-kept-page';
 
 export function mountAddressOver(routeUrl: string): RouteOnAddress {
-	if (new URL(routeUrl, location.href).pathname === location.pathname) return 'stands';
+	if (new URL(routeUrl, location.href).pathname !== location.pathname) {
+		mountStandingAddress();
+		return 'remounts';
+	}
+	return addressMountedUnderKeptPage === location.href ? 'stands-under-kept-page' : 'stands';
+}
+
+function mountStandingAddress(): void {
 	const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 	void navigateTo(location.href, {
 		replaceState: true,
@@ -371,13 +416,31 @@ export function mountAddressOver(routeUrl: string): RouteOnAddress {
 		keepFocus: true,
 		state: pageState
 	});
-	return 'remounts';
 }
+
+// The router's navigation started last; a newer one aborts it.
+let latestRouterNavigation: Promise<void> | null = null;
 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
 // is an address history has yet to move to.
-export function mountRouteOfLandedAddress(navigation: Pick<BeforeNavigate, 'type' | 'to'>): void {
+//
+// The router mounts a route only once a navigation completes, and a Back
+// pressed while one loads aborts it. A Back onto an entry of the navigation
+// the router was heading to -- the first of two quick Backs from Settings
+// lands on the album, the second on the wall shallow routing wrote it over --
+// is shallow routing to the router: it starts no navigation of its own, and
+// the page before stays on screen under the address (issue #1006, H5). Unless
+// a newer navigation took over, the route of the address history stands on is
+// mounted then.
+export function mountRouteOfLandedAddress(
+	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
+): void {
+	const started = navigation.complete;
+	latestRouterNavigation = started;
+	started.catch(() => {
+		if (latestRouterNavigation === started) mountStandingAddress();
+	});
 	if (navigation.type === 'popstate' && navigation.to !== null) {
 		mountAddressOver(navigation.to.url.href);
 	}
@@ -406,6 +469,7 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // start dropped gets back the id it was loaded with, and any other gets a
 // first id on top. A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
+	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
 		lastRouterIndex = routerIndexOf(history.state);
 		return;
@@ -575,13 +639,30 @@ export function forgetLayerEntries(): void {
 	settleStillness();
 }
 
+type LandingHandler = (landing: Landing, landedState: unknown) => void;
+
+// Nobody listens between two pages of the library history -- back from
+// Settings, the library listens only once its page has loaded -- so a Back
+// pressed meanwhile lands unheard: the second of two quick Backs from
+// Settings stands on the wall while the screen still shows the album the
+// first one reached (issue #1006, H5). A page entry history stands on that is
+// not the page the screen shows is heard as the landing it was once the
+// handler listens. Before the controller has seen any page there is nothing
+// to tell it from.
+function hearLandingMissedWhileNotListening(onLanding: LandingHandler): void {
+	const standing = standingEntry();
+	if (standing === null || standing.layer !== undefined || ledger.current === null) return;
+	if (isSameEntry(standing, ledger.current)) return;
+	const landing = land(ledger, standing);
+	ledger = landing.ledger;
+	onLanding(landing, history.state);
+}
+
 // The landing handler hears each landing once the controller has closed the
 // layers it left, settled its step-backs and, on a layer entry no open layer
 // owns, started stepping off it. While it listens, every layer opened owns an
 // entry.
-export function listenForLandings(
-	onLanding: (landing: Landing, event: PopStateEvent) => void
-): () => void {
+export function listenForLandings(onLanding: LandingHandler): () => void {
 	function onPopstate(event: PopStateEvent): void {
 		const landed = landedEntry(event);
 		countEntryMet(historyStorage, landed);
@@ -593,11 +674,12 @@ export function listenForLandings(
 		for (const target of landing.settled) settleStepBack(target);
 		if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
 		settleStillness();
-		onLanding(landing, event);
+		onLanding(landing, event.state);
 	}
 	window.addEventListener('popstate', onPopstate);
 	keepLayerHistory(layerEntries);
 	stepOffUnownedLayerEntry();
+	hearLandingMissedWhileNotListening(onLanding);
 	return () => {
 		window.removeEventListener('popstate', onPopstate);
 		forgetLayerEntries();
@@ -621,6 +703,8 @@ export function resetHistoryControllerForTests(): void {
 	stillnessWaiters = [];
 	navigationsUnderway = 0;
 	loadingMount = null;
+	addressMountedUnderKeptPage = null;
+	latestRouterNavigation = null;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 }

@@ -9,6 +9,7 @@ import {
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
 import {
+	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
 	pageStateOfHistoryState,
 	resetHistoryControllerForTests,
@@ -16,7 +17,12 @@ import {
 	type HistoryEntry
 } from '$lib/history/historyController';
 import { listenForGlobalEscape } from '$lib/test-utils/global-escape';
-import { fakePage, startFakeRouter, writeHistoryEntry } from '$lib/test-utils/app-navigation';
+import {
+	fakePage,
+	reportedNavigations,
+	startFakeRouter,
+	writeHistoryEntry
+} from '$lib/test-utils/app-navigation';
 
 // The one place tests touch the browser history: they seed and read entries,
 // and press Back and Forward, through these helpers, so the shape an entry is
@@ -31,6 +37,27 @@ export function replaceHistoryEntry(url: string, entry: unknown = null): void {
 export function mountAddressRoute(url: string, entry: unknown = null): void {
 	replaceHistoryEntry(url, entry);
 	fakePage.url = new URL(url, location.href);
+}
+
+// Two quick Backs from Settings (issue #1006, H5): the second one the router
+// routes shallowly, which moves its page's address onto the entry history
+// stands on and aborts the navigation of the first. The route then mounted
+// over that address stands under the page the router kept, whose params are
+// still those of Settings. Resolves once that mount has navigated.
+export async function mountRouteUnderKeptPage(): Promise<void> {
+	let abortFirstBack: (reason: Error) => void = () => undefined;
+	const firstBack = new Promise<void>((_, reject) => (abortFirstBack = reject));
+	mountRouteOfLandedAddress({
+		type: 'popstate',
+		to: { url: new URL(location.href), params: {}, route: { id: null }, scroll: null },
+		complete: firstBack
+	});
+	fakePage.url = new URL(location.href);
+	const navigated = reportedNavigations.length;
+
+	abortFirstBack(new Error('navigation aborted'));
+
+	await vi.waitFor(() => expect(reportedNavigations.length).toBeGreaterThan(navigated));
 }
 
 export function pushHistoryEntry(url: string, entry: unknown = null): void {
