@@ -54,6 +54,7 @@ import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
 import {
 	editLyrics,
+	pendingVersionLoad,
 	pinnedSeed,
 	setDraftLyrics,
 	setDraftPrompt,
@@ -347,6 +348,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	resetNavigationForTests();
 	pendingSource.set(null);
+	pendingVersionLoad.set(null);
 	pinnedSeed.set(null);
 	recipeOpen.set(false);
 	coWriterOpen.set(false);
@@ -1224,7 +1226,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
 	});
 
-	it('cross-song Repaint/Cover: Cancel leaves it unapplied and drops the pending source', async () => {
+	it('cross-song Repaint/Cover or Open vN: Cancel leaves it unapplied and drops what was pending', async () => {
 		songList.set(albumSongs());
 		const target = await renderView();
 		setDraftLyrics('unsaved edit');
@@ -1236,6 +1238,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 			song_id: 's-last'
 		});
 		pendingSource.set({ generation: targetGen, mode: 'repaint' });
+		pendingVersionLoad.set({ songId: 's-last', versionId: 'v-last' });
 		selectSong(
 			's-last',
 			song({
@@ -1253,6 +1256,7 @@ describe('SongDetailView unsaved-draft guard', () => {
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingSource)).toBeNull();
+		expect(get(pendingVersionLoad)).toBeNull();
 		expect(get(sourceGeneration)).toBeNull();
 	});
 
@@ -1803,6 +1807,33 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
 			'brief'
 		);
+	});
+
+	it('an Open from Now Playing loads that version on arrival and shows it on Edit', async () => {
+		navigateToSongTab('takes');
+		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
+		const target = await renderView();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft')
+		);
+		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
+		expect(target.textContent).toContain(versionLoadedFromLabel(1));
+		expect(get(pendingVersionLoad)).toBeNull();
+	});
+
+	it('an Open from Now Playing over a dirty draft asks first', async () => {
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+		setDraftLyrics('unsaved edit');
+		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
+		await tick();
+
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
+		expect(get(editLyrics)).toBe('unsaved edit');
+		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
 	});
 
 	it('over a dirty draft asks first, and Cancel keeps the edit and the sheet', async () => {

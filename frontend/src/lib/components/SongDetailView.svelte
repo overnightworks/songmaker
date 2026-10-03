@@ -49,6 +49,7 @@
 		versions,
 		loadSongData,
 		loadVersionAsDraft,
+		pendingVersionLoad,
 		handleSave,
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
@@ -275,6 +276,14 @@
 		if (!pending || !song || pending.generation.song_id !== song.id) return;
 		useSource(pending.generation, pending.mode);
 		pendingSource.set(null);
+	});
+
+	$effect(() => {
+		const pending = $pendingVersionLoad;
+		if (!pending || !song || pending.songId !== song.id) return;
+		if (!$versions.some((version) => version.id === pending.versionId)) return;
+		pendingVersionLoad.set(null);
+		void onVersionClick(pending.versionId);
 	});
 
 	const expiringSoon = $derived.by(() => {
@@ -620,6 +629,7 @@
 		pendingDirtyNavigation.set(null);
 		if (choice === 'cancel') {
 			pendingSource.set(null);
+			pendingVersionLoad.set(null);
 			return;
 		}
 		if (!action) return;
