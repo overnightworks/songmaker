@@ -34,6 +34,7 @@ interface DeckDouble {
 	playableFrom: number;
 	appending: boolean;
 	ended: boolean;
+	closed: boolean;
 }
 
 const continuousDecks = vi.hoisted(() => ({ supported: false, attached: [] as DeckDouble[] }));
@@ -54,6 +55,7 @@ vi.mock('./continuousDeck', () => {
 		playableFrom = 0;
 		appending = false;
 		ended = false;
+		closed = false;
 
 		static isSupported(): boolean {
 			return continuousDecks.supported;
@@ -84,6 +86,10 @@ vi.mock('./continuousDeck', () => {
 		endStream(): Promise<void> {
 			this.ended = true;
 			return Promise.resolve();
+		}
+
+		close(): void {
+			this.closed = true;
 		}
 	}
 	return { ContinuousDeck: ContinuousDeckDouble, TakeNotAppended };
@@ -3072,6 +3078,35 @@ describe('continuous deck (#1187 M2)', () => {
 
 		expect(fakeAudio.src).toBe('/audio/a1/first.mp3');
 		expect(audioPlayer.status).toBe('loading');
+	});
+
+	it.each([
+		{ leaving: 'for a new queue', leave: () => audioPlayer.load(takeInfo('g9', 'b2/other.mp3')) },
+		{ leaving: 'on unload', leave: () => audioPlayer.unload() },
+		{ leaving: 'on destroy', leave: () => audioPlayer.destroy() },
+		{
+			leaving: 'for the two decks',
+			leave: async () => {
+				deck().requests[1].fail(new Error('The source buffer refused the appended audio'));
+				await Promise.resolve();
+			}
+		},
+		{
+			leaving: 'for a stall reload',
+			leave: () => {
+				vi.useFakeTimers();
+				fakeAudio.fire('stalled');
+				vi.advanceTimersByTime(5000);
+			}
+		}
+	])('closes the deck it leaves $leaving', async ({ leave }) => {
+		playFirstWithSecondAppended();
+		playTo(4);
+		const left = deck();
+
+		await leave();
+
+		expect(left.closed).toBe(true);
 	});
 
 	it('a browser without MSE MP3 keeps the two decks', () => {
