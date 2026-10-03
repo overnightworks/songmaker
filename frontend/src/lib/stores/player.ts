@@ -689,16 +689,20 @@ export async function playIdleStart(): Promise<void> {
 	await playLibrary();
 }
 
+// The bar and the lock screen show a start that waits for the network as the
+// transport's own wait, and their presses stop it (#1288).
+export function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
+	return !current && notice === 'awaiting-network';
+}
+
 function stopStartAwaitingNetwork(): boolean {
-	if (get(playStartNotice) !== 'awaiting-network') return false;
+	if (!startAwaitsNetwork(audioPlayer.current, get(playStartNotice))) return false;
 	playStartAbort?.abort();
 	return true;
 }
 
-// The lock screen offers Pause for what the bar shows: the take, or with no
-// take a start that waits for the network, which its Pause stops (#1288).
 function pauseFromLockScreen(): void {
-	if (!audioPlayer.current && stopStartAwaitingNetwork()) return;
+	if (stopStartAwaitingNetwork()) return;
 	audioPlayer.pause();
 }
 

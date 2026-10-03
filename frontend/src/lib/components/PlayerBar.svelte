@@ -19,6 +19,7 @@
 		retryLastPlayIntent,
 		shuffleEnabled,
 		shuffleLabel,
+		startAwaitsNetwork,
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
@@ -63,11 +64,9 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
-	// A start that waits for the network has no take yet, but the listener
-	// asked for sound: the transport waits with it, and a press stops it (#1288).
 	// With the screen off the lock screen is the only surface, so it shows the same.
 	const barTransport = $derived(
-		!current && startNotice === 'awaiting-network' ? 'recovering' : transport
+		startAwaitsNetwork(current, startNotice) ? 'recovering' : transport
 	);
 
 	const isPlaying = $derived(transport === 'playing');
