@@ -26,6 +26,7 @@ import {
 	handleSave,
 	isDirty,
 	pinnedSeed,
+	retireVersionLoadUndo,
 	versions
 } from './editor';
 import { health } from './health';
@@ -263,6 +264,7 @@ export async function generate(): Promise<void> {
 	const song = get(selectedSong);
 	const model = get(recipeModel);
 	if (!song || model === null || get(requestInFlight)) return;
+	retireVersionLoadUndo();
 	dismissGenerationFailure(song.id);
 	requestInFlight.set(true);
 	try {

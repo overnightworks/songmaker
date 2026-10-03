@@ -204,7 +204,9 @@ def api_update_song(
     if "generation_params" in req.model_fields_set:
         kwargs["generation_params"] = gen_params_to_json(req.generation_params)
     try:
-        version = update_song(session, song_id, edited_by=user.id, **kwargs)
+        version = update_song(
+            session, song_id, force_new_version=req.new_version, edited_by=user.id, **kwargs,
+        )
     except ValueError:
         raise HTTPException(404, SONG_NOT_FOUND_DETAIL)
     record_audit(session, user.id, AuditAction.UPDATE, ResourceType.SONG, song_id)

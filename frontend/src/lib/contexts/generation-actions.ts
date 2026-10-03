@@ -11,7 +11,8 @@ export interface GenerationActions {
 	unshare: (genId: string) => Promise<void>;
 	addToPlaylist: (playlistId: string, genId: string) => Promise<void>;
 	pinSeed: (seed: number) => void;
-	clickVersion: (versionId: string) => void;
+	/** Loads a version as the draft, asking first over unsaved edits; answers whether it loaded. */
+	clickVersion: (versionId: string) => Promise<boolean>;
 }
 
 const GENERATION_ACTIONS_KEY = Symbol('generation-actions');

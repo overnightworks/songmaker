@@ -88,7 +88,7 @@ function tokens(text: string): string[] {
 	return normalized.length === 0 ? [] : normalized.split(' ');
 }
 
-function isSungLine(rawLine: string): boolean {
+export function isSungLine(rawLine: string): boolean {
 	const trimmed = rawLine.trim();
 	return trimmed.length > 0 && !SECTION_MARKER.test(trimmed);
 }
