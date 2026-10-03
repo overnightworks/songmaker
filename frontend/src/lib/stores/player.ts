@@ -141,6 +141,11 @@ type QueueContext =
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
+// One PlaybackInfo per playlist entry, handed out every time that entry is
+// played or preloaded, so the take the player holds names its place in the
+// queue even where a playlist holds one take twice.
+const playbackInfoOfEntry = new WeakMap<PlaylistEntryItem, PlaybackInfo>();
+
 // Curation mode (issue #228): whether the listener is walking an album's
 // candidate takes one after another via curateAlbum. setQueueContext is the
 // one writer of queueContext and owns turning this off — every fresh queue
@@ -480,18 +485,30 @@ function nativeTakeIndex(
 ): number {
 	if (!ctx.takes || ctx.takes.length === 0) return -1;
 	if (!current) return ctx.index ?? 0;
-	return queuePositionFrom(
+	return queuePositionOf(
 		ctx.takes,
 		ctx.index ?? 0,
+		(take) => take === current,
 		(take) =>
 			take.generation.id === current.generation.id &&
 			take.generation.mp3_path === current.generation.mp3_path
 	);
 }
 
-// Where the queue holds a take, looked for from the queue's own index on: a
-// take the player moved on to by itself is the next one along, even in a
-// playlist that holds that take twice.
+// The place a take was handed out for is the queue's own answer, even where
+// the queue holds that take twice. A take built elsewhere (a song row, a
+// restored session) is looked for by what it plays, from the queue's own
+// index on.
+function queuePositionOf<T>(
+	items: readonly T[],
+	from: number,
+	isPlaceOf: (item: T) => boolean,
+	holds: (item: T) => boolean
+): number {
+	const place = items.findIndex(isPlaceOf);
+	return place >= 0 ? place : queuePositionFrom(items, from, holds);
+}
+
 function queuePositionFrom<T>(
 	items: readonly T[],
 	from: number,
@@ -923,7 +940,12 @@ function currentPlaylistIndex(
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
 	if (!current) return ctx.index;
-	const idx = queuePositionFrom(ctx.entries, ctx.index, (entry) => holdsEntryTake(current, entry));
+	const idx = queuePositionOf(
+		ctx.entries,
+		ctx.index,
+		(entry) => playbackInfoOfEntry.get(entry) === current,
+		(entry) => holdsEntryTake(current, entry)
+	);
 	return idx >= 0 ? idx : ctx.index;
 }
 
@@ -1655,7 +1677,9 @@ function playlistEntryToGeneration(entry: PlaylistEntryItem): GenerationItem {
 }
 
 function playlistEntryToPlaybackInfo(entry: PlaylistEntryItem): PlaybackInfo {
-	return {
+	const known = playbackInfoOfEntry.get(entry);
+	if (known) return known;
+	const info: PlaybackInfo = {
 		generation: playlistEntryToGeneration(entry),
 		songId: entry.song_id,
 		songTitle: entry.song_title,
@@ -1663,6 +1687,8 @@ function playlistEntryToPlaybackInfo(entry: PlaylistEntryItem): PlaybackInfo {
 		albumTitle: entry.album_title,
 		lyrics: entry.lyrics
 	};
+	playbackInfoOfEntry.set(entry, info);
+	return info;
 }
 
 export async function navigateToPlaying(): Promise<void> {

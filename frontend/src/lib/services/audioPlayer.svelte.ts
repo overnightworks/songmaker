@@ -77,6 +77,8 @@ type LoadOptions = { autoplay?: boolean; restart?: boolean; startAt?: number };
 // A queue playing on the continuous deck (#1187): the takes after the current
 // one are appended into the same element, so a track change is the playhead
 // crossing into the next take, with no ended, no pause and no new source.
+// A take is told apart by its PlaybackInfo object, never by its URL: the queue
+// hands over one object per place, so one take in two places is two takes.
 interface DeckSession {
 	deck: ContinuousDeck<PlaybackInfo>;
 	// The entry the playhead was last seen in; entering another is a track change.
@@ -177,7 +179,9 @@ class AudioPlayer {
 	status = $state<PlayerStatus>('idle');
 	currentTime = $state(0);
 	duration = $state(0);
-	current = $state<PlaybackInfo | null>(null);
+	// Raw, so the take the player holds is the very object it was handed,
+	// which is how a queue tells one take's two places apart.
+	current = $state.raw<PlaybackInfo | null>(null);
 	mode = $state<'classic' | 'stream'>('classic');
 	private failure = $state<Failure | null>(null);
 
@@ -457,9 +461,8 @@ class AudioPlayer {
 	}
 
 	private appendAhead(session: DeckSession, info: PlaybackInfo): void {
-		const url = audioUrlOf(info);
-		if (audioUrlOf(session.tail) === url) return;
-		this.appendToDeck(session, info, url);
+		if (session.tail === info) return;
+		this.appendToDeck(session, info, audioUrlOf(info));
 	}
 
 	private appendToDeck(session: DeckSession, info: PlaybackInfo, url: string): void {
@@ -477,7 +480,7 @@ class AudioPlayer {
 		opts: LoadOptions
 	): boolean {
 		const el = this.audio;
-		const entry = el && continuableEntry(session, el.currentTime, url);
+		const entry = el && continuableEntry(session, el.currentTime, info);
 		if (!el || !entry) return false;
 		const startAt = opts.startAt ?? 0;
 		session.playing = entry;
@@ -505,9 +508,8 @@ class AudioPlayer {
 
 	private enterDeckEntry(session: DeckSession, entry: Readonly<DeckEntry<PlaybackInfo>>): void {
 		session.playing = entry;
-		const url = audioUrlOf(entry.take);
-		if (url === this.currentUrl) return;
-		this.currentUrl = url;
+		if (entry.take === this.current) return;
+		this.currentUrl = audioUrlOf(entry.take);
 		this.setCurrent(entry.take);
 		this.note('media_event', 'deck_crossing');
 	}
@@ -537,7 +539,7 @@ class AudioPlayer {
 	// anything else the deck cannot play on from goes to the two decks.
 	private deckFailed(session: DeckSession, error: unknown): void {
 		if (session !== this.deckSession) return;
-		if (error instanceof TakeNotAppended && audioUrlOf(error.take) !== this.currentUrl) {
+		if (error instanceof TakeNotAppended && error.take !== this.current) {
 			this.note(
 				'media_event',
 				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
@@ -559,7 +561,7 @@ class AudioPlayer {
 	// the playhead crosses on to it instead of running out where the dropped
 	// take would have started.
 	private appendInPlaceOf(session: DeckSession, dropped: PlaybackInfo): void {
-		if (audioUrlOf(session.tail) !== audioUrlOf(dropped)) return;
+		if (session.tail !== dropped) return;
 		const next = this.callbacks.takeAfter?.(dropped);
 		if (next) this.appendAhead(session, next);
 	}
@@ -1554,7 +1556,7 @@ function takeDuration(entry: Readonly<DeckEntry<PlaybackInfo>>): number {
 function continuableEntry(
 	session: DeckSession,
 	playhead: number,
-	url: string
+	take: PlaybackInfo
 ): Readonly<DeckEntry<PlaybackInfo>> | undefined {
 	const { deck } = session;
 	const playing = deck.entryAt(playhead);
@@ -1563,8 +1565,7 @@ function continuableEntry(
 	const next =
 		handedLast?.take === session.tail && deck.manifest.at(-2) === playing ? handedLast : undefined;
 	return [playing, next].find(
-		(entry) =>
-			entry !== undefined && audioUrlOf(entry.take) === url && deck.isPlayableFromStart(entry)
+		(entry) => entry !== undefined && entry.take === take && deck.isPlayableFromStart(entry)
 	);
 }
 

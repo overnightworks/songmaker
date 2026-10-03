@@ -2043,6 +2043,15 @@ describe('the queue names its next take', () => {
 		audioPlayer.currentCallbacks.onCurrentChange?.(take);
 	}
 
+	function currentRowAndTake(): { row: number; queueIndex: number; take: string | undefined } {
+		const ctx = get(queueContext);
+		return {
+			row: buildQueueViewModel(ctx, audioPlayer.current).currentIndex,
+			queueIndex: ctx.index ?? -1,
+			take: audioPlayer.current?.generation.id
+		};
+	}
+
 	function preloadedTake(): PlaybackInfo | null {
 		return vi.mocked(audioPlayer.preload).mock.lastCall?.[0] ?? null;
 	}
@@ -2249,6 +2258,34 @@ describe('the queue names its next take', () => {
 			const following = dropped && audioPlayer.currentCallbacks.takeAfter?.(dropped);
 			expect(following?.generation.id).toBe('g3');
 		});
+
+		it.each([
+			{ places: 'back to back', tracks: [1, 1, 3], dropped: null, rows: [0, 1, 2] },
+			{
+				places: 'around a take the deck dropped',
+				tracks: [1, 2, 1, 3],
+				dropped: 'g2',
+				rows: [0, 2, 3]
+			}
+		])(
+			'a playlist that holds a take twice $places plays both places, then the take after them',
+			async ({ tracks, dropped, rows }) => {
+				await playPlaylistEntryAndShowNowPlaying(playlistHolding(...tracks), 0);
+				const heard = [currentRowAndTake()];
+
+				let next = preloadedTake();
+				if (next && next.generation.id === dropped)
+					next = audioPlayer.currentCallbacks.takeAfter?.(next) ?? null;
+				moveOnByItselfTo(next);
+				heard.push(currentRowAndTake());
+				moveOnByItselfTo(preloadedTake());
+				heard.push(currentRowAndTake());
+
+				expect(heard).toEqual(
+					rows.map((row) => ({ row, queueIndex: row, take: `g${tracks[row]}` }))
+				);
+			}
+		);
 
 		it('a playlist that holds the take twice moves on past its later place', async () => {
 			await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 2, 1, 3), 1);

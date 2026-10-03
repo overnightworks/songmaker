@@ -2869,10 +2869,10 @@ describe('continuous deck (#1187 M2)', () => {
 		}));
 	}
 
-	function playFirstWithSecondAppended(): void {
+	function playFirstWithSecondAppended(next: PlaybackInfo = second): void {
 		audioPlayer.load(first);
-		audioPlayer.preload(second);
-		holds([first, 0, 10], [second, 10, 20]);
+		audioPlayer.preload(next);
+		holds([first, 0, 10], [next, 10, 20]);
 		fakeAudio.fire('canplay');
 		fakeAudio.fire('play');
 		fakeAudio.fire('playing');
@@ -2935,6 +2935,47 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(pauseSpy).not.toHaveBeenCalled();
 		expect(heard).toEqual([]);
 		expect(onEnded).not.toHaveBeenCalled();
+	});
+
+	describe('when the queue holds one take in two places', () => {
+		const firstAgain = { ...first };
+
+		it('appends the take for each place and crosses into both, then the take after them', () => {
+			playFirstWithSecondAppended(firstAgain);
+
+			playTo(10.5);
+			audioPlayer.preload(third);
+			holds([first, 0, 10], [firstAgain, 10, 20], [third, 30, 5]);
+			playTo(30.5);
+
+			expect(deck().requests.map((request) => request.take)).toEqual([first, firstAgain, third]);
+			expect(onCurrentChange.mock.calls.map(([take]) => take)).toEqual([first, firstAgain, third]);
+			expect(audioPlayer.current).toBe(third);
+		});
+
+		it('follows a dropped take between the two places with the second place, then the take after it', async () => {
+			const takeAfter = (take: PlaybackInfo): PlaybackInfo | null =>
+				take === second ? firstAgain : null;
+			audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+			playFirstWithSecondAppended();
+
+			deck().requests[1].fail(
+				new TakeNotAppended(second, 'refused', '/audio/a1/second.mp3 answered 404')
+			);
+			await Promise.resolve();
+			holds([first, 0, 10], [firstAgain, 10, 20]);
+			playTo(10.5);
+			audioPlayer.preload(third);
+
+			expect(deck().requests.map((request) => request.take)).toEqual([
+				first,
+				second,
+				firstAgain,
+				third
+			]);
+			expect(audioPlayer.current).toBe(firstAgain);
+			expect(onCurrentChange.mock.lastCall?.[0]).toBe(firstAgain);
+		});
 	});
 
 	it('reads the position within the take from the element clock at once', () => {
