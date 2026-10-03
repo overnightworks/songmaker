@@ -10,7 +10,7 @@ import { PLAYBACK_DIAGNOSTICS_PATH } from '$lib/constants';
 export type PlaybackDiagnosticKind = PlaybackDiagnosticEvent['kind'];
 
 /** The take an event concerns, as the deck holding it saw it. */
-interface PlaybackTakeState {
+export interface PlaybackTakeState {
 	takeId: string | null;
 	position: number;
 	readyState: number;
@@ -91,6 +91,9 @@ const STATUSES_KEEPING_THE_EVENTS: ReadonlySet<number> = new Set([401, 403, 429]
 const NO_TAKE: PlaybackTakeState = { takeId: null, position: 0, readyState: 0, deck: 'active' };
 
 let recording: Recording | null = null;
+// A page event has no element of its own; the player says what was playing
+// when the screen went off, so the night's log can tell which take it was.
+let playingTake: () => PlaybackTakeState | null = () => null;
 // The budget belongs to the page, not to one recording: the send on hide, the
 // pagehide right after it and a sign-in change in between all draw on it.
 let keepaliveBytesInFlight = 0;
@@ -131,6 +134,11 @@ export function recordPlaybackEvent(note: PlaybackNote): void {
 	writeEvents(recording);
 }
 
+/** Page events carry the take `source` reports as playing at that moment. */
+export function readThePlayingTakeFrom(source: () => PlaybackTakeState | null): void {
+	playingTake = source;
+}
+
 /** Drops what was recorded for `userId` and records nothing more for them. */
 export function forgetPlaybackDiagnostics(userId: string): void {
 	removeStorage(storageKey(userId));
@@ -162,7 +170,7 @@ function eventOf(note: PlaybackNote, sequence: number): PlaybackDiagnosticEvent 
 }
 
 function recordPageEvent(kind: PlaybackDiagnosticKind, detail = ''): void {
-	recordPlaybackEvent({ kind, detail, take: null });
+	recordPlaybackEvent({ kind, detail, take: playingTake() });
 }
 
 // A hidden page may be frozen or killed before an ordinary request answers,

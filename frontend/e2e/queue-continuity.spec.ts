@@ -1,7 +1,9 @@
 // A queue plays on by itself (#1187 P1, P6): when a take ends, the next one
 // starts without a tap, and it was already loading while the first one played
 // (P5: no server-side concat before the first byte, so the next take's own
-// request is the preload).
+// request is the preload). Where the browser appends MP3 into one source, as
+// Chromium does, the album plays on one element that neither pauses nor ends
+// between takes (#1254): the track change is the playhead crossing.
 //
 // Both shells walk both flows. The seeded takes are three seconds long, so a
 // real track change happens inside the flow's own time.
@@ -23,37 +25,45 @@ import {
 
 // A three-second take plus the next take's start, with room for a slow runner.
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
-const TAKE_ENDED_BINDING = 'reportTakeEnded';
+const MEDIA_EVENT_BINDING = 'reportMediaEvent';
+const STOPPING_EVENTS = ['pause', 'ended'];
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
 
 /**
- * When each take's audio was first requested and first ended, on one clock.
- * The player's decks are detached `Audio` elements, out of reach of any DOM
- * query, so every element that plays reports its own end through a binding.
+ * When each take's audio was first requested, and which elements played and
+ * stopped. The player's decks are detached `Audio` elements, out of reach of
+ * any DOM query, so every element that plays reports its own stops through a
+ * binding.
  */
 class PlaybackTimeline {
 	private readonly requested = new Map<string, number>();
-	private readonly ended = new Map<string, number>();
+	private readonly playingElements = new Set<number>();
+	readonly stops: string[] = [];
 
 	static async watch(page: Page): Promise<PlaybackTimeline> {
 		const timeline = new PlaybackTimeline();
-		page.on('request', (sent) => timeline.record(timeline.requested, sent.url()));
-		await page.exposeFunction(TAKE_ENDED_BINDING, (src: string) =>
-			timeline.record(timeline.ended, src)
+		page.on('request', (sent) => timeline.recordRequest(sent.url()));
+		await page.exposeFunction(MEDIA_EVENT_BINDING, (element: number, event: string) =>
+			timeline.recordMediaEvent(element, event)
 		);
-		await page.addInitScript((binding) => {
-			const watched = new WeakSet<HTMLMediaElement>();
-			const nativePlay = HTMLMediaElement.prototype.play;
-			HTMLMediaElement.prototype.play = function () {
-				if (!watched.has(this)) {
-					watched.add(this);
-					this.addEventListener('ended', () =>
-						Reflect.get(window, binding).call(window, this.currentSrc)
-					);
-				}
-				return nativePlay.call(this);
-			};
-		}, TAKE_ENDED_BINDING);
+		await page.addInitScript(
+			({ binding, stoppingEvents }) => {
+				const elementIds = new WeakMap<HTMLMediaElement, number>();
+				let nextId = 0;
+				const nativePlay = HTMLMediaElement.prototype.play;
+				HTMLMediaElement.prototype.play = function () {
+					if (!elementIds.has(this)) {
+						const id = nextId++;
+						elementIds.set(this, id);
+						const report = (event: string) => Reflect.get(window, binding).call(window, id, event);
+						report('play');
+						for (const event of stoppingEvents) this.addEventListener(event, () => report(event));
+					}
+					return nativePlay.call(this);
+				};
+			},
+			{ binding: MEDIA_EVENT_BINDING, stoppingEvents: STOPPING_EVENTS }
+		);
 		return timeline;
 	}
 
@@ -61,13 +71,18 @@ class PlaybackTimeline {
 		return this.requested.get(track.audioPath);
 	}
 
-	endedAt(track: SeededTrack): number | undefined {
-		return this.ended.get(track.audioPath);
+	get elementsPlayed(): number {
+		return this.playingElements.size;
 	}
 
-	private record(moments: Map<string, number>, url: string): void {
+	private recordRequest(url: string): void {
 		const path = decodeURIComponent(new URL(url).pathname);
-		if (!moments.has(path)) moments.set(path, performance.now());
+		if (!this.requested.has(path)) this.requested.set(path, performance.now());
+	}
+
+	private recordMediaEvent(element: number, event: string): void {
+		this.playingElements.add(element);
+		if (STOPPING_EVENTS.includes(event)) this.stops.push(`${event} on element ${element}`);
 	}
 }
 
@@ -80,7 +95,9 @@ async function expectTransportMovesOn(page: Page, from: SeededTrack, to: SeededT
 	await expect(transport.getByText(from.songTitle, { exact: true })).toHaveCount(0);
 }
 
-test('an album plays from one take into the next without a tap', async ({ page }) => {
+test('an album plays from one take into the next on one element that never stops', async ({
+	page
+}) => {
 	const guard = new FlowGuard(page);
 	const library = readSeededLibrary();
 	const [first, second] = library.albumTracks;
@@ -92,8 +109,10 @@ test('an album plays from one take into the next without a tap', async ({ page }
 		.click();
 
 	await expectTransportMovesOn(page, first, second);
-	await expect.poll(() => timeline.endedAt(first)).toBeDefined();
-	expect(timeline.requestedAt(second)).toBeLessThan(timeline.endedAt(first) ?? 0);
+	const movedOnAt = performance.now();
+	expect(timeline.requestedAt(second)).toBeLessThan(movedOnAt);
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.stops).toEqual([]);
 	guard.assertClean();
 });
 

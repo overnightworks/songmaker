@@ -30,19 +30,25 @@ interface DeckWindow {
 	audioDecks: Set<HTMLMediaElement>;
 }
 
-// The player's two decks are detached Audio objects no locator reaches, so the
-// page collects them as they load. Headless Chromium does not advance them far
-// enough to emit `playing`; the real play() call raises it, as the other
-// playback flows do.
+// The player's decks are detached Audio objects no locator reaches, so the
+// page collects each one as it is given a source: a take's own URL on the two
+// decks, a media source on the continuous deck, which never calls load().
+// Headless Chromium does not advance them far enough to emit `playing`; the
+// real play() call raises it, as the other playback flows do.
 async function followTheAudioDecks(page: Page): Promise<void> {
 	await page.addInitScript(() => {
 		const decks = new Set<HTMLMediaElement>();
 		(window as unknown as DeckWindow).audioDecks = decks;
-		const nativeLoad = HTMLMediaElement.prototype.load;
-		HTMLMediaElement.prototype.load = function () {
-			decks.add(this);
-			nativeLoad.call(this);
-		};
+		const source = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+		if (!source?.set) throw new Error('HTMLMediaElement has no src setter');
+		const setSource = source.set;
+		Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+			...source,
+			set(this: HTMLMediaElement, url: string) {
+				decks.add(this);
+				setSource.call(this, url);
+			}
+		});
 		const nativePlay = HTMLMediaElement.prototype.play;
 		HTMLMediaElement.prototype.play = function () {
 			const result = nativePlay.call(this);

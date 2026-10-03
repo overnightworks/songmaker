@@ -199,7 +199,7 @@ function positionToSave(userId: string, take: PlaybackInfo): number | null {
 	if (audioPlayer.status === 'loading' || audioPlayer.status === 'error') {
 		return savedRecordOf(userId, take) === null ? 0 : null;
 	}
-	return audioPlayer.getElement()?.currentTime ?? audioPlayer.currentTime;
+	return audioPlayer.currentTimeNow ?? audioPlayer.currentTime;
 }
 
 function saveTheTakeAfterTheEnd(follow: PlaybackToFollow): void {

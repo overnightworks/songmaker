@@ -2,9 +2,92 @@ import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
-import { recordPlaybackEvent } from './playbackDiagnostics';
+import { TakeNotAppended } from './continuousDeck';
+import { readThePlayingTakeFrom, recordPlaybackEvent } from './playbackDiagnostics';
 
-vi.mock('./playbackDiagnostics', () => ({ recordPlaybackEvent: vi.fn() }));
+vi.mock('./playbackDiagnostics', () => ({
+	recordPlaybackEvent: vi.fn(),
+	readThePlayingTakeFrom: vi.fn()
+}));
+
+// What the page's own events (screen off, page hidden) record as playing.
+const [playingTakeForPageEvents] = vi.mocked(readThePlayingTakeFrom).mock.calls[0];
+
+interface HeldTake {
+	take: PlaybackInfo;
+	start_offset: number;
+	duration: number;
+}
+
+interface AppendRequest {
+	take: PlaybackInfo;
+	url: string;
+	fail: (error: Error) => void;
+}
+
+// The continuous deck as the player sees it: what it was asked to append, and
+// a manifest of what it holds that each test lays out itself. The deck's own
+// appending, eviction and failures are proven in continuousDeck.test.ts.
+interface DeckDouble {
+	requests: AppendRequest[];
+	manifest: HeldTake[];
+	playableFrom: number;
+	appending: boolean;
+	ended: boolean;
+}
+
+const continuousDecks = vi.hoisted(() => ({ supported: false, attached: [] as DeckDouble[] }));
+
+vi.mock('./continuousDeck', () => {
+	class TakeNotAppended extends Error {
+		constructor(
+			readonly take: unknown,
+			readonly reason: string,
+			message: string
+		) {
+			super(message);
+		}
+	}
+	class ContinuousDeckDouble implements DeckDouble {
+		requests: AppendRequest[] = [];
+		manifest: HeldTake[] = [];
+		playableFrom = 0;
+		appending = false;
+		ended = false;
+
+		static isSupported(): boolean {
+			return continuousDecks.supported;
+		}
+
+		static attach(): ContinuousDeckDouble {
+			const deck = new ContinuousDeckDouble();
+			continuousDecks.attached.push(deck);
+			return deck;
+		}
+
+		entryAt(seconds: number): HeldTake | undefined {
+			return this.manifest.findLast((entry) => entry.start_offset <= seconds);
+		}
+
+		playableEntryOf(isTake: (take: PlaybackInfo) => boolean): HeldTake | undefined {
+			return this.manifest.findLast(
+				(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
+			);
+		}
+
+		appendTake(take: PlaybackInfo, url: string): Promise<void> {
+			if (this.ended)
+				return Promise.reject(new TakeNotAppended(take, 'stream-ended', `${url} came late`));
+			return new Promise((_resolve, reject) => this.requests.push({ take, url, fail: reject }));
+		}
+
+		endStream(): Promise<void> {
+			this.ended = true;
+			return Promise.resolve();
+		}
+	}
+	return { ContinuousDeck: ContinuousDeckDouble, TakeNotAppended };
+});
 
 const NO_STRIP_SHOWN = (): boolean => false;
 const SECOND = 1000;
@@ -2701,6 +2784,19 @@ describe('what the player writes down for diagnostics (#1250)', () => {
 		);
 	});
 
+	it('tells page events the playing take, its position and readiness', () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.readyState = 4;
+		fakeAudio.currentTime = 37;
+
+		expect(playingTakeForPageEvents()).toEqual({
+			takeId: 'g1',
+			position: 37,
+			readyState: 4,
+			deck: 'active'
+		});
+	});
+
 	it('records each reload with its reason and then the give-up', async () => {
 		vi.useFakeTimers();
 		audioPlayer.load(makeInfo(), { autoplay: false });
@@ -2722,5 +2818,290 @@ describe('what the player writes down for diagnostics (#1250)', () => {
 			detail: expect.stringContaining('reason=stall-timeout')
 		});
 		expect(recovery.at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
+	});
+});
+
+describe('continuous deck (#1187 M2)', () => {
+	const first = makeInfo({
+		generation: makeGen({ id: 'g1', mp3_path: 'a1/first.mp3', audio_duration_sec: 10 }),
+		songTitle: 'First'
+	});
+	const second = makeInfo({
+		generation: makeGen({ id: 'g2', mp3_path: 'a1/second.mp3', audio_duration_sec: 20 }),
+		songTitle: 'Second'
+	});
+	const third = takeInfo('g3', 'a1/third.mp3');
+	let onCurrentChange: ReturnType<typeof vi.fn<(current: PlaybackInfo | null) => void>>;
+	let onEnded: ReturnType<typeof vi.fn<(reason: 'normal' | 'window-end') => void>>;
+
+	beforeEach(() => {
+		continuousDecks.supported = true;
+		continuousDecks.attached = [];
+		vi.stubGlobal('MediaSource', vi.fn());
+		onCurrentChange = vi.fn();
+		onEnded = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded }));
+	});
+
+	afterEach(() => {
+		continuousDecks.supported = false;
+	});
+
+	function deck(): DeckDouble {
+		const attached = continuousDecks.attached.at(-1);
+		if (!attached) throw new Error('no deck was attached');
+		return attached;
+	}
+
+	function holds(...takes: [PlaybackInfo, number, number][]): void {
+		deck().manifest = takes.map(([take, start_offset, duration]) => ({
+			take,
+			start_offset,
+			duration
+		}));
+	}
+
+	function playFirstWithSecondAppended(): void {
+		audioPlayer.load(first);
+		audioPlayer.preload(second);
+		holds([first, 0, 10], [second, 10, 20]);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('play');
+		fakeAudio.fire('playing');
+	}
+
+	function playTo(seconds: number): void {
+		fakeAudio.currentTime = seconds;
+		fakeAudio.fire('timeupdate');
+	}
+
+	function heardEvents(): string[] {
+		const heard: string[] = [];
+		for (const name of ['pause', 'ended', 'emptied'])
+			fakeAudio.addEventListener(name, () => heard.push(name));
+		return heard;
+	}
+
+	it('starts a queue take on one deck that is asked for that take at once', () => {
+		audioPlayer.load(first);
+
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(deck().requests.map((request) => request.url)).toEqual(['/audio/a1/first.mp3']);
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		expect(audioPlayer.status).toBe('loading');
+	});
+
+	it('appends the preloaded next take behind the current one, once', () => {
+		audioPlayer.load(first);
+
+		audioPlayer.preload(second);
+		audioPlayer.preload(second);
+
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second]);
+		expect(createdAudios).toHaveLength(1);
+	});
+
+	it('keeps what the deck holds when nothing is known to follow yet', () => {
+		audioPlayer.load(first);
+
+		audioPlayer.preload(null);
+
+		expect(deck().ended).toBe(false);
+		expect(deck().requests).toHaveLength(1);
+	});
+
+	it('changes current when the playhead crosses into the next take, with no ended or pause', () => {
+		playFirstWithSecondAppended();
+		const heard = heardEvents();
+		const pauseSpy = vi.spyOn(fakeAudio, 'pause');
+
+		playTo(9.9);
+		playTo(10.5);
+
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(onCurrentChange).toHaveBeenLastCalledWith(second);
+		expect(audioPlayer.currentTime).toBeCloseTo(0.5);
+		expect(audioPlayer.duration).toBe(20);
+		expect(audioPlayer.status).toBe('playing');
+		expect(pauseSpy).not.toHaveBeenCalled();
+		expect(heard).toEqual([]);
+		expect(onEnded).not.toHaveBeenCalled();
+	});
+
+	it('Next seeks inside the buffer when the next take is already appended', () => {
+		playFirstWithSecondAppended();
+		playTo(4);
+		const loadSpy = vi.spyOn(fakeAudio, 'load');
+
+		audioPlayer.load(second);
+
+		expect(fakeAudio.currentTime).toBe(10);
+		expect(loadSpy).not.toHaveBeenCalled();
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(audioPlayer.currentTime).toBe(0);
+		expect(audioPlayer.duration).toBe(20);
+	});
+
+	it('reads the position within the take from the element clock at once', () => {
+		playFirstWithSecondAppended();
+		playTo(12);
+
+		fakeAudio.currentTime = 12.4;
+
+		expect(audioPlayer.currentTimeNow).toBeCloseTo(2.4);
+	});
+
+	it('a seek within the current take lands at that take in the element timeline', () => {
+		playFirstWithSecondAppended();
+		playTo(12);
+
+		audioPlayer.seek(5);
+
+		expect(fakeAudio.currentTime).toBe(15);
+	});
+
+	it('starts a new deck for a take the deck no longer holds from its start', () => {
+		playFirstWithSecondAppended();
+		playTo(12);
+		deck().playableFrom = 10;
+
+		audioPlayer.load(first, { restart: true });
+
+		expect(continuousDecks.attached).toHaveLength(2);
+		expect(deck().requests.map((request) => request.take)).toEqual([first]);
+	});
+
+	it('ends the stream only when the playhead runs out of takes with nothing on its way', async () => {
+		playFirstWithSecondAppended();
+		playTo(29.9);
+		fakeAudio.bufferedUntil = 30;
+		deck().appending = true;
+		fakeAudio.fire('waiting');
+		expect(deck().ended).toBe(false);
+
+		deck().appending = false;
+		fakeAudio.currentTime = 30;
+		fakeAudio.fire('waiting');
+		expect(deck().ended).toBe(true);
+
+		fakeAudio.fire('ended');
+		expect(onEnded).toHaveBeenCalledOnce();
+	});
+
+	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {
+		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
+		const skipped: PlaybackInfo[] = [];
+		const onTakeSkipped = (take: PlaybackInfo) => skipped.push(take);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter, onTakeSkipped }));
+		playFirstWithSecondAppended();
+		const heard = heardEvents();
+
+		deck().requests[1].fail(new TakeNotAppended(second, 'not-fetched', 'Failed to fetch'));
+		await Promise.resolve();
+
+		expect(skipped).toEqual([second]);
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second, third]);
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		expect(audioPlayer.status).toBe('playing');
+		expect(recordedNotes().map((note) => note.detail)).toContain(
+			'deck_dropped take=g2 not-fetched Failed to fetch'
+		);
+
+		holds([first, 0, 10], [third, 10, 5]);
+		fakeAudio.bufferedUntil = 15;
+		playTo(10);
+		fakeAudio.fire('waiting');
+		playTo(10.5);
+
+		expect(audioPlayer.current?.generation.id).toBe('g3');
+		expect(deck().ended).toBe(false);
+		expect(heard).toEqual([]);
+		expect(onEnded).not.toHaveBeenCalled();
+	});
+
+	it('asks for no further take when one comes after the end of the stream', async () => {
+		const takeAfter = vi.fn((): PlaybackInfo | null => first);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+		playFirstWithSecondAppended();
+		deck().ended = true;
+
+		audioPlayer.preload(third);
+		await Promise.resolve();
+
+		expect(takeAfter).not.toHaveBeenCalled();
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+	});
+
+	it.each([
+		{ failure: 'the current take cannot be fetched', notFetched: true },
+		{ failure: 'the buffer refuses the audio', notFetched: false }
+	])(
+		'falls back to the two decks at the same take and position when $failure',
+		async ({ notFetched }) => {
+			playFirstWithSecondAppended();
+			playTo(6);
+			fakeAudio.paused = false;
+
+			deck().requests[0].fail(
+				notFetched
+					? new TakeNotAppended(first, 'not-fetched', '404')
+					: new Error('The source buffer refused the appended audio')
+			);
+			await Promise.resolve();
+
+			expect(fakeAudio.src).toBe('/audio/a1/first.mp3');
+			expect(audioPlayer.current?.generation.id).toBe('g1');
+			expect(audioPlayer.status).toBe('loading');
+			fakeAudio.fire('loadedmetadata');
+			expect(fakeAudio.currentTime).toBe(6);
+
+			audioPlayer.preload(second);
+			expect(createdAudios.at(-1)?.src).toBe('/audio/a1/second.mp3');
+			expect(deck().requests).toHaveLength(2);
+		}
+	);
+
+	it('falls back to the two decks when the element reports a media error', () => {
+		playFirstWithSecondAppended();
+		playTo(3);
+
+		fakeAudio.error = { code: 3 } as MediaError;
+		fakeAudio.fire('error');
+
+		expect(fakeAudio.src).toBe('/audio/a1/first.mp3');
+		expect(audioPlayer.status).toBe('loading');
+	});
+
+	it('a browser without MSE MP3 keeps the two decks', () => {
+		continuousDecks.supported = false;
+
+		audioPlayer.load(first);
+		audioPlayer.preload(second);
+
+		expect(continuousDecks.attached).toEqual([]);
+		expect(fakeAudio.src).toBe('/audio/a1/first.mp3');
+		expect(createdAudios.at(-1)?.src).toBe('/audio/a1/second.mp3');
+	});
+
+	it('writes down the deck opening, each append, the crossing and a fallback', async () => {
+		playFirstWithSecondAppended();
+		playTo(10.5);
+		deck().requests[1].fail(new Error('The source buffer refused the appended audio'));
+		await Promise.resolve();
+
+		const details = recordedNotes().map((note) => `${note.kind} ${note.detail}`);
+		expect(details).toEqual(
+			expect.arrayContaining([
+				'fresh_load deck=continuous',
+				'media_event deck_append take=g1',
+				'media_event deck_append take=g2',
+				'media_event deck_crossing',
+				expect.stringMatching(/^retry deck_fallback The source buffer refused/)
+			])
+		);
+		const crossing = recordedNotes().find((note) => note.detail === 'deck_crossing');
+		expect(crossing?.take).toEqual(expect.objectContaining({ takeId: 'g2', position: 0.5 }));
 	});
 });

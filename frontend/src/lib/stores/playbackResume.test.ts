@@ -148,12 +148,10 @@ describe('playback resume record', () => {
 		expect(savedPoint(LISTENER.id)).toBeNull();
 	});
 
-	it("pause saves the element's current time", () => {
+	it("pause saves the take's position on the element clock", () => {
 		playTake('g-paused');
 		playTo(2.5);
-		vi.spyOn(audioPlayer, 'getElement').mockReturnValue({
-			currentTime: 2.75
-		} as HTMLAudioElement);
+		vi.spyOn(audioPlayer, 'currentTimeNow', 'get').mockReturnValue(2.75);
 
 		audioPlayer.status = 'paused';
 		flushSync();

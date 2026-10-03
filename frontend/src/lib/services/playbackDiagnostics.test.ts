@@ -512,6 +512,36 @@ describe('playback diagnostics recorder', () => {
 		expect(sentReports()[0].events[0].kind).toBe(kind);
 	});
 
+	it.each([
+		['visibilitychange', hidePage, 'visibility_change'],
+		[
+			'pagehide',
+			() => window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })),
+			'page_hide'
+		]
+	] as const)(
+		'records with the page’s %s the take the player reports as playing',
+		async (_name, happen, kind) => {
+			startFor(LISTENER);
+			recorder.readThePlayingTakeFrom(() => ({
+				takeId: TAKE_ID,
+				position: 93.4,
+				readyState: 4,
+				deck: 'active'
+			}));
+			happen();
+			await letTheServerAnswer();
+
+			expect(sentReports()[0].events[0]).toMatchObject({
+				kind,
+				take_id: TAKE_ID,
+				position: 93.4,
+				ready_state: 4,
+				deck: 'active'
+			});
+		}
+	);
+
 	it('records a timer gap when much more time passed than the heartbeat asked for', async () => {
 		vi.useFakeTimers();
 		startFor(LISTENER);
