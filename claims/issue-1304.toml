@@ -1,0 +1,8 @@
+claim_id = "9e6f4a2916724849b9cfc9f56b9675ad"
+agent = "claude-head"
+role = "builder"
+base = "7ed7bfdd268cb84dd44ddacf8fb22271cd7ccd37"
+branch = "claude-head/issue-1304-library-shuffle-skips"
+scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "07358fa2dbccc107017079d073cfa64c5076d8bd"
+whole_reason = "library shuffle position and skip handling in the queue store"
