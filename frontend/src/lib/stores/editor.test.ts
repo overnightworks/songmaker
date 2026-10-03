@@ -31,6 +31,7 @@ import {
 	isDirty,
 	versions,
 	draftLoadedFrom,
+	draftHasUnversionedChanges,
 	loadSongData,
 	loadVersionAsDraft,
 	retireVersionLoadUndo,
@@ -165,6 +166,31 @@ describe('loadVersionAsDraft', () => {
 		expect(client.fetchSong).not.toHaveBeenCalled();
 		expect(client.deleteVersion).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ draft: 'the song as opened', change: () => undefined, unversioned: false },
+		{
+			draft: 'an older version loaded and left untouched',
+			change: () => loadVersionAsDraft(older),
+			unversioned: false
+		},
+		{ draft: 'a typed line', change: () => setDraftLyrics('an unsaved line'), unversioned: true },
+		{
+			draft: 'an older version loaded and then edited',
+			change: () => {
+				loadVersionAsDraft(older);
+				setDraftLyrics('v1 lyrics\na typed line');
+			},
+			unversioned: true
+		}
+	])(
+		'only a draft no saved version equals has changes in no version: $draft',
+		({ change, unversioned }) => {
+			openSongWithTwoVersions();
+			change();
+			expect(get(draftHasUnversionedChanges)).toBe(unversioned);
+		}
+	);
 
 	it('answers no undo when the draft already holds that version', () => {
 		openSongWithTwoVersions();

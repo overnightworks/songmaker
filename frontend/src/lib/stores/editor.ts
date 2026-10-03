@@ -118,6 +118,20 @@ export function setDraftGenParams(genParams: VersionGenerationParams | null): vo
 export const versions = writable<VersionItem[]>([]);
 export const currentVersionIndex = writable(0);
 
+function isHeldByAVersion(data: SongData, held: VersionItem[]): boolean {
+	return held.some((version) => songDataEqual(data, songDataFromVersion(version)));
+}
+
+/**
+ * Whether the draft holds work no saved version has, so replacing it would
+ * lose something. A draft loaded from an older version and left untouched is
+ * still a draft of the latest (`isDirty`), yet replacing it loses nothing.
+ */
+export const draftHasUnversionedChanges = derived(
+	[editorState, versions],
+	([s, all]) => !songDataEqual(s.draft, s.saved) && !isHeldByAVersion(s.draft, all)
+);
+
 /** A version to load into a song's draft once that song's page shows it (Open vN in Now Playing). */
 interface PendingVersionLoad {
 	songId: string;

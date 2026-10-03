@@ -1820,6 +1820,22 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ next: 2, lyrics: 'verse' },
+		{ next: 1, lyrics: 'first draft' }
+	])(
+		'a draft equal to a saved version is clean: after an untouched v1, v$next loads without asking',
+		async ({ next, lyrics }) => {
+			const target = await renderView();
+			await tapVersion(target, 1);
+			await tapVersion(target, next);
+
+			expect(replaceDialog()).toBeNull();
+			expect(versionsSheet(target)).toBeNull();
+			expect(get(editLyrics)).toBe(lyrics);
+		}
+	);
+
 	function takeGroupOpenLink(target: HTMLElement, versionNumber: number): HTMLButtonElement {
 		const link = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
 			(button) => button.textContent?.includes(openVersionLabel(versionNumber))

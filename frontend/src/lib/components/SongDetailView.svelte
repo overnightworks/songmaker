@@ -46,6 +46,7 @@
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		isDirty,
+		draftHasUnversionedChanges,
 		versions,
 		loadSongData,
 		loadVersionAsDraft,
@@ -463,7 +464,7 @@
 	function askToLoadVersion(versionId: string): Promise<boolean> {
 		const version = get(versions).find((v) => v.id === versionId);
 		if (!version) return Promise.resolve(false);
-		if (!get(isDirty)) {
+		if (!get(draftHasUnversionedChanges)) {
 			loadVersionWithUndo(version);
 			return Promise.resolve(true);
 		}
