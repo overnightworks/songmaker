@@ -1649,4 +1649,20 @@ describe('an address route whose history moves on', () => {
 			expect(historyEntry()).toEqual(albumLeftFor);
 		}
 	);
+
+	it.each(resolvers)(
+		'mounts the $route route over the address history moved on to while its lookup failed, instead of calling it unreachable',
+		async ({ mountedAt, lookup, resolve }) => {
+			mountAddressRoute(mountedAt);
+			lookup.mockImplementationOnce(async () => {
+				moveHistoryOn();
+				throw new ApiError(500, 'boom', '/api/lookup');
+			});
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
 });

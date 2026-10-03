@@ -445,14 +445,21 @@ function mountedRouteUrl(): string {
 // The frame every address route shares. History may stand on another address
 // than the route was mounted under (see `mountAddressOver`) before its params
 // resolve, or move on while they do: they then resolve nothing and state no
-// verdict, and the route of the address history stands on is mounted instead,
-// whose own resolution follows (issue #1263).
+// verdict -- not even a failed lookup's -- and the route of the address
+// history stands on is mounted instead, whose own resolution follows (issues
+// #1263, #1267).
 async function resolveMountedAddress<Verdict extends string>(
 	resolveParams: () => Promise<ResolvedAddress | Verdict>
 ): Promise<Verdict | 'found'> {
 	const mountedUrl = mountedRouteUrl();
 	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
-	const resolved = await resolveParams();
+	let resolved: ResolvedAddress | Verdict;
+	try {
+		resolved = await resolveParams();
+	} catch (failure) {
+		if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+		throw failure;
+	}
 	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
 	if (typeof resolved === 'string') return resolved;
 	await showResolvedAddress(resolved);
