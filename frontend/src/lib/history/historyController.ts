@@ -374,7 +374,7 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 // address (`stampNavigatedEntry`).
 function keepTrackOfKeptPage(url: string): void {
 	const target = new URL(url, location.href).href;
-	if (target === page.url.href) addressMountedUnderKeptPage = target;
+	if (target === untrack(() => page.url.href)) addressMountedUnderKeptPage = target;
 }
 
 function standsOnAddress(url: string): boolean {
