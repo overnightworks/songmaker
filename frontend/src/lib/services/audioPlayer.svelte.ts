@@ -722,13 +722,12 @@ class AudioPlayer {
 		}
 		const entry = this.deckSession?.playing;
 		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
-		this.seekElement(
-			this.audio,
-			(entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable))
-		);
+		const target = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
+		if (this.deckSession) this.deckSession.deck.scrubTo(target);
+		else this.audio.currentTime = target;
 	}
 
-	// On the continuous deck the deck moves the playhead, so that a seek past
+	// On the continuous deck the deck moves the playhead, so that a restore past
 	// what has arrived waits there instead of stopping where the buffer ends.
 	private seekElement(el: HTMLAudioElement, seconds: number): void {
 		if (this.deckSession) this.deckSession.deck.seekTo(seconds);

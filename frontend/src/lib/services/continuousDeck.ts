@@ -138,6 +138,18 @@ export class ContinuousDeck<Take> {
 		element.currentTime = seconds;
 	}
 
+	/**
+	 * Moves the playhead as a live scrub does: no further than what has
+	 * arrived, so the position the listener sees is the one that plays. A
+	 * range a waiting seek opened is dropped first; scrubbing past the buffer
+	 * is #1187's to decide.
+	 */
+	scrubTo(seconds: number): void {
+		const { element, mediaSource } = this.ports;
+		if (mediaSource.readyState === 'open') mediaSource.clearLiveSeekableRange();
+		element.currentTime = seconds;
+	}
+
 	appendTake(take: Take, url: string): Promise<void> {
 		if (this.ending !== null)
 			return Promise.reject(

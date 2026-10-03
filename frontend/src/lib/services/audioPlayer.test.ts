@@ -37,6 +37,7 @@ interface DeckDouble {
 	closed: boolean;
 	retries: number;
 	seeks: number[];
+	scrubs: number[];
 }
 
 const continuousDecks = vi.hoisted(() => ({ supported: false, attached: [] as DeckDouble[] }));
@@ -60,6 +61,7 @@ vi.mock('./continuousDeck', () => {
 		closed = false;
 		retries = 0;
 		seeks: number[] = [];
+		scrubs: number[] = [];
 
 		private constructor(private readonly element: HTMLMediaElement) {}
 
@@ -75,6 +77,11 @@ vi.mock('./continuousDeck', () => {
 
 		seekTo(seconds: number): void {
 			this.seeks.push(seconds);
+			this.element.currentTime = seconds;
+		}
+
+		scrubTo(seconds: number): void {
+			this.scrubs.push(seconds);
 			this.element.currentTime = seconds;
 		}
 
@@ -2964,6 +2971,17 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().seeks).toEqual([14.5]);
 		expect(fakeAudio.currentTime).toBe(14.5);
 		expect(audioPlayer.currentTime).toBe(14.5);
+	});
+
+	it('a scrub while the restore waits for its place goes only as far as the deck has audio', () => {
+		audioPlayer.load(second, { autoplay: false, startAt: 14.5 });
+		holds([second, 0, 4]);
+		fakeAudio.fire('loadedmetadata');
+
+		audioPlayer.seek(18);
+
+		expect(deck().seeks).toEqual([14.5]);
+		expect(deck().scrubs).toEqual([18]);
 	});
 
 	it('a seek within the current take lands at that take in the element timeline', () => {

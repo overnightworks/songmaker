@@ -152,6 +152,11 @@ class FakeMediaSource extends EventTarget {
 		this.liveSeekable = [start, end];
 	}
 
+	clearLiveSeekableRange(): void {
+		if (this.readyState !== 'open') throw new DOMException('not open', 'InvalidStateError');
+		this.liveSeekable = null;
+	}
+
 	seekable(): readonly [number, number] {
 		const buffered = this.buffer.buffered;
 		const bufferedEnd = buffered.length ? buffered.end() : 0;
@@ -619,6 +624,19 @@ describe('ContinuousDeck', () => {
 
 		expect(buffer.removals).toEqual([[0, 15]]);
 		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, PIECE]);
+	});
+
+	it('stops a scrub where the arrived audio ends, even while a seek waits further on', async () => {
+		const { deck, audio, buffer, network } = openDeck();
+		network.serve('/audio/long.mp3', 5 * MEGABYTE);
+		void deck.appendTake('long', '/audio/long.mp3');
+		await audio.untilDeckWaitsForPlayback();
+		deck.seekTo(200);
+
+		deck.scrubTo(250);
+
+		expect(audio.currentTime).toBe(buffer.buffered.end());
+		expect(audio.currentTime).toBeLessThan(200);
 	});
 
 	it('lets a seek back before what a full buffer freed land where the kept audio starts', async () => {
