@@ -2,7 +2,9 @@ import {
 	historyEntry,
 	historyLength,
 	mountAddressRoute,
+	mountRouteUnderKeptPage,
 	pressBack,
+	pressForward,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
@@ -92,7 +94,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto, pushState, replaceState } from '$app/navigation';
-import { listenForLandings, replaceEntry } from '$lib/history/historyController';
+import { listenForLandings, pushEntry, replaceEntry } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
 import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
@@ -414,6 +416,63 @@ describe('applyLibraryHistory', () => {
 		await expect(first).resolves.toBe(false);
 
 		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	// Issue #1006 H5: an apply belongs to the entry it landed on, so a Back that
+	// leaves that entry stops it even when nothing in the library heard the Back
+	// -- the second of two quick Backs from Settings.
+	it('applies nothing more once history has left the entry it landed on', async () => {
+		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
+		fetchAlbum.mockImplementationOnce(
+			() => new Promise<AlbumItem>((resolve) => (resolveAlbum = resolve))
+		);
+		replaceEntry('/', { library: libraryRootState() });
+		const albumState = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a1' }
+		};
+		pushEntry(albumRoutePath('a1'), { library: albumState });
+		const applying = applyLibraryHistory(albumState);
+		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
+
+		await pressBack();
+		resolveAlbum?.(album());
+
+		await expect(applying).resolves.toBe(false);
+		expect(get(albumList).some((item) => item.id === 'a1')).toBe(false);
+		// Back to the top entry: a later push must not cut an entry above it.
+		await pressForward();
+	});
+
+	// Issue #1267: the song's apply joins the album-songs lookup the song itself
+	// started; that lookup refused while history moves on must not fail the
+	// apply -- and with it the library's snapshot -- but leave the screen to the
+	// entry history landed on.
+	it('stops quietly when the album songs lookup it joined is refused after history left the entry', async () => {
+		albumList.set([album({ id: 'a1' })]);
+		const listed = song({ id: 's1', album_id: 'a1', generation_count: 0, generations: [] });
+		let refuseSongs: ((reason: unknown) => void) | undefined;
+		fetchSongs.mockImplementation(async (albumId?: string) => {
+			if (albumId !== 'a1') return { ...emptyPage([listed]), limit: 200 };
+			return new Promise((_, reject) => (refuseSongs = reject));
+		});
+		replaceEntry('/', { library: libraryRootState() });
+		const songState = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a1' },
+			songId: 's1'
+		};
+		pushEntry(songRoutePath('a1', 's1'), { library: songState });
+		const applying = applyLibraryHistory(songState);
+		await vi.waitFor(() => expect(refuseSongs).toBeTypeOf('function'));
+
+		await pressBack();
+		refuseSongs?.(new ApiError(500, 'boom', '/api/songs'));
+
+		await expect(applying).resolves.toBe(false);
+		await pressForward();
 	});
 
 	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
@@ -1646,6 +1705,37 @@ describe('an address route whose history moves on', () => {
 			await expect(resolve()).resolves.toBe('found');
 
 			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
+
+	it.each(resolvers)(
+		'mounts the $route route over the address history moved on to while its lookup failed, instead of calling it unreachable',
+		async ({ mountedAt, lookup, resolve }) => {
+			mountAddressRoute(mountedAt);
+			lookup.mockImplementationOnce(async () => {
+				moveHistoryOn();
+				throw new ApiError(500, 'boom', '/api/lookup');
+			});
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
+
+	it.each(resolvers)(
+		'resolves nothing for the $route route mounted over its address under the page the router kept',
+		async ({ mountedAt, lookup, resolve }) => {
+			mountAddressRoute(mountedAt);
+			replaceEntry(mountedAt, { library: albumLeftFor });
+			await mountRouteUnderKeptPage();
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(lookup).not.toHaveBeenCalled();
+			expect(location.pathname).toBe(mountedAt);
 			expect(historyEntry()).toEqual(albumLeftFor);
 		}
 	);

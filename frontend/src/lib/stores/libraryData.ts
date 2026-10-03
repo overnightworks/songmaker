@@ -96,27 +96,23 @@ function setAlbumSongsLoad(albumId: string, status: AlbumSongsLoadStatus): void 
 	albumSongsLoad.update((state) => ({ ...state, [albumId]: status }));
 }
 
-export async function loadSongsForAlbum(albumId: string): Promise<void> {
+// A caller that joins a load under way gets the same settled load as the
+// caller that started it: a refusal is named on `albumSongsLoad`, never thrown
+// at whoever asked second -- a Back whose apply joined the load the song it
+// left had started would otherwise fail the library's whole snapshot (#1267).
+export function loadSongsForAlbum(albumId: string): Promise<void> {
 	const inflight = albumSongLoads.get(albumId);
 	if (inflight !== undefined) return inflight;
+	const load = settleAlbumSongsLoad(albumId);
+	albumSongLoads.set(albumId, load);
+	return load;
+}
+
+async function settleAlbumSongsLoad(albumId: string): Promise<void> {
 	const generation = albumSongsGeneration;
 	setAlbumSongsLoad(albumId, 'loading');
-	const load = (async () => {
-		let offset = 0;
-		const collected: SongItem[] = [];
-		for (;;) {
-			const page = await fetchSongs(albumId, offset, LIBRARY_SONG_PAGE_SIZE);
-			if (generation !== albumSongsGeneration) return;
-			collected.push(...page.items);
-			offset += page.items.length;
-			if (!page.has_more || page.items.length === 0) break;
-		}
-		if (generation !== albumSongsGeneration) return;
-		songList.update((list) => mergeAlbumSongs(list, collected));
-	})();
-	albumSongLoads.set(albumId, load);
 	try {
-		await load;
+		await mergeSongsOfAlbum(albumId, generation);
 		if (generation !== albumSongsGeneration) return;
 		albumSongsReloads.get(albumId)?.stop();
 		setAlbumSongsLoad(albumId, 'idle');
@@ -127,6 +123,20 @@ export async function loadSongsForAlbum(albumId: string): Promise<void> {
 	} finally {
 		albumSongLoads.delete(albumId);
 	}
+}
+
+async function mergeSongsOfAlbum(albumId: string, generation: number): Promise<void> {
+	let offset = 0;
+	const collected: SongItem[] = [];
+	for (;;) {
+		const page = await fetchSongs(albumId, offset, LIBRARY_SONG_PAGE_SIZE);
+		if (generation !== albumSongsGeneration) return;
+		collected.push(...page.items);
+		offset += page.items.length;
+		if (!page.has_more || page.items.length === 0) break;
+	}
+	if (generation !== albumSongsGeneration) return;
+	songList.update((list) => mergeAlbumSongs(list, collected));
 }
 
 export function albumSongsErrorMessage(err: unknown): string {

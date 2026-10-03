@@ -27,11 +27,12 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
-import { mountRouteOfLandedAddress } from '$lib/history/historyController';
+import { mountRouteOfLandedAddress, stampNavigatedEntry } from '$lib/history/historyController';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
 import {
+	applyLibraryHistory,
 	captureLibraryScroll,
 	currentLibraryHistoryState,
 	detailTab,
@@ -172,6 +173,7 @@ import {
 	setDraftLyrics
 } from '$lib/stores/editor';
 import { updateSong } from '$lib/api/client';
+import { fetchAlbums } from '$lib/api/albums';
 import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
@@ -839,6 +841,49 @@ describe('Back and Forward across an app page', () => {
 			expect(historyEntry().collection).toEqual({ kind: 'playlist', id: 'p1' });
 		}
 	);
+
+	// Issue #1006 H5: the library listens on its page only once that page has
+	// loaded, so a second Back pressed after the page showed the entry the
+	// first one reached lands unheard on the wall.
+	it('shows the wall two quick Backs from Settings reached once the library listens', async () => {
+		let stopNavigation = initNavigation();
+		await openAlbum('a1');
+		await goto(resolve(SETTINGS));
+		stampNavigatedEntry('link');
+		stopNavigation();
+
+		await pressBack();
+		await applyLibraryHistory(historyEntry());
+		await pressBack();
+		stopNavigation = initNavigation();
+
+		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
+		expect(get(openCollection)).toBeNull();
+		expect(location.pathname).toBe('/');
+		stopNavigation();
+	});
+
+	it('shows the song one Back from Settings reached once, however the library listens after', async () => {
+		fetchSong.mockResolvedValue(song({ ...navigableSongDefaults(), slug: 's1' }));
+		let stopNavigation = initNavigation();
+		await openAlbum('a1');
+		await selectSong('s1');
+		await goto(resolve(SETTINGS));
+		stampNavigatedEntry('link');
+		stopNavigation();
+		await pressBack();
+		vi.mocked(fetchAlbums).mockClear();
+		fetchActiveGeneration.mockClear();
+
+		await applyLibraryHistory(historyEntry());
+		stopNavigation = initNavigation();
+		await libraryHistoryStepsLanded();
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(fetchAlbums).toHaveBeenCalledOnce();
+		expect(fetchActiveGeneration).toHaveBeenCalledOnce();
+		stopNavigation();
+	});
 
 	it('Back from Settings after a reload returns to the playlist with what it showed', async () => {
 		await openPlaylist('p1');
@@ -1686,7 +1731,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
-	it('saves the draft, then leaves for the entry Back reached, on Save', async () => {
+	it('saves the draft once, then leaves for the entry Back reached, on Save', async () => {
 		await editTheSongOpenedFrom(() => openAlbum('a1'));
 		vi.mocked(updateSong).mockResolvedValue(
 			song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
@@ -1697,6 +1742,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(window.location.pathname).toBe('/album/a1');
+		expect(updateSong).toHaveBeenCalledOnce();
 		expect(updateSong).toHaveBeenCalledWith(
 			's1',
 			expect.objectContaining({ lyrics: 'unsaved edit' })
@@ -2363,6 +2409,34 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		await vi.waitFor(() =>
 			expect(historyEntry()).toMatchObject({ index: below + 1, songId: 's1' })
 		);
+		await pressBack();
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		playlistStands(below);
+	});
+
+	// Issue #1006 H5: a write issued while another waits behind the step-back
+	// builds on the waiting write, not on the entry the step leaves.
+	it("a tab chosen while the song's push waits behind a layer's step-back keeps the song's entry", async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+		const stepBack = watchBack();
+		menu.set(false);
+		const opening = selectSong('s1');
+		await vi.waitFor(() => expect(stepBack.presses()).toBe(1));
+
+		persistLibraryHistory();
+		navigateToSongTab('takes');
+		stepBack.stop();
+		await pressBack();
+		await opening;
+		await libraryHistoryStepsLanded();
+
+		expect(historyEntry()).toMatchObject({
+			index: below + 1,
+			songId: 's1',
+			detailTab: 'takes'
+		});
+		expect(location.pathname).toBe('/album/a1/s1');
 		await pressBack();
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		playlistStands(below);
