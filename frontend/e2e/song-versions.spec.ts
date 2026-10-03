@@ -10,7 +10,10 @@
 // version loads the next one without asking, tapping the version the draft
 // already holds changes nothing and keeps its Undo, the delete confirm says an
 // unsaved draft goes too, and the sheet stands over the whole page: the
-// phone's backdrop dims all of it (issue #1286).
+// phone's backdrop dims all of it (issue #1286). Leaving an untouched load
+// asks nothing, a peek at the sheet keeps the Undo, the Undo toast keeps its
+// time while the sheet is open, and the delete confirm says what an untouched
+// load loses (issue #1296).
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -23,6 +26,7 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
+	EDITOR_UNSAVED_TITLE,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_TAB_TAKES_LABEL,
 	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
@@ -30,13 +34,14 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
-	versionDeletePickWarning,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_CLOSE_LABEL,
 	VERSIONS_SHEET_LABEL,
 	versionChipLabel,
 	versionDeleteLabel,
+	versionDeleteLoadedDraftGoes,
+	versionDeleteLoadedDraftReplacedBy,
 	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
@@ -379,6 +384,69 @@ test.describe('the versions of a song', () => {
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
 	});
 
+	test('leaving an untouched load asks nothing: Escape goes to the album without the unsaved-changes question', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+
+		await lyricsField(page).focus();
+		await lyricsField(page).blur();
+		await page.keyboard.press('Escape');
+
+		await expect(lyricsField(page)).toBeHidden();
+		await expect(
+			workspace(page).getByRole('button', { name: nameStartingWith(song.title) })
+		).toBeVisible();
+		await expect(page.getByRole('dialog', { name: EDITOR_UNSAVED_TITLE })).toHaveCount(0);
+	});
+
+	test('a peek at the sheet keeps the Undo: its toast leaves while the sheet is open and comes back once it closes', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(loadedToast(page)).toBeVisible();
+
+		await versionChip(page).click();
+		await expect(versionsSheet(page)).toBeVisible();
+		await expect(loadedToast(page)).toBeHidden();
+		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+
+		await expect(versionsSheet(page)).toBeHidden();
+		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+	});
+
+	test('the Undo toast keeps its time while the sheet is open: a tap on the loaded version after 4 s brings it back with time left', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(editedLyrics);
+		await tapVersion(page, 1);
+		await replaceDraftDialog(page)
+			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+			.click();
+		await expect(loadedToast(page)).toBeVisible();
+		await versionChip(page).click();
+		await expect(versionsSheet(page)).toBeVisible();
+
+		// The toast's five seconds would have run out while the sheet stood open.
+		await page.waitForTimeout(4000);
+		await versionRow(page, 1).click();
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(loadedToast(page)).toBeVisible();
+		await page.waitForTimeout(2000);
+
+		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await expect(lyricsField(page)).toHaveValue(editedLyrics);
+	});
+
 	test('the sheet stands over the whole page: the phone dims all of it, the desktop popover sits under the chip and shows whole rows only', async ({
 		page
 	}, testInfo) => {
@@ -481,7 +549,7 @@ test.describe('the versions of a song', () => {
 			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
 			.click();
 		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
-		await expect(confirm).toContainText(versionDeletePickWarning(1));
+		await expect(confirm.getByRole('listitem')).toHaveText(['It is the album pick.']);
 		await confirm.getByRole('button', { name: VERSION_DELETE_CONFIRM_LABEL }).click();
 
 		await expect(confirm).toBeHidden();
@@ -515,6 +583,42 @@ test.describe('the versions of a song', () => {
 		await expect(confirm).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
+	});
+
+	test('the delete confirm over an untouched load says what leaves the editor: the load goes with its version, or the next latest replaces it', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await saveFurtherVersions(page, song.songId, 1);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+
+		for (const { deleted, title, line } of [
+			{
+				deleted: 1,
+				title: versionDeleteTitle(1, 1),
+				line: versionDeleteLoadedDraftGoes(1)
+			},
+			{
+				deleted: 2,
+				title: versionDeleteTitle(2, 1),
+				line: versionDeleteLoadedDraftReplacedBy(1, 3)
+			}
+		]) {
+			await versionChip(page).click();
+			await versionsSheet(page)
+				.getByRole('button', { name: versionDeleteLabel(deleted), exact: true })
+				.click();
+			const confirm = page.getByRole('dialog', { name: title });
+			await expect(confirm.getByRole('listitem')).toHaveText([line]);
+			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+			await expect(confirm).toBeHidden();
+			await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+			await expect(versionsSheet(page)).toBeHidden();
+		}
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([3, 2, 1]);
 	});
 
 	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
