@@ -3278,20 +3278,84 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(continuousDecks.attached).toHaveLength(1);
 	});
 
-	it('gives up after the deadline while the deck stays attached', async () => {
+	// The player never pauses itself on a give-up, so the element still plays.
+	async function giveUpOnTheDeckAt(seconds: number): Promise<void> {
 		vi.useFakeTimers();
 		playFirstWithSecondAppended();
-		playTo(6);
+		playTo(seconds);
+		fakeAudio.paused = false;
 		await vi.advanceTimersByTimeAsync(0);
 
 		fakeAudio.fire('stalled');
 		await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE + 10 * SECOND);
+	}
+
+	it('gives up after the deadline while the deck stays attached', async () => {
+		await giveUpOnTheDeckAt(6);
 
 		expect(audioPlayer.error).toBe(STALLED);
 		expect(deck().retries).toBeGreaterThan(1);
 		expect(deck().closed).toBe(false);
 		expect(continuousDecks.attached).toHaveLength(1);
 		expect(recordedNotes().at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
+	});
+
+	it.each([
+		{ action: 'Retry', networkAnnouncedGone: false, retry: () => audioPlayer.play() },
+		{
+			action: "the network's return",
+			networkAnnouncedGone: true,
+			retry: () => audioPlayer.resumeAfterNetworkReturn()
+		}
+	])(
+		'$action after giving up resumes the deck download and plays on from the element position',
+		async ({ networkAnnouncedGone, retry }) => {
+			let networkGone = networkAnnouncedGone;
+			audioPlayer.swapCallbacks(
+				callbacks({ onCurrentChange, onEnded, networkFailureIsAnnounced: () => networkGone })
+			);
+			await giveUpOnTheDeckAt(6);
+			const retriesWhenGivenUp = deck().retries;
+			const loadSpy = vi.spyOn(fakeAudio, 'load');
+			networkGone = false;
+
+			retry();
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(deck().retries).toBe(retriesWhenGivenUp + 1);
+			expect(deck().closed).toBe(false);
+			expect(continuousDecks.attached).toHaveLength(1);
+			expect(loadSpy).not.toHaveBeenCalled();
+			expect(fakeAudio.src).not.toMatch(/recover=/);
+			expect(fakeAudio.currentTime).toBe(6);
+			expect(audioPlayer.error).toBeNull();
+
+			playTo(6.5);
+			fakeAudio.fire('playing');
+			expect(audioPlayer.status).toBe('playing');
+			expect(audioPlayer.currentTime).toBe(6.5);
+		}
+	);
+
+	it.each([
+		{ moment: 'before its first byte', arrange: () => audioPlayer.load(first) },
+		{
+			moment: 'while a stall waits for its next look',
+			arrange: () => {
+				playFirstWithSecondAppended();
+				playTo(4);
+				fakeAudio.fire('stalled');
+			}
+		}
+	])('Play on a parked take resumes its download at once $moment', ({ arrange }) => {
+		vi.useFakeTimers();
+		arrange();
+
+		audioPlayer.play();
+
+		expect(deck().retries).toBe(1);
+		expect(deck().closed).toBe(false);
+		expect(recordedDetails()).toContain('retry deck_resume reason=play');
 	});
 
 	it('a browser without MSE MP3 keeps the two decks', () => {

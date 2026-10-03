@@ -58,6 +58,9 @@ type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
 
 type RecoveryReason = StallReason | 'media-error';
 
+// A Play tap on a take that waits for its bytes sends the deck's download on.
+type DeckResumeReason = RecoveryReason | 'play';
+
 // A stall the deck's own download explains: the deck resumes it on the same
 // element. A frozen clock or a media error still reloads the take.
 const DECK_RESUMABLE_REASONS: ReadonlySet<RecoveryReason> = new Set<RecoveryReason>([
@@ -671,15 +674,16 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error' || this.pausedOnAFailedLoad) {
-			this.reloadOnPlay('media-error');
+			this.recoverOnPlay('media-error');
 			return;
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
 			this.autoplayPending = true;
+			if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'play');
 			return;
 		}
 		if (this.clockStoodStill) {
-			this.reloadOnPlay('frozen-clock');
+			this.recoverOnPlay('frozen-clock');
 			return;
 		}
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
@@ -1089,15 +1093,27 @@ class AudioPlayer {
 	}
 
 	// A play on a broken or silent element fetches the take again rather than
-	// resuming what the element holds.
-	private reloadOnPlay(reason: 'media-error' | 'frozen-clock'): void {
+	// resuming what the element holds; the deck fetches on from the bytes it
+	// received and keeps its one source (#1288).
+	private recoverOnPlay(reason: 'media-error' | 'frozen-clock'): void {
 		this.recoveryStartedAt = null;
 		this.clearStallRecoveryTimer();
 		if (this.streamEngine.active) {
 			void this.recoverStream(reason);
 			return;
 		}
-		if (this.audio) this.reloadAt(this.reachedPosition(this.audio), reason);
+		if (!this.audio) return;
+		if (this.deckSession && reason === 'media-error')
+			this.retryOnTheDeck(this.deckSession, this.audio);
+		else this.reloadAt(this.reachedPosition(this.audio), reason);
+	}
+
+	// The listener asked for sound, so the playhead plays on where it stands
+	// while the download goes on.
+	private retryOnTheDeck(session: DeckSession, el: HTMLAudioElement): void {
+		this.resumeDeckDownload(session, 'media-error');
+		this.keepWaiting();
+		el.play().catch((err) => this.handlePlayRejection(err));
 	}
 
 	private pauseElement(el: HTMLAudioElement): void {
@@ -1213,7 +1229,7 @@ class AudioPlayer {
 
 	// The deck keeps what it holds and its one source: its download picks up
 	// from the bytes received, and the playhead plays on where it stood.
-	private resumeDeckDownload(session: DeckSession, reason: RecoveryReason): void {
+	private resumeDeckDownload(session: DeckSession, reason: DeckResumeReason): void {
 		this.note('retry', `deck_resume reason=${reason}`);
 		session.deck.retryDownload();
 	}
