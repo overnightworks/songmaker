@@ -44,7 +44,6 @@ import {
 	regainNetwork,
 	workspace
 } from './helpers';
-import { DOWNLOAD_ATTEMPTS } from '../src/lib/services/continuousDeck';
 import {
 	advanceGenerationJobPhase,
 	completeGenerationJobWithoutEvent,
@@ -63,6 +62,9 @@ const BACK_ONLINE_MS = 10_000;
 // says 'loading', from it on 'recovering'.
 const FIRST_STALL_LOOK_MS = 10_000;
 const TAKE_AUDIO_PATH_PREFIX = '/audio/';
+// The deck's contract (continuousDeck.ts): three downloads in a row fail,
+// then it parks until the player retries.
+const DECK_DOWNLOAD_ATTEMPTS = 3;
 // The ruling on #1099: a server that comes back while the browser stayed
 // online is found by the page's return probe, at most one interval until it
 // asks and one more for its answer -- about 2 seconds.
@@ -337,9 +339,9 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
 			.click();
 		await expect(loadingSpinner).toBeVisible();
-		await expect.poll(() => offlineAudioRequests).toBe(DOWNLOAD_ATTEMPTS);
+		await expect.poll(() => offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(recoveringSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
-		expect(offlineAudioRequests).toBe(DOWNLOAD_ATTEMPTS);
+		expect(offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(retry).toHaveCount(0);
 
 		await regainNetwork(page, context);
