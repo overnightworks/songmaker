@@ -11,9 +11,12 @@
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
 	collectionPlayLabel,
+	NOW_PLAYING_LABEL,
+	openNowPlayingLabel,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
+import { NOW_PLAYING_UP_NEXT_PREFIX } from '../src/lib/constants/now-playing';
 import { FlowGuard, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	BASE_URL,
@@ -30,6 +33,7 @@ import {
 // A three-second take plus the next take's start, with room for a slow runner.
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 const MEDIA_EVENT_BINDING = 'reportMediaEvent';
+const TOAST_BINDING = 'reportToast';
 const STOPPING_EVENTS = ['pause', 'ended'];
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
 const RECOVERY_QUERY = 'recover';
@@ -99,6 +103,37 @@ class PlaybackTimeline {
 		if (!this.playingElements.has(element)) this.sourcesPlayed.push(new URL(source).protocol);
 		this.playingElements.add(element);
 		if (STOPPING_EVENTS.includes(event)) this.stops.push(`${event} on element ${element}`);
+	}
+}
+
+/**
+ * Every toast the page shows, in order. A toast leaves after a few seconds,
+ * so whether one was shown twice is a count of arrivals, not of what is
+ * on screen at the end.
+ */
+class ToastLog {
+	readonly shown: string[] = [];
+
+	static async watch(page: Page): Promise<ToastLog> {
+		const log = new ToastLog();
+		await page.exposeFunction(TOAST_BINDING, (message: string) => log.shown.push(message));
+		await page.addInitScript((binding) => {
+			const report = (toast: Element) =>
+				Reflect.get(window, binding).call(window, toast.textContent?.trim() ?? '');
+			new MutationObserver((changes) => {
+				for (const change of changes)
+					for (const added of change.addedNodes) {
+						if (!(added instanceof Element)) continue;
+						if (added.matches('.toast')) report(added);
+						for (const toast of added.querySelectorAll('.toast')) report(toast);
+					}
+			}).observe(document, { childList: true, subtree: true });
+		}, TOAST_BINDING);
+		return log;
+	}
+
+	count(message: string): number {
+		return this.shown.filter((shown) => shown.includes(message)).length;
 	}
 }
 
@@ -192,6 +227,48 @@ test('an album whose next take fails on the network for a while plays that take 
 	await expect(page.getByText(`${second.songTitle} couldn't be loaded, skipped.`)).toHaveCount(0);
 	await expect(transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL })).toHaveCount(0);
 	guard.assertClean();
+});
+
+// A take the server refuses leaves Up next at once (#1298); the listener is
+// told about it once, where playback reaches its place, and not again when
+// the queue wraps past it. Now Playing's Up next names the take after the
+// one playing, so it also tells which take plays. FlowGuard counts a 404 and
+// the cancelled body of the refused take as failures, and the refusal is this
+// flow's own point, so the flow runs without it.
+test('an album whose second take is refused names it once, when playback reaches its place', async ({
+	page
+}, testInfo) => {
+	const library = readSeededLibrary();
+	const [first, second, third] = library.albumTracks;
+	const toasts = await ToastLog.watch(page);
+	const skipped = `${second.songTitle} couldn't be loaded, skipped.`;
+	const upNext = (track: SeededTrack) =>
+		page.getByText(`${NOW_PLAYING_UP_NEXT_PREFIX} ${track.songTitle}`, { exact: true });
+	const playsUntilUpNextNames = (track: SeededTrack) =>
+		expect(upNext(track)).toBeVisible({ timeout: TRACK_CHANGE_TIMEOUT_MS });
+	await page.route(
+		(url) => decodeURIComponent(url.pathname) === second.audioPath,
+		(route) => route.fulfill({ status: 404 })
+	);
+
+	await playAlbum(page, library.albumId);
+	await page
+		.getByRole('contentinfo')
+		.getByRole('button', {
+			name:
+				shellOf(testInfo) === 'mobile' ? openNowPlayingLabel(first.songTitle) : NOW_PLAYING_LABEL,
+			exact: true
+		})
+		.click();
+
+	await expect(upNext(third)).toBeVisible();
+	expect(toasts.count(skipped)).toBe(0);
+	await expect(upNext(third)).toBeVisible();
+	await playsUntilUpNextNames(first);
+	await expect.poll(() => toasts.count(skipped)).toBe(1);
+	await playsUntilUpNextNames(third);
+	await playsUntilUpNextNames(first);
+	expect(toasts.count(skipped)).toBe(1);
 });
 
 test.describe('on a fresh account', () => {
