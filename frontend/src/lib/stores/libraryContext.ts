@@ -456,20 +456,22 @@ function mountedRouteUrl(): string {
 // resolve, or move on while they do: they then resolve nothing and state no
 // verdict -- not even a failed lookup's -- and the route of the address
 // history stands on is mounted instead, whose own resolution follows (issues
-// #1263, #1267).
+// #1263, #1267). Nor do params the router left from the page before, under a
+// route it mounted over the address: the library shows the entry history
+// stands on itself, as it does every landing (issue #1006, H5).
 async function resolveMountedAddress<Verdict extends string>(
 	resolveParams: () => Promise<ResolvedAddress | Verdict>
 ): Promise<Verdict | 'found'> {
 	const mountedUrl = mountedRouteUrl();
-	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
 	let resolved: ResolvedAddress | Verdict;
 	try {
 		resolved = await resolveParams();
 	} catch (failure) {
-		if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+		if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
 		throw failure;
 	}
-	if (mountAddressOver(mountedUrl) === 'remounts') return 'found';
+	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
 	if (typeof resolved === 'string') return resolved;
 	await showResolvedAddress(resolved);
 	return 'found';

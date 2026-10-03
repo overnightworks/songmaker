@@ -2,6 +2,7 @@ import {
 	historyEntry,
 	historyLength,
 	mountAddressRoute,
+	mountRouteUnderKeptPage,
 	pressBack,
 	pressForward,
 	reloadLibraryPage,
@@ -1690,6 +1691,21 @@ describe('an address route whose history moves on', () => {
 			await expect(resolve()).resolves.toBe('found');
 
 			expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+			expect(historyEntry()).toEqual(albumLeftFor);
+		}
+	);
+
+	it.each(resolvers)(
+		'resolves nothing for the $route route mounted over its address under the page the router kept',
+		async ({ mountedAt, lookup, resolve }) => {
+			mountAddressRoute(mountedAt);
+			replaceEntry(mountedAt, { library: albumLeftFor });
+			await mountRouteUnderKeptPage();
+
+			await expect(resolve()).resolves.toBe('found');
+
+			expect(lookup).not.toHaveBeenCalled();
+			expect(location.pathname).toBe(mountedAt);
 			expect(historyEntry()).toEqual(albumLeftFor);
 		}
 	);

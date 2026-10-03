@@ -1,6 +1,7 @@
 import type { BeforeNavigate, NavigationType } from '@sveltejs/kit';
 import { untrack } from 'svelte';
 import { goto, pushState, replaceState } from '$app/navigation';
+import { page } from '$app/state';
 import {
 	dropLayersFrom,
 	keepLayerHistory,
@@ -250,6 +251,7 @@ const stepBackWaiters = new Map<number, (() => void)[]>();
 let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
 let loadingMount: NavigateOptions | null = null;
+let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
 
@@ -352,6 +354,7 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
 		: newEntry();
 	const mount = options.replaceState && standsOnAddress(url) ? options : null;
+	keepTrackOfKeptPage(url);
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
@@ -363,6 +366,15 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 		else if (loadingMount === mount) loadingMount = null;
 		settleStillness();
 	}
+}
+
+// A navigation to the address the router's page names keeps that page, so a
+// route it mounts there stands under the params of the route before
+// (`mountAddressOver`) until the router reports a navigation to another
+// address (`stampNavigatedEntry`).
+function keepTrackOfKeptPage(url: string): void {
+	const target = new URL(url, location.href).href;
+	if (target === page.url.href) addressMountedUnderKeptPage = target;
 }
 
 function standsOnAddress(url: string): boolean {
@@ -377,12 +389,23 @@ function standsOnAddress(url: string): boolean {
 // address on while the landed route loads. The address wins (issue #1006, H3):
 // the route of the address history stands on is mounted over it, under the
 // same entry, superseding the other route's load if it is still loading.
-type RouteOnAddress = 'stands' | 'remounts';
+//
+// The router keeps the page it shows -- its route and its params -- when it
+// navigates to the address that page already names, whatever route it mounts
+// there. A Back it routes shallowly moves that page's address on without
+// mounting anything (see `mountRouteOfLandedAddress`), so the route mounted
+// over the address afterwards stands under the params of the page before --
+// none for Settings -- until the router navigates to another address: its
+// params name no page of the address, and resolving them would write the page
+// they do name over the entry (issue #1006, H5).
+type RouteOnAddress = 'stands' | 'remounts' | 'stands-under-kept-page';
 
 export function mountAddressOver(routeUrl: string): RouteOnAddress {
-	if (new URL(routeUrl, location.href).pathname === location.pathname) return 'stands';
-	mountStandingAddress();
-	return 'remounts';
+	if (new URL(routeUrl, location.href).pathname !== location.pathname) {
+		mountStandingAddress();
+		return 'remounts';
+	}
+	return addressMountedUnderKeptPage === location.href ? 'stands-under-kept-page' : 'stands';
 }
 
 function mountStandingAddress(): void {
@@ -446,6 +469,7 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // start dropped gets back the id it was loaded with, and any other gets a
 // first id on top. A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
+	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
 		lastRouterIndex = routerIndexOf(history.state);
 		return;
@@ -679,6 +703,7 @@ export function resetHistoryControllerForTests(): void {
 	stillnessWaiters = [];
 	navigationsUnderway = 0;
 	loadingMount = null;
+	addressMountedUnderKeptPage = null;
 	latestRouterNavigation = null;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
