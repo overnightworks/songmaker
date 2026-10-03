@@ -14,6 +14,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
+import { DOWNLOAD_ATTEMPTS } from '../src/lib/services/continuousDeck';
 import { FlowGuard, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	BASE_URL,
@@ -32,8 +33,6 @@ const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 const MEDIA_EVENT_BINDING = 'reportMediaEvent';
 const STOPPING_EVENTS = ['pause', 'ended'];
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
-// The deck's attempts in a row before its download parks until the player retries it.
-const DECK_DOWNLOAD_ATTEMPTS = 3;
 const RECOVERY_QUERY = 'recover';
 
 /**
@@ -180,7 +179,7 @@ test('an album whose next take fails on the network for a while plays that take 
 	await playAlbum(page, library.albumId);
 	await expect
 		.poll(() => failedRequests, { timeout: TRACK_CHANGE_TIMEOUT_MS })
-		.toBeGreaterThan(DECK_DOWNLOAD_ATTEMPTS);
+		.toBeGreaterThan(DOWNLOAD_ATTEMPTS);
 	await page.unroute(isSecondTake);
 
 	await expectTransportMovesOn(page, first, second);

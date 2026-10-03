@@ -7,7 +7,7 @@ const SECONDS_AHEAD_BEFORE_GATHERING = 20;
 // Removing right up to the playhead can take the frame the decoder is playing.
 const SECONDS_KEPT_BEHIND_WHEN_FULL = 10;
 // Attempts in a row before a download parks until the player retries it.
-const DOWNLOAD_ATTEMPTS = 3;
+export const DOWNLOAD_ATTEMPTS = 3;
 const QUOTA_EXCEEDED = 'QuotaExceededError';
 
 export type DeckEntry<Take> = Pick<QueueStreamTrackItem, 'start_offset' | 'duration'> & {
