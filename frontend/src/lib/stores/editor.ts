@@ -71,7 +71,11 @@ function songDataEqual(a: SongData, b: SongData): boolean {
 	);
 }
 
-export const isDirty = derived(editorState, (s) => !songDataEqual(s.draft, s.saved));
+function draftIsSaved(s: EditorState): boolean {
+	return songDataEqual(s.draft, s.saved);
+}
+
+export const isDirty = derived(editorState, (s) => !draftIsSaved(s));
 
 export const savedSongData = derived(editorState, (s) => s.saved);
 
@@ -81,7 +85,7 @@ export const savedSongData = derived(editorState, (s) => s.saved);
  * exactly when the chip reads `· draft`.
  */
 function shownLoadedFrom(s: EditorState): number | null {
-	return songDataEqual(s.draft, s.saved) ? null : s.loadedFrom;
+	return draftIsSaved(s) ? null : s.loadedFrom;
 }
 
 export const draftLoadedFrom = derived(editorState, shownLoadedFrom);
@@ -130,7 +134,7 @@ export const currentVersionIndex = writable(0);
  * a draft of the latest (`isDirty`), yet replacing it loses nothing.
  */
 function holdsUnversionedChanges(s: EditorState, held: VersionItem[]): boolean {
-	if (songDataEqual(s.draft, s.saved)) return false;
+	if (draftIsSaved(s)) return false;
 	return !held.some((version) => songDataEqual(s.draft, songDataFromVersion(version)));
 }
 
@@ -324,7 +328,7 @@ export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEdit
 	if (holdsUnversionedChanges(state, survivors)) {
 		return { kind: 'unsaved-draft', emptiesEditor: survivors.length === 0 };
 	}
-	if (!songDataEqual(state.draft, state.saved) || version.id !== all[0]?.id) return null;
+	if (!draftIsSaved(state) || version.id !== all[0]?.id) return null;
 	const nextLatest = survivors[0];
 	return nextLatest
 		? { kind: 'current-lyrics', replacedBy: nextLatest.version_number }

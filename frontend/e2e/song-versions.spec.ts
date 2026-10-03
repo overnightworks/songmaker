@@ -100,6 +100,17 @@ async function seedTwoVersions(
 	return { songId, title, albumId: library.songPhoneAlbumId };
 }
 
+/** Saves the latest lyrics again as `count` more versions, so a song has more than the popover shows. */
+async function saveFurtherVersions(page: Page, songId: string, count: number): Promise<void> {
+	for (let saves = 0; saves < count; saves += 1) {
+		const saved = await page.request.put(`/api/songs/${songId}`, {
+			headers: await csrfHeaders(page),
+			data: { lyrics: SECOND_VERSION_LYRICS, new_version: true }
+		});
+		expect(saved.ok(), `Saving a further version failed: ${await saved.text()}`).toBeTruthy();
+	}
+}
+
 async function reportOneWorkerOnline(page: Page): Promise<void> {
 	await page.route('**/health', async (route) => {
 		const response = await route.fetch();
@@ -328,10 +339,11 @@ test.describe('the versions of a song', () => {
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
 	});
 
-	test('the sheet stands over the whole page: the phone dims all of it, the desktop popover sits under the chip', async ({
+	test('the sheet stands over the whole page: the phone dims all of it, the desktop popover sits under the chip and shows whole rows only', async ({
 		page
 	}, testInfo) => {
 		const song = await seedTwoVersions(page, testInfo);
+		if (shellOf(testInfo) === 'desktop') await saveFurtherVersions(page, song.songId, 6);
 		await openSongEditor(page, song);
 		await versionChip(page).click();
 		await expect(versionsSheet(page)).toBeVisible();
@@ -354,6 +366,29 @@ test.describe('the versions of a song', () => {
 		expect(popover.y).toBeGreaterThan(chip.y + chip.height);
 		expect(popover.y).toBeLessThan(chip.y + chip.height + 16);
 		expect(popover.y + popover.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+
+		const list = versionsSheet(page).getByRole('list');
+		const rowsInView = await list.evaluate((element) => {
+			const rowHeight = element.querySelector('li')?.getBoundingClientRect().height ?? 0;
+			return element.clientHeight / rowHeight;
+		});
+		expect(rowsInView).toBeGreaterThanOrEqual(2);
+		expect(Math.abs(rowsInView - Math.round(rowsInView))).toBeLessThan(0.02);
+		await list.evaluate((element) => {
+			const rowHeight = element.querySelector('li')?.getBoundingClientRect().height ?? 0;
+			element.scrollBy({ top: rowHeight * 1.4 });
+		});
+		await expect
+			.poll(() =>
+				list.evaluate((element) => {
+					const top = element.getBoundingClientRect().top;
+					const rowEdgeAtTop = Array.from(element.querySelectorAll('li')).some(
+						(row) => Math.abs(row.getBoundingClientRect().top - top) < 1
+					);
+					return element.scrollTop > 0 && rowEdgeAtTop;
+				})
+			)
+			.toBe(true);
 	});
 
 	test('Open v1 on its take group loads v1 as the draft on Edit', async ({ page }, testInfo) => {
