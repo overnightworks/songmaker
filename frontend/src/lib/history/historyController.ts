@@ -250,7 +250,7 @@ let lastRouterIndex = routerIndexOf(history.state);
 const stepBackWaiters = new Map<number, (() => void)[]>();
 let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
-let loadingMount: NavigateOptions | null = null;
+let loadingMount: RouteMount | null = null;
 let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
@@ -343,6 +343,13 @@ interface NavigateOptions {
 	readonly state: App.PageState;
 }
 
+// A navigation that mounts the route of the address history already stands
+// on, while it loads.
+interface RouteMount {
+	readonly address: string;
+	readonly options: NavigateOptions;
+}
+
 // A navigation through the router carries its entry the way a shallow write
 // does: a push a fresh id, a replace the id of the entry it writes over.
 // While it loads, history is not still: the router writes its entry only
@@ -353,7 +360,8 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 	const entry = options.replaceState
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
 		: newEntry();
-	const mount = options.replaceState && standsOnAddress(url) ? options : null;
+	const mount =
+		options.replaceState && standsOnAddress(url) ? { address: location.href, options } : null;
 	keepTrackOfKeptPage(url);
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
@@ -452,7 +460,14 @@ export function mountRouteOfLandedAddress(
 // started with, and the entry would lose its own.
 export function remountOverStandingEntry(url: string, state: App.PageState): Promise<void> {
 	if (loadingMount === null) return Promise.resolve();
-	return navigateTo(url, { ...loadingMount, state });
+	return navigateTo(url, { ...loadingMount.options, state });
+}
+
+// A navigation the router reports at the address a route mount loads for
+// moved no page: it mounted the route of the page already on screen, so the
+// overlays opened over that page meanwhile still cover it (issue #1289).
+export function navigationOnlyMountedRoute(type: NavigationType): boolean {
+	return type === 'goto' && loadingMount !== null && location.href === loadingMount.address;
 }
 
 // A navigation another one superseded wrote no entry of its own, so only one
