@@ -436,6 +436,15 @@ describe('versionDeleteEditorLoss', () => {
 			loss: { kind: 'unsaved-draft', emptiesEditor: false }
 		},
 		{
+			deleted: older,
+			draft: 'its own load edited into a surviving older version',
+			change: () => {
+				loadVersionAsDraft(older);
+				setDraftLyrics('v2 lyrics');
+			},
+			loss: null
+		},
+		{
 			deleted: middle,
 			draft: 'an untouched load of another older version',
 			change: () => loadVersionAsDraft(older),

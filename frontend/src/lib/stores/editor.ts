@@ -379,12 +379,13 @@ function untouchedLoadSource(s: EditorState, all: VersionItem[]): VersionItem | 
  * resets to the latest version left, or empties when none is left: the latest's
  * lyrics when the draft is the latest itself and it is the one deleted, an
  * untouched load whether it goes with its version or the next latest replaces
- * it, or a draft with changes no version holds.
+ * it, or a draft with changes no surviving version holds.
  */
 export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
 	const state = get(editorState);
 	const all = get(versions);
-	const nextLatest = all.find((candidate) => candidate.id !== version.id);
+	const survivors = all.filter((candidate) => candidate.id !== version.id);
+	const nextLatest = survivors[0];
 	if (draftIsSaved(state)) {
 		if (version.id !== all[0]?.id) return null;
 		return nextLatest
@@ -396,6 +397,9 @@ export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEdit
 	if (loadedFrom?.id === version.id) {
 		return { kind: 'loaded-draft-goes', loadedFrom: loadedFrom.version_number };
 	}
+	if (holdsUnversionedChanges(state, survivors)) {
+		return { kind: 'unsaved-draft', emptiesEditor: survivors.length === 0 };
+	}
 	if (loadedFrom && nextLatest) {
 		return {
 			kind: 'loaded-draft-replaced',
@@ -403,7 +407,7 @@ export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEdit
 			replacedBy: nextLatest.version_number
 		};
 	}
-	return { kind: 'unsaved-draft', emptiesEditor: !nextLatest };
+	return null;
 }
 
 /** Deletes a version and its takes. Fails loud — see {@link handleSave}. */
