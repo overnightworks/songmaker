@@ -40,11 +40,11 @@ const TAKE_FIXTURE = path.join(
 const TAKE_SECONDS = 3.056;
 
 /**
- * How often a long take repeats the fixture's audio: two minutes, far more
- * than the continuous deck's first piece holds, where the fixture take arrives
- * whole in it.
+ * How often a long take repeats the fixture's audio: four minutes, far more
+ * than the continuous deck holds when a restore seeks, where the fixture take
+ * arrives whole in its first piece.
  */
-const LONG_TAKE_REPEATS = 40;
+const LONG_TAKE_REPEATS = 80;
 
 const LONG_TAKE_SECONDS = LONG_TAKE_REPEATS * TAKE_SECONDS;
 
@@ -52,10 +52,11 @@ const LONG_TAKE_SECONDS = LONG_TAKE_REPEATS * TAKE_SECONDS;
 const SKIP_AHEAD_SECONDS = 50;
 
 /**
- * The listener pauses the long take after two skips, at 100 s: past the deck's
- * first piece, which held 33 to 66 s of it in measured runs (128 to 256 KB).
+ * The listener pauses the long take after three skips, at 150 s: past what the
+ * deck held when the restore's seek ran, 33 to 98 s in measured runs, and
+ * never more than its minute ahead of the start plus one piece.
  */
-const SKIPS_BEFORE_THE_PAUSE = 2;
+const SKIPS_BEFORE_THE_PAUSE = 3;
 
 /** MPEG-2 Layer III bitrates in kbit/s by header index, and sample rates in Hz. */
 const MPEG2_LAYER3_KBPS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
