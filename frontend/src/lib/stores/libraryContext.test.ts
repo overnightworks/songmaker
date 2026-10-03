@@ -445,6 +445,36 @@ describe('applyLibraryHistory', () => {
 		await pressForward();
 	});
 
+	// Issue #1267: the song's apply joins the album-songs lookup the song itself
+	// started; that lookup refused while history moves on must not fail the
+	// apply -- and with it the library's snapshot -- but leave the screen to the
+	// entry history landed on.
+	it('stops quietly when the album songs lookup it joined is refused after history left the entry', async () => {
+		albumList.set([album({ id: 'a1' })]);
+		const listed = song({ id: 's1', album_id: 'a1', generation_count: 0, generations: [] });
+		let refuseSongs: ((reason: unknown) => void) | undefined;
+		fetchSongs.mockImplementation(async (albumId?: string) => {
+			if (albumId !== 'a1') return { ...emptyPage([listed]), limit: 200 };
+			return new Promise((_, reject) => (refuseSongs = reject));
+		});
+		replaceEntry('/', { library: libraryRootState() });
+		const songState = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a1' },
+			songId: 's1'
+		};
+		pushEntry(songRoutePath('a1', 's1'), { library: songState });
+		const applying = applyLibraryHistory(songState);
+		await vi.waitFor(() => expect(refuseSongs).toBeTypeOf('function'));
+
+		await pressBack();
+		refuseSongs?.(new ApiError(500, 'boom', '/api/songs'));
+
+		await expect(applying).resolves.toBe(false);
+		await pressForward();
+	});
+
 	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
 		songList.set([
 			song({
