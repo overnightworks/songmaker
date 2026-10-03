@@ -47,7 +47,7 @@ export class TakeNotAppended<Take> extends Error {
  * The player left the deck: whatever it still had to fetch, wait for or
  * append is given up, and the buffer is not touched again.
  */
-export class DeckClosed extends Error {
+class DeckClosed extends Error {
 	constructor() {
 		super('The deck was closed');
 		this.name = 'DeckClosed';

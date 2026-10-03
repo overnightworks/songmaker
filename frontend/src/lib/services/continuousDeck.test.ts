@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ContinuousDeck, DeckClosed, TakeNotAppended } from './continuousDeck';
+import { ContinuousDeck, TakeNotAppended } from './continuousDeck';
 
 const MEGABYTE = 1024 * 1024;
 // The size FakeNetwork hands a response body out in.
@@ -586,7 +586,8 @@ describe('ContinuousDeck', () => {
 				() => 'settled',
 				(error: unknown) => error
 			);
-			expect(outcome).toBeInstanceOf(DeckClosed);
+			expect(outcome).toBeInstanceOf(Error);
+			expect((outcome as Error).name).toBe('DeckClosed');
 			expect(outcome).not.toBeInstanceOf(TakeNotAppended);
 		}
 
