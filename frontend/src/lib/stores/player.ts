@@ -771,7 +771,7 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 		generation_number: gen.generation_number,
 		version_number: gen.version_number,
 		is_picked: gen.is_picked,
-		audio_duration: song.audio_duration ?? null,
+		audio_duration: gen.audio_duration_sec,
 		mp3_path: gen.mp3_path,
 		seed: gen.seed,
 		model_mode: gen.model_mode,

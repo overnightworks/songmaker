@@ -3121,6 +3121,25 @@ describe('playAlbum', () => {
 		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
 		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
 	});
+
+	it("plays a take with the take's own length, not the length its song asked for", async () => {
+		songList.set([
+			makeSong({
+				...queuedSongDefaults(),
+				audio_duration: 180,
+				generations: [makeGen({ ...genDefaults, is_picked: true, audio_duration_sec: 3.056 })]
+			})
+		]);
+
+		await playAlbum('a1');
+
+		expect(audioPlayer.load).toHaveBeenCalledWith(
+			expect.objectContaining({
+				generation: expect.objectContaining({ audio_duration_sec: 3.056 })
+			}),
+			{ restart: true }
+		);
+	});
 });
 
 describe('buildQueueViewModel', () => {
