@@ -6,7 +6,10 @@
 // in Now Playing loads a version the same way, and imported takes say they
 // have no version (issue #1273, #1245 rules 7-8). A version is deleted from
 // its row in the sheet, behind a confirm that names its takes and the album
-// pick among them (issue #1284, #1245 rule 10).
+// pick among them (issue #1284, #1245 rule 10). A draft equal to a saved
+// version loads the next one without asking, the delete confirm says an
+// unsaved draft goes too, and the sheet stands over the whole page: the
+// phone's backdrop dims all of it (issue #1286).
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -25,6 +28,7 @@ import {
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_PICK_WARNING,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
@@ -308,6 +312,50 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 	});
 
+	test('a draft equal to a saved version is clean: after an untouched v1, v2 loads without asking', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await tapVersion(page, 1);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+
+		await tapVersion(page, 2);
+
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+		await expect(replaceDraftDialog(page)).toHaveCount(0);
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
+	});
+
+	test('the sheet stands over the whole page: the phone dims all of it, the desktop popover sits under the chip', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await versionChip(page).click();
+		await expect(versionsSheet(page)).toBeVisible();
+
+		if (shellOf(testInfo) === 'mobile') {
+			const topOfThePage = await page.evaluate(() => {
+				const hit = document.elementFromPoint(window.innerWidth / 2, 4);
+				return {
+					label: hit?.getAttribute('aria-label') ?? null,
+					background: hit ? getComputedStyle(hit).backgroundColor : null
+				};
+			});
+			expect(topOfThePage.label).toBe(VERSIONS_SHEET_CLOSE_LABEL);
+			expect(topOfThePage.background).not.toBe('rgba(0, 0, 0, 0)');
+			return;
+		}
+		const chip = await versionChip(page).boundingBox();
+		const popover = await versionsSheet(page).boundingBox();
+		if (!chip || !popover) throw new Error('Expected the chip and the popover on screen');
+		expect(popover.y).toBeGreaterThan(chip.y + chip.height);
+		expect(popover.y).toBeLessThan(chip.y + chip.height + 16);
+		expect(popover.y + popover.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? 0);
+	});
+
 	test('Open v1 on its take group loads v1 as the draft on Edit', async ({ page }, testInfo) => {
 		const song = await seedTwoVersions(page, testInfo);
 		await openSongEditor(page, song);
@@ -371,6 +419,27 @@ test.describe('the versions of a song', () => {
 		await showTakes(page);
 		await expect(takeGroup(page, 2, 1)).toBeVisible();
 		await expect(takeGroup(page, 1, 1)).toHaveCount(0);
+	});
+
+	test('the delete confirm over an unsaved draft says the draft goes too, and Cancel keeps it', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(editedLyrics);
+
+		await versionChip(page).click();
+		await versionsSheet(page)
+			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
+			.click();
+		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
+		await expect(confirm).toContainText(VERSION_DELETE_DRAFT_GOES);
+		await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
+
+		await expect(confirm).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(editedLyrics);
+		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 	});
 
 	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
