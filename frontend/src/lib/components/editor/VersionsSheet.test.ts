@@ -143,14 +143,14 @@ describe('VersionsSheet', () => {
 		expect(versionChip(target).textContent?.trim()).toBe('v7 · draft');
 	});
 
-	it('lists every version newest first with its takes, the pick, its day and first sung line, if it has one', async () => {
+	it('lists every version newest first with its takes, the pick, its day and first sung line, or that it has no lyrics', async () => {
 		const target = await renderSheet(vi.fn());
 		await openSheet(target);
 		expect(versionRowTexts(target)).toEqual([
 			'v7 2 takes current today 14:02 · Headlights cut the rain in two',
 			'v6 1 take · ★ picked yesterday 09:30 · Headlights cut the rain in two',
 			'v4 no takes 20 Sep · Rain on the window, the city asleep',
-			'v3 no takes 18 Sep'
+			'v3 no takes 18 Sep · No lyrics'
 		]);
 	});
 

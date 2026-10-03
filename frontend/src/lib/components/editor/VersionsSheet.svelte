@@ -14,6 +14,7 @@
 	import type { SongItem, VersionItem } from '$lib/api/types';
 	import {
 		VERSION_CURRENT_TAG,
+		VERSION_NO_LYRICS,
 		VERSION_PICKED_LABEL,
 		VERSIONS_SHEET_CLOSE_LABEL,
 		VERSIONS_SHEET_LABEL,
@@ -82,7 +83,7 @@
 			version,
 			takes: takes[version.version_number] ?? NO_TAKES,
 			when: activityTimeLabel(version.created_at, now),
-			firstLine: version.lyrics.split('\n').find(isSungLine)?.trim() ?? ''
+			firstLine: version.lyrics.split('\n').find(isSungLine)?.trim() ?? VERSION_NO_LYRICS
 		}));
 	});
 
@@ -202,8 +203,7 @@
 										{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
 									</span>
 									<span class="version-meta">
-										{row.when}
-										{#if row.firstLine}· {row.firstLine}{/if}
+										{row.when} · {row.firstLine}
 									</span>
 								</span>
 							</button>
