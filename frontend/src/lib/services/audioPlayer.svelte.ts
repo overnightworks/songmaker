@@ -1114,7 +1114,7 @@ class AudioPlayer {
 		const el = this.audio;
 		if (!el) return;
 		if (!this.deckSession) this.reloadAt(this.reachedPosition(el), reason);
-		else if (reason === 'frozen-clock' && holdsAudioAhead(el)) this.unfreezeDeckClock(el);
+		else if (unfreezesInPlace(reason, el)) this.unfreezeDeckClock(el);
 		else this.retryOnTheDeck(this.deckSession, el);
 	}
 
@@ -1243,7 +1243,7 @@ class AudioPlayer {
 		el: HTMLAudioElement,
 		reason: RecoveryReason
 	): void {
-		if (reason === 'frozen-clock' && holdsAudioAhead(el)) {
+		if (unfreezesInPlace(reason, el)) {
 			this.unfreezeDeckClock(el);
 			return;
 		}
@@ -1576,12 +1576,14 @@ function bufferedUntil(el: HTMLAudioElement): number {
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
 }
 
-// A lost network is never decoded here: where the owner's strip names it
-// (#1039), the player adds no network wording of its own.
-function holdsAudioAhead(el: HTMLAudioElement): boolean {
-	return bufferedUntil(el) > el.currentTime;
+// A clock frozen over audio the deck already holds is the element's own
+// fault, not the download's: it is unfrozen in place.
+function unfreezesInPlace(reason: RecoveryReason, el: HTMLAudioElement): boolean {
+	return reason === 'frozen-clock' && bufferedUntil(el) > el.currentTime;
 }
 
+// A lost network is never decoded here: where the owner's strip names it
+// (#1039), the player adds no network wording of its own.
 function decodeMediaError(err: MediaError): string {
 	switch (err.code) {
 		case MediaError.MEDIA_ERR_ABORTED:

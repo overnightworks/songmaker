@@ -342,7 +342,12 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 let playStartSeq = 0;
 let playStartAbort: AbortController | null = null;
 
-function beginPlayStart(): { seq: number; signal: AbortSignal } {
+interface PlayStart {
+	seq: number;
+	signal: AbortSignal;
+}
+
+function beginPlayStart(): PlayStart {
 	playStartAbort?.abort();
 	playStartAbort = new AbortController();
 	playStartSeq += 1;
@@ -1403,7 +1408,7 @@ async function gatherAlbumQueueAround(
 	albumId: string,
 	song: SongItem,
 	gen: GenerationItem,
-	playStart: { seq: number; signal: AbortSignal }
+	playStart: PlayStart
 ): Promise<void> {
 	const { seq, signal } = playStart;
 	if (!playStartIsCurrent(seq)) return;
