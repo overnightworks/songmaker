@@ -2368,6 +2368,34 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 		playlistStands(below);
 	});
 
+	// Issue #1006 H5: a write issued while another waits behind the step-back
+	// builds on the waiting write, not on the entry the step leaves.
+	it("a tab chosen while the song's push waits behind a layer's step-back keeps the song's entry", async () => {
+		const menu = ownedMenu();
+		const below = await openOnTopOfPlaylist(menu);
+		const stepBack = watchBack();
+		menu.set(false);
+		const opening = selectSong('s1');
+		await vi.waitFor(() => expect(stepBack.presses()).toBe(1));
+
+		persistLibraryHistory();
+		navigateToSongTab('takes');
+		stepBack.stop();
+		await pressBack();
+		await opening;
+		await libraryHistoryStepsLanded();
+
+		expect(historyEntry()).toMatchObject({
+			index: below + 1,
+			songId: 's1',
+			detailTab: 'takes'
+		});
+		expect(location.pathname).toBe('/album/a1/s1');
+		await pressBack();
+		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
+		playlistStands(below);
+	});
+
 	it('an album row in the drawer over an open menu, which closes that menu, lands on the album and one Back leaves it', async () => {
 		const menu = ownedMenu();
 		const below = await openOnTopOfPlaylist(menu);

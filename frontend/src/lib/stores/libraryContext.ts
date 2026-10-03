@@ -107,6 +107,7 @@ const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
 let historyApplyGeneration = 0;
 let librarySnapshotTaken = false;
+let latestHeldWrite: LibraryHistoryState | null = null;
 
 function isLibrarySort(value: unknown): value is LibrarySort {
 	return typeof value === 'string' && SORTS.has(value);
@@ -253,7 +254,8 @@ type HistoryWriteMode = 'push' | 'replace';
 // from another page, whose entry stands only once its route has loaded -- a
 // second write issued meanwhile would supersede it and stand in its place
 // (Settings, a song, another song of its album, Back skipped Settings). The
-// held write stands the moment history stands still.
+// held write stands the moment history stands still, and until then it is
+// the entry the next write builds on (`currentLibraryHistoryState`).
 //
 // Shallow routing keeps the page's route and `page.url` where the last
 // navigation left them, and an entry it writes remembers that page: Back onto
@@ -269,7 +271,11 @@ export function writeLibraryHistory(
 	mode: HistoryWriteMode
 ): Promise<void> {
 	if (historyMoves()) {
-		return historyStandsStill().then(() => writeLibraryHistory(state, url, mode));
+		latestHeldWrite = state;
+		return historyStandsStill().then(() => {
+			if (latestHeldWrite === state) latestHeldWrite = null;
+			return writeLibraryHistory(state, url, mode);
+		});
 	}
 	return writeLibraryHistoryNow(state, url, mode);
 }
@@ -353,10 +359,11 @@ export function loadLibraryHistoryPageForTests(): void {
 	loadHistoryPageForTests();
 }
 
-// The library history entry history stands on. Every write stands at once, so
-// this is the entry the next write starts from.
+// The library history entry the next write starts from: the entry history
+// stands on, or -- while history the controller has moving holds a write --
+// the latest held write, which is what will stand once history stands still.
 export function currentLibraryHistoryState(): unknown {
-	return libraryHistoryEntry();
+	return latestHeldWrite ?? libraryHistoryEntry();
 }
 
 // What a history entry says about the library, whichever way it was written:
@@ -1011,6 +1018,7 @@ export function captureLibraryScroll(scrollTop: number): void {
 export function resetLibraryContextForTests(): void {
 	historyApplyGeneration += 1;
 	librarySnapshotTaken = false;
+	latestHeldWrite = null;
 	heldRestores = null;
 	resetHistoryControllerForTests();
 	librarySurface.set('browse');
