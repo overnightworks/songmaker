@@ -129,15 +129,25 @@ interface PlaylistQueueSource {
 	title: string;
 }
 
-type QueueContext =
-	| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
-	| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
-	| {
-			type: 'playlist';
-			playlist: PlaylistQueueSource;
-			entries: PlaylistEntryItem[];
-			index: number;
-	  };
+// A take the deck could not fetch stays skipped for the life of its queue,
+// and is named once, when playback reaches the place it would have started.
+type SkipNotice = 'pending' | 'announced';
+
+interface QueueSkips {
+	skipped?: ReadonlyMap<PlaybackInfo, SkipNotice>;
+}
+
+type QueueContext = QueueSkips &
+	(
+		| { type: 'library'; takes?: PlaybackInfo[]; index?: number }
+		| { type: 'album'; albumId: string; takes?: PlaybackInfo[]; index?: number }
+		| {
+				type: 'playlist';
+				playlist: PlaylistQueueSource;
+				entries: PlaylistEntryItem[];
+				index: number;
+		  }
+	);
 
 export const queueContext = writable<QueueContext>({ type: 'library' });
 
@@ -529,11 +539,7 @@ function queuePositionFrom<T>(
 function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index: number): void {
 	const takes = ctx.takes;
 	if (!takes || index < 0 || index >= takes.length) return;
-	if (ctx.type === 'library') {
-		queueContext.set({ type: 'library', takes, index });
-	} else if (ctx.type === 'album') {
-		queueContext.set({ type: 'album', albumId: ctx.albumId, takes, index });
-	}
+	queueContext.set({ ...ctx, index });
 	loadNativeTake(takes[index]);
 }
 
@@ -1245,26 +1251,44 @@ const NO_NEXT_TAKE: NextQueueTake = { kind: 'none' };
 
 // The one decider of which take follows the current one: Next plays it, and
 // the preload loads it while the current one still plays, so the two can
-// never disagree. A queue wraps around; the library window's last take is
-// followed by its end, not by a take.
+// never disagree. A queue wraps around and passes over a take the deck skipped;
+// the library window's last take is followed by its end, not by a take.
 function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQueueTake {
 	if (ctx.type === 'playlist') {
-		if (ctx.entries.length <= 1) return NO_NEXT_TAKE;
-		const index = (currentPlaylistIndex(ctx, current) + 1) % ctx.entries.length;
-		return { kind: 'take', index, take: playlistEntryToPlaybackInfo(ctx.entries[index]) };
+		return firstPlayableAfter(ctx, {
+			index: currentPlaylistIndex(ctx, current),
+			length: ctx.entries.length,
+			takeAt: (index) => playlistEntryToPlaybackInfo(ctx.entries[index]),
+			endsWithItsWindow: false
+		});
 	}
 	const index = nativeTakeIndex(ctx, current);
-	if (index < 0 || ctx.takes === undefined) return NO_NEXT_TAKE;
-	if (
-		ctx.type === 'library' &&
-		index === ctx.takes.length - 1 &&
-		!get(libraryQueueSkippedComplete)
-	) {
-		return { kind: 'window-end' };
+	const takes = ctx.takes;
+	if (index < 0 || takes === undefined) return NO_NEXT_TAKE;
+	return firstPlayableAfter(ctx, {
+		index,
+		length: takes.length,
+		takeAt: (place) => takes[place],
+		endsWithItsWindow: ctx.type === 'library' && !get(libraryQueueSkippedComplete)
+	});
+}
+
+interface QueuePlace {
+	index: number;
+	length: number;
+	takeAt: (index: number) => PlaybackInfo;
+	endsWithItsWindow: boolean;
+}
+
+function firstPlayableAfter(ctx: QueueContext, place: QueuePlace): NextQueueTake {
+	const windowEnd: NextQueueTake = place.endsWithItsWindow ? { kind: 'window-end' } : NO_NEXT_TAKE;
+	for (let step = 1; step < place.length; step++) {
+		if (place.endsWithItsWindow && place.index + step === place.length) return windowEnd;
+		const index = (place.index + step) % place.length;
+		const take = place.takeAt(index);
+		if (!ctx.skipped?.has(take)) return { kind: 'take', index, take };
 	}
-	if (ctx.takes.length <= 1) return NO_NEXT_TAKE;
-	const nextIndex = (index + 1) % ctx.takes.length;
-	return { kind: 'take', index: nextIndex, take: ctx.takes[nextIndex] };
+	return windowEnd;
 }
 
 function takeAfterCurrent(): PlaybackInfo | null {
@@ -1517,19 +1541,13 @@ export async function curateAlbum(albumId: string): Promise<void> {
 }
 
 function playPlaylistIndex(
-	ctx: { playlist: PlaylistQueueSource; entries: PlaylistEntryItem[] },
+	ctx: Extract<QueueContext, { type: 'playlist' }>,
 	newIndex: number,
 	opts: QueueTakeLoad = {}
 ): void {
 	if (newIndex < 0 || newIndex >= ctx.entries.length) return;
-	const entry = ctx.entries[newIndex];
-	setQueueContext({
-		type: 'playlist',
-		playlist: ctx.playlist,
-		entries: ctx.entries,
-		index: newIndex
-	});
-	loadQueueTake(playlistEntryToPlaybackInfo(entry), opts);
+	queueContext.set({ ...ctx, index: newIndex });
+	loadQueueTake(playlistEntryToPlaybackInfo(ctx.entries[newIndex]), opts);
 }
 
 function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
@@ -1612,7 +1630,15 @@ function startPlaylistQueue(
 	const loadOpts: QueueTakeLoad = { restart: opts.restart };
 	if (opts.resumeAtTrackTime !== undefined) loadOpts.startAt = opts.resumeAtTrackTime;
 	if (opts.autoplay !== undefined) loadOpts.autoplay = opts.autoplay;
-	playPlaylistIndex({ playlist, entries: ordered.items }, ordered.startIndex, loadOpts);
+	const startTake = ordered.items[ordered.startIndex];
+	if (!startTake) return;
+	setQueueContext({
+		type: 'playlist',
+		playlist,
+		entries: ordered.items,
+		index: ordered.startIndex
+	});
+	loadQueueTake(playlistEntryToPlaybackInfo(startTake), loadOpts);
 }
 
 async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStreamManifest | null> {
@@ -1762,19 +1788,60 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
 	if (current === null) return;
 	moveQueueIndexTo(current);
+	announceSkipsReachedBy(current);
 	preloadNextTake();
 }
 
-// The deck plays on past the skipped take, so the listener hears which one
-// the queue lost instead of finding it silently gone.
-function announceSkippedTake(take: PlaybackInfo): void {
-	addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
+// The deck plays on past the skipped take; the queue passes over it at once
+// and names it when playback reaches its place, so the listener hears which
+// one the queue lost instead of finding it silently gone.
+function recordSkippedTake(take: PlaybackInfo): void {
+	const ctx = get(queueContext);
+	if (ctx.skipped?.has(take)) return;
+	const skipped = new Map(ctx.skipped).set(take, 'pending');
+	queueContext.set({ ...ctx, skipped });
+	announceSkips(
+		[...skipped]
+			.filter(([pending, notice]) => notice === 'pending' && noOtherTakeStartsInPlaceOf(pending))
+			.map(([pending]) => pending)
+	);
+}
+
+// Where the queue ends at a skipped take's place, or only the playing take
+// would play again there, no take change ever reaches that place, so the take
+// is named at once rather than never. A later skip can close a place an
+// earlier pending skip was waiting on, so every pending skip is asked again.
+function noOtherTakeStartsInPlaceOf(take: PlaybackInfo): boolean {
+	const ctx = get(queueContext);
+	const follower = nextQueueTake(ctx, take);
+	return follower.kind !== 'take' || follower.index === queuePlaceOf(ctx, audioPlayer.current);
+}
+
+function announceSkipsReachedBy(current: PlaybackInfo): void {
+	const reached = [...(get(queueContext).skipped ?? [])]
+		.filter(([take, notice]) => notice === 'pending' && takeAfter(take) === current)
+		.map(([take]) => take);
+	announceSkips(reached);
+}
+
+function announceSkips(takes: PlaybackInfo[]): void {
+	if (takes.length === 0) return;
+	const ctx = get(queueContext);
+	const skipped = new Map(ctx.skipped);
+	for (const take of takes) {
+		addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
+		skipped.set(take, 'announced');
+	}
+	queueContext.set({ ...ctx, skipped });
+}
+
+function queuePlaceOf(ctx: QueueContext, take: PlaybackInfo | null): number {
+	return ctx.type === 'playlist' ? currentPlaylistIndex(ctx, take) : nativeTakeIndex(ctx, take);
 }
 
 function moveQueueIndexTo(current: PlaybackInfo): void {
 	const ctx = get(queueContext);
-	const index =
-		ctx.type === 'playlist' ? currentPlaylistIndex(ctx, current) : nativeTakeIndex(ctx, current);
+	const index = queuePlaceOf(ctx, current);
 	if (index < 0 || index === ctx.index) return;
 	queueContext.set({ ...ctx, index });
 }
@@ -1809,7 +1876,7 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
 	takeAfter,
-	onTakeSkipped: announceSkippedTake,
+	onTakeSkipped: recordSkippedTake,
 	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
