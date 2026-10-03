@@ -31,14 +31,18 @@ import {
 	isDirty,
 	versions,
 	draftLoadedFrom,
+	draftHasUnversionedChanges,
 	loadSongData,
 	loadVersionAsDraft,
+	retireSetAsideVersionLoadUndo,
 	retireVersionLoadUndo,
+	setAsideVersionLoadUndo,
 	savedSongData,
 	handleSave,
 	handleDeleteVersion,
 	discardDraft,
-	computeDraftVersionNumber
+	computeDraftVersionNumber,
+	versionDeleteEditorLoss
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -166,6 +170,75 @@ describe('loadVersionAsDraft', () => {
 		expect(client.deleteVersion).not.toHaveBeenCalled();
 	});
 
+	it.each([
+		{ draft: 'the song as opened', change: () => undefined, unversioned: false },
+		{
+			draft: 'an older version loaded and left untouched',
+			change: () => loadVersionAsDraft(older),
+			unversioned: false
+		},
+		{ draft: 'a typed line', change: () => setDraftLyrics('an unsaved line'), unversioned: true },
+		{
+			draft: 'an older version loaded and then edited',
+			change: () => {
+				loadVersionAsDraft(older);
+				setDraftLyrics('v1 lyrics\na typed line');
+			},
+			unversioned: true
+		}
+	])(
+		'only a draft no saved version equals has changes in no version: $draft',
+		({ change, unversioned }) => {
+			openSongWithTwoVersions();
+			change();
+			expect(get(draftHasUnversionedChanges)).toBe(unversioned);
+		}
+	);
+
+	const twinOfLatest = makeVersion({
+		id: 'v1',
+		version_number: 1,
+		lyrics: 'hello',
+		prompt: 'rock'
+	});
+
+	const allShown = { toast: true, hint: true, draftChip: true };
+
+	it.each([
+		{ load: 'an older version', version: older, typed: false, shown: allShown },
+		{
+			load: 'an older version with the text of the current one',
+			version: twinOfLatest,
+			typed: false,
+			shown: allShown
+		},
+		{
+			load: 'an older version with the text of the current one over a typed draft',
+			version: twinOfLatest,
+			typed: true,
+			shown: allShown
+		},
+		{
+			load: 'the current version over a typed draft, back to saved',
+			version: latest,
+			typed: true,
+			shown: { toast: true, hint: false, draftChip: false }
+		}
+	])(
+		'a load of $load shows the toast, the hint and the draft chip together, or only the toast',
+		({ version, typed, shown }) => {
+			openSongWithTwoVersions();
+			versions.set(version === latest ? [latest, older] : [latest, version]);
+			if (typed) setDraftLyrics('an unsaved line');
+			const load = loadVersionAsDraft(version);
+			expect({
+				toast: load !== null,
+				hint: get(draftLoadedFrom) !== null,
+				draftChip: get(isDirty)
+			}).toEqual(shown);
+		}
+	);
+
 	it('answers no undo when the draft already holds that version', () => {
 		openSongWithTwoVersions();
 		expect(loadVersionAsDraft(latest)).toBeNull();
@@ -231,6 +304,64 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	it.each([
+		{ after: 'the opened Versions list', end: () => {}, undone: 'an unsaved line' },
+		{
+			after: 'the opened Versions list, then a retire',
+			end: retireVersionLoadUndo,
+			undone: 'v1 lyrics'
+		},
+		{
+			after: 'the opened Versions list, then its close',
+			end: retireSetAsideVersionLoadUndo,
+			undone: 'v1 lyrics'
+		},
+		{
+			after: 'the opened Versions list, then its toast timing out',
+			end: (load: { expire: () => void } | null) => load?.expire(),
+			undone: 'v1 lyrics'
+		}
+	])(
+		'a load that changes nothing offers the set-aside undo again, after $after',
+		({ end, undone }) => {
+			openSongWithTwoVersions();
+			setDraftLyrics('an unsaved line');
+			const load = loadVersionAsDraft(older);
+			setAsideVersionLoadUndo();
+			expect(load && get(load.holds)).toBe(false);
+			end(load);
+
+			loadVersionAsDraft(older)?.undo();
+
+			expect(get(editLyrics)).toBe(undone);
+		}
+	);
+
+	it('the Versions list closing keeps an undo a load from it offered again', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		loadVersionAsDraft(older);
+		setAsideVersionLoadUndo();
+		const offeredAgain = loadVersionAsDraft(older);
+		retireSetAsideVersionLoadUndo();
+
+		offeredAgain?.undo();
+
+		expect(get(editLyrics)).toBe('an unsaved line');
+	});
+
+	it('an earlier load timing out leaves the newer load its undo', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const earlier = loadVersionAsDraft(older);
+		const newer = loadVersionAsDraft(latest);
+		earlier?.expire();
+
+		newer?.undo();
+
+		expect(get(editLyrics)).toBe('v1 lyrics');
+	});
+
+	it.each([
 		{ draft: 'a loaded older version', load: true, newVersion: true },
 		{ draft: 'an edit of the latest version', load: false, newVersion: false }
 	])('saving $draft asks for a new version: $newVersion', async ({ load, newVersion }) => {
@@ -268,6 +399,68 @@ describe('loadVersionAsDraft', () => {
 		loadVersionAsDraft(older);
 		loadSongData(makeSong({ ...songDefaults, id: 's2' }));
 		expect(get(draftLoadedFrom)).toBeNull();
+	});
+});
+
+describe('versionDeleteEditorLoss', () => {
+	const latest = makeVersion({ id: 'v2', version_number: 2, lyrics: 'hello', prompt: 'rock' });
+	const older = makeVersion({ id: 'v1', version_number: 1, lyrics: 'v1 lyrics' });
+
+	it.each([
+		{ deleted: older, draft: 'the latest', change: () => undefined, loss: null },
+		{
+			deleted: older,
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
+		},
+		{
+			deleted: older,
+			draft: 'its own untouched load',
+			change: () => loadVersionAsDraft(older),
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
+		},
+		{
+			deleted: latest,
+			draft: 'an untouched load of a version that stays',
+			change: () => loadVersionAsDraft(older),
+			loss: null
+		},
+		{
+			deleted: latest,
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
+		},
+		{
+			deleted: latest,
+			draft: 'the latest',
+			change: () => undefined,
+			loss: { kind: 'current-lyrics', replacedBy: 1 }
+		}
+	])(
+		'deleting v$deleted.version_number under $draft takes from the editor: $loss',
+		({ deleted, change, loss }) => {
+			selectedSongId.set('s1');
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			versions.set([latest, older]);
+			change();
+			expect(versionDeleteEditorLoss(deleted)).toEqual(loss);
+		}
+	);
+
+	it.each([
+		{ draft: 'the latest', change: () => undefined, loss: { kind: 'all-lyrics' } },
+		{
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft', emptiesEditor: true }
+		}
+	])('deleting the only version under $draft empties the editor: $loss', ({ change, loss }) => {
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		versions.set([latest]);
+		change();
+		expect(versionDeleteEditorLoss(latest)).toEqual(loss);
 	});
 });
 

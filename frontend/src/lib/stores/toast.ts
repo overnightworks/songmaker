@@ -21,10 +21,13 @@ interface ToastAction {
 
 /**
  * An undo that can stop holding before its toast times out -- once it would
- * restore nothing, its toast closes, so a shown Undo always restores.
+ * restore nothing, its toast closes, so a shown Undo always restores. A raiser
+ * that could offer the undo again learns through `expire` that its toast's
+ * time is up, so the offer ends with it.
  */
 interface UndoAction extends ToastAction {
 	holds?: Readable<boolean>;
+	expire?: () => void;
 }
 
 interface Toast {
@@ -94,7 +97,10 @@ export function addUndoToast(
 		});
 		stopWatchingUndo.set(id, stop);
 	}
-	setTimeout(() => dismissToast(id), UNDO_TOAST_DURATION_MS[length]);
+	setTimeout(() => {
+		dismissToast(id);
+		action.expire?.();
+	}, UNDO_TOAST_DURATION_MS[length]);
 }
 
 export function dismissToast(id: number): void {
