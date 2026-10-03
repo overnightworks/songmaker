@@ -522,11 +522,7 @@ class AudioPlayer {
 	// while the queue names a next take is buffering, which recovery rides out
 	// until that take is appended.
 	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
-		if (
-			session.deck.appending ||
-			this.queueNamesATakeAfter(session.playing) ||
-			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
-		)
+		if (session.deck.appending || this.queueNamesATakeAfter(session.playing) || !ranOutOfAudio(el))
 			return false;
 		this.note('media_event', 'deck_end');
 		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
@@ -689,6 +685,10 @@ class AudioPlayer {
 			this.recoverOnPlay('frozen-clock');
 			return;
 		}
+		// A take paused while it waited for its bytes still waits for them: its
+		// download goes on now, not at the stall's next look (#1288).
+		if (this.deckSession?.deck.appending && ranOutOfAudio(this.audio))
+			this.resumeDeckDownload(this.deckSession, 'play');
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
 	}
 
@@ -1571,6 +1571,11 @@ function continuableEntry(
 function bufferedUntil(el: HTMLAudioElement): number {
 	const ranges = el.buffered;
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
+}
+
+// The playhead stands at the end of what the element holds.
+function ranOutOfAudio(el: HTMLAudioElement): boolean {
+	return bufferedUntil(el) - el.currentTime <= END_OF_DECK_SLACK_SECONDS;
 }
 
 // A clock frozen over audio the deck already holds is the element's own

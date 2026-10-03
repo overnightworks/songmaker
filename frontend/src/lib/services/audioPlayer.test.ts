@@ -3380,6 +3380,17 @@ describe('continuous deck (#1187 M2)', () => {
 				playTo(4);
 				fakeAudio.fire('stalled');
 			}
+		},
+		{
+			moment: 'after the listener paused it while it waited for its bytes',
+			arrange: () => {
+				playFirstWithSecondAppended();
+				playTo(4);
+				fakeAudio.bufferedUntil = 4;
+				deck().appending = true;
+				fakeAudio.fire('stalled');
+				audioPlayer.pause();
+			}
 		}
 	])('Play on a parked take resumes its download at once $moment', ({ arrange }) => {
 		vi.useFakeTimers();
@@ -3390,6 +3401,19 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().retries).toBe(1);
 		expect(deck().closed).toBe(false);
 		expect(recordedDetails()).toContain('retry deck_resume reason=play');
+	});
+
+	it('Play on a paused take with audio ahead of the playhead leaves its download alone', () => {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(4);
+		fakeAudio.bufferedUntil = 12;
+		deck().appending = true;
+		audioPlayer.pause();
+
+		audioPlayer.play();
+
+		expect(deck().retries).toBe(0);
 	});
 
 	function freezeTheClockOverBufferedAudioAt(seconds: number): void {
