@@ -1,0 +1,8 @@
+claim_id = "84d63f070c3f424f81eaf33c57f515cd"
+agent = "claude-head"
+role = "builder"
+base = "e1b6c6def31902efe9019e37de060e70903bab0d"
+branch = "claude-head/issue-1284-version-delete-row"
+scope = ["docs/architecture.md", "frontend/e2e/song-versions.spec.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/components/editor/VersionsSheet.svelte", "frontend/src/lib/components/editor/VersionsSheet.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "d9ced9a99ceca98b119efc8fcea06bf02296d703"
+whole_reason = "version delete on the Versions row with a richer confirm and versions docs"
