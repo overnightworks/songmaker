@@ -448,21 +448,29 @@ function nativeTakeIndex(
 	current: PlaybackInfo | null
 ): number {
 	if (!ctx.takes || ctx.takes.length === 0) return -1;
-	if (typeof ctx.index === 'number' && current) {
-		const indexed = ctx.takes[ctx.index];
-		if (
-			indexed?.generation.id === current.generation.id &&
-			indexed.generation.mp3_path === current.generation.mp3_path
-		) {
-			return ctx.index;
-		}
-	}
 	if (!current) return ctx.index ?? 0;
-	return ctx.takes.findIndex(
+	return queuePositionFrom(
+		ctx.takes,
+		ctx.index ?? 0,
 		(take) =>
 			take.generation.id === current.generation.id &&
 			take.generation.mp3_path === current.generation.mp3_path
 	);
+}
+
+// Where the queue holds a take, looked for from the queue's own index on: a
+// take the player moved on to by itself is the next one along, even in a
+// playlist that holds that take twice.
+function queuePositionFrom<T>(
+	items: readonly T[],
+	from: number,
+	holds: (item: T) => boolean
+): number {
+	for (let step = 0; step < items.length; step++) {
+		const index = (from + step) % items.length;
+		if (holds(items[index])) return index;
+	}
+	return -1;
 }
 
 // Moves the index within the queue that is already playing (Skip and Pick's
@@ -864,9 +872,7 @@ function currentPlaylistIndex(
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
 	if (!current) return ctx.index;
-	const indexedEntry = ctx.entries[ctx.index];
-	if (indexedEntry && holdsEntryTake(current, indexedEntry)) return ctx.index;
-	const idx = ctx.entries.findIndex((entry) => holdsEntryTake(current, entry));
+	const idx = queuePositionFrom(ctx.entries, ctx.index, (entry) => holdsEntryTake(current, entry));
 	return idx >= 0 ? idx : ctx.index;
 }
 
@@ -1656,9 +1662,23 @@ function handlePlaybackStarted(): void {
 	gatherRestoredAlbumQueue();
 }
 
+// A take change the player made by itself — the playhead crossing into the
+// next take on the continuous deck — moves the queue on and asks for the take
+// after it, just as a load does.
 function handleCurrentChange(current: PlaybackInfo | null): void {
 	updateMediaSessionMetadata(current);
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
+	if (current === null) return;
+	moveQueueIndexTo(current);
+	preloadNextTake();
+}
+
+function moveQueueIndexTo(current: PlaybackInfo): void {
+	const ctx = get(queueContext);
+	const index =
+		ctx.type === 'playlist' ? currentPlaylistIndex(ctx, current) : nativeTakeIndex(ctx, current);
+	if (index < 0 || index === ctx.index) return;
+	queueContext.set({ ...ctx, index });
 }
 
 /**

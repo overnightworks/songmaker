@@ -1968,17 +1968,31 @@ describe('the queue names its next take', () => {
 	}
 
 	function playlistOf(count: number): PlaylistDetailItem {
-		const entries = Array.from({ length: count }, (_, i) =>
+		return playlistHolding(...Array.from({ length: count }, (_, i) => i + 1));
+	}
+
+	function playlistHolding(...tracks: number[]): PlaylistDetailItem {
+		const entries = tracks.map((track, i) =>
 			makePlaylistEntry({
 				...playlistEntryDefaults,
 				id: `pe${i + 1}`,
 				position: i,
-				generation_id: `g${i + 1}`,
-				song_id: `s${i + 1}`,
-				mp3_path: `a1/s${i + 1}.mp3`
+				generation_id: `g${track}`,
+				song_id: `s${track}`,
+				song_title: `Song ${track}`,
+				mp3_path: `a1/s${track}.mp3`
 			})
 		);
 		return makeDetail({ ...playlistDefaults, entry_count: entries.length, entries });
+	}
+
+	function moveOnByItselfTo(take: PlaybackInfo | null): void {
+		audioPlayer.current = take;
+		audioPlayer.currentCallbacks.onCurrentChange?.(take);
+	}
+
+	function preloadedTake(): PlaybackInfo | null {
+		return vi.mocked(audioPlayer.preload).mock.lastCall?.[0] ?? null;
 	}
 
 	function nativeQueue(takeCount: number, index: number): QueueContext {
@@ -2132,6 +2146,56 @@ describe('the queue names its next take', () => {
 		expect(preloadedGenerationId()).toBe('g2-repicked');
 		await playNextSong();
 		expect(audioPlayer.current?.generation.id).toBe('g2-repicked');
+	});
+
+	describe('when the player moves on to the next take by itself', () => {
+		let mediaSession: { metadata: MediaMetadataInit | null };
+
+		beforeEach(() => {
+			mediaSession = { metadata: null };
+			Object.defineProperty(navigator, 'mediaSession', {
+				value: mediaSession,
+				configurable: true
+			});
+			vi.stubGlobal(
+				'MediaMetadata',
+				vi.fn(function (init: MediaMetadataInit) {
+					return init;
+				})
+			);
+		});
+
+		afterEach(() => {
+			Reflect.deleteProperty(navigator, 'mediaSession');
+		});
+
+		it.each([
+			['album', () => playAlbum('a1')],
+			['playlist', () => playPlaylistEntryAndShowNowPlaying(playlistOf(3), 0)]
+		])(
+			'the %s queue moves on, names the take and asks for the one after it',
+			async (_queue, start) => {
+				songList.set([albumSong(1), albumSong(2), albumSong(3)]);
+				await start();
+
+				moveOnByItselfTo(preloadedTake());
+
+				expect(preloadedGenerationId()).toBe('g3');
+				expect(
+					buildQueueViewModel(get(queueContext), audioPlayer.current).upNext?.generationId
+				).toBe('g3');
+				expect(mediaSession.metadata).toEqual(expect.objectContaining({ title: 'Song 2' }));
+			}
+		);
+
+		it('a playlist that holds the take twice moves on past its later place', async () => {
+			await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 2, 1, 3), 1);
+
+			moveOnByItselfTo(preloadedTake());
+
+			expect(audioPlayer.current?.generation.id).toBe('g1');
+			expect(preloadedGenerationId()).toBe('g3');
+		});
 	});
 
 	it('a take row whose pool holds only that take continues through its album', async () => {
