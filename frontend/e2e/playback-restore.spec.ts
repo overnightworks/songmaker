@@ -20,8 +20,17 @@ import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
  */
 const PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET = 50;
 
-/** Mid-take in the 3 s fixture take (`e2e/fixtures/take.mp3`). */
+/** The fixture take's length (`e2e/fixtures/take.mp3`). */
+const TAKE_SECONDS = 3;
+
+/** Mid-take in the fixture take. */
 const MID_TAKE_SECONDS = 1.5;
+
+/** Far enough into a playing take that its position is no start, with time left to pause. */
+const WELL_INTO_TAKE_SECONDS = 1;
+
+/** The transport's position as often as the take moves on, so a pause lands before its end. */
+const POSITION_POLL_INTERVALS_MS = [100];
 
 /** The rest of the fixture take plus the next take's start, with room for a slow runner. */
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
@@ -94,6 +103,24 @@ function transportOf(page: Page) {
 	};
 }
 
+// Plays the song's one take from its album.
+async function playTheSongsTake(
+	page: Page,
+	shell: Shell,
+	albumId: string,
+	songTitle: string
+): Promise<void> {
+	await page.goto(`/album/${albumId}`);
+	await workspace(page)
+		.getByRole('button', { name: nameStartingWith(songTitle) })
+		.click();
+	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	const take = workspace(page).locator('.take-row');
+	await expect(take).toHaveCount(1);
+	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
+	await expect(transportOf(page).pause).toBeVisible();
+}
+
 // Plays the song's one take from its album, pauses it mid-take and reloads,
 // as a page Android killed and the listener reopened.
 async function pauseMidTakeAndReload(
@@ -103,20 +130,24 @@ async function pauseMidTakeAndReload(
 	songTitle: string
 ): Promise<void> {
 	const { play, pause } = transportOf(page);
-	await page.goto(`/album/${albumId}`);
-	await workspace(page)
-		.getByRole('button', { name: nameStartingWith(songTitle) })
-		.click();
-	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
-	const take = workspace(page).locator('.take-row');
-	await expect(take).toHaveCount(1);
-	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
-	await expect(pause).toBeVisible();
+	await playTheSongsTake(page, shell, albumId, songTitle);
 	await seekThePlayingDeck(page, MID_TAKE_SECONDS);
 	await pause.click();
 	await expect(play).toBeVisible();
 
 	await page.reload();
+}
+
+// The desktop transport shows the take's position on its seek slider; the
+// phone's shows it only as the progress line across its top.
+async function shownPosition(page: Page, shell: Shell): Promise<number> {
+	const { transport } = transportOf(page);
+	if (shell === 'desktop') {
+		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+	}
+	const fill = transport.locator('.mobile-progress-fill');
+	const percent = parseFloat(await fill.evaluate((line) => (line as HTMLElement).style.width));
+	return (percent / 100) * TAKE_SECONDS;
 }
 
 test('reload mid-take shows the same take at the same position, paused', async ({
@@ -135,13 +166,7 @@ test('reload mid-take shows the same take at the same position, paused', async (
 	await expect(transport).toContainText(songTitle);
 	await expect(transportPlay).toBeVisible();
 	await expect.poll(() => loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
-	if (shell === 'desktop') {
-		await expect
-			.poll(async () =>
-				Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue())
-			)
-			.toBeCloseTo(MID_TAKE_SECONDS, 0);
-	}
+	await expect.poll(() => shownPosition(page, shell)).toBeCloseTo(MID_TAKE_SECONDS, 0);
 
 	await transportPlay.click();
 	await expect(transportPause).toBeVisible();
@@ -204,6 +229,37 @@ test('reload mid-album, one tap plays on, and the next song follows when the tak
 	});
 
 	console.log(`Playback restore queue flow /api requests (${shell}): ${guard.apiRequestCount}`);
+	guard.assertClean();
+	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+});
+
+test("reload after a pause in the album's second take shows it at its saved position", async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const shell = shellOf(testInfo);
+	await followTheAudioDecks(page);
+	const { transport, play, pause } = transportOf(page);
+
+	await withAlbumOfTwoSongs(page, `${shell} ${runMarker()}`, async (album) => {
+		await playTheSongsTake(page, shell, album.id, album.firstTitle);
+		await expect(transport).toContainText(album.secondTitle, {
+			timeout: TRACK_CHANGE_TIMEOUT_MS
+		});
+		await expect
+			.poll(() => shownPosition(page, shell), { intervals: POSITION_POLL_INTERVALS_MS })
+			.toBeGreaterThanOrEqual(WELL_INTO_TAKE_SECONDS);
+		await pause.click();
+		await expect(play).toBeVisible();
+		const pausedAt = await shownPosition(page, shell);
+		await page.reload();
+
+		await expect(transport).toContainText(album.secondTitle);
+		await expect(play).toBeVisible();
+		await expect.poll(() => shownPosition(page, shell)).toBeCloseTo(pausedAt, 0);
+	});
+
+	console.log(`Playback restore later take /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
 	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
 });
