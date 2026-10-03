@@ -9,7 +9,8 @@ import { stateProxy } from '../../tests/reactive-fixtures.svelte';
 //   vi.mock('$app/state', async () =>
 //     (await import('$lib/test-utils/app-navigation')).fakeAppState());
 // It writes history the way SvelteKit does: `goto` adds (or, with
-// `replaceState`, rewrites) a router entry and tells every mounted
+// `replaceState`, rewrites) a router entry once its route has loaded -- at
+// once, unless a test holds route loads -- and tells every mounted
 // `afterNavigate` callback; a Back or Forward that navigates tells every
 // mounted `beforeNavigate` callback first, and a `goto` one of them starts
 // supersedes it before it loads anything; `pushState` and `replaceState` are
@@ -63,6 +64,9 @@ const beforeNavigateCallbacks = new Set<(navigation: BeforeNavigate) => void>();
 // Every `goto` starts a navigation that supersedes the one still loading, the
 // way SvelteKit's navigation token does.
 let navigationsStarted = 0;
+// The route a `goto` loads before it writes its entry, while a test holds it;
+// otherwise the route is there at once.
+let heldRouteLoad: Promise<void> | null = null;
 
 // Every navigation the fake router reported since it last started, in order,
 // with the address of the page it navigated to.
@@ -127,8 +131,25 @@ function stepHistoryIndexUp(): void {
 	highestHistoryIndex = Math.max(highestHistoryIndex, currentHistoryIndex);
 }
 
+// Holds every route a `goto` loads until the returned function releases it.
+// Meanwhile a navigation writes nothing: once its route has loaded, it writes
+// its entry over whichever entry stands then, unless a newer one superseded it.
+export function holdRouteLoads(): () => void {
+	let release: () => void = () => undefined;
+	heldRouteLoad = new Promise((resolve) => (release = resolve));
+	return () => {
+		heldRouteLoad = null;
+		release();
+	};
+}
+
 async function fakeGoto(url: string | URL, options: GotoOptions = {}): Promise<void> {
 	navigationsStarted += 1;
+	const navigation = navigationsStarted;
+	if (heldRouteLoad !== null) {
+		await heldRouteLoad;
+		if (navigation !== navigationsStarted) return;
+	}
 	if (!options.replaceState) {
 		stepHistoryIndexUp();
 		currentNavigationIndex += 1;

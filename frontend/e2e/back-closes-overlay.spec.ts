@@ -743,11 +743,12 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 	});
 });
 
-// Issue #1165: the library shows a song the moment it opens, before the
-// router has loaded the song's route. Back pressed then must still step once,
-// onto the album -- the race is one of milliseconds, so the song opens more
-// than once, each time pressed as soon as it shows.
-const SONG_OPENS = 4;
+// Issues #1165 and #1263: the library shows a song the moment it opens,
+// before the router has loaded the song's route, and its address moves with
+// it. Back pressed then must still step once, onto the album -- the race is
+// one of milliseconds, so the song opens many times, each time read and
+// pressed as soon as it shows.
+const SONG_OPENS = 20;
 
 test('one Back right after a song opens from its album returns to the album', async ({
 	page
@@ -768,11 +769,12 @@ test('one Back right after a song opens from its album returns to the album', as
 	for (let open = 1; open <= SONG_OPENS; open += 1) {
 		await songRow.click();
 		await expect(song).toBeVisible();
+		expect(page.url(), `the song's address on open ${open}`).toMatch(SONG_ADDRESS);
 
 		await page.goBack();
 
 		await expect(album).toBeVisible();
-		expect(page.url()).toBe(albumAddress);
+		expect(page.url(), `the album's address after Back ${open}`).toBe(albumAddress);
 	}
 	guard.assertClean();
 });
