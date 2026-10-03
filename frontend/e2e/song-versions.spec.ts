@@ -39,6 +39,7 @@ import {
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_CLOSE_LABEL,
 	VERSIONS_SHEET_LABEL,
+	versionAlreadyTheDraftLabel,
 	versionChipLabel,
 	versionDeleteLabel,
 	versionDeleteLoadedDraftGoes,
@@ -553,6 +554,25 @@ test.describe('the versions of a song', () => {
 		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
 		await expect(loadedToast(page)).toBeVisible();
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
+	});
+
+	test('Open v2 on the clean current version answers: the focus moves to the lyrics and "v2 is already the draft" appears', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await showTakes(page);
+
+		await takeGroup(page, song.v2, 1)
+			.getByRole('button', { name: new RegExp(openVersionLabel(2)) })
+			.click();
+
+		await expect(lyricsField(page)).toBeFocused();
+		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+		await expect(
+			page.getByRole('alert').filter({ hasText: versionAlreadyTheDraftLabel(2) })
+		).toBeVisible();
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, false));
 	});
 
 	test('Open v1 in Now Playing lands on Edit with v1 loaded while the take plays on', async ({

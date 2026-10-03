@@ -432,6 +432,10 @@ export function versionLoadedFromLabel(versionNumber: number): string {
 	return `Loaded from ${versionLabel(versionNumber)}`;
 }
 
+export function versionAlreadyTheDraftLabel(versionNumber: number): string {
+	return `${versionLabel(versionNumber)} is already the draft`;
+}
+
 export function versionLoadedToastLabel(versionNumber: number): string {
 	return `${versionLabel(versionNumber)} loaded`;
 }

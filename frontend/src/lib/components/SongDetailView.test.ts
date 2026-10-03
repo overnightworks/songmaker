@@ -1887,6 +1887,23 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		);
 	});
 
+	it('Open on the clean current version answers: "v2 is already the draft" and the focus moves to the lyrics', async () => {
+		const takeOfV2 = generation({ ...sourceRecipeDefaults(), version_id: 'v2', version_number: 2 });
+		songList.set([song({ ...editableSongDefaults(), generations: [takeOfV2] })]);
+		navigateToSongTab('takes');
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+
+		takeGroupOpenLink(target, 2).click();
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(target.querySelector('textarea.lyrics-area'))
+		);
+
+		expect(addToast).toHaveBeenCalledWith('v2 is already the draft', 'info');
+		expect(addUndoToast).not.toHaveBeenCalled();
+		expect(get(editLyrics)).toBe('verse');
+	});
+
 	it('an Open from Now Playing loads that version on arrival and shows it on Edit', async () => {
 		navigateToSongTab('takes');
 		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
@@ -1996,7 +2013,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
-	it('loading the version the draft already holds raises no toast once its Undo timed out', async () => {
+	it('loading the version the draft already holds brings back no Undo toast once its Undo timed out', async () => {
 		const target = await renderView();
 		vi.useFakeTimers();
 		await replaceTypedDraftWith(target, 1);
