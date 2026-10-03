@@ -123,6 +123,7 @@ async function openSongWithAnUnsavedDraft(
 		.getByRole('button', { name: nameStartingWith(title) })
 		.click();
 	await expect(songHeading).toBeVisible();
+	expectSongAddressStands(page, albumId, title);
 	const savedLyrics = await lyrics.inputValue();
 	await lyrics.fill(`${savedLyrics}\n${UNSAVED_DRAFT_LINE}`);
 	return {
@@ -135,6 +136,12 @@ async function openSongWithAnUnsavedDraft(
 
 function expectedSongSlug(title: string): string {
 	return title.toLowerCase().replace(/\s+/g, '-');
+}
+
+// Read once, as soon as the song shows: its address moves with it, not once
+// the router has loaded the song's route (issue #1263).
+function expectSongAddressStands(page: Page, albumId: string, title: string): void {
+	expect(new URL(page.url()).pathname).toBe(`/album/${albumId}/${expectedSongSlug(title)}`);
 }
 
 test.describe('song page at phone width', () => {
@@ -291,6 +298,7 @@ test.describe('song page at phone width', () => {
 				.getByRole('button', { name: nameStartingWith(title) })
 				.click();
 			await expect(page.getByRole('heading', { name: title })).toBeVisible();
+			expectSongAddressStands(page, library.songPhoneAlbumId, title);
 		};
 
 		await page.goto(albumAddress);

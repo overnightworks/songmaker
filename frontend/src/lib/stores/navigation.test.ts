@@ -23,6 +23,7 @@ import { resolve } from '$app/paths';
 import {
 	fakePage,
 	followBeforeNavigate,
+	holdRouteLoads,
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
@@ -148,6 +149,7 @@ import {
 	initNavigation,
 	isLibraryWorkspacePath,
 	openAlbum,
+	openAppPage,
 	openCollectionEntry,
 	openLibraryWall,
 	openPlaylist,
@@ -317,7 +319,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(historyEntry()).not.toHaveProperty('filter');
 	});
 
-	it('keeps a second write behind the crossing one it follows', async () => {
+	it('lands a second write right after the crossing one it follows', async () => {
 		replaceHistoryEntry('/album/a1');
 		songList.set([song({ ...navigableSongDefaults(), slug: 's1', generations: [generation()] })]);
 
@@ -326,8 +328,8 @@ describe('history writes across the route boundary (issue #269)', () => {
 		persistLibraryHistory();
 
 		// Pinning the take crosses a second time (issue #281: the take is its
-		// own route file too), queued behind the song's own crossing write.
-		await vi.waitFor(() => expect(historyEntry().generationId).toBe('g1'));
+		// own route file too), and stands at once like the song's own write.
+		expect(historyEntry().generationId).toBe('g1');
 		expect(window.location.pathname + window.location.search).toBe('/album/a1/s1/take/1');
 	});
 
@@ -345,19 +347,40 @@ describe('history writes across the route boundary (issue #269)', () => {
 		expect(window.location.pathname).toBe('/album/a1/s1');
 	});
 
-	// Issue #1165: the song shows the moment it opens, a task before the router
-	// has loaded its route, and a Back pressed then must step once.
-	it('lands a Back pressed while the song route still loads on the album it was opened from', async () => {
-		await openAlbum('a1');
-		const album = historyEntry();
+	// Issues #1165 and #1263: the song shows the moment it opens, before the
+	// router has loaded its route -- or even the route of the album it was
+	// opened from -- so its address moves with it, and a Back pressed then
+	// steps once, onto the album.
+	function nextRouteNeverLoads(): void {
 		vi.mocked(goto).mockImplementationOnce(() => new Promise<void>(() => undefined));
+	}
 
-		void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
-		await pressBack();
+	it.each([
+		{ stillLoading: "the song's route", openTheAlbum: () => openAlbum('a1') },
+		{
+			stillLoading: "the album's route",
+			openTheAlbum: () => {
+				nextRouteNeverLoads();
+				void openAlbum('a1');
+			}
+		}
+	])(
+		'lands a Back pressed while $stillLoading still loads on the album the song was opened from',
+		async ({ openTheAlbum }) => {
+			replaceHistoryEntry('/', libraryRootState());
+			await openTheAlbum();
+			const album = historyEntry();
+			nextRouteNeverLoads();
 
-		expect(window.location.pathname).toBe('/album/a1');
-		expect(historyEntry()).toEqual(album);
-	});
+			void selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+
+			expect(window.location.pathname).toBe('/album/a1/s1');
+			expect(historyEntry().songId).toBe('s1');
+			await pressBack();
+			expect(window.location.pathname).toBe('/album/a1');
+			expect(historyEntry()).toEqual(album);
+		}
+	);
 
 	// An address its route stated as unknown or unreachable wrote no library
 	// state, so Back onto it must load that route again to state it once more
@@ -667,6 +690,58 @@ describe('opening a collection from off the library route', () => {
 		selectSong('s1');
 		await vi.waitFor(() => expect(get(selectedSongId)).toBe('s1'));
 		expect(window.location.pathname).toBe('/album/a1/s1');
+	});
+
+	// From an app page the library's entry stands only once its route has
+	// loaded, so a write made meanwhile waits for it: written at once, its
+	// navigation would supersede the first one and stand in place of its entry.
+	it.each([
+		{
+			opened: 'another song of the same album',
+			first: () => selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })),
+			second: () => selectSong('s2', song({ ...navigableSongDefaults(), id: 's2', slug: 's2' })),
+			backLandsOn: '/settings/voices'
+		},
+		{
+			opened: 'a song of the album',
+			first: () => openAlbum('a1'),
+			second: () => selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' })),
+			backLandsOn: '/album/a1'
+		}
+	])(
+		'keeps the entry of a library page opened from Settings when $opened opens before its route loads',
+		async ({ first, second, backLandsOn }) => {
+			replaceHistoryEntry('/settings/voices');
+			const routesLoaded = holdRouteLoads();
+
+			const firstWritten = first();
+			const secondWritten = second();
+			routesLoaded();
+			await Promise.all([firstWritten, secondWritten]);
+
+			await pressBack();
+			expect(window.location.pathname).toBe(backLandsOn);
+		}
+	);
+
+	// An app page opened while a library write still waits for its entry
+	// waits for that write too, so the page lands last and the album and its
+	// song stand under it.
+	it('lands on an app page opened while a song of the album waits for the album route', async () => {
+		replaceHistoryEntry('/settings');
+		const routesLoaded = holdRouteLoads();
+
+		const albumWritten = openAlbum('a1');
+		const songWritten = selectSong('s1', song({ ...navigableSongDefaults(), slug: 's1' }));
+		const pageOpened = openAppPage('/settings/voices');
+		routesLoaded();
+		await Promise.all([albumWritten, songWritten, pageOpened]);
+
+		expect(window.location.pathname).toBe('/settings/voices');
+		await pressBack();
+		expect(window.location.pathname).toBe('/album/a1/s1');
+		await pressBack();
+		expect(window.location.pathname).toBe('/album/a1');
 	});
 
 	// The one pairing removing the guard put at risk: openLibraryWall's own
@@ -1399,7 +1474,7 @@ describe('revealPlayingSong', () => {
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		// The song's own address crosses the route boundary once; the take is
 		// its own route file too (issue #281), so pinning it crosses a second
-		// time, queued behind the first.
+		// time, right after the first.
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(selectedGenerationId)).toBe('g1');
 		await vi.waitFor(() =>
