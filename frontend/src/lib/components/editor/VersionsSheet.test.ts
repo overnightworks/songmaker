@@ -8,22 +8,14 @@ vi.mock('$lib/api/client', () => ({
 	deleteVersion: vi.fn(),
 	fetchSong: vi.fn()
 }));
-vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
 
 import { get } from 'svelte/store';
-import { deleteVersion, fetchSong, fetchVersions } from '$lib/api/client';
-import { ApiError, NetworkError } from '$lib/api/fetch';
-import { loadSongData, setDraftLyrics, versions } from '$lib/stores/editor';
+import { fetchVersions } from '$lib/api/client';
+import { loadSongData, setDraftLyrics, versionDeleteRequest, versions } from '$lib/stores/editor';
 import { closeTopLayer, resetLayersForTests } from '$lib/stores/layers';
-import { selectedSongId } from '$lib/stores/player';
-import { addToast } from '$lib/stores/toast';
 import {
-	DIALOG_CANCEL_LABEL,
-	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_PICK_WARNING,
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
-	versionDeleteTitle,
 	versionsChipAccessibleLabel
 } from '$lib/constants';
 import VersionsSheet from './VersionsSheet.svelte';
@@ -71,7 +63,6 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 beforeEach(async () => {
 	vi.useFakeTimers({ toFake: ['Date'] });
 	vi.setSystemTime(NOW);
-	selectedSongId.set(SONG.id);
 	vi.mocked(fetchVersions).mockResolvedValueOnce(VERSION_ROWS);
 	loadSongData(SONG);
 	await vi.waitFor(() => expect(get(versions)).toEqual(VERSION_ROWS));
@@ -81,8 +72,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	resetLayersForTests();
-	vi.mocked(addToast).mockClear();
-	vi.mocked(deleteVersion).mockReset();
+	versionDeleteRequest.set(null);
 	vi.useRealTimers();
 });
 
@@ -133,27 +123,6 @@ function deleteButtons(open: HTMLElement): string[] {
 		.filter((name) => /delete/i.test(name));
 }
 
-function confirmDialog(): HTMLElement | null {
-	return document.querySelector<HTMLElement>('.dialog');
-}
-
-function confirmText(): string[] {
-	const dialog = confirmDialog();
-	if (!dialog) throw new Error('Expected the delete confirm');
-	return [
-		dialog.querySelector('h3')?.textContent?.trim() ?? '',
-		...Array.from(dialog.querySelectorAll('li')).map((item) => item.textContent?.trim() ?? '')
-	];
-}
-
-function confirmButton(label: string): HTMLButtonElement {
-	const button = Array.from(
-		confirmDialog()?.querySelectorAll<HTMLButtonElement>('button') ?? []
-	).find((el) => el.textContent?.trim() === label);
-	if (!button) throw new Error(`Expected the confirm's ${label} button`);
-	return button;
-}
-
 async function askToDelete(open: HTMLElement, versionNumber: number): Promise<void> {
 	const button = open.querySelector<HTMLButtonElement>(
 		`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
@@ -162,11 +131,6 @@ async function askToDelete(open: HTMLElement, versionNumber: number): Promise<vo
 	button.click();
 	await tick();
 }
-
-const SONG_WITHOUT_V6 = makeSong({
-	...SONG,
-	generations: SONG.generations.filter((take) => take.version_number !== 6)
-});
 
 describe('VersionsSheet', () => {
 	it('names the latest version on the chip, and the draft once it differs', async () => {
@@ -226,75 +190,25 @@ describe('VersionsSheet', () => {
 	});
 
 	it.each([
-		{
-			versionNumber: 6,
-			shown: [versionDeleteTitle(6, 1), VERSION_DELETE_PICK_WARNING],
-			says: 'names its one take and warns that the album pick is among them'
-		},
-		{
-			versionNumber: 7,
-			shown: [versionDeleteTitle(7, 2)],
-			says: 'names its takes and warns of no pick'
-		},
-		{ versionNumber: 4, shown: [versionDeleteTitle(4, 0)], says: 'names no takes' }
-	])('the confirm for v$versionNumber $says', async ({ versionNumber, shown }) => {
-		const target = await renderSheet(vi.fn());
-		const open = await openSheet(target);
-		await askToDelete(open, versionNumber);
-		expect(confirmText()).toEqual(shown);
-	});
+		{ versionNumber: 6, takeCount: 1, holdsPick: true, takes: 'its one take with the album pick' },
+		{ versionNumber: 7, takeCount: 2, holdsPick: false, takes: 'its two takes' },
+		{ versionNumber: 4, takeCount: 0, holdsPick: false, takes: 'no takes' }
+	])(
+		'the delete on v$versionNumber asks to delete it with $takes, loading nothing',
+		async ({ versionNumber, takeCount, holdsPick }) => {
+			const onload = vi.fn();
+			const target = await renderSheet(onload);
+			const open = await openSheet(target);
+			await askToDelete(open, versionNumber);
 
-	it('Cancel on the confirm deletes nothing and keeps the sheet open', async () => {
-		const target = await renderSheet(vi.fn());
-		const open = await openSheet(target);
-		await askToDelete(open, 6);
-		confirmButton(DIALOG_CANCEL_LABEL).click();
-		await tick();
-
-		expect(confirmDialog()).toBeNull();
-		expect(deleteVersion).not.toHaveBeenCalled();
-		expect(sheet(target)).not.toBeNull();
-		expect(versionRowTexts(target)).toHaveLength(VERSION_ROWS.length);
-	});
-
-	it('deletes the version with its takes once confirmed, and the sheet lists the rest', async () => {
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(SONG_WITHOUT_V6);
-		const remaining = VERSION_ROWS.filter((version) => version.id !== 'v6');
-		vi.mocked(fetchVersions).mockResolvedValueOnce(remaining);
-		const target = await renderSheet(vi.fn());
-		const open = await openSheet(target);
-		await askToDelete(open, 6);
-		confirmButton(VERSION_DELETE_CONFIRM_LABEL).click();
-
-		await vi.waitFor(() => expect(get(versions)).toEqual(remaining));
-		await tick();
-		expect(deleteVersion).toHaveBeenCalledExactlyOnceWith('v6', true);
-		expect(confirmDialog()).toBeNull();
-		expect(sheet(target)).not.toBeNull();
-		expect(deleteButtons(open)).toEqual([7, 4, 3].map(versionDeleteLabel));
-		expect(vi.mocked(addToast).mock.calls).toEqual([['Deleted v6', 'success']]);
-	});
-
-	it.each([
-		{
-			failure: 'with no network answer',
-			error: new NetworkError('/api/versions/v6', new TypeError('Failed to fetch')),
-			shown: 'Delete failed'
-		},
-		{
-			failure: 'refused by the server',
-			error: new ApiError(409, 'A picked take stays', '/api/versions/v6'),
-			shown: 'A picked take stays'
+			expect(get(versionDeleteRequest)).toEqual({
+				songId: SONG.id,
+				version: VERSION_ROWS.find((version) => version.version_number === versionNumber),
+				takeCount,
+				holdsPick
+			});
+			expect(onload).not.toHaveBeenCalled();
+			expect(sheet(target)).not.toBeNull();
 		}
-	])('says $shown once when the delete fails $failure', async ({ error, shown }) => {
-		vi.mocked(deleteVersion).mockRejectedValueOnce(error);
-		const target = await renderSheet(vi.fn());
-		const open = await openSheet(target);
-		await askToDelete(open, 6);
-		confirmButton(VERSION_DELETE_CONFIRM_LABEL).click();
-
-		await vi.waitFor(() => expect(vi.mocked(addToast).mock.calls).toEqual([[shown, 'error']]));
-		expect(versionRowTexts(target)).toHaveLength(VERSION_ROWS.length);
-	});
+	);
 });

@@ -50,6 +50,8 @@
 		loadSongData,
 		loadVersionAsDraft,
 		pendingVersionLoad,
+		versionDeleteRequest,
+		handleDeleteVersion,
 		handleSave,
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
@@ -100,8 +102,12 @@
 		EDITOR_UNSAVED_DISCARD_LABEL,
 		TAKES_ERROR,
 		TOAST_UNDO_LABEL,
+		VERSION_DELETE_CONFIRM_LABEL,
+		VERSION_DELETE_PICK_WARNING,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
+		versionDeleteTitle,
+		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
 	} from '$lib/constants';
@@ -474,6 +480,18 @@
 		awaiting.answer(replace);
 	}
 
+	async function confirmVersionDelete(): Promise<void> {
+		const request = get(versionDeleteRequest);
+		versionDeleteRequest.set(null);
+		if (!request) return;
+		try {
+			await handleDeleteVersion(request.songId, request.version.id, true);
+			addToast(`Deleted ${versionLabel(request.version.version_number)}`, 'success');
+		} catch (e) {
+			addToast(describeFailure(e, 'Delete failed'), 'error');
+		}
+	}
+
 	function loadVersionWithUndo(version: VersionItem): void {
 		const load = loadVersionAsDraft(version);
 		if (!load) return;
@@ -839,6 +857,17 @@
 		confirmLabel={VERSION_REPLACE_DRAFT_CONFIRM_LABEL}
 		onconfirm={() => answerVersionReplace(true)}
 		oncancel={() => answerVersionReplace(false)}
+	/>
+{/if}
+
+{#if $versionDeleteRequest}
+	{@const request = $versionDeleteRequest}
+	<ConfirmDeleteDialog
+		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
+		items={request.holdsPick ? [VERSION_DELETE_PICK_WARNING] : []}
+		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
+		onconfirm={() => void confirmVersionDelete()}
+		oncancel={() => versionDeleteRequest.set(null)}
 	/>
 {/if}
 
