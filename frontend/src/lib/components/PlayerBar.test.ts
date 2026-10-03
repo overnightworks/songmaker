@@ -150,6 +150,18 @@ function loadTake(songTitle = 'Opening Move'): void {
 	);
 }
 
+function installLockScreen(): Pick<MediaSession, 'playbackState'> {
+	const lockScreen = {
+		playbackState: 'none' as MediaSessionPlaybackState,
+		setPositionState() {}
+	};
+	Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: lockScreen });
+	onTestFinished(() => {
+		Reflect.deleteProperty(navigator, 'mediaSession');
+	});
+	return lockScreen;
+}
+
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 let audio: FakeAudio;
@@ -214,6 +226,32 @@ describe('PlayerBar stream boundaries', () => {
 		expect(target.querySelector('.track-title')?.textContent).toBe(RAIL_LIBRARY_LABEL);
 		play?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
+	});
+
+	it('a start that waits for the network shows the waiting transport, and a press goes to the start (#1288)', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set('awaiting-network');
+		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_QUEUE_LOADING_TITLE);
+		const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+		expect(transport?.querySelector('.spinner')).not.toBeNull();
+		transport?.click();
+		expect(playIdleStart).toHaveBeenCalledOnce();
+	});
+
+	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {
+		const lockScreen = installLockScreen();
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set('awaiting-network');
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(lockScreen.playbackState).toBe('playing');
 	});
 
 	it('idle Play copy follows an open album interior', async () => {
@@ -1224,18 +1262,6 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			smallRetry: TRANSPORT_RETRY_LABEL
 		});
 	});
-
-	function installLockScreen(): Pick<MediaSession, 'playbackState'> {
-		const lockScreen = {
-			playbackState: 'none' as MediaSessionPlaybackState,
-			setPositionState() {}
-		};
-		Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: lockScreen });
-		onTestFinished(() => {
-			Reflect.deleteProperty(navigator, 'mediaSession');
-		});
-		return lockScreen;
-	}
 
 	it.each([
 		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },

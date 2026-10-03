@@ -39,6 +39,21 @@ import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+const lockScreen = vi.hoisted(() => ({
+	handlers: null as { pause: () => void } | null
+}));
+vi.mock('$lib/services/mediaSession', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/services/mediaSession')>();
+	return {
+		...actual,
+		setupMediaSessionHandlers: (
+			handlers: Parameters<typeof actual.setupMediaSessionHandlers>[0]
+		) => {
+			lockScreen.handlers = handlers;
+			return actual.setupMediaSessionHandlers(handlers);
+		}
+	};
+});
 vi.mock('$lib/api/fetch', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
 	return { ...actual, handleSessionLost: vi.fn() };
@@ -198,6 +213,15 @@ function makePoolQueue(overrides: Partial<LibraryPoolQueue> = {}): LibraryPoolQu
 		skipped_complete: true,
 		...overrides
 	};
+}
+
+function networkLost(path: string): NetworkError {
+	return new NetworkError(path, new TypeError('Failed to fetch'));
+}
+
+function albumQueueTakeIds(): string[] {
+	const ctx = get(queueContext);
+	return ctx.type === 'album' ? (ctx.takes ?? []).map((take) => take.generation.id) : [];
 }
 
 function makePlayback(gen: GenerationItem, song: SongItem): PlaybackInfo {
@@ -1902,6 +1926,34 @@ describe('starting album playback from a take', () => {
 		expect(vm.items[0]).toEqual(expect.objectContaining({ versionNumber: 3, generationNumber: 2 }));
 	});
 
+	it('offline, plays the tapped take without a toast and gathers the album once the network is back', async () => {
+		const tapped = makeGen({ ...genDefaults, id: 'g1', is_picked: true });
+		const song1 = makeSong({ ...queuedSongDefaults(), generations: [tapped] });
+		const song2 = makeSong({
+			...queuedSongDefaults(),
+			id: 's2',
+			title: 'Two',
+			track_number: 2,
+			generations: []
+		});
+		songList.set([song1, song2]);
+		selectedAlbumId.set('a1');
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong)
+			.mockRejectedValueOnce(networkLost('/api/songs/s2'))
+			.mockResolvedValueOnce({
+				...song2,
+				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/s2.mp3' })]
+			});
+
+		await playTake(tapped, song1);
+		const whileOffline = { toasts: get(toasts), playing: audioPlayer.current?.generation.id };
+		reportResourceStreamReachable(true);
+
+		await vi.waitFor(() => expect(albumQueueTakeIds()).toEqual(['g1', 'g2']));
+		expect(whileOffline).toEqual({ toasts: [], playing: 'g1' });
+	});
+
 	it('loads the clicked take natively without concat', async () => {
 		const picked = makeGen({ ...genDefaults, id: 'g-pick', is_picked: true });
 		const clicked = makeGen({
@@ -2315,18 +2367,66 @@ describe('playAlbum start track', () => {
 		]);
 	});
 
-	it('offline, leaves a rejected take load to the strip instead of a toast', async () => {
+	it('offline, waits on the start notice without a toast and starts the album once the network is back', async () => {
 		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 		reportResourceStreamReachable(false);
-		vi.mocked(fetchSong).mockRejectedValueOnce(
-			new NetworkError('/api/songs/s1', new TypeError('Failed to fetch'))
-		);
+		vi.mocked(fetchSong)
+			.mockRejectedValueOnce(networkLost('/api/songs/s1'))
+			.mockResolvedValueOnce(makeSong(queuedSongDefaults()));
 
 		await playAlbum('a1');
+		const whileOffline = {
+			notice: get(playStartNotice),
+			toasts: get(toasts),
+			loads: vi.mocked(audioPlayer.load).mock.calls.length
+		};
+		reportResourceStreamReachable(true);
 
-		expect(audioPlayer.load).not.toHaveBeenCalled();
+		await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+		expect(whileOffline).toEqual({ notice: 'awaiting-network', toasts: [], loads: 0 });
 		expect(get(playStartNotice)).toBe('idle');
-		expect(get(toasts)).toEqual([]);
+	});
+
+	it.each([
+		{ press: "the bar's transport", stop: () => playIdleStart() },
+		{ press: "the lock screen's Pause", stop: async () => lockScreen.handlers?.pause() }
+	])('offline, $press stops the waiting start so the network starts nothing', async ({ stop }) => {
+		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+		await playAlbum('a1');
+
+		await stop();
+		reportResourceStreamReachable(true);
+		await Promise.resolve();
+
+		expect(get(playStartNotice)).toBe('idle');
+		expect(fetchSong).toHaveBeenCalledOnce();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('offline, a start the listener replaced while it waited stays put once the network is back', async () => {
+		songList.set([
+			makeSong({ ...queuedSongDefaults(), generations: [] }),
+			makeSong({
+				...queuedSongDefaults(),
+				id: 's2',
+				album_id: 'a2',
+				title: 'Two',
+				generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', is_picked: true })]
+			})
+		]);
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+		await playAlbum('a1');
+		await playAlbum('a2');
+
+		reportResourceStreamReachable(true);
+		await Promise.resolve();
+
+		expect(fetchSong).toHaveBeenCalledOnce();
+		expect(audioPlayer.load).toHaveBeenCalledOnce();
+		expect(audioPlayer.current?.generation.id).toBe('g2');
 	});
 
 	it('leaves a superseded start silent when its take load is rejected', async () => {

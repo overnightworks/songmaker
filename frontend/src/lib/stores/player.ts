@@ -212,7 +212,9 @@ export const playbackSource = derived(
 	}
 );
 
-type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
+// 'awaiting-network': a start that could not read its takes offline waits
+// for the network, with nothing playing yet (#1288).
+type PlayStartNotice = 'idle' | 'building' | 'awaiting-network' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -342,7 +344,12 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 let playStartSeq = 0;
 let playStartAbort: AbortController | null = null;
 
-function beginPlayStart(): { seq: number; signal: AbortSignal } {
+interface PlayStart {
+	seq: number;
+	signal: AbortSignal;
+}
+
+function beginPlayStart(): PlayStart {
 	playStartAbort?.abort();
 	playStartAbort = new AbortController();
 	playStartSeq += 1;
@@ -352,6 +359,30 @@ function beginPlayStart(): { seq: number; signal: AbortSignal } {
 
 function playStartIsCurrent(seq: number): boolean {
 	return seq === playStartSeq;
+}
+
+// Offline, the strip already says why a start could not reach its takes: the
+// start keeps waiting where the listener sees it and runs again once the
+// network is back, unless a newer start replaced it meanwhile (#1288).
+function retryOnceBackOnline(
+	err: unknown,
+	signal: AbortSignal,
+	retry: () => Promise<void>
+): boolean {
+	if (!(err instanceof NetworkError) || !get(offline)) return false;
+	const stopWaiting = whenBackOnline(() => {
+		stopWaiting();
+		void retry().catch(toastAlbumSongsFailure);
+	});
+	signal.addEventListener('abort', stopWaiting, { once: true });
+	return true;
+}
+
+// The bar shows the start waiting until it runs again, a newer start
+// replaces it, or the listener stops it.
+function noticeStartAwaitingNetwork(signal: AbortSignal): void {
+	playStartNotice.set('awaiting-network');
+	signal.addEventListener('abort', () => playStartNotice.set('idle'), { once: true });
 }
 
 function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
@@ -636,7 +667,10 @@ export function idlePlayTarget(input: {
 	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
+// The transport with no take: a start that waits for the network is what the
+// listener asked for, so a press stops it rather than starting another.
 export async function playIdleStart(): Promise<void> {
+	if (stopStartAwaitingNetwork()) return;
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -653,6 +687,23 @@ export async function playIdleStart(): Promise<void> {
 		return;
 	}
 	await playLibrary();
+}
+
+// The bar and the lock screen show a start that waits for the network as the
+// transport's own wait, and their presses stop it (#1288).
+export function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
+	return !current && notice === 'awaiting-network';
+}
+
+function stopStartAwaitingNetwork(): boolean {
+	if (!startAwaitsNetwork(audioPlayer.current, get(playStartNotice))) return false;
+	playStartAbort?.abort();
+	return true;
+}
+
+function pauseFromLockScreen(): void {
+	if (stopStartAwaitingNetwork()) return;
+	audioPlayer.pause();
 }
 
 // The playlist store owns loading and joins the fetch already in flight; a
@@ -1339,7 +1390,7 @@ async function firstPlayableAlbumTake(
 // that turns out to have nothing playable leaves the running queue, and the
 // place it names as its source, exactly as they were.
 export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
-	const { seq } = beginPlayStart();
+	const { seq, signal } = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	playStartNotice.set('building');
@@ -1352,6 +1403,10 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 		startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
+		if (retryOnceBackOnline(err, signal, () => playAlbum(albumId, start))) {
+			noticeStartAwaitingNetwork(signal);
+			return;
+		}
 		playStartNotice.set('idle');
 		toastAlbumSongsFailure(err);
 		return;
@@ -1363,12 +1418,7 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 	}
 	playStartNotice.set('idle');
 	playNativeAlbumTakes(albumId, [albumQueueTake(startTake.song, startTake.gen)], 0);
-	await loadSongsForAlbum(albumId);
-	if (!playStartIsCurrent(seq)) return;
-	const entries = await collectAlbumEntries(albumId, seq);
-	if (entries === null || !playStartIsCurrent(seq)) return;
-	setAlbumQueueTakes(albumId, entries, startTake.gen.id);
-	preloadNextTake();
+	await gatherAlbumQueueAround(albumId, startTake.song, startTake.gen, { seq, signal });
 }
 
 async function playAlbumFromGeneration(
@@ -1377,11 +1427,11 @@ async function playAlbumFromGeneration(
 	gen: GenerationItem,
 	opts: QueueStart = {}
 ): Promise<void> {
-	const { seq } = beginPlayStart();
+	const playStart = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	playNativeAlbumTakes(albumId, [toPlaybackInfo(gen, song)], 0, opts);
-	await gatherAlbumQueueAround(albumId, song, gen, seq);
+	await gatherAlbumQueueAround(albumId, song, gen, playStart);
 }
 
 // Turns the one-take album queue a start loaded into the whole album, its
@@ -1390,12 +1440,20 @@ async function gatherAlbumQueueAround(
 	albumId: string,
 	song: SongItem,
 	gen: GenerationItem,
-	seq: number
+	playStart: PlayStart
 ): Promise<void> {
+	const { seq, signal } = playStart;
 	if (!playStartIsCurrent(seq)) return;
 	await loadSongsForAlbum(albumId);
 	if (!playStartIsCurrent(seq)) return;
-	const entries = await collectAlbumEntries(albumId, seq, { song, gen });
+	let entries: PlaylistEntryItem[] | null;
+	try {
+		entries = await collectAlbumEntries(albumId, seq, { song, gen });
+	} catch (err) {
+		const gatherAgain = () => gatherAlbumQueueAround(albumId, song, gen, playStart);
+		if (!playStartIsCurrent(seq) || retryOnceBackOnline(err, signal, gatherAgain)) return;
+		throw err;
+	}
 	if (entries === null || !playStartIsCurrent(seq)) return;
 	setAlbumQueueTakes(albumId, entries, gen.id);
 	preloadNextTake();
@@ -1559,8 +1617,8 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 
 setupMediaSessionHandlers({
 	play: () => audioPlayer.play(),
-	pause: () => audioPlayer.pause(),
-	stop: () => audioPlayer.pause(),
+	pause: pauseFromLockScreen,
+	stop: pauseFromLockScreen,
 	next: () => {
 		void playNextSong();
 	},
@@ -1795,9 +1853,9 @@ let restoredAlbumQueueToGather: (() => Promise<void>) | null = null;
 let restoredAlbumQueueGathering: Promise<void> | null = null;
 
 function restoreAlbumTake(song: SongItem, take: GenerationItem, start: QueueStart): void {
-	const { seq } = beginPlayStart();
+	const playStart = beginPlayStart();
 	playNativeAlbumTakes(song.album_id, [toPlaybackInfo(take, song)], 0, start);
-	restoredAlbumQueueToGather = () => gatherAlbumQueueAround(song.album_id, song, take, seq);
+	restoredAlbumQueueToGather = () => gatherAlbumQueueAround(song.album_id, song, take, playStart);
 }
 
 function gatherRestoredAlbumQueue(): void {
