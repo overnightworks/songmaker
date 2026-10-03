@@ -361,13 +361,14 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 });
 
 // Offline, the album header Play no longer drops silently when the album's
-// takes cannot be read (#1288): the bar holds its start notice with no toast,
-// and the album starts by itself once the network is back.
+// takes cannot be read (#1288): the bar holds its start notice and the
+// waiting transport with no toast, and the album starts by itself once the
+// network is back.
 test.describe('pressing the album header Play while the network is gone', () => {
 	// The takes must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
 
-	test('waits in the bar with no toast and plays the album by itself once the network is back (#1288)', async ({
+	test('waits in the bar and its transport with no toast and plays the album by itself once the network is back (#1288)', async ({
 		page,
 		context
 	}) => {
@@ -392,6 +393,9 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		await songTakesRefused;
 
 		await expect(waiting).toBeVisible();
+		await expect(
+			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+		).toBeVisible();
 		await expect(page.getByRole('alert')).toHaveCount(0);
 
 		await regainNetwork(page, context);

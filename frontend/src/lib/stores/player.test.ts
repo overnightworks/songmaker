@@ -2368,8 +2368,23 @@ describe('playAlbum start track', () => {
 		reportResourceStreamReachable(true);
 
 		await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
-		expect(whileOffline).toEqual({ notice: 'building', toasts: [], loads: 0 });
+		expect(whileOffline).toEqual({ notice: 'awaiting-network', toasts: [], loads: 0 });
 		expect(get(playStartNotice)).toBe('idle');
+	});
+
+	it('offline, a transport press stops the waiting start so the network starts nothing', async () => {
+		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+		reportResourceStreamReachable(false);
+		vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+		await playAlbum('a1');
+
+		await playIdleStart();
+		reportResourceStreamReachable(true);
+		await Promise.resolve();
+
+		expect(get(playStartNotice)).toBe('idle');
+		expect(fetchSong).toHaveBeenCalledOnce();
+		expect(audioPlayer.load).not.toHaveBeenCalled();
 	});
 
 	it('offline, a start the listener replaced while it waited stays put once the network is back', async () => {

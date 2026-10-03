@@ -212,7 +212,9 @@ export const playbackSource = derived(
 	}
 );
 
-type PlayStartNotice = 'idle' | 'building' | 'empty' | 'error';
+// 'awaiting-network': a start that could not read its takes offline waits
+// for the network, with nothing playing yet (#1288).
+type PlayStartNotice = 'idle' | 'building' | 'awaiting-network' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -374,6 +376,13 @@ function retryOnceBackOnline(
 	});
 	signal.addEventListener('abort', stopWaiting, { once: true });
 	return true;
+}
+
+// The bar shows the start waiting until it runs again, a newer start
+// replaces it, or the listener stops it.
+function noticeStartAwaitingNetwork(signal: AbortSignal): void {
+	playStartNotice.set('awaiting-network');
+	signal.addEventListener('abort', () => playStartNotice.set('idle'), { once: true });
 }
 
 function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
@@ -658,7 +667,13 @@ export function idlePlayTarget(input: {
 	return { type: 'library', label: RAIL_LIBRARY_LABEL };
 }
 
+// The transport with no take: a start that waits for the network is what the
+// listener asked for, so a press stops it rather than starting another.
 export async function playIdleStart(): Promise<void> {
+	if (get(playStartNotice) === 'awaiting-network') {
+		playStartAbort?.abort();
+		return;
+	}
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -1374,7 +1389,10 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 		startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	} catch (err) {
 		if (!playStartIsCurrent(seq)) return;
-		if (retryOnceBackOnline(err, signal, () => playAlbum(albumId, start))) return;
+		if (retryOnceBackOnline(err, signal, () => playAlbum(albumId, start))) {
+			noticeStartAwaitingNetwork(signal);
+			return;
+		}
 		playStartNotice.set('idle');
 		toastAlbumSongsFailure(err);
 		return;

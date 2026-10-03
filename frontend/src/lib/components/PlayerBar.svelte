@@ -63,6 +63,11 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
+	// A start that waits for the network has no take yet, but the listener
+	// asked for sound: the transport waits with it, and a press stops it (#1288).
+	const barTransport = $derived(
+		!current && startNotice === 'awaiting-network' ? 'recovering' : transport
+	);
 
 	const isPlaying = $derived(transport === 'playing');
 	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
@@ -198,7 +203,7 @@
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
-		{:else if startNotice === 'building'}
+		{:else if startNotice === 'building' || startNotice === 'awaiting-network'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
@@ -219,7 +224,7 @@
 {#if !$transportBarHidden}
 	<OfflineStrip />
 	<TransportBarFrame
-		{transport}
+		transport={barTransport}
 		{errorMsg}
 		onRetry={() => audioPlayer.play()}
 		{currentTime}

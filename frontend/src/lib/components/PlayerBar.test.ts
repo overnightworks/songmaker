@@ -216,6 +216,21 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
+	it('a start that waits for the network shows the waiting transport, and a press goes to the start (#1288)', async () => {
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set('awaiting-network');
+		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_QUEUE_LOADING_TITLE);
+		const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+		expect(transport?.querySelector('.spinner')).not.toBeNull();
+		transport?.click();
+		expect(playIdleStart).toHaveBeenCalledOnce();
+	});
+
 	it('idle Play copy follows an open album interior', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
 		selectedSongId.set(null);
