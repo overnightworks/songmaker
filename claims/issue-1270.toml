@@ -1,8 +1,0 @@
-claim_id = "c8f1c84ce1fd4395bd71dd014e8fd03a"
-agent = "claude-head"
-role = "builder"
-base = "cc061605679911609733c8e39133f60ccd910e52"
-branch = "claude-head/issue-1270-reload-position"
-scope = ["frontend/e2e/playback-restore.spec.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts", "frontend/src/lib/stores/playbackResume.test.ts", "frontend/src/lib/stores/playbackResume.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
-opened_commit = "093e61f4fb56ec8d61055c636d4a1b5d3de3995e"
-whole_reason = "restoring a later saved position on the continuous deck"
