@@ -11,7 +11,7 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { readSeededLibrary, runMarker, seedSongPhoneSong } from './seed';
+import { runMarker, seedSongPhoneSong } from './seed';
 
 /**
  * Measured in CI (01.10.2026, #1236): 43 requests on desktop and 46 on mobile
@@ -203,40 +203,6 @@ async function shownPosition(page: Page, shell: Shell, takeSeconds: number): Pro
 	return (percent / 100) * takeSeconds;
 }
 
-test('reload mid-take shows the same take at the same position, paused', async ({
-	page
-}, testInfo) => {
-	const guard = new FlowGuard(page);
-	const shell = shellOf(testInfo);
-	const library = readSeededLibrary();
-	const songTitle = `Playback Restore ${shell} ${runMarker()}`;
-	await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
-	await followTheAudioDecks(page);
-	const { transport, play: transportPlay, pause: transportPause } = transportOf(page);
-
-	await pauseMidTakeAndReload(page, shell, library.songPhoneAlbumId, songTitle);
-
-	await expect(transport).toContainText(songTitle);
-	await expect(transportPlay).toBeVisible();
-	await expect.poll(() => loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
-	await expect
-		.poll(() => shownPosition(page, shell, TAKE_SECONDS))
-		.toBeCloseTo(MID_TAKE_SECONDS, 0);
-
-	await transportPlay.click();
-	await expect(transportPause).toBeVisible();
-	await transportPause.click();
-	await expect(transportPlay).toBeVisible();
-	expect(await savedQueueSource(page)).toEqual({
-		type: 'album',
-		albumId: library.songPhoneAlbumId
-	});
-
-	console.log(`Playback restore flow /api requests (${shell}): ${guard.apiRequestCount}`);
-	guard.assertClean();
-	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
-});
-
 async function importSongWithTake(
 	page: Page,
 	albumId: string,
@@ -256,27 +222,33 @@ async function importSongWithTake(
 	expect(imported.ok(), `Take import failed: ${await imported.text()}`).toBe(true);
 }
 
-// An album of its own holds just the two songs, so the second one follows the
-// first. The second song's take is the fixture's unless its audio is given.
-async function withAlbumOfTwoSongs(
+/** A song of a flow's own album; its take is the fixture's unless its audio is given. */
+interface AlbumSong {
+	title: string;
+	takeAudio?: Buffer;
+}
+
+// An album of its own holds just the flow's songs, in their order, so the
+// next one follows each, and what the flow requests does not grow with the
+// songs other flows seeded into a shared album.
+async function withAlbumOfItsOwn(
 	page: Page,
 	marker: string,
-	flow: (album: { id: string; firstTitle: string; secondTitle: string }) => Promise<void>,
-	secondTakeAudio?: Buffer
+	songs: readonly AlbumSong[],
+	flow: (albumId: string) => Promise<void>
 ): Promise<void> {
 	const created = await page.request.post('/api/albums', {
 		headers: await csrfHeaders(page),
-		data: { title: `E2E Restore Queue ${marker}`, artist: '' }
+		data: { title: `E2E Playback Restore ${marker}`, artist: '' }
 	});
 	expect(created.ok()).toBe(true);
 	const { id } = (await created.json()) as { id: string };
-	const firstTitle = `Restore Queue ${marker} first`;
-	const secondTitle = `Restore Queue ${marker} second`;
 	try {
-		await seedSongPhoneSong(id, firstTitle, 1, 1);
-		if (secondTakeAudio) await importSongWithTake(page, id, secondTitle, secondTakeAudio);
-		else await seedSongPhoneSong(id, secondTitle, 1, 1);
-		await flow({ id, firstTitle, secondTitle });
+		for (const { title, takeAudio } of songs) {
+			if (takeAudio) await importSongWithTake(page, id, title, takeAudio);
+			else await seedSongPhoneSong(id, title, 1, 1);
+		}
+		await flow(id);
 	} finally {
 		const removed = await page.request.delete(`/api/albums/${id}`, {
 			headers: await csrfHeaders(page)
@@ -284,6 +256,40 @@ async function withAlbumOfTwoSongs(
 		expect(removed.ok()).toBe(true);
 	}
 }
+
+test('reload mid-take shows the same take at the same position, paused', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const shell = shellOf(testInfo);
+	const marker = `${shell} ${runMarker()}`;
+	const songTitle = `Playback Restore ${marker}`;
+	await followTheAudioDecks(page);
+	const { transport, play: transportPlay, pause: transportPause } = transportOf(page);
+
+	await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
+		await pauseMidTakeAndReload(page, shell, albumId, songTitle);
+
+		await expect(transport).toContainText(songTitle);
+		await expect(transportPlay).toBeVisible();
+		await expect
+			.poll(() => loadedDeckPositions(page))
+			.toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
+		await expect
+			.poll(() => shownPosition(page, shell, TAKE_SECONDS))
+			.toBeCloseTo(MID_TAKE_SECONDS, 0);
+
+		await transportPlay.click();
+		await expect(transportPause).toBeVisible();
+		await transportPause.click();
+		await expect(transportPlay).toBeVisible();
+		expect(await savedQueueSource(page)).toEqual({ type: 'album', albumId });
+	});
+
+	console.log(`Playback restore flow /api requests (${shell}): ${guard.apiRequestCount}`);
+	guard.assertClean();
+	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+});
 
 test('reload mid-album, one tap plays on, and the next song follows when the take ends', async ({
 	page
@@ -293,15 +299,16 @@ test('reload mid-album, one tap plays on, and the next song follows when the tak
 	await followTheAudioDecks(page);
 	const { transport, play, pause } = transportOf(page);
 
-	await withAlbumOfTwoSongs(page, `${shell} ${runMarker()}`, async (album) => {
-		await pauseMidTakeAndReload(page, shell, album.id, album.firstTitle);
+	const marker = `${shell} ${runMarker()}`;
+	const [first, second] = [`Restore Queue ${marker} first`, `Restore Queue ${marker} second`];
 
-		await expect(transport).toContainText(album.firstTitle);
+	await withAlbumOfItsOwn(page, marker, [{ title: first }, { title: second }], async (albumId) => {
+		await pauseMidTakeAndReload(page, shell, albumId, first);
+
+		await expect(transport).toContainText(first);
 		await play.click();
 		await expect(pause).toBeVisible();
-		await expect(transport).toContainText(album.secondTitle, {
-			timeout: TRACK_CHANGE_TIMEOUT_MS
-		});
+		await expect(transport).toContainText(second, { timeout: TRACK_CHANGE_TIMEOUT_MS });
 	});
 
 	console.log(`Playback restore queue flow /api requests (${shell}): ${guard.apiRequestCount}`);
@@ -318,33 +325,33 @@ test("reload after a pause in the album's second take shows it at its saved posi
 	const { transport, play, pause } = transportOf(page);
 	const shownInLongTake = () => shownPosition(page, shell, LONG_TAKE_SECONDS);
 
-	await withAlbumOfTwoSongs(
-		page,
-		`${shell} ${runMarker()}`,
-		async (album) => {
-			await playTheSongsTake(page, shell, album.id, album.firstTitle);
-			await expect(transport).toContainText(album.secondTitle, {
-				timeout: TRACK_CHANGE_TIMEOUT_MS
-			});
-			await skipThePlayingDeckAhead(page, LONG_TAKE_PAUSE_SECONDS);
-			await expect.poll(shownInLongTake).toBeGreaterThanOrEqual(LONG_TAKE_PAUSE_SECONDS);
-			await pause.click();
-			await expect(play).toBeVisible();
-			const pausedAt = await shownInLongTake();
+	const marker = `${shell} ${runMarker()}`;
+	const first = `Restore Later Take ${marker} first`;
+	const second = `Restore Later Take ${marker} second`;
+	const songs = [{ title: first }, { title: second, takeAudio: longTakeAudio() }];
 
-			for (const reload of ['first reload', 'second reload']) {
-				await page.reload();
-				await expect(transport, reload).toContainText(album.secondTitle);
-				await expect(play, reload).toBeVisible();
-				await expect.poll(shownInLongTake, { message: reload }).toBeCloseTo(pausedAt, 0);
-			}
+	await withAlbumOfItsOwn(page, marker, songs, async (albumId) => {
+		await playTheSongsTake(page, shell, albumId, first);
+		await expect(transport).toContainText(second, {
+			timeout: TRACK_CHANGE_TIMEOUT_MS
+		});
+		await skipThePlayingDeckAhead(page, LONG_TAKE_PAUSE_SECONDS);
+		await expect.poll(shownInLongTake).toBeGreaterThanOrEqual(LONG_TAKE_PAUSE_SECONDS);
+		await pause.click();
+		await expect(play).toBeVisible();
+		const pausedAt = await shownInLongTake();
 
-			await play.click();
-			await expect(pause).toBeVisible();
-			await expect.poll(shownInLongTake).toBeGreaterThan(pausedAt);
-		},
-		longTakeAudio()
-	);
+		for (const reload of ['first reload', 'second reload']) {
+			await page.reload();
+			await expect(transport, reload).toContainText(second);
+			await expect(play, reload).toBeVisible();
+			await expect.poll(shownInLongTake, { message: reload }).toBeCloseTo(pausedAt, 0);
+		}
+
+		await play.click();
+		await expect(pause).toBeVisible();
+		await expect.poll(shownInLongTake).toBeGreaterThan(pausedAt);
+	});
 
 	console.log(`Playback restore later take /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
