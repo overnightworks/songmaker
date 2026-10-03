@@ -9,7 +9,11 @@
 // real track change happens inside the flow's own time.
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
-import { collectionPlayLabel, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import {
+	collectionPlayLabel,
+	TRANSPORT_PLAY_LABEL,
+	TRANSPORT_RETRY_LABEL
+} from '../src/lib/constants';
 import { FlowGuard, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	BASE_URL,
@@ -28,23 +32,31 @@ const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 const MEDIA_EVENT_BINDING = 'reportMediaEvent';
 const STOPPING_EVENTS = ['pause', 'ended'];
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
+const RECOVERY_QUERY = 'recover';
+// The deck's contract (continuousDeck.ts): three downloads in a row fail,
+// then it parks until the player retries.
+const DECK_DOWNLOAD_ATTEMPTS = 3;
 
 /**
- * When each take's audio was first requested, and which elements played and
- * stopped. The player's decks are detached `Audio` elements, out of reach of
- * any DOM query, so every element that plays reports its own stops through a
- * binding.
+ * When each take's audio was first requested, which elements played from
+ * which kind of source, and which stopped. The player's decks are detached
+ * `Audio` elements, out of reach of any DOM query, so every element that
+ * plays reports its own source and stops through a binding.
  */
 class PlaybackTimeline {
 	private readonly requested = new Map<string, number>();
 	private readonly playingElements = new Set<number>();
 	readonly stops: string[] = [];
+	readonly sourcesPlayed: string[] = [];
+	readonly recoveryRequests: string[] = [];
 
 	static async watch(page: Page): Promise<PlaybackTimeline> {
 		const timeline = new PlaybackTimeline();
 		page.on('request', (sent) => timeline.recordRequest(sent.url()));
-		await page.exposeFunction(MEDIA_EVENT_BINDING, (element: number, event: string) =>
-			timeline.recordMediaEvent(element, event)
+		await page.exposeFunction(
+			MEDIA_EVENT_BINDING,
+			(element: number, event: string, source: string) =>
+				timeline.recordMediaEvent(element, event, source)
 		);
 		await page.addInitScript(
 			({ binding, stoppingEvents }) => {
@@ -55,7 +67,8 @@ class PlaybackTimeline {
 					if (!elementIds.has(this)) {
 						const id = nextId++;
 						elementIds.set(this, id);
-						const report = (event: string) => Reflect.get(window, binding).call(window, id, event);
+						const report = (event: string) =>
+							Reflect.get(window, binding).call(window, id, event, this.src);
 						report('play');
 						for (const event of stoppingEvents) this.addEventListener(event, () => report(event));
 					}
@@ -76,11 +89,14 @@ class PlaybackTimeline {
 	}
 
 	private recordRequest(url: string): void {
-		const path = decodeURIComponent(new URL(url).pathname);
+		const parsed = new URL(url);
+		const path = decodeURIComponent(parsed.pathname);
 		if (!this.requested.has(path)) this.requested.set(path, performance.now());
+		if (parsed.searchParams.has(RECOVERY_QUERY)) this.recoveryRequests.push(url);
 	}
 
-	private recordMediaEvent(element: number, event: string): void {
+	private recordMediaEvent(element: number, event: string, source: string): void {
+		if (!this.playingElements.has(element)) this.sourcesPlayed.push(new URL(source).protocol);
 		this.playingElements.add(element);
 		if (STOPPING_EVENTS.includes(event)) this.stops.push(`${event} on element ${element}`);
 	}
@@ -139,6 +155,42 @@ test('Prev on an album starts the previous take and the queue continues into the
 	await expectTransportMovesOn(page, first, second);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
+	guard.assertClean();
+});
+
+// A take ahead whose requests fail on the network waits instead of being
+// skipped (#1282): its download parks, the player's stall look resumes it,
+// and once the requests succeed the playhead crosses into it on the same
+// element. A dropout in the middle of a body is not drivable with
+// three-second takes; continuousDeck.test.ts proves that one.
+test('an album whose next take fails on the network for a while plays that take once its requests succeed', async ({
+	page
+}) => {
+	const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+	const library = readSeededLibrary();
+	const [first, second] = library.albumTracks;
+	const timeline = await PlaybackTimeline.watch(page);
+	const transport = page.getByRole('contentinfo');
+	const isSecondTake = (url: URL) => decodeURIComponent(url.pathname) === second.audioPath;
+	let failedRequests = 0;
+	await page.route(isSecondTake, (route) => {
+		failedRequests += 1;
+		return route.abort('internetdisconnected');
+	});
+
+	await playAlbum(page, library.albumId);
+	await expect
+		.poll(() => failedRequests, { timeout: TRACK_CHANGE_TIMEOUT_MS })
+		.toBeGreaterThan(DECK_DOWNLOAD_ATTEMPTS);
+	await page.unroute(isSecondTake);
+
+	await expectTransportMovesOn(page, first, second);
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.sourcesPlayed).toEqual(['blob:']);
+	expect(timeline.stops).toEqual([]);
+	expect(timeline.recoveryRequests).toEqual([]);
+	await expect(page.getByText(`${second.songTitle} couldn't be loaded, skipped.`)).toHaveCount(0);
+	await expect(transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL })).toHaveCount(0);
 	guard.assertClean();
 });
 

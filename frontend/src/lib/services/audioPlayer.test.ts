@@ -35,6 +35,7 @@ interface DeckDouble {
 	appending: boolean;
 	ended: boolean;
 	closed: boolean;
+	retries: number;
 }
 
 const continuousDecks = vi.hoisted(() => ({ supported: false, attached: [] as DeckDouble[] }));
@@ -56,6 +57,7 @@ vi.mock('./continuousDeck', () => {
 		appending = false;
 		ended = false;
 		closed = false;
+		retries = 0;
 
 		static isSupported(): boolean {
 			return continuousDecks.supported;
@@ -88,6 +90,10 @@ vi.mock('./continuousDeck', () => {
 
 		close(): void {
 			this.closed = true;
+		}
+
+		retryDownload(): void {
+			this.retries += 1;
 		}
 	}
 	return { ContinuousDeck: ContinuousDeckDouble, TakeNotAppended };
@@ -3091,7 +3097,7 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).not.toHaveBeenCalled();
 	});
 
-	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {
+	it('drops a take ahead the server refused, names it and crosses on into the take after it', async () => {
 		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
 		const skipped: PlaybackInfo[] = [];
 		const onTakeSkipped = (take: PlaybackInfo) => skipped.push(take);
@@ -3099,7 +3105,9 @@ describe('continuous deck (#1187 M2)', () => {
 		playFirstWithSecondAppended();
 		const heard = heardEvents();
 
-		deck().requests[1].fail(new TakeNotAppended(second, 'not-fetched', 'Failed to fetch'));
+		deck().requests[1].fail(
+			new TakeNotAppended(second, 'refused', '/audio/a1/second.mp3 answered 404')
+		);
 		await Promise.resolve();
 
 		expect(skipped).toEqual([second]);
@@ -3107,7 +3115,7 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(audioPlayer.current?.generation.id).toBe('g1');
 		expect(audioPlayer.status).toBe('playing');
 		expect(recordedNotes().map((note) => note.detail)).toContain(
-			'deck_dropped take=g2 not-fetched Failed to fetch'
+			'deck_dropped take=g2 refused /audio/a1/second.mp3 answered 404'
 		);
 
 		holds([first, 0, 10], [third, 10, 5]);
@@ -3136,18 +3144,18 @@ describe('continuous deck (#1187 M2)', () => {
 	});
 
 	it.each([
-		{ failure: 'the current take cannot be fetched', notFetched: true },
-		{ failure: 'the buffer refuses the audio', notFetched: false }
+		{ failure: 'the server refuses the current take', refused: true },
+		{ failure: 'the buffer refuses the audio', refused: false }
 	])(
 		'falls back to the two decks at the same take and position when $failure',
-		async ({ notFetched }) => {
+		async ({ refused }) => {
 			playFirstWithSecondAppended();
 			playTo(6);
 			fakeAudio.paused = false;
 
 			deck().requests[0].fail(
-				notFetched
-					? new TakeNotAppended(first, 'not-fetched', '404')
+				refused
+					? new TakeNotAppended(first, 'refused', '/audio/a1/first.mp3 answered 404')
 					: new Error('The source buffer refused the appended audio')
 			);
 			await Promise.resolve();
@@ -3185,14 +3193,6 @@ describe('continuous deck (#1187 M2)', () => {
 				deck().requests[1].fail(new Error('The source buffer refused the appended audio'));
 				await Promise.resolve();
 			}
-		},
-		{
-			leaving: 'for a stall reload',
-			leave: () => {
-				vi.useFakeTimers();
-				fakeAudio.fire('stalled');
-				vi.advanceTimersByTime(5000);
-			}
 		}
 	])('closes the deck it leaves $leaving', async ({ leave }) => {
 		playFirstWithSecondAppended();
@@ -3202,6 +3202,96 @@ describe('continuous deck (#1187 M2)', () => {
 		await leave();
 
 		expect(left.closed).toBe(true);
+	});
+
+	function recordedDetails(): string[] {
+		return recordedNotes().map((note) => `${note.kind} ${note.detail}`);
+	}
+
+	it('keeps the deck on a stall and resumes its download on the same element with no seek back', () => {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(6);
+		const source = fakeAudio.src;
+		const loadSpy = vi.spyOn(fakeAudio, 'load');
+
+		fakeAudio.fire('stalled');
+		vi.advanceTimersByTime(5 * SECOND);
+
+		expect(deck().retries).toBe(1);
+		expect(deck().closed).toBe(false);
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(fakeAudio.src).toBe(source);
+		expect(loadSpy).not.toHaveBeenCalled();
+		expect(fakeAudio.currentTime).toBe(6);
+		expect(audioPlayer.currentTime).toBe(6);
+		expect(audioPlayer.transport).toBe('recovering');
+		expect(recordedDetails()).toContain('retry deck_resume reason=stall-timeout');
+
+		vi.advanceTimersByTime(5 * SECOND);
+		expect(deck().retries).toBe(2);
+	});
+
+	it.each([
+		{ when: 'while a stall is watched', stalled: true },
+		{ when: 'while the take plays on and only a take ahead waits', stalled: false }
+	])("the network's return resumes a parked deck at once $when", ({ stalled }) => {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(4);
+		if (stalled) fakeAudio.fire('stalled');
+
+		audioPlayer.resumeAfterNetworkReturn();
+
+		expect(deck().retries).toBe(1);
+		expect(deck().closed).toBe(false);
+		expect(recordedDetails()).toContain('retry deck_resume reason=network-return');
+	});
+
+	it('a take ahead that fails on the network is neither skipped nor named, and plays once its bytes arrive', () => {
+		vi.useFakeTimers();
+		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === first ? second : null);
+		const onTakeSkipped = vi.fn();
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter, onTakeSkipped }));
+		playFirstWithSecondAppended();
+		holds([first, 0, 10]);
+		deck().appending = true;
+		fakeAudio.bufferedUntil = 10;
+		playTo(10);
+		fakeAudio.fire('waiting');
+
+		vi.advanceTimersByTime(5 * SECOND);
+
+		expect(deck().retries).toBe(1);
+		expect(deck().ended).toBe(false);
+		expect(onTakeSkipped).not.toHaveBeenCalled();
+		expect(recordedDetails().some((detail) => detail.includes('deck_dropped'))).toBe(false);
+		expect(audioPlayer.error).toBeNull();
+
+		holds([first, 0, 10], [second, 10, 20]);
+		fakeAudio.bufferedUntil = 30;
+		playTo(10.5);
+		fakeAudio.fire('playing');
+
+		expect(audioPlayer.current?.generation.id).toBe('g2');
+		expect(audioPlayer.status).toBe('playing');
+		expect(continuousDecks.attached).toHaveLength(1);
+	});
+
+	it('gives up after the deadline while the deck stays attached', async () => {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(6);
+		await vi.advanceTimersByTimeAsync(0);
+
+		fakeAudio.fire('stalled');
+		await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE + 10 * SECOND);
+
+		expect(audioPlayer.error).toBe(STALLED);
+		expect(deck().retries).toBeGreaterThan(1);
+		expect(deck().closed).toBe(false);
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(recordedNotes().at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
 	});
 
 	it('a browser without MSE MP3 keeps the two decks', () => {
@@ -3215,19 +3305,22 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(createdAudios.at(-1)?.src).toBe('/audio/a1/second.mp3');
 	});
 
-	it('writes down the deck opening, each append, the crossing and a fallback', async () => {
+	it('writes down the deck opening, each append, the crossing, a resume and a fallback', async () => {
+		vi.useFakeTimers();
 		playFirstWithSecondAppended();
 		playTo(10.5);
+		fakeAudio.fire('stalled');
+		vi.advanceTimersByTime(5 * SECOND);
 		deck().requests[1].fail(new Error('The source buffer refused the appended audio'));
 		await Promise.resolve();
 
-		const details = recordedNotes().map((note) => `${note.kind} ${note.detail}`);
-		expect(details).toEqual(
+		expect(recordedDetails()).toEqual(
 			expect.arrayContaining([
 				'fresh_load deck=continuous',
 				'media_event deck_append take=g1',
 				'media_event deck_append take=g2',
 				'media_event deck_crossing',
+				'retry deck_resume reason=stall-timeout',
 				expect.stringMatching(/^retry deck_fallback The source buffer refused/)
 			])
 		);
