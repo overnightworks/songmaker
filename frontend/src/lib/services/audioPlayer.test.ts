@@ -2962,6 +2962,16 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(fakeAudio.currentTime).toBe(15);
 	});
 
+	it('a seek clamps to the part of the take the deck holds', () => {
+		playFirstWithSecondAppended();
+		holds([first, 0, 10], [second, 10, 12]);
+		playTo(12);
+
+		audioPlayer.seek(17);
+
+		expect(fakeAudio.currentTime).toBe(22);
+	});
+
 	it('starts a new deck for a take the deck no longer holds from its start', () => {
 		playFirstWithSecondAppended();
 		playTo(12);

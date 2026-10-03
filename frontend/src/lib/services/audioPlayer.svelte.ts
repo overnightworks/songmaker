@@ -699,8 +699,9 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
-		const takeStart = this.deckSession?.playing?.start_offset ?? 0;
-		this.audio.currentTime = takeStart + Math.max(0, Math.min(seconds, this.duration));
+		const entry = this.deckSession?.playing;
+		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
+		this.audio.currentTime = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 	}
 
 	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
