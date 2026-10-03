@@ -1195,7 +1195,11 @@ function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQue
 }
 
 function takeAfterCurrent(): PlaybackInfo | null {
-	const next = nextQueueTake(get(queueContext), audioPlayer.current);
+	return takeAfter(audioPlayer.current);
+}
+
+function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
+	const next = nextQueueTake(get(queueContext), take);
 	return next.kind === 'take' ? next.take : null;
 }
 
@@ -1710,6 +1714,7 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
+	takeAfter,
 	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);

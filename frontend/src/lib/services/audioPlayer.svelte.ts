@@ -89,6 +89,10 @@ export interface AudioPlayerCallbacks {
 	onAuthLost: (() => void | Promise<void>) | null;
 	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null;
 	onCurrentChange: ((current: PlaybackInfo | null) => void) | null;
+	// Only the owner's queue knows which take follows one the continuous deck
+	// could not fetch; an owner that never plays a queue on that deck (a share
+	// route) has no answer to give.
+	takeAfter?: (take: PlaybackInfo) => PlaybackInfo | null;
 	// Only the owner knows whether its page shows the offline strip; a page
 	// without one needs the player's own failure line.
 	networkFailureIsAnnounced: () => boolean;
@@ -500,9 +504,19 @@ class AudioPlayer {
 		if (session !== this.deckSession) return;
 		if (error instanceof TakeNotAppended && audioUrlOf(error.take) !== this.currentUrl) {
 			this.note('media_event', `deck_dropped ${error.reason} ${error.message}`);
+			if (error.reason === 'not-fetched') this.appendInPlaceOf(session, error.take);
 			return;
 		}
 		this.fallBackToTwoDecks(error instanceof Error ? error.message : String(error));
+	}
+
+	// The take the queue plays after a dropped one is appended in its place, so
+	// the playhead crosses on to it instead of running out where the dropped
+	// take would have started.
+	private appendInPlaceOf(session: DeckSession, dropped: PlaybackInfo): void {
+		if (audioUrlOf(session.tail) !== audioUrlOf(dropped)) return;
+		const next = this.callbacks.takeAfter?.(dropped);
+		if (next) this.appendAhead(session, next);
 	}
 
 	// The current take loads from its own URL where the listener is, and the

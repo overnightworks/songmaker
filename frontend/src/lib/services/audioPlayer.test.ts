@@ -2971,16 +2971,42 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).toHaveBeenCalledOnce();
 	});
 
-	it('plays on when a take ahead could not be fetched', async () => {
+	it('drops a take ahead that could not be fetched and crosses on into the take after it', async () => {
+		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
 		playFirstWithSecondAppended();
-		audioPlayer.preload(third);
+		const heard = heardEvents();
 
-		deck().requests[2].fail(new TakeNotAppended(third, 'not-fetched', '404'));
+		deck().requests[1].fail(new TakeNotAppended(second, 'not-fetched', 'Failed to fetch'));
 		await Promise.resolve();
 
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second, third]);
 		expect(audioPlayer.current?.generation.id).toBe('g1');
-		expect(fakeAudio.src).toBe('');
 		expect(audioPlayer.status).toBe('playing');
+
+		holds([first, 0, 10], [third, 10, 5]);
+		fakeAudio.bufferedUntil = 15;
+		playTo(10);
+		fakeAudio.fire('waiting');
+		playTo(10.5);
+
+		expect(audioPlayer.current?.generation.id).toBe('g3');
+		expect(deck().ended).toBe(false);
+		expect(heard).toEqual([]);
+		expect(onEnded).not.toHaveBeenCalled();
+	});
+
+	it('asks for no further take when one comes after the end of the stream', async () => {
+		const takeAfter = vi.fn((): PlaybackInfo | null => first);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+		playFirstWithSecondAppended();
+		deck().ended = true;
+
+		audioPlayer.preload(third);
+		await Promise.resolve();
+
+		expect(takeAfter).not.toHaveBeenCalled();
+		expect(audioPlayer.current?.generation.id).toBe('g1');
 	});
 
 	it.each([

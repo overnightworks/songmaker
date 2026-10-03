@@ -2188,6 +2188,16 @@ describe('the queue names its next take', () => {
 			}
 		);
 
+		it('names the queue take after one the deck could not fetch', async () => {
+			songList.set([albumSong(1), albumSong(2), albumSong(3)]);
+			await playAlbum('a1');
+			const dropped = preloadedTake();
+
+			expect(dropped?.generation.id).toBe('g2');
+			const following = dropped && audioPlayer.currentCallbacks.takeAfter?.(dropped);
+			expect(following?.generation.id).toBe('g3');
+		});
+
 		it('a playlist that holds the take twice moves on past its later place', async () => {
 			await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 2, 1, 3), 1);
 
