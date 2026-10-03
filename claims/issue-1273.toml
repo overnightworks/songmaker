@@ -1,0 +1,8 @@
+claim_id = "49aa234238a74a2c8df2a4dcd694d7a6"
+agent = "claude-head"
+role = "builder"
+base = "a6666052e717a2e562789c19b5944370cb97362e"
+branch = "claude-head/issue-1273-open-version-links"
+scope = ["frontend/e2e/song-phone.spec.ts", "frontend/e2e/song-versions.spec.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingLyrics.svelte", "frontend/src/lib/components/NowPlayingLyrics.test.ts", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "2eb733948e4faef99ae27a1b8ebbcce16e85c8a6"
+whole_reason = "Open-version links and imported-take copy"
