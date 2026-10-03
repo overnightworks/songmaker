@@ -32,6 +32,7 @@ import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
 import {
+	applyLibraryHistory,
 	captureLibraryScroll,
 	currentLibraryHistoryState,
 	detailTab,
@@ -172,6 +173,7 @@ import {
 	setDraftLyrics
 } from '$lib/stores/editor';
 import { updateSong } from '$lib/api/client';
+import { fetchAlbums } from '$lib/api/albums';
 import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
 import { toasts } from '$lib/stores/toast';
@@ -841,7 +843,8 @@ describe('Back and Forward across an app page', () => {
 	);
 
 	// Issue #1006 H5: the library listens on its page only once that page has
-	// loaded, so a second Back pressed meanwhile lands unheard on the wall.
+	// loaded, so a second Back pressed after the page showed the entry the
+	// first one reached lands unheard on the wall.
 	it('shows the wall two quick Backs from Settings reached once the library listens', async () => {
 		let stopNavigation = initNavigation();
 		await openAlbum('a1');
@@ -850,12 +853,35 @@ describe('Back and Forward across an app page', () => {
 		stopNavigation();
 
 		await pressBack();
+		await applyLibraryHistory(historyEntry());
 		await pressBack();
 		stopNavigation = initNavigation();
 
 		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
 		expect(get(openCollection)).toBeNull();
 		expect(location.pathname).toBe('/');
+		stopNavigation();
+	});
+
+	it('shows the song one Back from Settings reached once, however the library listens after', async () => {
+		fetchSong.mockResolvedValue(song({ ...navigableSongDefaults(), slug: 's1' }));
+		let stopNavigation = initNavigation();
+		await openAlbum('a1');
+		await selectSong('s1');
+		await goto(resolve(SETTINGS));
+		stampNavigatedEntry('link');
+		stopNavigation();
+		await pressBack();
+		vi.mocked(fetchAlbums).mockClear();
+		fetchActiveGeneration.mockClear();
+
+		await applyLibraryHistory(historyEntry());
+		stopNavigation = initNavigation();
+		await libraryHistoryStepsLanded();
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(fetchAlbums).toHaveBeenCalledOnce();
+		expect(fetchActiveGeneration).toHaveBeenCalledOnce();
 		stopNavigation();
 	});
 

@@ -218,6 +218,15 @@ export function standingPageEntryId(): number | null {
 	return standing?.id ?? null;
 }
 
+// The library starts showing the page entry history stands on, so that entry
+// is the page the screen shows from now on, whichever of the library's paths
+// showed it -- a landing on it is no news, and one elsewhere it did not hear
+// is (`listenForLandings`). Answers that entry's id.
+export function showStandingPage(): number | null {
+	settleOnPage(standingEntry());
+	return standingPageEntryId();
+}
+
 export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 	return entryOfHistoryState(event.state);
 }

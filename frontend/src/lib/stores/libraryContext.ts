@@ -14,6 +14,7 @@ import {
 	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
+	showStandingPage,
 	standingPageEntryId
 } from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
@@ -853,7 +854,7 @@ interface HistoryApply {
 }
 
 function startHistoryApply(): HistoryApply {
-	runningApply = { entry: standingPageEntryId() };
+	runningApply = { entry: showStandingPage() };
 	return runningApply;
 }
 
