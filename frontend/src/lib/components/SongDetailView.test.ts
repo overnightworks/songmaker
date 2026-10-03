@@ -1826,6 +1826,51 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(versionChip(target).textContent?.trim()).toBe('v2');
 	});
 
+	function typeInLyrics(target: HTMLElement): void {
+		const lyrics = target.querySelector<HTMLTextAreaElement>('textarea.lyrics-area');
+		if (!lyrics) throw new Error('Expected the lyrics field');
+		lyrics.value = `${lyrics.value}\na typed line`;
+		lyrics.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	it.each([
+		{ action: 'typing in the draft', act: typeInLyrics },
+		{
+			action: 'opening the version chip',
+			act: (target: HTMLElement) => versionChip(target).click()
+		},
+		{
+			action: 'Generate',
+			act: (target: HTMLElement) =>
+				getByRoleButton(
+					target.querySelector<HTMLElement>('.generate-action') ?? target,
+					EDITOR_GENERATE_MODE_LABELS.generate
+				).click()
+		}
+	])('the Undo toast of a load goes with the next action: $action', async ({ act }) => {
+		generateSong.mockResolvedValue(jobStatus({ status: 'queued' }));
+		const target = await renderView();
+		setDraftLyrics('unsaved edit');
+		await tick();
+		await tapVersion(target, 2);
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
+		await tick();
+		await Promise.resolve();
+		await tick();
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((t) => t.message)).toEqual([versionLoadedToastLabel(2)]);
+
+		act(target);
+		await tick();
+
+		expect(get(toasts)).toEqual([]);
+		undoLastLoad();
+		await tick();
+		expect(get(editLyrics)).not.toBe('unsaved edit');
+	});
+
 	it('Generate after a load saves the loaded text as the next version; the hint and the Undo toast go', async () => {
 		const { fetchVersions } = await import('$lib/api/client');
 		const next = version({ id: 'v3', version_number: 3, lyrics: 'first draft' });

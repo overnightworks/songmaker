@@ -33,6 +33,7 @@ import {
 	draftLoadedFrom,
 	loadSongData,
 	loadVersionAsDraft,
+	retireVersionLoadUndo,
 	savedSongData,
 	handleSave,
 	handleDeleteVersion,
@@ -203,18 +204,30 @@ describe('loadVersionAsDraft', () => {
 		expect(load && get(load.holds)).toBe(false);
 	});
 
-	it('undo ends once the loaded draft is saved, keeping what was typed after the load', async () => {
+	async function saveSongS1(): Promise<void> {
 		const { updateSong } = await import('$lib/api/client');
 		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
-		openSongWithTwoVersions();
-		const load = loadVersionAsDraft(older);
-		setDraftLyrics('v1 lyrics\nidea typed after load');
-		expect(load && get(load.holds)).toBe(true);
 		await handleSave('s1');
-		load?.undo();
-		expect(get(editLyrics)).toBe('v1 lyrics\nidea typed after load');
-		expect(get(isDirty)).toBe(false);
+	}
+
+	it.each([
+		{
+			action: 'typing in the draft',
+			lyrics: 'v1 lyrics\na typed line',
+			act: () => setDraftLyrics('v1 lyrics\na typed line')
+		},
+		{ action: 'another load', lyrics: 'hello', act: () => loadVersionAsDraft(latest) },
+		{ action: 'the retire call', lyrics: 'v1 lyrics', act: retireVersionLoadUndo },
+		{ action: 'a save', lyrics: 'v1 lyrics', act: saveSongS1 }
+	])('undo is offered only until the next action: $action', async ({ lyrics, act }) => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+		expect(load && get(load.holds)).toBe(true);
+		await act();
 		expect(load && get(load.holds)).toBe(false);
+		load?.undo();
+		expect(get(editLyrics)).toBe(lyrics);
 	});
 
 	it.each([

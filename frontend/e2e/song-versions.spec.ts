@@ -125,8 +125,8 @@ function versionRow(page: Page, versionNumber: number): Locator {
 	return versionsSheet(page).getByRole('button', { name: nameStartingWith(`v${versionNumber} `) });
 }
 
-function loadedToast(page: Page): Locator {
-	return page.getByRole('alert').filter({ hasText: versionLoadedToastLabel(1) });
+function loadedToast(page: Page, versionNumber = 1): Locator {
+	return page.getByRole('alert').filter({ hasText: versionLoadedToastLabel(versionNumber) });
 }
 
 function replaceDraftDialog(page: Page): Locator {
@@ -231,5 +231,32 @@ test.describe('the versions of a song', () => {
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
+	});
+
+	test('the Undo of a load is offered only until the next action: typing ends it, and the opened sheet stands free of it', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+
+		await tapVersion(page, 1);
+		await expect(loadedToast(page)).toBeVisible();
+		const typedLyrics = `${FIRST_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(typedLyrics);
+		await expect(loadedToast(page)).toBeHidden();
+
+		await tapVersion(page, 2);
+		await replaceDraftDialog(page)
+			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+			.click();
+		await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+		await expect(loadedToast(page, 2)).toBeVisible();
+
+		await versionChip(page).click();
+		await expect(versionsSheet(page)).toBeVisible();
+		await expect(loadedToast(page, 2)).toBeHidden();
+		await versionRow(page, 1).click();
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 	});
 });

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { isDirty, versions } from '$lib/stores/editor';
+	import { isDirty, retireVersionLoadUndo, versions } from '$lib/stores/editor';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import { activityTimeLabel } from '$lib/utils/format';
@@ -95,6 +95,7 @@
 	}
 
 	async function openSheet(): Promise<void> {
+		retireVersionLoadUndo();
 		placeUnderChip();
 		$open = true;
 		await tick();
