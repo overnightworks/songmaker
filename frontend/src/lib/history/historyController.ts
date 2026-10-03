@@ -372,6 +372,11 @@ type RouteOnAddress = 'stands' | 'remounts';
 
 export function mountAddressOver(routeUrl: string): RouteOnAddress {
 	if (new URL(routeUrl, location.href).pathname === location.pathname) return 'stands';
+	mountStandingAddress();
+	return 'remounts';
+}
+
+function mountStandingAddress(): void {
 	const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 	void navigateTo(location.href, {
 		replaceState: true,
@@ -379,13 +384,31 @@ export function mountAddressOver(routeUrl: string): RouteOnAddress {
 		keepFocus: true,
 		state: pageState
 	});
-	return 'remounts';
 }
+
+// The router's navigation started last; a newer one aborts it.
+let latestRouterNavigation: Promise<void> | null = null;
 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
 // is an address history has yet to move to.
-export function mountRouteOfLandedAddress(navigation: Pick<BeforeNavigate, 'type' | 'to'>): void {
+//
+// The router mounts a route only once a navigation completes, and a Back
+// pressed while one loads aborts it. A Back onto an entry of the navigation
+// the router was heading to -- the first of two quick Backs from Settings
+// lands on the album, the second on the wall shallow routing wrote it over --
+// is shallow routing to the router: it starts no navigation of its own, and
+// the page before stays on screen under the address (issue #1006, H5). Unless
+// a newer navigation took over, the route of the address history stands on is
+// mounted then.
+export function mountRouteOfLandedAddress(
+	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
+): void {
+	const started = navigation.complete;
+	latestRouterNavigation = started;
+	started.catch(() => {
+		if (latestRouterNavigation === started) mountStandingAddress();
+	});
 	if (navigation.type === 'popstate' && navigation.to !== null) {
 		mountAddressOver(navigation.to.url.href);
 	}
@@ -629,6 +652,7 @@ export function resetHistoryControllerForTests(): void {
 	stillnessWaiters = [];
 	navigationsUnderway = 0;
 	loadingMount = null;
+	latestRouterNavigation = null;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 }
