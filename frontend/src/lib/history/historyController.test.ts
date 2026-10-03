@@ -15,6 +15,7 @@ import {
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
+	standingPageEntryId,
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
@@ -398,6 +399,15 @@ describe('history adapter', () => {
 		stampNavigatedEntry(type);
 
 		expect(standingEntry()).toEqual({ id: expect.any(Number) });
+	});
+
+	it('the page entry under an open layer is the page the layer covers', () => {
+		const page = pushEntry('/album/a', {});
+
+		holdLayer('album-menu', () => undefined);
+
+		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'album-menu' });
+		expect(standingPageEntryId()).toBe(page.id);
 	});
 
 	it('a page push closes the layers below it', () => {

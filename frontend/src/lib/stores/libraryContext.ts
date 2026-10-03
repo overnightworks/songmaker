@@ -13,7 +13,8 @@ import {
 	pushEntry,
 	remountOverStandingEntry,
 	replaceEntry,
-	resetHistoryControllerForTests
+	resetHistoryControllerForTests,
+	standingPageEntryId
 } from '$lib/history/historyController';
 import { fetchPlaylists } from '$lib/api/client';
 import { isNotFound } from '$lib/api/fetch';
@@ -105,7 +106,7 @@ const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 const songTabs = new Map<string, DetailTab>();
 const SORTS: ReadonlySet<string> = new Set(CREATED_SORTS);
 
-let historyApplyGeneration = 0;
+let runningApply: HistoryApply | null = null;
 let librarySnapshotTaken = false;
 let latestHeldWrite: LibraryHistoryState | null = null;
 
@@ -838,10 +839,30 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 	return settled;
 }
 
+// An apply belongs to the page entry it landed on (issue #1006): history
+// leaving that entry stops it -- a Back nothing in the library heard, such as
+// the second of two quick Backs from Settings while the first one's route
+// still loads -- and so do a newer apply and a write
+// (`cancelLibraryHistoryApply`). An entry without an id tells nothing apart,
+// so there only those two stop it.
+interface HistoryApply {
+	readonly entry: number | null;
+}
+
+function startHistoryApply(): HistoryApply {
+	runningApply = { entry: standingPageEntryId() };
+	return runningApply;
+}
+
+function applyStands(apply: HistoryApply): boolean {
+	if (runningApply !== apply) return false;
+	return apply.entry === null || standingPageEntryId() === apply.entry;
+}
+
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
-	const generation = ++historyApplyGeneration;
+	const apply = startHistoryApply();
 	if (heldRestores !== null) await heldRestores;
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	librarySurface.set(state.surface);
 	librarySort.set(state.sort);
 	searchQuery.set(state.query);
@@ -850,18 +871,18 @@ export async function applyLibraryHistory(state: LibraryHistoryState): Promise<b
 	selectedSongId.set(state.songId);
 	selectedGenerationId.set(state.generationId);
 	await hydrateCollection(state.collection);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	await restoreLibraryBrowse(state.sort, state.albumOffset, state.songOffset);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	if (state.query.trim()) {
 		await restoreLibrarySearch(state.query, state.sort, state.searchLoadedCount);
 	}
-	if (generation !== historyApplyGeneration) return false;
-	await hydrateSelectedResources(state, generation);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
+	await hydrateSelectedResources(state, apply);
+	if (!applyStands(apply)) return false;
 	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
 	if (shownAlbum) await loadSongsForAlbum(shownAlbum);
-	if (generation !== historyApplyGeneration) return false;
+	if (!applyStands(apply)) return false;
 	fallbackBrowseIfDetailGone(state.surface);
 	return true;
 }
@@ -879,7 +900,7 @@ export function albumWhoseSongsShow(
 }
 
 export function cancelLibraryHistoryApply(): void {
-	historyApplyGeneration += 1;
+	runningApply = null;
 }
 
 async function hydrateCollection(collection: CollectionSnapshot): Promise<void> {
@@ -895,24 +916,24 @@ async function hydrateCollection(collection: CollectionSnapshot): Promise<void> 
 
 async function hydrateSelectedResources(
 	state: LibraryHistoryState,
-	generation: number
+	apply: HistoryApply
 ): Promise<void> {
-	await hydrateMissingCollectionAlbum(state.collection, generation);
-	if (state.songId) await hydrateSelectedSong(state.songId, generation);
+	await hydrateMissingCollectionAlbum(state.collection, apply);
+	if (state.songId) await hydrateSelectedSong(state.songId, apply);
 }
 
 async function hydrateMissingCollectionAlbum(
 	collection: CollectionSnapshot,
-	generation: number
+	apply: HistoryApply
 ): Promise<void> {
 	if (collection?.kind !== 'album') return;
 	if (get(albumList).some((album) => album.id === collection.id)) return;
 	try {
 		const album = await fetchAlbum(collection.id);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		albumList.update((list) => upsertReplace(list, album));
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) setOpenCollection(null);
 	}
 }
@@ -925,22 +946,22 @@ export function enterAlbumOfSong(song: SongItem): void {
 	void loadSongsForAlbum(song.album_id);
 }
 
-async function hydrateSelectedSong(songId: string, generation: number): Promise<void> {
-	if (generation !== historyApplyGeneration) return;
+async function hydrateSelectedSong(songId: string, apply: HistoryApply): Promise<void> {
+	if (!applyStands(apply)) return;
 	const listed = get(songList).find((song) => song.id === songId);
 	if (listed && listed.generations.length >= listed.generation_count) {
 		enterAlbumOfSong(listed);
-		await hydrateSongAlbum(listed.album_id, generation);
+		await hydrateSongAlbum(listed.album_id, apply);
 		return;
 	}
 	try {
 		const song = await fetchSong(songId);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		songList.update((list) => upsertReplace(list, song));
 		enterAlbumOfSong(song);
-		await hydrateSongAlbum(song.album_id, generation);
+		await hydrateSongAlbum(song.album_id, apply);
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) {
 			selectedSongId.set(null);
 			selectedGenerationId.set(null);
@@ -948,14 +969,14 @@ async function hydrateSelectedSong(songId: string, generation: number): Promise<
 	}
 }
 
-async function hydrateSongAlbum(albumId: string, generation: number): Promise<void> {
+async function hydrateSongAlbum(albumId: string, apply: HistoryApply): Promise<void> {
 	if (get(albumList).some((album) => album.id === albumId)) return;
 	try {
 		const album = await fetchAlbum(albumId);
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		albumList.update((list) => upsertReplace(list, album));
 	} catch (err) {
-		if (generation !== historyApplyGeneration) return;
+		if (!applyStands(apply)) return;
 		if (isNotFound(err)) return;
 	}
 }
@@ -1016,7 +1037,7 @@ export function captureLibraryScroll(scrollTop: number): void {
 }
 
 export function resetLibraryContextForTests(): void {
-	historyApplyGeneration += 1;
+	runningApply = null;
 	librarySnapshotTaken = false;
 	latestHeldWrite = null;
 	heldRestores = null;

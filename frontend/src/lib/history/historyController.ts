@@ -210,6 +210,14 @@ function routerIndexOf(state: unknown): number | undefined {
 	return typeof index === 'number' ? index : undefined;
 }
 
+// The page entry history stands on: the standing entry, or under an open
+// layer's entry the page that layer covers. An entry without an id has none.
+export function standingPageEntryId(): number | null {
+	const standing = standingEntry();
+	if (standing?.layer !== undefined) return ledger.current?.id ?? null;
+	return standing?.id ?? null;
+}
+
 export function landedEntry(event: PopStateEvent): HistoryEntry | null {
 	return entryOfHistoryState(event.state);
 }

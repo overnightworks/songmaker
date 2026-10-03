@@ -3,6 +3,7 @@ import {
 	historyLength,
 	mountAddressRoute,
 	pressBack,
+	pressForward,
 	reloadLibraryPage,
 	reloadLibraryPageBeforeRouterStarts,
 	replaceHistoryEntry,
@@ -92,7 +93,7 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto, pushState, replaceState } from '$app/navigation';
-import { listenForLandings, replaceEntry } from '$lib/history/historyController';
+import { listenForLandings, pushEntry, replaceEntry } from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
 import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
@@ -414,6 +415,33 @@ describe('applyLibraryHistory', () => {
 		await expect(first).resolves.toBe(false);
 
 		expect(get(selectedSongId)).toBe('s2');
+	});
+
+	// Issue #1006 H5: an apply belongs to the entry it landed on, so a Back that
+	// leaves that entry stops it even when nothing in the library heard the Back
+	// -- the second of two quick Backs from Settings.
+	it('applies nothing more once history has left the entry it landed on', async () => {
+		let resolveAlbum: ((value: AlbumItem) => void) | undefined;
+		fetchAlbum.mockImplementationOnce(
+			() => new Promise<AlbumItem>((resolve) => (resolveAlbum = resolve))
+		);
+		replaceEntry('/', { library: libraryRootState() });
+		const albumState = {
+			...libraryRootState(),
+			surface: 'detail' as const,
+			collection: { kind: 'album' as const, id: 'a1' }
+		};
+		pushEntry(albumRoutePath('a1'), { library: albumState });
+		const applying = applyLibraryHistory(albumState);
+		await vi.waitFor(() => expect(resolveAlbum).toBeTypeOf('function'));
+
+		await pressBack();
+		resolveAlbum?.(album());
+
+		await expect(applying).resolves.toBe(false);
+		expect(get(albumList).some((item) => item.id === 'a1')).toBe(false);
+		// Back to the top entry: a later push must not cut an entry above it.
+		await pressForward();
 	});
 
 	it('fetches the selected song when retained takes are fewer than generation_count', async () => {
