@@ -827,6 +827,31 @@ export function snapshotLibraryHistory(index: number): LibraryHistoryState {
 	};
 }
 
+// The library page history stands on keeps how it was left -- its scroll, the
+// pages it had loaded, its search -- only in the library's stores until it is
+// left, so its entry takes them before another page is pushed over it, and
+// Back shows that page as it was left. Off a library page there is nothing to
+// keep.
+export function keepLibraryPageAsLeft(): Promise<void> {
+	const current = currentLibraryHistoryState();
+	if (!isLibraryHistoryState(current)) return Promise.resolve();
+	const leaving = snapshotLibraryHistory(current.index);
+	return writeLibraryHistory(
+		{
+			...current,
+			scrollAnchor: leaving.scrollAnchor,
+			albumOffset: leaving.albumOffset,
+			songOffset: leaving.songOffset,
+			searchCursor: leaving.searchCursor,
+			searchLoadedCount: leaving.searchLoadedCount,
+			query: leaving.query,
+			sort: leaving.sort
+		},
+		libraryHistoryUrl(current),
+		'replace'
+	);
+}
+
 let heldRestores: Promise<void> | null = null;
 
 // A Back or Forward that leaves a dirty draft puts the song's entry back and
