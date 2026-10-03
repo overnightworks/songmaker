@@ -2417,6 +2417,31 @@ describe('the queue names its next take', () => {
 			}
 		);
 
+		const playlistOfTwo = playlistOf(2);
+		const startsOfAQueueOfTwo = [
+			{
+				queue: 'album',
+				start: () => {
+					songList.set([albumSong(1), albumSong(2)]);
+					return playAlbum('a1');
+				}
+			},
+			{
+				queue: 'playlist',
+				start: async () => playPlaylist(playlistOfTwo, 'top')
+			}
+		];
+
+		it.each(startsOfAQueueOfTwo)(
+			'is named at once where only the playing take would start in its place ($queue)',
+			async ({ start }) => {
+				await startAndSkipTheSecondTake(start);
+
+				expect(takeAfterCurrentGenerationId()).toBeUndefined();
+				expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+			}
+		);
+
 		it.each(startsOfAQueueOfThree)('a new queue forgets it ($queue)', async ({ start }) => {
 			await startAndSkipTheSecondTake(start);
 

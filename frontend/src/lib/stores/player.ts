@@ -1799,26 +1799,43 @@ function recordSkippedTake(take: PlaybackInfo): void {
 	const ctx = get(queueContext);
 	if (ctx.skipped?.has(take)) return;
 	queueContext.set({ ...ctx, skipped: new Map(ctx.skipped).set(take, 'pending') });
+	if (noOtherTakeStartsInPlaceOf(take)) announceSkips([take]);
+}
+
+// Where the queue ends at the skipped take's place, or only the playing take
+// would play again there, no take change ever reaches that place, so the take
+// is named at once rather than never.
+function noOtherTakeStartsInPlaceOf(take: PlaybackInfo): boolean {
+	const ctx = get(queueContext);
+	const follower = nextQueueTake(ctx, take);
+	return follower.kind !== 'take' || follower.index === queuePlaceOf(ctx, audioPlayer.current);
 }
 
 function announceSkipsReachedBy(current: PlaybackInfo): void {
-	const ctx = get(queueContext);
-	const reached = [...(ctx.skipped ?? [])]
+	const reached = [...(get(queueContext).skipped ?? [])]
 		.filter(([take, notice]) => notice === 'pending' && takeAfter(take) === current)
 		.map(([take]) => take);
-	if (reached.length === 0) return;
+	announceSkips(reached);
+}
+
+function announceSkips(takes: PlaybackInfo[]): void {
+	if (takes.length === 0) return;
+	const ctx = get(queueContext);
 	const skipped = new Map(ctx.skipped);
-	for (const take of reached) {
+	for (const take of takes) {
 		addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
 		skipped.set(take, 'announced');
 	}
 	queueContext.set({ ...ctx, skipped });
 }
 
+function queuePlaceOf(ctx: QueueContext, take: PlaybackInfo | null): number {
+	return ctx.type === 'playlist' ? currentPlaylistIndex(ctx, take) : nativeTakeIndex(ctx, take);
+}
+
 function moveQueueIndexTo(current: PlaybackInfo): void {
 	const ctx = get(queueContext);
-	const index =
-		ctx.type === 'playlist' ? currentPlaylistIndex(ctx, current) : nativeTakeIndex(ctx, current);
+	const index = queuePlaceOf(ctx, current);
 	if (index < 0 || index === ctx.index) return;
 	queueContext.set({ ...ctx, index });
 }
