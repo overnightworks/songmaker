@@ -1686,7 +1686,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
-	it('saves the draft, then leaves for the entry Back reached, on Save', async () => {
+	it('saves the draft once, then leaves for the entry Back reached, on Save', async () => {
 		await editTheSongOpenedFrom(() => openAlbum('a1'));
 		vi.mocked(updateSong).mockResolvedValue(
 			song({ ...navigableSongDefaults(), slug: 's1', lyrics: 'unsaved edit' })
@@ -1697,6 +1697,7 @@ describe('Back with a dirty draft asks before it leaves (issue #1143)', () => {
 
 		await vi.waitFor(() => expect(get(selectedSongId)).toBeNull());
 		expect(window.location.pathname).toBe('/album/a1');
+		expect(updateSong).toHaveBeenCalledOnce();
 		expect(updateSong).toHaveBeenCalledWith(
 			's1',
 			expect.objectContaining({ lyrics: 'unsaved edit' })
