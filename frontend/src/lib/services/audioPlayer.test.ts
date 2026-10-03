@@ -3043,11 +3043,10 @@ describe('continuous deck (#1187 M2)', () => {
 	it('plays on through a load of the playing take built outside the queue, keeping the take it holds', () => {
 		playFirstWithSecondAppended();
 		playTo(4);
-		const seekSpy = vi.spyOn(deck(), 'seekTo');
 
 		audioPlayer.load({ ...first });
 
-		expect(seekSpy).not.toHaveBeenCalled();
+		expect(deck().seeks).toEqual([]);
 		expect(fakeAudio.currentTime).toBe(4);
 		expect(continuousDecks.attached).toHaveLength(1);
 		expect(audioPlayer.current).toBe(first);
