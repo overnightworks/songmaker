@@ -1,15 +1,30 @@
-import { get, writable } from 'svelte/store';
+import { get, writable, type Readable } from 'svelte/store';
 
 import { offline, whenBackOnline } from '$lib/stores/connectivity';
 
 const TOAST_DURATION_MS = 5000;
-const UNDO_TOAST_DURATION_MS = 30000;
+
+/** How long Undo stays offered: a few seconds for a light change, a longer grace for a deletion. */
+type UndoToastLength = 'brief' | 'long';
+
+const UNDO_TOAST_DURATION_MS: Record<UndoToastLength, number> = {
+	brief: TOAST_DURATION_MS,
+	long: 30000
+};
 
 type ToastType = 'error' | 'success' | 'info';
 
 interface ToastAction {
 	label: string;
 	handler: () => void | Promise<void>;
+}
+
+/**
+ * An undo that can stop holding before its toast times out -- once it would
+ * restore nothing, its toast closes, so a shown Undo always restores.
+ */
+interface UndoAction extends ToastAction {
+	holds?: Readable<boolean>;
 }
 
 interface Toast {
@@ -20,6 +35,8 @@ interface Toast {
 }
 
 let nextId = 0;
+
+const stopWatchingUndo = new Map<number, () => void>();
 
 export const toasts = writable<Toast[]>([]);
 
@@ -57,7 +74,11 @@ export function addToast(message: string, type: ToastType = 'info'): number {
 	return id;
 }
 
-export function addUndoToast(message: string, action: ToastAction): void {
+export function addUndoToast(
+	message: string,
+	action: UndoAction,
+	length: UndoToastLength = 'long'
+): void {
 	const id = nextId++;
 	const wrapped: ToastAction = {
 		label: action.label,
@@ -67,11 +88,17 @@ export function addUndoToast(message: string, action: ToastAction): void {
 		}
 	};
 	toasts.update((t) => [...t, { id, message, type: 'info', action: wrapped }]);
-	setTimeout(() => {
-		toasts.update((t) => t.filter((toast) => toast.id !== id));
-	}, UNDO_TOAST_DURATION_MS);
+	if (action.holds) {
+		const stop = action.holds.subscribe((holds) => {
+			if (!holds) dismissToast(id);
+		});
+		stopWatchingUndo.set(id, stop);
+	}
+	setTimeout(() => dismissToast(id), UNDO_TOAST_DURATION_MS[length]);
 }
 
 export function dismissToast(id: number): void {
+	stopWatchingUndo.get(id)?.();
+	stopWatchingUndo.delete(id);
 	toasts.update((t) => t.filter((toast) => toast.id !== id));
 }

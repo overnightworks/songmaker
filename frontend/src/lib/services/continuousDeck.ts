@@ -8,7 +8,9 @@ const SECONDS_KEPT_BEHIND_WHEN_FULL = 10;
 const DOWNLOAD_ATTEMPTS = 3;
 const QUOTA_EXCEEDED = 'QuotaExceededError';
 
-type DeckEntry<Take> = Pick<QueueStreamTrackItem, 'start_offset' | 'duration'> & { take: Take };
+export type DeckEntry<Take> = Pick<QueueStreamTrackItem, 'start_offset' | 'duration'> & {
+	take: Take;
+};
 
 interface ContinuousDeckPorts {
 	element: HTMLMediaElement;
@@ -24,6 +26,34 @@ class TakeRefused extends Error {
 	}
 }
 
+type TakeNotAppendedReason = 'not-fetched' | 'stream-ended';
+
+/**
+ * A take the deck could not append, or not to its end. The deck itself plays
+ * on: what was appended before it stays, and the next take still follows.
+ */
+export class TakeNotAppended<Take> extends Error {
+	constructor(
+		readonly take: Take,
+		readonly reason: TakeNotAppendedReason,
+		message: string
+	) {
+		super(message);
+		this.name = 'TakeNotAppended';
+	}
+}
+
+/**
+ * The player left the deck: whatever it still had to fetch, wait for or
+ * append is given up, and the buffer is not touched again.
+ */
+class DeckClosed extends Error {
+	constructor() {
+		super('The deck was closed');
+		this.name = 'DeckClosed';
+	}
+}
+
 /**
  * Plays a queue of takes as one continuous stream: each take's MP3 bytes are
  * appended behind the previous one into a single SourceBuffer, so a track
@@ -32,59 +62,108 @@ class TakeRefused extends Error {
 export class ContinuousDeck<Take> {
 	private readonly entries: DeckEntry<Take>[] = [];
 	private steps: Promise<void> = Promise.resolve();
+	private stepsInFlight = 0;
+	private brokenBy: Error | null = null;
+	private ending: Promise<void> | null = null;
+	private playableFrom = 0;
+	private readonly closing = new AbortController();
 
 	private constructor(
 		private readonly ports: ContinuousDeckPorts,
-		private readonly buffer: SourceBuffer
+		private readonly opened: Promise<SourceBuffer>
 	) {}
 
 	static isSupported(): boolean {
 		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(MP3_MIME_TYPE);
 	}
 
-	static async open<Take>(ports: ContinuousDeckPorts): Promise<ContinuousDeck<Take>> {
-		const { element, mediaSource, urls } = ports;
-		const opened = nextEvent(mediaSource, 'sourceopen');
-		const objectUrl = urls.createObjectURL(mediaSource);
-		element.src = objectUrl;
-		await opened;
-		urls.revokeObjectURL(objectUrl);
-		const buffer = mediaSource.addSourceBuffer(MP3_MIME_TYPE);
-		buffer.mode = 'sequence';
-		return new ContinuousDeck<Take>(ports, buffer);
+	// Usable at once: every append waits for the media source to open, so the
+	// first take is asked for in the same moment the element gets its source.
+	static attach<Take>(ports: ContinuousDeckPorts): ContinuousDeck<Take> {
+		return new ContinuousDeck<Take>(ports, attachSourceBuffer(ports));
 	}
 
 	get manifest(): readonly Readonly<DeckEntry<Take>>[] {
 		return this.entries;
 	}
 
+	get appending(): boolean {
+		return this.stepsInFlight > 0;
+	}
+
+	entryAt(seconds: number): Readonly<DeckEntry<Take>> | undefined {
+		return this.entries.findLast((entry) => entry.start_offset <= seconds);
+	}
+
+	// The latest entry of a take whose start is still buffered, so that a seek
+	// to its offset plays it from the beginning.
+	playableEntryOf(isTake: (take: Take) => boolean): Readonly<DeckEntry<Take>> | undefined {
+		return this.entries.findLast(
+			(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
+		);
+	}
+
 	appendTake(take: Take, url: string): Promise<void> {
-		return this.queueStep(() => this.appendWholeTake(take, url));
+		if (this.ending !== null)
+			return Promise.reject(
+				new TakeNotAppended(take, 'stream-ended', `${url} came after the end of the stream`)
+			);
+		return this.queueStep((buffer) => this.appendWholeTake(buffer, take, url));
 	}
 
 	endStream(): Promise<void> {
-		return this.queueStep(async () => this.ports.mediaSource.endOfStream());
+		this.ending ??= this.queueStep(() => this.ports.mediaSource.endOfStream());
+		return this.ending;
 	}
 
-	// A failed step fails every later one: a take appended behind a partial
-	// take would start at the wrong offset.
-	private queueStep(step: () => Promise<void>): Promise<void> {
-		this.steps = this.steps.then(step);
-		return this.steps;
+	close(): void {
+		this.closing.abort(new DeckClosed());
 	}
 
-	private async appendWholeTake(take: Take, url: string): Promise<void> {
-		const entry: DeckEntry<Take> = { take, start_offset: this.buffer.timestampOffset, duration: 0 };
+	// A failed step fails every later one: a take appended behind audio the
+	// buffer refused would start at the wrong offset. Only a take that could
+	// not be fetched leaves the buffer as it was, so the next one still follows.
+	private queueStep(step: (buffer: SourceBuffer) => Promise<void> | void): Promise<void> {
+		this.stepsInFlight += 1;
+		const result = this.steps
+			.then(async () => {
+				if (this.brokenBy) throw this.brokenBy;
+				await step(await this.whileOpen(this.opened));
+			})
+			.finally(() => {
+				this.stepsInFlight -= 1;
+			});
+		this.steps = result.catch((error: unknown) => {
+			if (!(error instanceof TakeNotAppended)) this.brokenBy ??= asError(error);
+		});
+		return result;
+	}
+
+	private async appendWholeTake(buffer: SourceBuffer, take: Take, url: string): Promise<void> {
+		const entry: DeckEntry<Take> = { take, start_offset: buffer.timestampOffset, duration: 0 };
 		this.entries.push(entry);
-		for await (const chunk of chunked(this.download(url))) {
-			await this.roomAhead();
-			await this.evictPlayedTakes();
-			await this.appendChunk(chunk);
-			entry.duration = this.buffer.timestampOffset - entry.start_offset;
+		try {
+			for await (const chunk of chunked(this.download(take, url))) {
+				await this.roomAhead(buffer);
+				await this.evictPlayedTakes(buffer);
+				await this.appendChunk(buffer, chunk);
+				entry.duration = buffer.timestampOffset - entry.start_offset;
+			}
+		} catch (error) {
+			if (error instanceof TakeNotAppended) this.endTakeEarly(buffer, entry);
+			throw error;
 		}
 	}
 
-	private async *download(url: string): AsyncGenerator<Uint8Array> {
+	// A take with nothing appended leaves no trace in the manifest; one cut off
+	// part-way keeps what it has, and the parser drops its unfinished frame so
+	// the next take's first frame is read from its own start.
+	private endTakeEarly(buffer: SourceBuffer, entry: DeckEntry<Take>): void {
+		if (entry.duration === 0) this.entries.splice(this.entries.indexOf(entry), 1);
+		else buffer.abort();
+	}
+
+	private async *download(take: Take, url: string): AsyncGenerator<Uint8Array> {
 		let received = 0;
 		for (let attempt = 1; ; attempt += 1) {
 			try {
@@ -94,7 +173,9 @@ export class ContinuousDeck<Take> {
 				}
 				return;
 			} catch (error) {
-				if (error instanceof TakeRefused || attempt === DOWNLOAD_ATTEMPTS) throw error;
+				this.closing.signal.throwIfAborted();
+				if (error instanceof TakeRefused || attempt === DOWNLOAD_ATTEMPTS)
+					throw new TakeNotAppended(take, 'not-fetched', asError(error).message);
 			}
 		}
 	}
@@ -102,7 +183,8 @@ export class ContinuousDeck<Take> {
 	private async request(url: string, fromByte: number): Promise<ReadableStream<Uint8Array>> {
 		const resuming = fromByte > 0;
 		const response = await this.ports.fetch(url, {
-			headers: resuming ? { Range: `bytes=${fromByte}-` } : {}
+			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
+			signal: this.closing.signal
 		});
 		const expectedStatus = resuming ? 206 : 200;
 		if (response.status !== expectedStatus || !response.body)
@@ -110,45 +192,80 @@ export class ContinuousDeck<Take> {
 		return response.body;
 	}
 
-	private async roomAhead(): Promise<void> {
+	private async roomAhead(buffer: SourceBuffer): Promise<void> {
 		const { element } = this.ports;
-		while (this.buffer.timestampOffset - element.currentTime >= SECONDS_BUFFERED_AHEAD)
-			await nextEvent(element, 'timeupdate');
+		while (buffer.timestampOffset - element.currentTime >= SECONDS_BUFFERED_AHEAD)
+			await this.whileOpen(nextEvent(element, 'timeupdate', this.closing.signal));
 	}
 
-	private async evictPlayedTakes(): Promise<void> {
-		const playhead = this.ports.element.currentTime;
-		const current = this.entries.findLast((entry) => entry.start_offset <= playhead);
-		if (current) await this.removeBefore(current.start_offset);
+	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
+		const current = this.entryAt(this.ports.element.currentTime);
+		if (current) await this.removeBefore(buffer, current.start_offset);
 	}
 
-	private async appendChunk(chunk: Uint8Array<ArrayBuffer>): Promise<void> {
+	private async appendChunk(buffer: SourceBuffer, chunk: Uint8Array<ArrayBuffer>): Promise<void> {
 		try {
-			await this.update(() => this.buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		} catch (error) {
 			if (!isQuotaExceeded(error)) throw error;
 			const playhead = this.ports.element.currentTime;
-			const freed = await this.removeBefore(playhead - SECONDS_KEPT_BEHIND_WHEN_FULL);
+			const freed = await this.removeBefore(buffer, playhead - SECONDS_KEPT_BEHIND_WHEN_FULL);
 			if (!freed) throw error;
-			await this.update(() => this.buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		}
 	}
 
-	private async removeBefore(seconds: number): Promise<boolean> {
-		const buffered = this.buffer.buffered;
+	private async removeBefore(buffer: SourceBuffer, seconds: number): Promise<boolean> {
+		const buffered = buffer.buffered;
 		if (buffered.length === 0 || buffered.start(0) >= seconds) return false;
-		await this.update(() => this.buffer.remove(buffered.start(0), seconds));
+		await this.update(buffer, () => buffer.remove(buffered.start(0), seconds));
+		this.playableFrom = seconds;
 		return true;
 	}
 
-	private async update(start: () => void): Promise<void> {
+	private async update(buffer: SourceBuffer, start: () => void): Promise<void> {
+		this.closing.signal.throwIfAborted();
 		start();
-		await updateEnded(this.buffer);
+		await updateEnded(buffer);
+	}
+
+	private whileOpen<Value>(pending: Promise<Value>): Promise<Value> {
+		const { signal } = this.closing;
+		return new Promise((resolve, reject) => {
+			const closed = () => reject(signal.reason);
+			if (signal.aborted) {
+				closed();
+				return;
+			}
+			signal.addEventListener('abort', closed, { once: true });
+			pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', closed));
+		});
 	}
 }
 
-function nextEvent(target: EventTarget, type: string): Promise<void> {
-	return new Promise((resolve) => target.addEventListener(type, () => resolve(), { once: true }));
+async function attachSourceBuffer(ports: ContinuousDeckPorts): Promise<SourceBuffer> {
+	const { element, mediaSource, urls } = ports;
+	const opened = nextEvent(mediaSource, 'sourceopen');
+	const objectUrl = urls.createObjectURL(mediaSource);
+	element.src = objectUrl;
+	await opened;
+	urls.revokeObjectURL(objectUrl);
+	const buffer = mediaSource.addSourceBuffer(MP3_MIME_TYPE);
+	buffer.mode = 'sequence';
+	return buffer;
+}
+
+function asError(error: unknown): Error {
+	return error instanceof Error
+		? error
+		: new Error('A deck step failed without an error', { cause: error });
+}
+
+// An aborted signal only removes the listener; the promise then never settles.
+function nextEvent(target: EventTarget, type: string, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve) =>
+		target.addEventListener(type, () => resolve(), { once: true, signal })
+	);
 }
 
 function updateEnded(buffer: SourceBuffer): Promise<void> {
@@ -186,15 +303,19 @@ async function* piecesOf(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8
 	}
 }
 
+// A take's first piece goes in at once, so playback starts on the first bytes
+// that arrive instead of after a megabyte (#1187 P5).
 async function* chunked(
 	pieces: AsyncIterable<Uint8Array>
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
 	let gathered: Uint8Array[] = [];
 	let gatheredBytes = 0;
+	let firstPiece = true;
 	for await (const piece of pieces) {
 		gathered.push(piece);
 		gatheredBytes += piece.byteLength;
-		if (gatheredBytes >= CHUNK_BYTES) {
+		if (firstPiece || gatheredBytes >= CHUNK_BYTES) {
+			firstPiece = false;
 			yield joined(gathered, gatheredBytes);
 			gathered = [];
 			gatheredBytes = 0;

@@ -5,7 +5,13 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { recordPlaybackEvent, type PlaybackDiagnosticKind } from './playbackDiagnostics';
+import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
+import {
+	readThePlayingTakeFrom,
+	recordPlaybackEvent,
+	type PlaybackDiagnosticKind,
+	type PlaybackTakeState
+} from './playbackDiagnostics';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -63,6 +69,19 @@ type Failure = { kind: FailureKind; message: string } | { kind: 'unreachable' };
 
 type ProbeAnswer = { ok: boolean; status: number };
 
+type LoadOptions = { autoplay?: boolean; restart?: boolean; startAt?: number };
+
+// A queue playing on the continuous deck (#1187): the takes after the current
+// one are appended into the same element, so a track change is the playhead
+// crossing into the next take, with no ended, no pause and no new source.
+interface DeckSession {
+	deck: ContinuousDeck<PlaybackInfo>;
+	// The entry the playhead was last seen in; entering another is a track change.
+	playing: Readonly<DeckEntry<PlaybackInfo>> | null;
+	// The last take handed to the deck, so that the next take is appended once.
+	tail: PlaybackInfo;
+}
+
 // One typed object per owner of the singleton audioPlayer (the logged-in app
 // via stores/player.ts, a share route via sharePlayback). swapCallbacks/
 // restoreCallbacks move the whole set atomically so a new owner never
@@ -75,6 +94,13 @@ export interface AudioPlayerCallbacks {
 	onAuthLost: (() => void | Promise<void>) | null;
 	onStreamRebuild: ((state: StreamFallbackState) => Promise<QueueStreamManifest | null>) | null;
 	onCurrentChange: ((current: PlaybackInfo | null) => void) | null;
+	// Only the owner's queue knows which take follows one the continuous deck
+	// could not fetch; an owner that never plays a queue on that deck (a share
+	// route) has no answer to give.
+	takeAfter?: (take: PlaybackInfo) => PlaybackInfo | null;
+	// The continuous deck skips a take it could not fetch while the next one
+	// plays; only the owner can tell the listener which take that was.
+	onTakeSkipped?: (take: PlaybackInfo) => void;
 	// Only the owner knows whether its page shows the offline strip; a page
 	// without one needs the player's own failure line.
 	networkFailureIsAnnounced: () => boolean;
@@ -93,6 +119,9 @@ const AUDIO_URL_PREFIX = '/audio/';
 const ERROR_MSG_GENERIC = 'Playback failed. Press Retry.';
 const ERROR_MSG_NOT_FOUND = 'Audio file not found.';
 const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
+// A deck whose playhead is this close to the end of what it holds, with
+// nothing more on its way, has played its last take.
+const END_OF_DECK_SLACK_SECONDS = 0.5;
 // How often a stalled take is looked at again and, unless the owner reports
 // the network gone, reloaded.
 const STALL_RECOVERY_MS = 5000;
@@ -149,6 +178,10 @@ class AudioPlayer {
 	mode = $state<'classic' | 'stream'>('classic');
 	private failure = $state<Failure | null>(null);
 
+	constructor() {
+		readThePlayingTakeFrom(() => this.takeStateOf(this.audio));
+	}
+
 	get error(): string | null {
 		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
 	}
@@ -173,6 +206,7 @@ class AudioPlayer {
 	// gap in which Android may freeze a page whose screen is off.
 	private standby: HTMLAudioElement | null = null;
 	private standbyUrl: string | null = null;
+	private deckSession: DeckSession | null = null;
 	private autoplayPending = $state(false);
 	private readonly streamEngine = new QueueStreamEngine();
 	private stallRecoveryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -208,6 +242,18 @@ class AudioPlayer {
 
 	getElement(): HTMLAudioElement | null {
 		return this.audio;
+	}
+
+	// currentTime as the element's clock gives it this instant rather than at
+	// the last timeupdate; on the continuous deck that clock runs across every
+	// take, so the current take's start is taken off. Null without an element.
+	get currentTimeNow(): number | null {
+		return this.audio ? this.positionWithinTake(this.audio) : null;
+	}
+
+	// On the continuous deck the element clock runs across every take it holds.
+	private positionWithinTake(el: HTMLAudioElement): number {
+		return el.currentTime - (this.deckSession?.playing?.start_offset ?? 0);
 	}
 
 	// The Web Audio graph belongs to the <audio> element, not to whatever
@@ -274,11 +320,19 @@ class AudioPlayer {
 		this.callbacks = previous;
 	}
 
-	load(
-		info: PlaybackInfo,
-		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
-	): void {
-		this.loadFromUrl(info, audioUrlOf(info), opts);
+	// Where the browser can append MP3 into one source, a take plays on the
+	// continuous deck, and a take that deck already holds is reached by a seek.
+	// A take the second deck stands ready with is promoted, as everywhere else.
+	load(info: PlaybackInfo, opts: LoadOptions = {}): void {
+		const url = audioUrlOf(info);
+		if (this.continueCurrentTake(info, url, opts)) return;
+		if (this.deckSession && this.seekWithinDeck(this.deckSession, info, url, opts)) return;
+		if (!ContinuousDeck.isSupported() || this.standbyReadyFor(url)) {
+			this.loadFromUrl(info, url, opts);
+			return;
+		}
+		this.startTake(info, url, opts, (el) => this.attachDeck(el, info, url));
+		this.note('fresh_load', 'deck=continuous');
 	}
 
 	// Classic per-track playback from a URL the caller already resolved
@@ -287,17 +341,20 @@ class AudioPlayer {
 	// the app's own URL convention plugged in; both funnel through the same
 	// resolved-URL state so recovery and the auth probe never have to choose
 	// between two URL sources.
-	loadUrl(
-		info: PlaybackInfo,
-		url: string,
-		opts: { autoplay?: boolean; restart?: boolean; startAt?: number } = {}
-	): void {
+	loadUrl(info: PlaybackInfo, url: string, opts: LoadOptions = {}): void {
 		this.loadFromUrl(info, url, opts);
 	}
 
-	// Loads the take a later load() is expected to ask for, replacing whatever
-	// stood by; null drops it. Nothing plays and nothing the player shows changes.
+	// Readies the take a later load() is expected to ask for: on the continuous
+	// deck it is appended behind what plays, otherwise it loads on the second
+	// deck, replacing whatever stood by. Nothing plays and nothing the player
+	// shows changes. Null drops the second deck's take; the continuous deck
+	// keeps what it holds and ends where its takes run out.
 	preload(info: PlaybackInfo | null): void {
+		if (this.deckSession) {
+			if (info) this.appendAhead(this.deckSession, info);
+			return;
+		}
 		if (info === null) {
 			this.clearStandby();
 			return;
@@ -310,14 +367,28 @@ class AudioPlayer {
 		el.load();
 	}
 
-	private loadFromUrl(
-		info: PlaybackInfo,
-		url: string,
-		opts: { autoplay?: boolean; restart?: boolean; startAt?: number }
-	): void {
-		const autoplay = opts.autoplay ?? true;
-		const restart = opts.restart ?? false;
-		const sameGen =
+	private loadFromUrl(info: PlaybackInfo, url: string, opts: LoadOptions): void {
+		if (this.continueCurrentTake(info, url, opts)) return;
+
+		const standbyFacts = `standby_ready_state=${this.standby?.readyState ?? 'none'} url_matched=${this.standbyUrl === url}`;
+		const readyStandby = this.standbyReadyFor(url);
+		if (readyStandby) {
+			this.promote(readyStandby, info, url, {
+				autoplay: opts.autoplay ?? true,
+				startAt: opts.startAt
+			});
+			this.note('promote', standbyFacts);
+			return;
+		}
+
+		this.startTake(info, url, opts, (el) => this.loadSource(el, url));
+		this.note('fresh_load', standbyFacts);
+	}
+
+	// A load of the take already playing plays on where it is, unless it is
+	// asked to restart; any load leaves a queue stream.
+	private continueCurrentTake(info: PlaybackInfo, url: string, opts: LoadOptions): boolean {
+		const sameTake =
 			!this.streamEngine.active &&
 			this.current?.generation.id === info.generation.id &&
 			this.currentUrl === url;
@@ -326,33 +397,176 @@ class AudioPlayer {
 		this.syncStreamBoundaries();
 		this.mode = 'classic';
 
-		if (sameGen && this.audio && this.status !== 'error' && !restart) {
-			this.setCurrent(info);
-			this.currentUrl = url;
-			this.failure = null;
-			if (autoplay && (this.status !== 'playing' || this.clockStoodStill)) this.play();
-			return;
-		}
+		if (!sameTake || !this.audio || this.status === 'error' || opts.restart) return false;
+		this.setCurrent(info);
+		this.currentUrl = url;
+		this.failure = null;
+		if ((opts.autoplay ?? true) && (this.status !== 'playing' || this.clockStoodStill)) this.play();
+		return true;
+	}
 
-		const standbyFacts = `standby_ready_state=${this.standby?.readyState ?? 'none'} url_matched=${this.standbyUrl === url}`;
-		const readyStandby = this.standbyReadyFor(url);
-		if (readyStandby) {
-			this.promote(readyStandby, info, url, { autoplay, startAt: opts.startAt });
-			this.note('promote', standbyFacts);
-			return;
-		}
-
+	// A take that starts from nothing on the active element: whatever played or
+	// stood by before it is dropped. The source is attached before the take
+	// becomes current, so a preload the change asks for lands behind it.
+	private startTake(
+		info: PlaybackInfo,
+		url: string,
+		opts: LoadOptions,
+		attachSource: (el: HTMLAudioElement) => void
+	): void {
 		this.clearStandby();
 		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
-		this.autoplayPending = autoplay;
+		this.autoplayPending = opts.autoplay ?? true;
 		const el = this.ensureAudio();
 		this.status = 'loading';
 		this.pauseElement(el);
-		this.setCurrent(info);
 		this.currentUrl = url;
-		this.loadSource(el, url);
-		this.note('fresh_load', standbyFacts);
+		attachSource(el);
+		this.setCurrent(info);
+		this.scheduleStallRecovery();
+	}
+
+	private attachDeck(el: HTMLAudioElement, info: PlaybackInfo, url: string): void {
+		this.pauseRequestedByApp = false;
+		const session: DeckSession = {
+			deck: ContinuousDeck.attach<PlaybackInfo>({
+				element: el,
+				mediaSource: new MediaSource(),
+				urls: URL,
+				fetch: (input, init) => fetch(input, init)
+			}),
+			playing: null,
+			tail: info
+		};
+		this.deckSession = session;
+		this.appendToDeck(session, info, url);
+	}
+
+	private appendAhead(session: DeckSession, info: PlaybackInfo): void {
+		const url = audioUrlOf(info);
+		if (audioUrlOf(session.tail) === url) return;
+		this.appendToDeck(session, info, url);
+	}
+
+	private appendToDeck(session: DeckSession, info: PlaybackInfo, url: string): void {
+		session.tail = info;
+		this.note('media_event', `deck_append take=${info.generation.id}`);
+		session.deck.appendTake(info, url).catch((error: unknown) => this.deckFailed(session, error));
+	}
+
+	// Next, or a restart, is a seek when the deck still holds the take from its
+	// start: the element plays on from its one source.
+	private seekWithinDeck(
+		session: DeckSession,
+		info: PlaybackInfo,
+		url: string,
+		opts: LoadOptions
+	): boolean {
+		const el = this.audio;
+		const entry = session.deck.playableEntryOf((take) => audioUrlOf(take) === url);
+		if (!el || !entry) return false;
+		const startAt = opts.startAt ?? 0;
+		session.playing = entry;
+		el.currentTime = entry.start_offset + startAt;
+		this.currentUrl = url;
+		this.currentTime = startAt;
+		this.lastObservedTime = startAt;
+		this.duration = takeDuration(entry);
+		this.setCurrent(info);
+		this.note('promote', 'deck_seek');
+		if (opts.autoplay ?? true) this.play();
+		else this.pause();
+		return true;
+	}
+
+	// The take under the playhead is the current one: crossing into the next
+	// take changes current while the element neither ends nor pauses.
+	private followDeckPlayhead(session: DeckSession, el: HTMLAudioElement): number {
+		const entry = session.deck.entryAt(el.currentTime);
+		if (!entry) return el.currentTime;
+		if (entry !== session.playing) this.enterDeckEntry(session, entry);
+		this.duration = takeDuration(entry);
+		return el.currentTime - entry.start_offset;
+	}
+
+	private enterDeckEntry(session: DeckSession, entry: Readonly<DeckEntry<PlaybackInfo>>): void {
+		session.playing = entry;
+		const url = audioUrlOf(entry.take);
+		if (url === this.currentUrl) return;
+		this.currentUrl = url;
+		this.setCurrent(entry.take);
+		this.note('media_event', 'deck_crossing');
+	}
+
+	private deckTakeDuration(el: HTMLAudioElement): number | null {
+		const entry = this.deckSession?.deck.entryAt(el.currentTime);
+		return entry ? takeDuration(entry) : null;
+	}
+
+	// The playhead ran out of audio in the queue's last take: the queue has
+	// ended, and only an ended stream lets the element fire ended. Running out
+	// while the queue names a next take is buffering, which recovery rides out
+	// until that take is appended.
+	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
+		if (
+			session.deck.appending ||
+			this.queueNamesATakeAfter(session.playing) ||
+			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
+		)
+			return false;
+		this.note('media_event', 'deck_end');
+		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
+		return true;
+	}
+
+	private queueNamesATakeAfter(entry: Readonly<DeckEntry<PlaybackInfo>> | null): boolean {
+		return entry !== null && (this.callbacks.takeAfter?.(entry.take) ?? null) !== null;
+	}
+
+	// A dropped take the playhead has not reached only shortens the stream;
+	// anything else the deck cannot play on from goes to the two decks.
+	private deckFailed(session: DeckSession, error: unknown): void {
+		if (session !== this.deckSession) return;
+		if (error instanceof TakeNotAppended && audioUrlOf(error.take) !== this.currentUrl) {
+			this.note(
+				'media_event',
+				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
+			);
+			if (error.reason === 'not-fetched') this.skipTake(session, error.take);
+			return;
+		}
+		this.fallBackToTwoDecks(
+			error instanceof Error ? error.message : 'the deck failed without an error'
+		);
+	}
+
+	private skipTake(session: DeckSession, dropped: PlaybackInfo): void {
+		this.callbacks.onTakeSkipped?.(dropped);
+		this.appendInPlaceOf(session, dropped);
+	}
+
+	// The take the queue plays after a dropped one is appended in its place, so
+	// the playhead crosses on to it instead of running out where the dropped
+	// take would have started.
+	private appendInPlaceOf(session: DeckSession, dropped: PlaybackInfo): void {
+		if (audioUrlOf(session.tail) !== audioUrlOf(dropped)) return;
+		const next = this.callbacks.takeAfter?.(dropped);
+		if (next) this.appendAhead(session, next);
+	}
+
+	// The current take loads from its own URL where the listener is, and the
+	// take after it stands by on the second deck again.
+	private fallBackToTwoDecks(reason: string): void {
+		const el = this.audio;
+		const info = this.current;
+		if (!el || !info) return;
+		this.note('retry', `deck_fallback ${reason}`);
+		this.loadFromUrl(info, audioUrlOf(info), {
+			restart: true,
+			startAt: this.currentTime,
+			autoplay: this.autoplayPending || !el.paused
+		});
 	}
 
 	loadStream(
@@ -407,11 +621,11 @@ class AudioPlayer {
 		this.currentTime = promoted.currentTime;
 		this.duration = promoted.duration || 0;
 		this.status = 'ready';
-		this.setCurrent(info);
 		this.currentUrl = url;
 		this.applyPendingRecoverySeek(promoted);
 		if (opts.autoplay) this.play();
 		if (previous) clearDeck(previous);
+		this.setCurrent(info);
 	}
 
 	private createStandby(): HTMLAudioElement {
@@ -495,7 +709,9 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
-		this.audio.currentTime = Math.max(0, Math.min(seconds, this.duration));
+		const entry = this.deckSession?.playing;
+		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
+		this.audio.currentTime = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 	}
 
 	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
@@ -585,6 +801,14 @@ class AudioPlayer {
 		this.failure = null;
 		this.currentTime = 0;
 		this.duration = 0;
+		this.leaveDeck();
+	}
+
+	// A deck the player leaves is closed, so nothing of it keeps downloading,
+	// waiting or reporting a failure.
+	private leaveDeck(): void {
+		this.deckSession?.deck.close();
+		this.deckSession = null;
 	}
 
 	private forgetTake(): void {
@@ -630,7 +854,7 @@ class AudioPlayer {
 				this.duration = this.streamEngine.activeDuration;
 				this.applyPendingStreamSeek(el);
 			} else {
-				this.duration = el.duration || 0;
+				this.duration = this.deckTakeDuration(el) ?? (el.duration || 0);
 				this.applyPendingRecoverySeek(el);
 			}
 		});
@@ -645,7 +869,7 @@ class AudioPlayer {
 			this.status = el.paused ? 'ready' : 'playing';
 			this.duration = this.streamEngine.active
 				? this.streamEngine.activeDuration
-				: el.duration || this.duration;
+				: (this.deckTakeDuration(el) ?? (el.duration || this.duration));
 			if (this.autoplayPending) {
 				this.autoplayPending = false;
 				el.play().catch((err) => this.handlePlayRejection(err));
@@ -657,12 +881,15 @@ class AudioPlayer {
 				return;
 			}
 			if (this.pendingRecoverySeek !== null) return;
-			if (Math.abs(el.currentTime - this.lastObservedTime) > 0.05) {
-				this.lastObservedTime = el.currentTime;
+			const position = this.deckSession
+				? this.followDeckPlayhead(this.deckSession, el)
+				: el.currentTime;
+			if (Math.abs(position - this.lastObservedTime) > 0.05) {
+				this.lastObservedTime = position;
 				this.clearStallRecoveryTimer();
 				if (this.status === 'buffering') this.status = 'playing';
 			}
-			this.currentTime = el.currentTime;
+			this.currentTime = position;
 		});
 		on('play', () => {
 			this.streamEndSignaled = false;
@@ -677,6 +904,7 @@ class AudioPlayer {
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		on('pause', () => {
+			if (this.gaveUpOnStall && !this.pauseRequestedByApp) this.autoplayPending = false;
 			this.pauseRequestedByApp = false;
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
@@ -686,6 +914,7 @@ class AudioPlayer {
 			this.status = 'paused';
 		});
 		on('waiting', () => {
+			if (this.deckSession && this.endDeckAtItsLastTake(this.deckSession, el)) return;
 			if (this.status === 'playing' || this.status === 'buffering') {
 				this.status = 'buffering';
 				this.scheduleStallRecovery();
@@ -714,6 +943,10 @@ class AudioPlayer {
 		// reload says nothing new.
 		on('error', () => {
 			if (!this.currentUrl || this.gaveUpOnStall) return;
+			if (this.deckSession) {
+				this.fallBackToTwoDecks(`media-error ${el.error?.code ?? ''}`);
+				return;
+			}
 			if (this.streamEngine.active) {
 				void this.recoverStream('media-error');
 				return;
@@ -753,9 +986,10 @@ class AudioPlayer {
 		if (!this.recoverPlayback(reason)) this.giveUpOnStall();
 	}
 
-	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message. The listener's wish to hear the take outlives it, so
-	// a late answer plays on unless the listener pauses in the meantime.
+	// The player never pauses itself (#1187 P3): with the screen off a pause is
+	// the moment Android may freeze the page. The listener's wish to hear the
+	// take outlives the give-up, so a late answer plays on unless the listener
+	// pauses in the meantime.
 	private giveUpOnStall(): void {
 		const listenerWantsSound =
 			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
@@ -767,7 +1001,6 @@ class AudioPlayer {
 				: { kind: 'stalled', message: ERROR_MSG_STALLED }
 		);
 		this.autoplayPending = listenerWantsSound;
-		if (this.audio) this.pauseElement(this.audio);
 		this.note('give_up', this.failure?.kind ?? '');
 	}
 
@@ -866,6 +1099,7 @@ class AudioPlayer {
 	// anyway.
 	private reloadSource(el: HTMLAudioElement, url: string): void {
 		this.stopProgressWatchdog();
+		this.leaveDeck();
 		this.loadSource(el, this.urlWithRecovery(url));
 	}
 
@@ -896,17 +1130,18 @@ class AudioPlayer {
 		detail: string,
 		el: HTMLAudioElement | null = this.audio
 	): void {
+		recordPlaybackEvent({ kind, detail, take: this.takeStateOf(el) });
+	}
+
+	private takeStateOf(el: HTMLAudioElement | null): PlaybackTakeState | null {
+		if (el === null) return null;
 		const active = el === this.audio;
-		recordPlaybackEvent({
-			kind,
-			detail,
-			take: el && {
-				takeId: active ? (this.current?.generation.id ?? null) : null,
-				position: el.currentTime,
-				readyState: el.readyState,
-				deck: active ? 'active' : 'standby'
-			}
-		});
+		return {
+			takeId: active ? (this.current?.generation.id ?? null) : null,
+			position: active ? this.positionWithinTake(el) : el.currentTime,
+			readyState: el.readyState,
+			deck: active ? 'active' : 'standby'
+		};
 	}
 
 	private pauseSource(el: HTMLAudioElement): 'app' | 'ended' | 'outside' {
@@ -983,8 +1218,11 @@ class AudioPlayer {
 
 	// A reload restarts the element clock at 0 before its seek lands; until
 	// then the player's own position is the one the listener reached.
+	// On the deck the element clock runs across every take; the player's own
+	// position is the one within the current take.
 	private reachedPosition(el: HTMLAudioElement): number {
-		return el.currentTime || this.currentTime || this.lastObservedTime;
+		const elementPosition = this.deckSession ? 0 : el.currentTime;
+		return elementPosition || this.currentTime || this.lastObservedTime;
 	}
 
 	private reloadAt(reachedTime: number, reason: RecoveryReason): void {
@@ -1211,6 +1449,11 @@ function clearDeck(el: HTMLAudioElement): void {
 // exactly, or a standby deck is never promoted.
 function audioUrlOf(info: PlaybackInfo): string {
 	return AUDIO_URL_PREFIX + info.generation.mp3_path;
+}
+
+// The take's own length, not the stretch of it appended so far.
+function takeDuration(entry: Readonly<DeckEntry<PlaybackInfo>>): number {
+	return entry.take.generation.audio_duration_sec ?? entry.duration;
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {

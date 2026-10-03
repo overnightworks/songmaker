@@ -248,6 +248,18 @@ def test_update_song(client: TestClient) -> None:
     assert resp.json()["version_count"] == 2
 
 
+def test_update_song_as_new_version_keeps_a_takeless_latest_version(client: TestClient) -> None:
+    client.put("/api/songs/s1", json={"lyrics": "takeless second draft"})
+
+    resp = client.put("/api/songs/s1", json={"lyrics": "boom", "new_version": True})
+
+    assert resp.status_code == 200
+    versions = client.get("/api/songs/s1/versions").json()
+    assert [(v["version_number"], v["lyrics"]) for v in versions] == [
+        (3, "boom"), (2, "takeless second draft"), (1, "boom"),
+    ]
+
+
 def test_rename_song(client: TestClient) -> None:
     resp = client.put("/api/songs/s1/title", json={"title": "Storm"})
     assert resp.status_code == 200

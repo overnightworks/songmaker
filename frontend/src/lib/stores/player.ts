@@ -448,21 +448,29 @@ function nativeTakeIndex(
 	current: PlaybackInfo | null
 ): number {
 	if (!ctx.takes || ctx.takes.length === 0) return -1;
-	if (typeof ctx.index === 'number' && current) {
-		const indexed = ctx.takes[ctx.index];
-		if (
-			indexed?.generation.id === current.generation.id &&
-			indexed.generation.mp3_path === current.generation.mp3_path
-		) {
-			return ctx.index;
-		}
-	}
 	if (!current) return ctx.index ?? 0;
-	return ctx.takes.findIndex(
+	return queuePositionFrom(
+		ctx.takes,
+		ctx.index ?? 0,
 		(take) =>
 			take.generation.id === current.generation.id &&
 			take.generation.mp3_path === current.generation.mp3_path
 	);
+}
+
+// Where the queue holds a take, looked for from the queue's own index on: a
+// take the player moved on to by itself is the next one along, even in a
+// playlist that holds that take twice.
+function queuePositionFrom<T>(
+	items: readonly T[],
+	from: number,
+	holds: (item: T) => boolean
+): number {
+	for (let step = 0; step < items.length; step++) {
+		const index = (from + step) % items.length;
+		if (holds(items[index])) return index;
+	}
+	return -1;
 }
 
 // Moves the index within the queue that is already playing (Skip and Pick's
@@ -763,7 +771,7 @@ function toAlbumQueueEntry(song: SongItem, gen: GenerationItem): PlaylistEntryIt
 		generation_number: gen.generation_number,
 		version_number: gen.version_number,
 		is_picked: gen.is_picked,
-		audio_duration: song.audio_duration ?? null,
+		audio_duration: gen.audio_duration_sec,
 		mp3_path: gen.mp3_path,
 		seed: gen.seed,
 		model_mode: gen.model_mode,
@@ -864,9 +872,7 @@ function currentPlaylistIndex(
 	current: PlaybackInfo | null = audioPlayer.current
 ): number {
 	if (!current) return ctx.index;
-	const indexedEntry = ctx.entries[ctx.index];
-	if (indexedEntry && holdsEntryTake(current, indexedEntry)) return ctx.index;
-	const idx = ctx.entries.findIndex((entry) => holdsEntryTake(current, entry));
+	const idx = queuePositionFrom(ctx.entries, ctx.index, (entry) => holdsEntryTake(current, entry));
 	return idx >= 0 ? idx : ctx.index;
 }
 
@@ -1189,7 +1195,11 @@ function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQue
 }
 
 function takeAfterCurrent(): PlaybackInfo | null {
-	const next = nextQueueTake(get(queueContext), audioPlayer.current);
+	return takeAfter(audioPlayer.current);
+}
+
+function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
+	const next = nextQueueTake(get(queueContext), take);
 	return next.kind === 'take' ? next.take : null;
 }
 
@@ -1656,9 +1666,29 @@ function handlePlaybackStarted(): void {
 	gatherRestoredAlbumQueue();
 }
 
+// A take change the player made by itself — the playhead crossing into the
+// next take on the continuous deck — moves the queue on and asks for the take
+// after it, just as a load does.
 function handleCurrentChange(current: PlaybackInfo | null): void {
 	updateMediaSessionMetadata(current);
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
+	if (current === null) return;
+	moveQueueIndexTo(current);
+	preloadNextTake();
+}
+
+// The deck plays on past the skipped take, so the listener hears which one
+// the queue lost instead of finding it silently gone.
+function announceSkippedTake(take: PlaybackInfo): void {
+	addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
+}
+
+function moveQueueIndexTo(current: PlaybackInfo): void {
+	const ctx = get(queueContext);
+	const index =
+		ctx.type === 'playlist' ? currentPlaylistIndex(ctx, current) : nativeTakeIndex(ctx, current);
+	if (index < 0 || index === ctx.index) return;
+	queueContext.set({ ...ctx, index });
 }
 
 /**
@@ -1690,6 +1720,8 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onAuthLost: handleSessionLost,
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
+	takeAfter,
+	onTakeSkipped: announceSkippedTake,
 	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
