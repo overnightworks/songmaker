@@ -1,8 +1,0 @@
-claim_id = "1cb4defc69004adc859c3558d09846ff"
-agent = "claude-head"
-role = "builder"
-base = "57f9a3b996f8c2df516963f544c3962f9ee39bfb"
-branch = "claude-head/issue-1293-entry-identity"
-scope = ["frontend/e2e/queue-continuity.spec.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
-opened_commit = "3f083fa337b4e374268e97b1f435d90f78b6191f"
-whole_reason = "queue entries identified by PlaybackInfo identity"
