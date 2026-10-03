@@ -4,7 +4,9 @@
 // replaced, Undo in the toast, and Generate saving the loaded text as the next
 // version while the loaded one stays as it was. "Open vN" on a take group and
 // in Now Playing loads a version the same way, and imported takes say they
-// have no version (issue #1273, #1245 rules 7-8).
+// have no version (issue #1273, #1245 rules 7-8). A version is deleted from
+// its row in the sheet, behind a confirm that names its takes and the album
+// pick among them (issue #1284, #1245 rule 10).
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -22,10 +24,15 @@ import {
 	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
+	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_PICK_WARNING,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
+	VERSIONS_SHEET_CLOSE_LABEL,
 	VERSIONS_SHEET_LABEL,
 	versionChipLabel,
+	versionDeleteLabel,
+	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionsChipAccessibleLabel
@@ -36,7 +43,7 @@ import {
 	takeGroupLabel,
 	takeRowLabel
 } from '../src/lib/constants/now-playing';
-import type { VersionItem } from '../src/lib/api/types';
+import type { SongItem, VersionItem } from '../src/lib/api/types';
 import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
@@ -116,6 +123,18 @@ async function readVersions(page: Page, songId: string): Promise<VersionItem[]> 
 	const response = await page.request.get(`/api/songs/${songId}/versions`);
 	expect(response.ok()).toBeTruthy();
 	return (await response.json()) as VersionItem[];
+}
+
+async function pickTheTakeOf(page: Page, songId: string, versionNumber: number): Promise<void> {
+	const response = await page.request.get(`/api/songs/${songId}`);
+	expect(response.ok()).toBeTruthy();
+	const song = (await response.json()) as SongItem;
+	const take = song.generations.find((generation) => generation.version_number === versionNumber);
+	if (!take) throw new Error(`Expected a take of v${versionNumber}`);
+	const picked = await page.request.post(`/api/generations/${take.id}/pick`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(picked.ok(), `Picking the take failed: ${await picked.text()}`).toBeTruthy();
 }
 
 function lyricsField(page: Page): Locator {
@@ -325,6 +344,33 @@ test.describe('the versions of a song', () => {
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
 		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
+	});
+
+	test('deleting v1 from its row asks with its take and the album pick, then v1 and its take are gone while v2 stays', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await pickTheTakeOf(page, song.songId, 1);
+		await openSongEditor(page, song);
+
+		await versionChip(page).click();
+		await versionsSheet(page)
+			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
+			.click();
+		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
+		await expect(confirm).toContainText(VERSION_DELETE_PICK_WARNING);
+		await confirm.getByRole('button', { name: VERSION_DELETE_CONFIRM_LABEL }).click();
+
+		await expect(confirm).toBeHidden();
+		await expect(versionRow(page, 1)).toHaveCount(0);
+		await expect(versionRow(page, 2)).toBeVisible();
+		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2]);
+
+		await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();
+		await expect(versionsSheet(page)).toBeHidden();
+		await showTakes(page);
+		await expect(takeGroup(page, 2, 1)).toBeVisible();
+		await expect(takeGroup(page, 1, 1)).toHaveCount(0);
 	});
 
 	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
