@@ -164,13 +164,26 @@ interface TakeRequest {
 	range: string | null;
 }
 
+// How a resume is answered instead of from the byte it asked for.
+interface RangeAnswer {
+	status: number;
+	fromTheStart?: boolean;
+	withoutContentRange?: boolean;
+}
+
+interface Answer {
+	status: number;
+	bodyCancelled: boolean;
+}
+
 class FakeNetwork {
 	readonly requests: TakeRequest[] = [];
 	readonly signals: AbortSignal[] = [];
+	readonly answers: Answer[] = [];
 	private readonly files = new Map<string, Uint8Array>();
 	private readonly breaks = new Map<string, number[]>();
 	private readonly refusals = new Map<string, number>();
-	private readonly rangesAnsweredFromTheStart = new Map<string, 200 | 206>();
+	private readonly rangeAnswers = new Map<string, RangeAnswer>();
 	private pieceBytes = PIECE;
 
 	slowLink(): void {
@@ -191,8 +204,8 @@ class FakeNetwork {
 		this.refusals.set(url, status);
 	}
 
-	answerRangesFromTheStart(url: string, status: 200 | 206): void {
-		this.rangesAnsweredFromTheStart.set(url, status);
+	answerRanges(url: string, answer: RangeAnswer): void {
+		this.rangeAnswers.set(url, answer);
 	}
 
 	readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -204,35 +217,46 @@ class FakeNetwork {
 		if (refusal) return new Response(null, { status: refusal });
 		const file = this.files.get(url);
 		if (!file) throw new TypeError(`no file served at ${url}`);
-		const startAnswer = range ? this.rangesAnsweredFromTheStart.get(url) : undefined;
-		const from = range && !startAnswer ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
-		const status = startAnswer ?? (range ? 206 : 200);
+		const rangeAnswer = range ? this.rangeAnswers.get(url) : undefined;
+		const from =
+			range && !rangeAnswer?.fromTheStart ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
+		const status = rangeAnswer?.status ?? (range ? 206 : 200);
 		const breakPosition = this.breaks.get(url)?.shift();
 		const headers: Record<string, string> =
-			status === 206
+			status === 206 && !rangeAnswer?.withoutContentRange
 				? { 'Content-Range': `bytes ${from}-${file.byteLength - 1}/${file.byteLength}` }
 				: {};
+		const answer: Answer = { status, bodyCancelled: false };
+		this.answers.push(answer);
 		return new Response(
-			piecewise(
-				file.subarray(from, breakPosition),
-				this.pieceBytes,
-				breakPosition !== undefined,
-				init?.signal
-			),
+			piecewise(file.subarray(from, breakPosition), {
+				pieceBytes: this.pieceBytes,
+				breaks: breakPosition !== undefined,
+				signal: init?.signal,
+				cancelled: () => {
+					answer.bodyCancelled = true;
+				}
+			}),
 			{ status, headers }
 		);
 	};
 }
 
+interface PiecewiseOptions {
+	pieceBytes: number;
+	breaks: boolean;
+	signal: AbortSignal | null | undefined;
+	cancelled: () => void;
+}
+
 // Like a fetch body, the stream errors with the abort reason once its request is aborted.
 function piecewise(
 	bytes: Uint8Array,
-	pieceBytes: number,
-	breaks: boolean,
-	signal: AbortSignal | null | undefined
+	{ pieceBytes, breaks, signal, cancelled }: PiecewiseOptions
 ): ReadableStream<Uint8Array> {
 	let offset = 0;
 	return new ReadableStream({
+		cancel: cancelled,
 		pull(controller) {
 			if (signal?.aborted) {
 				controller.error(signal.reason);
@@ -475,21 +499,27 @@ describe('ContinuousDeck', () => {
 	});
 
 	it.each([
-		{ answer: 206 as const, refusal: 'Content-Range mismatch' },
-		{ answer: 200 as const, refusal: 'ignored Range' }
+		{
+			answer: { status: 206, fromTheStart: true },
+			refusal: 'Content-Range mismatch: asked from byte 300000'
+		},
+		{ answer: { status: 200 }, refusal: 'ignored Range' },
+		{ answer: { status: 503 }, refusal: 'answered 503' },
+		{ answer: { status: 206, withoutContentRange: true }, refusal: 'missing Content-Range' }
 	])(
-		'refuses a resume answered $answer from the first byte as $refusal and appends nothing twice',
+		'refuses a resume answered $answer as $refusal, stops its download and appends nothing twice',
 		async ({ answer, refusal }) => {
 			const { deck, buffer, network } = openDeck();
 			const file = network.serve('/audio/take.mp3', 0.75 * MEGABYTE);
 			network.breakAt('/audio/take.mp3', 300_000);
-			network.answerRangesFromTheStart('/audio/take.mp3', answer);
+			network.answerRanges('/audio/take.mp3', answer);
 
 			const step = deck.appendTake('take', '/audio/take.mp3');
 
 			await expect(step).rejects.toMatchObject({ reason: 'not-fetched' });
 			await expect(step).rejects.toThrow(refusal);
 			expect(network.requests.map((request) => request.range)).toEqual([null, 'bytes=300000-']);
+			expect(network.answers.at(-1)).toEqual({ status: answer.status, bodyCancelled: true });
 			const appended = concatenated(buffer.appended);
 			expect(appended.byteLength).toBeLessThanOrEqual(300_000);
 			expect(firstDifferingByte(appended, file.subarray(0, appended.byteLength))).toBeNull();

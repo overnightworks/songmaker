@@ -189,7 +189,10 @@ export class ContinuousDeck<Take> {
 			signal: this.closing.signal
 		});
 		const refusal = refusalOf(response, fromByte);
-		if (refusal) throw new TakeRefused(url, refusal);
+		if (refusal) {
+			await response.body?.cancel();
+			throw new TakeRefused(url, refusal);
+		}
 		if (!response.body) throw new TakeRefused(url, `answered ${response.status} without a body`);
 		return response.body;
 	}
@@ -268,7 +271,8 @@ function refusalOf(response: Response, fromByte: number): string | null {
 	if (response.status !== (resuming ? 206 : 200)) return `answered ${response.status}`;
 	if (!resuming) return null;
 	const contentRange = response.headers.get('Content-Range');
-	const answeredFrom = Number(/^bytes (\d+)-/.exec(contentRange ?? '')?.[1]);
+	if (contentRange === null) return 'missing Content-Range';
+	const answeredFrom = Number(/^bytes (\d+)-/.exec(contentRange)?.[1]);
 	if (answeredFrom === fromByte) return null;
 	return `Content-Range mismatch: asked from byte ${fromByte}, answered ${contentRange}`;
 }
