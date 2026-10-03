@@ -58,6 +58,13 @@ type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
 
 type RecoveryReason = StallReason | 'media-error';
 
+// A stall the deck's own download explains: the deck resumes it on the same
+// element. A frozen clock or a media error still reloads the take.
+const DECK_RESUMABLE_REASONS: ReadonlySet<RecoveryReason> = new Set<RecoveryReason>([
+	'stall-timeout',
+	'network-return'
+]);
+
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
 // 'awaiting-network' is a stall given up while the network was gone; its
@@ -642,7 +649,8 @@ class AudioPlayer {
 
 	// Only a failure the lost network explains goes on by itself: a real
 	// failure keeps its words and its Retry (#1161 R2). A stalled take that
-	// waits for the network tries again at once instead of at its next look.
+	// waits for the network tries again at once instead of at its next look,
+	// and so does a take ahead whose download parked while the current played.
 	resumeAfterNetworkReturn(): void {
 		if (this.failure?.kind === 'unreachable') {
 			this.play();
@@ -652,9 +660,12 @@ class AudioPlayer {
 			this.retryAfterWaitingForNetwork();
 			return;
 		}
-		if (!this.stallRecoveryTimer) return;
-		this.clearStallRecoveryTimer();
-		this.recoverFromStall('network-return');
+		if (this.stallRecoveryTimer) {
+			this.clearStallRecoveryTimer();
+			this.recoverFromStall('network-return');
+			return;
+		}
+		if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'network-return');
 	}
 
 	play(): void {
@@ -1193,8 +1204,18 @@ class AudioPlayer {
 		const step = this.nextRecoveryStep(reason);
 		if (step === 'give-up') return false;
 		if (step === 'wait') this.keepWaiting();
-		else this.reloadAt(reachedTime, reason);
+		else if (this.deckSession && DECK_RESUMABLE_REASONS.has(reason)) {
+			this.resumeDeckDownload(this.deckSession, reason);
+			this.keepWaiting();
+		} else this.reloadAt(reachedTime, reason);
 		return true;
+	}
+
+	// The deck keeps what it holds and its one source: its download picks up
+	// from the bytes received, and the playhead plays on where it stood.
+	private resumeDeckDownload(session: DeckSession, reason: RecoveryReason): void {
+		this.note('retry', `deck_resume reason=${reason}`);
+		session.deck.retryDownload();
 	}
 
 	// One deadline for every stalled take. While the owner reports the network
