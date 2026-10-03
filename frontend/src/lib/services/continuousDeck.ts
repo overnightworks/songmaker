@@ -201,9 +201,11 @@ export class ContinuousDeck<Take> {
 		return buffer.timestampOffset - this.ports.element.currentTime;
 	}
 
+	// whileOpen wakes a parked wait on close; tying each timeupdate listener to
+	// the close signal as well would leave an abort step on it per timeupdate.
 	private async roomAhead(buffer: SourceBuffer): Promise<void> {
 		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
-			await this.whileOpen(nextEvent(this.ports.element, 'timeupdate', this.closing.signal));
+			await this.whileOpen(nextEvent(this.ports.element, 'timeupdate'));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -283,11 +285,8 @@ function asError(error: unknown): Error {
 		: new Error('A deck step failed without an error', { cause: error });
 }
 
-// An aborted signal only removes the listener; the promise then never settles.
-function nextEvent(target: EventTarget, type: string, signal?: AbortSignal): Promise<void> {
-	return new Promise((resolve) =>
-		target.addEventListener(type, () => resolve(), { once: true, signal })
-	);
+function nextEvent(target: EventTarget, type: string): Promise<void> {
+	return new Promise((resolve) => target.addEventListener(type, () => resolve(), { once: true }));
 }
 
 function updateEnded(buffer: SourceBuffer): Promise<void> {
