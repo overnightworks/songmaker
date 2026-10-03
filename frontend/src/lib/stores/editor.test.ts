@@ -30,9 +30,11 @@ import {
 	setDraftLyrics,
 	isDirty,
 	versions,
-	currentVersionIndex,
+	draftLoadedFrom,
 	loadSongData,
-	loadVersion,
+	loadVersionAsDraft,
+	retireVersionLoadUndo,
+	savedSongData,
 	handleSave,
 	handleDeleteVersion,
 	discardDraft,
@@ -110,23 +112,162 @@ describe('loadSongData', () => {
 	});
 });
 
-describe('loadVersion', () => {
-	it('loads version data into edit fields', () => {
-		versions.set([
-			makeVersion({ lyrics: 'v1 lyrics', prompt: 'v1 prompt', bpm: 100 }),
-			makeVersion({ id: 'v2', version_number: 2, lyrics: 'v2 lyrics' })
-		]);
-		loadVersion(1);
-		expect(get(editLyrics)).toBe('v2 lyrics');
-		expect(get(currentVersionIndex)).toBe(1);
-		expect(get(isDirty)).toBe(false);
+describe('loadVersionAsDraft', () => {
+	const latest = makeVersion({ id: 'v2', version_number: 2, lyrics: 'hello', prompt: 'rock' });
+	const older = makeVersion({
+		id: 'v1',
+		version_number: 1,
+		lyrics: 'v1 lyrics',
+		prompt: 'v1 prompt',
+		bpm: 84,
+		audio_duration: 210,
+		key_scale: 'F minor',
+		generation_params: { inference_steps: 40 }
 	});
 
-	it('does nothing for out-of-bounds index', () => {
-		versions.set([makeVersion()]);
-		loadSongData(makeSong(songDefaults));
-		loadVersion(99);
+	function openSongWithTwoVersions(): void {
+		selectedSongId.set('s1');
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		versions.set([latest, older]);
+	}
+
+	it('puts the older version into the draft and keeps the latest as saved', () => {
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		expect(get(editLyrics)).toBe('v1 lyrics');
+		expect(get(editPrompt)).toBe('v1 prompt');
+		expect(get(editBpm)).toBe(84);
+		expect(get(editAudioDuration)).toBe(210);
+		expect(get(editKeyScale)).toBe('F minor');
+		expect(get(editGenParams)).toEqual({ inference_steps: 40 });
+		expect(get(savedSongData).lyrics).toBe('hello');
+		expect(get(isDirty)).toBe(true);
+		expect(get(draftLoadedFrom)).toBe(1);
+	});
+
+	it('takes the current version as the way back to the saved state', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		loadVersionAsDraft(latest);
 		expect(get(editLyrics)).toBe('hello');
+		expect(get(isDirty)).toBe(false);
+		expect(get(draftLoadedFrom)).toBeNull();
+	});
+
+	it('asks nothing of the server', async () => {
+		const client = await import('$lib/api/client');
+		vi.clearAllMocks();
+		openSongWithTwoVersions();
+		vi.mocked(client.fetchVersions).mockClear();
+		loadVersionAsDraft(older);
+		expect(client.updateSong).not.toHaveBeenCalled();
+		expect(client.fetchVersions).not.toHaveBeenCalled();
+		expect(client.fetchSong).not.toHaveBeenCalled();
+		expect(client.deleteVersion).not.toHaveBeenCalled();
+	});
+
+	it('answers no undo when the draft already holds that version', () => {
+		openSongWithTwoVersions();
+		expect(loadVersionAsDraft(latest)).toBeNull();
+		loadVersionAsDraft(older);
+		expect(loadVersionAsDraft(older)).toBeNull();
+		expect(get(draftLoadedFrom)).toBe(1);
+	});
+
+	it('undo puts back exactly the draft that was replaced', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		setDraftGenParams({ shift: 3 });
+		loadVersionAsDraft(older)?.undo();
+		expect(get(editLyrics)).toBe('an unsaved line');
+		expect(get(editGenParams)).toEqual({ shift: 3 });
+		expect(get(savedSongData).lyrics).toBe('hello');
+		expect(get(draftLoadedFrom)).toBeNull();
+	});
+
+	it('undo of a second load brings back the first load and its hint', () => {
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		loadVersionAsDraft(latest)?.undo();
+		expect(get(editLyrics)).toBe('v1 lyrics');
+		expect(get(draftLoadedFrom)).toBe(1);
+	});
+
+	it('undo leaves another song alone once the editor has moved on', () => {
+		openSongWithTwoVersions();
+		const load = loadVersionAsDraft(older);
+		selectedSongId.set('s2');
+		loadSongData(makeSong({ ...songDefaults, id: 's2', lyrics: 'other song' }));
+		load?.undo();
+		expect(get(editLyrics)).toBe('other song');
+		expect(get(isDirty)).toBe(false);
+		expect(load && get(load.holds)).toBe(false);
+	});
+
+	async function saveSongS1(): Promise<void> {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		await handleSave('s1');
+	}
+
+	it.each([
+		{
+			action: 'typing in the draft',
+			lyrics: 'v1 lyrics\na typed line',
+			act: () => setDraftLyrics('v1 lyrics\na typed line')
+		},
+		{ action: 'another load', lyrics: 'hello', act: () => loadVersionAsDraft(latest) },
+		{ action: 'the retire call', lyrics: 'v1 lyrics', act: retireVersionLoadUndo },
+		{ action: 'a save', lyrics: 'v1 lyrics', act: saveSongS1 }
+	])('undo is offered only until the next action: $action', async ({ lyrics, act }) => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+		expect(load && get(load.holds)).toBe(true);
+		await act();
+		expect(load && get(load.holds)).toBe(false);
+		load?.undo();
+		expect(get(editLyrics)).toBe(lyrics);
+	});
+
+	it.each([
+		{ draft: 'a loaded older version', load: true, newVersion: true },
+		{ draft: 'an edit of the latest version', load: false, newVersion: false }
+	])('saving $draft asks for a new version: $newVersion', async ({ load, newVersion }) => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		openSongWithTwoVersions();
+		if (load) loadVersionAsDraft(older);
+		else setDraftLyrics('an edited line');
+		await handleSave('s1');
+		expect(updateSong).toHaveBeenLastCalledWith(
+			's1',
+			expect.objectContaining({ new_version: newVersion })
+		);
+	});
+
+	it('the hint goes once the loaded draft is saved', async () => {
+		const { updateSong } = await import('$lib/api/client');
+		vi.mocked(updateSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		await handleSave('s1');
+		expect(get(draftLoadedFrom)).toBeNull();
+	});
+
+	it('the hint stays gone after a discard, even once the draft is edited again', () => {
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		discardDraft();
+		setDraftLyrics('a fresh line');
+		expect(get(draftLoadedFrom)).toBeNull();
+	});
+
+	it('the hint goes when another song is opened', () => {
+		openSongWithTwoVersions();
+		loadVersionAsDraft(older);
+		loadSongData(makeSong({ ...songDefaults, id: 's2' }));
+		expect(get(draftLoadedFrom)).toBeNull();
 	});
 });
 
@@ -179,7 +320,7 @@ describe('computeDraftVersionNumber', () => {
 		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
 		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 2 })];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(3);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(3);
 	});
 
 	it('predicts the current version number when the take-less latest version will be overwritten in place', () => {
@@ -188,7 +329,14 @@ describe('computeDraftVersionNumber', () => {
 		const versions = [makeVersion()];
 		const generations: GenerationItem[] = [];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(1);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(1);
+	});
+
+	it('predicts version_number + 1 when a loaded draft is saved over a take-less latest version', () => {
+		const versions = [makeVersion({ id: 'v2', version_number: 2 }), makeVersion()];
+		const generations = [makeGeneration({ seed: null, created_at: '', version_number: 1 })];
+
+		expect(computeDraftVersionNumber(versions, generations, true)).toBe(3);
 	});
 
 	it('predicts from the highest surviving version_number, not the count, after a middle version was deleted', () => {
@@ -200,11 +348,11 @@ describe('computeDraftVersionNumber', () => {
 			makeGeneration({ seed: null, created_at: '', id: 'g2' })
 		];
 
-		expect(computeDraftVersionNumber(versions, generations)).toBe(4);
+		expect(computeDraftVersionNumber(versions, generations, false)).toBe(4);
 	});
 
 	it('returns 1 when the song has no versions yet', () => {
-		expect(computeDraftVersionNumber([], [])).toBe(1);
+		expect(computeDraftVersionNumber([], [], false)).toBe(1);
 	});
 });
 

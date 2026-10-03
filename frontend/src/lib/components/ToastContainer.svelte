@@ -23,7 +23,9 @@
 <style>
 	.toast-container {
 		position: fixed;
-		bottom: calc(var(--player-height) + 1rem);
+		/* --docked-action-bar-height: the phone editor's Generate bar, which
+		   SongPhoneView publishes while it is docked above the transport bar. */
+		bottom: calc(var(--player-height) + var(--docked-action-bar-height, 0px) + 1rem);
 		right: 1rem;
 		z-index: 9999;
 		display: flex;
