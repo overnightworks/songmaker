@@ -3305,7 +3305,8 @@ describe('continuous deck (#1187 M2)', () => {
 			name: 'a clock that moves on while the element plays ends it',
 			paused: false,
 			move: () => playTo(7),
-			after: { status: 'playing', error: null }
+			after: { status: 'playing', error: null },
+			frozenClockAfterwardsNudged: true
 		},
 		{
 			name: 'a seek while the element is paused leaves it',
@@ -3314,16 +3315,24 @@ describe('continuous deck (#1187 M2)', () => {
 				audioPlayer.seek(3);
 				fakeAudio.fire('timeupdate');
 			},
-			after: { status: 'error', error: STALLED }
+			after: { status: 'error', error: STALLED },
+			frozenClockAfterwardsNudged: false
 		}
-	])('given up on the deck, $name', async ({ paused, move, after }) => {
-		await giveUpOnTheDeckAt(6);
-		fakeAudio.paused = paused;
+	])(
+		'given up on the deck, $name',
+		async ({ paused, move, after, frozenClockAfterwardsNudged }) => {
+			await giveUpOnTheDeckAt(6);
+			fakeAudio.paused = paused;
 
-		move();
+			move();
+			fakeAudio.bufferedUntil = 20;
+			const seeks = recordSeeks(fakeAudio);
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
 
-		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(after);
-	});
+			expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(after);
+			expect(seeks.length > 0).toBe(frozenClockAfterwardsNudged);
+		}
+	);
 
 	it.each([
 		{ action: 'Retry', networkAnnouncedGone: false, retry: () => audioPlayer.play() },

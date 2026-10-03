@@ -908,7 +908,7 @@ class AudioPlayer {
 				this.clearStallRecoveryTimer();
 				// A clock that plays on is the late answer even when no canplay or
 				// playing event announces it; a seek while paused is not (#1288).
-				if (this.gaveUpOnStall && !el.paused) this.resumeAfterGivingUp();
+				if (this.gaveUpOnStall && !el.paused) this.resumeAfterGivingUp(el);
 				else if (this.status === 'buffering') this.status = 'playing';
 			}
 			this.currentTime = position;
@@ -921,7 +921,7 @@ class AudioPlayer {
 		on('playing', () => {
 			this.clearStallRecoveryTimer();
 			this.startProgressWatchdog(el);
-			if (this.gaveUpOnStall) this.resumeAfterGivingUp();
+			if (this.gaveUpOnStall) this.resumeAfterGivingUp(el);
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
@@ -1047,10 +1047,13 @@ class AudioPlayer {
 		return this.status === 'error' && (kind === 'stalled' || kind === 'awaiting-network');
 	}
 
-	private resumeAfterGivingUp(): void {
+	// The give-up stopped the watchdog; a take that plays again is watched
+	// again, even when no play or playing event announces it.
+	private resumeAfterGivingUp(el: HTMLAudioElement): void {
 		this.status = 'playing';
 		this.failure = null;
 		this.autoplayPending = false;
+		this.startProgressWatchdog(el);
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
