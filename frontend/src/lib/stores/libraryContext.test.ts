@@ -107,6 +107,7 @@ import {
 	holdLibraryRestoresUntil,
 	hydrateLibraryFromHistory,
 	isLibraryHistoryState,
+	keepLibraryPageAsLeft,
 	libraryHistoryUrl,
 	librarySurface,
 	openAlbumAddress,
@@ -215,6 +216,37 @@ describe('library history snapshot', () => {
 			detailTab: 'edit'
 		});
 		expect(isLibraryHistoryState(snap)).toBe(true);
+	});
+
+	// Issue #1289: another page pushed over a library page finds it as it
+	// was left once Back returns to it.
+	it('keeps where the library page history stands on was left in its entry', async () => {
+		const albumPage: LibraryHistoryState = {
+			...libraryRootState(),
+			surface: 'detail',
+			collection: { kind: 'album', id: 'a1' }
+		};
+		replaceHistoryEntry('/album/a1', albumPage);
+		librarySurface.set('browse');
+		captureLibraryScroll(240);
+		const entries = historyLength();
+
+		await keepLibraryPageAsLeft();
+
+		expect(historyEntry()).toEqual({ ...albumPage, scrollAnchor: 240 });
+		expect(historyLength()).toBe(entries);
+		expect(location.pathname).toBe('/album/a1');
+	});
+
+	it('keeps nothing on a page outside the library', async () => {
+		replaceHistoryEntry('/settings/voices');
+		captureLibraryScroll(240);
+
+		await keepLibraryPageAsLeft();
+
+		expect(historyEntry()).toBeNull();
+		expect(location.pathname).toBe('/settings/voices');
+		expect(vi.mocked(goto)).not.toHaveBeenCalled();
 	});
 
 	it('does not snapshot a previous search page count onto a new query', () => {

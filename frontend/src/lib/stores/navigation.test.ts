@@ -15,7 +15,7 @@ import {
 	makePlaylist as playlistItem,
 	makeSong as song
 } from '$lib/test-utils/factories';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
 import { mount, tick, unmount } from 'svelte';
 import { goto } from '$app/navigation';
@@ -883,6 +883,20 @@ describe('Back and Forward across an app page', () => {
 		expect(fetchAlbums).toHaveBeenCalledOnce();
 		expect(fetchActiveGeneration).toHaveBeenCalledOnce();
 		stopNavigation();
+	});
+
+	// Issue #1289: the wall keeps its scroll in the library alone until it is
+	// left, so Settings opened over it writes that scroll into its entry.
+	it('Back from Settings opened over the wall shows the wall at the scroll it was left at', async () => {
+		onTestFinished(initNavigation());
+		captureLibraryScroll(480);
+
+		await openAppPage(SETTINGS);
+		await pressBack();
+
+		expect(location.pathname).toBe('/');
+		expect(historyEntry()).toMatchObject({ surface: 'browse', scrollAnchor: 480 });
+		await vi.waitFor(() => expect(get(libraryScrollAnchor)).toBe(480));
 	});
 
 	it('Back from Settings after a reload returns to the playlist with what it showed', async () => {

@@ -1,5 +1,5 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 vi.mock('$app/navigation', async () =>
@@ -9,8 +9,20 @@ vi.mock('$app/navigation', async () =>
 import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
+import {
+	listenForLandings,
+	navigateTo,
+	pushEntry,
+	resetHistoryControllerForTests
+} from '$lib/history/historyController';
 import { followShellLayers, resetNavigationForTests } from '$lib/stores/navigation';
 import { closeSidebar, railWidth, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+import {
+	holdRouteLoads,
+	reportedNavigations,
+	startFakeRouter
+} from '$lib/test-utils/app-navigation';
+import { pressBack, standingHistoryEntry } from '$lib/test-utils/library-history';
 import RailDrawer from './RailDrawer.svelte';
 import railDrawerSource from './RailDrawer.svelte?raw';
 
@@ -151,5 +163,40 @@ describe('RailDrawer', () => {
 		await goto(resolve('/settings'));
 		await tick();
 		expect(document.body.querySelector('.drawer-panel')).toBeNull();
+	});
+
+	// Issue #1289: a song tapped on its album shows at once, and the router
+	// mounts the song's route under it afterwards. A drawer opened before that
+	// mount lands covers the same page, so the mount closes nothing.
+	it('stays open when the route of the page under it mounts after it opened, and Back closes only it', async () => {
+		history.replaceState(null, '', '/album/a1');
+		resetHistoryControllerForTests();
+		startFakeRouter();
+		onTestFinished(listenForLandings(() => undefined));
+		const songEntry = pushEntry('/album/a1/s1', {});
+		const routesLoaded = holdRouteLoads();
+		void navigateTo(location.href, {
+			replaceState: true,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
+		const target = document.createElement('div');
+		document.body.append(target);
+		mounted = mount(RailDrawer, { target, props: { children } });
+		toggleSidebar();
+		await tick();
+
+		routesLoaded();
+		await vi.waitFor(() =>
+			expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/a1/s1' })
+		);
+		await tick();
+
+		expect(get(sidebarOpen)).toBe(true);
+		await pressBack();
+		await vi.waitFor(() => expect(get(sidebarOpen)).toBe(false));
+		expect(location.pathname).toBe('/album/a1/s1');
+		expect(standingHistoryEntry()).toEqual(songEntry);
 	});
 });
