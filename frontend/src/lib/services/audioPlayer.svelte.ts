@@ -6,7 +6,12 @@ import {
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
-import { recordPlaybackEvent, type PlaybackDiagnosticKind } from './playbackDiagnostics';
+import {
+	readThePlayingTakeFrom,
+	recordPlaybackEvent,
+	type PlaybackDiagnosticKind,
+	type PlaybackTakeState
+} from './playbackDiagnostics';
 import type { PlaybackInfo } from './playbackTypes';
 import { QueueStreamEngine, type StreamFallbackState } from './queueStreamEngine';
 
@@ -172,6 +177,10 @@ class AudioPlayer {
 	current = $state<PlaybackInfo | null>(null);
 	mode = $state<'classic' | 'stream'>('classic');
 	private failure = $state<Failure | null>(null);
+
+	constructor() {
+		readThePlayingTakeFrom(() => this.takeStateOf(this.audio));
+	}
 
 	get error(): string | null {
 		return this.failure !== null && 'message' in this.failure ? this.failure.message : null;
@@ -1102,17 +1111,18 @@ class AudioPlayer {
 		detail: string,
 		el: HTMLAudioElement | null = this.audio
 	): void {
+		recordPlaybackEvent({ kind, detail, take: this.takeStateOf(el) });
+	}
+
+	private takeStateOf(el: HTMLAudioElement | null): PlaybackTakeState | null {
+		if (el === null) return null;
 		const active = el === this.audio;
-		recordPlaybackEvent({
-			kind,
-			detail,
-			take: el && {
-				takeId: active ? (this.current?.generation.id ?? null) : null,
-				position: active ? this.positionWithinTake(el) : el.currentTime,
-				readyState: el.readyState,
-				deck: active ? 'active' : 'standby'
-			}
-		});
+		return {
+			takeId: active ? (this.current?.generation.id ?? null) : null,
+			position: active ? this.positionWithinTake(el) : el.currentTime,
+			readyState: el.readyState,
+			deck: active ? 'active' : 'standby'
+		};
 	}
 
 	private pauseSource(el: HTMLAudioElement): 'app' | 'ended' | 'outside' {

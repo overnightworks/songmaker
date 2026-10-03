@@ -3,9 +3,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
 import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
 import { TakeNotAppended } from './continuousDeck';
-import { recordPlaybackEvent } from './playbackDiagnostics';
+import { readThePlayingTakeFrom, recordPlaybackEvent } from './playbackDiagnostics';
 
-vi.mock('./playbackDiagnostics', () => ({ recordPlaybackEvent: vi.fn() }));
+vi.mock('./playbackDiagnostics', () => ({
+	recordPlaybackEvent: vi.fn(),
+	readThePlayingTakeFrom: vi.fn()
+}));
+
+// What the page's own events (screen off, page hidden) record as playing.
+const [playingTakeForPageEvents] = vi.mocked(readThePlayingTakeFrom).mock.calls[0];
 
 interface HeldTake {
 	take: PlaybackInfo;
@@ -2776,6 +2782,19 @@ describe('what the player writes down for diagnostics (#1250)', () => {
 		expect(recordedNotes()).toContainEqual(
 			expect.objectContaining({ kind: 'play_rejected', detail: 'NotAllowedError' })
 		);
+	});
+
+	it('tells page events the playing take, its position and readiness', () => {
+		audioPlayer.load(makeInfo(), { autoplay: false });
+		fakeAudio.readyState = 4;
+		fakeAudio.currentTime = 37;
+
+		expect(playingTakeForPageEvents()).toEqual({
+			takeId: 'g1',
+			position: 37,
+			readyState: 4,
+			deck: 'active'
+		});
 	});
 
 	it('records each reload with its reason and then the give-up', async () => {
