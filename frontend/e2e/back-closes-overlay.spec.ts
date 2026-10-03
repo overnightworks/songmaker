@@ -501,6 +501,28 @@ function wallTiles(page: Page): Locator {
 	return workspace(page).locator('.library-wall .tile-grid');
 }
 
+function wallTileNamed(page: Page, title: string): Locator {
+	return wallTiles(page).locator('.wall-tile-body').filter({ hasText: title });
+}
+
+function wallBody(page: Page): Locator {
+	return workspace(page).locator('.library-wall .wall-body');
+}
+
+function wallScrollTop(page: Page): Promise<number> {
+	return wallBody(page).evaluate((body) => Math.round(body.scrollTop));
+}
+
+// Scrolls the wall halfway down and answers where it then stands.
+async function scrollWallHalfway(page: Page): Promise<number> {
+	const target = await wallBody(page).evaluate((body) => {
+		body.scrollTop = Math.round((body.scrollHeight - body.clientHeight) / 2);
+		return Math.round(body.scrollTop);
+	});
+	expect(target, 'the seeded wall scrolls').toBeGreaterThan(0);
+	return target;
+}
+
 // A fresh playlist, opened from the wall the way a person does: one entry for
 // the wall, one for the playlist.
 async function openSeededPlaylist(
@@ -634,6 +656,24 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await expect(wall).toBeVisible();
 		await expect(page).toHaveURL(/\/$/);
 		await expect(wallTiles(page).locator(':focus')).toHaveCount(0);
+		guard.assertClean();
+	});
+
+	test('Back from Settings shows the wall at the scroll position it was left at', async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		await page.goto('/');
+		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(wallTileNamed(page, library.albumTitle)).toBeVisible();
+		const leftAt = await scrollWallHalfway(page);
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		await page.goBack();
+
+		await expect(page).toHaveURL(/\/$/);
+		await expect.poll(() => wallScrollTop(page)).toBe(leftAt);
 		guard.assertClean();
 	});
 
@@ -895,6 +935,62 @@ test('one Back right after a song opens from its album returns to the album', as
 	}
 	guard.assertClean();
 });
+
+// Issue #1289: the phone drawer opened while the song a tap opened is still
+// loading its route stays open once that route has mounted, and Back closes
+// only the drawer. The race is one of milliseconds, so the menu is tapped from
+// inside the page, a fixed gap after the song, and many times over.
+const MENU_TAPS_AFTER_SONG = 10;
+
+async function tapSongThenMenu(page: Page, songRow: Locator, gapMs: number): Promise<void> {
+	await songRow.evaluate(
+		(row, { menuLabel, gap }) =>
+			new Promise<void>((tapped) => {
+				(row as HTMLElement).click();
+				setTimeout(() => {
+					document.querySelector<HTMLElement>(`button[aria-label="${menuLabel}"]`)?.click();
+					tapped();
+				}, gap);
+			}),
+		{ menuLabel: RAIL_DRAWER_OPEN_LABEL, gap: gapMs }
+	);
+}
+
+for (const gapMs of [5, 20]) {
+	test(`the menu tapped ${gapMs} ms after a song stays open, and Back closes only the menu`, async ({
+		page
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		await page.goto('/');
+		await wallTileNamed(page, library.albumTitle).click();
+		const album = surface.getByRole('heading', { name: library.albumTitle });
+		await expect(album).toBeVisible();
+		const albumAddress = page.url();
+		const songRow = surface.getByRole('button', {
+			name: nameStartingWith(library.pickedSongTitle)
+		});
+
+		for (let tap = 1; tap <= MENU_TAPS_AFTER_SONG; tap += 1) {
+			await tapSongThenMenu(page, songRow, gapMs);
+			await expect(railDrawer(page), `the menu on tap ${tap}`).toBeVisible();
+			await expect(page).toHaveURL(SONG_ADDRESS);
+
+			await page.goBack();
+
+			await expect(railDrawer(page), `the menu after Back on tap ${tap}`).toBeHidden();
+			await expectSongStands(page, 'mobile', library.pickedSongTitle);
+
+			await page.goBack();
+
+			await expect(album).toBeVisible();
+			expect(page.url(), `the album's address after tap ${tap}`).toBe(albumAddress);
+		}
+		guard.assertClean();
+	});
+}
 
 // Issue #1165: a crossing the phone opens out of a history layer -- an album
 // tapped in the rail drawer, Go to song in Now Playing -- is written behind
