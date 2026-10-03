@@ -343,6 +343,7 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 		await expect(recoveringSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
 		expect(offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(retry).toHaveCount(0);
+		expect(offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 
 		await regainNetwork(page, context);
 
