@@ -236,8 +236,12 @@ class AudioPlayer {
 	// the last timeupdate; on the continuous deck that clock runs across every
 	// take, so the current take's start is taken off. Null without an element.
 	get currentTimeNow(): number | null {
-		if (!this.audio) return null;
-		return this.audio.currentTime - (this.deckSession?.playing?.start_offset ?? 0);
+		return this.audio ? this.positionWithinTake(this.audio) : null;
+	}
+
+	// On the continuous deck the element clock runs across every take it holds.
+	private positionWithinTake(el: HTMLAudioElement): number {
+		return el.currentTime - (this.deckSession?.playing?.start_offset ?? 0);
 	}
 
 	// The Web Audio graph belongs to the <audio> element, not to whatever
@@ -503,7 +507,10 @@ class AudioPlayer {
 	private deckFailed(session: DeckSession, error: unknown): void {
 		if (session !== this.deckSession) return;
 		if (error instanceof TakeNotAppended && audioUrlOf(error.take) !== this.currentUrl) {
-			this.note('media_event', `deck_dropped ${error.reason} ${error.message}`);
+			this.note(
+				'media_event',
+				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
+			);
 			if (error.reason === 'not-fetched') this.appendInPlaceOf(session, error.take);
 			return;
 		}
@@ -1091,7 +1098,7 @@ class AudioPlayer {
 			detail,
 			take: el && {
 				takeId: active ? (this.current?.generation.id ?? null) : null,
-				position: el.currentTime,
+				position: active ? this.positionWithinTake(el) : el.currentTime,
 				readyState: el.readyState,
 				deck: active ? 'active' : 'standby'
 			}

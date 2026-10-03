@@ -2983,6 +2983,9 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(deck().requests.map((request) => request.take)).toEqual([first, second, third]);
 		expect(audioPlayer.current?.generation.id).toBe('g1');
 		expect(audioPlayer.status).toBe('playing');
+		expect(recordedNotes().map((note) => note.detail)).toContain(
+			'deck_dropped take=g2 not-fetched Failed to fetch'
+		);
 
 		holds([first, 0, 10], [third, 10, 5]);
 		fakeAudio.bufferedUntil = 15;
@@ -3076,5 +3079,7 @@ describe('continuous deck (#1187 M2)', () => {
 				expect.stringMatching(/^retry deck_fallback The source buffer refused/)
 			])
 		);
+		const crossing = recordedNotes().find((note) => note.detail === 'deck_crossing');
+		expect(crossing?.take).toEqual(expect.objectContaining({ takeId: 'g2', position: 0.5 }));
 	});
 });
