@@ -42,11 +42,12 @@ import {
 	handleDeleteVersion,
 	discardDraft,
 	computeDraftVersionNumber,
-	versionDeleteEditorLoss,
-	type VersionLoadUndo
+	versionDeleteEditorLoss
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
+
+type VersionLoad = ReturnType<typeof loadVersionAsDraft>;
 
 const songDefaults = {
 	slug: 'test',
@@ -304,7 +305,7 @@ describe('loadVersionAsDraft', () => {
 		expect(get(editLyrics)).toBe(lyrics);
 	});
 
-	function offered(load: VersionLoadUndo | null): boolean {
+	function offered(load: VersionLoad): boolean {
 		return load !== null && get(load.holds) && !get(load.setAside);
 	}
 
@@ -338,7 +339,7 @@ describe('loadVersionAsDraft', () => {
 	it.each([
 		{ end: 'loading another version from it', act: () => loadVersionAsDraft(latest) },
 		{ end: 'a retire', act: retireVersionLoadUndo },
-		{ end: 'its toast timing out', act: (load: VersionLoadUndo | null) => load?.expire() }
+		{ end: 'its toast timing out', act: (load: VersionLoad) => load?.expire() }
 	])('the set-aside undo is not offered again after $end', ({ act }) => {
 		openSongWithTwoVersions();
 		setDraftLyrics('an unsaved line');

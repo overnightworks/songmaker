@@ -224,7 +224,7 @@ function resetToVersion(v: VersionItem): void {
  * Versions list has set it aside, and the end of its offer once the toast that
  * raised it times out.
  */
-export interface VersionLoadUndo {
+interface VersionLoadUndo {
 	undo: () => void;
 	holds: Readable<boolean>;
 	setAside: Readable<boolean>;
