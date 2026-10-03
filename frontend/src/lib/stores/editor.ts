@@ -155,6 +155,8 @@ export const pendingVersionLoad = writable<PendingVersionLoad | null>(null);
 /** What a version delete takes from the editor besides the version and its takes. */
 export type VersionDeleteEditorLoss =
 	| { kind: 'unsaved-draft'; emptiesEditor: boolean }
+	| { kind: 'loaded-draft-goes'; loadedFrom: number }
+	| { kind: 'loaded-draft-replaced'; loadedFrom: number; replacedBy: number }
 	| { kind: 'current-lyrics'; replacedBy: number }
 	| { kind: 'all-lyrics' };
 
@@ -359,24 +361,42 @@ export async function handleSave(songId: string): Promise<SongItem> {
 	return updated;
 }
 
+/** The version the draft was loaded from, while the draft still holds exactly that version. */
+function untouchedLoadSource(s: EditorState, all: VersionItem[]): VersionItem | null {
+	const source = all.find((version) => version.version_number === s.loadedFrom);
+	return source && songDataEqual(s.draft, songDataFromVersion(source)) ? source : null;
+}
+
 /**
  * What deleting `version` takes from the editor, which {@link handleDeleteVersion}
- * resets to the latest version left, or empties when none is left: a draft no
- * surviving version holds, or, under a draft of the latest itself, the latest's
- * lyrics when it is the one deleted.
+ * resets to the latest version left, or empties when none is left: the latest's
+ * lyrics when the draft is the latest itself and it is the one deleted, an
+ * untouched load whether it goes with its version or the next latest replaces
+ * it, or a draft with changes no version holds.
  */
 export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
 	const state = get(editorState);
 	const all = get(versions);
-	const survivors = all.filter((candidate) => candidate.id !== version.id);
-	if (holdsUnversionedChanges(state, survivors)) {
-		return { kind: 'unsaved-draft', emptiesEditor: survivors.length === 0 };
+	const nextLatest = all.find((candidate) => candidate.id !== version.id);
+	if (draftIsSaved(state)) {
+		if (version.id !== all[0]?.id) return null;
+		return nextLatest
+			? { kind: 'current-lyrics', replacedBy: nextLatest.version_number }
+			: { kind: 'all-lyrics' };
 	}
-	if (!draftIsSaved(state) || version.id !== all[0]?.id) return null;
-	const nextLatest = survivors[0];
-	return nextLatest
-		? { kind: 'current-lyrics', replacedBy: nextLatest.version_number }
-		: { kind: 'all-lyrics' };
+	if (nextLatest && songDataEqual(state.draft, songDataFromVersion(nextLatest))) return null;
+	const loadedFrom = untouchedLoadSource(state, all);
+	if (loadedFrom?.id === version.id) {
+		return { kind: 'loaded-draft-goes', loadedFrom: loadedFrom.version_number };
+	}
+	if (loadedFrom && nextLatest) {
+		return {
+			kind: 'loaded-draft-replaced',
+			loadedFrom: loadedFrom.version_number,
+			replacedBy: nextLatest.version_number
+		};
+	}
+	return { kind: 'unsaved-draft', emptiesEditor: !nextLatest };
 }
 
 /** Deletes a version and its takes. Fails loud — see {@link handleSave}. */

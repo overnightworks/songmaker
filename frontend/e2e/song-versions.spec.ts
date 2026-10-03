@@ -30,7 +30,7 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
-	VERSION_DELETE_PICK_WARNING,
+	versionDeletePickWarning,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_CLOSE_LABEL,
@@ -481,7 +481,7 @@ test.describe('the versions of a song', () => {
 			.getByRole('button', { name: versionDeleteLabel(1), exact: true })
 			.click();
 		const confirm = page.getByRole('dialog', { name: versionDeleteTitle(1, 1) });
-		await expect(confirm).toContainText(VERSION_DELETE_PICK_WARNING);
+		await expect(confirm).toContainText(versionDeletePickWarning(1));
 		await confirm.getByRole('button', { name: VERSION_DELETE_CONFIRM_LABEL }).click();
 
 		await expect(confirm).toBeHidden();

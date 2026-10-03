@@ -105,13 +105,15 @@
 		TAKES_ERROR,
 		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
-		VERSION_DELETE_PICK_WARNING,
 		VERSION_DELETE_DRAFT_GOES,
 		VERSION_DELETE_EMPTIES_EDITOR,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
 		versionDeleteTitle,
 		versionDeleteReplacedBy,
+		versionDeleteLoadedDraftGoes,
+		versionDeleteLoadedDraftReplacedBy,
+		versionDeletePickWarning,
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
@@ -503,6 +505,10 @@
 				return loss.emptiesEditor
 					? [VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
 					: [VERSION_DELETE_DRAFT_GOES];
+			case 'loaded-draft-goes':
+				return [versionDeleteLoadedDraftGoes(loss.loadedFrom)];
+			case 'loaded-draft-replaced':
+				return [versionDeleteLoadedDraftReplacedBy(loss.loadedFrom, loss.replacedBy)];
 			case 'current-lyrics':
 				return [versionDeleteReplacedBy(loss.replacedBy)];
 			case 'all-lyrics':
@@ -511,11 +517,12 @@
 	}
 
 	function versionDeleteConsequences(
+		takeCount: number,
 		holdsPick: boolean,
 		editorLoss: VersionDeleteEditorLoss | null
 	): string[] {
 		return [
-			...(holdsPick ? [VERSION_DELETE_PICK_WARNING] : []),
+			...(holdsPick ? [versionDeletePickWarning(takeCount)] : []),
 			...(editorLoss ? editorLossLines(editorLoss) : [])
 		];
 	}
@@ -892,7 +899,7 @@
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
 		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
-		items={versionDeleteConsequences(request.holdsPick, request.editorLoss)}
+		items={versionDeleteConsequences(request.takeCount, request.holdsPick, request.editorLoss)}
 		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}

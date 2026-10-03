@@ -403,7 +403,8 @@ describe('loadVersionAsDraft', () => {
 });
 
 describe('versionDeleteEditorLoss', () => {
-	const latest = makeVersion({ id: 'v2', version_number: 2, lyrics: 'hello', prompt: 'rock' });
+	const latest = makeVersion({ id: 'v3', version_number: 3, lyrics: 'hello', prompt: 'rock' });
+	const middle = makeVersion({ id: 'v2', version_number: 2, lyrics: 'v2 lyrics' });
 	const older = makeVersion({ id: 'v1', version_number: 1, lyrics: 'v1 lyrics' });
 
 	it.each([
@@ -418,13 +419,34 @@ describe('versionDeleteEditorLoss', () => {
 			deleted: older,
 			draft: 'its own untouched load',
 			change: () => loadVersionAsDraft(older),
+			loss: { kind: 'loaded-draft-goes', loadedFrom: 1 }
+		},
+		{
+			deleted: older,
+			draft: 'its own load with a typed line',
+			change: () => {
+				loadVersionAsDraft(older);
+				setDraftLyrics('v1 lyrics and a typed line');
+			},
 			loss: { kind: 'unsaved-draft', emptiesEditor: false }
 		},
 		{
-			deleted: latest,
-			draft: 'an untouched load of a version that stays',
+			deleted: middle,
+			draft: 'an untouched load of another older version',
 			change: () => loadVersionAsDraft(older),
+			loss: { kind: 'loaded-draft-replaced', loadedFrom: 1, replacedBy: 3 }
+		},
+		{
+			deleted: latest,
+			draft: 'an untouched load of the version that becomes the latest',
+			change: () => loadVersionAsDraft(middle),
 			loss: null
+		},
+		{
+			deleted: latest,
+			draft: 'an untouched load of an older version',
+			change: () => loadVersionAsDraft(older),
+			loss: { kind: 'loaded-draft-replaced', loadedFrom: 1, replacedBy: 2 }
 		},
 		{
 			deleted: latest,
@@ -436,14 +458,14 @@ describe('versionDeleteEditorLoss', () => {
 			deleted: latest,
 			draft: 'the latest',
 			change: () => undefined,
-			loss: { kind: 'current-lyrics', replacedBy: 1 }
+			loss: { kind: 'current-lyrics', replacedBy: 2 }
 		}
 	])(
 		'deleting v$deleted.version_number under $draft takes from the editor: $loss',
 		({ deleted, change, loss }) => {
 			selectedSongId.set('s1');
 			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
-			versions.set([latest, older]);
+			versions.set([latest, middle, older]);
 			change();
 			expect(versionDeleteEditorLoss(deleted)).toEqual(loss);
 		}
