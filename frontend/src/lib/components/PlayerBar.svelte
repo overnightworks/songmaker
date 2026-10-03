@@ -65,8 +65,7 @@
 	const startNotice = $derived($playStartNotice);
 	// A start that waits for the network has no take yet, but the listener
 	// asked for sound: the transport waits with it, and a press stops it (#1288).
-	// The lock screen stays on the element's transport: its Pause reaches only a
-	// loaded take, so offering it during this wait would be a button that does nothing.
+	// With the screen off the lock screen is the only surface, so it shows the same.
 	const barTransport = $derived(
 		!current && startNotice === 'awaiting-network' ? 'recovering' : transport
 	);
@@ -156,7 +155,7 @@
 
 	$effect(() => {
 		updateMediaSessionPlaybackState(
-			transportOffersPause(transport) ? 'playing' : current ? 'paused' : 'none'
+			transportOffersPause(barTransport) ? 'playing' : current ? 'paused' : 'none'
 		);
 		updateMediaSessionPositionState(currentTime, duration);
 	});

@@ -94,6 +94,7 @@ import {
 	curationActive,
 	isPlaylistEntryCurrent,
 	playAlbum,
+	pauseFromLockScreen,
 	playIdleStart,
 	retryLastPlayIntent,
 	playNextSong,
@@ -2372,13 +2373,16 @@ describe('playAlbum start track', () => {
 		expect(get(playStartNotice)).toBe('idle');
 	});
 
-	it('offline, a transport press stops the waiting start so the network starts nothing', async () => {
+	it.each([
+		{ press: "the bar's transport", stop: () => playIdleStart() },
+		{ press: "the lock screen's Pause", stop: async () => pauseFromLockScreen() }
+	])('offline, $press stops the waiting start so the network starts nothing', async ({ stop }) => {
 		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 		reportResourceStreamReachable(false);
 		vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
 		await playAlbum('a1');
 
-		await playIdleStart();
+		await stop();
 		reportResourceStreamReachable(true);
 		await Promise.resolve();
 

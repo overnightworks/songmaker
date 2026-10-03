@@ -670,10 +670,7 @@ export function idlePlayTarget(input: {
 // The transport with no take: a start that waits for the network is what the
 // listener asked for, so a press stops it rather than starting another.
 export async function playIdleStart(): Promise<void> {
-	if (get(playStartNotice) === 'awaiting-network') {
-		playStartAbort?.abort();
-		return;
-	}
+	if (stopStartAwaitingNetwork()) return;
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -690,6 +687,19 @@ export async function playIdleStart(): Promise<void> {
 		return;
 	}
 	await playLibrary();
+}
+
+function stopStartAwaitingNetwork(): boolean {
+	if (get(playStartNotice) !== 'awaiting-network') return false;
+	playStartAbort?.abort();
+	return true;
+}
+
+// The lock screen offers Pause for what the bar shows: the take, or with no
+// take a start that waits for the network, which its Pause stops (#1288).
+export function pauseFromLockScreen(): void {
+	if (!audioPlayer.current && stopStartAwaitingNetwork()) return;
+	audioPlayer.pause();
 }
 
 // The playlist store owns loading and joins the fetch already in flight; a
@@ -1603,8 +1613,8 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 
 setupMediaSessionHandlers({
 	play: () => audioPlayer.play(),
-	pause: () => audioPlayer.pause(),
-	stop: () => audioPlayer.pause(),
+	pause: pauseFromLockScreen,
+	stop: pauseFromLockScreen,
 	next: () => {
 		void playNextSong();
 	},
