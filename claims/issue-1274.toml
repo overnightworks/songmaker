@@ -1,0 +1,8 @@
+claim_id = "2f3b364a77d34a068d8068455913bd64"
+agent = "claude-head"
+role = "builder"
+base = "e58a55ef6199dc912cfd61559b70e55f003d5af4"
+branch = "claude-head/issue-1274-range-resume-check"
+scope = ["frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
+opened_commit = "764b06f7e2ba4c473c641f86936dcd2fee683da5"
+whole_reason = "Content-Range check on a deck Range resume"
