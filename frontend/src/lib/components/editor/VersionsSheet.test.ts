@@ -190,12 +190,24 @@ describe('VersionsSheet', () => {
 	});
 
 	it.each([
-		{ versionNumber: 6, takeCount: 1, holdsPick: true, takes: 'its one take with the album pick' },
-		{ versionNumber: 7, takeCount: 2, holdsPick: false, takes: 'its two takes' },
-		{ versionNumber: 4, takeCount: 0, holdsPick: false, takes: 'no takes' }
+		{
+			versionNumber: 6,
+			takeCount: 1,
+			holdsPick: true,
+			editorLoss: null,
+			takes: 'its one take with the album pick'
+		},
+		{
+			versionNumber: 7,
+			takeCount: 2,
+			holdsPick: false,
+			editorLoss: { kind: 'current-lyrics', replacedBy: 6 },
+			takes: 'its two takes and the lyrics in the editor'
+		},
+		{ versionNumber: 4, takeCount: 0, holdsPick: false, editorLoss: null, takes: 'no takes' }
 	])(
 		'the delete on v$versionNumber asks to delete it with $takes, loading nothing',
-		async ({ versionNumber, takeCount, holdsPick }) => {
+		async ({ versionNumber, takeCount, holdsPick, editorLoss }) => {
 			const onload = vi.fn();
 			const target = await renderSheet(onload);
 			const open = await openSheet(target);
@@ -205,7 +217,8 @@ describe('VersionsSheet', () => {
 				songId: SONG.id,
 				version: VERSION_ROWS.find((version) => version.version_number === versionNumber),
 				takeCount,
-				holdsPick
+				holdsPick,
+				editorLoss
 			});
 			expect(onload).not.toHaveBeenCalled();
 			expect(sheet(target)).not.toBeNull();

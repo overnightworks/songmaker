@@ -45,11 +45,14 @@ import {
 	TOAST_UNDO_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_PICK_WARNING,
+	VERSION_DELETE_DRAFT_GOES,
+	VERSION_DELETE_EMPTIES_EDITOR,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
+	versionDeleteReplacedBy,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
@@ -1978,7 +1981,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 	}
 
 	it.each([
-		{ picked: false, shown: [versionDeleteTitle(1, 1)] },
+		{ picked: false, shown: ['Delete v1 and its 1 take?'] },
 		{ picked: true, shown: [versionDeleteTitle(1, 1), VERSION_DELETE_PICK_WARNING] }
 	])(
 		'the delete on a row names its takes (album pick among them: $picked), and Cancel deletes nothing',
@@ -2002,6 +2005,33 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			expect(deleteVersion).not.toHaveBeenCalled();
 			expect(versionsSheet(target)).not.toBeNull();
 			expect(versionRowNumbers(target)).toEqual(['v2', 'v1']);
+		}
+	);
+
+	it.each([
+		{
+			deleted: 1,
+			edit: true,
+			only: false,
+			shown: [versionDeleteTitle(1, 1), VERSION_DELETE_DRAFT_GOES]
+		},
+		{ deleted: 2, edit: false, only: false, shown: ['Delete v2?', versionDeleteReplacedBy(1)] },
+		{ deleted: 2, edit: false, only: true, shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR] }
+	])(
+		'the delete on v$deleted says what else leaves the editor (unsaved edit: $edit, only version: $only)',
+		async ({ deleted, edit, only, shown }) => {
+			if (only) {
+				vi.mocked(fetchVersions).mockReset().mockResolvedValue([]).mockResolvedValueOnce([LATEST]);
+			}
+			const target = await renderView();
+			await vi.waitFor(() => expect(get(versions)).toHaveLength(only ? 1 : 2));
+			if (edit) setDraftLyrics('unsaved edit');
+			await tick();
+			await askToDeleteVersion(target, deleted);
+
+			const dialog = deleteConfirm();
+			if (!dialog) throw new Error('Expected the version delete confirm');
+			expect(confirmLines(dialog)).toEqual(shown);
 		}
 	);
 

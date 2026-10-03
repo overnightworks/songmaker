@@ -3,6 +3,7 @@
 	import {
 		isDirty,
 		retireVersionLoadUndo,
+		versionDeleteEditorLoss,
 		versionDeleteRequest,
 		versions
 	} from '$lib/stores/editor';
@@ -119,7 +120,8 @@
 			songId: song.id,
 			version: row.version,
 			takeCount: row.takes.count,
-			holdsPick: row.takes.holdsPick
+			holdsPick: row.takes.holdsPick,
+			editorLoss: versionDeleteEditorLoss(row.version)
 		});
 	}
 

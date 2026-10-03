@@ -64,6 +64,7 @@
 		editGenParams,
 		savedSongData
 	} from '$lib/stores/editor';
+	import type { VersionDeleteEditorLoss } from '$lib/stores/editor';
 	import { activeModels, loadActiveModels } from '$lib/stores/presets';
 	import { loras, loadLoras } from '$lib/stores/loras';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
@@ -105,9 +106,12 @@
 		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_PICK_WARNING,
+		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_EMPTIES_EDITOR,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
 		versionDeleteTitle,
+		versionDeleteReplacedBy,
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
@@ -493,6 +497,27 @@
 		}
 	}
 
+	function editorLossLine(loss: VersionDeleteEditorLoss): string {
+		switch (loss.kind) {
+			case 'unsaved-draft':
+				return VERSION_DELETE_DRAFT_GOES;
+			case 'current-lyrics':
+				return versionDeleteReplacedBy(loss.replacedBy);
+			case 'all-lyrics':
+				return VERSION_DELETE_EMPTIES_EDITOR;
+		}
+	}
+
+	function versionDeleteConsequences(
+		holdsPick: boolean,
+		editorLoss: VersionDeleteEditorLoss | null
+	): string[] {
+		return [
+			...(holdsPick ? [VERSION_DELETE_PICK_WARNING] : []),
+			...(editorLoss ? [editorLossLine(editorLoss)] : [])
+		];
+	}
+
 	function loadVersionWithUndo(version: VersionItem): void {
 		const load = loadVersionAsDraft(version);
 		if (!load) return;
@@ -865,7 +890,7 @@
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
 		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
-		items={request.holdsPick ? [VERSION_DELETE_PICK_WARNING] : []}
+		items={versionDeleteConsequences(request.holdsPick, request.editorLoss)}
 		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}

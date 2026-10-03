@@ -146,12 +146,19 @@ interface PendingVersionLoad {
 
 export const pendingVersionLoad = writable<PendingVersionLoad | null>(null);
 
-/** A version the Versions list asks to delete, with the takes that go with it. */
+/** What a version delete takes from the editor besides the version and its takes. */
+export type VersionDeleteEditorLoss =
+	| { kind: 'unsaved-draft' }
+	| { kind: 'current-lyrics'; replacedBy: number }
+	| { kind: 'all-lyrics' };
+
+/** A version the Versions list asks to delete, with what goes with it. */
 interface VersionDeleteRequest {
 	songId: string;
 	version: VersionItem;
 	takeCount: number;
 	holdsPick: boolean;
+	editorLoss: VersionDeleteEditorLoss | null;
 }
 
 // The song page confirms it: a dialog inside the editor would sit in its size
@@ -302,6 +309,26 @@ export async function handleSave(songId: string): Promise<SongItem> {
 	replaceSongInList(updated);
 	await loadVersions(songId);
 	return updated;
+}
+
+/**
+ * What deleting `version` takes from the editor, which {@link handleDeleteVersion}
+ * resets to the latest version left: a draft no surviving version holds, or,
+ * under a draft of the latest itself, the latest's lyrics when it is the one
+ * deleted.
+ */
+export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
+	const { draft, saved } = get(editorState);
+	const all = get(versions);
+	const survivors = all.filter((candidate) => candidate.id !== version.id);
+	if (!songDataEqual(draft, saved)) {
+		return isHeldByAVersion(draft, survivors) ? null : { kind: 'unsaved-draft' };
+	}
+	if (version.id !== all[0]?.id) return null;
+	const nextLatest = survivors[0];
+	return nextLatest
+		? { kind: 'current-lyrics', replacedBy: nextLatest.version_number }
+		: { kind: 'all-lyrics' };
 }
 
 /** Deletes a version and its takes. Fails loud — see {@link handleSave}. */

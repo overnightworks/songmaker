@@ -39,7 +39,8 @@ import {
 	handleSave,
 	handleDeleteVersion,
 	discardDraft,
-	computeDraftVersionNumber
+	computeDraftVersionNumber,
+	versionDeleteEditorLoss
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -318,6 +319,60 @@ describe('loadVersionAsDraft', () => {
 		loadVersionAsDraft(older);
 		loadSongData(makeSong({ ...songDefaults, id: 's2' }));
 		expect(get(draftLoadedFrom)).toBeNull();
+	});
+});
+
+describe('versionDeleteEditorLoss', () => {
+	const latest = makeVersion({ id: 'v2', version_number: 2, lyrics: 'hello', prompt: 'rock' });
+	const older = makeVersion({ id: 'v1', version_number: 1, lyrics: 'v1 lyrics' });
+
+	it.each([
+		{ deleted: older, draft: 'the latest', change: () => undefined, loss: null },
+		{
+			deleted: older,
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft' }
+		},
+		{
+			deleted: older,
+			draft: 'its own untouched load',
+			change: () => loadVersionAsDraft(older),
+			loss: { kind: 'unsaved-draft' }
+		},
+		{
+			deleted: latest,
+			draft: 'an untouched load of a version that stays',
+			change: () => loadVersionAsDraft(older),
+			loss: null
+		},
+		{
+			deleted: latest,
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft' }
+		},
+		{
+			deleted: latest,
+			draft: 'the latest',
+			change: () => undefined,
+			loss: { kind: 'current-lyrics', replacedBy: 1 }
+		}
+	])(
+		'deleting v$deleted.version_number under $draft takes from the editor: $loss',
+		({ deleted, change, loss }) => {
+			selectedSongId.set('s1');
+			loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+			versions.set([latest, older]);
+			change();
+			expect(versionDeleteEditorLoss(deleted)).toEqual(loss);
+		}
+	);
+
+	it('deleting the only version empties the editor', () => {
+		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
+		versions.set([latest]);
+		expect(versionDeleteEditorLoss(latest)).toEqual({ kind: 'all-lyrics' });
 	});
 });
 
