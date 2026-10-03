@@ -126,12 +126,15 @@ export class ContinuousDeck<Take> {
 	 * Moves the playhead to `seconds`, even past what has arrived: the element
 	 * waits there, and the download appends on until it reaches it. The stream
 	 * has no known length, so without the live seekable range the browser would
-	 * stop the seek where the buffer ends (#1270). An ended stream holds all it
-	 * will ever hold, so a seek there stays within it.
+	 * stop the seek where the buffer ends (#1270). The range opens only forward
+	 * from the earliest audio still kept: freed audio is never appended again,
+	 * so a seek before it lands where the kept audio starts. An ended stream
+	 * holds all it will ever hold, so a seek there stays within it.
 	 */
 	seekTo(seconds: number): void {
 		const { element, mediaSource } = this.ports;
-		if (mediaSource.readyState === 'open') mediaSource.setLiveSeekableRange(seconds, seconds);
+		if (mediaSource.readyState === 'open')
+			mediaSource.setLiveSeekableRange(this.playableFrom, Math.max(seconds, this.playableFrom));
 		element.currentTime = seconds;
 	}
 

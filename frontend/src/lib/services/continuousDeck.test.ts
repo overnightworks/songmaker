@@ -116,13 +116,14 @@ class FakeSourceBuffer extends EventTarget {
 }
 
 // Its duration stays unknown while takes are appended, so the browser lets the
-// element seek only up to the end of what is buffered, or of the live
-// seekable range where one is set.
+// element seek from 0 to the end of what is buffered; once a live seekable
+// range is set, from the earliest to the latest point of that range and the
+// buffer together.
 class FakeMediaSource extends EventTarget {
 	readonly mimeTypes: string[] = [];
 	readonly buffer: FakeSourceBuffer;
 	readyState: ReadyState = 'closed';
-	private liveSeekableEnd = 0;
+	private liveSeekable: readonly [number, number] | null = null;
 
 	constructor(private readonly log: string[]) {
 		super();
@@ -148,12 +149,16 @@ class FakeMediaSource extends EventTarget {
 	setLiveSeekableRange(start: number, end: number): void {
 		if (this.readyState !== 'open') throw new DOMException('not open', 'InvalidStateError');
 		if (start < 0 || start > end) throw new TypeError('invalid live seekable range');
-		this.liveSeekableEnd = end;
+		this.liveSeekable = [start, end];
 	}
 
-	seekableEnd(): number {
+	seekable(): readonly [number, number] {
 		const buffered = this.buffer.buffered;
-		return Math.max(buffered.length ? buffered.end() : 0, this.liveSeekableEnd);
+		const bufferedEnd = buffered.length ? buffered.end() : 0;
+		if (!this.liveSeekable) return [0, bufferedEnd];
+		const [liveStart, liveEnd] = this.liveSeekable;
+		if (!buffered.length) return [liveStart, liveEnd];
+		return [Math.min(liveStart, buffered.start()), Math.max(liveEnd, bufferedEnd)];
 	}
 }
 
@@ -170,9 +175,10 @@ class FakeAudio extends EventTarget {
 		return this.position;
 	}
 
-	// Like a browser, a seek lands no further than the seekable range reaches.
+	// Like a browser, a seek lands at the nearest point of the seekable range.
 	set currentTime(seconds: number) {
-		this.position = Math.min(seconds, this.mediaSource.seekableEnd());
+		const [start, end] = this.mediaSource.seekable();
+		this.position = Math.min(Math.max(seconds, start), end);
 		this.dispatchEvent(new Event('seeking'));
 	}
 
@@ -613,6 +619,21 @@ describe('ContinuousDeck', () => {
 
 		expect(buffer.removals).toEqual([[0, 15]]);
 		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, PIECE]);
+	});
+
+	it('lets a seek back before what a full buffer freed land where the kept audio starts', async () => {
+		const { deck, audio, buffer, network } = openDeck();
+		network.serve('/audio/first.mp3', MEGABYTE / 2);
+		network.serve('/audio/second.mp3', MEGABYTE / 4);
+		await deck.appendTake('first', '/audio/first.mp3');
+		audio.playTo(25);
+		buffer.quotaRefusals = 1;
+		await deck.appendTake('second', '/audio/second.mp3');
+		expect(buffer.buffered.start()).toBe(15);
+
+		deck.seekTo(5);
+
+		expect(audio.currentTime).toBe(15);
 	});
 
 	it('reports a full buffer that freeing played audio could not cure', async () => {
