@@ -165,7 +165,7 @@ function resetToVersion(v: VersionItem): void {
 }
 
 /** The way back from a version load, and whether it still holds. */
-export interface VersionLoadUndo {
+interface VersionLoadUndo {
 	undo: () => void;
 	holds: Readable<boolean>;
 }
