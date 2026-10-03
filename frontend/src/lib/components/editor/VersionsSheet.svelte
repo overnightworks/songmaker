@@ -295,7 +295,8 @@
 		left: var(--popover-left);
 		z-index: 301;
 		width: var(--popover-width);
-		max-height: min(60vh, 28rem);
+		--version-row-height: calc(3.75rem + 1px);
+		--versions-room: min(60vh, 28rem);
 		display: flex;
 		flex-direction: column;
 		background: var(--surface);
@@ -330,19 +331,26 @@
 		color: var(--text-muted);
 	}
 
+	/* The list shows whole rows only and comes to rest on a row's top edge,
+	   so no row stands half hidden under the head with its glyphs cut. The
+	   first max-height is for a browser without round(). */
 	.versions-list {
 		margin: 0;
 		padding: 0;
 		list-style: none;
 		overflow-y: auto;
-		min-height: 0;
+		scroll-snap-type: y mandatory;
+		max-height: calc(var(--versions-room) - 3.5rem);
+		max-height: round(down, calc(var(--versions-room) - 3.5rem), var(--version-row-height));
 	}
 
 	.version-item {
 		display: flex;
 		align-items: center;
+		height: var(--version-row-height);
 		padding-right: 0.25rem;
 		border-top: 1px solid var(--border);
+		scroll-snap-align: start;
 	}
 
 	.version-item.current {
@@ -355,7 +363,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		min-height: 60px;
+		align-self: stretch;
 		padding: 0.35rem 0.25rem 0.35rem 1rem;
 		background: none;
 		border: none;
@@ -423,10 +431,12 @@
 	}
 
 	/* A phone opens the list as a sheet along the screen's bottom edge; a
-	   wider window keeps it as a popover under the chip. */
+	   wider window keeps it as a popover under the chip. The sheet dims the
+	   page as the phone's rail drawer does: the picture's light grey left the
+	   dark theme undimmed. */
 	@media (max-width: 768px) {
 		.versions-backdrop {
-			background: rgba(20, 16, 28, 0.22);
+			background: color-mix(in srgb, #000 42%, transparent);
 		}
 
 		.versions-panel {
@@ -435,7 +445,7 @@
 			right: 0;
 			bottom: 0;
 			width: auto;
-			max-height: 70vh;
+			--versions-room: 70vh;
 			padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
 			border-radius: 14px 14px 0 0;
 			box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.18);
