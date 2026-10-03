@@ -743,6 +743,123 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 	});
 });
 
+// Issue #1006 (H5): the first Back from Settings loads the album's route, and a
+// second Back pressed while it loads lands on the wall -- 30 ms after it, or
+// in the same task, where the router takes the second for shallow routing and
+// abandons the first. However quickly the two follow, the screen shows the
+// page the address names, and the album's own entry stays for Forward; the
+// race is one of milliseconds, so the two Backs are pressed many times.
+const DOUBLE_BACKS = 8;
+
+async function pressBackTwice(page: Page, gapMs: number): Promise<void> {
+	await page.evaluate(async (gap) => {
+		history.back();
+		await new Promise((resolve) => setTimeout(resolve, gap));
+		history.back();
+	}, gapMs);
+}
+
+for (const gapMs of [30, 0]) {
+	test(`two Backs ${gapMs} ms apart from Settings show the wall at its address and keep the album for Forward`, async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		const album = surface.getByRole('heading', { name: library.albumTitle });
+		await page.goto('/');
+		await wallTiles(page)
+			.locator('.wall-tile-body')
+			.filter({ hasText: library.albumTitle })
+			.click();
+		await expect(album).toBeVisible();
+		const albumAddress = page.url();
+		await openVoicesSettings(page, shellOf(testInfo));
+
+		for (let attempt = 1; attempt <= DOUBLE_BACKS; attempt += 1) {
+			await pressBackTwice(page, gapMs);
+
+			await expect(wall, `the wall after the two Backs of attempt ${attempt}`).toBeVisible();
+			await expect(page).toHaveURL(/\/$/);
+			await expect(settingsHeading(page)).toBeHidden();
+			await expect(album).toBeHidden();
+
+			await page.goForward();
+
+			await expect(album, `the album after Forward on attempt ${attempt}`).toBeVisible();
+			expect(page.url()).toBe(albumAddress);
+
+			await page.goForward();
+
+			await expectSettingsStands(page);
+		}
+		guard.assertClean();
+	});
+}
+
+// Both Backs in one task: the router hears the second before the first has
+// loaded anything.
+async function pressBackTwiceInOneTask(page: Page): Promise<void> {
+	await page.evaluate(() => {
+		history.back();
+		history.back();
+	});
+}
+
+// Issue #1006 (H5): from Settings opened over a song, the second of two Backs
+// pressed in one task reaches the album while the router still loads the
+// song's route, which it then abandons, and the router keeps the page of
+// Settings under the album's route. The album shows at its own address, with
+// the wall below it for Back, and Forward walks the album, the song and
+// Settings again; the race is one of milliseconds, so the two Backs are
+// pressed many times.
+test('two Backs in one task from Settings over a song show the album at its address', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const shell = shellOf(testInfo);
+	const surface = workspace(page);
+	const wall = surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+	const album = surface.getByRole('heading', { name: library.albumTitle });
+	const song = songBar(page, shell).getByRole('heading', { name: library.pickedSongTitle });
+	await page.goto('/');
+	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
+	await expect(album).toBeVisible();
+	const albumAddress = page.url();
+	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await expect(song).toBeVisible();
+	await openVoicesSettings(page, shell);
+
+	for (let attempt = 1; attempt <= DOUBLE_BACKS; attempt += 1) {
+		await pressBackTwiceInOneTask(page);
+
+		await expect(album, `the album after the two Backs of attempt ${attempt}`).toBeVisible();
+		await expect(page).toHaveURL(albumAddress);
+		await expect(settingsHeading(page)).toBeHidden();
+
+		await page.goBack();
+
+		await expect(wall, `the wall below the album on attempt ${attempt}`).toBeVisible();
+		await expect(page).toHaveURL(/\/$/);
+
+		await page.goForward();
+
+		await expect(album, `the album after Forward on attempt ${attempt}`).toBeVisible();
+		await expect(page).toHaveURL(albumAddress);
+
+		await page.goForward();
+
+		await expect(song).toBeVisible();
+
+		await page.goForward();
+
+		await expectSettingsStands(page);
+	}
+	guard.assertClean();
+});
+
 // Issues #1165 and #1263: the library shows a song the moment it opens,
 // before the router has loaded the song's route, and its address moves with
 // it. Back pressed then must still step once, onto the album -- the race is

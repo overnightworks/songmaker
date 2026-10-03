@@ -623,9 +623,9 @@ export function initNavigation(): () => void {
 	// The history controller's landing handler: by the time a landing reaches
 	// here the controller has closed the layers it left, so only a landing on
 	// another page entry is the library's to apply.
-	function onLanding(landing: Landing, event: PopStateEvent): void {
+	function onLanding(landing: Landing, landedState: unknown): void {
 		if (!landing.apply) return;
-		const state = libraryHistoryEntry(event.state);
+		const state = libraryHistoryEntry(landedState);
 		let songPutBack = false;
 		void guardDirtyNavigation(
 			() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),

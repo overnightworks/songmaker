@@ -252,6 +252,31 @@ describe('song list mutations', () => {
 		expect(fetchSongs).toHaveBeenCalledTimes(1);
 	});
 
+	it.each([
+		{ refusal: 'a server refusal', err: new ApiError(500, '', '/api/x'), status: 'failed' },
+		{ refusal: 'an unreachable network', err: OFFLINE, status: 'unreachable' }
+	])(
+		'a caller joining an album-songs load that meets $refusal resolves and sees it named $status',
+		async ({ err, status }) => {
+			let refusePage: ((reason: unknown) => void) | undefined;
+			vi.mocked(fetchSongs).mockImplementationOnce(
+				() =>
+					new Promise<PaginatedResponse<SongItem>>((_resolve, reject) => {
+						refusePage = reject;
+					})
+			);
+			const started = loadSongsForAlbum('a1');
+			const joined = loadSongsForAlbum('a1');
+
+			refusePage?.(err);
+
+			await expect(joined).resolves.toBeUndefined();
+			await expect(started).resolves.toBeUndefined();
+			expect(get(albumSongsLoad).a1).toBe(status);
+			expect(fetchSongs).toHaveBeenCalledTimes(1);
+		}
+	);
+
 	it('overlaySongList keeps loaded takes when a summary arrives later', () => {
 		const loaded = makeSong({
 			...loadedSongDefaults(),

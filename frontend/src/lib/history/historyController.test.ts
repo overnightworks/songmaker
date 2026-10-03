@@ -1,3 +1,4 @@
+import type { NavigationTarget } from '@sveltejs/kit';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
@@ -15,6 +16,7 @@ import {
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
+	standingPageEntryId,
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
@@ -400,6 +402,34 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual({ id: expect.any(Number) });
 	});
 
+	it('a Back while nobody listened is heard once the handler listens again, and only once', async () => {
+		const album = pushEntry('/album/a', {});
+		pushEntry('/album/b', {});
+		stopListening();
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+
+		const heard: Landing[] = [];
+		stopListening = listenForLandings((landing) => heard.push(landing));
+		stopListening();
+		stopListening = listenForLandings((landing) => heard.push(landing));
+
+		expect(heard).toHaveLength(1);
+		expect(heard[0]).toMatchObject({ apply: true, ledger: { current: album } });
+	});
+
+	it('the page entry under an open layer is the page the layer covers', () => {
+		const page = pushEntry('/album/a', {});
+
+		holdLayer('album-menu', () => undefined);
+
+		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'album-menu' });
+		expect(standingPageEntryId()).toBe(page.id);
+	});
+
 	it('a page push closes the layers below it', () => {
 		pushEntry('/album/a', {});
 		let menuOpen = true;
@@ -543,6 +573,59 @@ describe('route convergence after a landing', () => {
 		expect(standingEntry()).toEqual(albumB);
 	});
 
+	function navigationTo(pathname: string): NavigationTarget {
+		return { url: new URL(pathname, location.href), params: {}, route: { id: null }, scroll: null };
+	}
+
+	function abortableNavigation(): { complete: Promise<void>; abort: () => Promise<void> } {
+		let reject: (reason: Error) => void = () => undefined;
+		const complete = new Promise<void>((_, rejectComplete) => (reject = rejectComplete));
+		return {
+			complete,
+			abort: async () => {
+				reject(new Error('navigation aborted'));
+				await complete.catch(() => undefined);
+			}
+		};
+	}
+
+	// Issue #1006 H5: the router takes a Back onto an entry of the navigation
+	// it is heading to for shallow routing, and the navigation that Back aborts
+	// mounts nothing -- the page before stays on screen under the address.
+	it("a Back that aborts the router's navigation without one of its own mounts the route of the address it landed on", async () => {
+		const loading = abortableNavigation();
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		fakePage.url = new URL('/settings', location.href);
+
+		await loading.abort();
+
+		await vi.waitFor(() => expect(fakePage.url.pathname).toBe('/album/a'));
+		expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/a' });
+	});
+
+	it('an aborted navigation leaves the mount to the navigation that took over', async () => {
+		const loading = abortableNavigation();
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		mountRouteOfLandedAddress({
+			type: 'link',
+			to: navigationTo('/settings'),
+			complete: new Promise<void>(() => undefined)
+		});
+		const navigated = reportedNavigations.length;
+
+		await loading.abort();
+
+		expect(reportedNavigations).toHaveLength(navigated);
+	});
+
 	it.each(['link', 'goto'] as const)(
 		'a %s navigation to another address is left to the router',
 		(type) => {
@@ -550,12 +633,8 @@ describe('route convergence after a landing', () => {
 
 			mountRouteOfLandedAddress({
 				type,
-				to: {
-					url: new URL('/settings', location.href),
-					params: {},
-					route: { id: null },
-					scroll: null
-				}
+				to: navigationTo('/settings'),
+				complete: Promise.resolve()
 			});
 
 			expect(reportedNavigations).toHaveLength(navigated);
