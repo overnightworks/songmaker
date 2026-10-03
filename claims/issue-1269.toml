@@ -1,8 +1,0 @@
-claim_id = "9e24040c551c4d6e84161934ace26f39"
-agent = "claude-head"
-role = "builder"
-base = "cc061605679911609733c8e39133f60ccd910e52"
-branch = "claude-head/issue-1269-deck-seek-end-giveup"
-scope = ["frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts"]
-opened_commit = "fbb65133410354a96a0858dd4885ac635b5c7003"
-whole_reason = "deck seek clamp, stream end only at the queue's end, and a give-up that never pauses"
