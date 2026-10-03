@@ -506,7 +506,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -773,7 +774,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -838,7 +840,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'First' })
+			expect.objectContaining({ songTitle: 'First' }),
+			{ restart: true }
 		);
 	});
 
@@ -862,7 +865,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -2043,6 +2047,15 @@ describe('the queue names its next take', () => {
 		audioPlayer.currentCallbacks.onCurrentChange?.(take);
 	}
 
+	function currentRowAndTake(): { row: number; queueIndex: number; take: string | undefined } {
+		const ctx = get(queueContext);
+		return {
+			row: buildQueueViewModel(ctx, audioPlayer.current).currentIndex,
+			queueIndex: ctx.index ?? -1,
+			take: audioPlayer.current?.generation.id
+		};
+	}
+
 	function preloadedTake(): PlaybackInfo | null {
 		return vi.mocked(audioPlayer.preload).mock.lastCall?.[0] ?? null;
 	}
@@ -2249,6 +2262,54 @@ describe('the queue names its next take', () => {
 			const following = dropped && audioPlayer.currentCallbacks.takeAfter?.(dropped);
 			expect(following?.generation.id).toBe('g3');
 		});
+
+		it.each([
+			{ places: 'back to back', tracks: [1, 1, 3], dropped: null, rows: [0, 1, 2] },
+			{
+				places: 'around a take the deck dropped',
+				tracks: [1, 2, 1, 3],
+				dropped: 'g2',
+				rows: [0, 2, 3]
+			}
+		])(
+			'a playlist that holds a take twice $places plays both places, then the take after them',
+			async ({ tracks, dropped, rows }) => {
+				await playPlaylistEntryAndShowNowPlaying(playlistHolding(...tracks), 0);
+				const heard = [currentRowAndTake()];
+
+				let next = preloadedTake();
+				if (next && next.generation.id === dropped)
+					next = audioPlayer.currentCallbacks.takeAfter?.(next) ?? null;
+				moveOnByItselfTo(next);
+				heard.push(currentRowAndTake());
+				moveOnByItselfTo(preloadedTake());
+				heard.push(currentRowAndTake());
+
+				expect(heard).toEqual(
+					rows.map((row) => ({ row, queueIndex: row, take: `g${tracks[row]}` }))
+				);
+			}
+		);
+
+		it.each([
+			{ step: 'Previous', from: 1, to: 0, press: playPrevSong },
+			{ step: 'Next', from: 0, to: 1, press: playNextSong }
+		])(
+			'$step between the two places of a take starts the other place from its beginning',
+			async ({ from, to, press }) => {
+				await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 1, 3), from);
+
+				await press();
+
+				expect(vi.mocked(audioPlayer.load).mock.lastCall?.[1]).toEqual({ restart: true });
+				const rows = [currentRowAndTake().row];
+				for (let lap = 0; lap < 3; lap++) {
+					moveOnByItselfTo(preloadedTake());
+					rows.push(currentRowAndTake().row);
+				}
+				expect(rows).toEqual([to, to + 1, to + 2, to + 3].map((row) => row % 3));
+			}
+		);
 
 		it('a playlist that holds the take twice moves on past its later place', async () => {
 			await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 2, 1, 3), 1);
