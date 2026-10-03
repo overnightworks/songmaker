@@ -489,9 +489,10 @@ export function historyStandsStill(): Promise<void> {
 	return new Promise((resolve) => stillnessWaiters.push(resolve));
 }
 
-// Once history stands still the writes and the layers held meanwhile get
-// their entries, in the order they were held, on top of the entry that then
-// stands.
+// Once history stands still the layers held meanwhile get their entries
+// first, then the held writes are written over the entry that then stands:
+// each waiter resolves a promise whose callback runs only after this
+// function has pushed the layers.
 function settleStillness(): void {
 	if (historyMoves()) return;
 	const still = stillnessWaiters;
