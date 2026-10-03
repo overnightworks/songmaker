@@ -1,0 +1,8 @@
+claim_id = "523139b181a7490385d54dfafda3010f"
+agent = "claude-head"
+role = "builder"
+base = "da9071f37eaa268642f72215c217c91d9fcfd81f"
+branch = "claude-head/issue-1289-wall-scroll-menu-race"
+scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/menu.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/layers.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts"]
+opened_commit = "95900c8a87c3bdef8d1f4f04fa414161fad8f65a"
+whole_reason = "wall scroll after Settings and a menu opened right after a song tap"
