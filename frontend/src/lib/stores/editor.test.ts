@@ -35,6 +35,7 @@ import {
 	loadSongData,
 	loadVersionAsDraft,
 	retireVersionLoadUndo,
+	setAsideVersionLoadUndo,
 	savedSongData,
 	handleSave,
 	handleDeleteVersion,
@@ -300,6 +301,25 @@ describe('loadVersionAsDraft', () => {
 		load?.undo();
 		expect(get(editLyrics)).toBe(lyrics);
 	});
+
+	it.each([
+		{ after: 'the opened Versions list', retired: false, undone: 'an unsaved line' },
+		{ after: 'the opened Versions list, then a retire', retired: true, undone: 'v1 lyrics' }
+	])(
+		'a load that changes nothing offers the set-aside undo again, after $after',
+		({ retired, undone }) => {
+			openSongWithTwoVersions();
+			setDraftLyrics('an unsaved line');
+			const load = loadVersionAsDraft(older);
+			setAsideVersionLoadUndo();
+			expect(load && get(load.holds)).toBe(false);
+			if (retired) retireVersionLoadUndo();
+
+			loadVersionAsDraft(older)?.undo();
+
+			expect(get(editLyrics)).toBe(undone);
+		}
+	);
 
 	it.each([
 		{ draft: 'a loaded older version', load: true, newVersion: true },

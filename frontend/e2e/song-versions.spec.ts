@@ -7,7 +7,8 @@
 // have no version (issue #1273, #1245 rules 7-8). A version is deleted from
 // its row in the sheet, behind a confirm that names its takes and the album
 // pick among them (issue #1284, #1245 rule 10). A draft equal to a saved
-// version loads the next one without asking, the delete confirm says an
+// version loads the next one without asking, tapping the version the draft
+// already holds changes nothing and keeps its Undo, the delete confirm says an
 // unsaved draft goes too, and the sheet stands over the whole page: the
 // phone's backdrop dims all of it (issue #1286).
 //
@@ -338,6 +339,28 @@ test.describe('the versions of a song', () => {
 		await versionRow(page, 1).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+	});
+
+	test('tapping the version the draft already holds changes nothing: the sheet closes and the Undo still brings the typed edit back', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
+		await lyricsField(page).fill(editedLyrics);
+		await tapVersion(page, 1);
+		await replaceDraftDialog(page)
+			.getByRole('button', { name: VERSION_REPLACE_DRAFT_CONFIRM_LABEL })
+			.click();
+		await expect(loadedToast(page)).toBeVisible();
+
+		await tapVersion(page, 1);
+
+		await expect(versionsSheet(page)).toBeHidden();
+		await expect(replaceDraftDialog(page)).toHaveCount(0);
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
+		await expect(lyricsField(page)).toHaveValue(editedLyrics);
 	});
 
 	test('a draft equal to a saved version is clean: after an untouched v1, v2 loads without asking', async ({

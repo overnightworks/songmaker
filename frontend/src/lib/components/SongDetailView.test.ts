@@ -1914,17 +1914,21 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(addUndoToast).not.toHaveBeenCalled();
 	});
 
-	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
-		const target = await renderView();
+	async function replaceTypedDraftWith(target: HTMLElement, versionNumber: number): Promise<void> {
 		setDraftLyrics('unsaved edit');
 		await tick();
-		await tapVersion(target, 1);
+		await tapVersion(target, versionNumber);
 		const dialog = replaceDialog();
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
 		await tick();
 		await Promise.resolve();
 		await tick();
+	}
+
+	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
 
 		expect(versionsSheet()).toBeNull();
 		expect(get(editLyrics)).toBe('first draft');
@@ -1935,6 +1939,40 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
 		expect(updateSong).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ again: 'its row in the sheet', reload: (target: HTMLElement) => tapVersion(target, 1) },
+		{
+			again: 'its Open link on the take group',
+			reload: async (target: HTMLElement) => {
+				navigateToSongTab('takes');
+				await tick();
+				takeGroupOpenLink(target, 1).click();
+				await tick();
+				await Promise.resolve();
+				await tick();
+			}
+		}
+	])(
+		'loading the version the draft already holds changes nothing, and its Undo still brings the edit back: $again',
+		async ({ reload }) => {
+			const target = await renderView();
+			await replaceTypedDraftWith(target, 1);
+
+			await reload(target);
+
+			expect(replaceDialog()).toBeNull();
+			expect(versionsSheet()).toBeNull();
+			expect(get(editLyrics)).toBe('first draft');
+			const { toasts } = await shownToasts();
+			const [loaded, ...others] = get(toasts);
+			expect(others).toEqual([]);
+			expect(loaded?.message).toBe(versionLoadedToastLabel(1));
+			await loaded?.action?.handler();
+			await tick();
+			expect(get(editLyrics)).toBe('unsaved edit');
+		}
+	);
 
 	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
 		const target = await renderView();

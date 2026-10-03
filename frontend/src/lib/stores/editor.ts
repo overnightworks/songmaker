@@ -223,8 +223,19 @@ interface VersionLoadUndo {
 	holds: Readable<boolean>;
 }
 
-/** The one version load whose undo is still offered; null once the next action has retired it. */
-const offeredVersionLoad = writable<symbol | null>(null);
+/**
+ * The one version load whose undo is still offered, and whether the opened
+ * Versions list has only set it aside; null once the next action has retired it.
+ */
+interface OfferedVersionLoad {
+	load: symbol;
+	setAside: boolean;
+	undo: VersionLoadUndo;
+	/** Whether the editor still shows exactly what the load left: same song, saved version and draft. */
+	stands: () => boolean;
+}
+
+const offeredVersionLoad = writable<OfferedVersionLoad | null>(null);
 
 /**
  * Loads a version into the draft only: the latest version stays saved, so a
@@ -234,8 +245,10 @@ const offeredVersionLoad = writable<symbol | null>(null);
  * draft this load replaced, only until the next action: typing in the draft,
  * another load, a save, a move to another song, or anything that calls
  * `retireVersionLoadUndo()` ends it, so an Undo never restores over work done
- * after the load. Answers null when the load would change nothing the
- * musician sees: neither the draft nor its "Loaded from" hint.
+ * after the load. A load that would change nothing the musician sees, neither
+ * the draft nor its "Loaded from" hint, is no action: it answers null, or,
+ * when the opened Versions list set the last load's undo aside, that same
+ * undo offered again.
  */
 export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null {
 	const songId = get(selectedSongId);
@@ -243,19 +256,19 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 	const isLatest = version.id === get(versions)[0]?.id;
 	const draft = isLatest ? { ...saved } : songDataFromVersion(version);
 	const loadedFrom = isLatest ? null : version.version_number;
-	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) return null;
+	if (songDataEqual(draft, replaced) && loadedFrom === replacedLoadedFrom) {
+		return offerSetAsideLoadAgain();
+	}
 	const thisLoad = Symbol('version load');
 	editorState.update((s) => ({ ...s, draft, loadedFrom }));
-	offeredVersionLoad.set(thisLoad);
+	const standsIn = (currentSongId: string | null, s: EditorState) =>
+		currentSongId === songId && s.saved === saved && s.draft === draft;
 	const holds = derived(
 		[offeredVersionLoad, selectedSongId, editorState],
 		([$offered, $selectedSongId, $editorState]) =>
-			$offered === thisLoad &&
-			$selectedSongId === songId &&
-			$editorState.saved === saved &&
-			$editorState.draft === draft
+			$offered?.load === thisLoad && !$offered.setAside && standsIn($selectedSongId, $editorState)
 	);
-	return {
+	const undo: VersionLoadUndo = {
 		holds,
 		undo: () => {
 			if (!get(holds)) return;
@@ -263,6 +276,28 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 			editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
 		}
 	};
+	offeredVersionLoad.set({
+		load: thisLoad,
+		setAside: false,
+		undo,
+		stands: () => standsIn(get(selectedSongId), get(editorState))
+	});
+	return undo;
+}
+
+function offerSetAsideLoadAgain(): VersionLoadUndo | null {
+	const offered = get(offeredVersionLoad);
+	if (!offered?.setAside || !offered.stands()) return null;
+	offeredVersionLoad.set({ ...offered, setAside: false });
+	return offered.undo;
+}
+
+/**
+ * Takes the offered version-load undo off screen while the Versions list is
+ * open; a load from the list that changes nothing offers it again.
+ */
+export function setAsideVersionLoadUndo(): void {
+	offeredVersionLoad.update((offered) => offered && { ...offered, setAside: true });
 }
 
 /** Ends the offered version-load undo: the musician has moved on to the next action. */

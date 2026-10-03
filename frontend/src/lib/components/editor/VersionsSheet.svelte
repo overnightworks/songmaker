@@ -2,7 +2,7 @@
 	import { tick } from 'svelte';
 	import {
 		isDirty,
-		retireVersionLoadUndo,
+		setAsideVersionLoadUndo,
 		versionDeleteEditorLoss,
 		versionDeleteRequest,
 		versions
@@ -114,7 +114,7 @@
 	}
 
 	async function openSheet(): Promise<void> {
-		retireVersionLoadUndo();
+		setAsideVersionLoadUndo();
 		placeUnderChip();
 		$open = true;
 		await tick();
