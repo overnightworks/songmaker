@@ -44,7 +44,6 @@ import {
 	DIALOG_CANCEL_LABEL,
 	TOAST_UNDO_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
-	VERSION_DELETE_PICK_WARNING,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_EMPTIES_EDITOR,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
@@ -52,7 +51,6 @@ import {
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
-	versionDeleteReplacedBy,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
@@ -65,6 +63,7 @@ import {
 	versionDeleteRequest,
 	pinnedSeed,
 	setDraftLyrics,
+	loadVersionAsDraft,
 	setDraftPrompt,
 	versions
 } from '$lib/stores/editor';
@@ -1976,43 +1975,84 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
-	it.each([
-		{
-			ended: 'its toast timed out',
-			end: () => vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS),
-			reload: (target: HTMLElement) => tapVersion(target, 1)
-		},
-		{
-			ended: 'the chip closed without a load',
-			end: async (target: HTMLElement) => {
-				versionChip(target).click();
-				await tick();
-				versionChip(target).click();
-				await tick();
-			},
-			reload: async (target: HTMLElement) => {
-				navigateToSongTab('takes');
-				await tick();
-				takeGroupOpenLink(target, 1).click();
-				await tick();
-			}
-		}
-	])(
-		'loading the version the draft already holds raises no toast once its Undo ended: $ended',
-		async ({ end, reload }) => {
-			const target = await renderView();
-			vi.useFakeTimers();
-			await replaceTypedDraftWith(target, 1);
+	it('loading the version the draft already holds raises no toast once its Undo timed out', async () => {
+		const target = await renderView();
+		vi.useFakeTimers();
+		await replaceTypedDraftWith(target, 1);
 
-			await end(target);
-			const { toasts } = await shownToasts();
-			expect(get(toasts)).toEqual([]);
-			await reload(target);
+		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS);
+		const { toasts } = await shownToasts();
+		expect(get(toasts)).toEqual([]);
+		await tapVersion(target, 1);
 
-			expect(get(editLyrics)).toBe('first draft');
-			expect(get(toasts)).toEqual([]);
-		}
-	);
+		expect(get(editLyrics)).toBe('first draft');
+		expect(get(toasts)).toEqual([]);
+	});
+
+	async function toggleVersionsChip(target: HTMLElement): Promise<void> {
+		versionChip(target).click();
+		await tick();
+	}
+
+	function versionRowButton(versionNumber: number): HTMLButtonElement {
+		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
+			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
+		);
+		if (!row) throw new Error(`Expected the v${versionNumber} row`);
+		return row;
+	}
+
+	it('a peek at the Versions list keeps the Undo: its toast leaves while the list is open and comes back once it closes', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
+		const { toasts } = await shownToasts();
+
+		await toggleVersionsChip(target);
+		expect(get(toasts)).toEqual([]);
+		await toggleVersionsChip(target);
+
+		expect(versionsSheet()).toBeNull();
+		const [loaded, ...others] = get(toasts);
+		expect(others).toEqual([]);
+		expect(loaded?.message).toBe(versionLoadedToastLabel(1));
+		await loaded?.action?.handler();
+		await tick();
+		expect(get(editLyrics)).toBe('unsaved edit');
+	});
+
+	it('the Undo toast keeps its time while the list is open: a tap on the loaded version brings it back with the time it had left', async () => {
+		const target = await renderView();
+		vi.useFakeTimers();
+		await replaceTypedDraftWith(target, 1);
+		vi.advanceTimersByTime(1000);
+		await toggleVersionsChip(target);
+		vi.advanceTimersByTime(4 * BRIEF_UNDO_TOAST_MS);
+
+		versionRowButton(1).click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(1)]);
+		vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS - 1001);
+		expect(get(toasts)).toHaveLength(1);
+		vi.advanceTimersByTime(1);
+		expect(get(toasts)).toEqual([]);
+	});
+
+	it('loading another version from the opened list retires the Undo of the last load', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
+
+		await tapVersion(target, 2);
+
+		const { toasts } = await shownToasts();
+		expect(get(toasts).map((toast) => toast.message)).toEqual([versionLoadedToastLabel(2)]);
+		const [, firstLoadUndo] = vi.mocked(addUndoToast).mock.calls[0] ?? [];
+		await firstLoadUndo?.handler();
+		expect(get(editLyrics)).toBe('verse');
+	});
 
 	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
 		const target = await renderView();
@@ -2028,8 +2068,12 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(versionChip(target).textContent?.trim()).toBe('v2');
 	});
 
-	async function askToDeleteVersion(target: HTMLElement, versionNumber: number): Promise<void> {
-		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
+	async function askToDeleteVersion(
+		target: HTMLElement,
+		versionNumber: number,
+		latestNumber = 2
+	): Promise<void> {
+		await vi.waitFor(() => expect(versionChip(target).textContent).toContain(`v${latestNumber}`));
 		versionChip(target).click();
 		await tick();
 		const trash = document.querySelector<HTMLButtonElement>(
@@ -2059,17 +2103,21 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 	}
 
 	it.each([
-		{ picked: false, shown: ['Delete v1 and its 1 take?'] },
-		{ picked: true, shown: [versionDeleteTitle(1, 1), VERSION_DELETE_PICK_WARNING] }
+		{ takes: 1, picked: false, shown: ['Delete v1 and its 1 take?'] },
+		{ takes: 1, picked: true, shown: [versionDeleteTitle(1, 1), 'It is the album pick.'] },
+		{ takes: 2, picked: true, shown: [versionDeleteTitle(1, 2), 'The album pick is one of them.'] }
 	])(
-		'the delete on a row names its takes (album pick among them: $picked), and Cancel deletes nothing',
-		async ({ picked, shown }) => {
-			songList.set([
-				song({
-					...editableSongDefaults(),
-					generations: [generation({ ...sourceRecipeDefaults(), is_picked: picked })]
+		'the delete on a row names its $takes take(s) (album pick among them: $picked), and Cancel deletes nothing',
+		async ({ takes, picked, shown }) => {
+			const takesOfV1 = Array.from({ length: takes }, (_, index) =>
+				generation({
+					...sourceRecipeDefaults(),
+					id: `g${index + 1}`,
+					generation_number: index + 1,
+					is_picked: picked && index === 0
 				})
-			]);
+			);
+			songList.set([song({ ...editableSongDefaults(), generations: takesOfV1 })]);
 			const target = await renderView();
 			await askToDeleteVersion(target, 1);
 
@@ -2086,32 +2134,63 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
+	const THIRD = version({ id: 'v3', version_number: 3, lyrics: 'chorus', prompt: 'dark folk' });
+	const typeAnEdit = () => setDraftLyrics('unsaved edit');
+	const loadV1Untouched = () => void loadVersionAsDraft(FIRST);
+	const leaveTheCurrentVersion = () => undefined;
+
 	it.each([
 		{
 			deleted: 1,
-			edit: true,
-			only: false,
+			draft: 'an unsaved edit',
+			prepare: typeAnEdit,
+			held: [LATEST, FIRST],
 			shown: [versionDeleteTitle(1, 1), VERSION_DELETE_DRAFT_GOES]
 		},
-		{ deleted: 2, edit: false, only: false, shown: ['Delete v2?', versionDeleteReplacedBy(1)] },
-		{ deleted: 2, edit: false, only: true, shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR] },
+		{
+			deleted: 1,
+			draft: 'an untouched load of v1',
+			prepare: loadV1Untouched,
+			held: [LATEST, FIRST],
+			shown: [versionDeleteTitle(1, 1), 'The draft loaded from v1 goes too.']
+		},
 		{
 			deleted: 2,
-			edit: true,
-			only: true,
+			draft: 'an untouched load of v1',
+			prepare: loadV1Untouched,
+			held: [THIRD, LATEST, FIRST],
+			shown: ['Delete v2?', 'The draft loaded from v1 leaves the editor; v3 replaces it.']
+		},
+		{
+			deleted: 2,
+			draft: 'the current version',
+			prepare: leaveTheCurrentVersion,
+			held: [LATEST, FIRST],
+			shown: ['Delete v2?', 'Its lyrics leave the editor; v1 replaces them.']
+		},
+		{
+			deleted: 2,
+			draft: 'the current version',
+			prepare: leaveTheCurrentVersion,
+			held: [LATEST],
+			shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR]
+		},
+		{
+			deleted: 2,
+			draft: 'an unsaved edit',
+			prepare: typeAnEdit,
+			held: [LATEST],
 			shown: ['Delete v2?', VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
 		}
 	])(
-		'the delete on v$deleted says what else leaves the editor (unsaved edit: $edit, only version: $only)',
-		async ({ deleted, edit, only, shown }) => {
-			if (only) {
-				vi.mocked(fetchVersions).mockReset().mockResolvedValue([]).mockResolvedValueOnce([LATEST]);
-			}
+		'the delete on v$deleted under $draft says what leaves the editor ($held.length versions)',
+		async ({ deleted, prepare, held, shown }) => {
+			vi.mocked(fetchVersions).mockReset().mockResolvedValue([]).mockResolvedValueOnce(held);
 			const target = await renderView();
-			await vi.waitFor(() => expect(get(versions)).toHaveLength(only ? 1 : 2));
-			if (edit) setDraftLyrics('unsaved edit');
+			await vi.waitFor(() => expect(get(versions)).toHaveLength(held.length));
+			prepare();
 			await tick();
-			await askToDeleteVersion(target, deleted);
+			await askToDeleteVersion(target, deleted, held[0].version_number);
 
 			const dialog = deleteConfirm();
 			if (!dialog) throw new Error('Expected the version delete confirm');
@@ -2148,10 +2227,6 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 	it.each([
 		{ action: 'typing in the draft', act: typeInLyrics },
-		{
-			action: 'opening the version chip',
-			act: (target: HTMLElement) => versionChip(target).click()
-		},
 		{
 			action: 'Generate',
 			act: (target: HTMLElement) =>

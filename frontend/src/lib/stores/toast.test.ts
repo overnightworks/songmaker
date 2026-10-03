@@ -56,6 +56,36 @@ describe('toast store', () => {
 		expect(get(toasts)).toHaveLength(0);
 	});
 
+	it('an undo toast set aside leaves the screen and keeps its remaining time until it comes back', () => {
+		const setAside = writable(false);
+		const expire = vi.fn();
+		addUndoToast('v1 loaded', { label: 'Undo', handler: () => {}, setAside, expire }, 'brief');
+		vi.advanceTimersByTime(1000);
+
+		setAside.set(true);
+		expect(get(toasts)).toEqual([]);
+		vi.advanceTimersByTime(10000);
+		expect(expire).not.toHaveBeenCalled();
+
+		setAside.set(false);
+		expect(get(toasts).map((toast) => toast.message)).toEqual(['v1 loaded']);
+		vi.advanceTimersByTime(3999);
+		expect(get(toasts)).toHaveLength(1);
+		vi.advanceTimersByTime(1);
+		expect(get(toasts)).toEqual([]);
+		expect(expire).toHaveBeenCalledOnce();
+	});
+
+	it('an undo toast that stops holding while set aside never comes back', () => {
+		const setAside = writable(false);
+		const holds = writable(true);
+		addUndoToast('v1 loaded', { label: 'Undo', handler: () => {}, holds, setAside }, 'brief');
+		setAside.set(true);
+		holds.set(false);
+		setAside.set(false);
+		expect(get(toasts)).toEqual([]);
+	});
+
 	it('error toasts persist until manually dismissed', () => {
 		addToast('boom', 'error');
 		expect(get(toasts)).toHaveLength(1);

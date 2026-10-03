@@ -30,10 +30,8 @@
 		openVersionLabel,
 		takeVersion
 	} from '$lib/constants/now-playing';
-	import { get } from 'svelte/store';
-	import { isDirty, pendingVersionLoad } from '$lib/stores/editor';
-	import { revealPlayingSong } from '$lib/stores/navigation';
-	import { closeNowPlaying, selectedSongId } from '$lib/stores/player';
+	import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
+	import { closeNowPlaying } from '$lib/stores/player';
 	import { pendingSource } from '$lib/stores/recipe';
 	import {
 		pinSeed,
@@ -229,13 +227,9 @@
 		void revealPlayingSong(song, generation.id);
 	}
 
-	// The open song's own page asks before a load replaces its dirty draft;
-	// leaving and re-entering that same song would ask about the draft twice.
 	function openVersion(versionId: string): void {
-		pendingVersionLoad.set({ songId: song.id, versionId });
 		closeNowPlaying();
-		if (get(isDirty) && get(selectedSongId) === song.id) return;
-		void revealPlayingSong(song, generation.id);
+		void openTakeVersion(song, generation.id, versionId);
 	}
 
 	// "v · take · duration · mode" — the same take-description formatter every

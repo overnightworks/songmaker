@@ -14,17 +14,17 @@ vi.mock('$lib/stores/takeActions', async (importOriginal) => ({
 	rescore: vi.fn().mockResolvedValue(undefined)
 }));
 vi.mock('$lib/stores/navigation', () => ({
-	revealPlayingSong: vi.fn().mockResolvedValue(undefined)
+	revealPlayingSong: vi.fn().mockResolvedValue(undefined),
+	openTakeVersion: vi.fn().mockResolvedValue(undefined)
 }));
 
 import { get } from 'svelte/store';
 import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '$lib/constants';
 import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '$lib/constants/now-playing';
-import { discardDraft, pendingVersionLoad, setDraftLyrics } from '$lib/stores/editor';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
-import { revealPlayingSong } from '$lib/stores/navigation';
-import { nowPlayingOpen, nowPlayingSurface, selectedSongId } from '$lib/stores/player';
+import { openTakeVersion, revealPlayingSong } from '$lib/stores/navigation';
+import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
 import { pendingSource } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
@@ -48,9 +48,6 @@ afterEach(async () => {
 	vi.clearAllMocks();
 	nowPlayingSurface.set('closed');
 	pendingSource.set(null);
-	pendingVersionLoad.set(null);
-	discardDraft();
-	selectedSongId.set(null);
 	activeJobs.set([]);
 });
 
@@ -440,23 +437,8 @@ describe('NowPlayingTake Open vN', () => {
 		openVersionLink()?.click();
 		await tick();
 
-		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-5' });
 		expect(get(nowPlayingOpen)).toBe(false);
-		expect(revealPlayingSong).toHaveBeenCalledWith(withSong, takeOfV5.id);
-	});
-
-	it('over a dirty draft of the same song, stays on it so the replace confirm asks', async () => {
-		nowPlayingSurface.set('full');
-		selectedSongId.set('s1');
-		setDraftLyrics('unsaved edit');
-		await render({ generation: takeOfV5, song: song({ id: 's1' }) });
-
-		openVersionLink()?.click();
-		await tick();
-
-		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-5' });
-		expect(get(nowPlayingOpen)).toBe(false);
-		expect(revealPlayingSong).not.toHaveBeenCalled();
+		expect(openTakeVersion).toHaveBeenCalledWith(withSong, takeOfV5.id, 'ver-5');
 	});
 
 	it('offers no Open link for an imported take', async () => {
