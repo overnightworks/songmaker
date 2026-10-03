@@ -1914,6 +1914,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(addUndoToast).not.toHaveBeenCalled();
 	});
 
+	const BRIEF_UNDO_TOAST_MS = 5000;
+
 	async function replaceTypedDraftWith(target: HTMLElement, versionNumber: number): Promise<void> {
 		setDraftLyrics('unsaved edit');
 		await tick();
@@ -1971,6 +1973,44 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			await loaded?.action?.handler();
 			await tick();
 			expect(get(editLyrics)).toBe('unsaved edit');
+		}
+	);
+
+	it.each([
+		{
+			ended: 'its toast timed out',
+			end: () => vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS),
+			reload: (target: HTMLElement) => tapVersion(target, 1)
+		},
+		{
+			ended: 'the chip closed without a load',
+			end: async (target: HTMLElement) => {
+				versionChip(target).click();
+				await tick();
+				versionChip(target).click();
+				await tick();
+			},
+			reload: async (target: HTMLElement) => {
+				navigateToSongTab('takes');
+				await tick();
+				takeGroupOpenLink(target, 1).click();
+				await tick();
+			}
+		}
+	])(
+		'loading the version the draft already holds raises no toast once its Undo ended: $ended',
+		async ({ end, reload }) => {
+			const target = await renderView();
+			vi.useFakeTimers();
+			await replaceTypedDraftWith(target, 1);
+
+			await end(target);
+			const { toasts } = await shownToasts();
+			expect(get(toasts)).toEqual([]);
+			await reload(target);
+
+			expect(get(editLyrics)).toBe('first draft');
+			expect(get(toasts)).toEqual([]);
 		}
 	);
 

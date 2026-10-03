@@ -217,10 +217,14 @@ function resetToVersion(v: VersionItem): void {
 	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
 }
 
-/** The way back from a version load, and whether it still holds. */
+/**
+ * The way back from a version load, whether it still holds, and the end of
+ * its offer once the toast that raised it times out.
+ */
 interface VersionLoadUndo {
 	undo: () => void;
 	holds: Readable<boolean>;
+	expire: () => void;
 }
 
 /**
@@ -245,10 +249,10 @@ const offeredVersionLoad = writable<OfferedVersionLoad | null>(null);
  * draft this load replaced, only until the next action: typing in the draft,
  * another load, a save, a move to another song, or anything that calls
  * `retireVersionLoadUndo()` ends it, so an Undo never restores over work done
- * after the load. A load that would change nothing the musician sees, neither
- * the draft nor its "Loaded from" hint, is no action: it answers null, or,
- * when the opened Versions list set the last load's undo aside, that same
- * undo offered again.
+ * after the load, and so does `expire()` once its toast times out. A load
+ * that would change nothing the musician sees, neither the draft nor its
+ * "Loaded from" hint, is no action: it answers null, or, when the opened
+ * Versions list set the last load's undo aside, that same undo offered again.
  */
 export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null {
 	const songId = get(selectedSongId);
@@ -274,7 +278,9 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 			if (!get(holds)) return;
 			offeredVersionLoad.set(null);
 			editorState.update((s) => ({ ...s, draft: replaced, loadedFrom: replacedLoadedFrom }));
-		}
+		},
+		expire: () =>
+			offeredVersionLoad.update((offered) => (offered?.load === thisLoad ? null : offered))
 	};
 	offeredVersionLoad.set({
 		load: thisLoad,
@@ -298,6 +304,11 @@ function offerSetAsideLoadAgain(): VersionLoadUndo | null {
  */
 export function setAsideVersionLoadUndo(): void {
 	offeredVersionLoad.update((offered) => offered && { ...offered, setAside: true });
+}
+
+/** The Versions list closed: an undo it set aside and did not offer again is retired. */
+export function retireSetAsideVersionLoadUndo(): void {
+	offeredVersionLoad.update((offered) => (offered?.setAside ? null : offered));
 }
 
 /** Ends the offered version-load undo: the musician has moved on to the next action. */

@@ -34,6 +34,7 @@ import {
 	draftHasUnversionedChanges,
 	loadSongData,
 	loadVersionAsDraft,
+	retireSetAsideVersionLoadUndo,
 	retireVersionLoadUndo,
 	setAsideVersionLoadUndo,
 	savedSongData,
@@ -303,23 +304,62 @@ describe('loadVersionAsDraft', () => {
 	});
 
 	it.each([
-		{ after: 'the opened Versions list', retired: false, undone: 'an unsaved line' },
-		{ after: 'the opened Versions list, then a retire', retired: true, undone: 'v1 lyrics' }
+		{ after: 'the opened Versions list', end: () => {}, undone: 'an unsaved line' },
+		{
+			after: 'the opened Versions list, then a retire',
+			end: retireVersionLoadUndo,
+			undone: 'v1 lyrics'
+		},
+		{
+			after: 'the opened Versions list, then its close',
+			end: retireSetAsideVersionLoadUndo,
+			undone: 'v1 lyrics'
+		},
+		{
+			after: 'the opened Versions list, then its toast timing out',
+			end: (load: { expire: () => void } | null) => load?.expire(),
+			undone: 'v1 lyrics'
+		}
 	])(
 		'a load that changes nothing offers the set-aside undo again, after $after',
-		({ retired, undone }) => {
+		({ end, undone }) => {
 			openSongWithTwoVersions();
 			setDraftLyrics('an unsaved line');
 			const load = loadVersionAsDraft(older);
 			setAsideVersionLoadUndo();
 			expect(load && get(load.holds)).toBe(false);
-			if (retired) retireVersionLoadUndo();
+			end(load);
 
 			loadVersionAsDraft(older)?.undo();
 
 			expect(get(editLyrics)).toBe(undone);
 		}
 	);
+
+	it('the Versions list closing keeps an undo a load from it offered again', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		loadVersionAsDraft(older);
+		setAsideVersionLoadUndo();
+		const offeredAgain = loadVersionAsDraft(older);
+		retireSetAsideVersionLoadUndo();
+
+		offeredAgain?.undo();
+
+		expect(get(editLyrics)).toBe('an unsaved line');
+	});
+
+	it('an earlier load timing out leaves the newer load its undo', () => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const earlier = loadVersionAsDraft(older);
+		const newer = loadVersionAsDraft(latest);
+		earlier?.expire();
+
+		newer?.undo();
+
+		expect(get(editLyrics)).toBe('v1 lyrics');
+	});
 
 	it.each([
 		{ draft: 'a loaded older version', load: true, newVersion: true },
