@@ -3358,6 +3358,82 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(recordedDetails()).toContain('retry deck_resume reason=play');
 	});
 
+	function freezeTheClockOverBufferedAudioAt(seconds: number): void {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(seconds);
+		fakeAudio.paused = false;
+		fakeAudio.bufferedUntil = 20;
+	}
+
+	function recordSeeks(el: FakeAudio): number[] {
+		const seeks: number[] = [];
+		let position = el.currentTime;
+		Object.defineProperty(el, 'currentTime', {
+			configurable: true,
+			get: () => position,
+			set: (seconds: number) => {
+				seeks.push(seconds);
+				position = seconds;
+			}
+		});
+		return seeks;
+	}
+
+	it.each([
+		{ noticedBy: 'the watchdog', notice: () => vi.advanceTimersByTime(5 * SECOND) },
+		{
+			noticedBy: 'a Play tap after one still look',
+			notice: () => {
+				vi.advanceTimersByTime(2 * SECOND);
+				audioPlayer.play();
+			}
+		}
+	])(
+		'nudges a clock frozen over buffered audio in place when $noticedBy notices it',
+		({ notice }) => {
+			freezeTheClockOverBufferedAudioAt(6);
+			const seeks = recordSeeks(fakeAudio);
+			fakeAudio.playMock.mockClear();
+			const loadSpy = vi.spyOn(fakeAudio, 'load');
+
+			notice();
+
+			expect(seeks).toEqual([6]);
+			expect(fakeAudio.playMock).toHaveBeenCalledOnce();
+			expect(continuousDecks.attached).toHaveLength(1);
+			expect(deck().closed).toBe(false);
+			expect(loadSpy).not.toHaveBeenCalled();
+			expect(audioPlayer.status).toBe('playing');
+		}
+	);
+
+	it('opens a fresh deck at the take and position on the same element when the clock is still frozen at the next look', () => {
+		audioPlayer.swapCallbacks(
+			callbacks({
+				onEnded,
+				onCurrentChange: (current) => {
+					if (current?.generation.id === first.generation.id) audioPlayer.preload(second);
+				}
+			})
+		);
+		freezeTheClockOverBufferedAudioAt(6);
+		vi.advanceTimersByTime(5 * SECOND);
+		const frozen = deck();
+
+		vi.advanceTimersByTime(5 * SECOND);
+
+		expect(frozen.closed).toBe(true);
+		expect(continuousDecks.attached).toHaveLength(2);
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second]);
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).not.toMatch(/recover=/);
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		expect(audioPlayer.transport).toBe('recovering');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(6);
+	});
+
 	it('a browser without MSE MP3 keeps the two decks', () => {
 		continuousDecks.supported = false;
 
