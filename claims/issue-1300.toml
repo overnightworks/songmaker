@@ -1,0 +1,8 @@
+claim_id = "d5cd5a1ddce14b5db768be37321adc4a"
+agent = "claude-head"
+role = "builder"
+base = "9ba1a758ebcd8f27a6cf3b6dd7c90c9609151fc8"
+branch = "claude-head/issue-1300-versions-surface-polish"
+scope = ["frontend/e2e/song-phone.spec.ts", "frontend/e2e/song-versions.spec.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/constants/now-playing.test.ts", "frontend/src/lib/constants/now-playing.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "57c322110c9a0df4c3a6d43e5feed88dd7e608af"
+whole_reason = "versions surface polish"
