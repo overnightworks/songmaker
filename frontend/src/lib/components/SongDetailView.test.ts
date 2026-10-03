@@ -584,7 +584,7 @@ describe('SongDetailView failure wording', () => {
 				});
 				chip.click();
 				await tick();
-				getByRoleButton(target, versionDeleteLabel(1)).click();
+				getByRoleButton(document.body, versionDeleteLabel(1)).click();
 				await tick();
 				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
@@ -1774,8 +1774,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		return chip;
 	}
 
-	function versionsSheet(target: HTMLElement): HTMLElement | null {
-		return target.querySelector<HTMLElement>(
+	function versionsSheet(): HTMLElement | null {
+		return document.querySelector<HTMLElement>(
 			`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
 		);
 	}
@@ -1790,8 +1790,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
 		versionChip(target).click();
 		await tick();
-		const row = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-row')).find((el) =>
-			el.textContent?.trim().startsWith(`v${versionNumber}`)
+		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
+			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
 		);
 		if (!row) throw new Error(`Expected the v${versionNumber} row`);
 		row.click();
@@ -1811,7 +1811,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await tapVersion(target, 1);
 
 		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet(target)).toBeNull();
+		expect(versionsSheet()).toBeNull();
 		expect(get(editLyrics)).toBe('first draft');
 		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
 		expect(target.textContent).toContain(versionLoadedFromLabel(1));
@@ -1834,7 +1834,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			await tapVersion(target, next);
 
 			expect(replaceDialog()).toBeNull();
-			expect(versionsSheet(target)).toBeNull();
+			expect(versionsSheet()).toBeNull();
 			expect(get(editLyrics)).toBe(lyrics);
 		}
 	);
@@ -1909,7 +1909,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await tick();
 
 		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet(target)).not.toBeNull();
+		expect(versionsSheet()).not.toBeNull();
 		expect(get(editLyrics)).toBe('unsaved edit');
 		expect(addUndoToast).not.toHaveBeenCalled();
 	});
@@ -1926,7 +1926,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await Promise.resolve();
 		await tick();
 
-		expect(versionsSheet(target)).toBeNull();
+		expect(versionsSheet()).toBeNull();
 		expect(get(editLyrics)).toBe('first draft');
 
 		undoLastLoad();
@@ -1954,7 +1954,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
 		versionChip(target).click();
 		await tick();
-		const trash = target.querySelector<HTMLButtonElement>(
+		const trash = document.querySelector<HTMLButtonElement>(
 			`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
 		);
 		if (!trash) throw new Error(`Expected the delete on the v${versionNumber} row`);
@@ -1976,8 +1976,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		);
 	}
 
-	function versionRowNumbers(target: HTMLElement): string[] {
-		return Array.from(target.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
+	function versionRowNumbers(): string[] {
+		return Array.from(document.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
 	}
 
 	it.each([
@@ -2003,8 +2003,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 			expect(deleteConfirm()).toBeNull();
 			expect(deleteVersion).not.toHaveBeenCalled();
-			expect(versionsSheet(target)).not.toBeNull();
-			expect(versionRowNumbers(target)).toEqual(['v2', 'v1']);
+			expect(versionsSheet()).not.toBeNull();
+			expect(versionRowNumbers()).toEqual(['v2', 'v1']);
 		}
 	);
 
@@ -2049,9 +2049,9 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(deleteVersion).toHaveBeenCalledExactlyOnceWith('v1', true);
 		expect(addToast).toHaveBeenCalledWith('Deleted v1', 'success');
 		expect(deleteConfirm()).toBeNull();
-		const sheet = versionsSheet(target);
+		const sheet = versionsSheet();
 		expect(sheet).not.toBeNull();
-		expect(versionRowNumbers(target)).toEqual(['v2']);
+		expect(versionRowNumbers()).toEqual(['v2']);
 		expect(sheet?.contains(document.activeElement)).toBe(true);
 	});
 

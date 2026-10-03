@@ -94,6 +94,15 @@
 		wasOpen = isOpen;
 	});
 
+	// The editor body is a size container, and so the containing block of
+	// every fixed box inside it: the backdrop would dim only the editor and the
+	// popover would scroll and clip with it. The layer stands in the document
+	// body instead. It must stay its block's only node, which Svelte removes.
+	function standInDocumentBody(layer: HTMLElement): () => void {
+		document.body.append(layer);
+		return () => layer.remove();
+	}
+
 	// The desktop popover stands in the viewport under the chip, so the editor
 	// column's own scroll box cannot clip it; the phone sheet ignores this.
 	function placeUnderChip(): void {
@@ -157,68 +166,70 @@
 			</span>
 		</button>
 		{#if $open}
-			<button
-				type="button"
-				class="versions-backdrop"
-				tabindex="-1"
-				aria-label={VERSIONS_SHEET_CLOSE_LABEL}
-				onclick={() => ($open = false)}
-			></button>
-			<div
-				bind:this={panel}
-				class="versions-panel"
-				role="dialog"
-				aria-modal="true"
-				aria-label={VERSIONS_SHEET_LABEL}
-				tabindex="-1"
-				style:--popover-top="{popoverTop}px"
-				style:--popover-left="{popoverLeft}px"
-				style:--popover-width="{POPOVER_WIDTH_PX}px"
-				onkeydown={onPanelKeydown}
-			>
-				<div class="versions-head">
-					<span class="versions-title">{VERSIONS_SHEET_LABEL}</span>
-					<button
-						type="button"
-						class="versions-close"
-						data-hitbox="frequent"
-						aria-label={VERSIONS_SHEET_CLOSE_LABEL}
-						onclick={() => ($open = false)}
-					>
-						<Icon name="x" size={18} />
-					</button>
+			<div class="versions-layer" {@attach standInDocumentBody}>
+				<button
+					type="button"
+					class="versions-backdrop"
+					tabindex="-1"
+					aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+					onclick={() => ($open = false)}
+				></button>
+				<div
+					bind:this={panel}
+					class="versions-panel"
+					role="dialog"
+					aria-modal="true"
+					aria-label={VERSIONS_SHEET_LABEL}
+					tabindex="-1"
+					style:--popover-top="{popoverTop}px"
+					style:--popover-left="{popoverLeft}px"
+					style:--popover-width="{POPOVER_WIDTH_PX}px"
+					onkeydown={onPanelKeydown}
+				>
+					<div class="versions-head">
+						<span class="versions-title">{VERSIONS_SHEET_LABEL}</span>
+						<button
+							type="button"
+							class="versions-close"
+							data-hitbox="frequent"
+							aria-label={VERSIONS_SHEET_CLOSE_LABEL}
+							onclick={() => ($open = false)}
+						>
+							<Icon name="x" size={18} />
+						</button>
+					</div>
+					<ul class="versions-list">
+						{#each rows as row (row.version.id)}
+							{@const isCurrent = row.version.id === latest.id}
+							<li class="version-item" class:current={isCurrent}>
+								<button type="button" class="version-row" onclick={() => void choose(row.version)}>
+									<span class="version-number">{versionLabel(row.version.version_number)}</span>
+									<span class="version-lines">
+										<span class="version-takes">
+											{versionTakesLabel(row.takes.count)}
+											{#if row.takes.holdsPick}
+												· ★ {VERSION_PICKED_LABEL}
+											{/if}
+											{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
+										</span>
+										<span class="version-meta">
+											{row.when} · {row.firstLine}
+										</span>
+									</span>
+								</button>
+								<button
+									type="button"
+									class="version-delete"
+									data-hitbox="frequent"
+									aria-label={versionDeleteLabel(row.version.version_number)}
+									onclick={() => askToDelete(row)}
+								>
+									<Icon name="trash" size={16} />
+								</button>
+							</li>
+						{/each}
+					</ul>
 				</div>
-				<ul class="versions-list">
-					{#each rows as row (row.version.id)}
-						{@const isCurrent = row.version.id === latest.id}
-						<li class="version-item" class:current={isCurrent}>
-							<button type="button" class="version-row" onclick={() => void choose(row.version)}>
-								<span class="version-number">{versionLabel(row.version.version_number)}</span>
-								<span class="version-lines">
-									<span class="version-takes">
-										{versionTakesLabel(row.takes.count)}
-										{#if row.takes.holdsPick}
-											· ★ {VERSION_PICKED_LABEL}
-										{/if}
-										{#if isCurrent}<span class="version-current">{VERSION_CURRENT_TAG}</span>{/if}
-									</span>
-									<span class="version-meta">
-										{row.when} · {row.firstLine}
-									</span>
-								</span>
-							</button>
-							<button
-								type="button"
-								class="version-delete"
-								data-hitbox="frequent"
-								aria-label={versionDeleteLabel(row.version.version_number)}
-								onclick={() => askToDelete(row)}
-							>
-								<Icon name="trash" size={16} />
-							</button>
-						</li>
-					{/each}
-				</ul>
 			</div>
 		{/if}
 	</span>
