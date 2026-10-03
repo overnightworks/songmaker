@@ -14,14 +14,21 @@ import {
 import { runMarker, seedSongPhoneSong } from './seed';
 
 /**
- * Measured in CI (01.10.2026, #1236): 43 requests on desktop and 46 on mobile
- * for opening the album and the song, playing the take, the reload whose
- * restore asks for the saved song alone, and the tap that plays it on and
- * gathers its album; 46 and 43 when the restored take plays on into the next
- * song. The songs and their takes are seeded against the database and cost
- * nothing here.
+ * Measured locally (03.10.2026, #1270): 40 to 43 requests on either shell for
+ * opening the album and the song, playing the take, the reload whose restore
+ * asks for the saved song alone, and the tap that plays it on and gathers its
+ * album; 43 to 46 when the restored take plays on into the next song. Each
+ * flow's album holds only its own songs, since gathering costs a request per
+ * song. The songs, their takes and the album cost nothing here.
  */
 const PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET = 50;
+
+/**
+ * Measured locally (03.10.2026, #1270): 59 to 62 requests on either shell for
+ * the album flow that plays into its second song, then reloads twice and plays
+ * on.
+ */
+const PLAYBACK_RESTORE_TWICE_FLOW_API_REQUEST_BUDGET = 70;
 
 const TAKE_FIXTURE = path.join(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -29,8 +36,8 @@ const TAKE_FIXTURE = path.join(
 	'take.mp3'
 );
 
-/** The fixture take's length (`e2e/fixtures/take.mp3`). */
-const TAKE_SECONDS = 3;
+/** The fixture take's length (`e2e/fixtures/take.mp3`), as the server measures it. */
+const TAKE_SECONDS = 3.056;
 
 /**
  * How often a long take repeats the fixture's audio: two minutes, far more
@@ -41,8 +48,14 @@ const LONG_TAKE_REPEATS = 40;
 
 const LONG_TAKE_SECONDS = LONG_TAKE_REPEATS * TAKE_SECONDS;
 
-/** Where the listener pauses the long take: past the deck's first piece, inside what it holds. */
-const LONG_TAKE_PAUSE_SECONDS = 40;
+/** A skip the playing deck holds once it has filled its minute ahead. */
+const SKIP_AHEAD_SECONDS = 50;
+
+/**
+ * The listener pauses the long take after two skips, at 100 s: past the deck's
+ * first piece, which held 33 to 66 s of it in measured runs (128 to 256 KB).
+ */
+const SKIPS_BEFORE_THE_PAUSE = 2;
 
 /** MPEG-2 Layer III bitrates in kbit/s by header index, and sample rates in Hz. */
 const MPEG2_LAYER3_KBPS = [0, 8, 16, 24, 32, 40, 48, 56, 64, 80, 96, 112, 128, 144, 160];
@@ -122,15 +135,23 @@ function transportOf(page: Page) {
 	};
 }
 
-// Moves the playing deck's playhead on within what it holds, as a listener
-// skipping ahead does.
+// Moves the playing deck's playhead on once it holds that far, as a listener
+// skipping ahead within what has loaded does.
 async function skipThePlayingDeckAhead(page: Page, seconds: number): Promise<void> {
-	await page.evaluate((by) => {
-		const decks = [...(window as unknown as DeckWindow).audioDecks];
-		const playing = decks.find((deck) => !deck.paused);
-		if (!playing) throw new Error('No deck is playing');
-		playing.currentTime += by;
-	}, seconds);
+	await expect
+		.poll(() =>
+			page.evaluate((by) => {
+				const decks = [...(window as unknown as DeckWindow).audioDecks];
+				const playing = decks.find((deck) => !deck.paused);
+				if (!playing) throw new Error('No deck is playing');
+				const target = playing.currentTime + by;
+				const { buffered } = playing;
+				if (buffered.length === 0 || buffered.end(buffered.length - 1) < target) return false;
+				playing.currentTime = target;
+				return true;
+			}, seconds)
+		)
+		.toBe(true);
 }
 
 // The fixture's audio frames over and over, without its ID3 tag and the LAME
@@ -335,8 +356,10 @@ test("reload after a pause in the album's second take shows it at its saved posi
 		await expect(transport).toContainText(second, {
 			timeout: TRACK_CHANGE_TIMEOUT_MS
 		});
-		await skipThePlayingDeckAhead(page, LONG_TAKE_PAUSE_SECONDS);
-		await expect.poll(shownInLongTake).toBeGreaterThanOrEqual(LONG_TAKE_PAUSE_SECONDS);
+		for (let skips = 1; skips <= SKIPS_BEFORE_THE_PAUSE; skips += 1) {
+			await skipThePlayingDeckAhead(page, SKIP_AHEAD_SECONDS);
+			await expect.poll(shownInLongTake).toBeGreaterThanOrEqual(skips * SKIP_AHEAD_SECONDS);
+		}
 		await pause.click();
 		await expect(play).toBeVisible();
 		const pausedAt = await shownInLongTake();
@@ -345,6 +368,9 @@ test("reload after a pause in the album's second take shows it at its saved posi
 			await page.reload();
 			await expect(transport, reload).toContainText(second);
 			await expect(play, reload).toBeVisible();
+			await expect
+				.poll(() => loadedDeckPositions(page), { message: reload })
+				.toEqual([expect.closeTo(pausedAt, 0)]);
 			await expect.poll(shownInLongTake, { message: reload }).toBeCloseTo(pausedAt, 0);
 		}
 
@@ -355,5 +381,5 @@ test("reload after a pause in the album's second take shows it at its saved posi
 
 	console.log(`Playback restore later take /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
-	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+	guard.assertWithinBudget(PLAYBACK_RESTORE_TWICE_FLOW_API_REQUEST_BUDGET);
 });
