@@ -9,7 +9,7 @@ import {
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
 import {
-	ownStepBacksUnderway,
+	ownStepBacksUnderwayForTests,
 	pageStateOfHistoryState,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
@@ -109,7 +109,7 @@ export function reloadLibraryPage(): Promise<void> {
 // as far as a test needs to tell them apart.
 export function plannedHistoryIndex(): number {
 	const standing = standingHistoryEntry()?.id ?? Number.NEGATIVE_INFINITY;
-	return ownStepBacksUnderway() ? standing - 1 : standing;
+	return ownStepBacksUnderwayForTests() ? standing - 1 : standing;
 }
 
 // The entry history stands on, as the history controller stamped it: its id,

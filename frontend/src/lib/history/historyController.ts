@@ -470,9 +470,10 @@ function settleStepBack(target: number): void {
 	settle?.();
 }
 
-export function ownStepBacksUnderway(): boolean {
+function ownStepBacksUnderway(): boolean {
 	return ledger.stepBacks.length > 0;
 }
+export { ownStepBacksUnderway as ownStepBacksUnderwayForTests };
 
 // History moves while one of the controller's own step-backs is underway or a
 // navigation is loading the route it writes its entry for: an entry written
