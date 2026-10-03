@@ -1,8 +1,0 @@
-claim_id = "f50214284b314737881ebffb04b5fa44"
-agent = "claude-head"
-role = "builder"
-base = "dcafdee310655b1633ecfc27b3e89ab2caa26e12"
-branch = "claude-head/issue-1296-clean-leave-confirms"
-scope = ["docs/architecture.md", "frontend/e2e/song-versions.spec.ts", "frontend/src/lib/components/NowPlayingTake.svelte", "frontend/src/lib/components/NowPlayingTake.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/editor/VersionsSheet.svelte", "frontend/src/lib/components/editor/VersionsSheet.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/toast.test.ts", "frontend/src/lib/stores/toast.ts"]
-opened_commit = "c2aecff5f83910006c2b0bf106dc08f5ffa076fb"
-whole_reason = "leaving a clean draft, honest delete confirms and Undo toast lifetime, with the Versions sheet"
