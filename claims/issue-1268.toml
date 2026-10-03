@@ -1,0 +1,8 @@
+claim_id = "866751fb7f5b45ceb46f550ade195fa9"
+agent = "claude-head"
+role = "builder"
+base = "cc061605679911609733c8e39133f60ccd910e52"
+branch = "claude-head/issue-1268-deck-close"
+scope = ["frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
+opened_commit = "dd873a0c57557433229fe48f67913f077883bf9c"
+whole_reason = "deck close() and the player closing every deck it leaves"
