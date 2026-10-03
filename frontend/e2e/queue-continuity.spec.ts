@@ -5,7 +5,7 @@
 // Chromium does, the album plays on one element that neither pauses nor ends
 // between takes (#1254): the track change is the playhead crossing.
 //
-// Both shells walk both flows. The seeded takes are three seconds long, so a
+// Both shells walk every flow. The seeded takes are three seconds long, so a
 // real track change happens inside the flow's own time.
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
@@ -95,6 +95,13 @@ async function expectTransportMovesOn(page: Page, from: SeededTrack, to: SeededT
 	await expect(transport.getByText(from.songTitle, { exact: true })).toHaveCount(0);
 }
 
+async function playAlbum(page: Page, albumId: string) {
+	await page.goto(`/album/${albumId}`);
+	await workspace(page)
+		.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
+		.click();
+}
+
 test('an album plays from one take into the next on one element that never stops', async ({
 	page
 }) => {
@@ -103,16 +110,37 @@ test('an album plays from one take into the next on one element that never stops
 	const [first, second] = library.albumTracks;
 	const timeline = await PlaybackTimeline.watch(page);
 
-	await page.goto(`/album/${library.albumId}`);
-	await workspace(page)
-		.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
-		.click();
+	await playAlbum(page, library.albumId);
 
 	await expectTransportMovesOn(page, first, second);
 	const movedOnAt = performance.now();
 	expect(timeline.requestedAt(second)).toBeLessThan(movedOnAt);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
+	guard.assertClean();
+});
+
+// Prev starts the previous take on a fresh buffer (#1276): the one pause is
+// the jump back, and the queue then crosses into the take after it on the
+// same element without another stop.
+test('Prev on an album starts the previous take and the queue continues into the take after it', async ({
+	page
+}) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const [first, second] = library.albumTracks;
+	const timeline = await PlaybackTimeline.watch(page);
+	const transport = page.getByRole('contentinfo');
+	const jumpBack = ['pause on element 0'];
+
+	await playAlbum(page, library.albumId);
+	await expectTransportMovesOn(page, first, second);
+	await transport.getByRole('button', { name: 'Previous', exact: true }).click();
+	await expect.poll(() => timeline.stops).toEqual(jumpBack);
+
+	await expectTransportMovesOn(page, first, second);
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.stops).toEqual(jumpBack);
 	guard.assertClean();
 });
 
