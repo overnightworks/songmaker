@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContinuousDeck, TakeNotAppended } from './continuousDeck';
 
 const MEGABYTE = 1024 * 1024;
-// The size FakeNetwork hands a response body out in.
+// The size FakeNetwork hands a response body out in, unless the link is slow.
 const PIECE = 256 * 1024;
+// What a link barely faster than the take's bitrate delivers in a second.
+const SLOW_PIECE = 12_000;
 const BYTES_PER_SECOND = 16_000;
 const OBJECT_URL = 'blob:continuous-deck';
 
@@ -162,13 +164,31 @@ interface TakeRequest {
 	range: string | null;
 }
 
+// How a resume is answered instead of from the byte it asked for.
+interface RangeAnswer {
+	status: number;
+	fromTheStart?: boolean;
+	withoutContentRange?: boolean;
+}
+
+interface Answer {
+	status: number;
+	bodyCancelled: boolean;
+}
+
 class FakeNetwork {
 	readonly requests: TakeRequest[] = [];
 	readonly signals: AbortSignal[] = [];
+	readonly answers: Answer[] = [];
 	private readonly files = new Map<string, Uint8Array>();
 	private readonly breaks = new Map<string, number[]>();
 	private readonly refusals = new Map<string, number>();
-	private readonly rangesAnsweredFromTheStart = new Map<string, 200 | 206>();
+	private readonly rangeAnswers = new Map<string, RangeAnswer>();
+	private pieceBytes = PIECE;
+
+	slowLink(): void {
+		this.pieceBytes = SLOW_PIECE;
+	}
 
 	serve(url: string, bytes: number): Uint8Array {
 		const file = Uint8Array.from({ length: bytes }, (_, index) => index % 251);
@@ -184,8 +204,8 @@ class FakeNetwork {
 		this.refusals.set(url, status);
 	}
 
-	answerRangesFromTheStart(url: string, status: 200 | 206): void {
-		this.rangesAnsweredFromTheStart.set(url, status);
+	answerRanges(url: string, answer: RangeAnswer): void {
+		this.rangeAnswers.set(url, answer);
 	}
 
 	readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -197,29 +217,46 @@ class FakeNetwork {
 		if (refusal) return new Response(null, { status: refusal });
 		const file = this.files.get(url);
 		if (!file) throw new TypeError(`no file served at ${url}`);
-		const startAnswer = range ? this.rangesAnsweredFromTheStart.get(url) : undefined;
-		const from = range && !startAnswer ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
-		const status = startAnswer ?? (range ? 206 : 200);
+		const rangeAnswer = range ? this.rangeAnswers.get(url) : undefined;
+		const from =
+			range && !rangeAnswer?.fromTheStart ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
+		const status = rangeAnswer?.status ?? (range ? 206 : 200);
 		const breakPosition = this.breaks.get(url)?.shift();
 		const headers: Record<string, string> =
-			status === 206
+			status === 206 && !rangeAnswer?.withoutContentRange
 				? { 'Content-Range': `bytes ${from}-${file.byteLength - 1}/${file.byteLength}` }
 				: {};
+		const answer: Answer = { status, bodyCancelled: false };
+		this.answers.push(answer);
 		return new Response(
-			piecewise(file.subarray(from, breakPosition), breakPosition !== undefined, init?.signal),
+			piecewise(file.subarray(from, breakPosition), {
+				pieceBytes: this.pieceBytes,
+				breaks: breakPosition !== undefined,
+				signal: init?.signal,
+				cancelled: () => {
+					answer.bodyCancelled = true;
+				}
+			}),
 			{ status, headers }
 		);
 	};
 }
 
+interface PiecewiseOptions {
+	pieceBytes: number;
+	breaks: boolean;
+	signal: AbortSignal | null | undefined;
+	cancelled: () => void;
+}
+
 // Like a fetch body, the stream errors with the abort reason once its request is aborted.
 function piecewise(
 	bytes: Uint8Array,
-	breaks: boolean,
-	signal: AbortSignal | null | undefined
+	{ pieceBytes, breaks, signal, cancelled }: PiecewiseOptions
 ): ReadableStream<Uint8Array> {
 	let offset = 0;
 	return new ReadableStream({
+		cancel: cancelled,
 		pull(controller) {
 			if (signal?.aborted) {
 				controller.error(signal.reason);
@@ -230,8 +267,8 @@ function piecewise(
 				else controller.close();
 				return;
 			}
-			controller.enqueue(bytes.slice(offset, offset + PIECE));
-			offset += PIECE;
+			controller.enqueue(bytes.slice(offset, offset + pieceBytes));
+			offset += pieceBytes;
 		}
 	});
 }
@@ -335,21 +372,27 @@ describe('ContinuousDeck', () => {
 		]);
 	});
 
-	it('appends the first piece at once, then one-megabyte chunks while less than a minute is buffered ahead', async () => {
+	it('appends each piece as it arrives while little is buffered ahead, so a slow link keeps the buffer growing', async () => {
+		const { deck, buffer, network } = openDeck();
+		network.slowLink();
+		network.serve('/audio/take.mp3', 20 * SLOW_PIECE);
+
+		await deck.appendTake('take', '/audio/take.mp3');
+
+		expect(buffer.appendedBytes()).toEqual(Array(20).fill(SLOW_PIECE));
+	});
+
+	it('gathers one-megabyte chunks once plenty is buffered ahead, and waits while a minute is', async () => {
 		const { deck, audio, buffer, network } = openDeck();
 		network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
 		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
 
-		audio.playTo(25);
-		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE]);
-
-		audio.playTo(100);
+		audio.playTo(50);
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE, MEGABYTE]);
 	});
 
 	it('appends the first piece before the rest of the take has arrived', async () => {
@@ -372,7 +415,7 @@ describe('ContinuousDeck', () => {
 
 	it('starts the next append only after the previous one fired updateend', async () => {
 		const { deck, audio, buffer, network } = openDeck();
-		network.serve('/audio/long.mp3', 1.5 * MEGABYTE);
+		network.serve('/audio/long.mp3', 3 * PIECE);
 		audio.currentTime = 1000;
 		buffer.autoSettle = false;
 
@@ -392,7 +435,7 @@ describe('ContinuousDeck', () => {
 		await lastAppend;
 		buffer.settle();
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, PIECE]);
 	});
 
 	it('removes takes that have played and keeps the take under the playhead', async () => {
@@ -456,21 +499,27 @@ describe('ContinuousDeck', () => {
 	});
 
 	it.each([
-		{ answer: 206 as const, refusal: 'Content-Range mismatch' },
-		{ answer: 200 as const, refusal: 'ignored Range' }
+		{
+			answer: { status: 206, fromTheStart: true },
+			refusal: 'Content-Range mismatch: asked from byte 300000'
+		},
+		{ answer: { status: 200 }, refusal: 'ignored Range' },
+		{ answer: { status: 503 }, refusal: 'answered 503' },
+		{ answer: { status: 206, withoutContentRange: true }, refusal: 'missing Content-Range' }
 	])(
-		'refuses a resume answered $answer from the first byte as $refusal and appends nothing twice',
+		'refuses a resume answered $answer as $refusal, stops its download and appends nothing twice',
 		async ({ answer, refusal }) => {
 			const { deck, buffer, network } = openDeck();
 			const file = network.serve('/audio/take.mp3', 0.75 * MEGABYTE);
 			network.breakAt('/audio/take.mp3', 300_000);
-			network.answerRangesFromTheStart('/audio/take.mp3', answer);
+			network.answerRanges('/audio/take.mp3', answer);
 
 			const step = deck.appendTake('take', '/audio/take.mp3');
 
 			await expect(step).rejects.toMatchObject({ reason: 'not-fetched' });
 			await expect(step).rejects.toThrow(refusal);
 			expect(network.requests.map((request) => request.range)).toEqual([null, 'bytes=300000-']);
+			expect(network.answers.at(-1)).toEqual({ status: answer.status, bodyCancelled: true });
 			const appended = concatenated(buffer.appended);
 			expect(appended.byteLength).toBeLessThanOrEqual(300_000);
 			expect(firstDifferingByte(appended, file.subarray(0, appended.byteLength))).toBeNull();
@@ -649,7 +698,7 @@ describe('ContinuousDeck', () => {
 			audio.playTo(100);
 			await Promise.resolve();
 
-			expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE]);
+			expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
 			expect(buffer.removals).toEqual([]);
 		});
 
