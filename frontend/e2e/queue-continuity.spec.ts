@@ -263,7 +263,6 @@ test('an album whose second take is refused names it once, when playback reaches
 
 	await expect(upNext(third)).toBeVisible();
 	expect(toasts.count(skipped)).toBe(0);
-	await expect(upNext(third)).toBeVisible();
 	await playsUntilUpNextNames(first);
 	await expect.poll(() => toasts.count(skipped)).toBe(1);
 	await playsUntilUpNextNames(third);
