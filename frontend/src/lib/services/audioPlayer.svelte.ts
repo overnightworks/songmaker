@@ -897,6 +897,7 @@ class AudioPlayer {
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		on('pause', () => {
+			if (this.gaveUpOnStall && !this.pauseRequestedByApp) this.autoplayPending = false;
 			this.pauseRequestedByApp = false;
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
@@ -978,9 +979,10 @@ class AudioPlayer {
 		if (!this.recoverPlayback(reason)) this.giveUpOnStall();
 	}
 
-	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message. The listener's wish to hear the take outlives it, so
-	// a late answer plays on unless the listener pauses in the meantime.
+	// The player never pauses itself (#1187 P3): with the screen off a pause is
+	// the moment Android may freeze the page. The listener's wish to hear the
+	// take outlives the give-up, so a late answer plays on unless the listener
+	// pauses in the meantime.
 	private giveUpOnStall(): void {
 		const listenerWantsSound =
 			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
@@ -992,7 +994,6 @@ class AudioPlayer {
 				: { kind: 'stalled', message: ERROR_MSG_STALLED }
 		);
 		this.autoplayPending = listenerWantsSound;
-		if (this.audio) this.pauseElement(this.audio);
 		this.note('give_up', this.failure?.kind ?? '');
 	}
 
