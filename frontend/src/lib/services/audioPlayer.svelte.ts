@@ -481,7 +481,10 @@ class AudioPlayer {
 	}
 
 	// A load the deck can play on into is a seek: the element keeps its one
-	// source. Every other take starts a fresh deck.
+	// source. Every other take starts a fresh deck. A queue rebuilt around the
+	// playing take (a shuffle toggle) asks for it where the player shows it,
+	// which trails the element by up to a timeupdate: the element plays on
+	// from where it is, so nothing is heard twice.
 	private seekWithinDeck(
 		session: DeckSession,
 		info: PlaybackInfo,
@@ -492,8 +495,9 @@ class AudioPlayer {
 		const entry = el && continuableEntry(session, el.currentTime, info);
 		if (!el || !entry) return false;
 		const startAt = opts.startAt ?? 0;
+		const playsOnWhereItIs = entry === session.playing && startAt === this.currentTime;
 		session.playing = entry;
-		session.deck.seekTo(entry.start_offset + startAt);
+		if (!playsOnWhereItIs) session.deck.seekTo(entry.start_offset + startAt);
 		this.currentUrl = url;
 		this.currentTime = startAt;
 		this.lastObservedTime = startAt;

@@ -3140,6 +3140,25 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(audioPlayer.duration).toBe(20);
 	});
 
+	it.each([
+		{ rebuild: 'handing the take the deck holds', take: first },
+		{ rebuild: 'handing the playing take anew', take: { ...first } }
+	])(
+		'a queue rebuilt around the playing take $rebuild plays on from the exact position',
+		({ take }) => {
+			playFirstWithSecondAppended();
+			playTo(4);
+			fakeAudio.currentTime = 4.15;
+
+			audioPlayer.load(take, { restart: true, startAt: audioPlayer.currentTime });
+
+			expect(deck().seeks).toEqual([]);
+			expect(fakeAudio.currentTime).toBe(4.15);
+			expect(continuousDecks.attached).toHaveLength(1);
+			expect(audioPlayer.current).toBe(first);
+		}
+	);
+
 	function playThreeHeldWithThirdHandedLast(): void {
 		playFirstWithSecondAppended();
 		audioPlayer.preload(third);
