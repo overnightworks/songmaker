@@ -3707,6 +3707,25 @@ describe('audioPlayer offline announcement wiring', () => {
 	});
 });
 
+describe('a take the player skipped', () => {
+	it('tells the listener which take could not be loaded', () => {
+		toasts.set([]);
+		const take = makePlayback(
+			makeGen(genDefaults),
+			makeSong({ ...queuedSongDefaults(), title: 'Second Wind' })
+		);
+
+		audioPlayer.currentCallbacks.onTakeSkipped?.(take);
+
+		expect(get(toasts)).toEqual([
+			expect.objectContaining({
+				message: "Second Wind couldn't be loaded, skipped.",
+				type: 'error'
+			})
+		]);
+	});
+});
+
 describe('remembering what the app plays', () => {
 	const LISTENER = { id: 'u-resume', username: 'listener', role: 'user' as const };
 	const song = makeSong({ ...queuedSongDefaults(), id: 's-resume' });

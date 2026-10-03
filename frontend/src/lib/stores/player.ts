@@ -1677,6 +1677,12 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 	preloadNextTake();
 }
 
+// The deck plays on past the skipped take, so the listener hears which one
+// the queue lost instead of finding it silently gone.
+function announceSkippedTake(take: PlaybackInfo): void {
+	addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
+}
+
 function moveQueueIndexTo(current: PlaybackInfo): void {
 	const ctx = get(queueContext);
 	const index =
@@ -1715,6 +1721,7 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onStreamRebuild: rebuildQueueStream,
 	onCurrentChange: handleCurrentChange,
 	takeAfter,
+	onTakeSkipped: announceSkippedTake,
 	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);

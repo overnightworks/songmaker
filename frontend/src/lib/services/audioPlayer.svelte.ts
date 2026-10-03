@@ -93,6 +93,9 @@ export interface AudioPlayerCallbacks {
 	// could not fetch; an owner that never plays a queue on that deck (a share
 	// route) has no answer to give.
 	takeAfter?: (take: PlaybackInfo) => PlaybackInfo | null;
+	// The continuous deck skips a take it could not fetch while the next one
+	// plays; only the owner can tell the listener which take that was.
+	onTakeSkipped?: (take: PlaybackInfo) => void;
 	// Only the owner knows whether its page shows the offline strip; a page
 	// without one needs the player's own failure line.
 	networkFailureIsAnnounced: () => boolean;
@@ -511,10 +514,15 @@ class AudioPlayer {
 				'media_event',
 				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
 			);
-			if (error.reason === 'not-fetched') this.appendInPlaceOf(session, error.take);
+			if (error.reason === 'not-fetched') this.skipTake(session, error.take);
 			return;
 		}
 		this.fallBackToTwoDecks(error instanceof Error ? error.message : String(error));
+	}
+
+	private skipTake(session: DeckSession, dropped: PlaybackInfo): void {
+		this.callbacks.onTakeSkipped?.(dropped);
+		this.appendInPlaceOf(session, dropped);
 	}
 
 	// The take the queue plays after a dropped one is appended in its place, so

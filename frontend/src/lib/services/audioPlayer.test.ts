@@ -2971,15 +2971,18 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).toHaveBeenCalledOnce();
 	});
 
-	it('drops a take ahead that could not be fetched and crosses on into the take after it', async () => {
+	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {
 		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
-		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter }));
+		const skipped: PlaybackInfo[] = [];
+		const onTakeSkipped = (take: PlaybackInfo) => skipped.push(take);
+		audioPlayer.swapCallbacks(callbacks({ onCurrentChange, onEnded, takeAfter, onTakeSkipped }));
 		playFirstWithSecondAppended();
 		const heard = heardEvents();
 
 		deck().requests[1].fail(new TakeNotAppended(second, 'not-fetched', 'Failed to fetch'));
 		await Promise.resolve();
 
+		expect(skipped).toEqual([second]);
 		expect(deck().requests.map((request) => request.take)).toEqual([first, second, third]);
 		expect(audioPlayer.current?.generation.id).toBe('g1');
 		expect(audioPlayer.status).toBe('playing');
