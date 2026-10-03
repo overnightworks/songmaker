@@ -126,6 +126,18 @@ interface PendingVersionLoad {
 
 export const pendingVersionLoad = writable<PendingVersionLoad | null>(null);
 
+/** A version the Versions list asks to delete, with the takes that go with it. */
+interface VersionDeleteRequest {
+	songId: string;
+	version: VersionItem;
+	takeCount: number;
+	holdsPick: boolean;
+}
+
+// The song page confirms it: a dialog inside the editor would sit in its size
+// container and inherit the Lyrics label's type.
+export const versionDeleteRequest = writable<VersionDeleteRequest | null>(null);
+
 // --- Pinned seed (forwarded to the next generation request) ---
 export const pinnedSeed = writable<number | null>(null);
 

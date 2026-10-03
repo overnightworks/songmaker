@@ -1,6 +1,11 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { isDirty, retireVersionLoadUndo, versions } from '$lib/stores/editor';
+	import {
+		isDirty,
+		retireVersionLoadUndo,
+		versionDeleteRequest,
+		versions
+	} from '$lib/stores/editor';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown, refocusIfDropped } from '$lib/utils/focus-trap';
 	import { activityTimeLabel } from '$lib/utils/format';
@@ -12,10 +17,12 @@
 		VERSIONS_SHEET_CLOSE_LABEL,
 		VERSIONS_SHEET_LABEL,
 		versionChipLabel,
+		versionDeleteLabel,
 		versionLabel,
 		versionTakesLabel,
 		versionsChipAccessibleLabel
 	} from '$lib/constants';
+	import { takeVersion } from '$lib/constants/now-playing';
 	import Icon from '../Icon.svelte';
 
 	interface Props {
@@ -56,9 +63,10 @@
 	function takesByVersion(): Record<number, VersionTakes> {
 		const byVersion: Record<number, VersionTakes> = {};
 		for (const take of song.generations) {
-			if (take.version_number === null) continue;
-			const takes = byVersion[take.version_number] ?? NO_TAKES;
-			byVersion[take.version_number] = {
+			const origin = takeVersion(take.version_id, take.version_number);
+			if (!origin) continue;
+			const takes = byVersion[origin.versionNumber] ?? NO_TAKES;
+			byVersion[origin.versionNumber] = {
 				count: takes.count + 1,
 				holdsPick: takes.holdsPick || take.is_picked
 			};
@@ -105,6 +113,20 @@
 	async function choose(version: VersionItem): Promise<void> {
 		if (await onload(version.id)) $open = false;
 	}
+
+	function askToDelete(row: VersionRow): void {
+		versionDeleteRequest.set({
+			songId: song.id,
+			version: row.version,
+			takeCount: row.takes.count,
+			holdsPick: row.takes.holdsPick
+		});
+	}
+
+	// A deleted row takes the focus with it; the open list keeps it.
+	$effect(() => {
+		if (rows.length > 0 && $open && panel) refocusIfDropped(panel);
+	});
 
 	function onPanelKeydown(event: KeyboardEvent): void {
 		if (panel) handleFocusTrapKeydown(panel, event);
@@ -166,13 +188,8 @@
 				<ul class="versions-list">
 					{#each rows as row (row.version.id)}
 						{@const isCurrent = row.version.id === latest.id}
-						<li>
-							<button
-								type="button"
-								class="version-row"
-								class:current={isCurrent}
-								onclick={() => void choose(row.version)}
-							>
+						<li class="version-item" class:current={isCurrent}>
+							<button type="button" class="version-row" onclick={() => void choose(row.version)}>
 								<span class="version-number">{versionLabel(row.version.version_number)}</span>
 								<span class="version-lines">
 									<span class="version-takes">
@@ -187,6 +204,15 @@
 										{#if row.firstLine}· {row.firstLine}{/if}
 									</span>
 								</span>
+							</button>
+							<button
+								type="button"
+								class="version-delete"
+								data-hitbox="frequent"
+								aria-label={versionDeleteLabel(row.version.version_number)}
+								onclick={() => askToDelete(row)}
+							>
+								<Icon name="trash" size={16} />
 							</button>
 						</li>
 					{/each}
@@ -299,16 +325,27 @@
 		min-height: 0;
 	}
 
+	.version-item {
+		display: flex;
+		align-items: center;
+		padding-right: 0.25rem;
+		border-top: 1px solid var(--border);
+	}
+
+	.version-item.current {
+		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+	}
+
 	.version-row {
+		flex: 1;
+		min-width: 0;
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		width: 100%;
 		min-height: 60px;
-		padding: 0.35rem 1rem;
+		padding: 0.35rem 0.25rem 0.35rem 1rem;
 		background: none;
 		border: none;
-		border-top: 1px solid var(--border);
 		color: var(--text);
 		text-align: left;
 		cursor: pointer;
@@ -318,8 +355,14 @@
 		background: var(--surface-hover);
 	}
 
-	.version-row.current {
-		background: color-mix(in srgb, var(--accent) 5%, var(--surface));
+	.version-delete {
+		background: none;
+		border: none;
+		color: var(--text-subtle);
+	}
+
+	.version-delete:hover {
+		color: var(--score-bad);
 	}
 
 	.version-number {
@@ -329,7 +372,7 @@
 		font-size: 1.05rem;
 	}
 
-	.version-row.current .version-number {
+	.version-item.current .version-number {
 		color: var(--accent);
 	}
 

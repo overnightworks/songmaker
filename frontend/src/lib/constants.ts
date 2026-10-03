@@ -216,7 +216,6 @@ export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
 export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
 export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
-export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 export const EDITOR_TAB_EDIT_LABEL = 'Edit';
@@ -377,6 +376,8 @@ export const VERSION_CURRENT_TAG = 'current';
 export const VERSION_PICKED_LABEL = 'picked';
 export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
 export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
+export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
+export const VERSION_DELETE_PICK_WARNING = 'The album pick is one of them.';
 export const TOAST_UNDO_LABEL = 'Undo';
 
 export function versionLabel(versionNumber: number): string {
@@ -395,6 +396,16 @@ export function versionsChipAccessibleLabel(chipLabel: string): string {
 export function versionTakesLabel(count: number): string {
 	if (count === 0) return 'no takes';
 	return `${count} take${count === 1 ? '' : 's'}`;
+}
+
+export function versionDeleteLabel(versionNumber: number): string {
+	return `Delete ${versionLabel(versionNumber)}`;
+}
+
+export function versionDeleteTitle(versionNumber: number, takeCount: number): string {
+	const version = versionLabel(versionNumber);
+	if (takeCount === 0) return `Delete ${version}?`;
+	return `Delete ${version} and its ${versionTakesLabel(takeCount)}?`;
 }
 
 export function versionLoadedFromLabel(versionNumber: number): string {

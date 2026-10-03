@@ -14,7 +14,6 @@
 		TAKE_PICK_LABEL,
 		TAKE_UNKEEP_LABEL,
 		TAKE_RESCORING_LABEL,
-		TAKES_DELETE_VERSION_LABEL,
 		TAKES_DRAFT_BANNER_TEMPLATE,
 		TAKES_EMPTY,
 		TAKES_ERROR,
@@ -31,6 +30,7 @@
 		takeVersion,
 		takeRowLabel,
 		takeGroupLabel,
+		type TakeVersion,
 		TAKE_SELECT_LABEL,
 		NOW_PLAYING_UNPICK_LABEL
 	} from '$lib/constants/now-playing';
@@ -50,14 +50,12 @@
 		selectionCount
 	} from '$lib/stores/selection';
 	import { addToast } from '$lib/stores/toast';
-	import { handleDeleteVersion } from '$lib/stores/editor';
 	import { bulkDeleteGenerations } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
-	import ConfirmDeleteDialog from '../ConfirmDeleteDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
 	import { generateAction, isGenerateJobActive } from '$lib/stores/generateAction';
 	import TakeMenu from './TakeMenu.svelte';
@@ -108,29 +106,27 @@
 
 	let playlistFor = $state<string | null>(null);
 	let deleteFor = $state<GenerationItem | null>(null);
-	let deleteVersionFor = $state<VersionGroup | null>(null);
 
 	interface VersionGroup {
-		versionNumber: number | null;
-		versionId: string | null;
+		version: TakeVersion | null;
 		generations: GenerationItem[];
+	}
+
+	const IMPORTED_GROUP_KEY = 'imported';
+
+	function groupKey(version: TakeVersion | null): string {
+		return version ? `v${version.versionNumber}` : IMPORTED_GROUP_KEY;
 	}
 
 	const groups = $derived.by((): VersionGroup[] => {
 		const map: Record<string, VersionGroup> = {};
 		for (const gen of song.generations) {
-			const key = gen.version_number !== null ? `v${gen.version_number}` : 'unknown';
-			if (!map[key]) {
-				map[key] = {
-					versionNumber: gen.version_number,
-					versionId: gen.version_id,
-					generations: []
-				};
-			}
-			map[key].generations.push(gen);
+			const version = takeVersion(gen.version_id, gen.version_number);
+			const group = (map[groupKey(version)] ??= { version, generations: [] });
+			group.generations.push(gen);
 		}
 		const result = Object.values(map);
-		result.sort((a, b) => (b.versionNumber ?? -1) - (a.versionNumber ?? -1));
+		result.sort((a, b) => (b.version?.versionNumber ?? -1) - (a.version?.versionNumber ?? -1));
 		return result;
 	});
 
@@ -274,19 +270,6 @@
 		}
 	}
 
-	async function confirmDeleteVersion(): Promise<void> {
-		const group = deleteVersionFor;
-		deleteVersionFor = null;
-		const versionId = group?.versionId;
-		if (!group || !versionId) return;
-		try {
-			await handleDeleteVersion(song.id, versionId, true);
-			addToast(`Deleted v${group.versionNumber}`, 'success');
-		} catch (e) {
-			addToast(describeFailure(e, 'Delete failed'), 'error');
-		}
-	}
-
 	// The first generation of a song has zero takes; the empty state must not hide a job in flight.
 	const jobRunning = $derived(isGenerateJobActive($generateAction));
 </script>
@@ -350,44 +333,31 @@
 			</div>
 		{/if}
 
-		{#each groups as group (group.versionNumber ?? 'unknown')}
-			{@const openableVersion = takeVersion(group.versionId, group.versionNumber)}
+		{#each groups as group (groupKey(group.version))}
+			{@const label = takeGroupLabel(
+				group.version?.versionNumber ?? null,
+				group.generations.length
+			)}
 			<div class="version-section">
 				<div class="version-header-row">
-					{#if openableVersion}
+					{#if group.version}
+						{@const version = group.version}
 						<button
 							type="button"
 							class="version-link"
 							data-hitbox="text"
-							onclick={() => void actions.clickVersion(openableVersion.versionId)}
+							onclick={() => void actions.clickVersion(version.versionId)}
 						>
-							<span class="version-header"
-								>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
-							>
+							<span class="version-header">{label}</span>
 							<span class="version-open"
-								>{openVersionLabel(openableVersion.versionNumber)}<Icon
+								>{openVersionLabel(version.versionNumber)}<Icon
 									name="chevron-right"
 									size={14}
 								/></span
 							>
 						</button>
 					{:else}
-						<span class="version-header"
-							>{takeGroupLabel(group.versionNumber, group.generations.length)}</span
-						>
-					{/if}
-					{#if group.versionNumber !== null}
-						<button
-							type="button"
-							class="version-delete-btn"
-							data-hitbox="frequent"
-							data-hitbox-face
-							onclick={() => (deleteVersionFor = group)}
-							aria-label={`${TAKES_DELETE_VERSION_LABEL} v${group.versionNumber}`}
-							title={TAKES_DELETE_VERSION_LABEL}
-						>
-							<Icon name="trash" size={12} />
-						</button>
+						<span class="version-header">{label}</span>
 					{/if}
 				</div>
 				{#each group.generations as gen (gen.id)}
@@ -611,18 +581,6 @@
 	/>
 {/if}
 
-{#if deleteVersionFor}
-	<ConfirmDeleteDialog
-		title={`Delete v${deleteVersionFor.versionNumber}?`}
-		items={[
-			`${deleteVersionFor.generations.length} take${deleteVersionFor.generations.length !== 1 ? 's' : ''} will be deleted permanently`
-		]}
-		confirmLabel="Delete Version"
-		onconfirm={() => void confirmDeleteVersion()}
-		oncancel={() => (deleteVersionFor = null)}
-	/>
-{/if}
-
 <style>
 	.takes-list {
 		display: flex;
@@ -678,21 +636,6 @@
 		margin-left: auto;
 		font-size: var(--label-font-size);
 		color: var(--accent);
-	}
-
-	.version-delete-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: none;
-		border: none;
-		color: var(--text-subtle);
-		cursor: pointer;
-		padding: 0.15rem;
-	}
-
-	.version-delete-btn:hover {
-		color: var(--score-bad);
 	}
 
 	.take-row {

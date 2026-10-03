@@ -11,9 +11,13 @@ vi.mock('$lib/api/client', () => ({
 
 import { get } from 'svelte/store';
 import { fetchVersions } from '$lib/api/client';
-import { loadSongData, setDraftLyrics, versions } from '$lib/stores/editor';
+import { loadSongData, setDraftLyrics, versionDeleteRequest, versions } from '$lib/stores/editor';
 import { closeTopLayer, resetLayersForTests } from '$lib/stores/layers';
-import { VERSIONS_SHEET_LABEL, versionsChipAccessibleLabel } from '$lib/constants';
+import {
+	VERSIONS_SHEET_LABEL,
+	versionDeleteLabel,
+	versionsChipAccessibleLabel
+} from '$lib/constants';
 import VersionsSheet from './VersionsSheet.svelte';
 
 const NOW = new Date(2026, 9, 2, 15, 0);
@@ -47,10 +51,10 @@ const SONG = makeSong({
 	id: 's1',
 	lyrics: 'Headlights cut the rain in two',
 	generations: [
-		makeGeneration({ id: 'g1', version_number: 7 }),
-		makeGeneration({ id: 'g2', version_number: 7 }),
-		makeGeneration({ id: 'g3', version_number: 6, is_picked: true }),
-		makeGeneration({ id: 'g4', version_number: null })
+		makeGeneration({ id: 'g1', version_id: 'v7', version_number: 7 }),
+		makeGeneration({ id: 'g2', version_id: 'v7', version_number: 7 }),
+		makeGeneration({ id: 'g3', version_id: 'v6', version_number: 6, is_picked: true }),
+		makeGeneration({ id: 'g4', version_id: null, version_number: null })
 	]
 });
 
@@ -68,6 +72,7 @@ afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
 	resetLayersForTests();
+	versionDeleteRequest.set(null);
 	vi.useRealTimers();
 });
 
@@ -110,6 +115,21 @@ function clickRow(target: HTMLElement, versionNumber: number): void {
 	);
 	if (!row) throw new Error(`Expected the v${versionNumber} row`);
 	row.click();
+}
+
+function deleteButtons(open: HTMLElement): string[] {
+	return Array.from(open.querySelectorAll('button'))
+		.map((button) => button.getAttribute('aria-label') ?? button.textContent ?? '')
+		.filter((name) => /delete/i.test(name));
+}
+
+async function askToDelete(open: HTMLElement, versionNumber: number): Promise<void> {
+	const button = open.querySelector<HTMLButtonElement>(
+		`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
+	);
+	if (!button) throw new Error(`Expected the delete on the v${versionNumber} row`);
+	button.click();
+	await tick();
 }
 
 describe('VersionsSheet', () => {
@@ -163,12 +183,32 @@ describe('VersionsSheet', () => {
 		expect(versionChip(target).getAttribute('aria-expanded')).toBe('false');
 	});
 
-	it('offers no delete on a row', async () => {
+	it('offers a delete on every row, the current one included', async () => {
 		const target = await renderSheet(vi.fn());
 		const open = await openSheet(target);
-		const names = Array.from(open.querySelectorAll('button')).map(
-			(button) => button.getAttribute('aria-label') ?? button.textContent ?? ''
-		);
-		expect(names.some((name) => /delete/i.test(name))).toBe(false);
+		expect(deleteButtons(open)).toEqual([7, 6, 4, 3].map(versionDeleteLabel));
 	});
+
+	it.each([
+		{ versionNumber: 6, takeCount: 1, holdsPick: true, takes: 'its one take with the album pick' },
+		{ versionNumber: 7, takeCount: 2, holdsPick: false, takes: 'its two takes' },
+		{ versionNumber: 4, takeCount: 0, holdsPick: false, takes: 'no takes' }
+	])(
+		'the delete on v$versionNumber asks to delete it with $takes, loading nothing',
+		async ({ versionNumber, takeCount, holdsPick }) => {
+			const onload = vi.fn();
+			const target = await renderSheet(onload);
+			const open = await openSheet(target);
+			await askToDelete(open, versionNumber);
+
+			expect(get(versionDeleteRequest)).toEqual({
+				songId: SONG.id,
+				version: VERSION_ROWS.find((version) => version.version_number === versionNumber),
+				takeCount,
+				holdsPick
+			});
+			expect(onload).not.toHaveBeenCalled();
+			expect(sheet(target)).not.toBeNull();
+		}
+	);
 });
