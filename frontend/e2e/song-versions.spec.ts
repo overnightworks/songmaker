@@ -69,6 +69,18 @@ interface SeededVersions {
 	albumId: string;
 }
 
+// Every song seeded here joins song-phone.spec.ts's dedicated album, whose
+// request budget grows with each sibling song left in it, so a test removes
+// the songs it seeded.
+const songsSeededByThisTest: string[] = [];
+
+async function deleteSeededSong(page: Page, songId: string): Promise<void> {
+	const deleted = await page.request.delete(`/api/songs/${songId}`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(deleted.ok(), `Deleting a seeded song failed: ${await deleted.text()}`).toBeTruthy();
+}
+
 /**
  * A song with two versions: v1 from the seed with its take, v2 saved over it
  * with other lyrics -- with a take of its own unless `secondVersionTaken` is
@@ -84,6 +96,7 @@ async function seedTwoVersions(
 	// shared album would leave two rows starting with it.
 	const title = `${SONG_TITLE} ${shellOf(testInfo)} ${runMarker()}`;
 	const songId = await seedSongPhoneSong(library.songPhoneAlbumId, title, 1, 1);
+	songsSeededByThisTest.push(songId);
 	const saved = await page.request.put(`/api/songs/${songId}`, {
 		headers: await csrfHeaders(page),
 		data: { lyrics: SECOND_VERSION_LYRICS }
@@ -210,6 +223,10 @@ async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 }
 
 test.describe('the versions of a song', () => {
+	test.afterEach(async ({ page }) => {
+		for (const songId of songsSeededByThisTest.splice(0)) await deleteSeededSong(page, songId);
+	});
+
 	for (const { secondVersionTaken, v2 } of [
 		{ secondVersionTaken: true, v2: 'v2 with a take' },
 		{ secondVersionTaken: false, v2: 'a take-less v2' }
