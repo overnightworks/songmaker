@@ -475,7 +475,7 @@ class AudioPlayer {
 		if (!el || !entry) return false;
 		const startAt = opts.startAt ?? 0;
 		session.playing = entry;
-		el.currentTime = entry.start_offset + startAt;
+		session.deck.seekTo(entry.start_offset + startAt);
 		this.currentUrl = url;
 		this.currentTime = startAt;
 		this.lastObservedTime = startAt;
@@ -722,7 +722,17 @@ class AudioPlayer {
 		}
 		const entry = this.deckSession?.playing;
 		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
-		this.audio.currentTime = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
+		this.seekElement(
+			this.audio,
+			(entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable))
+		);
+	}
+
+	// On the continuous deck the deck moves the playhead, so that a seek past
+	// what has arrived waits there instead of stopping where the buffer ends.
+	private seekElement(el: HTMLAudioElement, seconds: number): void {
+		if (this.deckSession) this.deckSession.deck.seekTo(seconds);
+		else el.currentTime = seconds;
 	}
 
 	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
@@ -1271,7 +1281,7 @@ class AudioPlayer {
 				? Math.min(this.pendingRecoverySeek, this.duration)
 				: this.pendingRecoverySeek;
 		try {
-			el.currentTime = seekTime;
+			this.seekElement(el, seekTime);
 			this.currentTime = seekTime;
 			this.lastObservedTime = seekTime;
 			this.pendingRecoverySeek = null;
