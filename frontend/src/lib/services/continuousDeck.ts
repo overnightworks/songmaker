@@ -6,6 +6,7 @@ const SECONDS_BUFFERED_AHEAD = 60;
 const SECONDS_AHEAD_BEFORE_GATHERING = 20;
 // Removing right up to the playhead can take the frame the decoder is playing.
 const SECONDS_KEPT_BEHIND_WHEN_FULL = 10;
+// Attempts in a row before a download parks until the player retries it.
 const DOWNLOAD_ATTEMPTS = 3;
 const QUOTA_EXCEEDED = 'QuotaExceededError';
 
@@ -20,14 +21,21 @@ interface ContinuousDeckPorts {
 	fetch: typeof fetch;
 }
 
+// The server answered, but not with the bytes asked for: asking again would
+// get the same answer. A body that could not be cancelled is named with it.
 class TakeRefused extends Error {
-	constructor(url: string, refusal: string) {
-		super(`${url} ${refusal}`);
+	constructor(url: string, refusal: string, cancelFailure?: Error) {
+		super(
+			cancelFailure
+				? `${url} ${refusal}; cancelling its body failed: ${cancelFailure.message}`
+				: `${url} ${refusal}`,
+			{ cause: cancelFailure }
+		);
 		this.name = 'TakeRefused';
 	}
 }
 
-type TakeNotAppendedReason = 'not-fetched' | 'stream-ended';
+type TakeNotAppendedReason = 'refused' | 'stream-ended';
 
 /**
  * A take the deck could not append, or not to its end. The deck itself plays
@@ -37,9 +45,10 @@ export class TakeNotAppended<Take> extends Error {
 	constructor(
 		readonly take: Take,
 		readonly reason: TakeNotAppendedReason,
-		message: string
+		message: string,
+		options?: ErrorOptions
 	) {
-		super(message);
+		super(message, options);
 		this.name = 'TakeNotAppended';
 	}
 }
@@ -59,6 +68,10 @@ class DeckClosed extends Error {
  * Plays a queue of takes as one continuous stream: each take's MP3 bytes are
  * appended behind the previous one into a single SourceBuffer, so a track
  * change is only the playhead crossing an offset in {@link manifest}.
+ *
+ * A download the network keeps failing parks with what it appended, and the
+ * takes after it wait behind it; the deck sets no timer of its own, so only
+ * {@link retryDownload} sends it on.
  */
 export class ContinuousDeck<Take> {
 	private readonly entries: DeckEntry<Take>[] = [];
@@ -68,6 +81,8 @@ export class ContinuousDeck<Take> {
 	private ending: Promise<void> | null = null;
 	private playableFrom = 0;
 	private readonly closing = new AbortController();
+	private requestInFlight: AbortController | null = null;
+	private wakeParkedDownload: (() => void) | null = null;
 
 	private constructor(
 		private readonly ports: ContinuousDeckPorts,
@@ -119,9 +134,16 @@ export class ContinuousDeck<Take> {
 		this.closing.abort(new DeckClosed());
 	}
 
+	// Cuts a request that may have stopped sending, or wakes a parked one: either
+	// way the download resumes from the bytes received, with its attempts fresh.
+	retryDownload(): void {
+		this.requestInFlight?.abort(new Error('The player retried the download'));
+		this.wakeParkedDownload?.();
+	}
+
 	// A failed step fails every later one: a take appended behind audio the
-	// buffer refused would start at the wrong offset. Only a take that could
-	// not be fetched leaves the buffer as it was, so the next one still follows.
+	// buffer refused would start at the wrong offset. Only a refused take leaves
+	// the buffer as it was, so the next one still follows.
 	private queueStep(step: (buffer: SourceBuffer) => Promise<void> | void): Promise<void> {
 		this.stepsInFlight += 1;
 		const result = this.steps
@@ -165,32 +187,52 @@ export class ContinuousDeck<Take> {
 
 	private async *download(take: Take, url: string): AsyncGenerator<Uint8Array> {
 		let received = 0;
-		for (let attempt = 1; ; attempt += 1) {
+		let failedInARow = 0;
+		for (;;) {
+			const attempt = new AbortController();
+			this.requestInFlight = attempt;
 			try {
-				for await (const piece of piecesOf(await this.request(url, received))) {
+				for await (const piece of piecesOf(await this.request(url, received, attempt.signal))) {
 					received += piece.byteLength;
 					yield piece;
 				}
 				return;
 			} catch (error) {
 				this.closing.signal.throwIfAborted();
-				if (error instanceof TakeRefused || attempt === DOWNLOAD_ATTEMPTS)
-					throw new TakeNotAppended(take, 'not-fetched', asError(error).message);
+				if (error instanceof TakeRefused)
+					throw new TakeNotAppended(take, 'refused', error.message, { cause: error });
+				failedInARow = attempt.signal.aborted ? 0 : failedInARow + 1;
+			} finally {
+				this.requestInFlight = null;
+			}
+			if (failedInARow === DOWNLOAD_ATTEMPTS) {
+				await this.parkDownload();
+				failedInARow = 0;
 			}
 		}
 	}
 
-	private async request(url: string, fromByte: number): Promise<ReadableStream<Uint8Array>> {
+	private parkDownload(): Promise<void> {
+		const woken = new Promise<void>((wake) => {
+			this.wakeParkedDownload = wake;
+		});
+		return this.whileOpen(woken).finally(() => {
+			this.wakeParkedDownload = null;
+		});
+	}
+
+	private async request(
+		url: string,
+		fromByte: number,
+		retried: AbortSignal
+	): Promise<ReadableStream<Uint8Array>> {
 		const resuming = fromByte > 0;
 		const response = await this.ports.fetch(url, {
 			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
-			signal: this.closing.signal
+			signal: AbortSignal.any([this.closing.signal, retried])
 		});
 		const refusal = refusalOf(response, fromByte);
-		if (refusal) {
-			await response.body?.cancel();
-			throw new TakeRefused(url, refusal);
-		}
+		if (refusal) throw new TakeRefused(url, refusal, await cancelFailureOf(response));
 		if (!response.body) throw new TakeRefused(url, `answered ${response.status} without a body`);
 		return response.body;
 	}
@@ -275,6 +317,17 @@ function refusalOf(response: Response, fromByte: number): string | null {
 	const answeredFrom = Number(/^bytes (\d+)-/.exec(contentRange)?.[1]);
 	if (answeredFrom === fromByte) return null;
 	return `Content-Range mismatch: asked from byte ${fromByte}, answered ${contentRange}`;
+}
+
+// A body that has already errored cannot be cancelled; that failure is
+// handed back, so it neither hides the refusal nor goes unseen.
+async function cancelFailureOf(response: Response): Promise<Error | undefined> {
+	try {
+		await response.body?.cancel();
+		return undefined;
+	} catch (error) {
+		return asError(error);
+	}
 }
 
 function asError(error: unknown): Error {
