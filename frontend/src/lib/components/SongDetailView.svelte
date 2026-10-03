@@ -49,6 +49,7 @@
 		versions,
 		loadSongData,
 		loadVersionAsDraft,
+		pendingVersionLoad,
 		handleSave,
 		computeDraftVersionNumber,
 		draftSavesAsNewVersion,
@@ -277,6 +278,14 @@
 		pendingSource.set(null);
 	});
 
+	$effect(() => {
+		const pending = $pendingVersionLoad;
+		if (!pending || !song || pending.songId !== song.id) return;
+		if (!$versions.some((version) => version.id === pending.versionId)) return;
+		pendingVersionLoad.set(null);
+		void onVersionClick(pending.versionId);
+	});
+
 	const expiringSoon = $derived.by(() => {
 		if (!song) return { count: 0, minDays: 0 };
 		const now = Date.now();
@@ -439,7 +448,13 @@
 		if (compact) openEditTab();
 	}
 
-	function onVersionClick(versionId: string): Promise<boolean> {
+	async function onVersionClick(versionId: string): Promise<boolean> {
+		const loaded = await askToLoadVersion(versionId);
+		if (loaded && compact) openEditTab();
+		return loaded;
+	}
+
+	function askToLoadVersion(versionId: string): Promise<boolean> {
 		const version = get(versions).find((v) => v.id === versionId);
 		if (!version) return Promise.resolve(false);
 		if (!get(isDirty)) {
@@ -614,6 +629,7 @@
 		pendingDirtyNavigation.set(null);
 		if (choice === 'cancel') {
 			pendingSource.set(null);
+			pendingVersionLoad.set(null);
 			return;
 		}
 		if (!action) return;
@@ -623,6 +639,8 @@
 				await handleSave(song.id);
 			} catch (e) {
 				addToast(describeFailure(e, EDITOR_SAVE_FAILED), 'error');
+				pendingSource.set(null);
+				pendingVersionLoad.set(null);
 				return;
 			}
 		} else {
