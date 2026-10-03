@@ -45,7 +45,7 @@ export function takeGroupLabel(versionNumber: number | null, count: number): str
 	return `${origin}${META_SEPARATOR}${count} take${count === 1 ? '' : 's'}`;
 }
 
-export interface TakeVersion {
+interface TakeVersion {
 	versionId: string;
 	versionNumber: number;
 }
