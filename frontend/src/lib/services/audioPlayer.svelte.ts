@@ -790,6 +790,13 @@ class AudioPlayer {
 		this.failure = null;
 		this.currentTime = 0;
 		this.duration = 0;
+		this.leaveDeck();
+	}
+
+	// A deck the player leaves is closed, so nothing of it keeps downloading,
+	// waiting or reporting a failure.
+	private leaveDeck(): void {
+		this.deckSession?.deck.close();
 		this.deckSession = null;
 	}
 
@@ -1080,7 +1087,7 @@ class AudioPlayer {
 	// anyway.
 	private reloadSource(el: HTMLAudioElement, url: string): void {
 		this.stopProgressWatchdog();
-		this.deckSession = null;
+		this.leaveDeck();
 		this.loadSource(el, this.urlWithRecovery(url));
 	}
 

@@ -44,6 +44,17 @@ export class TakeNotAppended<Take> extends Error {
 }
 
 /**
+ * The player left the deck: whatever it still had to fetch, wait for or
+ * append is given up, and the buffer is not touched again.
+ */
+class DeckClosed extends Error {
+	constructor() {
+		super('The deck was closed');
+		this.name = 'DeckClosed';
+	}
+}
+
+/**
  * Plays a queue of takes as one continuous stream: each take's MP3 bytes are
  * appended behind the previous one into a single SourceBuffer, so a track
  * change is only the playhead crossing an offset in {@link manifest}.
@@ -55,6 +66,7 @@ export class ContinuousDeck<Take> {
 	private brokenBy: Error | null = null;
 	private ending: Promise<void> | null = null;
 	private playableFrom = 0;
+	private readonly closing = new AbortController();
 
 	private constructor(
 		private readonly ports: ContinuousDeckPorts,
@@ -104,6 +116,10 @@ export class ContinuousDeck<Take> {
 		return this.ending;
 	}
 
+	close(): void {
+		this.closing.abort(new DeckClosed());
+	}
+
 	// A failed step fails every later one: a take appended behind audio the
 	// buffer refused would start at the wrong offset. Only a take that could
 	// not be fetched leaves the buffer as it was, so the next one still follows.
@@ -112,7 +128,7 @@ export class ContinuousDeck<Take> {
 		const result = this.steps
 			.then(async () => {
 				if (this.brokenBy) throw this.brokenBy;
-				await step(await this.opened);
+				await step(await this.whileOpen(this.opened));
 			})
 			.finally(() => {
 				this.stepsInFlight -= 1;
@@ -157,6 +173,7 @@ export class ContinuousDeck<Take> {
 				}
 				return;
 			} catch (error) {
+				this.closing.signal.throwIfAborted();
 				if (error instanceof TakeRefused || attempt === DOWNLOAD_ATTEMPTS)
 					throw new TakeNotAppended(take, 'not-fetched', asError(error).message);
 			}
@@ -166,7 +183,8 @@ export class ContinuousDeck<Take> {
 	private async request(url: string, fromByte: number): Promise<ReadableStream<Uint8Array>> {
 		const resuming = fromByte > 0;
 		const response = await this.ports.fetch(url, {
-			headers: resuming ? { Range: `bytes=${fromByte}-` } : {}
+			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
+			signal: this.closing.signal
 		});
 		const expectedStatus = resuming ? 206 : 200;
 		if (response.status !== expectedStatus || !response.body)
@@ -177,7 +195,7 @@ export class ContinuousDeck<Take> {
 	private async roomAhead(buffer: SourceBuffer): Promise<void> {
 		const { element } = this.ports;
 		while (buffer.timestampOffset - element.currentTime >= SECONDS_BUFFERED_AHEAD)
-			await nextEvent(element, 'timeupdate');
+			await this.whileOpen(nextEvent(element, 'timeupdate', this.closing.signal));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -187,22 +205,41 @@ export class ContinuousDeck<Take> {
 
 	private async appendChunk(buffer: SourceBuffer, chunk: Uint8Array<ArrayBuffer>): Promise<void> {
 		try {
-			await update(buffer, () => buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		} catch (error) {
 			if (!isQuotaExceeded(error)) throw error;
 			const playhead = this.ports.element.currentTime;
 			const freed = await this.removeBefore(buffer, playhead - SECONDS_KEPT_BEHIND_WHEN_FULL);
 			if (!freed) throw error;
-			await update(buffer, () => buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		}
 	}
 
 	private async removeBefore(buffer: SourceBuffer, seconds: number): Promise<boolean> {
 		const buffered = buffer.buffered;
 		if (buffered.length === 0 || buffered.start(0) >= seconds) return false;
-		await update(buffer, () => buffer.remove(buffered.start(0), seconds));
+		await this.update(buffer, () => buffer.remove(buffered.start(0), seconds));
 		this.playableFrom = seconds;
 		return true;
+	}
+
+	private async update(buffer: SourceBuffer, start: () => void): Promise<void> {
+		this.closing.signal.throwIfAborted();
+		start();
+		await updateEnded(buffer);
+	}
+
+	private whileOpen<Value>(pending: Promise<Value>): Promise<Value> {
+		const { signal } = this.closing;
+		return new Promise((resolve, reject) => {
+			const closed = () => reject(signal.reason);
+			if (signal.aborted) {
+				closed();
+				return;
+			}
+			signal.addEventListener('abort', closed, { once: true });
+			pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', closed));
+		});
 	}
 }
 
@@ -218,19 +255,17 @@ async function attachSourceBuffer(ports: ContinuousDeckPorts): Promise<SourceBuf
 	return buffer;
 }
 
-async function update(buffer: SourceBuffer, start: () => void): Promise<void> {
-	start();
-	await updateEnded(buffer);
-}
-
 function asError(error: unknown): Error {
 	return error instanceof Error
 		? error
 		: new Error('A deck step failed without an error', { cause: error });
 }
 
-function nextEvent(target: EventTarget, type: string): Promise<void> {
-	return new Promise((resolve) => target.addEventListener(type, () => resolve(), { once: true }));
+// An aborted signal only removes the listener; the promise then never settles.
+function nextEvent(target: EventTarget, type: string, signal?: AbortSignal): Promise<void> {
+	return new Promise((resolve) =>
+		target.addEventListener(type, () => resolve(), { once: true, signal })
+	);
 }
 
 function updateEnded(buffer: SourceBuffer): Promise<void> {
