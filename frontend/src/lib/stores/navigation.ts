@@ -110,10 +110,10 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/' || isAlbumRoutePath(pathname) || isPlaylistRoutePath(pathname);
 }
 
-// A draft with changes no version holds blocks a song switch or leave (rail row, prev/next,
-// breadcrumb, Escape, Library, a collection opened anywhere, a rail page
-// link, Logout, browser or phone Back) until the owner resolves it: the
-// deferred navigation is parked here, and SongDetailView renders the Save /
+// A draft with changes no version holds blocks a song switch or leave (rail
+// row, prev/next, breadcrumb, Escape, Library, a collection opened anywhere, a
+// rail page link, Logout, browser or phone Back) until the owner resolves it:
+// the deferred navigation is parked here, and SongDetailView renders the Save /
 // Discard / Cancel confirm and either runs the parked action (Discard, or
 // Save then run it) or drops it (Cancel). Only the song's own surface can dirty a draft, and
 // a way out that skips this guard unmounts that confirm while the draft
@@ -125,12 +125,12 @@ export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | nu
 // editor draft: a draft with changes no version holds parks `action` in
 // `pendingDirtyNavigation` instead of running it (see the comment above); a
 // draft equal to a saved version, such as an untouched load, loses nothing by
-// leaving and runs it immediately (#1296). Every song-switch/leave entry point must route through this
-// — never re-implement the if/else inline. A way out that has already moved
-// history puts the song back first, through `beforeAsking`. The phone drawer
-// closes over a parked navigation: the question now belongs to the song
-// behind it, and Keep editing must land on that draft, not on the drawer
-// (issue #1143).
+// leaving and runs it immediately (#1296). Every song-switch/leave entry
+// point must route through this — never re-implement the if/else inline. A
+// way out that has already moved history puts the song back first, through
+// `beforeAsking`. The phone drawer closes over a parked navigation: the
+// question now belongs to the song behind it, and Keep editing must land on
+// that draft, not on the drawer (issue #1143).
 async function guardDirtyNavigation(
 	action: () => void | Promise<void>,
 	beforeAsking: () => void = () => undefined
