@@ -120,9 +120,9 @@ test('an album plays from one take into the next on one element that never stops
 	guard.assertClean();
 });
 
-// Prev starts the previous take on a fresh buffer (#1276): the one pause is
-// the jump back, and the queue then crosses into the take after it on the
-// same element without another stop.
+// Prev starts the previous take on a fresh buffer of the same element
+// (#1276), and the queue then crosses into the take after it; a new source
+// drops the pause the jump back asked for, so the element never stops.
 test('Prev on an album starts the previous take and the queue continues into the take after it', async ({
 	page
 }) => {
@@ -131,16 +131,14 @@ test('Prev on an album starts the previous take and the queue continues into the
 	const [first, second] = library.albumTracks;
 	const timeline = await PlaybackTimeline.watch(page);
 	const transport = page.getByRole('contentinfo');
-	const jumpBack = ['pause on element 0'];
 
 	await playAlbum(page, library.albumId);
 	await expectTransportMovesOn(page, first, second);
 	await transport.getByRole('button', { name: 'Previous', exact: true }).click();
-	await expect.poll(() => timeline.stops).toEqual(jumpBack);
 
 	await expectTransportMovesOn(page, first, second);
 	expect(timeline.elementsPlayed).toBe(1);
-	expect(timeline.stops).toEqual(jumpBack);
+	expect(timeline.stops).toEqual([]);
 	guard.assertClean();
 });
 
