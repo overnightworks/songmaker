@@ -6,7 +6,9 @@ import {
 	nowPlayingSheetCloseLabel,
 	nowPlayingTakeLabel,
 	nowPlayingTakeMeta,
-	takeBatchReductionLabel
+	openVersionLabel,
+	takeBatchReductionLabel,
+	takeGroupLabel
 } from './now-playing';
 
 describe('nowPlayingTakeLabel', () => {
@@ -16,6 +18,23 @@ describe('nowPlayingTakeLabel', () => {
 
 	it('names only the take when the row carries no version', () => {
 		expect(nowPlayingTakeLabel(null, 3)).toBe('take 3');
+	});
+});
+
+describe('takeGroupLabel', () => {
+	it.each([
+		{ versionNumber: 7, count: 4, label: 'v7 · 4 takes' },
+		{ versionNumber: 2, count: 1, label: 'v2 · 1 take' },
+		{ versionNumber: null, count: 3, label: 'Imported · 3 takes' },
+		{ versionNumber: null, count: 1, label: 'Imported · 1 take' }
+	])('names the group "$label"', ({ versionNumber, count, label }) => {
+		expect(takeGroupLabel(versionNumber, count)).toBe(label);
+	});
+});
+
+describe('openVersionLabel', () => {
+	it('names the version the link opens', () => {
+		expect(openVersionLabel(5)).toBe('Open v5');
 	});
 });
 
