@@ -1106,7 +1106,8 @@ class AudioPlayer {
 
 	// A play on a broken or silent element fetches the take again rather than
 	// resuming what the element holds; the deck fetches on from the bytes it
-	// received and keeps its one source (#1288).
+	// received and keeps its one source (#1288). The listener asked for sound,
+	// so a deck whose download resumes plays on where the playhead stands.
 	private recoverOnPlay(reason: 'media-error' | 'frozen-clock'): void {
 		this.recoveryStartedAt = null;
 		this.clearStallRecoveryTimer();
@@ -1117,16 +1118,8 @@ class AudioPlayer {
 		const el = this.audio;
 		if (!el) return;
 		if (!this.deckSession) this.reloadAt(this.reachedPosition(el), reason);
-		else if (unfreezesInPlace(reason, el)) this.unfreezeDeckClock(el);
-		else this.retryOnTheDeck(this.deckSession, el);
-	}
-
-	// The listener asked for sound, so the playhead plays on where it stands
-	// while the download goes on.
-	private retryOnTheDeck(session: DeckSession, el: HTMLAudioElement): void {
-		this.resumeDeckDownload(session, 'media-error');
-		this.keepWaiting();
-		el.play().catch((err) => this.handlePlayRejection(err));
+		else if (!this.recoverOnTheDeck(this.deckSession, el, reason))
+			el.play().catch((err) => this.handlePlayRejection(err));
 	}
 
 	private pauseElement(el: HTMLAudioElement): void {
@@ -1240,18 +1233,19 @@ class AudioPlayer {
 
 	// The deck never swaps its source (#1288): a stall its download explains
 	// resumes that download, and a clock frozen over buffered audio is
-	// unfrozen in place.
+	// unfrozen in place. Reports whether it set the element going itself.
 	private recoverOnTheDeck(
 		session: DeckSession,
 		el: HTMLAudioElement,
 		reason: RecoveryReason
-	): void {
+	): boolean {
 		if (unfreezesInPlace(reason, el)) {
 			this.unfreezeDeckClock(el);
-			return;
+			return true;
 		}
 		this.resumeDeckDownload(session, reason);
 		this.keepWaiting();
+		return false;
 	}
 
 	// A seek to where the clock stands makes the element read its buffer

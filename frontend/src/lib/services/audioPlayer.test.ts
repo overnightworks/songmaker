@@ -3442,6 +3442,20 @@ describe('continuous deck (#1187 M2)', () => {
 		}
 	);
 
+	it('a Play tap on a clock frozen with no audio ahead resumes the download under that cause and plays on', () => {
+		freezeTheClockOverBufferedAudioAt(6);
+		fakeAudio.bufferedUntil = 6;
+		vi.advanceTimersByTime(2 * SECOND);
+		fakeAudio.playMock.mockClear();
+
+		audioPlayer.play();
+
+		expect(recordedDetails()).toContain('retry deck_resume reason=frozen-clock');
+		expect(deck().retries).toBe(1);
+		expect(fakeAudio.playMock).toHaveBeenCalledOnce();
+		expect(continuousDecks.attached).toHaveLength(1);
+	});
+
 	it('opens a fresh deck at the take and position on the same element when the clock is still frozen at the next look', () => {
 		audioPlayer.swapCallbacks(
 			callbacks({
