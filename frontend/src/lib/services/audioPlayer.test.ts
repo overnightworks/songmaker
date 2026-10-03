@@ -3091,7 +3091,7 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).not.toHaveBeenCalled();
 	});
 
-	it('drops a take ahead that could not be fetched, names it and crosses on into the take after it', async () => {
+	it('drops a take ahead the server refused, names it and crosses on into the take after it', async () => {
 		const takeAfter = (take: PlaybackInfo): PlaybackInfo | null => (take === second ? third : null);
 		const skipped: PlaybackInfo[] = [];
 		const onTakeSkipped = (take: PlaybackInfo) => skipped.push(take);
@@ -3099,7 +3099,9 @@ describe('continuous deck (#1187 M2)', () => {
 		playFirstWithSecondAppended();
 		const heard = heardEvents();
 
-		deck().requests[1].fail(new TakeNotAppended(second, 'not-fetched', 'Failed to fetch'));
+		deck().requests[1].fail(
+			new TakeNotAppended(second, 'refused', '/audio/a1/second.mp3 answered 404')
+		);
 		await Promise.resolve();
 
 		expect(skipped).toEqual([second]);
@@ -3107,7 +3109,7 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(audioPlayer.current?.generation.id).toBe('g1');
 		expect(audioPlayer.status).toBe('playing');
 		expect(recordedNotes().map((note) => note.detail)).toContain(
-			'deck_dropped take=g2 not-fetched Failed to fetch'
+			'deck_dropped take=g2 refused /audio/a1/second.mp3 answered 404'
 		);
 
 		holds([first, 0, 10], [third, 10, 5]);
@@ -3136,18 +3138,18 @@ describe('continuous deck (#1187 M2)', () => {
 	});
 
 	it.each([
-		{ failure: 'the current take cannot be fetched', notFetched: true },
-		{ failure: 'the buffer refuses the audio', notFetched: false }
+		{ failure: 'the server refuses the current take', refused: true },
+		{ failure: 'the buffer refuses the audio', refused: false }
 	])(
 		'falls back to the two decks at the same take and position when $failure',
-		async ({ notFetched }) => {
+		async ({ refused }) => {
 			playFirstWithSecondAppended();
 			playTo(6);
 			fakeAudio.paused = false;
 
 			deck().requests[0].fail(
-				notFetched
-					? new TakeNotAppended(first, 'not-fetched', '404')
+				refused
+					? new TakeNotAppended(first, 'refused', '/audio/a1/first.mp3 answered 404')
 					: new Error('The source buffer refused the appended audio')
 			);
 			await Promise.resolve();

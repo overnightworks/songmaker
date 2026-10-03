@@ -533,7 +533,7 @@ class AudioPlayer {
 				'media_event',
 				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
 			);
-			if (error.reason === 'not-fetched') this.skipTake(session, error.take);
+			if (error.reason === 'refused') this.skipTake(session, error.take);
 			return;
 		}
 		this.fallBackToTwoDecks(
