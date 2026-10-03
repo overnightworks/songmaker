@@ -19,9 +19,12 @@ interface HeldTake {
 	duration: number;
 }
 
+// 'next' replaces whatever the deck holds behind the playing take; 'end'
+// appends behind its last take.
 interface AppendRequest {
 	take: PlaybackInfo;
 	url: string;
+	placement: 'end' | 'next';
 	fail: (error: Error) => void;
 }
 
@@ -94,9 +97,19 @@ vi.mock('./continuousDeck', () => {
 		}
 
 		appendTake(take: PlaybackInfo, url: string): Promise<void> {
+			return this.request(take, url, 'end');
+		}
+
+		appendNext(take: PlaybackInfo, url: string): Promise<void> {
+			return this.request(take, url, 'next');
+		}
+
+		private request(take: PlaybackInfo, url: string, placement: 'end' | 'next'): Promise<void> {
 			if (this.ended)
 				return Promise.reject(new TakeNotAppended(take, 'stream-ended', `${url} came late`));
-			return new Promise((_resolve, reject) => this.requests.push({ take, url, fail: reject }));
+			return new Promise((_resolve, reject) =>
+				this.requests.push({ take, url, placement, fail: reject })
+			);
 		}
 
 		endStream(): Promise<void> {
@@ -2924,6 +2937,21 @@ describe('continuous deck (#1187 M2)', () => {
 
 		expect(deck().requests.map((request) => request.take)).toEqual([first, second]);
 		expect(createdAudios).toHaveLength(1);
+	});
+
+	it('puts a repicked or reshuffled next take in place of the one the deck holds ahead', () => {
+		const repicked = takeInfo('g2b', 'a1/second-repicked.mp3');
+		playFirstWithSecondAppended();
+		playTo(4);
+
+		audioPlayer.preload(repicked);
+		audioPlayer.preload(repicked);
+
+		expect(deck().requests.map(({ take, placement }) => [take.generation.id, placement])).toEqual([
+			['g1', 'end'],
+			['g2', 'next'],
+			['g2b', 'next']
+		]);
 	});
 
 	it('keeps what the deck holds when nothing is known to follow yet', () => {

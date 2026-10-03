@@ -457,18 +457,21 @@ class AudioPlayer {
 			tail: info
 		};
 		this.deckSession = session;
-		this.appendToDeck(session, info, url);
+		this.handToDeck(session, info, session.deck.appendTake(info, url));
 	}
 
+	// The queue's next take changes when the listener repicks or reshuffles
+	// what follows the playing take; the deck then gives up whatever it held
+	// ahead for it (#1299).
 	private appendAhead(session: DeckSession, info: PlaybackInfo): void {
 		if (session.tail === info) return;
-		this.appendToDeck(session, info, audioUrlOf(info));
+		session.tail = info;
+		this.handToDeck(session, info, session.deck.appendNext(info, audioUrlOf(info)));
 	}
 
-	private appendToDeck(session: DeckSession, info: PlaybackInfo, url: string): void {
-		session.tail = info;
+	private handToDeck(session: DeckSession, info: PlaybackInfo, appended: Promise<void>): void {
 		this.note('media_event', `deck_append take=${info.generation.id}`);
-		session.deck.appendTake(info, url).catch((error: unknown) => this.deckFailed(session, error));
+		appended.catch((error: unknown) => this.deckFailed(session, error));
 	}
 
 	// A load the deck can play on into is a seek: the element keeps its one
