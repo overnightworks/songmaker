@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContinuousDeck, TakeNotAppended } from './continuousDeck';
 
 const MEGABYTE = 1024 * 1024;
-// The size FakeNetwork hands a response body out in.
+// The size FakeNetwork hands a response body out in, unless the link is slow.
 const PIECE = 256 * 1024;
+// What a link barely faster than the take's bitrate delivers in a second.
+const SLOW_PIECE = 12_000;
 const BYTES_PER_SECOND = 16_000;
 const OBJECT_URL = 'blob:continuous-deck';
 
@@ -169,6 +171,11 @@ class FakeNetwork {
 	private readonly breaks = new Map<string, number[]>();
 	private readonly refusals = new Map<string, number>();
 	private readonly rangesAnsweredFromTheStart = new Map<string, 200 | 206>();
+	private pieceBytes = PIECE;
+
+	slowLink(): void {
+		this.pieceBytes = SLOW_PIECE;
+	}
 
 	serve(url: string, bytes: number): Uint8Array {
 		const file = Uint8Array.from({ length: bytes }, (_, index) => index % 251);
@@ -206,7 +213,12 @@ class FakeNetwork {
 				? { 'Content-Range': `bytes ${from}-${file.byteLength - 1}/${file.byteLength}` }
 				: {};
 		return new Response(
-			piecewise(file.subarray(from, breakPosition), breakPosition !== undefined, init?.signal),
+			piecewise(
+				file.subarray(from, breakPosition),
+				this.pieceBytes,
+				breakPosition !== undefined,
+				init?.signal
+			),
 			{ status, headers }
 		);
 	};
@@ -215,6 +227,7 @@ class FakeNetwork {
 // Like a fetch body, the stream errors with the abort reason once its request is aborted.
 function piecewise(
 	bytes: Uint8Array,
+	pieceBytes: number,
 	breaks: boolean,
 	signal: AbortSignal | null | undefined
 ): ReadableStream<Uint8Array> {
@@ -230,8 +243,8 @@ function piecewise(
 				else controller.close();
 				return;
 			}
-			controller.enqueue(bytes.slice(offset, offset + PIECE));
-			offset += PIECE;
+			controller.enqueue(bytes.slice(offset, offset + pieceBytes));
+			offset += pieceBytes;
 		}
 	});
 }
@@ -335,21 +348,27 @@ describe('ContinuousDeck', () => {
 		]);
 	});
 
-	it('appends the first piece at once, then one-megabyte chunks while less than a minute is buffered ahead', async () => {
+	it('appends each piece as it arrives while little is buffered ahead, so a slow link keeps the buffer growing', async () => {
+		const { deck, buffer, network } = openDeck();
+		network.slowLink();
+		network.serve('/audio/take.mp3', 20 * SLOW_PIECE);
+
+		await deck.appendTake('take', '/audio/take.mp3');
+
+		expect(buffer.appendedBytes()).toEqual(Array(20).fill(SLOW_PIECE));
+	});
+
+	it('gathers one-megabyte chunks once plenty is buffered ahead, and waits while a minute is', async () => {
 		const { deck, audio, buffer, network } = openDeck();
 		network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
 		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
 
-		audio.playTo(25);
-		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE]);
-
-		audio.playTo(100);
+		audio.playTo(50);
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE, MEGABYTE]);
 	});
 
 	it('appends the first piece before the rest of the take has arrived', async () => {
@@ -372,7 +391,7 @@ describe('ContinuousDeck', () => {
 
 	it('starts the next append only after the previous one fired updateend', async () => {
 		const { deck, audio, buffer, network } = openDeck();
-		network.serve('/audio/long.mp3', 1.5 * MEGABYTE);
+		network.serve('/audio/long.mp3', 3 * PIECE);
 		audio.currentTime = 1000;
 		buffer.autoSettle = false;
 
@@ -392,7 +411,7 @@ describe('ContinuousDeck', () => {
 		await lastAppend;
 		buffer.settle();
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, PIECE]);
 	});
 
 	it('removes takes that have played and keeps the take under the playhead', async () => {
@@ -648,7 +667,7 @@ describe('ContinuousDeck', () => {
 			audio.playTo(100);
 			await Promise.resolve();
 
-			expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE]);
+			expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
 			expect(buffer.removals).toEqual([]);
 		});
 

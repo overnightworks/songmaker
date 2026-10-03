@@ -3,6 +3,7 @@ import type { QueueStreamTrackItem } from '$lib/api/types';
 const MP3_MIME_TYPE = 'audio/mpeg';
 const CHUNK_BYTES = 1024 * 1024;
 const SECONDS_BUFFERED_AHEAD = 60;
+const SECONDS_AHEAD_BEFORE_GATHERING = 20;
 // Removing right up to the playhead can take the frame the decoder is playing.
 const SECONDS_KEPT_BEHIND_WHEN_FULL = 10;
 const DOWNLOAD_ATTEMPTS = 3;
@@ -143,7 +144,8 @@ export class ContinuousDeck<Take> {
 		const entry: DeckEntry<Take> = { take, start_offset: buffer.timestampOffset, duration: 0 };
 		this.entries.push(entry);
 		try {
-			for await (const chunk of chunked(this.download(take, url))) {
+			const runningLow = () => this.secondsAhead(buffer) < SECONDS_AHEAD_BEFORE_GATHERING;
+			for await (const chunk of chunked(this.download(take, url), runningLow)) {
 				await this.roomAhead(buffer);
 				await this.evictPlayedTakes(buffer);
 				await this.appendChunk(buffer, chunk);
@@ -192,10 +194,13 @@ export class ContinuousDeck<Take> {
 		return response.body;
 	}
 
+	private secondsAhead(buffer: SourceBuffer): number {
+		return buffer.timestampOffset - this.ports.element.currentTime;
+	}
+
 	private async roomAhead(buffer: SourceBuffer): Promise<void> {
-		const { element } = this.ports;
-		while (buffer.timestampOffset - element.currentTime >= SECONDS_BUFFERED_AHEAD)
-			await this.whileOpen(nextEvent(element, 'timeupdate', this.closing.signal));
+		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
+			await this.whileOpen(nextEvent(this.ports.element, 'timeupdate', this.closing.signal));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -316,19 +321,20 @@ async function* piecesOf(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8
 	}
 }
 
-// A take's first piece goes in at once, so playback starts on the first bytes
-// that arrive instead of after a megabyte (#1187 P5).
+// While the playhead is close to the end of the buffer every piece goes in as
+// it arrives: playback starts on the first bytes, and a link barely faster
+// than the take's bitrate still keeps the buffer growing (#1280). Only with
+// plenty buffered are pieces gathered into fewer, larger appends.
 async function* chunked(
-	pieces: AsyncIterable<Uint8Array>
+	pieces: AsyncIterable<Uint8Array>,
+	runningLow: () => boolean
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
 	let gathered: Uint8Array[] = [];
 	let gatheredBytes = 0;
-	let firstPiece = true;
 	for await (const piece of pieces) {
 		gathered.push(piece);
 		gatheredBytes += piece.byteLength;
-		if (firstPiece || gatheredBytes >= CHUNK_BYTES) {
-			firstPiece = false;
+		if (runningLow() || gatheredBytes >= CHUNK_BYTES) {
 			yield joined(gathered, gatheredBytes);
 			gathered = [];
 			gatheredBytes = 0;
