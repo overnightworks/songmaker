@@ -839,12 +839,14 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 	return settled;
 }
 
-// An apply belongs to the page entry it landed on (issue #1006): history
-// leaving that entry stops it -- a Back nothing in the library heard, such as
-// the second of two quick Backs from Settings while the first one's route
-// still loads -- and so do a newer apply and a write
-// (`cancelLibraryHistoryApply`). An entry without an id tells nothing apart,
-// so there only those two stop it.
+// An apply belongs to the page entry it landed on (issue #1006): a newer
+// apply and a write (`cancelLibraryHistoryApply`) stop it, and so does history
+// leaving that entry. A step the library heard starts an apply of its own; one
+// nothing heard -- the second of two quick Backs from Settings, pressed before
+// the library on the first one's page listens -- leaves the entry it landed on
+// to this apply, which then applies that entry instead of stopping silently.
+// An entry without an id tells nothing apart, so there only the newer apply
+// and the write stop it.
 interface HistoryApply {
 	readonly entry: number | null;
 }
@@ -859,8 +861,26 @@ function applyStands(apply: HistoryApply): boolean {
 	return apply.entry === null || standingPageEntryId() === apply.entry;
 }
 
+function historyLeftUnheard(apply: HistoryApply): boolean {
+	return runningApply === apply && !applyStands(apply);
+}
+
 export async function applyLibraryHistory(state: LibraryHistoryState): Promise<boolean> {
 	const apply = startHistoryApply();
+	if (await applyWhileItStands(state, apply)) return true;
+	if (historyLeftUnheard(apply)) await applyStandingLibraryEntry();
+	return false;
+}
+
+async function applyStandingLibraryEntry(): Promise<void> {
+	const standing = libraryHistoryEntry();
+	if (isLibraryHistoryState(standing)) await applyLibraryHistory(standing);
+}
+
+async function applyWhileItStands(
+	state: LibraryHistoryState,
+	apply: HistoryApply
+): Promise<boolean> {
 	if (heldRestores !== null) await heldRestores;
 	if (!applyStands(apply)) return false;
 	librarySurface.set(state.surface);
