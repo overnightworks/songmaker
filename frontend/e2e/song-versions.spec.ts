@@ -163,10 +163,10 @@ function takeGroup(page: Page, versionNumber: number | null, takeCount: number):
 		.filter({ hasText: takeGroupLabel(versionNumber, takeCount) });
 }
 
-function playingTransport(page: Page): Locator {
-	return page
-		.getByRole('contentinfo')
-		.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+// The phone's full Now Playing carries the transport while it covers the
+// mini player; elsewhere the transport bar does.
+function pauseOfThePlayingTake(page: Page): Locator {
+	return page.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).first();
 }
 
 async function tapVersion(page: Page, versionNumber: number): Promise<void> {
@@ -315,7 +315,7 @@ test.describe('the versions of a song', () => {
 			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
 			.click();
 		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
-		await expect(playingTransport(page)).toBeVisible();
+		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
 		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true });
 		await openV1.click();
@@ -324,7 +324,7 @@ test.describe('the versions of a song', () => {
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
 		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
-		await expect(playingTransport(page)).toBeVisible();
+		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 	});
 
 	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
