@@ -89,8 +89,13 @@ export class ContinuousDeck<Take> {
 		private readonly opened: Promise<SourceBuffer>
 	) {}
 
+	// Without a live seekable range a seek could never reach past what has arrived.
 	static isSupported(): boolean {
-		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(MP3_MIME_TYPE);
+		return (
+			typeof MediaSource !== 'undefined' &&
+			MediaSource.isTypeSupported(MP3_MIME_TYPE) &&
+			'setLiveSeekableRange' in MediaSource.prototype
+		);
 	}
 
 	// Usable at once: every append waits for the media source to open, so the
@@ -115,6 +120,19 @@ export class ContinuousDeck<Take> {
 	// plays it from the beginning.
 	isPlayableFromStart(entry: Readonly<DeckEntry<Take>>): boolean {
 		return entry.start_offset >= this.playableFrom;
+	}
+
+	/**
+	 * Moves the playhead to `seconds`, even past what has arrived: the element
+	 * waits there, and the download appends on until it reaches it. The stream
+	 * has no known length, so without the live seekable range the browser would
+	 * stop the seek where the buffer ends (#1270). An ended stream holds all it
+	 * will ever hold, so a seek there stays within it.
+	 */
+	seekTo(seconds: number): void {
+		const { element, mediaSource } = this.ports;
+		if (mediaSource.readyState === 'open') mediaSource.setLiveSeekableRange(seconds, seconds);
+		element.currentTime = seconds;
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
@@ -241,11 +259,13 @@ export class ContinuousDeck<Take> {
 		return buffer.timestampOffset - this.ports.element.currentTime;
 	}
 
-	// whileOpen wakes a parked wait on close; tying each timeupdate listener to
-	// the close signal as well would leave an abort step on it per timeupdate.
+	// A seek wakes the wait as well: the element announces a seek past the
+	// buffer at once, but its first timeupdate there only once audio arrived.
+	// whileOpen wakes a parked wait on close; tying each listener to the close
+	// signal as well would leave an abort step on it per timeupdate.
 	private async roomAhead(buffer: SourceBuffer): Promise<void> {
 		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
-			await this.whileOpen(nextEvent(this.ports.element, 'timeupdate'));
+			await this.whileOpen(firstEventOf(this.ports.element, ['timeupdate', 'seeking']));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -338,6 +358,16 @@ function asError(error: unknown): Error {
 
 function nextEvent(target: EventTarget, type: string): Promise<void> {
 	return new Promise((resolve) => target.addEventListener(type, () => resolve(), { once: true }));
+}
+
+function firstEventOf(target: EventTarget, types: readonly string[]): Promise<void> {
+	return new Promise((resolve) => {
+		const fired = () => {
+			for (const type of types) target.removeEventListener(type, fired);
+			resolve();
+		};
+		for (const type of types) target.addEventListener(type, fired);
+	});
 }
 
 function updateEnded(buffer: SourceBuffer): Promise<void> {

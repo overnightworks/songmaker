@@ -115,9 +115,14 @@ class FakeSourceBuffer extends EventTarget {
 	}
 }
 
+// Its duration stays unknown while takes are appended, so the browser lets the
+// element seek only up to the end of what is buffered, or of the live
+// seekable range where one is set.
 class FakeMediaSource extends EventTarget {
 	readonly mimeTypes: string[] = [];
 	readonly buffer: FakeSourceBuffer;
+	readyState: ReadyState = 'closed';
+	private liveSeekableEnd = 0;
 
 	constructor(private readonly log: string[]) {
 		super();
@@ -131,14 +136,45 @@ class FakeMediaSource extends EventTarget {
 
 	endOfStream(): void {
 		if (this.buffer.updating) throw new DOMException('still updating', 'InvalidStateError');
+		this.readyState = 'ended';
 		this.log.push('endOfStream');
+	}
+
+	open(): void {
+		this.readyState = 'open';
+		this.dispatchEvent(new Event('sourceopen'));
+	}
+
+	setLiveSeekableRange(start: number, end: number): void {
+		if (this.readyState !== 'open') throw new DOMException('not open', 'InvalidStateError');
+		if (start < 0 || start > end) throw new TypeError('invalid live seekable range');
+		this.liveSeekableEnd = end;
+	}
+
+	seekableEnd(): number {
+		const buffered = this.buffer.buffered;
+		return Math.max(buffered.length ? buffered.end() : 0, this.liveSeekableEnd);
 	}
 }
 
 class FakeAudio extends EventTarget {
 	src = '';
-	currentTime = 0;
+	private position = 0;
 	private readonly playbackWatchers: (() => void)[] = [];
+
+	constructor(private readonly mediaSource: FakeMediaSource) {
+		super();
+	}
+
+	get currentTime(): number {
+		return this.position;
+	}
+
+	// Like a browser, a seek lands no further than the seekable range reaches.
+	set currentTime(seconds: number) {
+		this.position = Math.min(seconds, this.mediaSource.seekableEnd());
+		this.dispatchEvent(new Event('seeking'));
+	}
 
 	override addEventListener(
 		type: string,
@@ -154,7 +190,7 @@ class FakeAudio extends EventTarget {
 	}
 
 	playTo(seconds: number): void {
-		this.currentTime = seconds;
+		this.position = seconds;
 		this.dispatchEvent(new Event('timeupdate'));
 	}
 }
@@ -324,13 +360,13 @@ interface Rig {
 
 function openDeck(): Rig {
 	const log: string[] = [];
-	const audio = new FakeAudio();
 	const mediaSource = new FakeMediaSource(log);
+	const audio = new FakeAudio(mediaSource);
 	const network = new FakeNetwork();
 	const revoked: string[] = [];
 	const urls = {
 		createObjectURL: () => {
-			queueMicrotask(() => mediaSource.dispatchEvent(new Event('sourceopen')));
+			queueMicrotask(() => mediaSource.open());
 			return OBJECT_URL;
 		},
 		revokeObjectURL: (url: string) => {
@@ -396,11 +432,28 @@ describe('ContinuousDeck', () => {
 		expect(buffer.mode).toBe('sequence');
 	});
 
+	const withLiveSeekableRange = { setLiveSeekableRange: () => undefined };
 	it.each([
-		{ mediaSource: undefined, supported: false },
-		{ mediaSource: { isTypeSupported: () => false }, supported: false },
-		{ mediaSource: { isTypeSupported: (type: string) => type === 'audio/mpeg' }, supported: true }
-	])('reports MP3 support as $supported', ({ mediaSource, supported }) => {
+		{ browser: 'no media source', mediaSource: undefined, supported: false },
+		{
+			browser: 'no MP3',
+			mediaSource: { isTypeSupported: () => false, prototype: withLiveSeekableRange },
+			supported: false
+		},
+		{
+			browser: 'MP3 without a live seekable range',
+			mediaSource: { isTypeSupported: (type: string) => type === 'audio/mpeg', prototype: {} },
+			supported: false
+		},
+		{
+			browser: 'MP3 with a live seekable range',
+			mediaSource: {
+				isTypeSupported: (type: string) => type === 'audio/mpeg',
+				prototype: withLiveSeekableRange
+			},
+			supported: true
+		}
+	])('reports support as $supported for $browser', ({ mediaSource, supported }) => {
 		vi.stubGlobal('MediaSource', mediaSource);
 
 		expect(ContinuousDeck.isSupported()).toBe(supported);
@@ -490,10 +543,25 @@ describe('ContinuousDeck', () => {
 		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE]);
 	});
 
+	it('lets a seek past what has arrived wait there, appending the take up to a minute beyond it', async () => {
+		const { deck, audio, buffer, network } = openDeck();
+		network.serve('/audio/long.mp3', 5 * MEGABYTE);
+		void deck.appendTake('long', '/audio/long.mp3');
+		await audio.untilDeckWaitsForPlayback();
+		expect(buffer.buffered.end()).toBeLessThan(200);
+
+		deck.seekTo(200);
+		await audio.untilDeckWaitsForPlayback();
+
+		expect(audio.currentTime).toBe(200);
+		expect(buffer.buffered.end()).toBeGreaterThanOrEqual(260);
+		expect(buffer.buffered.end()).toBeLessThan(secondsOf(5 * MEGABYTE));
+	});
+
 	it('starts the next append only after the previous one fired updateend', async () => {
 		const { deck, audio, buffer, network } = openDeck();
 		network.serve('/audio/long.mp3', 3 * PIECE);
-		audio.currentTime = 1000;
+		audio.playTo(1000);
 		buffer.autoSettle = false;
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
@@ -538,7 +606,7 @@ describe('ContinuousDeck', () => {
 		network.serve('/audio/first.mp3', MEGABYTE / 2);
 		network.serve('/audio/second.mp3', MEGABYTE / 4);
 		await deck.appendTake('first', '/audio/first.mp3');
-		audio.currentTime = 25;
+		audio.playTo(25);
 		buffer.quotaRefusals = 1;
 
 		await deck.appendTake('second', '/audio/second.mp3');
@@ -552,7 +620,7 @@ describe('ContinuousDeck', () => {
 		network.serve('/audio/first.mp3', MEGABYTE / 2);
 		network.serve('/audio/second.mp3', MEGABYTE / 4);
 		await deck.appendTake('first', '/audio/first.mp3');
-		audio.currentTime = 25;
+		audio.playTo(25);
 		buffer.quotaRefusals = 2;
 
 		await expect(deck.appendTake('second', '/audio/second.mp3')).rejects.toMatchObject({
@@ -756,7 +824,7 @@ describe('ContinuousDeck', () => {
 		network.serve('/audio/second.mp3', MEGABYTE / 4);
 		const secondStart = secondsOf(MEGABYTE / 2);
 		await deck.appendTake('first', '/audio/first.mp3');
-		audio.currentTime = secondStart + 1;
+		audio.playTo(secondStart + 1);
 
 		await deck.appendTake('second', '/audio/second.mp3');
 
