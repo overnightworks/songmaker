@@ -59,9 +59,9 @@ const OFFLINE_SONG_TITLE = 'Offline Strip';
 const OFFLINE_NOTICE_MS = 1_500;
 // The ruling on #1032: back online, the page has caught up within 10 seconds.
 const BACK_ONLINE_MS = 10_000;
-// The player's stall look comes 5 s after the take stopped; the deck's
-// download it resumes then is the first request past its parked attempts.
-const STALL_LOOK_RETRY_MS = 10_000;
+// The player's first stall look comes 5 s after Play; until it the transport
+// says 'loading', from it on 'recovering'.
+const FIRST_STALL_LOOK_MS = 10_000;
 const TAKE_AUDIO_PATH_PREFIX = '/audio/';
 // The ruling on #1099: a server that comes back while the browser stayed
 // online is found by the page's return probe, at most one interval until it
@@ -292,8 +292,9 @@ test.describe('losing the network while a take plays on the phone', () => {
 });
 
 // Offline, a take with no bytes yet waits instead of offering Retry (#1282):
-// its download parks, the player's stall look tries it again, and the
-// transport keeps its spinner until the network's return lets it play.
+// its download parks after its attempts, the player's stall looks wait
+// without asking again while the network is announced gone, and the
+// transport keeps its spinner until the network's return resumes the take.
 test.describe('tapping Play while the network is gone on the phone', () => {
 	// The take must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
@@ -311,11 +312,11 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 		const miniPlayer = page.getByRole('contentinfo');
 		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 		const retry = miniPlayer.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
-		const spinner = pause.locator('.spinner');
-		let audioRequests = 0;
-		page.on('request', (sent) => {
-			if (new URL(sent.url()).pathname.startsWith(TAKE_AUDIO_PATH_PREFIX)) audioRequests += 1;
-		});
+		const spinner = miniPlayer.locator('.play-btn .spinner');
+		const loadingSpinner = miniPlayer
+			.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+			.locator('.spinner');
+		const recoveringSpinner = pause.locator('.spinner');
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
@@ -326,15 +327,19 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 
 		await loseNetwork(page, context);
 		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+		let offlineAudioRequests = 0;
+		page.on('request', (sent) => {
+			if (new URL(sent.url()).pathname.startsWith(TAKE_AUDIO_PATH_PREFIX))
+				offlineAudioRequests += 1;
+		});
 		await page
 			.getByRole('tabpanel')
 			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
 			.click();
-		await expect(spinner).toBeVisible();
-		await expect
-			.poll(() => audioRequests, { timeout: STALL_LOOK_RETRY_MS })
-			.toBeGreaterThan(DOWNLOAD_ATTEMPTS);
-		await expect(spinner).toBeVisible();
+		await expect(loadingSpinner).toBeVisible();
+		await expect.poll(() => offlineAudioRequests).toBe(DOWNLOAD_ATTEMPTS);
+		await expect(recoveringSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
+		expect(offlineAudioRequests).toBe(DOWNLOAD_ATTEMPTS);
 		await expect(retry).toHaveCount(0);
 
 		await regainNetwork(page, context);
