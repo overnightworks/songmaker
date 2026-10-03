@@ -1,0 +1,8 @@
+claim_id = "fb71edc8361243be8e8db0fea63338db"
+agent = "claude-head"
+role = "builder"
+base = "a6e17ede0885a494bf4744e4eb1522b5f3bab15d"
+branch = "claude-head/issue-1280-deck-slow-link"
+scope = ["frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts"]
+opened_commit = "0beec8c2115ff3275c386720970e5937a41c6ad2"
+whole_reason = "deck slow-link start and refused-download hygiene"
