@@ -332,13 +332,13 @@ describe('versionDeleteEditorLoss', () => {
 			deleted: older,
 			draft: 'a typed line',
 			change: () => setDraftLyrics('an unsaved line'),
-			loss: { kind: 'unsaved-draft' }
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
 		},
 		{
 			deleted: older,
 			draft: 'its own untouched load',
 			change: () => loadVersionAsDraft(older),
-			loss: { kind: 'unsaved-draft' }
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
 		},
 		{
 			deleted: latest,
@@ -350,7 +350,7 @@ describe('versionDeleteEditorLoss', () => {
 			deleted: latest,
 			draft: 'a typed line',
 			change: () => setDraftLyrics('an unsaved line'),
-			loss: { kind: 'unsaved-draft' }
+			loss: { kind: 'unsaved-draft', emptiesEditor: false }
 		},
 		{
 			deleted: latest,
@@ -369,10 +369,18 @@ describe('versionDeleteEditorLoss', () => {
 		}
 	);
 
-	it('deleting the only version empties the editor', () => {
+	it.each([
+		{ draft: 'the latest', change: () => undefined, loss: { kind: 'all-lyrics' } },
+		{
+			draft: 'a typed line',
+			change: () => setDraftLyrics('an unsaved line'),
+			loss: { kind: 'unsaved-draft', emptiesEditor: true }
+		}
+	])('deleting the only version under $draft empties the editor: $loss', ({ change, loss }) => {
 		loadSongData(makeSong({ ...songDefaults, id: 's1' }));
 		versions.set([latest]);
-		expect(versionDeleteEditorLoss(latest)).toEqual({ kind: 'all-lyrics' });
+		change();
+		expect(versionDeleteEditorLoss(latest)).toEqual(loss);
 	});
 });
 

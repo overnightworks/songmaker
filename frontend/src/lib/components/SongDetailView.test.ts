@@ -2016,7 +2016,13 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			shown: [versionDeleteTitle(1, 1), VERSION_DELETE_DRAFT_GOES]
 		},
 		{ deleted: 2, edit: false, only: false, shown: ['Delete v2?', versionDeleteReplacedBy(1)] },
-		{ deleted: 2, edit: false, only: true, shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR] }
+		{ deleted: 2, edit: false, only: true, shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR] },
+		{
+			deleted: 2,
+			edit: true,
+			only: true,
+			shown: ['Delete v2?', VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
+		}
 	])(
 		'the delete on v$deleted says what else leaves the editor (unsaved edit: $edit, only version: $only)',
 		async ({ deleted, edit, only, shown }) => {

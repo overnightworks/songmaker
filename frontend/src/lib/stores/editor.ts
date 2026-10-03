@@ -148,7 +148,7 @@ export const pendingVersionLoad = writable<PendingVersionLoad | null>(null);
 
 /** What a version delete takes from the editor besides the version and its takes. */
 export type VersionDeleteEditorLoss =
-	| { kind: 'unsaved-draft' }
+	| { kind: 'unsaved-draft'; emptiesEditor: boolean }
 	| { kind: 'current-lyrics'; replacedBy: number }
 	| { kind: 'all-lyrics' };
 
@@ -313,15 +313,17 @@ export async function handleSave(songId: string): Promise<SongItem> {
 
 /**
  * What deleting `version` takes from the editor, which {@link handleDeleteVersion}
- * resets to the latest version left: a draft no surviving version holds, or,
- * under a draft of the latest itself, the latest's lyrics when it is the one
- * deleted.
+ * resets to the latest version left, or empties when none is left: a draft no
+ * surviving version holds, or, under a draft of the latest itself, the latest's
+ * lyrics when it is the one deleted.
  */
 export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
 	const state = get(editorState);
 	const all = get(versions);
 	const survivors = all.filter((candidate) => candidate.id !== version.id);
-	if (holdsUnversionedChanges(state, survivors)) return { kind: 'unsaved-draft' };
+	if (holdsUnversionedChanges(state, survivors)) {
+		return { kind: 'unsaved-draft', emptiesEditor: survivors.length === 0 };
+	}
 	if (!songDataEqual(state.draft, state.saved) || version.id !== all[0]?.id) return null;
 	const nextLatest = survivors[0];
 	return nextLatest

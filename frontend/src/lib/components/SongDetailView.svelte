@@ -497,14 +497,16 @@
 		}
 	}
 
-	function editorLossLine(loss: VersionDeleteEditorLoss): string {
+	function editorLossLines(loss: VersionDeleteEditorLoss): string[] {
 		switch (loss.kind) {
 			case 'unsaved-draft':
-				return VERSION_DELETE_DRAFT_GOES;
+				return loss.emptiesEditor
+					? [VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
+					: [VERSION_DELETE_DRAFT_GOES];
 			case 'current-lyrics':
-				return versionDeleteReplacedBy(loss.replacedBy);
+				return [versionDeleteReplacedBy(loss.replacedBy)];
 			case 'all-lyrics':
-				return VERSION_DELETE_EMPTIES_EDITOR;
+				return [VERSION_DELETE_EMPTIES_EDITOR];
 		}
 	}
 
@@ -514,7 +516,7 @@
 	): string[] {
 		return [
 			...(holdsPick ? [VERSION_DELETE_PICK_WARNING] : []),
-			...(editorLoss ? [editorLossLine(editorLoss)] : [])
+			...(editorLoss ? editorLossLines(editorLoss) : [])
 		];
 	}
 
