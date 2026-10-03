@@ -2,7 +2,9 @@
 // loads it as the draft (issue #1262, #1245 rules 1-6 and 9): a sheet on the
 // phone, a popover on the desktop, a confirm before a dirty draft is
 // replaced, Undo in the toast, and Generate saving the loaded text as the next
-// version while the loaded one stays as it was.
+// version while the loaded one stays as it was. "Open vN" on a take group and
+// in Now Playing loads a version the same way, and imported takes say they
+// have no version (issue #1273, #1245 rules 7-8).
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -16,7 +18,10 @@ import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_TAB_EDIT_LABEL,
+	EDITOR_TAB_TAKES_LABEL,
+	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
 	TOAST_UNDO_LABEL,
+	TRANSPORT_PAUSE_LABEL,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
@@ -25,6 +30,12 @@ import {
 	versionLoadedToastLabel,
 	versionsChipAccessibleLabel
 } from '../src/lib/constants';
+import {
+	NOW_PLAYING_TAKE_TAB,
+	openVersionLabel,
+	takeGroupLabel,
+	takeRowLabel
+} from '../src/lib/constants/now-playing';
 import type { VersionItem } from '../src/lib/api/types';
 import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
@@ -138,6 +149,24 @@ type Box = { x: number; y: number; width: number; height: number };
 function boxesOverlap(a: Box | null, b: Box | null): boolean {
 	if (!a || !b) throw new Error('Expected both boxes on screen');
 	return a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+}
+
+// The phone shows the takes on their own tab; the desktop beside the editor.
+async function showTakes(page: Page): Promise<void> {
+	const takesTab = page.getByRole('tab', { name: nameStartingWith(EDITOR_TAB_TAKES_LABEL) });
+	if (await takesTab.isVisible()) await takesTab.click();
+}
+
+function takeGroup(page: Page, versionNumber: number | null, takeCount: number): Locator {
+	return workspace(page)
+		.locator('.version-section')
+		.filter({ hasText: takeGroupLabel(versionNumber, takeCount) });
+}
+
+function playingTransport(page: Page): Locator {
+	return page
+		.getByRole('contentinfo')
+		.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 }
 
 async function tapVersion(page: Page, versionNumber: number): Promise<void> {
@@ -258,5 +287,63 @@ test.describe('the versions of a song', () => {
 		await versionRow(page, 1).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+	});
+
+	test('Open v1 on its take group loads v1 as the draft on Edit', async ({ page }, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await showTakes(page);
+
+		await takeGroup(page, 1, 1)
+			.getByRole('button', { name: new RegExp(openVersionLabel(1)) })
+			.click();
+
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
+		await expect(loadedToast(page)).toBeVisible();
+		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
+	});
+
+	test('Open v1 in Now Playing lands on Edit with v1 loaded while the take plays on', async ({
+		page
+	}, testInfo) => {
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await showTakes(page);
+		await takeGroup(page, 1, 1)
+			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
+			.click();
+		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
+		await expect(playingTransport(page)).toBeVisible();
+
+		const openV1 = page.getByRole('button', { name: openVersionLabel(1), exact: true });
+		await openV1.click();
+
+		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeHidden();
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
+		await expect(playingTransport(page)).toBeVisible();
+	});
+
+	test('an imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics', async ({
+		page
+	}) => {
+		const library = readSeededLibrary();
+		await page.goto(`/album/${library.albumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) })
+			.click();
+		await showTakes(page);
+
+		const imported = takeGroup(page, null, 1);
+		await expect(imported).toBeVisible();
+		await expect(imported.getByRole('button', { name: /Open v/ })).toHaveCount(0);
+
+		await imported.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) }).click();
+		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
+		await expect(page.getByText(NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS)).toBeVisible();
+		await expect(page.getByRole('button', { name: /^Open v/ })).toHaveCount(0);
 	});
 });
