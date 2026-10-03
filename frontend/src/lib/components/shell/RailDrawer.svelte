@@ -2,6 +2,7 @@
 	import { onDestroy, tick, type Snippet } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { RAIL_DRAWER_CLOSE_LABEL, RAIL_DRAWER_LABEL } from '$lib/constants';
+	import { navigationOnlyMountedRoute } from '$lib/history/historyController';
 	import { closeSidebar, railWidth, sidebarOpen } from '$lib/stores/ui';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 
@@ -10,7 +11,9 @@
 	let panel: HTMLDivElement | undefined = $state();
 	const open = $derived($sidebarOpen);
 
-	afterNavigate(() => closeSidebar());
+	afterNavigate((navigation) => {
+		if (!navigationOnlyMountedRoute(navigation.type)) closeSidebar();
+	});
 	onDestroy(closeSidebar);
 
 	$effect(() => {

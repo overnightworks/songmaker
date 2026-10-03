@@ -44,6 +44,7 @@ import {
 	enterAlbumOfSong,
 	holdLibraryRestoresUntil,
 	isLibraryHistoryState,
+	keepLibraryPageAsLeft,
 	libraryHistoryEntry,
 	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
@@ -82,24 +83,7 @@ function replaceLibraryHistory(): Promise<void> {
 
 function pushLibraryHistory(): Promise<void> {
 	cancelLibraryHistoryApply();
-	const current = currentLibraryHistoryState();
-	if (isLibraryHistoryState(current)) {
-		const leaving = snapshotLibraryHistory(current.index);
-		void writeLibraryHistory(
-			{
-				...current,
-				scrollAnchor: leaving.scrollAnchor,
-				albumOffset: leaving.albumOffset,
-				songOffset: leaving.songOffset,
-				searchCursor: leaving.searchCursor,
-				searchLoadedCount: leaving.searchLoadedCount,
-				query: leaving.query,
-				sort: leaving.sort
-			},
-			urlFromState(current),
-			'replace'
-		);
-	}
+	void keepLibraryPageAsLeft();
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	return writeLibraryHistory(next, urlFromState(next), 'push');
 }
@@ -286,13 +270,16 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 // index, so a page written over the drawer's shallow entry would share its
 // index with the library entry below, and Back onto it would move the address
 // without loading the library (issue #1165). A step still in flight when the
-// page starts loading would abort it, which is why the push waits.
+// page starts loading would abort it, which is why the push waits. The
+// library page it leaves keeps how it was left -- the wall's scroll -- for
+// Back (issue #1289).
 type AppPageHref = Extract<RailSearchTarget, { kind: 'page' }>['href'];
 
 export function openAppPage(href: AppPageHref): Promise<void> {
 	return guardDirtyNavigation(async () => {
 		closeSidebar();
 		await libraryHistoryStepsLanded();
+		await keepLibraryPageAsLeft();
 		await goto(resolve(href));
 	});
 }
