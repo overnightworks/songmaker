@@ -58,12 +58,8 @@ type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
 
 type RecoveryReason = StallReason | 'media-error';
 
-// A stall the deck's own download explains: the deck resumes it on the same
-// element. A frozen clock or a media error still reloads the take.
-const DECK_RESUMABLE_REASONS: ReadonlySet<RecoveryReason> = new Set<RecoveryReason>([
-	'stall-timeout',
-	'network-return'
-]);
+// A Play tap on a take that waits for its bytes sends the deck's download on.
+type DeckResumeReason = RecoveryReason | 'play';
 
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
@@ -224,6 +220,7 @@ class AudioPlayer {
 	private lastCheckedTime = 0;
 	private stillChecks = 0;
 	private steadyChecks = 0;
+	private frozenClockNudged = false;
 	private recoveryUrlSerial = 0;
 	private streamProbe: Promise<ProbeAnswer> | null = null;
 	private pauseRequestedByApp = false;
@@ -428,6 +425,15 @@ class AudioPlayer {
 		const el = this.ensureAudio();
 		this.status = 'loading';
 		this.pauseElement(el);
+		this.attachTake(el, info, url, attachSource);
+	}
+
+	private attachTake(
+		el: HTMLAudioElement,
+		info: PlaybackInfo,
+		url: string,
+		attachSource: (el: HTMLAudioElement) => void
+	): void {
 		this.currentUrl = url;
 		attachSource(el);
 		this.setCurrent(info);
@@ -516,11 +522,7 @@ class AudioPlayer {
 	// while the queue names a next take is buffering, which recovery rides out
 	// until that take is appended.
 	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
-		if (
-			session.deck.appending ||
-			this.queueNamesATakeAfter(session.playing) ||
-			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
-		)
+		if (session.deck.appending || this.queueNamesATakeAfter(session.playing) || !ranOutOfAudio(el))
 			return false;
 		this.note('media_event', 'deck_end');
 		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
@@ -671,17 +673,22 @@ class AudioPlayer {
 	play(): void {
 		if (!this.audio || !this.current) return;
 		if (this.status === 'error' || this.pausedOnAFailedLoad) {
-			this.reloadOnPlay('media-error');
+			this.recoverOnPlay('media-error');
 			return;
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
 			this.autoplayPending = true;
+			if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'play');
 			return;
 		}
 		if (this.clockStoodStill) {
-			this.reloadOnPlay('frozen-clock');
+			this.recoverOnPlay('frozen-clock');
 			return;
 		}
+		// A take paused while it waited for its bytes still waits for them: its
+		// download goes on now, not at the stall's next look (#1288).
+		if (this.deckSession?.deck.appending && ranOutOfAudio(this.audio))
+			this.resumeDeckDownload(this.deckSession, 'play');
 		this.audio.play().catch((err) => this.handlePlayRejection(err));
 	}
 
@@ -805,6 +812,7 @@ class AudioPlayer {
 		this.recoveryStartedAt = null;
 		this.streamProbe = null;
 		this.stillChecks = 0;
+		this.frozenClockNudged = false;
 		this.pendingRecoverySeek = null;
 		this.lastObservedTime = 0;
 		this.autoplayPending = false;
@@ -898,7 +906,10 @@ class AudioPlayer {
 			if (Math.abs(position - this.lastObservedTime) > 0.05) {
 				this.lastObservedTime = position;
 				this.clearStallRecoveryTimer();
-				if (this.status === 'buffering') this.status = 'playing';
+				// A clock that plays on is the late answer even when no canplay or
+				// playing event announces it; a seek while paused is not (#1288).
+				if (this.gaveUpOnStall && !el.paused) this.resumeAfterGivingUp(el);
+				else if (this.status === 'buffering') this.status = 'playing';
 			}
 			this.currentTime = position;
 		});
@@ -910,7 +921,7 @@ class AudioPlayer {
 		on('playing', () => {
 			this.clearStallRecoveryTimer();
 			this.startProgressWatchdog(el);
-			if (this.gaveUpOnStall) this.resumeAfterGivingUp();
+			if (this.gaveUpOnStall) this.resumeAfterGivingUp(el);
 			if (this.status === 'buffering' || this.status === 'loading') this.status = 'playing';
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
@@ -1036,10 +1047,13 @@ class AudioPlayer {
 		return this.status === 'error' && (kind === 'stalled' || kind === 'awaiting-network');
 	}
 
-	private resumeAfterGivingUp(): void {
+	// The give-up stopped the watchdog; a take that plays again is watched
+	// again, even when no play or playing event announces it.
+	private resumeAfterGivingUp(el: HTMLAudioElement): void {
 		this.status = 'playing';
 		this.failure = null;
 		this.autoplayPending = false;
+		this.startProgressWatchdog(el);
 	}
 
 	private startProgressWatchdog(el: HTMLAudioElement): void {
@@ -1072,7 +1086,9 @@ class AudioPlayer {
 
 	private trackSteadyPlayback(playingSteadily: boolean): void {
 		this.steadyChecks = playingSteadily ? this.steadyChecks + 1 : 0;
-		if (this.steadyChecks >= STEADY_CHECKS_BEFORE_RECOVERY_ENDS) this.recoveryStartedAt = null;
+		if (this.steadyChecks < STEADY_CHECKS_BEFORE_RECOVERY_ENDS) return;
+		this.recoveryStartedAt = null;
+		this.frozenClockNudged = false;
 	}
 
 	// A recovery reload that failed while the network was gone leaves the
@@ -1089,15 +1105,21 @@ class AudioPlayer {
 	}
 
 	// A play on a broken or silent element fetches the take again rather than
-	// resuming what the element holds.
-	private reloadOnPlay(reason: 'media-error' | 'frozen-clock'): void {
+	// resuming what the element holds; the deck fetches on from the bytes it
+	// received and keeps its one source (#1288). The listener asked for sound,
+	// so a deck whose download resumes plays on where the playhead stands.
+	private recoverOnPlay(reason: 'media-error' | 'frozen-clock'): void {
 		this.recoveryStartedAt = null;
 		this.clearStallRecoveryTimer();
 		if (this.streamEngine.active) {
 			void this.recoverStream(reason);
 			return;
 		}
-		if (this.audio) this.reloadAt(this.reachedPosition(this.audio), reason);
+		const el = this.audio;
+		if (!el) return;
+		if (!this.deckSession) this.reloadAt(this.reachedPosition(el), reason);
+		else if (!this.recoverOnTheDeck(this.deckSession, el, reason))
+			el.play().catch((err) => this.handlePlayRejection(err));
 	}
 
 	private pauseElement(el: HTMLAudioElement): void {
@@ -1204,16 +1226,64 @@ class AudioPlayer {
 		const step = this.nextRecoveryStep(reason);
 		if (step === 'give-up') return false;
 		if (step === 'wait') this.keepWaiting();
-		else if (this.deckSession && DECK_RESUMABLE_REASONS.has(reason)) {
-			this.resumeDeckDownload(this.deckSession, reason);
-			this.keepWaiting();
-		} else this.reloadAt(reachedTime, reason);
+		else if (this.deckSession) this.recoverOnTheDeck(this.deckSession, el, reason);
+		else this.reloadAt(reachedTime, reason);
 		return true;
+	}
+
+	// The deck never swaps its source (#1288): a stall its download explains
+	// resumes that download, and a clock frozen over buffered audio is
+	// unfrozen in place. Reports whether it set the element going itself.
+	private recoverOnTheDeck(
+		session: DeckSession,
+		el: HTMLAudioElement,
+		reason: RecoveryReason
+	): boolean {
+		if (unfreezesInPlace(reason, el)) {
+			this.unfreezeDeckClock(el);
+			return true;
+		}
+		this.resumeDeckDownload(session, reason);
+		this.keepWaiting();
+		return false;
+	}
+
+	// A seek to where the clock stands makes the element read its buffer
+	// again. A clock still frozen at the next look gets a fresh deck.
+	private unfreezeDeckClock(el: HTMLAudioElement): void {
+		if (this.frozenClockNudged) {
+			this.reopenDeckAtThePlayhead(el);
+			return;
+		}
+		this.frozenClockNudged = true;
+		this.stillChecks = 0;
+		const position = el.currentTime;
+		this.note('retry', `deck_nudge at=${position.toFixed(1)}`);
+		el.currentTime = position;
+		el.play().catch((err) => this.handlePlayRejection(err));
+	}
+
+	// The queue continues from the fresh deck: the take becomes current again,
+	// so its owner hands the take after it. The element is never paused first
+	// (see reloadSource), and the recovery deadline runs on.
+	private reopenDeckAtThePlayhead(el: HTMLAudioElement): void {
+		const info = this.current;
+		const url = this.currentUrl;
+		if (!info || !url) return;
+		const position = this.positionWithinTake(el);
+		const recoveryStartedAt = this.recoveryStartedAt;
+		this.note('retry', `deck_reopen seek=${position.toFixed(1)}`);
+		this.resetTakeState();
+		this.recoveryStartedAt = recoveryStartedAt;
+		this.pendingRecoverySeek = position;
+		this.autoplayPending = true;
+		this.status = 'loading';
+		this.attachTake(el, info, url, (target) => this.attachDeck(target, info, url));
 	}
 
 	// The deck keeps what it holds and its one source: its download picks up
 	// from the bytes received, and the playhead plays on where it stood.
-	private resumeDeckDownload(session: DeckSession, reason: RecoveryReason): void {
+	private resumeDeckDownload(session: DeckSession, reason: DeckResumeReason): void {
 		this.note('retry', `deck_resume reason=${reason}`);
 		session.deck.retryDownload();
 	}
@@ -1501,6 +1571,17 @@ function continuableEntry(
 function bufferedUntil(el: HTMLAudioElement): number {
 	const ranges = el.buffered;
 	return ranges.length === 0 ? 0 : ranges.end(ranges.length - 1);
+}
+
+// The playhead stands at the end of what the element holds.
+function ranOutOfAudio(el: HTMLAudioElement): boolean {
+	return bufferedUntil(el) - el.currentTime <= END_OF_DECK_SLACK_SECONDS;
+}
+
+// A clock frozen over audio the deck already holds is the element's own
+// fault, not the download's: it is unfrozen in place.
+function unfreezesInPlace(reason: RecoveryReason, el: HTMLAudioElement): boolean {
+	return reason === 'frozen-clock' && bufferedUntil(el) > el.currentTime;
 }
 
 // A lost network is never decoded here: where the owner's strip names it

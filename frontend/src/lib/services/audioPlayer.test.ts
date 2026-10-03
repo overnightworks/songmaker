@@ -3278,20 +3278,232 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(continuousDecks.attached).toHaveLength(1);
 	});
 
-	it('gives up after the deadline while the deck stays attached', async () => {
+	// The player never pauses itself on a give-up, so the element still plays.
+	async function giveUpOnTheDeckAt(seconds: number): Promise<void> {
 		vi.useFakeTimers();
 		playFirstWithSecondAppended();
-		playTo(6);
+		playTo(seconds);
+		fakeAudio.paused = false;
 		await vi.advanceTimersByTimeAsync(0);
 
 		fakeAudio.fire('stalled');
 		await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE + 10 * SECOND);
+	}
+
+	it('gives up after the deadline while the deck stays attached', async () => {
+		await giveUpOnTheDeckAt(6);
 
 		expect(audioPlayer.error).toBe(STALLED);
 		expect(deck().retries).toBeGreaterThan(1);
 		expect(deck().closed).toBe(false);
 		expect(continuousDecks.attached).toHaveLength(1);
 		expect(recordedNotes().at(-1)).toMatchObject({ kind: 'give_up', detail: 'stalled' });
+	});
+
+	it.each([
+		{
+			name: 'a clock that moves on while the element plays ends it',
+			paused: false,
+			move: () => playTo(7),
+			after: { status: 'playing', error: null },
+			frozenClockAfterwardsNudged: true
+		},
+		{
+			name: 'a seek while the element is paused leaves it',
+			paused: true,
+			move: () => {
+				audioPlayer.seek(3);
+				fakeAudio.fire('timeupdate');
+			},
+			after: { status: 'error', error: STALLED },
+			frozenClockAfterwardsNudged: false
+		}
+	])(
+		'given up on the deck, $name',
+		async ({ paused, move, after, frozenClockAfterwardsNudged }) => {
+			await giveUpOnTheDeckAt(6);
+			fakeAudio.paused = paused;
+
+			move();
+			fakeAudio.bufferedUntil = 20;
+			const seeks = recordSeeks(fakeAudio);
+			await vi.advanceTimersByTimeAsync(5 * SECOND);
+
+			expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(after);
+			expect(seeks.length > 0).toBe(frozenClockAfterwardsNudged);
+		}
+	);
+
+	it.each([
+		{ action: 'Retry', networkAnnouncedGone: false, retry: () => audioPlayer.play() },
+		{
+			action: "the network's return",
+			networkAnnouncedGone: true,
+			retry: () => audioPlayer.resumeAfterNetworkReturn()
+		}
+	])(
+		'$action after giving up resumes the deck download and plays on from the element position',
+		async ({ networkAnnouncedGone, retry }) => {
+			let networkGone = networkAnnouncedGone;
+			audioPlayer.swapCallbacks(
+				callbacks({ onCurrentChange, onEnded, networkFailureIsAnnounced: () => networkGone })
+			);
+			await giveUpOnTheDeckAt(6);
+			const retriesWhenGivenUp = deck().retries;
+			const loadSpy = vi.spyOn(fakeAudio, 'load');
+			networkGone = false;
+
+			retry();
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(deck().retries).toBe(retriesWhenGivenUp + 1);
+			expect(deck().closed).toBe(false);
+			expect(continuousDecks.attached).toHaveLength(1);
+			expect(loadSpy).not.toHaveBeenCalled();
+			expect(fakeAudio.src).not.toMatch(/recover=/);
+			expect(fakeAudio.currentTime).toBe(6);
+			expect(audioPlayer.error).toBeNull();
+
+			playTo(6.5);
+			fakeAudio.fire('playing');
+			expect(audioPlayer.status).toBe('playing');
+			expect(audioPlayer.currentTime).toBe(6.5);
+		}
+	);
+
+	it.each([
+		{ moment: 'before its first byte', arrange: () => audioPlayer.load(first) },
+		{
+			moment: 'while a stall waits for its next look',
+			arrange: () => {
+				playFirstWithSecondAppended();
+				playTo(4);
+				fakeAudio.fire('stalled');
+			}
+		},
+		{
+			moment: 'after the listener paused it while it waited for its bytes',
+			arrange: () => {
+				playFirstWithSecondAppended();
+				playTo(4);
+				fakeAudio.bufferedUntil = 4;
+				deck().appending = true;
+				fakeAudio.fire('stalled');
+				audioPlayer.pause();
+			}
+		}
+	])('Play on a parked take resumes its download at once $moment', ({ arrange }) => {
+		vi.useFakeTimers();
+		arrange();
+
+		audioPlayer.play();
+
+		expect(deck().retries).toBe(1);
+		expect(deck().closed).toBe(false);
+		expect(recordedDetails()).toContain('retry deck_resume reason=play');
+	});
+
+	it('Play on a paused take with audio ahead of the playhead leaves its download alone', () => {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(4);
+		fakeAudio.bufferedUntil = 12;
+		deck().appending = true;
+		audioPlayer.pause();
+
+		audioPlayer.play();
+
+		expect(deck().retries).toBe(0);
+	});
+
+	function freezeTheClockOverBufferedAudioAt(seconds: number): void {
+		vi.useFakeTimers();
+		playFirstWithSecondAppended();
+		playTo(seconds);
+		fakeAudio.paused = false;
+		fakeAudio.bufferedUntil = 20;
+	}
+
+	function recordSeeks(el: FakeAudio): number[] {
+		const seeks: number[] = [];
+		let position = el.currentTime;
+		Object.defineProperty(el, 'currentTime', {
+			configurable: true,
+			get: () => position,
+			set: (seconds: number) => {
+				seeks.push(seconds);
+				position = seconds;
+			}
+		});
+		return seeks;
+	}
+
+	it.each([
+		{ noticedBy: 'the watchdog', notice: () => vi.advanceTimersByTime(5 * SECOND) },
+		{
+			noticedBy: 'a Play tap after one still look',
+			notice: () => {
+				vi.advanceTimersByTime(2 * SECOND);
+				audioPlayer.play();
+			}
+		}
+	])(
+		'nudges a clock frozen over buffered audio in place when $noticedBy notices it',
+		({ notice }) => {
+			freezeTheClockOverBufferedAudioAt(6);
+			const seeks = recordSeeks(fakeAudio);
+			fakeAudio.playMock.mockClear();
+			const loadSpy = vi.spyOn(fakeAudio, 'load');
+
+			notice();
+
+			expect(seeks).toEqual([6]);
+			expect(fakeAudio.playMock).toHaveBeenCalledOnce();
+			expect(continuousDecks.attached).toHaveLength(1);
+			expect(deck().closed).toBe(false);
+			expect(loadSpy).not.toHaveBeenCalled();
+			expect(audioPlayer.status).toBe('playing');
+		}
+	);
+
+	it('a Play tap on a clock frozen with no audio ahead resumes the download under that cause and plays on', () => {
+		freezeTheClockOverBufferedAudioAt(6);
+		fakeAudio.bufferedUntil = 6;
+		vi.advanceTimersByTime(2 * SECOND);
+		fakeAudio.playMock.mockClear();
+
+		audioPlayer.play();
+
+		expect(recordedDetails()).toContain('retry deck_resume reason=frozen-clock');
+		expect(deck().retries).toBe(1);
+		expect(fakeAudio.playMock).toHaveBeenCalledOnce();
+		expect(continuousDecks.attached).toHaveLength(1);
+	});
+
+	it('opens a fresh deck at the take and position on the same element when the clock is still frozen at the next look', () => {
+		audioPlayer.swapCallbacks(
+			callbacks({
+				onEnded,
+				onCurrentChange: (current) => {
+					if (current?.generation.id === first.generation.id) audioPlayer.preload(second);
+				}
+			})
+		);
+		freezeTheClockOverBufferedAudioAt(6);
+		vi.advanceTimersByTime(5 * SECOND);
+		const frozen = deck();
+
+		vi.advanceTimersByTime(5 * SECOND);
+
+		expect(frozen.closed).toBe(true);
+		expect(continuousDecks.attached).toHaveLength(2);
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second]);
+		expect(audioPlayer.getElement()).toBe(fakeAudio);
+		expect(fakeAudio.src).not.toMatch(/recover=/);
+		expect(audioPlayer.current?.generation.id).toBe('g1');
+		expect(audioPlayer.transport).toBe('recovering');
+		fakeAudio.fire('loadedmetadata');
+		expect(fakeAudio.currentTime).toBe(6);
 	});
 
 	it('a browser without MSE MP3 keeps the two decks', () => {

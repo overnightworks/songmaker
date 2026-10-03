@@ -19,6 +19,7 @@
 		retryLastPlayIntent,
 		shuffleEnabled,
 		shuffleLabel,
+		startAwaitsNetwork,
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
@@ -63,6 +64,10 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
+	// With the screen off the lock screen is the only surface, so it shows the same.
+	const barTransport = $derived(
+		startAwaitsNetwork(current, startNotice) ? 'recovering' : transport
+	);
 
 	const isPlaying = $derived(transport === 'playing');
 	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
@@ -149,7 +154,7 @@
 
 	$effect(() => {
 		updateMediaSessionPlaybackState(
-			transportOffersPause(transport) ? 'playing' : current ? 'paused' : 'none'
+			transportOffersPause(barTransport) ? 'playing' : current ? 'paused' : 'none'
 		);
 		updateMediaSessionPositionState(currentTime, duration);
 	});
@@ -198,7 +203,7 @@
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
-		{:else if startNotice === 'building'}
+		{:else if startNotice === 'building' || startNotice === 'awaiting-network'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
@@ -219,7 +224,7 @@
 {#if !$transportBarHidden}
 	<OfflineStrip />
 	<TransportBarFrame
-		{transport}
+		transport={barTransport}
 		{errorMsg}
 		onRetry={() => audioPlayer.play()}
 		{currentTime}
