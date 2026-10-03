@@ -52,7 +52,15 @@ import {
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-utils/hitbox';
-import { editLyrics, pinnedSeed, setDraftLyrics, setDraftPrompt } from '$lib/stores/editor';
+import {
+	editLyrics,
+	pendingVersionLoad,
+	pinnedSeed,
+	setDraftLyrics,
+	setDraftPrompt,
+	versions
+} from '$lib/stores/editor';
+import { openVersionLabel } from '$lib/constants/now-playing';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
 import {
 	detailTab,
@@ -340,6 +348,7 @@ afterEach(async () => {
 	document.body.replaceChildren();
 	resetNavigationForTests();
 	pendingSource.set(null);
+	pendingVersionLoad.set(null);
 	pinnedSeed.set(null);
 	recipeOpen.set(false);
 	coWriterOpen.set(false);
@@ -1217,37 +1226,50 @@ describe('SongDetailView unsaved-draft guard', () => {
 		expect(addToast).toHaveBeenCalledWith('Saved version 5', 'success');
 	});
 
-	it('cross-song Repaint/Cover: Cancel leaves it unapplied and drops the pending source', async () => {
-		songList.set(albumSongs());
-		const target = await renderView();
-		setDraftLyrics('unsaved edit');
-		await tick();
+	it.each([
+		{ choice: 'Cancel', button: 'Cancel', saveFails: false },
+		{ choice: 'a failed Save', button: EDITOR_UNSAVED_SAVE_LABEL, saveFails: true }
+	])(
+		'cross-song Repaint/Cover or Open vN: $choice leaves it unapplied and drops what was pending',
+		async ({ button, saveFails }) => {
+			if (saveFails) {
+				const { updateSong } = await import('$lib/api/client');
+				vi.mocked(updateSong).mockRejectedValueOnce(new Error('save failed'));
+			}
+			songList.set(albumSongs());
+			const target = await renderView();
+			setDraftLyrics('unsaved edit');
+			await tick();
 
-		const targetGen = generation({
-			...sourceRecipeDefaults(),
-			id: 'g-last',
-			song_id: 's-last'
-		});
-		pendingSource.set({ generation: targetGen, mode: 'repaint' });
-		selectSong(
-			's-last',
-			song({
-				...editableSongDefaults(),
-				id: 's-last',
-				title: 'Last',
-				generations: [targetGen]
-			})
-		);
-		await tick();
-		expect(get(sourceGeneration)).toBeNull();
+			const targetGen = generation({
+				...sourceRecipeDefaults(),
+				id: 'g-last',
+				song_id: 's-last'
+			});
+			pendingSource.set({ generation: targetGen, mode: 'repaint' });
+			pendingVersionLoad.set({ songId: 's-last', versionId: 'v-last' });
+			selectSong(
+				's-last',
+				song({
+					...editableSongDefaults(),
+					id: 's-last',
+					title: 'Last',
+					generations: [targetGen]
+				})
+			);
+			await tick();
+			expect(get(sourceGeneration)).toBeNull();
 
-		clickNamed(target, 'Cancel');
-		await tick();
+			const dialog = target.querySelector<HTMLElement>('.dialog');
+			if (!dialog) throw new Error('Expected the unsaved-changes dialog');
+			clickNamed(dialog, button);
 
-		expect(get(selectedSongId)).toBe('s1');
-		expect(get(pendingSource)).toBeNull();
-		expect(get(sourceGeneration)).toBeNull();
-	});
+			await vi.waitFor(() => expect(get(pendingVersionLoad)).toBeNull());
+			expect(get(selectedSongId)).toBe('s1');
+			expect(get(pendingSource)).toBeNull();
+			expect(get(sourceGeneration)).toBeNull();
+		}
+	);
 
 	it('cross-song Repaint/Cover: Discard applies the source once the target song opens', async () => {
 		songList.set(albumSongs());
@@ -1768,6 +1790,61 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			'brief'
 		);
 		expect(updateSong).not.toHaveBeenCalled();
+	});
+
+	function takeGroupOpenLink(target: HTMLElement, versionNumber: number): HTMLButtonElement {
+		const link = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
+			(button) => button.textContent?.includes(openVersionLabel(versionNumber))
+		);
+		if (!link) throw new Error(`Expected the Open v${versionNumber} link on its take group`);
+		return link;
+	}
+
+	it('Open v1 on a take group loads v1 as the draft and shows it on Edit', async () => {
+		navigateToSongTab('takes');
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+
+		takeGroupOpenLink(target, 1).click();
+		await tick();
+		await Promise.resolve();
+		await tick();
+
+		expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft');
+		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
+		expect(target.textContent).toContain(versionLoadedFromLabel(1));
+		expect(addUndoToast).toHaveBeenCalledWith(
+			versionLoadedToastLabel(1),
+			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
+			'brief'
+		);
+	});
+
+	it('an Open from Now Playing loads that version on arrival and shows it on Edit', async () => {
+		navigateToSongTab('takes');
+		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
+		const target = await renderView();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector<HTMLTextAreaElement>('.lyrics-area')?.value).toBe('first draft')
+		);
+		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
+		expect(target.textContent).toContain(versionLoadedFromLabel(1));
+		expect(get(pendingVersionLoad)).toBeNull();
+	});
+
+	it('an Open from Now Playing over a dirty draft asks first', async () => {
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+		setDraftLyrics('unsaved edit');
+		pendingVersionLoad.set({ songId: 's1', versionId: 'v1' });
+		await tick();
+
+		const dialog = replaceDialog();
+		if (!dialog) throw new Error('Expected the replace-draft confirm');
+		expect(dialog.textContent).toContain(versionReplaceDraftMessage(1));
+		expect(get(editLyrics)).toBe('unsaved edit');
+		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
 	});
 
 	it('over a dirty draft asks first, and Cancel keeps the edit and the sheet', async () => {

@@ -21,6 +21,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
+import { openVersionLabel, takeGroupLabel } from '$lib/constants/now-playing';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
@@ -182,6 +183,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 const pick = vi.fn();
 const keep = vi.fn();
 const pinSeed = vi.fn();
+const clickVersion = vi.fn(async () => true);
 
 const addToPlaylist = vi.fn(async () => undefined);
 
@@ -200,7 +202,7 @@ function mockActions(): GenerationActions {
 		unshare: vi.fn(async () => undefined),
 		addToPlaylist,
 		pinSeed,
-		clickVersion: vi.fn()
+		clickVersion
 	};
 }
 
@@ -223,6 +225,7 @@ beforeEach(() => {
 	pick.mockReset();
 	keep.mockReset();
 	pinSeed.mockReset();
+	clickVersion.mockClear();
 	addToPlaylist.mockClear();
 	playlistList.set([{ ...playlist }]);
 	playlistLoad.set({ status: 'ready', error: null });
@@ -320,6 +323,52 @@ describe('TakesList', () => {
 		expect(
 			Array.from(target.querySelectorAll('.take-label'), (label) => label.textContent?.trim())
 		).toEqual(['Take 1', 'Take 2', 'Take 3', 'Take 4']);
+	});
+
+	function openVersionLink(target: HTMLElement, versionNumber: number): HTMLButtonElement | null {
+		return (
+			Array.from(target.querySelectorAll<HTMLButtonElement>('.version-section button')).find(
+				(button) => button.textContent?.includes(openVersionLabel(versionNumber))
+			) ?? null
+		);
+	}
+
+	it('opens the version a group header names, through the one version load', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [
+					generation({ id: 'g5', version_id: 'ver-5', version_number: 5 }),
+					generation({ id: 'g7', version_id: 'ver-7', version_number: 7 })
+				]
+			})
+		});
+
+		openVersionLink(target, 5)?.click();
+		await tick();
+
+		expect(openVersionLink(target, 7)?.textContent).toContain(takeGroupLabel(7, 1));
+		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
+	});
+
+	it('groups imported takes under plain text with no Open link', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [1, 2].map((generation_number) =>
+					generation({
+						id: `imported-${generation_number}`,
+						version_id: null,
+						version_number: null,
+						generation_number
+					})
+				)
+			})
+		});
+
+		expect(target.querySelector('.version-header')?.textContent?.trim()).toBe(
+			takeGroupLabel(null, 2)
+		);
+		expect(target.querySelector('.version-section .version-link')).toBeNull();
+		expect(target.querySelector('.version-section')?.textContent).not.toContain('Open v');
 	});
 
 	it('shows the draft banner with the next version number only when dirty', async () => {
