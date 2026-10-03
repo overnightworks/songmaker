@@ -11,18 +11,27 @@
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
 	collectionPlayLabel,
+	openNowPlayingLabel,
+	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
-import { FlowGuard, nameStartingWith, shellOf, workspace } from './helpers';
+import {
+	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
+	NOW_PLAYING_SHUFFLE_LABEL_PREFIX
+} from '../src/lib/constants/now-playing';
+import { FlowGuard, nameStartingWith, shellOf, workspace, type Shell } from './helpers';
 import {
 	BASE_URL,
 	createAccount,
 	deleteAccount,
 	readSeededLibrary,
 	runMarker,
+	seedPlaylist,
 	seedUnpickedLibrary,
 	STORAGE_STATE_FILE,
+	type SeededLibrary,
+	type SeededTake,
 	type SeededTrack,
 	type SeededUnpickedLibrary
 } from './seed';
@@ -30,7 +39,19 @@ import {
 // A three-second take plus the next take's start, with room for a slow runner.
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 const MEDIA_EVENT_BINDING = 'reportMediaEvent';
+const PLAYED_ELEMENTS_KEY = 'e2ePlayedMediaElements';
 const STOPPING_EVENTS = ['pause', 'ended'];
+const SEEKING_EVENT = 'seeking';
+// A new source on an element that already held one empties it first.
+const SOURCE_SWAP_EVENT = 'emptied';
+const WATCHED_EVENTS = [...STOPPING_EVENTS, SEEKING_EVENT, SOURCE_SWAP_EVENT];
+// The fixture take is three seconds long, so a take's second place on the
+// deck starts about three seconds in.
+const SECOND_PLACE_STARTS_AFTER_SECONDS = 2.5;
+// Long enough into a take that the player has shown its position.
+const PLAYING_FOR_SECONDS = 0.5;
+// Far enough past the shuffle toggle that a seek back would already have landed.
+const PLAYS_ON_PAST_THE_TOGGLE_SECONDS = 0.5;
 const ACCOUNT_PASSWORD = 'E2eQueue!2026';
 const RECOVERY_QUERY = 'recover';
 // The deck's contract (continuousDeck.ts): three downloads in a row fail,
@@ -38,50 +59,72 @@ const RECOVERY_QUERY = 'recover';
 const DECK_DOWNLOAD_ATTEMPTS = 3;
 
 /**
- * When each take's audio was first requested, which elements played from
- * which kind of source, and which stopped. The player's decks are detached
- * `Audio` elements, out of reach of any DOM query, so every element that
- * plays reports its own source and stops through a binding.
+ * When each take's audio was first requested and how often, which elements
+ * played from which kind of source, where they seeked to, and which stopped
+ * or swapped their source. The player's decks are detached `Audio` elements,
+ * out of reach of any DOM query, so every element that plays reports its own
+ * events through a binding and is kept on the window for its clock.
  */
 class PlaybackTimeline {
 	private readonly requested = new Map<string, number>();
+	private readonly requestCounts = new Map<string, number>();
 	private readonly playingElements = new Set<number>();
 	readonly stops: string[] = [];
+	readonly seeks: number[] = [];
 	readonly sourcesPlayed: string[] = [];
 	readonly recoveryRequests: string[] = [];
+	sourceSwaps = 0;
 
 	static async watch(page: Page): Promise<PlaybackTimeline> {
 		const timeline = new PlaybackTimeline();
 		page.on('request', (sent) => timeline.recordRequest(sent.url()));
 		await page.exposeFunction(
 			MEDIA_EVENT_BINDING,
-			(element: number, event: string, source: string) =>
-				timeline.recordMediaEvent(element, event, source)
+			(element: number, event: string, source: string, position: number) =>
+				timeline.recordMediaEvent(element, event, source, position)
 		);
 		await page.addInitScript(
-			({ binding, stoppingEvents }) => {
+			({ binding, elementsKey, watchedEvents }) => {
 				const elementIds = new WeakMap<HTMLMediaElement, number>();
-				let nextId = 0;
+				const played: HTMLMediaElement[] = [];
+				Reflect.set(window, elementsKey, played);
 				const nativePlay = HTMLMediaElement.prototype.play;
 				HTMLMediaElement.prototype.play = function () {
 					if (!elementIds.has(this)) {
-						const id = nextId++;
+						const id = played.push(this) - 1;
 						elementIds.set(this, id);
 						const report = (event: string) =>
-							Reflect.get(window, binding).call(window, id, event, this.src);
+							Reflect.get(window, binding).call(window, id, event, this.src, this.currentTime);
 						report('play');
-						for (const event of stoppingEvents) this.addEventListener(event, () => report(event));
+						for (const event of watchedEvents) this.addEventListener(event, () => report(event));
 					}
 					return nativePlay.call(this);
 				};
 			},
-			{ binding: MEDIA_EVENT_BINDING, stoppingEvents: STOPPING_EVENTS }
+			{
+				binding: MEDIA_EVENT_BINDING,
+				elementsKey: PLAYED_ELEMENTS_KEY,
+				watchedEvents: WATCHED_EVENTS
+			}
 		);
 		return timeline;
 	}
 
 	requestedAt(track: SeededTrack): number | undefined {
 		return this.requested.get(track.audioPath);
+	}
+
+	requestsOf(track: SeededTrack): number {
+		return this.requestCounts.get(track.audioPath) ?? 0;
+	}
+
+	// The clock of the one element the deck plays on, 0 until it first plays.
+	static clockOf(page: Page): Promise<number> {
+		return page.evaluate(
+			(elementsKey) =>
+				(Reflect.get(window, elementsKey) as HTMLMediaElement[])[0]?.currentTime ?? 0,
+			PLAYED_ELEMENTS_KEY
+		);
 	}
 
 	get elementsPlayed(): number {
@@ -92,13 +135,16 @@ class PlaybackTimeline {
 		const parsed = new URL(url);
 		const path = decodeURIComponent(parsed.pathname);
 		if (!this.requested.has(path)) this.requested.set(path, performance.now());
+		this.requestCounts.set(path, (this.requestCounts.get(path) ?? 0) + 1);
 		if (parsed.searchParams.has(RECOVERY_QUERY)) this.recoveryRequests.push(url);
 	}
 
-	private recordMediaEvent(element: number, event: string, source: string): void {
+	private recordMediaEvent(element: number, event: string, source: string, position: number): void {
 		if (!this.playingElements.has(element)) this.sourcesPlayed.push(new URL(source).protocol);
 		this.playingElements.add(element);
 		if (STOPPING_EVENTS.includes(event)) this.stops.push(`${event} on element ${element}`);
+		if (event === SEEKING_EVENT) this.seeks.push(position);
+		if (event === SOURCE_SWAP_EVENT) this.sourceSwaps += 1;
 	}
 }
 
@@ -116,6 +162,41 @@ async function playAlbum(page: Page, albumId: string) {
 	await workspace(page)
 		.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
 		.click();
+}
+
+function trackOf(library: SeededLibrary, take: SeededTake): SeededTrack {
+	const track = library.albumTracks.find(({ songTitle }) => songTitle === take.songTitle);
+	if (!track) throw new Error(`${take.songTitle} is not one of the album's tracks`);
+	return track;
+}
+
+async function seedPlaylistOf(library: SeededLibrary, takes: SeededTake[]): Promise<string> {
+	const api = await request.newContext({ baseURL: BASE_URL, storageState: STORAGE_STATE_FILE });
+	try {
+		return (await seedPlaylist(api, { ...library, playlistTakes: takes })).slug;
+	} finally {
+		await api.dispose();
+	}
+}
+
+// On the phone shuffle lives in Now Playing, opened from the mini player.
+async function toggleShuffle(page: Page, shell: Shell, playingSongTitle: string) {
+	const transport = page.getByRole('contentinfo');
+	if (shell === 'mobile')
+		await transport
+			.getByRole('button', { name: openNowPlayingLabel(playingSongTitle), exact: true })
+			.click();
+	const controls =
+		shell === 'desktop' ? transport : page.getByRole('dialog', { name: playingSongTitle });
+	const shuffle = controls.getByRole('button', {
+		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+	});
+	await shuffle.click();
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
+	if (shell === 'mobile') {
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('dialog', { name: playingSongTitle })).toBeHidden();
+	}
 }
 
 test('an album plays from one take into the next on one element that never stops', async ({
@@ -155,6 +236,67 @@ test('Prev on an album starts the previous take and the queue continues into the
 	await expectTransportMovesOn(page, first, second);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
+	guard.assertClean();
+});
+
+// Next from the first of two places of one take seeks to the second place
+// on the same element (#1299): the place, not the audio, decides where the
+// playhead goes.
+test('Next between two places of one take in a playlist moves the audio to the second place', async ({
+	page
+}) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const [twice, once] = library.playlistTakes;
+	const slug = await seedPlaylistOf(library, [twice, twice, once]);
+	const timeline = await PlaybackTimeline.watch(page);
+	const transport = page.getByRole('contentinfo');
+
+	await page.goto(`/playlist/${slug}`);
+	await workspace(page)
+		.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
+		.click();
+	await expect.poll(() => timeline.requestsOf(trackOf(library, twice))).toBeGreaterThanOrEqual(2);
+	await transport.getByRole('button', { name: 'Next', exact: true }).click();
+
+	await expect.poll(() => timeline.seeks).toHaveLength(1);
+	expect(timeline.seeks[0]).toBeGreaterThan(SECOND_PLACE_STARTS_AFTER_SECONDS);
+	await expectTransportMovesOn(page, trackOf(library, twice), trackOf(library, once));
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.sourceSwaps).toBe(0);
+	guard.assertClean();
+});
+
+// A shuffle toggle rebuilds the queue around the playing take (#1299): the
+// element plays on from exactly where it stood, on the same source, and the
+// takes ahead follow the new order. It is toggled while paused, so the take
+// cannot end in the middle of the toggle.
+test('shuffle on an album keeps the playing take where it is and plays on into the new order', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const library = readSeededLibrary();
+	const [first] = library.albumTracks;
+	const timeline = await PlaybackTimeline.watch(page);
+	const transport = page.getByRole('contentinfo');
+
+	await playAlbum(page, library.albumId);
+	await expect(transport.getByText(first.songTitle, { exact: true })).toBeVisible();
+	await expect.poll(() => PlaybackTimeline.clockOf(page)).toBeGreaterThan(PLAYING_FOR_SECONDS);
+	await transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).click();
+	const pausedAt = await PlaybackTimeline.clockOf(page);
+	await toggleShuffle(page, shellOf(testInfo), first.songTitle);
+
+	await expect
+		.poll(() => PlaybackTimeline.clockOf(page))
+		.toBeGreaterThan(pausedAt + PLAYS_ON_PAST_THE_TOGGLE_SECONDS);
+	expect(timeline.seeks).toEqual([]);
+	await expect(transport.getByText(first.songTitle, { exact: true })).toHaveCount(0, {
+		timeout: TRACK_CHANGE_TIMEOUT_MS
+	});
+	expect(timeline.seeks).toEqual([]);
+	expect(timeline.sourceSwaps).toBe(0);
+	expect(timeline.elementsPlayed).toBe(1);
 	guard.assertClean();
 });
 
