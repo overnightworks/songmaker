@@ -192,6 +192,30 @@ describe('loadVersionAsDraft', () => {
 		}
 	);
 
+	const twinOfLatest = makeVersion({
+		id: 'v1',
+		version_number: 1,
+		lyrics: 'hello',
+		prompt: 'rock'
+	});
+
+	it.each([
+		{ load: 'an older version', version: older, shown: true },
+		{ load: 'an older version with the text the draft holds', version: twinOfLatest, shown: false }
+	])(
+		'a load of $load shows the toast, the hint and the draft chip together, or none of them',
+		({ version, shown }) => {
+			openSongWithTwoVersions();
+			versions.set([latest, version]);
+			const load = loadVersionAsDraft(version);
+			expect({
+				toast: load !== null,
+				hint: get(draftLoadedFrom) !== null,
+				draftChip: get(isDirty)
+			}).toEqual({ toast: shown, hint: shown, draftChip: shown });
+		}
+	);
+
 	it('answers no undo when the draft already holds that version', () => {
 		openSongWithTwoVersions();
 		expect(loadVersionAsDraft(latest)).toBeNull();
