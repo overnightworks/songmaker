@@ -79,7 +79,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import { addToast } from '$lib/stores/toast';
-import { bulkDeleteGenerations, deleteVersion } from '$lib/api/client';
+import { bulkDeleteGenerations } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { GenerateState } from '$lib/stores/generateAction';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
@@ -350,26 +350,32 @@ describe('TakesList', () => {
 		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
 	});
 
-	it('groups imported takes under plain text with no Open link', async () => {
-		const { target } = await render({
-			song: song({
-				generations: [1, 2].map((generation_number) =>
-					generation({
-						id: `imported-${generation_number}`,
-						version_id: null,
-						version_number: null,
-						generation_number
-					})
-				)
-			})
-		});
+	it.each([
+		{ origin: 'no version at all', version_number: null },
+		{ origin: 'a version number but no version', version_number: 3 }
+	])(
+		'groups imported takes with $origin under plain text with no Open link',
+		async ({ version_number }) => {
+			const { target } = await render({
+				song: song({
+					generations: [1, 2].map((generation_number) =>
+						generation({
+							id: `imported-${generation_number}`,
+							version_id: null,
+							version_number,
+							generation_number
+						})
+					)
+				})
+			});
 
-		expect(target.querySelector('.version-header')?.textContent?.trim()).toBe(
-			takeGroupLabel(null, 2)
-		);
-		expect(target.querySelector('.version-section .version-link')).toBeNull();
-		expect(target.querySelector('.version-section')?.textContent).not.toContain('Open v');
-	});
+			expect(target.querySelector('.version-header')?.textContent?.trim()).toBe(
+				takeGroupLabel(null, 2)
+			);
+			expect(target.querySelector('.version-section .version-link')).toBeNull();
+			expect(target.querySelector('.version-section')?.textContent).not.toContain('Open v');
+		}
+	);
 
 	it('shows the draft banner with the next version number only when dirty', async () => {
 		const { target: clean } = await render({ dirty: false });
@@ -468,26 +474,13 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('deletes a version and its takes from the group header, with confirmation', async () => {
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			song({ ...versionedSongDefaults(), version_count: 2 })
-		);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([]);
-
+	it('offers no delete on a take-group header; the Versions sheet row carries it', async () => {
 		const { target } = await render();
-		const deleteBtn = target.querySelector<HTMLButtonElement>('.version-delete-btn');
-		if (!deleteBtn) throw new Error('Expected a delete-version button on the newest group');
-		deleteBtn.click();
-		await tick();
-		expect(document.querySelector('.dialog h3')?.textContent).toBe('Delete v3?');
-
-		document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
-		await tick();
-		await Promise.resolve();
-
-		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
+		const names = Array.from(
+			target.querySelectorAll<HTMLButtonElement>('.version-header-row button')
+		).map((button) => button.getAttribute('aria-label') ?? button.textContent ?? '');
+		expect(names.length).toBeGreaterThan(0);
+		expect(names.some((name) => /delete/i.test(name))).toBe(false);
 	});
 
 	it('leaves the model in the recipe instead of repeating it on the row', async () => {
@@ -863,16 +856,6 @@ describe('TakesList', () => {
 				enterSelectionMode();
 				await tick();
 				target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
-			}
-		},
-		{
-			action: 'deleting a version',
-			fallback: 'Delete failed',
-			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
-			run: async (target: HTMLElement) => {
-				target.querySelector<HTMLButtonElement>('.version-delete-btn')?.click();
-				await tick();
-				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
 		},
 		{
