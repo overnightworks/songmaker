@@ -42,7 +42,8 @@ import {
 	handleDeleteVersion,
 	discardDraft,
 	computeDraftVersionNumber,
-	versionDeleteEditorLoss
+	versionDeleteEditorLoss,
+	versionLoadUndoOutstanding
 } from './editor';
 import { selectedSongId } from '$lib/stores/player';
 import type { GenerationItem, SongItem } from '$lib/api/types';
@@ -352,6 +353,39 @@ describe('loadVersionAsDraft', () => {
 		expect(offered(load)).toBe(false);
 		load?.undo();
 		expect(get(editLyrics)).not.toBe('an unsaved line');
+	});
+
+	it.each([
+		{ state: 'offered', outstanding: true, act: () => undefined },
+		{ state: 'set aside by the opened list', outstanding: true, act: setAsideVersionLoadUndo },
+		{ state: 'timed out', outstanding: false, act: (load: VersionLoad) => load?.expire() },
+		{ state: 'ended by typing', outstanding: false, act: () => setDraftLyrics('a typed line') }
+	])('a load undo $state is outstanding: $outstanding', ({ outstanding, act }) => {
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+
+		act(load);
+
+		expect(get(versionLoadUndoOutstanding)).toBe(outstanding);
+	});
+
+	it('a version delete puts the latest into the editor, so it retires the undo of a load', async () => {
+		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
+		openSongWithTwoVersions();
+		setDraftLyrics('an unsaved line');
+		const load = loadVersionAsDraft(older);
+		setAsideVersionLoadUndo();
+		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+		vi.mocked(fetchSong).mockResolvedValueOnce(makeSong({ ...songDefaults, id: 's1' }));
+		vi.mocked(fetchVersions).mockResolvedValueOnce([latest]);
+
+		await handleDeleteVersion('s1', 'v1', true);
+		offerSetAsideVersionLoadUndoAgain();
+
+		expect(get(versionLoadUndoOutstanding)).toBe(false);
+		load?.undo();
+		expect(get(editLyrics)).toBe('hello');
 	});
 
 	it('an earlier load timing out leaves the newer load its undo', () => {

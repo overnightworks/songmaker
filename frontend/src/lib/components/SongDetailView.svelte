@@ -52,6 +52,7 @@
 		loadVersionAsDraft,
 		pendingVersionLoad,
 		versionDeleteRequest,
+		versionLoadUndoOutstanding,
 		handleDeleteVersion,
 		handleSave,
 		computeDraftVersionNumber,
@@ -106,6 +107,7 @@
 		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_LOAD_UNDO_GOES,
 		VERSION_DELETE_EMPTIES_EDITOR,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
@@ -519,11 +521,13 @@
 	function versionDeleteConsequences(
 		takeCount: number,
 		holdsPick: boolean,
-		editorLoss: VersionDeleteEditorLoss | null
+		editorLoss: VersionDeleteEditorLoss | null,
+		dropsLoadUndo: boolean
 	): string[] {
 		return [
 			...(holdsPick ? [versionDeletePickWarning(takeCount)] : []),
-			...(editorLoss ? editorLossLines(editorLoss) : [])
+			...(editorLoss ? editorLossLines(editorLoss) : []),
+			...(dropsLoadUndo ? [VERSION_DELETE_LOAD_UNDO_GOES] : [])
 		];
 	}
 
@@ -905,7 +909,12 @@
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
 		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
-		items={versionDeleteConsequences(request.takeCount, request.holdsPick, request.editorLoss)}
+		items={versionDeleteConsequences(
+			request.takeCount,
+			request.holdsPick,
+			request.editorLoss,
+			$versionLoadUndoOutstanding
+		)}
 		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}

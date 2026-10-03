@@ -34,6 +34,7 @@ import {
 	TRANSPORT_PAUSE_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
+	VERSION_DELETE_LOAD_UNDO_GOES,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_CLOSE_LABEL,
@@ -624,7 +625,7 @@ test.describe('the versions of a song', () => {
 		expect((await readVersions(page, song.songId)).map((v) => v.version_number)).toEqual([2, 1]);
 	});
 
-	test('the delete confirm over an untouched load says what leaves the editor: the load goes with its version, or the next latest replaces it', async ({
+	test('the delete confirm over an untouched load says what leaves the editor: the load goes with its version, or the next latest replaces it, and its Undo goes too', async ({
 		page
 	}, testInfo) => {
 		const song = await seedTwoVersions(page, testInfo);
@@ -650,7 +651,7 @@ test.describe('the versions of a song', () => {
 				.getByRole('button', { name: versionDeleteLabel(deleted), exact: true })
 				.click();
 			const confirm = page.getByRole('dialog', { name: title });
-			await expect(confirm.getByRole('listitem')).toHaveText([line]);
+			await expect(confirm.getByRole('listitem')).toHaveText([line, VERSION_DELETE_LOAD_UNDO_GOES]);
 			await confirm.getByRole('button', { name: DIALOG_CANCEL_LABEL }).click();
 			await expect(confirm).toBeHidden();
 			await versionsSheet(page).getByRole('button', { name: VERSIONS_SHEET_CLOSE_LABEL }).click();

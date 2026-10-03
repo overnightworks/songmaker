@@ -46,6 +46,7 @@ import {
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_EMPTIES_EDITOR,
+	VERSION_DELETE_LOAD_UNDO_GOES,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
@@ -2157,6 +2158,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 	const THIRD = version({ id: 'v3', version_number: 3, lyrics: 'chorus', prompt: 'dark folk' });
 	const typeAnEdit = () => setDraftLyrics('unsaved edit');
 	const loadV1Untouched = () => void loadVersionAsDraft(FIRST);
+	const loadV1WithItsUndoTimedOut = () => loadVersionAsDraft(FIRST)?.expire();
 	const leaveTheCurrentVersion = () => undefined;
 
 	it.each([
@@ -2172,12 +2174,27 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			draft: 'an untouched load of v1',
 			prepare: loadV1Untouched,
 			held: [LATEST, FIRST],
-			shown: [versionDeleteTitle(1, 1), 'The draft loaded from v1 goes too.']
+			shown: [
+				versionDeleteTitle(1, 1),
+				'The draft loaded from v1 goes too.',
+				'Undo for your earlier draft goes too.'
+			]
 		},
 		{
 			deleted: 2,
 			draft: 'an untouched load of v1',
 			prepare: loadV1Untouched,
+			held: [THIRD, LATEST, FIRST],
+			shown: [
+				'Delete v2?',
+				'The draft loaded from v1 leaves the editor; v3 replaces it.',
+				VERSION_DELETE_LOAD_UNDO_GOES
+			]
+		},
+		{
+			deleted: 2,
+			draft: 'an untouched load of v1 whose Undo timed out',
+			prepare: loadV1WithItsUndoTimedOut,
 			held: [THIRD, LATEST, FIRST],
 			shown: ['Delete v2?', 'The draft loaded from v1 leaves the editor; v3 replaces it.']
 		},
