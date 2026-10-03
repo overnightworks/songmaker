@@ -3,8 +3,10 @@ import type { QueueStreamTrackItem } from '$lib/api/types';
 const MP3_MIME_TYPE = 'audio/mpeg';
 const CHUNK_BYTES = 1024 * 1024;
 const SECONDS_BUFFERED_AHEAD = 60;
+const SECONDS_AHEAD_BEFORE_GATHERING = 20;
 // Removing right up to the playhead can take the frame the decoder is playing.
 const SECONDS_KEPT_BEHIND_WHEN_FULL = 10;
+// Attempts in a row before a download parks until the player retries it.
 const DOWNLOAD_ATTEMPTS = 3;
 const QUOTA_EXCEEDED = 'QuotaExceededError';
 
@@ -19,14 +21,21 @@ interface ContinuousDeckPorts {
 	fetch: typeof fetch;
 }
 
+// The server answered, but not with the bytes asked for: asking again would
+// get the same answer. A body that could not be cancelled is named with it.
 class TakeRefused extends Error {
-	constructor(url: string, status: number) {
-		super(`${url} answered ${status}`);
+	constructor(url: string, refusal: string, cancelFailure?: Error) {
+		super(
+			cancelFailure
+				? `${url} ${refusal}; cancelling its body failed: ${cancelFailure.message}`
+				: `${url} ${refusal}`,
+			{ cause: cancelFailure }
+		);
 		this.name = 'TakeRefused';
 	}
 }
 
-type TakeNotAppendedReason = 'not-fetched' | 'stream-ended';
+type TakeNotAppendedReason = 'refused' | 'stream-ended';
 
 /**
  * A take the deck could not append, or not to its end. The deck itself plays
@@ -36,10 +45,22 @@ export class TakeNotAppended<Take> extends Error {
 	constructor(
 		readonly take: Take,
 		readonly reason: TakeNotAppendedReason,
-		message: string
+		message: string,
+		options?: ErrorOptions
 	) {
-		super(message);
+		super(message, options);
 		this.name = 'TakeNotAppended';
+	}
+}
+
+/**
+ * The player left the deck: whatever it still had to fetch, wait for or
+ * append is given up, and the buffer is not touched again.
+ */
+class DeckClosed extends Error {
+	constructor() {
+		super('The deck was closed');
+		this.name = 'DeckClosed';
 	}
 }
 
@@ -47,6 +68,10 @@ export class TakeNotAppended<Take> extends Error {
  * Plays a queue of takes as one continuous stream: each take's MP3 bytes are
  * appended behind the previous one into a single SourceBuffer, so a track
  * change is only the playhead crossing an offset in {@link manifest}.
+ *
+ * A download the network keeps failing parks with what it appended, and the
+ * takes after it wait behind it; the deck sets no timer of its own, so only
+ * {@link retryDownload} sends it on.
  */
 export class ContinuousDeck<Take> {
 	private readonly entries: DeckEntry<Take>[] = [];
@@ -55,6 +80,9 @@ export class ContinuousDeck<Take> {
 	private brokenBy: Error | null = null;
 	private ending: Promise<void> | null = null;
 	private playableFrom = 0;
+	private readonly closing = new AbortController();
+	private requestInFlight: AbortController | null = null;
+	private wakeParkedDownload: (() => void) | null = null;
 
 	private constructor(
 		private readonly ports: ContinuousDeckPorts,
@@ -83,12 +111,10 @@ export class ContinuousDeck<Take> {
 		return this.entries.findLast((entry) => entry.start_offset <= seconds);
 	}
 
-	// The latest entry of a take whose start is still buffered, so that a seek
-	// to its offset plays it from the beginning.
-	playableEntryOf(isTake: (take: Take) => boolean): Readonly<DeckEntry<Take>> | undefined {
-		return this.entries.findLast(
-			(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
-		);
+	// Whether the entry's start is still buffered, so that a seek to its offset
+	// plays it from the beginning.
+	isPlayableFromStart(entry: Readonly<DeckEntry<Take>>): boolean {
+		return entry.start_offset >= this.playableFrom;
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
@@ -104,15 +130,26 @@ export class ContinuousDeck<Take> {
 		return this.ending;
 	}
 
+	close(): void {
+		this.closing.abort(new DeckClosed());
+	}
+
+	// Cuts a request that may have stopped sending, or wakes a parked one: either
+	// way the download resumes from the bytes received, with its attempts fresh.
+	retryDownload(): void {
+		this.requestInFlight?.abort(new Error('The player retried the download'));
+		this.wakeParkedDownload?.();
+	}
+
 	// A failed step fails every later one: a take appended behind audio the
-	// buffer refused would start at the wrong offset. Only a take that could
-	// not be fetched leaves the buffer as it was, so the next one still follows.
+	// buffer refused would start at the wrong offset. Only a refused take leaves
+	// the buffer as it was, so the next one still follows.
 	private queueStep(step: (buffer: SourceBuffer) => Promise<void> | void): Promise<void> {
 		this.stepsInFlight += 1;
 		const result = this.steps
 			.then(async () => {
 				if (this.brokenBy) throw this.brokenBy;
-				await step(await this.opened);
+				await step(await this.whileOpen(this.opened));
 			})
 			.finally(() => {
 				this.stepsInFlight -= 1;
@@ -127,7 +164,8 @@ export class ContinuousDeck<Take> {
 		const entry: DeckEntry<Take> = { take, start_offset: buffer.timestampOffset, duration: 0 };
 		this.entries.push(entry);
 		try {
-			for await (const chunk of chunked(this.download(take, url))) {
+			const runningLow = () => this.secondsAhead(buffer) < SECONDS_AHEAD_BEFORE_GATHERING;
+			for await (const chunk of chunked(this.download(take, url), runningLow)) {
 				await this.roomAhead(buffer);
 				await this.evictPlayedTakes(buffer);
 				await this.appendChunk(buffer, chunk);
@@ -149,35 +187,65 @@ export class ContinuousDeck<Take> {
 
 	private async *download(take: Take, url: string): AsyncGenerator<Uint8Array> {
 		let received = 0;
-		for (let attempt = 1; ; attempt += 1) {
+		let failedInARow = 0;
+		for (;;) {
+			const attempt = new AbortController();
+			this.requestInFlight = attempt;
 			try {
-				for await (const piece of piecesOf(await this.request(url, received))) {
+				for await (const piece of piecesOf(await this.request(url, received, attempt.signal))) {
 					received += piece.byteLength;
 					yield piece;
 				}
 				return;
 			} catch (error) {
-				if (error instanceof TakeRefused || attempt === DOWNLOAD_ATTEMPTS)
-					throw new TakeNotAppended(take, 'not-fetched', asError(error).message);
+				this.closing.signal.throwIfAborted();
+				if (error instanceof TakeRefused)
+					throw new TakeNotAppended(take, 'refused', error.message, { cause: error });
+				failedInARow = attempt.signal.aborted ? 0 : failedInARow + 1;
+			} finally {
+				this.requestInFlight = null;
+			}
+			if (failedInARow === DOWNLOAD_ATTEMPTS) {
+				await this.parkDownload();
+				failedInARow = 0;
 			}
 		}
 	}
 
-	private async request(url: string, fromByte: number): Promise<ReadableStream<Uint8Array>> {
+	private parkDownload(): Promise<void> {
+		const woken = new Promise<void>((wake) => {
+			this.wakeParkedDownload = wake;
+		});
+		return this.whileOpen(woken).finally(() => {
+			this.wakeParkedDownload = null;
+		});
+	}
+
+	private async request(
+		url: string,
+		fromByte: number,
+		retried: AbortSignal
+	): Promise<ReadableStream<Uint8Array>> {
 		const resuming = fromByte > 0;
 		const response = await this.ports.fetch(url, {
-			headers: resuming ? { Range: `bytes=${fromByte}-` } : {}
+			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
+			signal: AbortSignal.any([this.closing.signal, retried])
 		});
-		const expectedStatus = resuming ? 206 : 200;
-		if (response.status !== expectedStatus || !response.body)
-			throw new TakeRefused(url, response.status);
+		const refusal = refusalOf(response, fromByte);
+		if (refusal) throw new TakeRefused(url, refusal, await cancelFailureOf(response));
+		if (!response.body) throw new TakeRefused(url, `answered ${response.status} without a body`);
 		return response.body;
 	}
 
+	private secondsAhead(buffer: SourceBuffer): number {
+		return buffer.timestampOffset - this.ports.element.currentTime;
+	}
+
+	// whileOpen wakes a parked wait on close; tying each timeupdate listener to
+	// the close signal as well would leave an abort step on it per timeupdate.
 	private async roomAhead(buffer: SourceBuffer): Promise<void> {
-		const { element } = this.ports;
-		while (buffer.timestampOffset - element.currentTime >= SECONDS_BUFFERED_AHEAD)
-			await nextEvent(element, 'timeupdate');
+		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
+			await this.whileOpen(nextEvent(this.ports.element, 'timeupdate'));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -187,22 +255,41 @@ export class ContinuousDeck<Take> {
 
 	private async appendChunk(buffer: SourceBuffer, chunk: Uint8Array<ArrayBuffer>): Promise<void> {
 		try {
-			await update(buffer, () => buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		} catch (error) {
 			if (!isQuotaExceeded(error)) throw error;
 			const playhead = this.ports.element.currentTime;
 			const freed = await this.removeBefore(buffer, playhead - SECONDS_KEPT_BEHIND_WHEN_FULL);
 			if (!freed) throw error;
-			await update(buffer, () => buffer.appendBuffer(chunk));
+			await this.update(buffer, () => buffer.appendBuffer(chunk));
 		}
 	}
 
 	private async removeBefore(buffer: SourceBuffer, seconds: number): Promise<boolean> {
 		const buffered = buffer.buffered;
 		if (buffered.length === 0 || buffered.start(0) >= seconds) return false;
-		await update(buffer, () => buffer.remove(buffered.start(0), seconds));
+		await this.update(buffer, () => buffer.remove(buffered.start(0), seconds));
 		this.playableFrom = seconds;
 		return true;
+	}
+
+	private async update(buffer: SourceBuffer, start: () => void): Promise<void> {
+		this.closing.signal.throwIfAborted();
+		start();
+		await updateEnded(buffer);
+	}
+
+	private whileOpen<Value>(pending: Promise<Value>): Promise<Value> {
+		const { signal } = this.closing;
+		return new Promise((resolve, reject) => {
+			const closed = () => reject(signal.reason);
+			if (signal.aborted) {
+				closed();
+				return;
+			}
+			signal.addEventListener('abort', closed, { once: true });
+			pending.then(resolve, reject).finally(() => signal.removeEventListener('abort', closed));
+		});
 	}
 }
 
@@ -218,9 +305,29 @@ async function attachSourceBuffer(ports: ContinuousDeckPorts): Promise<SourceBuf
 	return buffer;
 }
 
-async function update(buffer: SourceBuffer, start: () => void): Promise<void> {
-	start();
-	await updateEnded(buffer);
+// A resume appends behind the bytes already received, so an answer starting
+// anywhere else would duplicate or skip audio inside the take.
+function refusalOf(response: Response, fromByte: number): string | null {
+	const resuming = fromByte > 0;
+	if (resuming && response.status === 200) return 'ignored Range';
+	if (response.status !== (resuming ? 206 : 200)) return `answered ${response.status}`;
+	if (!resuming) return null;
+	const contentRange = response.headers.get('Content-Range');
+	if (contentRange === null) return 'missing Content-Range';
+	const answeredFrom = Number(/^bytes (\d+)-/.exec(contentRange)?.[1]);
+	if (answeredFrom === fromByte) return null;
+	return `Content-Range mismatch: asked from byte ${fromByte}, answered ${contentRange}`;
+}
+
+// A body that has already errored cannot be cancelled; that failure is
+// handed back, so it neither hides the refusal nor goes unseen.
+async function cancelFailureOf(response: Response): Promise<Error | undefined> {
+	try {
+		await response.body?.cancel();
+		return undefined;
+	} catch (error) {
+		return asError(error);
+	}
 }
 
 function asError(error: unknown): Error {
@@ -268,19 +375,20 @@ async function* piecesOf(body: ReadableStream<Uint8Array>): AsyncGenerator<Uint8
 	}
 }
 
-// A take's first piece goes in at once, so playback starts on the first bytes
-// that arrive instead of after a megabyte (#1187 P5).
+// While the playhead is close to the end of the buffer every piece goes in as
+// it arrives: playback starts on the first bytes, and a link barely faster
+// than the take's bitrate still keeps the buffer growing (#1280). Only with
+// plenty buffered are pieces gathered into fewer, larger appends.
 async function* chunked(
-	pieces: AsyncIterable<Uint8Array>
+	pieces: AsyncIterable<Uint8Array>,
+	runningLow: () => boolean
 ): AsyncGenerator<Uint8Array<ArrayBuffer>> {
 	let gathered: Uint8Array[] = [];
 	let gatheredBytes = 0;
-	let firstPiece = true;
 	for await (const piece of pieces) {
 		gathered.push(piece);
 		gatheredBytes += piece.byteLength;
-		if (firstPiece || gatheredBytes >= CHUNK_BYTES) {
-			firstPiece = false;
+		if (runningLow() || gatheredBytes >= CHUNK_BYTES) {
 			yield joined(gathered, gatheredBytes);
 			gathered = [];
 			gatheredBytes = 0;

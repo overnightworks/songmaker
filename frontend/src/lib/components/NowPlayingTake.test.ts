@@ -19,11 +19,12 @@ vi.mock('$lib/stores/navigation', () => ({
 
 import { get } from 'svelte/store';
 import { TAKE_RESCORE_LABEL, TAKE_RESCORING_LABEL } from '$lib/constants';
-import { NOW_PLAYING_RESCORE_ACTION_LABEL } from '$lib/constants/now-playing';
+import { NOW_PLAYING_RESCORE_ACTION_LABEL, openVersionLabel } from '$lib/constants/now-playing';
+import { discardDraft, pendingVersionLoad, setDraftLyrics } from '$lib/stores/editor';
 import { activeJobs } from '$lib/stores/jobs';
 import { pinSeed, rate, rescore, setKeep, setPick } from '$lib/stores/takeActions';
 import { revealPlayingSong } from '$lib/stores/navigation';
-import { nowPlayingOpen, nowPlayingSurface } from '$lib/stores/player';
+import { nowPlayingOpen, nowPlayingSurface, selectedSongId } from '$lib/stores/player';
 import { pendingSource } from '$lib/stores/recipe';
 import NowPlayingTake from './NowPlayingTake.svelte';
 
@@ -47,6 +48,9 @@ afterEach(async () => {
 	vi.clearAllMocks();
 	nowPlayingSurface.set('closed');
 	pendingSource.set(null);
+	pendingVersionLoad.set(null);
+	discardDraft();
+	selectedSongId.set(null);
 	activeJobs.set([]);
 });
 
@@ -415,6 +419,53 @@ describe('NowPlayingTake', () => {
 			expect(revealPlayingSong).toHaveBeenCalledWith(withSong, gen.id);
 		}
 	);
+});
+
+describe('NowPlayingTake Open vN', () => {
+	const takeOfV5 = generation({ ...generationDefaults, version_id: 'ver-5', version_number: 5 });
+
+	function openVersionLink(): HTMLButtonElement | null {
+		return (
+			Array.from(target.querySelectorAll<HTMLButtonElement>('button')).find(
+				(button) => button.textContent?.trim() === openVersionLabel(5)
+			) ?? null
+		);
+	}
+
+	it("closes Now Playing and opens the take's song with its version to load", async () => {
+		nowPlayingSurface.set('full');
+		const withSong = song({ id: 's1', title: 'Tide' });
+		await render({ generation: takeOfV5, song: withSong });
+
+		openVersionLink()?.click();
+		await tick();
+
+		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-5' });
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(revealPlayingSong).toHaveBeenCalledWith(withSong, takeOfV5.id);
+	});
+
+	it('over a dirty draft of the same song, stays on it so the replace confirm asks', async () => {
+		nowPlayingSurface.set('full');
+		selectedSongId.set('s1');
+		setDraftLyrics('unsaved edit');
+		await render({ generation: takeOfV5, song: song({ id: 's1' }) });
+
+		openVersionLink()?.click();
+		await tick();
+
+		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-5' });
+		expect(get(nowPlayingOpen)).toBe(false);
+		expect(revealPlayingSong).not.toHaveBeenCalled();
+	});
+
+	it('offers no Open link for an imported take', async () => {
+		await render({
+			generation: generation({ ...generationDefaults, version_id: null, version_number: null })
+		});
+
+		expect(target.textContent).not.toContain('Open v');
+	});
 });
 
 describe('NowPlayingTake recipe section', () => {

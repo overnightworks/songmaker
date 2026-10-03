@@ -21,6 +21,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
+import { openVersionLabel, takeGroupLabel } from '$lib/constants/now-playing';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
@@ -78,7 +79,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 });
 
 import { addToast } from '$lib/stores/toast';
-import { bulkDeleteGenerations, deleteVersion } from '$lib/api/client';
+import { bulkDeleteGenerations } from '$lib/api/client';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import type { GenerateState } from '$lib/stores/generateAction';
 import { activeJobs, generationFailures } from '$lib/stores/jobs';
@@ -182,6 +183,7 @@ const mounted: Array<ReturnType<typeof mount>> = [];
 const pick = vi.fn();
 const keep = vi.fn();
 const pinSeed = vi.fn();
+const clickVersion = vi.fn(async () => true);
 
 const addToPlaylist = vi.fn(async () => undefined);
 
@@ -200,7 +202,7 @@ function mockActions(): GenerationActions {
 		unshare: vi.fn(async () => undefined),
 		addToPlaylist,
 		pinSeed,
-		clickVersion: vi.fn()
+		clickVersion
 	};
 }
 
@@ -223,6 +225,7 @@ beforeEach(() => {
 	pick.mockReset();
 	keep.mockReset();
 	pinSeed.mockReset();
+	clickVersion.mockClear();
 	addToPlaylist.mockClear();
 	playlistList.set([{ ...playlist }]);
 	playlistLoad.set({ status: 'ready', error: null });
@@ -322,6 +325,58 @@ describe('TakesList', () => {
 		).toEqual(['Take 1', 'Take 2', 'Take 3', 'Take 4']);
 	});
 
+	function openVersionLink(target: HTMLElement, versionNumber: number): HTMLButtonElement | null {
+		return (
+			Array.from(target.querySelectorAll<HTMLButtonElement>('.version-section button')).find(
+				(button) => button.textContent?.includes(openVersionLabel(versionNumber))
+			) ?? null
+		);
+	}
+
+	it('opens the version a group header names, through the one version load', async () => {
+		const { target } = await render({
+			song: song({
+				generations: [
+					generation({ id: 'g5', version_id: 'ver-5', version_number: 5 }),
+					generation({ id: 'g7', version_id: 'ver-7', version_number: 7 })
+				]
+			})
+		});
+
+		openVersionLink(target, 5)?.click();
+		await tick();
+
+		expect(openVersionLink(target, 7)?.textContent).toContain(takeGroupLabel(7, 1));
+		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
+	});
+
+	it.each([
+		{ origin: 'no version at all', version_number: null },
+		{ origin: 'a version number but no version', version_number: 3 }
+	])(
+		'groups imported takes with $origin under plain text with no Open link',
+		async ({ version_number }) => {
+			const { target } = await render({
+				song: song({
+					generations: [1, 2].map((generation_number) =>
+						generation({
+							id: `imported-${generation_number}`,
+							version_id: null,
+							version_number,
+							generation_number
+						})
+					)
+				})
+			});
+
+			expect(target.querySelector('.version-header')?.textContent?.trim()).toBe(
+				takeGroupLabel(null, 2)
+			);
+			expect(target.querySelector('.version-section .version-link')).toBeNull();
+			expect(target.querySelector('.version-section')?.textContent).not.toContain('Open v');
+		}
+	);
+
 	it('shows the draft banner with the next version number only when dirty', async () => {
 		const { target: clean } = await render({ dirty: false });
 		expect(clean.querySelector('.draft-banner')).toBeNull();
@@ -419,26 +474,13 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('deletes a version and its takes from the group header, with confirmation', async () => {
-		const { deleteVersion, fetchSong, fetchVersions } = await import('$lib/api/client');
-		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
-		vi.mocked(fetchSong).mockResolvedValueOnce(
-			song({ ...versionedSongDefaults(), version_count: 2 })
-		);
-		vi.mocked(fetchVersions).mockResolvedValueOnce([]);
-
+	it('offers no delete on a take-group header; the Versions sheet row carries it', async () => {
 		const { target } = await render();
-		const deleteBtn = target.querySelector<HTMLButtonElement>('.version-delete-btn');
-		if (!deleteBtn) throw new Error('Expected a delete-version button on the newest group');
-		deleteBtn.click();
-		await tick();
-		expect(document.querySelector('.dialog h3')?.textContent).toBe('Delete v3?');
-
-		document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
-		await tick();
-		await Promise.resolve();
-
-		expect(deleteVersion).toHaveBeenCalledWith('v1', true);
+		const names = Array.from(
+			target.querySelectorAll<HTMLButtonElement>('.version-header-row button')
+		).map((button) => button.getAttribute('aria-label') ?? button.textContent ?? '');
+		expect(names.length).toBeGreaterThan(0);
+		expect(names.some((name) => /delete/i.test(name))).toBe(false);
 	});
 
 	it('leaves the model in the recipe instead of repeating it on the row', async () => {
@@ -814,16 +856,6 @@ describe('TakesList', () => {
 				enterSelectionMode();
 				await tick();
 				target.querySelector<HTMLButtonElement>('.selection-toolbar .destructive')?.click();
-			}
-		},
-		{
-			action: 'deleting a version',
-			fallback: 'Delete failed',
-			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
-			run: async (target: HTMLElement) => {
-				target.querySelector<HTMLButtonElement>('.version-delete-btn')?.click();
-				await tick();
-				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
 		},
 		{

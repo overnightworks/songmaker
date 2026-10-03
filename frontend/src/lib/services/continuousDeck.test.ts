@@ -2,8 +2,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ContinuousDeck, TakeNotAppended } from './continuousDeck';
 
 const MEGABYTE = 1024 * 1024;
-// The size FakeNetwork hands a response body out in.
+// The size FakeNetwork hands a response body out in, unless the link is slow.
 const PIECE = 256 * 1024;
+// What a link barely faster than the take's bitrate delivers in a second.
+const SLOW_PIECE = 12_000;
 const BYTES_PER_SECOND = 16_000;
 const OBJECT_URL = 'blob:continuous-deck';
 
@@ -162,11 +164,39 @@ interface TakeRequest {
 	range: string | null;
 }
 
+// How a resume is answered instead of from the byte it asked for.
+interface RangeAnswer {
+	status: number;
+	fromTheStart?: boolean;
+	withoutContentRange?: boolean;
+}
+
+interface Answer {
+	status: number;
+	bodyCancelled: boolean;
+}
+
+// Where a response body stops: a break errors the stream, a stall stops
+// sending and waits until its request is aborted.
+interface Cut {
+	at: number;
+	stalls: boolean;
+}
+
 class FakeNetwork {
 	readonly requests: TakeRequest[] = [];
+	readonly signals: AbortSignal[] = [];
+	readonly answers: Answer[] = [];
 	private readonly files = new Map<string, Uint8Array>();
-	private readonly breaks = new Map<string, number[]>();
+	private readonly cuts = new Map<string, Cut[]>();
 	private readonly refusals = new Map<string, number>();
+	private readonly refusalsWithAnErroredBody = new Set<string>();
+	private readonly rangeAnswers = new Map<string, RangeAnswer>();
+	private pieceBytes = PIECE;
+
+	slowLink(): void {
+		this.pieceBytes = SLOW_PIECE;
+	}
 
 	serve(url: string, bytes: number): Uint8Array {
 		const file = Uint8Array.from({ length: bytes }, (_, index) => index % 251);
@@ -175,45 +205,111 @@ class FakeNetwork {
 	}
 
 	breakAt(url: string, ...filePositions: number[]): void {
-		this.breaks.set(url, filePositions);
+		this.cutAt(url, filePositions, false);
 	}
 
-	refuse(url: string, status: number): void {
+	stallAt(url: string, ...filePositions: number[]): void {
+		this.cutAt(url, filePositions, true);
+	}
+
+	refuse(url: string, status: number, { bodyErrored = false } = {}): void {
 		this.refusals.set(url, status);
+		if (bodyErrored) this.refusalsWithAnErroredBody.add(url);
+	}
+
+	answerRanges(url: string, answer: RangeAnswer): void {
+		this.rangeAnswers.set(url, answer);
 	}
 
 	readonly fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
 		const url = String(input);
 		const range = new Headers(init?.headers).get('Range');
 		this.requests.push({ url, range });
+		if (init?.signal) this.signals.push(init.signal);
 		const refusal = this.refusals.get(url);
-		if (refusal) return new Response(null, { status: refusal });
+		if (refusal)
+			return new Response(this.refusalsWithAnErroredBody.has(url) ? erroredBody() : null, {
+				status: refusal
+			});
 		const file = this.files.get(url);
 		if (!file) throw new TypeError(`no file served at ${url}`);
-		const from = range ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
-		const breakPosition = this.breaks.get(url)?.shift();
+		const rangeAnswer = range ? this.rangeAnswers.get(url) : undefined;
+		const from =
+			range && !rangeAnswer?.fromTheStart ? Number(/^bytes=(\d+)-$/.exec(range)?.[1]) : 0;
+		const status = rangeAnswer?.status ?? (range ? 206 : 200);
+		const cut = this.cuts.get(url)?.shift();
+		const headers: Record<string, string> =
+			status === 206 && !rangeAnswer?.withoutContentRange
+				? { 'Content-Range': `bytes ${from}-${file.byteLength - 1}/${file.byteLength}` }
+				: {};
+		const answer: Answer = { status, bodyCancelled: false };
+		this.answers.push(answer);
 		return new Response(
-			piecewise(file.subarray(from, breakPosition), breakPosition !== undefined),
-			{
-				status: range ? 206 : 200
-			}
+			piecewise(file.subarray(from, cut?.at), {
+				pieceBytes: this.pieceBytes,
+				end: cut === undefined ? 'closes' : cut.stalls ? 'stalls' : 'breaks',
+				signal: init?.signal,
+				cancelled: () => {
+					answer.bodyCancelled = true;
+				}
+			}),
+			{ status, headers }
 		);
 	};
+
+	private cutAt(url: string, filePositions: number[], stalls: boolean): void {
+		this.cuts.set(url, [
+			...(this.cuts.get(url) ?? []),
+			...filePositions.map((at) => ({ at, stalls }))
+		]);
+	}
 }
 
-function piecewise(bytes: Uint8Array, breaks: boolean): ReadableStream<Uint8Array> {
+function erroredBody(): ReadableStream<Uint8Array> {
+	return new ReadableStream({
+		start(controller) {
+			controller.error(new TypeError('connection reset'));
+		}
+	});
+}
+
+interface PiecewiseOptions {
+	pieceBytes: number;
+	end: 'closes' | 'breaks' | 'stalls';
+	signal: AbortSignal | null | undefined;
+	cancelled: () => void;
+}
+
+// Like a fetch body, the stream errors with the abort reason once its request is aborted.
+function piecewise(
+	bytes: Uint8Array,
+	{ pieceBytes, end, signal, cancelled }: PiecewiseOptions
+): ReadableStream<Uint8Array> {
 	let offset = 0;
 	return new ReadableStream({
+		cancel: cancelled,
 		pull(controller) {
+			if (signal?.aborted) {
+				controller.error(signal.reason);
+				return;
+			}
 			if (offset >= bytes.byteLength) {
-				if (breaks) controller.error(new TypeError('network connection lost'));
+				if (end === 'stalls')
+					return untilAborted(signal).then(() => controller.error(signal?.reason));
+				if (end === 'breaks') controller.error(new TypeError('network connection lost'));
 				else controller.close();
 				return;
 			}
-			controller.enqueue(bytes.slice(offset, offset + PIECE));
-			offset += PIECE;
+			controller.enqueue(bytes.slice(offset, offset + pieceBytes));
+			offset += pieceBytes;
 		}
 	});
+}
+
+function untilAborted(signal: AbortSignal | null | undefined): Promise<void> {
+	return new Promise((resolve) =>
+		signal?.addEventListener('abort', () => resolve(), { once: true })
+	);
 }
 
 interface Rig {
@@ -270,9 +366,24 @@ function firstDifferingByte(actual: Uint8Array, expected: Uint8Array): number | 
 	return actual.byteLength === expected.byteLength ? null : shorter;
 }
 
+// Lets every request, body piece and append already on its way run to where it waits.
+function quiet(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function settlement(step: Promise<void>): { settled: boolean } {
+	const state = { settled: false };
+	step.then(
+		() => (state.settled = true),
+		() => (state.settled = true)
+	);
+	return state;
+}
+
 describe('ContinuousDeck', () => {
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.restoreAllMocks();
 	});
 
 	it('attaches one audio/mpeg buffer in sequence mode to the element', async () => {
@@ -315,21 +426,50 @@ describe('ContinuousDeck', () => {
 		]);
 	});
 
-	it('appends the first piece at once, then one-megabyte chunks while less than a minute is buffered ahead', async () => {
+	it('appends each piece as it arrives while little is buffered ahead, so a slow link keeps the buffer growing', async () => {
+		const { deck, buffer, network } = openDeck();
+		network.slowLink();
+		network.serve('/audio/take.mp3', 20 * SLOW_PIECE);
+
+		await deck.appendTake('take', '/audio/take.mp3');
+
+		expect(buffer.appendedBytes()).toEqual(Array(20).fill(SLOW_PIECE));
+	});
+
+	it('gathers one-megabyte chunks once plenty is buffered ahead, and waits while a minute is', async () => {
 		const { deck, audio, buffer, network } = openDeck();
 		network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
 
 		const appending = deck.appendTake('long', '/audio/long.mp3');
 		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
 
-		audio.playTo(25);
-		await audio.untilDeckWaitsForPlayback();
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE]);
-
-		audio.playTo(100);
+		audio.playTo(50);
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE, MEGABYTE]);
+	});
+
+	it('waits for room ahead without leaving a listener on the close signal per timeupdate', async () => {
+		const { deck, audio, network } = openDeck();
+		network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
+		void deck.appendTake('long', '/audio/long.mp3');
+		await audio.untilDeckWaitsForPlayback();
+		await quiet();
+		let abortListeners = 0;
+		const added = vi.spyOn(AbortSignal.prototype, 'addEventListener');
+		const removed = vi.spyOn(AbortSignal.prototype, 'removeEventListener');
+
+		for (let second = 1; second <= 20; second += 1) {
+			const waitsAgain = audio.untilDeckWaitsForPlayback();
+			audio.playTo(second);
+			await waitsAgain;
+		}
+		await quiet();
+
+		for (const [type] of added.mock.calls) if (type === 'abort') abortListeners += 1;
+		for (const [type] of removed.mock.calls) if (type === 'abort') abortListeners -= 1;
+		expect(added.mock.calls.length).toBeGreaterThan(0);
+		expect(abortListeners).toBe(0);
 	});
 
 	it('appends the first piece before the rest of the take has arrived', async () => {
@@ -352,7 +492,7 @@ describe('ContinuousDeck', () => {
 
 	it('starts the next append only after the previous one fired updateend', async () => {
 		const { deck, audio, buffer, network } = openDeck();
-		network.serve('/audio/long.mp3', 1.5 * MEGABYTE);
+		network.serve('/audio/long.mp3', 3 * PIECE);
 		audio.currentTime = 1000;
 		buffer.autoSettle = false;
 
@@ -372,7 +512,7 @@ describe('ContinuousDeck', () => {
 		await lastAppend;
 		buffer.settle();
 		await appending;
-		expect(buffer.appendedBytes()).toEqual([PIECE, MEGABYTE, PIECE]);
+		expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, PIECE]);
 	});
 
 	it('removes takes that have played and keeps the take under the playhead', async () => {
@@ -435,70 +575,127 @@ describe('ContinuousDeck', () => {
 		expect(audio.src).toBe(OBJECT_URL);
 	});
 
-	it('gives up on a download that keeps breaking after three attempts', async () => {
-		const { deck, network } = openDeck();
-		network.serve('/audio/take.mp3', MEGABYTE / 2);
+	it.each([
+		{
+			answer: { status: 206, fromTheStart: true },
+			refusal: 'Content-Range mismatch: asked from byte 300000'
+		},
+		{ answer: { status: 200 }, refusal: 'ignored Range' },
+		{ answer: { status: 503 }, refusal: 'answered 503' },
+		{ answer: { status: 206, withoutContentRange: true }, refusal: 'missing Content-Range' }
+	])(
+		'refuses a resume answered $answer as $refusal, stops its download and appends nothing twice',
+		async ({ answer, refusal }) => {
+			const { deck, buffer, network } = openDeck();
+			const file = network.serve('/audio/take.mp3', 0.75 * MEGABYTE);
+			network.breakAt('/audio/take.mp3', 300_000);
+			network.answerRanges('/audio/take.mp3', answer);
+
+			const step = deck.appendTake('take', '/audio/take.mp3');
+
+			await expect(step).rejects.toMatchObject({ reason: 'refused' });
+			await expect(step).rejects.toThrow(refusal);
+			expect(network.requests.map((request) => request.range)).toEqual([null, 'bytes=300000-']);
+			expect(network.answers.at(-1)).toEqual({ status: answer.status, bodyCancelled: true });
+			const appended = concatenated(buffer.appended);
+			expect(appended.byteLength).toBeLessThanOrEqual(300_000);
+			expect(firstDifferingByte(appended, file.subarray(0, appended.byteLength))).toBeNull();
+		}
+	);
+
+	it('parks a take whose download fails on the network and resumes it from the bytes received, the next take waiting behind it', async () => {
+		const { deck, buffer, network } = openDeck();
+		const file = network.serve('/audio/take.mp3', MEGABYTE / 2);
+		network.serve('/audio/next.mp3', MEGABYTE / 4);
 		network.breakAt('/audio/take.mp3', 100_000, 200_000, 300_000);
 
-		await expect(deck.appendTake('take', '/audio/take.mp3')).rejects.toThrow(
-			'network connection lost'
-		);
+		const take = deck.appendTake('take', '/audio/take.mp3');
+		const next = deck.appendTake('next', '/audio/next.mp3');
+		const taken = settlement(take);
+		await quiet();
+
+		expect(taken.settled).toBe(false);
+		expect(deck.appending).toBe(true);
 		expect(network.requests.map((request) => request.range)).toEqual([
 			null,
 			'bytes=100000-',
 			'bytes=200000-'
 		]);
+		expect(concatenated(buffer.appended).byteLength).toBe(300_000);
+
+		deck.retryDownload();
+		await Promise.all([take, next]);
+
+		expect(network.requests.map(({ url, range }) => `${url} ${range}`)).toEqual([
+			'/audio/take.mp3 null',
+			'/audio/take.mp3 bytes=100000-',
+			'/audio/take.mp3 bytes=200000-',
+			'/audio/take.mp3 bytes=300000-',
+			'/audio/next.mp3 null'
+		]);
+		const appended = concatenated(buffer.appended);
+		expect(firstDifferingByte(appended.subarray(0, file.byteLength), file)).toBeNull();
+		expect(deck.manifest.map((entry) => entry.take)).toEqual(['take', 'next']);
 	});
 
-	it('gives up on a refused take without retrying it', async () => {
+	it('a retry aborts a request that stopped sending and resumes from the bytes received', async () => {
+		const { deck, audio, buffer, network } = openDeck();
+		const file = network.serve('/audio/take.mp3', MEGABYTE / 2);
+		network.stallAt('/audio/take.mp3', PIECE);
+
+		const take = deck.appendTake('take', '/audio/take.mp3');
+		await quiet();
+		expect(buffer.appendedBytes()).toEqual([PIECE]);
+
+		deck.retryDownload();
+		await take;
+
+		expect(network.signals[0].aborted).toBe(true);
+		expect(network.requests.map((request) => request.range)).toEqual([null, `bytes=${PIECE}-`]);
+		expect(firstDifferingByte(concatenated(buffer.appended), file)).toBeNull();
+		expect(audio.src).toBe(OBJECT_URL);
+	});
+
+	it('still drops a refused take without retrying it, names it, and appends the next take where it would have started', async () => {
 		const { deck, network } = openDeck();
+		network.serve('/audio/first.mp3', MEGABYTE / 4);
+		network.serve('/audio/third.mp3', MEGABYTE / 4);
 		network.refuse('/audio/gone.mp3', 404);
 
-		await expect(deck.appendTake('gone', '/audio/gone.mp3')).rejects.toThrow('404');
-		expect(network.requests).toHaveLength(1);
+		void deck.appendTake('first', '/audio/first.mp3');
+		const dropped = deck.appendTake('gone', '/audio/gone.mp3');
+		const third = deck.appendTake('third', '/audio/third.mp3');
+
+		await expect(dropped).rejects.toMatchObject({ take: 'gone', reason: 'refused' });
+		await expect(dropped).rejects.toThrow('404');
+		await third;
+		expect(network.requests.filter((request) => request.url === '/audio/gone.mp3')).toHaveLength(1);
+		expect(deck.manifest).toEqual([
+			{ take: 'first', start_offset: 0, duration: secondsOf(MEGABYTE / 4) },
+			{
+				take: 'third',
+				start_offset: secondsOf(MEGABYTE / 4),
+				duration: secondsOf(MEGABYTE / 4)
+			}
+		]);
 	});
 
-	it.each([
-		{
-			failure: 'refused',
-			arrange: (network: FakeNetwork) => network.refuse('/audio/gone.mp3', 404)
-		},
-		{
-			failure: 'never arriving',
-			arrange: (network: FakeNetwork) => {
-				network.serve('/audio/gone.mp3', MEGABYTE / 2);
-				network.breakAt('/audio/gone.mp3', 0, 0, 0);
-			}
-		}
-	])(
-		'drops a $failure take, names it, and appends the next take where it would have started',
-		async ({ arrange }) => {
-			const { deck, network } = openDeck();
-			network.serve('/audio/first.mp3', MEGABYTE / 4);
-			network.serve('/audio/third.mp3', MEGABYTE / 4);
-			arrange(network);
+	it('drops a refused take whose body cannot be cancelled, naming both the refusal and the failed cancel', async () => {
+		const { deck, network } = openDeck();
+		network.refuse('/audio/gone.mp3', 404, { bodyErrored: true });
 
-			void deck.appendTake('first', '/audio/first.mp3');
-			const dropped = deck.appendTake('gone', '/audio/gone.mp3');
-			const third = deck.appendTake('third', '/audio/third.mp3');
+		const dropped = deck.appendTake('gone', '/audio/gone.mp3');
 
-			await expect(dropped).rejects.toMatchObject({ take: 'gone', reason: 'not-fetched' });
-			await third;
-			expect(deck.manifest).toEqual([
-				{ take: 'first', start_offset: 0, duration: secondsOf(MEGABYTE / 4) },
-				{
-					take: 'third',
-					start_offset: secondsOf(MEGABYTE / 4),
-					duration: secondsOf(MEGABYTE / 4)
-				}
-			]);
-		}
-	);
+		await expect(dropped).rejects.toMatchObject({ take: 'gone', reason: 'refused' });
+		await expect(dropped).rejects.toThrow(/answered 404.*connection reset/);
+		expect(network.requests).toHaveLength(1);
+	});
 
 	it('keeps what a take cut off part-way appended and starts the next take on a fresh frame', async () => {
 		const { deck, log, network } = openDeck();
 		network.serve('/audio/cut.mp3', MEGABYTE / 2);
-		network.breakAt('/audio/cut.mp3', PIECE, PIECE, PIECE);
+		network.breakAt('/audio/cut.mp3', PIECE);
+		network.answerRanges('/audio/cut.mp3', { status: 200 });
 		network.serve('/audio/next.mp3', MEGABYTE / 4);
 
 		const cut = deck.appendTake('cut', '/audio/cut.mp3');
@@ -565,8 +762,94 @@ describe('ContinuousDeck', () => {
 
 		expect(deck.entryAt(secondStart - 1)?.take).toBe('first');
 		expect(deck.entryAt(secondStart)?.take).toBe('second');
-		expect(deck.playableEntryOf((take) => take === 'second')?.start_offset).toBe(secondStart);
-		expect(deck.playableEntryOf((take) => take === 'first')).toBeUndefined();
+		const [firstEntry, secondEntry] = deck.manifest;
+		expect(deck.isPlayableFromStart(secondEntry)).toBe(true);
+		expect(deck.isPlayableFromStart(firstEntry)).toBe(false);
+	});
+
+	describe('once closed', () => {
+		async function expectClosed(step: Promise<void>): Promise<void> {
+			const outcome = await step.then(
+				() => 'settled',
+				(error: unknown) => error
+			);
+			expect(outcome).toBeInstanceOf(Error);
+			expect((outcome as Error).name).toBe('DeckClosed');
+			expect(outcome).not.toBeInstanceOf(TakeNotAppended);
+		}
+
+		it('aborts the request of the take being fetched and does not report it as dropped', async () => {
+			const { deck, buffer, network } = openDeck();
+			network.serve('/audio/take.mp3', MEGABYTE / 2);
+			buffer.autoSettle = false;
+			const appending = deck.appendTake('take', '/audio/take.mp3');
+			await buffer.untilUpdateStarts();
+
+			deck.close();
+			buffer.settle();
+
+			expect(network.signals.map((signal) => signal.aborted)).toEqual([true]);
+			await expectClosed(appending);
+			expect(buffer.appendedBytes()).toEqual([PIECE]);
+		});
+
+		it('wakes a parked wait and appends nothing more when playback moves on', async () => {
+			const { deck, audio, buffer, network } = openDeck();
+			network.serve('/audio/long.mp3', 2.5 * MEGABYTE);
+			const appending = deck.appendTake('long', '/audio/long.mp3');
+			await audio.untilDeckWaitsForPlayback();
+
+			deck.close();
+			await expectClosed(appending);
+			audio.playTo(100);
+			await Promise.resolve();
+
+			expect(buffer.appendedBytes()).toEqual([PIECE, PIECE, MEGABYTE]);
+			expect(buffer.removals).toEqual([]);
+		});
+
+		it('settles every step queued before it without touching the buffer', async () => {
+			const { deck, buffer, log, network } = openDeck();
+			network.serve('/audio/first.mp3', MEGABYTE / 2);
+			network.serve('/audio/second.mp3', MEGABYTE / 4);
+			buffer.autoSettle = false;
+			const first = deck.appendTake('first', '/audio/first.mp3');
+			const second = deck.appendTake('second', '/audio/second.mp3');
+			const ending = deck.endStream();
+			await buffer.untilUpdateStarts();
+
+			deck.close();
+			buffer.settle();
+
+			await Promise.all([first, second, ending].map(expectClosed));
+			expect(log).toEqual(['append']);
+			expect(network.requests.map((request) => request.url)).toEqual(['/audio/first.mp3']);
+		});
+
+		it('settles a parked download and asks for nothing more', async () => {
+			const { deck, network } = openDeck();
+			network.serve('/audio/take.mp3', MEGABYTE / 2);
+			network.breakAt('/audio/take.mp3', 0, 0, 0);
+			const appending = deck.appendTake('take', '/audio/take.mp3');
+			await quiet();
+
+			deck.close();
+			deck.retryDownload();
+
+			await expectClosed(appending);
+			expect(network.requests).toHaveLength(3);
+		});
+
+		it('settles a step still waiting for the media source to open', async () => {
+			const { deck, network } = openDeck();
+			network.serve('/audio/take.mp3', MEGABYTE / 4);
+			const appending = deck.appendTake('take', '/audio/take.mp3');
+
+			deck.close();
+
+			await expectClosed(appending);
+			expect(network.requests).toEqual([]);
+		});
 	});
 
 	it('ends the stream only after the last take has been appended', async () => {

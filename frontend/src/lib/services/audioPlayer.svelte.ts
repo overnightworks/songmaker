@@ -58,6 +58,13 @@ type StallReason = 'stall-timeout' | 'frozen-clock' | 'network-return';
 
 type RecoveryReason = StallReason | 'media-error';
 
+// A stall the deck's own download explains: the deck resumes it on the same
+// element. A frozen clock or a media error still reloads the take.
+const DECK_RESUMABLE_REASONS: ReadonlySet<RecoveryReason> = new Set<RecoveryReason>([
+	'stall-timeout',
+	'network-return'
+]);
+
 type RecoveryStep = 'give-up' | 'wait' | 'reload';
 
 // 'awaiting-network' is a stall given up while the network was gone; its
@@ -455,8 +462,8 @@ class AudioPlayer {
 		session.deck.appendTake(info, url).catch((error: unknown) => this.deckFailed(session, error));
 	}
 
-	// Next, or a restart, is a seek when the deck still holds the take from its
-	// start: the element plays on from its one source.
+	// A load the deck can play on into is a seek: the element keeps its one
+	// source. Every other take starts a fresh deck.
 	private seekWithinDeck(
 		session: DeckSession,
 		info: PlaybackInfo,
@@ -464,7 +471,7 @@ class AudioPlayer {
 		opts: LoadOptions
 	): boolean {
 		const el = this.audio;
-		const entry = session.deck.playableEntryOf((take) => audioUrlOf(take) === url);
+		const entry = el && continuableEntry(session, el.currentTime, url);
 		if (!el || !entry) return false;
 		const startAt = opts.startAt ?? 0;
 		session.playing = entry;
@@ -504,14 +511,24 @@ class AudioPlayer {
 		return entry ? takeDuration(entry) : null;
 	}
 
-	// The playhead ran out of audio with nothing more on its way: the queue has
-	// ended, and only an ended stream lets the element fire ended.
+	// The playhead ran out of audio in the queue's last take: the queue has
+	// ended, and only an ended stream lets the element fire ended. Running out
+	// while the queue names a next take is buffering, which recovery rides out
+	// until that take is appended.
 	private endDeckAtItsLastTake(session: DeckSession, el: HTMLAudioElement): boolean {
-		if (session.deck.appending || bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS)
+		if (
+			session.deck.appending ||
+			this.queueNamesATakeAfter(session.playing) ||
+			bufferedUntil(el) - el.currentTime > END_OF_DECK_SLACK_SECONDS
+		)
 			return false;
 		this.note('media_event', 'deck_end');
 		session.deck.endStream().catch((error: unknown) => this.deckFailed(session, error));
 		return true;
+	}
+
+	private queueNamesATakeAfter(entry: Readonly<DeckEntry<PlaybackInfo>> | null): boolean {
+		return entry !== null && (this.callbacks.takeAfter?.(entry.take) ?? null) !== null;
 	}
 
 	// A dropped take the playhead has not reached only shortens the stream;
@@ -523,7 +540,7 @@ class AudioPlayer {
 				'media_event',
 				`deck_dropped take=${error.take.generation.id} ${error.reason} ${error.message}`
 			);
-			if (error.reason === 'not-fetched') this.skipTake(session, error.take);
+			if (error.reason === 'refused') this.skipTake(session, error.take);
 			return;
 		}
 		this.fallBackToTwoDecks(
@@ -632,7 +649,8 @@ class AudioPlayer {
 
 	// Only a failure the lost network explains goes on by itself: a real
 	// failure keeps its words and its Retry (#1161 R2). A stalled take that
-	// waits for the network tries again at once instead of at its next look.
+	// waits for the network tries again at once instead of at its next look,
+	// and so does a take ahead whose download parked while the current played.
 	resumeAfterNetworkReturn(): void {
 		if (this.failure?.kind === 'unreachable') {
 			this.play();
@@ -642,9 +660,12 @@ class AudioPlayer {
 			this.retryAfterWaitingForNetwork();
 			return;
 		}
-		if (!this.stallRecoveryTimer) return;
-		this.clearStallRecoveryTimer();
-		this.recoverFromStall('network-return');
+		if (this.stallRecoveryTimer) {
+			this.clearStallRecoveryTimer();
+			this.recoverFromStall('network-return');
+			return;
+		}
+		if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'network-return');
 	}
 
 	play(): void {
@@ -699,8 +720,9 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
-		const takeStart = this.deckSession?.playing?.start_offset ?? 0;
-		this.audio.currentTime = takeStart + Math.max(0, Math.min(seconds, this.duration));
+		const entry = this.deckSession?.playing;
+		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
+		this.audio.currentTime = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 	}
 
 	seekToStreamTrack(index: number, opts: { autoplay?: boolean } = {}): boolean {
@@ -790,6 +812,13 @@ class AudioPlayer {
 		this.failure = null;
 		this.currentTime = 0;
 		this.duration = 0;
+		this.leaveDeck();
+	}
+
+	// A deck the player leaves is closed, so nothing of it keeps downloading,
+	// waiting or reporting a failure.
+	private leaveDeck(): void {
+		this.deckSession?.deck.close();
 		this.deckSession = null;
 	}
 
@@ -886,6 +915,7 @@ class AudioPlayer {
 			if (this.status !== 'error') this.callbacks.onPlaybackStarted?.();
 		});
 		on('pause', () => {
+			if (this.gaveUpOnStall && !this.pauseRequestedByApp) this.autoplayPending = false;
 			this.pauseRequestedByApp = false;
 			this.clearStallRecoveryTimer();
 			this.stopProgressWatchdog();
@@ -967,9 +997,10 @@ class AudioPlayer {
 		if (!this.recoverPlayback(reason)) this.giveUpOnStall();
 	}
 
-	// Pausing the element too keeps the sound and the lock screen in line with
-	// the stalled message. The listener's wish to hear the take outlives it, so
-	// a late answer plays on unless the listener pauses in the meantime.
+	// The player never pauses itself (#1187 P3): with the screen off a pause is
+	// the moment Android may freeze the page. The listener's wish to hear the
+	// take outlives the give-up, so a late answer plays on unless the listener
+	// pauses in the meantime.
 	private giveUpOnStall(): void {
 		const listenerWantsSound =
 			this.autoplayPending || this.status === 'playing' || this.status === 'buffering';
@@ -981,7 +1012,6 @@ class AudioPlayer {
 				: { kind: 'stalled', message: ERROR_MSG_STALLED }
 		);
 		this.autoplayPending = listenerWantsSound;
-		if (this.audio) this.pauseElement(this.audio);
 		this.note('give_up', this.failure?.kind ?? '');
 	}
 
@@ -1080,7 +1110,7 @@ class AudioPlayer {
 	// anyway.
 	private reloadSource(el: HTMLAudioElement, url: string): void {
 		this.stopProgressWatchdog();
-		this.deckSession = null;
+		this.leaveDeck();
 		this.loadSource(el, this.urlWithRecovery(url));
 	}
 
@@ -1174,8 +1204,18 @@ class AudioPlayer {
 		const step = this.nextRecoveryStep(reason);
 		if (step === 'give-up') return false;
 		if (step === 'wait') this.keepWaiting();
-		else this.reloadAt(reachedTime, reason);
+		else if (this.deckSession && DECK_RESUMABLE_REASONS.has(reason)) {
+			this.resumeDeckDownload(this.deckSession, reason);
+			this.keepWaiting();
+		} else this.reloadAt(reachedTime, reason);
 		return true;
+	}
+
+	// The deck keeps what it holds and its one source: its download picks up
+	// from the bytes received, and the playhead plays on where it stood.
+	private resumeDeckDownload(session: DeckSession, reason: RecoveryReason): void {
+		this.note('retry', `deck_resume reason=${reason}`);
+		session.deck.retryDownload();
 	}
 
 	// One deadline for every stalled take. While the owner reports the network
@@ -1435,6 +1475,27 @@ function audioUrlOf(info: PlaybackInfo): string {
 // The take's own length, not the stretch of it appended so far.
 function takeDuration(entry: Readonly<DeckEntry<PlaybackInfo>>): number {
 	return entry.take.generation.audio_duration_sec ?? entry.duration;
+}
+
+// The deck only ever receives the take the queue plays after the current one,
+// so the take handed to it last, directly behind the playhead's entry, is
+// the queue's next take whoever asked for it; the playing take itself is
+// still reached from its start. Anything else it holds may be stale.
+function continuableEntry(
+	session: DeckSession,
+	playhead: number,
+	url: string
+): Readonly<DeckEntry<PlaybackInfo>> | undefined {
+	const { deck } = session;
+	const playing = deck.entryAt(playhead);
+	if (!playing) return undefined;
+	const handedLast = deck.manifest.at(-1);
+	const next =
+		handedLast?.take === session.tail && deck.manifest.at(-2) === playing ? handedLast : undefined;
+	return [playing, next].find(
+		(entry) =>
+			entry !== undefined && audioUrlOf(entry.take) === url && deck.isPlayableFromStart(entry)
+	);
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {

@@ -1,21 +1,24 @@
 <script lang="ts">
 	import { tick, type Snippet } from 'svelte';
 	import {
+		draftLoadedFrom,
 		editLyrics,
 		editPrompt,
-		isDirty,
 		setDraftLyrics,
-		setDraftPrompt,
-		versions
+		setDraftPrompt
 	} from '$lib/stores/editor';
-	import type { SongItem, VersionItem } from '$lib/api/types';
+	import { getGenerationActions } from '$lib/contexts/generation-actions';
+	import type { SongItem } from '$lib/api/types';
 	import {
 		EDITOR_LYRICS_LABEL,
 		EDITOR_STYLE_LABEL,
 		EDITOR_STYLE_PROMPT_LABEL,
-		EDITOR_TAB_TAKES_LABEL
+		EDITOR_TAB_TAKES_LABEL,
+		versionLoadedFromLabel
 	} from '$lib/constants';
+	import Icon from '../Icon.svelte';
 	import TakeStrip from './TakeStrip.svelte';
+	import VersionsSheet from './VersionsSheet.svelte';
 
 	interface Props {
 		song: SongItem;
@@ -26,15 +29,12 @@
 
 	let { song, coWriterOpen, compact, cowriterPanel }: Props = $props();
 
-	const dirty = $derived($isDirty);
-	const latestVersion = $derived<VersionItem | null>($versions[0] ?? null);
-	const draftStamp = $derived(
-		latestVersion
-			? `v${latestVersion.version_number}${dirty ? ' · draft · differs from v' + latestVersion.version_number : ''}`
-			: dirty
-				? 'draft'
-				: ''
-	);
+	const lyricsFieldId = $props.id();
+	const generationActions = getGenerationActions();
+
+	function loadVersion(versionId: string): Promise<boolean> {
+		return generationActions.clickVersion(versionId);
+	}
 
 	// At compact width the page itself is the one scroll surface (L9): a
 	// fixed-height field whose content overflows becomes its own nested
@@ -92,8 +92,9 @@
 			</div>
 			<div class="cowriter-lyrics">
 				<span class="lyrics-label"
-					>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span
+					>{EDITOR_LYRICS_LABEL} <VersionsSheet {song} onload={loadVersion} /></span
 				>
+				{@render loadedFromHint()}
 				<textarea
 					class="lyrics-area"
 					value={$editLyrics}
@@ -123,18 +124,32 @@
 				value={$editPrompt}
 				oninput={(e) => setDraftPrompt(e.currentTarget.value)}></textarea>
 		</label>
-		<label class="edit-field">
-			<span>{EDITOR_LYRICS_LABEL} <span class="field-stamp">{draftStamp}</span></span>
+		<div class="edit-field">
+			<span>
+				<label for={lyricsFieldId}>{EDITOR_LYRICS_LABEL}</label>
+				<VersionsSheet {song} onload={loadVersion} />
+			</span>
+			{@render loadedFromHint()}
 			<textarea
+				id={lyricsFieldId}
 				class="lyrics-area"
 				class:auto-grow={compact}
 				use:autogrowTextarea={{ active: compact, value: $editLyrics }}
 				rows="15"
 				value={$editLyrics}
 				oninput={(e) => setDraftLyrics(e.currentTarget.value)}></textarea>
-		</label>
+		</div>
 	</div>
 {/if}
+
+{#snippet loadedFromHint()}
+	{#if $draftLoadedFrom !== null}
+		<span class="loaded-hint">
+			<Icon name="refresh-cw" size={13} />
+			{versionLoadedFromLabel($draftLoadedFrom)}
+		</span>
+	{/if}
+{/snippet}
 
 <style>
 	.write-mode {
@@ -149,7 +164,7 @@
 		gap: 0.4rem;
 	}
 
-	.edit-field span {
+	.edit-field > span:first-child {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -160,11 +175,13 @@
 		letter-spacing: 1px;
 	}
 
-	.field-stamp {
-		font-size: 0.65rem;
+	.loaded-hint {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		margin-top: -0.1rem;
+		font-size: 0.74rem;
 		color: var(--text-subtle);
-		text-transform: none;
-		letter-spacing: 0;
 	}
 
 	.edit-field textarea,

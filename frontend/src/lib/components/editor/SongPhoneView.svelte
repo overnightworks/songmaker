@@ -19,6 +19,8 @@
 
 	let { sharedLink, edit, cowriter, expiryDigest, takeListProps, chips }: Props = $props();
 
+	const DOCKED_ACTION_BAR_HEIGHT_VAR = '--docked-action-bar-height';
+
 	let actionBarEl: HTMLDivElement | undefined = $state();
 	let cowriterOpened = $state(false);
 	const cowriterShown = $derived($detailTab === 'cowriter');
@@ -40,7 +42,10 @@
 	// button keeps its own state across the typing.
 	$effect(() => {
 		const el = actionBarEl;
-		if (!el) return;
+		if (!el) {
+			generateBarHeight = undefined;
+			return;
+		}
 		const measure = () => {
 			generateBarHeight = el.offsetHeight;
 		};
@@ -48,6 +53,15 @@
 		const observer = new ResizeObserver(measure);
 		observer.observe(el);
 		return () => observer.disconnect();
+	});
+
+	// The toast stack rises above the docked Generate bar instead of covering
+	// it, so Generate stays tappable while a toast shows (#1262).
+	$effect(() => {
+		if (generateBarHeight === undefined) return;
+		const root = document.documentElement;
+		root.style.setProperty(DOCKED_ACTION_BAR_HEIGHT_VAR, `${generateBarHeight}px`);
+		return () => root.style.removeProperty(DOCKED_ACTION_BAR_HEIGHT_VAR);
 	});
 </script>
 

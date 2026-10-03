@@ -181,6 +181,7 @@ export const REDUCED_MOTION_MEDIA = '(prefers-reduced-motion: reduce)';
 const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
 export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
+export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
@@ -215,7 +216,6 @@ export const WORKER_POOL_LOAD_FAILED = 'Cannot reach the worker pool API.';
 export const WORKER_POOL_REFRESH_FAILED = 'Worker pool not updating — retrying…';
 export const MODEL_REGISTRY_LOAD_FAILED = 'Cannot reach the registry API.';
 export const TAKES_MOBILE_HINT = 'Tap play → details in Now Playing';
-export const TAKES_DELETE_VERSION_LABEL = 'Delete version…';
 
 export const EDITOR_TAB_TAKES_LABEL = 'Takes';
 export const EDITOR_TAB_EDIT_LABEL = 'Edit';
@@ -369,6 +369,56 @@ export const EDITOR_UNSAVED_MESSAGE =
 export const EDITOR_UNSAVED_SAVE_LABEL = 'Save';
 export const EDITOR_UNSAVED_DISCARD_LABEL = 'Discard';
 export const EDITOR_SAVE_FAILED = 'Save failed';
+const VERSION_CHIP_DRAFT_LABEL = 'draft';
+export const VERSIONS_SHEET_LABEL = 'Versions';
+export const VERSIONS_SHEET_CLOSE_LABEL = 'Close versions';
+export const VERSION_CURRENT_TAG = 'current';
+export const VERSION_PICKED_LABEL = 'picked';
+export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
+export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
+export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
+export const VERSION_DELETE_PICK_WARNING = 'The album pick is one of them.';
+export const TOAST_UNDO_LABEL = 'Undo';
+
+export function versionLabel(versionNumber: number): string {
+	return `v${versionNumber}`;
+}
+
+export function versionChipLabel(versionNumber: number, dirty: boolean): string {
+	const version = versionLabel(versionNumber);
+	return dirty ? `${version} · ${VERSION_CHIP_DRAFT_LABEL}` : version;
+}
+
+export function versionsChipAccessibleLabel(chipLabel: string): string {
+	return `${VERSIONS_SHEET_LABEL}: ${chipLabel}`;
+}
+
+export function versionTakesLabel(count: number): string {
+	if (count === 0) return 'no takes';
+	return `${count} take${count === 1 ? '' : 's'}`;
+}
+
+export function versionDeleteLabel(versionNumber: number): string {
+	return `Delete ${versionLabel(versionNumber)}`;
+}
+
+export function versionDeleteTitle(versionNumber: number, takeCount: number): string {
+	const version = versionLabel(versionNumber);
+	if (takeCount === 0) return `Delete ${version}?`;
+	return `Delete ${version} and its ${versionTakesLabel(takeCount)}?`;
+}
+
+export function versionLoadedFromLabel(versionNumber: number): string {
+	return `Loaded from ${versionLabel(versionNumber)}`;
+}
+
+export function versionLoadedToastLabel(versionNumber: number): string {
+	return `${versionLabel(versionNumber)} loaded`;
+}
+
+export function versionReplaceDraftMessage(versionNumber: number): string {
+	return `Your draft has changes that are not in any version. Loading ${versionLabel(versionNumber)} replaces them. You can undo right after.`;
+}
 
 export const SONG_SHARE_LABEL = 'Share song';
 export const SONG_TITLE_LABEL = 'Song title';
