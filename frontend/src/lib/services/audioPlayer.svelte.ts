@@ -228,6 +228,14 @@ class AudioPlayer {
 		return this.audio;
 	}
 
+	// currentTime as the element's clock gives it this instant rather than at
+	// the last timeupdate; on the continuous deck that clock runs across every
+	// take, so the current take's start is taken off. Null without an element.
+	get currentTimeNow(): number | null {
+		if (!this.audio) return null;
+		return this.audio.currentTime - (this.deckSession?.playing?.start_offset ?? 0);
+	}
+
 	// The Web Audio graph belongs to the <audio> element, not to whatever
 	// happens to be drawing a visualizer. An element can be handed to
 	// createMediaElementSource exactly once, and closing the context that owns

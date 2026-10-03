@@ -2925,6 +2925,15 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(audioPlayer.duration).toBe(20);
 	});
 
+	it('reads the position within the take from the element clock at once', () => {
+		playFirstWithSecondAppended();
+		playTo(12);
+
+		fakeAudio.currentTime = 12.4;
+
+		expect(audioPlayer.currentTimeNow).toBeCloseTo(2.4);
+	});
+
 	it('a seek within the current take lands at that take in the element timeline', () => {
 		playFirstWithSecondAppended();
 		playTo(12);
