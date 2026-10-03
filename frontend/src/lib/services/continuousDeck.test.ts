@@ -607,8 +607,9 @@ describe('ContinuousDeck', () => {
 
 		expect(deck.entryAt(secondStart - 1)?.take).toBe('first');
 		expect(deck.entryAt(secondStart)?.take).toBe('second');
-		expect(deck.playableEntryOf((take) => take === 'second')?.start_offset).toBe(secondStart);
-		expect(deck.playableEntryOf((take) => take === 'first')).toBeUndefined();
+		const [firstEntry, secondEntry] = deck.manifest;
+		expect(deck.isPlayableFromStart(secondEntry)).toBe(true);
+		expect(deck.isPlayableFromStart(firstEntry)).toBe(false);
 	});
 
 	describe('once closed', () => {

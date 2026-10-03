@@ -455,8 +455,8 @@ class AudioPlayer {
 		session.deck.appendTake(info, url).catch((error: unknown) => this.deckFailed(session, error));
 	}
 
-	// Next, or a restart, is a seek when the deck still holds the take from its
-	// start: the element plays on from its one source.
+	// A load the deck can play on into is a seek: the element keeps its one
+	// source. Every other take starts a fresh deck.
 	private seekWithinDeck(
 		session: DeckSession,
 		info: PlaybackInfo,
@@ -464,7 +464,7 @@ class AudioPlayer {
 		opts: LoadOptions
 	): boolean {
 		const el = this.audio;
-		const entry = session.deck.playableEntryOf((take) => audioUrlOf(take) === url);
+		const entry = el && continuableEntry(session, el.currentTime, url);
 		if (!el || !entry) return false;
 		const startAt = opts.startAt ?? 0;
 		session.playing = entry;
@@ -1454,6 +1454,27 @@ function audioUrlOf(info: PlaybackInfo): string {
 // The take's own length, not the stretch of it appended so far.
 function takeDuration(entry: Readonly<DeckEntry<PlaybackInfo>>): number {
 	return entry.take.generation.audio_duration_sec ?? entry.duration;
+}
+
+// The deck only ever receives the take the queue plays after the current one,
+// so the take handed to it last, directly behind the playhead's entry, is
+// the queue's next take whoever asked for it; the playing take itself is
+// still reached from its start. Anything else it holds may be stale.
+function continuableEntry(
+	session: DeckSession,
+	playhead: number,
+	url: string
+): Readonly<DeckEntry<PlaybackInfo>> | undefined {
+	const { deck } = session;
+	const playing = deck.entryAt(playhead);
+	if (!playing) return undefined;
+	const handedLast = deck.manifest.at(-1);
+	const next =
+		handedLast?.take === session.tail && deck.manifest.at(-2) === playing ? handedLast : undefined;
+	return [playing, next].find(
+		(entry) =>
+			entry !== undefined && audioUrlOf(entry.take) === url && deck.isPlayableFromStart(entry)
+	);
 }
 
 function bufferedUntil(el: HTMLAudioElement): number {
