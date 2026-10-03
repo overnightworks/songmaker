@@ -424,6 +424,7 @@ test.describe('the versions of a song', () => {
 	test('the Undo toast keeps its time while the sheet is open: a tap on the loaded version after 4 s brings it back with time left', async ({
 		page
 	}, testInfo) => {
+		await page.clock.install();
 		const song = await seedTwoVersions(page, testInfo);
 		await openSongEditor(page, song);
 		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
@@ -437,11 +438,11 @@ test.describe('the versions of a song', () => {
 		await expect(versionsSheet(page)).toBeVisible();
 
 		// The toast's five seconds would have run out while the sheet stood open.
-		await page.waitForTimeout(4000);
+		await page.clock.fastForward(4000);
 		await versionRow(page, 1).click();
 		await expect(versionsSheet(page)).toBeHidden();
 		await expect(loadedToast(page)).toBeVisible();
-		await page.waitForTimeout(2000);
+		await page.clock.fastForward(2000);
 
 		await loadedToast(page).getByRole('button', { name: TOAST_UNDO_LABEL }).click();
 		await expect(lyricsField(page)).toHaveValue(editedLyrics);
