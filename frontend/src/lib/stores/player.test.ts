@@ -39,6 +39,21 @@ import type { StreamFallbackState } from '$lib/services/audioPlayer.svelte';
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
+const lockScreen = vi.hoisted(() => ({
+	handlers: null as { pause: () => void } | null
+}));
+vi.mock('$lib/services/mediaSession', async (importOriginal) => {
+	const actual = await importOriginal<typeof import('$lib/services/mediaSession')>();
+	return {
+		...actual,
+		setupMediaSessionHandlers: (
+			handlers: Parameters<typeof actual.setupMediaSessionHandlers>[0]
+		) => {
+			lockScreen.handlers = handlers;
+			return actual.setupMediaSessionHandlers(handlers);
+		}
+	};
+});
 vi.mock('$lib/api/fetch', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/fetch')>();
 	return { ...actual, handleSessionLost: vi.fn() };
@@ -94,7 +109,6 @@ import {
 	curationActive,
 	isPlaylistEntryCurrent,
 	playAlbum,
-	pauseFromLockScreen,
 	playIdleStart,
 	retryLastPlayIntent,
 	playNextSong,
@@ -2375,7 +2389,7 @@ describe('playAlbum start track', () => {
 
 	it.each([
 		{ press: "the bar's transport", stop: () => playIdleStart() },
-		{ press: "the lock screen's Pause", stop: async () => pauseFromLockScreen() }
+		{ press: "the lock screen's Pause", stop: async () => lockScreen.handlers?.pause() }
 	])('offline, $press stops the waiting start so the network starts nothing', async ({ stop }) => {
 		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 		reportResourceStreamReachable(false);

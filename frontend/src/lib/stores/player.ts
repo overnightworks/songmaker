@@ -697,7 +697,7 @@ function stopStartAwaitingNetwork(): boolean {
 
 // The lock screen offers Pause for what the bar shows: the take, or with no
 // take a start that waits for the network, which its Pause stops (#1288).
-export function pauseFromLockScreen(): void {
+function pauseFromLockScreen(): void {
 	if (!audioPlayer.current && stopStartAwaitingNetwork()) return;
 	audioPlayer.pause();
 }
