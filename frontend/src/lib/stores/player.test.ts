@@ -506,7 +506,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -773,7 +774,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -838,7 +840,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'First' })
+			expect.objectContaining({ songTitle: 'First' }),
+			{ restart: true }
 		);
 	});
 
@@ -862,7 +865,8 @@ describe('playback dispatch', () => {
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
-			expect.objectContaining({ songTitle: 'Second' })
+			expect.objectContaining({ songTitle: 'Second' }),
+			{ restart: true }
 		);
 	});
 
@@ -2284,6 +2288,26 @@ describe('the queue names its next take', () => {
 				expect(heard).toEqual(
 					rows.map((row) => ({ row, queueIndex: row, take: `g${tracks[row]}` }))
 				);
+			}
+		);
+
+		it.each([
+			{ step: 'Previous', from: 1, to: 0, press: playPrevSong },
+			{ step: 'Next', from: 0, to: 1, press: playNextSong }
+		])(
+			'$step between the two places of a take starts the other place from its beginning',
+			async ({ from, to, press }) => {
+				await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 1, 3), from);
+
+				await press();
+
+				expect(vi.mocked(audioPlayer.load).mock.lastCall?.[1]).toEqual({ restart: true });
+				const rows = [currentRowAndTake().row];
+				for (let lap = 0; lap < 3; lap++) {
+					moveOnByItselfTo(preloadedTake());
+					rows.push(currentRowAndTake().row);
+				}
+				expect(rows).toEqual([to, to + 1, to + 2, to + 3].map((row) => row % 3));
 			}
 		);
 

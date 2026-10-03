@@ -1289,18 +1289,22 @@ function preloadNextTake(): void {
 	audioPlayer.preload(takeAfterCurrent());
 }
 
+// A step always lands on another place of the playlist, so that place starts
+// from its beginning even where it holds the very take playing now.
 function playPlaylistInDirection(
 	ctx: Extract<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
 	if (direction === 1) {
 		const next = nextQueueTake(ctx, audioPlayer.current);
-		if (next.kind === 'take') playPlaylistIndex(ctx, next.index);
+		if (next.kind === 'take') playPlaylistIndex(ctx, next.index, { restart: true });
 		return;
 	}
 	if (ctx.entries.length <= 1) return;
 	const currentIndex = currentPlaylistIndex(ctx);
-	playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length);
+	playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length, {
+		restart: true
+	});
 }
 
 function playNativeTakesInDirection(
