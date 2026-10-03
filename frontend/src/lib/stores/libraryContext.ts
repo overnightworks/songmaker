@@ -840,11 +840,14 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 }
 
 // An apply belongs to the page entry it landed on (issue #1006): history
-// leaving that entry stops it -- a Back nothing in the library heard, such as
-// the second of two quick Backs from Settings while the first one's route
-// still loads -- and so do a newer apply and a write
-// (`cancelLibraryHistoryApply`). An entry without an id tells nothing apart,
-// so there only those two stop it.
+// leaving that entry stops it, and so do a newer apply and a write
+// (`cancelLibraryHistoryApply`). A Back the library heard starts the newer
+// apply; one it did not -- the second of two quick Backs from Settings,
+// pressed before the library on the first one's page listens -- is heard once
+// it does (`listenForLandings`), and meanwhile the apply for the entry it left
+// neither finishes over the entry history stands on nor writes its library
+// there. An entry without an id tells nothing apart, so there only the newer
+// apply and the write stop it.
 interface HistoryApply {
 	readonly entry: number | null;
 }
