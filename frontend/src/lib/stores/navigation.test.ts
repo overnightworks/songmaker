@@ -13,7 +13,8 @@ import {
 	makeAlbum as album,
 	makeGeneration as generation,
 	makePlaylist as playlistItem,
-	makeSong as song
+	makeSong as song,
+	makeVersion
 } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get, type Writable } from 'svelte/store';
@@ -155,6 +156,7 @@ import {
 	openLibraryWall,
 	openPlaylist,
 	openRailSearchTarget,
+	openTakeVersion,
 	pendingDirtyNavigation,
 	persistLibraryHistory,
 	resetNavigationForTests,
@@ -170,9 +172,12 @@ import {
 	editLyrics,
 	isDirty,
 	loadSongData,
-	setDraftLyrics
+	loadVersionAsDraft,
+	pendingVersionLoad,
+	setDraftLyrics,
+	versions
 } from '$lib/stores/editor';
-import { updateSong } from '$lib/api/client';
+import { fetchVersions, updateSong } from '$lib/api/client';
 import { fetchAlbums } from '$lib/api/albums';
 import { dialogHistoryLayer } from '$lib/utils/dialog-history-layer';
 import { libraryRootState } from '$lib/stores/libraryContext';
@@ -1264,6 +1269,23 @@ describe('backToCollection', () => {
 	});
 });
 
+const LATEST_VERSION = makeVersion({ id: 'ver-2', version_number: 2, lyrics: 'second' });
+const FIRST_VERSION = makeVersion({ id: 'ver-1', version_number: 1, lyrics: 'first' });
+
+async function openSongWithAnUntouchedLoadOfV1(): Promise<void> {
+	songList.set([
+		song({ ...navigableSongDefaults(), slug: 's1' }),
+		song({ ...navigableSongDefaults(), slug: 's2', id: 's2' })
+	]);
+	await openAlbum('a1');
+	await selectSong('s1');
+	vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST_VERSION, FIRST_VERSION]);
+	loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+	await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+	loadVersionAsDraft(FIRST_VERSION);
+	expect(get(editLyrics)).toBe('first');
+}
+
 describe('a dirty draft guards song switch / leave', () => {
 	afterEach(() => {
 		discardDraft();
@@ -1279,6 +1301,25 @@ describe('a dirty draft guards song switch / leave', () => {
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it.each([
+		{
+			way: 'a song switch',
+			leave: () => selectSong('s2', song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }))
+		},
+		{
+			way: "Open vN on another song's take in Now Playing",
+			leave: () =>
+				openTakeVersion(song({ ...navigableSongDefaults(), slug: 's2', id: 's2' }), 'g2', 'ver-2')
+		}
+	])('an untouched load of an older version leaves without asking: $way', async ({ leave }) => {
+		await openSongWithAnUntouchedLoadOfV1();
+
+		await leave();
+
+		expect(get(selectedSongId)).toBe('s2');
+		expect(get(pendingDirtyNavigation)).toBeNull();
 	});
 
 	it('runs the deferred switch on Discard', async () => {
@@ -1524,6 +1565,36 @@ describe('openCollectionEntry', () => {
 		openCollectionEntry({ kind: 'playlist', id: 'p1' });
 		await Promise.resolve();
 		expect(get(openCollection)?.kind).toBe('playlist');
+	});
+});
+
+describe('openTakeVersion', () => {
+	afterEach(() => {
+		discardDraft();
+		pendingVersionLoad.set(null);
+	});
+
+	it('over changes no version holds, stays on the same song so its page asks before the load', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		await openTakeVersion(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1', 'ver-1');
+
+		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-1' });
+		expect(get(pendingDirtyNavigation)).toBeNull();
+		expect(get(selectedGenerationId)).toBeNull();
+	});
+
+	it("over an untouched load, opens the take's own song without asking", async () => {
+		await openSongWithAnUntouchedLoadOfV1();
+
+		await openTakeVersion(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1', 'ver-2');
+
+		expect(get(pendingVersionLoad)).toEqual({ songId: 's1', versionId: 'ver-2' });
+		expect(get(pendingDirtyNavigation)).toBeNull();
+		expect(get(selectedGenerationId)).toBe('g1');
 	});
 });
 
