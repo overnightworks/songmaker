@@ -124,18 +124,18 @@ export function setDraftGenParams(genParams: VersionGenerationParams | null): vo
 export const versions = writable<VersionItem[]>([]);
 export const currentVersionIndex = writable(0);
 
-function isHeldByAVersion(data: SongData, held: VersionItem[]): boolean {
-	return held.some((version) => songDataEqual(data, songDataFromVersion(version)));
+/**
+ * Whether the draft holds work none of `held` has, so replacing it would lose
+ * something. A draft loaded from an older version and left untouched is still
+ * a draft of the latest (`isDirty`), yet replacing it loses nothing.
+ */
+function holdsUnversionedChanges(s: EditorState, held: VersionItem[]): boolean {
+	if (songDataEqual(s.draft, s.saved)) return false;
+	return !held.some((version) => songDataEqual(s.draft, songDataFromVersion(version)));
 }
 
-/**
- * Whether the draft holds work no saved version has, so replacing it would
- * lose something. A draft loaded from an older version and left untouched is
- * still a draft of the latest (`isDirty`), yet replacing it loses nothing.
- */
-export const draftHasUnversionedChanges = derived(
-	[editorState, versions],
-	([s, all]) => !songDataEqual(s.draft, s.saved) && !isHeldByAVersion(s.draft, all)
+export const draftHasUnversionedChanges = derived([editorState, versions], ([s, all]) =>
+	holdsUnversionedChanges(s, all)
 );
 
 /** A version to load into a song's draft once that song's page shows it (Open vN in Now Playing). */
@@ -318,13 +318,11 @@ export async function handleSave(songId: string): Promise<SongItem> {
  * deleted.
  */
 export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEditorLoss | null {
-	const { draft, saved } = get(editorState);
+	const state = get(editorState);
 	const all = get(versions);
 	const survivors = all.filter((candidate) => candidate.id !== version.id);
-	if (!songDataEqual(draft, saved)) {
-		return isHeldByAVersion(draft, survivors) ? null : { kind: 'unsaved-draft' };
-	}
-	if (version.id !== all[0]?.id) return null;
+	if (holdsUnversionedChanges(state, survivors)) return { kind: 'unsaved-draft' };
+	if (!songDataEqual(state.draft, state.saved) || version.id !== all[0]?.id) return null;
 	const nextLatest = survivors[0];
 	return nextLatest
 		? { kind: 'current-lyrics', replacedBy: nextLatest.version_number }
