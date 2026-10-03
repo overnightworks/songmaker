@@ -119,7 +119,7 @@ export const versions = writable<VersionItem[]>([]);
 export const currentVersionIndex = writable(0);
 
 /** A version to load into a song's draft once that song's page shows it (Open vN in Now Playing). */
-export interface PendingVersionLoad {
+interface PendingVersionLoad {
 	songId: string;
 	versionId: string;
 }
