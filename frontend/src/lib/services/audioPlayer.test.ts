@@ -71,10 +71,8 @@ vi.mock('./continuousDeck', () => {
 			return this.manifest.findLast((entry) => entry.start_offset <= seconds);
 		}
 
-		playableEntryOf(isTake: (take: PlaybackInfo) => boolean): HeldTake | undefined {
-			return this.manifest.findLast(
-				(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
-			);
+		isPlayableFromStart(entry: HeldTake): boolean {
+			return entry.start_offset >= this.playableFrom;
 		}
 
 		appendTake(take: PlaybackInfo, url: string): Promise<void> {
@@ -2935,21 +2933,6 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(onEnded).not.toHaveBeenCalled();
 	});
 
-	it('Next seeks inside the buffer when the next take is already appended', () => {
-		playFirstWithSecondAppended();
-		playTo(4);
-		const loadSpy = vi.spyOn(fakeAudio, 'load');
-
-		audioPlayer.load(second);
-
-		expect(fakeAudio.currentTime).toBe(10);
-		expect(loadSpy).not.toHaveBeenCalled();
-		expect(continuousDecks.attached).toHaveLength(1);
-		expect(audioPlayer.current?.generation.id).toBe('g2');
-		expect(audioPlayer.currentTime).toBe(0);
-		expect(audioPlayer.duration).toBe(20);
-	});
-
 	it('reads the position within the take from the element clock at once', () => {
 		playFirstWithSecondAppended();
 		playTo(12);
@@ -2968,15 +2951,95 @@ describe('continuous deck (#1187 M2)', () => {
 		expect(fakeAudio.currentTime).toBe(15);
 	});
 
-	it('starts a new deck for a take the deck no longer holds from its start', () => {
+	it.each([
+		{ load: 'Next onto the take handed last', at: 4, take: second, opts: {}, landsAt: 10 },
+		{
+			load: 'a restart of the playing take',
+			at: 12,
+			take: second,
+			opts: { restart: true },
+			landsAt: 10
+		},
+		{
+			load: 'a rebuild of the playing take at a position',
+			at: 12,
+			take: second,
+			opts: { restart: true, startAt: 1.5 },
+			landsAt: 11.5
+		}
+	])('plays on from its one source for $load', ({ at, take, opts, landsAt }) => {
 		playFirstWithSecondAppended();
-		playTo(12);
-		deck().playableFrom = 10;
+		playTo(at);
+		const loadSpy = vi.spyOn(fakeAudio, 'load');
 
-		audioPlayer.load(first, { restart: true });
+		audioPlayer.load(take, opts);
+
+		expect(fakeAudio.currentTime).toBe(landsAt);
+		expect(loadSpy).not.toHaveBeenCalled();
+		expect(continuousDecks.attached).toHaveLength(1);
+		expect(audioPlayer.current?.generation.id).toBe(take.generation.id);
+		expect(audioPlayer.currentTime).toBe(opts.startAt ?? 0);
+		expect(audioPlayer.duration).toBe(20);
+	});
+
+	function playThreeHeldWithThirdHandedLast(): void {
+		playFirstWithSecondAppended();
+		audioPlayer.preload(third);
+		holds([first, 0, 10], [second, 10, 20], [third, 30, 5]);
+	}
+
+	it.each([
+		{
+			load: 'Prev to the take before the playhead',
+			setup: playFirstWithSecondAppended,
+			at: 12,
+			take: first,
+			playableFrom: 0
+		},
+		{
+			load: 'a jump to the take handed last past the next one',
+			setup: playThreeHeldWithThirdHandedLast,
+			at: 4,
+			take: third,
+			playableFrom: 0
+		},
+		{
+			load: 'a tap on a held take that is not the one handed last',
+			setup: playThreeHeldWithThirdHandedLast,
+			at: 4,
+			take: second,
+			playableFrom: 0
+		},
+		{
+			load: 'a restart of the playing take whose start was removed',
+			setup: playFirstWithSecondAppended,
+			at: 12,
+			take: second,
+			playableFrom: 11
+		}
+	])('starts a fresh deck at the take for $load', ({ setup, at, take, playableFrom }) => {
+		setup();
+		playTo(at);
+		const left = deck();
+		left.playableFrom = playableFrom;
+
+		audioPlayer.load(take, { restart: true });
 
 		expect(continuousDecks.attached).toHaveLength(2);
-		expect(deck().requests.map((request) => request.take)).toEqual([first]);
+		expect(left.closed).toBe(true);
+		expect(deck().requests.map((request) => request.take)).toEqual([take]);
+		expect(audioPlayer.current?.generation.id).toBe(take.generation.id);
+	});
+
+	it('Prev continues on the fresh deck into the take after it', () => {
+		playFirstWithSecondAppended();
+		playTo(12);
+
+		audioPlayer.load(first, { restart: true });
+		audioPlayer.preload(second);
+
+		expect(continuousDecks.attached).toHaveLength(2);
+		expect(deck().requests.map((request) => request.take)).toEqual([first, second]);
 	});
 
 	it('ends the stream only when the playhead runs out of takes with nothing on its way', async () => {

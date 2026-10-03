@@ -95,12 +95,10 @@ export class ContinuousDeck<Take> {
 		return this.entries.findLast((entry) => entry.start_offset <= seconds);
 	}
 
-	// The latest entry of a take whose start is still buffered, so that a seek
-	// to its offset plays it from the beginning.
-	playableEntryOf(isTake: (take: Take) => boolean): Readonly<DeckEntry<Take>> | undefined {
-		return this.entries.findLast(
-			(entry) => isTake(entry.take) && entry.start_offset >= this.playableFrom
-		);
+	// Whether the entry's start is still buffered, so that a seek to its offset
+	// plays it from the beginning.
+	isPlayableFromStart(entry: Readonly<DeckEntry<Take>>): boolean {
+		return entry.start_offset >= this.playableFrom;
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
