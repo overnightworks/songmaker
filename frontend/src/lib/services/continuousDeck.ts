@@ -50,22 +50,16 @@ export class TakeNotAppended<Take> extends Error {
  */
 export class ContinuousDeck<Take> {
 	private readonly entries: DeckEntry<Take>[] = [];
-	private readonly opened: Promise<SourceBuffer>;
-	private steps: Promise<void>;
+	private steps: Promise<void> = Promise.resolve();
 	private stepsInFlight = 0;
 	private brokenBy: Error | null = null;
 	private ending: Promise<void> | null = null;
 	private playableFrom = 0;
 
-	private constructor(private readonly ports: ContinuousDeckPorts) {
-		this.opened = attachSourceBuffer(ports);
-		this.steps = this.opened.then(
-			() => undefined,
-			(error: unknown) => {
-				this.brokenBy = asError(error);
-			}
-		);
-	}
+	private constructor(
+		private readonly ports: ContinuousDeckPorts,
+		private readonly opened: Promise<SourceBuffer>
+	) {}
 
 	static isSupported(): boolean {
 		return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported(MP3_MIME_TYPE);
@@ -74,7 +68,7 @@ export class ContinuousDeck<Take> {
 	// Usable at once: every append waits for the media source to open, so the
 	// first take is asked for in the same moment the element gets its source.
 	static attach<Take>(ports: ContinuousDeckPorts): ContinuousDeck<Take> {
-		return new ContinuousDeck<Take>(ports);
+		return new ContinuousDeck<Take>(ports, attachSourceBuffer(ports));
 	}
 
 	get manifest(): readonly Readonly<DeckEntry<Take>>[] {
@@ -98,7 +92,7 @@ export class ContinuousDeck<Take> {
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
-		if (this.ending)
+		if (this.ending !== null)
 			return Promise.reject(
 				new TakeNotAppended(take, 'stream-ended', `${url} came after the end of the stream`)
 			);
@@ -106,14 +100,14 @@ export class ContinuousDeck<Take> {
 	}
 
 	endStream(): Promise<void> {
-		this.ending ??= this.queueStep(async () => this.ports.mediaSource.endOfStream());
+		this.ending ??= this.queueStep(() => this.ports.mediaSource.endOfStream());
 		return this.ending;
 	}
 
 	// A failed step fails every later one: a take appended behind audio the
 	// buffer refused would start at the wrong offset. Only a take that could
 	// not be fetched leaves the buffer as it was, so the next one still follows.
-	private queueStep(step: (buffer: SourceBuffer) => Promise<void>): Promise<void> {
+	private queueStep(step: (buffer: SourceBuffer) => Promise<void> | void): Promise<void> {
 		this.stepsInFlight += 1;
 		const result = this.steps
 			.then(async () => {
@@ -230,7 +224,9 @@ async function update(buffer: SourceBuffer, start: () => void): Promise<void> {
 }
 
 function asError(error: unknown): Error {
-	return error instanceof Error ? error : new Error(String(error));
+	return error instanceof Error
+		? error
+		: new Error('A deck step failed without an error', { cause: error });
 }
 
 function nextEvent(target: EventTarget, type: string): Promise<void> {

@@ -517,7 +517,9 @@ class AudioPlayer {
 			if (error.reason === 'not-fetched') this.skipTake(session, error.take);
 			return;
 		}
-		this.fallBackToTwoDecks(error instanceof Error ? error.message : String(error));
+		this.fallBackToTwoDecks(
+			error instanceof Error ? error.message : 'the deck failed without an error'
+		);
 	}
 
 	private skipTake(session: DeckSession, dropped: PlaybackInfo): void {
