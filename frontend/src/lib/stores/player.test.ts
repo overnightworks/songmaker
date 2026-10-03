@@ -2021,7 +2021,12 @@ describe('the queue names its next take', () => {
 	}
 
 	function poolTake(n: number): LibraryPoolTakeItem {
-		return makePoolTake({ generation_id: `g${n}`, song_id: `s${n}`, mp3_path: `a1/s${n}.mp3` });
+		return makePoolTake({
+			generation_id: `g${n}`,
+			song_id: `s${n}`,
+			song_title: `Song ${n}`,
+			mp3_path: `a1/s${n}.mp3`
+		});
 	}
 
 	function playlistOf(count: number): PlaylistDetailItem {
@@ -2323,10 +2328,13 @@ describe('the queue names its next take', () => {
 	});
 
 	describe('a take the player skipped', () => {
-		const SKIPPED_TOAST = expect.objectContaining({
-			message: "Song 2 couldn't be loaded, skipped.",
-			type: 'error'
-		});
+		function skippedToast(songTitle: string) {
+			return expect.objectContaining({
+				message: `${songTitle} couldn't be loaded, skipped.`,
+				type: 'error'
+			});
+		}
+		const SKIPPED_TOAST = skippedToast('Song 2');
 
 		const playlistOfThree = playlistOf(3);
 		const startsOfAQueueOfThree = [
@@ -2343,11 +2351,14 @@ describe('the queue names its next take', () => {
 			}
 		];
 
-		async function startAndSkipTheSecondTake(start: () => Promise<void>): Promise<void> {
+		async function startAndSkipTheSecondTake(
+			start: () => Promise<void>
+		): Promise<PlaybackInfo | null> {
 			await start();
 			const dropped = preloadedTake();
 			expect(dropped?.generation.id).toBe('g2');
 			if (dropped) audioPlayer.currentCallbacks.onTakeSkipped?.(dropped);
+			return dropped;
 		}
 
 		// The deck appends the take the queue names after the skipped one in its
@@ -2439,6 +2450,33 @@ describe('the queue names its next take', () => {
 
 				expect(takeAfterCurrentGenerationId()).toBeUndefined();
 				expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+			}
+		);
+
+		const libraryWindowOfThree = {
+			queue: 'library window',
+			start: async () => {
+				vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+					makePoolQueue({
+						takes: [poolTake(1), poolTake(2), poolTake(3)],
+						skipped_complete: false
+					})
+				);
+				await playTake(albumSong(1).generations[0], albumSong(1));
+			}
+		};
+
+		it.each([...startsOfAQueueOfThree, libraryWindowOfThree])(
+			'both are named when the take the deck appends in its place is skipped too ($queue)',
+			async ({ start }) => {
+				const dropped = await startAndSkipTheSecondTake(start);
+				const appendedInItsPlace = dropped && audioPlayer.currentCallbacks.takeAfter?.(dropped);
+				expect(appendedInItsPlace?.generation.id).toBe('g3');
+				if (appendedInItsPlace) audioPlayer.currentCallbacks.onTakeSkipped?.(appendedInItsPlace);
+
+				moveOnAsTheDeckDoes();
+
+				expect(get(toasts)).toEqual([SKIPPED_TOAST, skippedToast('Song 3')]);
 			}
 		);
 

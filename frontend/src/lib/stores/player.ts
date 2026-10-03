@@ -1798,13 +1798,19 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 function recordSkippedTake(take: PlaybackInfo): void {
 	const ctx = get(queueContext);
 	if (ctx.skipped?.has(take)) return;
-	queueContext.set({ ...ctx, skipped: new Map(ctx.skipped).set(take, 'pending') });
-	if (noOtherTakeStartsInPlaceOf(take)) announceSkips([take]);
+	const skipped = new Map(ctx.skipped).set(take, 'pending');
+	queueContext.set({ ...ctx, skipped });
+	announceSkips(
+		[...skipped]
+			.filter(([pending, notice]) => notice === 'pending' && noOtherTakeStartsInPlaceOf(pending))
+			.map(([pending]) => pending)
+	);
 }
 
-// Where the queue ends at the skipped take's place, or only the playing take
+// Where the queue ends at a skipped take's place, or only the playing take
 // would play again there, no take change ever reaches that place, so the take
-// is named at once rather than never.
+// is named at once rather than never. A later skip can close a place an
+// earlier pending skip was waiting on, so every pending skip is asked again.
 function noOtherTakeStartsInPlaceOf(take: PlaybackInfo): boolean {
 	const ctx = get(queueContext);
 	const follower = nextQueueTake(ctx, take);
