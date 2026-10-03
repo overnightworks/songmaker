@@ -43,9 +43,13 @@ import {
 	TAKES_RETRY_LABEL,
 	DIALOG_CANCEL_LABEL,
 	TOAST_UNDO_LABEL,
+	VERSION_DELETE_CONFIRM_LABEL,
+	VERSION_DELETE_PICK_WARNING,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
+	versionDeleteLabel,
+	versionDeleteTitle,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
@@ -55,6 +59,7 @@ import { clearHitboxStyles, clearPointer, injectHitboxStyles } from '$lib/test-u
 import {
 	editLyrics,
 	pendingVersionLoad,
+	versionDeleteRequest,
 	pinnedSeed,
 	setDraftLyrics,
 	setDraftPrompt,
@@ -187,7 +192,9 @@ import writeColumnSource from './editor/WriteColumn.svelte?raw';
 import {
 	addGenerationToPlaylist,
 	deleteSong,
+	deleteVersion,
 	fetchSong,
+	fetchVersions,
 	renameSong,
 	updateSong
 } from '$lib/api/client';
@@ -349,6 +356,7 @@ afterEach(async () => {
 	resetNavigationForTests();
 	pendingSource.set(null);
 	pendingVersionLoad.set(null);
+	versionDeleteRequest.set(null);
 	pinnedSeed.set(null);
 	recipeOpen.set(false);
 	coWriterOpen.set(false);
@@ -561,6 +569,24 @@ describe('SongDetailView failure wording', () => {
 			run: () => appBar().menu.onsave()
 		},
 		{
+			action: 'deleting a version from its Versions row',
+			fallback: 'Delete failed',
+			versions: [version({ id: 'v1', version_number: 1 })],
+			fail: (error: Error) => vi.mocked(deleteVersion).mockRejectedValueOnce(error),
+			run: async (target: HTMLElement) => {
+				const chip = await vi.waitFor(() => {
+					const found = target.querySelector<HTMLButtonElement>('.version-chip');
+					if (!found) throw new Error('Expected the version chip');
+					return found;
+				});
+				chip.click();
+				await tick();
+				getByRoleButton(target, versionDeleteLabel(1)).click();
+				await tick();
+				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
+			}
+		},
+		{
 			action: 'deleting the song',
 			fallback: 'Delete failed',
 			fail: (error: Error) => vi.mocked(deleteSong).mockRejectedValueOnce(error),
@@ -589,8 +615,9 @@ describe('SongDetailView failure wording', () => {
 		])
 	)(
 		'says $shown once when $action fails $failure',
-		async ({ ownCover, fail, run, error, shown }) => {
+		async ({ ownCover, versions: seededVersions, fail, run, error, shown }) => {
 			if (ownCover) songList.set([song({ ...editableSongDefaults(), cover: OWN_COVER })]);
+			if (seededVersions) vi.mocked(fetchVersions).mockResolvedValueOnce(seededVersions);
 			fail(error);
 			const target = await renderView();
 			await run(target);
@@ -1727,6 +1754,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		shown.toasts.set([]);
 		vi.mocked(addUndoToast).mockClear().mockImplementation(shown.addUndoToast);
 		vi.mocked(updateSong).mockClear();
+		vi.mocked(deleteVersion).mockReset();
 	});
 
 	afterEach(() => {
@@ -1901,6 +1929,84 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 		expect(get(editLyrics)).toBe('verse');
 		expect(versionChip(target).textContent?.trim()).toBe('v2');
+	});
+
+	async function askToDeleteVersion(target: HTMLElement, versionNumber: number): Promise<void> {
+		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
+		versionChip(target).click();
+		await tick();
+		const trash = target.querySelector<HTMLButtonElement>(
+			`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
+		);
+		if (!trash) throw new Error(`Expected the delete on the v${versionNumber} row`);
+		trash.click();
+		await tick();
+	}
+
+	function deleteConfirm(): HTMLElement | null {
+		return (
+			Array.from(document.querySelectorAll<HTMLElement>('[role="dialog"]')).find((dialog) =>
+				dialog.querySelector('h3')?.textContent?.startsWith('Delete v')
+			) ?? null
+		);
+	}
+
+	function confirmLines(dialog: HTMLElement): string[] {
+		return [dialog.querySelector('h3'), ...dialog.querySelectorAll('li')].map(
+			(line) => line?.textContent?.trim() ?? ''
+		);
+	}
+
+	function versionRowNumbers(target: HTMLElement): string[] {
+		return Array.from(target.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
+	}
+
+	it.each([
+		{ picked: false, shown: [versionDeleteTitle(1, 1)] },
+		{ picked: true, shown: [versionDeleteTitle(1, 1), VERSION_DELETE_PICK_WARNING] }
+	])(
+		'the delete on a row names its takes (album pick among them: $picked), and Cancel deletes nothing',
+		async ({ picked, shown }) => {
+			songList.set([
+				song({
+					...editableSongDefaults(),
+					generations: [generation({ ...sourceRecipeDefaults(), is_picked: picked })]
+				})
+			]);
+			const target = await renderView();
+			await askToDeleteVersion(target, 1);
+
+			const dialog = deleteConfirm();
+			if (!dialog) throw new Error('Expected the version delete confirm');
+			expect(confirmLines(dialog)).toEqual(shown);
+			clickNamed(dialog, DIALOG_CANCEL_LABEL);
+			await tick();
+
+			expect(deleteConfirm()).toBeNull();
+			expect(deleteVersion).not.toHaveBeenCalled();
+			expect(versionsSheet(target)).not.toBeNull();
+			expect(versionRowNumbers(target)).toEqual(['v2', 'v1']);
+		}
+	);
+
+	it('Delete removes the version with its takes; the sheet stays open on the rest and keeps the focus', async () => {
+		vi.mocked(deleteVersion).mockResolvedValueOnce(undefined);
+		vi.mocked(fetchVersions).mockResolvedValueOnce([LATEST]);
+		const target = await renderView();
+		await askToDeleteVersion(target, 1);
+		const dialog = deleteConfirm();
+		if (!dialog) throw new Error('Expected the version delete confirm');
+		clickNamed(dialog, VERSION_DELETE_CONFIRM_LABEL);
+
+		await vi.waitFor(() => expect(get(versions)).toEqual([LATEST]));
+		await tick();
+		expect(deleteVersion).toHaveBeenCalledExactlyOnceWith('v1', true);
+		expect(addToast).toHaveBeenCalledWith('Deleted v1', 'success');
+		expect(deleteConfirm()).toBeNull();
+		const sheet = versionsSheet(target);
+		expect(sheet).not.toBeNull();
+		expect(versionRowNumbers(target)).toEqual(['v2']);
+		expect(sheet?.contains(document.activeElement)).toBe(true);
 	});
 
 	function typeInLyrics(target: HTMLElement): void {
