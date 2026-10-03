@@ -189,10 +189,10 @@ export class ContinuousDeck<Take> {
 		let received = 0;
 		let failedInARow = 0;
 		for (;;) {
-			const request = new AbortController();
-			this.requestInFlight = request;
+			const attempt = new AbortController();
+			this.requestInFlight = attempt;
 			try {
-				for await (const piece of piecesOf(await this.request(url, received, request.signal))) {
+				for await (const piece of piecesOf(await this.request(url, received, attempt.signal))) {
 					received += piece.byteLength;
 					yield piece;
 				}
@@ -201,7 +201,7 @@ export class ContinuousDeck<Take> {
 				this.closing.signal.throwIfAborted();
 				if (error instanceof TakeRefused)
 					throw new TakeNotAppended(take, 'refused', error.message, { cause: error });
-				failedInARow = request.signal.aborted ? 0 : failedInARow + 1;
+				failedInARow = attempt.signal.aborted ? 0 : failedInARow + 1;
 			} finally {
 				this.requestInFlight = null;
 			}
