@@ -9,7 +9,9 @@
 // the browser is online but the job's stream stays refused, and a take tapped
 // offline plays by itself once the network is back (#1161). Mobile project
 // only: the phone's Generate bar is compact-shell UI, and the unit suite pins
-// the desktop placement (PlayerBar.test.ts).
+// the desktop placement (PlayerBar.test.ts). The album header Play pressed
+// offline waits and starts the album once the network is back (#1288), on
+// the phone and the desktop alike.
 //
 // The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
 // already open event stream running, so the page's open loads are stopped
@@ -18,12 +20,14 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
+	collectionPlayLabel,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
+	LIBRARY_QUEUE_LOADING_TITLE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
@@ -62,6 +66,8 @@ const BACK_ONLINE_MS = 10_000;
 // says 'loading', from it on 'recovering'.
 const FIRST_STALL_LOOK_MS = 10_000;
 const TAKE_AUDIO_PATH_PREFIX = '/audio/';
+// The request an album start makes for a song's takes (`fetchSong`).
+const SONG_TAKES_PATH = /^\/api\/songs\/[^/]+$/;
 // The deck's contract (continuousDeck.ts): three downloads in a row fail,
 // then it parks until the player retries.
 const DECK_DOWNLOAD_ATTEMPTS = 3;
@@ -343,12 +349,60 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 		await expect(recoveringSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
 		expect(offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(retry).toHaveCount(0);
+		await expect(page.getByRole('alert')).toHaveCount(0);
 
 		await regainNetwork(page, context);
 
 		await expect(spinner).toHaveCount(0, { timeout: BACK_ONLINE_MS });
 		await expect(pause).toBeVisible();
 		await expect(retry).toHaveCount(0);
+		guard.assertClean();
+	});
+});
+
+// Offline, the album header Play no longer drops silently when the album's
+// takes cannot be read (#1288): the bar holds its start notice with no toast,
+// and the album starts by itself once the network is back.
+test.describe('pressing the album header Play while the network is gone', () => {
+	// The takes must come over the network, not from the service worker's cache.
+	test.use({ serviceWorkers: 'block' });
+
+	test('waits in the bar with no toast and plays the album by itself once the network is back (#1288)', async ({
+		page,
+		context
+	}) => {
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const [firstTrack] = library.albumTracks;
+		const transport = page.getByRole('contentinfo');
+		const waiting = transport.getByText(LIBRARY_QUEUE_LOADING_TITLE, { exact: true });
+		const play = workspace(page).getByRole('button', {
+			name: collectionPlayLabel('album'),
+			exact: true
+		});
+
+		await page.goto(`/album/${library.albumId}`);
+		await expect(play).toBeVisible();
+		await loseNetwork(page, context);
+		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+		const songTakesRefused = page.waitForEvent('requestfailed', (request) =>
+			SONG_TAKES_PATH.test(new URL(request.url()).pathname)
+		);
+		await play.click();
+		await songTakesRefused;
+
+		await expect(waiting).toBeVisible();
+		await expect(page.getByRole('alert')).toHaveCount(0);
+
+		await regainNetwork(page, context);
+
+		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(
+			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+		).toBeVisible();
+		await expect(waiting).toHaveCount(0);
+		await expect(page.getByRole('alert')).toHaveCount(0);
 		guard.assertClean();
 	});
 });
