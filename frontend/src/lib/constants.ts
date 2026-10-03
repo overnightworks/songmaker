@@ -378,6 +378,9 @@ export const VERSION_REPLACE_DRAFT_TITLE = 'Replace your unsaved draft?';
 export const VERSION_REPLACE_DRAFT_CONFIRM_LABEL = 'Replace';
 export const VERSION_DELETE_CONFIRM_LABEL = 'Delete version';
 export const VERSION_DELETE_PICK_WARNING = 'The album pick is one of them.';
+export const VERSION_DELETE_DRAFT_GOES = 'Your unsaved draft goes too.';
+export const VERSION_DELETE_EMPTIES_EDITOR = 'Its lyrics leave the editor, which will be empty.';
+export const VERSION_NO_LYRICS = 'No lyrics';
 export const TOAST_UNDO_LABEL = 'Undo';
 
 export function versionLabel(versionNumber: number): string {
@@ -406,6 +409,10 @@ export function versionDeleteTitle(versionNumber: number, takeCount: number): st
 	const version = versionLabel(versionNumber);
 	if (takeCount === 0) return `Delete ${version}?`;
 	return `Delete ${version} and its ${versionTakesLabel(takeCount)}?`;
+}
+
+export function versionDeleteReplacedBy(versionNumber: number): string {
+	return `Its lyrics leave the editor; ${versionLabel(versionNumber)} takes their place.`;
 }
 
 export function versionLoadedFromLabel(versionNumber: number): string {

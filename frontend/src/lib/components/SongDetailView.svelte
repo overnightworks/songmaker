@@ -46,6 +46,7 @@
 	import { openCollection } from '$lib/stores/collection';
 	import {
 		isDirty,
+		draftHasUnversionedChanges,
 		versions,
 		loadSongData,
 		loadVersionAsDraft,
@@ -63,6 +64,7 @@
 		editGenParams,
 		savedSongData
 	} from '$lib/stores/editor';
+	import type { VersionDeleteEditorLoss } from '$lib/stores/editor';
 	import { activeModels, loadActiveModels } from '$lib/stores/presets';
 	import { loras, loadLoras } from '$lib/stores/loras';
 	import { addToast, addUndoToast } from '$lib/stores/toast';
@@ -104,9 +106,12 @@
 		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_PICK_WARNING,
+		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_EMPTIES_EDITOR,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
 		versionDeleteTitle,
+		versionDeleteReplacedBy,
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
@@ -463,7 +468,7 @@
 	function askToLoadVersion(versionId: string): Promise<boolean> {
 		const version = get(versions).find((v) => v.id === versionId);
 		if (!version) return Promise.resolve(false);
-		if (!get(isDirty)) {
+		if (!get(draftHasUnversionedChanges)) {
 			loadVersionWithUndo(version);
 			return Promise.resolve(true);
 		}
@@ -492,12 +497,35 @@
 		}
 	}
 
+	function editorLossLines(loss: VersionDeleteEditorLoss): string[] {
+		switch (loss.kind) {
+			case 'unsaved-draft':
+				return loss.emptiesEditor
+					? [VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
+					: [VERSION_DELETE_DRAFT_GOES];
+			case 'current-lyrics':
+				return [versionDeleteReplacedBy(loss.replacedBy)];
+			case 'all-lyrics':
+				return [VERSION_DELETE_EMPTIES_EDITOR];
+		}
+	}
+
+	function versionDeleteConsequences(
+		holdsPick: boolean,
+		editorLoss: VersionDeleteEditorLoss | null
+	): string[] {
+		return [
+			...(holdsPick ? [VERSION_DELETE_PICK_WARNING] : []),
+			...(editorLoss ? editorLossLines(editorLoss) : [])
+		];
+	}
+
 	function loadVersionWithUndo(version: VersionItem): void {
 		const load = loadVersionAsDraft(version);
 		if (!load) return;
 		addUndoToast(
 			versionLoadedToastLabel(version.version_number),
-			{ label: TOAST_UNDO_LABEL, handler: load.undo, holds: load.holds },
+			{ label: TOAST_UNDO_LABEL, handler: load.undo, holds: load.holds, expire: load.expire },
 			'brief'
 		);
 	}
@@ -864,7 +892,7 @@
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
 		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
-		items={request.holdsPick ? [VERSION_DELETE_PICK_WARNING] : []}
+		items={versionDeleteConsequences(request.holdsPick, request.editorLoss)}
 		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}

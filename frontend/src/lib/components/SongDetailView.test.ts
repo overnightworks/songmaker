@@ -45,11 +45,14 @@ import {
 	TOAST_UNDO_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_PICK_WARNING,
+	VERSION_DELETE_DRAFT_GOES,
+	VERSION_DELETE_EMPTIES_EDITOR,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
 	versionDeleteLabel,
 	versionDeleteTitle,
+	versionDeleteReplacedBy,
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionReplaceDraftMessage
@@ -581,7 +584,7 @@ describe('SongDetailView failure wording', () => {
 				});
 				chip.click();
 				await tick();
-				getByRoleButton(target, versionDeleteLabel(1)).click();
+				getByRoleButton(document.body, versionDeleteLabel(1)).click();
 				await tick();
 				document.querySelector<HTMLButtonElement>('.confirm-btn')?.click();
 			}
@@ -1771,8 +1774,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		return chip;
 	}
 
-	function versionsSheet(target: HTMLElement): HTMLElement | null {
-		return target.querySelector<HTMLElement>(
+	function versionsSheet(): HTMLElement | null {
+		return document.querySelector<HTMLElement>(
 			`[role="dialog"][aria-label="${VERSIONS_SHEET_LABEL}"]`
 		);
 	}
@@ -1787,8 +1790,8 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
 		versionChip(target).click();
 		await tick();
-		const row = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-row')).find((el) =>
-			el.textContent?.trim().startsWith(`v${versionNumber}`)
+		const row = Array.from(document.querySelectorAll<HTMLButtonElement>('.version-row')).find(
+			(el) => el.textContent?.trim().startsWith(`v${versionNumber}`)
 		);
 		if (!row) throw new Error(`Expected the v${versionNumber} row`);
 		row.click();
@@ -1808,7 +1811,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await tapVersion(target, 1);
 
 		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet(target)).toBeNull();
+		expect(versionsSheet()).toBeNull();
 		expect(get(editLyrics)).toBe('first draft');
 		expect(versionChip(target).textContent?.trim()).toBe('v2 · draft');
 		expect(target.textContent).toContain(versionLoadedFromLabel(1));
@@ -1819,6 +1822,22 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		);
 		expect(updateSong).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ next: 2, lyrics: 'verse' },
+		{ next: 1, lyrics: 'first draft' }
+	])(
+		'a draft equal to a saved version is clean: after an untouched v1, v$next loads without asking',
+		async ({ next, lyrics }) => {
+			const target = await renderView();
+			await tapVersion(target, 1);
+			await tapVersion(target, next);
+
+			expect(replaceDialog()).toBeNull();
+			expect(versionsSheet()).toBeNull();
+			expect(get(editLyrics)).toBe(lyrics);
+		}
+	);
 
 	function takeGroupOpenLink(target: HTMLElement, versionNumber: number): HTMLButtonElement {
 		const link = Array.from(target.querySelectorAll<HTMLButtonElement>('.version-link')).find(
@@ -1890,24 +1909,30 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await tick();
 
 		expect(replaceDialog()).toBeNull();
-		expect(versionsSheet(target)).not.toBeNull();
+		expect(versionsSheet()).not.toBeNull();
 		expect(get(editLyrics)).toBe('unsaved edit');
 		expect(addUndoToast).not.toHaveBeenCalled();
 	});
 
-	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
-		const target = await renderView();
+	const BRIEF_UNDO_TOAST_MS = 5000;
+
+	async function replaceTypedDraftWith(target: HTMLElement, versionNumber: number): Promise<void> {
 		setDraftLyrics('unsaved edit');
 		await tick();
-		await tapVersion(target, 1);
+		await tapVersion(target, versionNumber);
 		const dialog = replaceDialog();
 		if (!dialog) throw new Error('Expected the replace-draft confirm');
 		clickNamed(dialog, VERSION_REPLACE_DRAFT_CONFIRM_LABEL);
 		await tick();
 		await Promise.resolve();
 		await tick();
+	}
 
-		expect(versionsSheet(target)).toBeNull();
+	it('Replace loads the version, and Undo brings the replaced edit back', async () => {
+		const target = await renderView();
+		await replaceTypedDraftWith(target, 1);
+
+		expect(versionsSheet()).toBeNull();
 		expect(get(editLyrics)).toBe('first draft');
 
 		undoLastLoad();
@@ -1916,6 +1941,78 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(target.textContent).not.toContain(versionLoadedFromLabel(1));
 		expect(updateSong).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ again: 'its row in the sheet', reload: (target: HTMLElement) => tapVersion(target, 1) },
+		{
+			again: 'its Open link on the take group',
+			reload: async (target: HTMLElement) => {
+				navigateToSongTab('takes');
+				await tick();
+				takeGroupOpenLink(target, 1).click();
+				await tick();
+				await Promise.resolve();
+				await tick();
+			}
+		}
+	])(
+		'loading the version the draft already holds changes nothing, and its Undo still brings the edit back: $again',
+		async ({ reload }) => {
+			const target = await renderView();
+			await replaceTypedDraftWith(target, 1);
+
+			await reload(target);
+
+			expect(replaceDialog()).toBeNull();
+			expect(versionsSheet()).toBeNull();
+			expect(get(editLyrics)).toBe('first draft');
+			const { toasts } = await shownToasts();
+			const [loaded, ...others] = get(toasts);
+			expect(others).toEqual([]);
+			expect(loaded?.message).toBe(versionLoadedToastLabel(1));
+			await loaded?.action?.handler();
+			await tick();
+			expect(get(editLyrics)).toBe('unsaved edit');
+		}
+	);
+
+	it.each([
+		{
+			ended: 'its toast timed out',
+			end: () => vi.advanceTimersByTime(BRIEF_UNDO_TOAST_MS),
+			reload: (target: HTMLElement) => tapVersion(target, 1)
+		},
+		{
+			ended: 'the chip closed without a load',
+			end: async (target: HTMLElement) => {
+				versionChip(target).click();
+				await tick();
+				versionChip(target).click();
+				await tick();
+			},
+			reload: async (target: HTMLElement) => {
+				navigateToSongTab('takes');
+				await tick();
+				takeGroupOpenLink(target, 1).click();
+				await tick();
+			}
+		}
+	])(
+		'loading the version the draft already holds raises no toast once its Undo ended: $ended',
+		async ({ end, reload }) => {
+			const target = await renderView();
+			vi.useFakeTimers();
+			await replaceTypedDraftWith(target, 1);
+
+			await end(target);
+			const { toasts } = await shownToasts();
+			expect(get(toasts)).toEqual([]);
+			await reload(target);
+
+			expect(get(editLyrics)).toBe('first draft');
+			expect(get(toasts)).toEqual([]);
+		}
+	);
 
 	it('the current version over a dirty draft goes back to the saved state behind the same confirm', async () => {
 		const target = await renderView();
@@ -1935,7 +2032,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		await vi.waitFor(() => expect(versionChip(target).textContent).toContain('v2'));
 		versionChip(target).click();
 		await tick();
-		const trash = target.querySelector<HTMLButtonElement>(
+		const trash = document.querySelector<HTMLButtonElement>(
 			`button[aria-label="${versionDeleteLabel(versionNumber)}"]`
 		);
 		if (!trash) throw new Error(`Expected the delete on the v${versionNumber} row`);
@@ -1957,12 +2054,12 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		);
 	}
 
-	function versionRowNumbers(target: HTMLElement): string[] {
-		return Array.from(target.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
+	function versionRowNumbers(): string[] {
+		return Array.from(document.querySelectorAll('.version-number'), (el) => el.textContent ?? '');
 	}
 
 	it.each([
-		{ picked: false, shown: [versionDeleteTitle(1, 1)] },
+		{ picked: false, shown: ['Delete v1 and its 1 take?'] },
 		{ picked: true, shown: [versionDeleteTitle(1, 1), VERSION_DELETE_PICK_WARNING] }
 	])(
 		'the delete on a row names its takes (album pick among them: $picked), and Cancel deletes nothing',
@@ -1984,8 +2081,41 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 
 			expect(deleteConfirm()).toBeNull();
 			expect(deleteVersion).not.toHaveBeenCalled();
-			expect(versionsSheet(target)).not.toBeNull();
-			expect(versionRowNumbers(target)).toEqual(['v2', 'v1']);
+			expect(versionsSheet()).not.toBeNull();
+			expect(versionRowNumbers()).toEqual(['v2', 'v1']);
+		}
+	);
+
+	it.each([
+		{
+			deleted: 1,
+			edit: true,
+			only: false,
+			shown: [versionDeleteTitle(1, 1), VERSION_DELETE_DRAFT_GOES]
+		},
+		{ deleted: 2, edit: false, only: false, shown: ['Delete v2?', versionDeleteReplacedBy(1)] },
+		{ deleted: 2, edit: false, only: true, shown: ['Delete v2?', VERSION_DELETE_EMPTIES_EDITOR] },
+		{
+			deleted: 2,
+			edit: true,
+			only: true,
+			shown: ['Delete v2?', VERSION_DELETE_DRAFT_GOES, VERSION_DELETE_EMPTIES_EDITOR]
+		}
+	])(
+		'the delete on v$deleted says what else leaves the editor (unsaved edit: $edit, only version: $only)',
+		async ({ deleted, edit, only, shown }) => {
+			if (only) {
+				vi.mocked(fetchVersions).mockReset().mockResolvedValue([]).mockResolvedValueOnce([LATEST]);
+			}
+			const target = await renderView();
+			await vi.waitFor(() => expect(get(versions)).toHaveLength(only ? 1 : 2));
+			if (edit) setDraftLyrics('unsaved edit');
+			await tick();
+			await askToDeleteVersion(target, deleted);
+
+			const dialog = deleteConfirm();
+			if (!dialog) throw new Error('Expected the version delete confirm');
+			expect(confirmLines(dialog)).toEqual(shown);
 		}
 	);
 
@@ -2003,9 +2133,9 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(deleteVersion).toHaveBeenCalledExactlyOnceWith('v1', true);
 		expect(addToast).toHaveBeenCalledWith('Deleted v1', 'success');
 		expect(deleteConfirm()).toBeNull();
-		const sheet = versionsSheet(target);
+		const sheet = versionsSheet();
 		expect(sheet).not.toBeNull();
-		expect(versionRowNumbers(target)).toEqual(['v2']);
+		expect(versionRowNumbers()).toEqual(['v2']);
 		expect(sheet?.contains(document.activeElement)).toBe(true);
 	});
 
