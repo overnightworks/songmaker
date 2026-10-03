@@ -10,7 +10,7 @@ import {
 	type Landing
 } from '$lib/history/historyController';
 import { describeFailure, isNotFound } from '$lib/api/fetch';
-import { isDirty } from '$lib/stores/editor';
+import { draftHasUnversionedChanges, pendingVersionLoad } from '$lib/stores/editor';
 import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/jobs';
 import { addToast } from '$lib/stores/toast';
 import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
@@ -110,7 +110,7 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 	return pathname === '/' || isAlbumRoutePath(pathname) || isPlaylistRoutePath(pathname);
 }
 
-// A dirty editor draft blocks a song switch or leave (rail row, prev/next,
+// A draft with changes no version holds blocks a song switch or leave (rail row, prev/next,
 // breadcrumb, Escape, Library, a collection opened anywhere, a rail page
 // link, Logout, browser or phone Back) until the owner resolves it: the
 // deferred navigation is parked here, and SongDetailView renders the Save /
@@ -122,9 +122,10 @@ export function isLibraryWorkspacePath(pathname: string): boolean {
 export const pendingDirtyNavigation = writable<(() => void | Promise<void>) | null>(null);
 
 // The single gatekeeper for every navigation that would drop the current
-// editor draft: a dirty draft parks `action` in `pendingDirtyNavigation`
-// instead of running it (see the comment above), a clean draft runs it
-// immediately. Every song-switch/leave entry point must route through this
+// editor draft: a draft with changes no version holds parks `action` in
+// `pendingDirtyNavigation` instead of running it (see the comment above); a
+// draft equal to a saved version, such as an untouched load, loses nothing by
+// leaving and runs it immediately (#1296). Every song-switch/leave entry point must route through this
 // — never re-implement the if/else inline. A way out that has already moved
 // history puts the song back first, through `beforeAsking`. The phone drawer
 // closes over a parked navigation: the question now belongs to the song
@@ -134,7 +135,7 @@ async function guardDirtyNavigation(
 	action: () => void | Promise<void>,
 	beforeAsking: () => void = () => undefined
 ): Promise<void> {
-	if (get(isDirty)) {
+	if (get(draftHasUnversionedChanges)) {
 		beforeAsking();
 		closeSidebar();
 		pendingDirtyNavigation.set(action);
@@ -531,6 +532,20 @@ export async function revealPlayingSong(song: SongItem, generationId: string): P
 		selectedGenerationId.set(generationId);
 		persistLibraryHistory();
 	});
+}
+
+// "Open vN" on a take in Now Playing: the take's song shows the version
+// loaded. Over changes no version holds on that same song, its page asks
+// before the load replaces them, so leaving and re-entering the song would ask
+// about the draft twice.
+export async function openTakeVersion(
+	song: SongItem,
+	generationId: string,
+	versionId: string
+): Promise<void> {
+	pendingVersionLoad.set({ songId: song.id, versionId });
+	if (get(selectedSongId) === song.id && get(draftHasUnversionedChanges)) return;
+	await revealPlayingSong(song, generationId);
 }
 
 // Browser Back/Forward has already moved the address by the time `popstate`
