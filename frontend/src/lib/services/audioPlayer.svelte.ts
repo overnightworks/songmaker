@@ -906,7 +906,10 @@ class AudioPlayer {
 			if (Math.abs(position - this.lastObservedTime) > 0.05) {
 				this.lastObservedTime = position;
 				this.clearStallRecoveryTimer();
-				if (this.status === 'buffering') this.status = 'playing';
+				// A clock that plays on is the late answer even when no canplay or
+				// playing event announces it; a seek while paused is not (#1288).
+				if (this.gaveUpOnStall && !el.paused) this.resumeAfterGivingUp();
+				else if (this.status === 'buffering') this.status = 'playing';
 			}
 			this.currentTime = position;
 		});

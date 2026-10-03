@@ -3301,6 +3301,31 @@ describe('continuous deck (#1187 M2)', () => {
 	});
 
 	it.each([
+		{
+			name: 'a clock that moves on while the element plays ends it',
+			paused: false,
+			move: () => playTo(7),
+			after: { status: 'playing', error: null }
+		},
+		{
+			name: 'a seek while the element is paused leaves it',
+			paused: true,
+			move: () => {
+				audioPlayer.seek(3);
+				fakeAudio.fire('timeupdate');
+			},
+			after: { status: 'error', error: STALLED }
+		}
+	])('given up on the deck, $name', async ({ paused, move, after }) => {
+		await giveUpOnTheDeckAt(6);
+		fakeAudio.paused = paused;
+
+		move();
+
+		expect({ status: audioPlayer.status, error: audioPlayer.error }).toEqual(after);
+	});
+
+	it.each([
 		{ action: 'Retry', networkAnnouncedGone: false, retry: () => audioPlayer.play() },
 		{
 			action: "the network's return",
