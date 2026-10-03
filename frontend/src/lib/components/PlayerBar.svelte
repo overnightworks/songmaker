@@ -65,6 +65,8 @@
 	const startNotice = $derived($playStartNotice);
 	// A start that waits for the network has no take yet, but the listener
 	// asked for sound: the transport waits with it, and a press stops it (#1288).
+	// The lock screen stays on the element's transport: its Pause reaches only a
+	// loaded take, so offering it during this wait would be a button that does nothing.
 	const barTransport = $derived(
 		!current && startNotice === 'awaiting-network' ? 'recovering' : transport
 	);
