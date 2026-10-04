@@ -1,17 +1,12 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import {
-		collectionPauseLabel,
-		collectionPlayLabel,
-		collectionShuffleLabel,
-		type CollectionPlayKind
-	} from '$lib/constants';
+	import { collectionShuffleLabel, type CollectionPlayKind } from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
 		transportButtonFace,
+		transportButtonLabel,
 		transportIsBusy,
-		transportOffersPause,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
 
@@ -63,9 +58,7 @@
 	}: Props = $props();
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
-	const playLabel = $derived(
-		transportOffersPause(transport) ? collectionPauseLabel(kind) : collectionPlayLabel(kind)
-	);
+	const playLabel = $derived(`${transportButtonLabel(transport)} ${kind}`);
 </script>
 
 {#snippet coverArt()}

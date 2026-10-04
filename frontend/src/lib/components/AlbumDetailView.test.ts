@@ -301,21 +301,6 @@ describe('AlbumDetailView header', () => {
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 
-	it('offers to pause this album while it plays', async () => {
-		queueContext.set({ type: 'album', albumId: 'a-local' });
-		audioPlayer.current = {
-			songId: 's-local',
-			generation: generation({ song_id: 's-local' })
-		} as unknown as typeof audioPlayer.current;
-		audioPlayer.status = 'playing';
-
-		const target = await renderDetail();
-
-		expect(
-			getByRoleButton(requireElement(target, '.collection-header'), collectionPauseLabel('album'))
-		).not.toBeNull();
-	});
-
 	function playCircle(target: HTMLElement): HTMLButtonElement {
 		return requireElement<HTMLButtonElement>(target, '.collection-header .play-circle');
 	}
@@ -380,22 +365,24 @@ describe('AlbumDetailView header', () => {
 		});
 	});
 
-	it('shows the retry face the bar shows on a failed take of this album (#1330)', async () => {
-		queueContext.set({ type: 'album', albumId: 'a-local' });
-		audioPlayer.current = {
-			songId: 's-local',
-			generation: generation({ song_id: 's-local' })
-		} as unknown as typeof audioPlayer.current;
-		audioPlayer.status = 'error';
+	it.each([
+		{ status: 'playing', label: collectionPauseLabel('album'), face: 'pause' },
+		{ status: 'error', label: 'Retry album', face: 'refresh-cw' }
+	] as const)(
+		'names and draws the circle as the bar does while a take of this album is $status (#1330)',
+		async ({ status, label, face }) => {
+			queueContext.set({ type: 'album', albumId: 'a-local' });
+			audioPlayer.current = {
+				songId: 's-local',
+				generation: generation({ song_id: 's-local' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = status;
 
-		const target = await renderDetail();
+			const target = await renderDetail();
 
-		expect(circleFacts(playCircle(target))).toEqual({
-			label: collectionPlayLabel('album'),
-			busy: 'false',
-			face: 'refresh-cw'
-		});
-	});
+			expect(circleFacts(playCircle(target))).toEqual({ label, busy: 'false', face });
+		}
+	);
 
 	it.each([
 		['without songs', []],
