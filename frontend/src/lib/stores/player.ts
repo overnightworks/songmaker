@@ -1269,9 +1269,6 @@ type NextQueueTake =
 
 const NO_NEXT_TAKE: NextQueueTake = { kind: 'none' };
 
-// Previous, Next and preload share the same playable queue places.
-// A queue wraps around and passes over a take the deck skipped;
-// the library window's last take is followed by its end, not by a take.
 function adjacentQueueTake(
 	ctx: QueueContext,
 	current: PlaybackInfo | null,
