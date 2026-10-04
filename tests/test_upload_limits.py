@@ -5,9 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from fastapi.testclient import TestClient
-from webauth.passwords import hash_password
 
 from songmaker_cli.constants import (
     AUDIO_UPLOAD_BODY_MAX_BYTES,
@@ -51,7 +50,7 @@ def test_body_limits_keep_json_small_and_uploads_larger() -> None:
 
 
 def _seed_owner(session) -> None:
-    session.add(User(id="owner-id", username="owner", password_hash=hash_password("pass1234")))
+    session.add(User(id="owner-id", username="owner", password_hash=stored_hash("pass1234")))
     session.flush()
     session.add(Album(id="a1", title="A", artist="A", created_by="owner-id"))
 

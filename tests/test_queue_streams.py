@@ -9,11 +9,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
 from songmaker_cli.db.models import Album, Generation, Playlist, PlaylistEntry, Song, User, Version
@@ -39,8 +38,8 @@ from songmaker_cli.queue_streams import (
 
 
 def _seed_queue_data(session) -> None:
-    owner = User(id="owner-id", username="owner", password_hash=hash_password("pass1234"))
-    other = User(id="other-id", username="other", password_hash=hash_password("pass1234"))
+    owner = User(id="owner-id", username="owner", password_hash=stored_hash("pass1234"))
+    other = User(id="other-id", username="other", password_hash=stored_hash("pass1234"))
     session.add_all([owner, other])
     session.flush()
     session.add(Album(id="a1", title="Album", artist="Artist", created_by=owner.id))
@@ -215,7 +214,7 @@ def test_queue_stream_rate_limiter_failure_is_503(monkeypatch) -> None:
 
 
 def _seed_versioned_lyrics(session) -> None:
-    owner = User(id="owner-id", username="owner", password_hash=hash_password("pass1234"))
+    owner = User(id="owner-id", username="owner", password_hash=stored_hash("pass1234"))
     session.add(owner)
     session.flush()
     session.add(Album(id="a1", title="Nachtstrom", artist="Artist", created_by=owner.id))
@@ -1072,8 +1071,8 @@ def _seed_library_data(session) -> None:
     User B (user-b):
       Album a3: s5 with gen g5 (picked, non-archived)
     """
-    user_a = User(id="user-a", username="usera", password_hash=hash_password("pass1234"))
-    user_b = User(id="user-b", username="userb", password_hash=hash_password("pass1234"))
+    user_a = User(id="user-a", username="usera", password_hash=stored_hash("pass1234"))
+    user_b = User(id="user-b", username="userb", password_hash=stored_hash("pass1234"))
     session.add_all([user_a, user_b])
     session.flush()
 
@@ -1371,7 +1370,7 @@ def test_library_stream_windowed_for_oversize_library(tmp_path: Path, monkeypatc
 
 def _seed_large_library(session, *, song_count: int) -> None:
     """One user, one album, ``song_count`` songs each with one playable take."""
-    user = User(id="user-a", username="usera", password_hash=hash_password("pass1234"))
+    user = User(id="user-a", username="usera", password_hash=stored_hash("pass1234"))
     session.add(user)
     session.flush()
     session.add(Album(id="a1", title="Big Album", artist="A", created_by=user.id))
@@ -1912,7 +1911,7 @@ def test_shuffle_library_sources_leaves_a_single_track_unchanged() -> None:
 
 
 def _seed_library_shuffle_data(session) -> None:
-    session.add(User(id="user-a", username="usera", password_hash=hash_password("pass1234")))
+    session.add(User(id="user-a", username="usera", password_hash=stored_hash("pass1234")))
     session.flush()
     session.add(Album(id="a1", title="Album", artist="A", created_by="user-a"))
     session.flush()
@@ -2294,7 +2293,7 @@ def test_collect_library_pool_dedupes_pick_and_keep_and_pins_out_of_pool_start()
 
 def _seed_library_pool_data(session) -> None:
     t0 = datetime(2026, 1, 1, tzinfo=timezone.utc)
-    session.add(User(id="user-a", username="usera", password_hash=hash_password("pass1234")))
+    session.add(User(id="user-a", username="usera", password_hash=stored_hash("pass1234")))
     session.flush()
     session.add(Album(id="a1", title="Alpha", artist="A", created_by="user-a"))
     session.add(Album(id="a2", title="Beta", artist="A", created_by="user-a"))

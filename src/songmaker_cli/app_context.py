@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from webauth.config import WebAuthConfig
 from webauth.liveness import ExpiryColumnLiveness
 from webauth.passwords import BcryptPasswordHasher
+from webauth.ports import PasswordHasher
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
 from webauth.session_store import RedisSessionCache, SessionKeyPrefixes
@@ -62,11 +63,16 @@ def build_session_cache(redis: Redis) -> RedisSessionCache:
     )
 
 
+def build_password_hasher() -> PasswordHasher:
+    """The one password hasher every stored hash in this deployment comes from."""
+    return BcryptPasswordHasher()
+
+
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
     return WebAuthConfig(
         session_secret=SecretStr(ctx.signing_key.decode()),
-        password_hasher=BcryptPasswordHasher(),
+        password_hasher=build_password_hasher(),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
         session_cache=build_session_cache(ctx.redis),

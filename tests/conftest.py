@@ -35,7 +35,7 @@ from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
 
-from songmaker_cli.app_context import AppContext  # noqa: E402
+from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
 
 TEST_SECRET = b"a" * 64
 
@@ -502,6 +502,11 @@ def make_router_app(ctx: AppContext, *, user: AuthenticatedUser | None = None) -
         app.dependency_overrides[get_current_user] = lambda: user
     app.include_router(router)
     return app
+
+
+def stored_hash(password: str) -> str:
+    """The hash this deployment stores for ``password``, as a seeded user's column."""
+    return build_password_hasher().hash(password)
 
 
 def make_test_app(
