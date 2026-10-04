@@ -1166,7 +1166,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 	test('Back closes the account menu on Voices and the address stays', async ({
 		page
 	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE);
+		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
 		const guard = new FlowGuard(page);
 		await openVoicesOverTheWall(page, 'mobile');
 		await accountCircle(page).click();
@@ -1258,7 +1258,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 	test('an album tapped in the phone drawer over Voices leaves one Back to Voices', async ({
 		page
 	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY); // NOSONAR S1607: the drawer is a phone layer only.
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		await openVoicesOverTheWall(page, 'mobile');
@@ -1279,7 +1279,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 	test('the account menu left open over a reload on Voices is gone, and one Back leaves the page', async ({
 		page
 	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE);
+		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
 		const guard = new FlowGuard(page);
 		await openVoicesOverTheWall(page, 'mobile');
 		await accountCircle(page).click();

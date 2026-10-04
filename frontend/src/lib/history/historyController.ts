@@ -494,7 +494,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 		lastRouterIndex = routerIndexOf(history.state);
 		return;
 	}
-	if (type === 'enter' && uninstall !== null) followRouterStart();
+	if (type === 'enter') followRouterStart();
 	const routerPushed = isRouterPush();
 	lastRouterIndex = routerIndexOf(history.state);
 	const carried = entryOfHistoryState(history.state);
@@ -711,8 +711,9 @@ function onPopstate(event: PopStateEvent): void {
 // place, and the router's own handling would abort a navigation it released.
 // So once the start has run to its end the controller listens again, behind
 // the router, and only then steps off a layer entry a reload came back onto;
-// history moves until then.
+// history moves until then. A controller not installed has no part to follow.
 function followRouterStart(): void {
+	if (uninstall === null) return;
 	routerStarting = true;
 	setTimeout(() => {
 		routerStarting = false;
