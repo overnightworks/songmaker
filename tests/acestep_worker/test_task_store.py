@@ -112,8 +112,9 @@ def test_generation_progress_carries_its_phase_into_every_event() -> None:
 
 @pytest.mark.parametrize("kind", ["download", "train_lora"])
 def test_only_a_generation_task_has_a_phase(kind) -> None:
+    creation = TaskStore().create(kind, phase=AceStepPhase.WRITING)
     with pytest.raises(ValueError, match="Only generation tasks have phases"):
-        _run(TaskStore().create(kind, phase=AceStepPhase.WRITING))
+        _run(creation)
 
 
 def test_training_progress_carries_real_epochs() -> None:

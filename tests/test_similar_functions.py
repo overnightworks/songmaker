@@ -165,8 +165,9 @@ def test_corrupt_cache_fails_loudly(tmp_path, functions):
     path = cache.path("code-v1:code", functions[0].key)
     path.parent.mkdir()
     path.write_text("{broken")
+    embedder = UnavailablePort()
     with pytest.raises(audit.AuditError, match="Cannot read cache"):
-        audit.collect_signals(functions, UnavailablePort(), None, cache, "code", "claude")
+        audit.collect_signals(functions, embedder, None, cache, "code", "claude")
 
 
 def test_embedding_port_must_return_one_consistent_vector_per_text(tmp_path):
@@ -174,13 +175,16 @@ def test_embedding_port_must_return_one_consistent_vector_per_text(tmp_path):
         def embed(self, texts):
             return []
 
+    bad_embedder = BadEmbedder()
+    empty_cache = audit.Cache(tmp_path)
     with pytest.raises(audit.AuditError, match="number of vectors"):
-        audit.cached_vectors({"one": "text"}, BadEmbedder(), audit.Cache(tmp_path), "model")
+        audit.cached_vectors({"one": "text"}, bad_embedder, empty_cache, "model")
     cache = audit.Cache(tmp_path)
     cache.write("model", "one", [1, 0])
     cache.write("model", "two", [1, 0, 0])
+    unavailable_embedder = UnavailablePort()
     with pytest.raises(audit.AuditError, match="dimensions"):
-        audit.cached_vectors({"one": "a", "two": "b"}, UnavailablePort(), cache, "model")
+        audit.cached_vectors({"one": "a", "two": "b"}, unavailable_embedder, cache, "model")
 
 
 def test_empty_summary_fails_without_caching_success(tmp_path, functions):
@@ -188,10 +192,11 @@ def test_empty_summary_fails_without_caching_success(tmp_path, functions):
         def summarize(self, text):
             return "\n  "
 
+    embedder = FakeEmbedder()
+    summarizer = EmptySummarizer()
+    cache = audit.Cache(tmp_path)
     with pytest.raises(audit.AuditError, match="empty summary"):
-        audit.collect_signals(
-            functions, FakeEmbedder(), EmptySummarizer(), audit.Cache(tmp_path), "code", "claude"
-        )
+        audit.collect_signals(functions, embedder, summarizer, cache, "code", "claude")
 
 
 def test_pairs_support_either_or_both_signals_and_sort_by_mean(functions):
@@ -224,7 +229,8 @@ def test_report_contains_locations_signatures_separate_scores_and_escaped_summar
         for f in functions
     ]
     report = audit.render_report(audit.find_pairs(signals), 2, "code", "claude", 0.9, 0.9, False)
-    assert "src/one.py:1" in report and "src/two.py:1" in report
+    assert "src/one.py:1" in report
+    assert "src/two.py:1" in report
     assert "def choose(value: int) -&gt; int" in report
     assert "| 1.0000 | 1.0000 | 1.0000 |" in report
     assert "&#96;x &#124; y&#96; &lt; z. Then decides." in report
@@ -285,8 +291,9 @@ def test_cli_rejects_invalid_options(arguments):
 
 def test_missing_claude_is_a_named_failure(monkeypatch):
     monkeypatch.setattr(audit.shutil, "which", lambda command: None)
+    summarizer = audit.ClaudeSummarizer("model")
     with pytest.raises(audit.AuditError, match="Claude CLI unavailable"):
-        audit.ClaudeSummarizer("model").summarize(SOURCE)
+        summarizer.summarize(SOURCE)
 
 
 def test_claude_receives_source_as_stdin_without_tools_or_project_settings(monkeypatch):
@@ -315,8 +322,9 @@ def test_claude_failure_is_named_without_echoing_provider_output(monkeypatch, fa
         return subprocess.CompletedProcess(command, 1, "private provider output")
 
     monkeypatch.setattr(audit.subprocess, "run", invoke)
+    summarizer = audit.ClaudeSummarizer("model")
     with pytest.raises(audit.AuditError, match="Claude summary") as error:
-        audit.ClaudeSummarizer("model").summarize(SOURCE)
+        summarizer.summarize(SOURCE)
     assert "private provider output" not in str(error.value)
 
 
@@ -332,12 +340,15 @@ def test_summary_failure_stops_before_dispatching_remaining_batches(tmp_path):
                 pytest.fail("Failed summaries must not dispatch the remaining work")
             raise audit.AuditError("Claude unavailable")
 
+    embedder = FakeEmbedder()
+    summarizer = FailingSummarizer()
+    cache = audit.Cache(tmp_path)
     with pytest.raises(audit.AuditError, match="Claude unavailable"):
         audit.collect_signals(
             functions,
-            FakeEmbedder(),
-            FailingSummarizer(),
-            audit.Cache(tmp_path),
+            embedder,
+            summarizer,
+            cache,
             "model",
             "claude",
             summary_workers=1,
@@ -388,29 +399,33 @@ def test_configured_api_uses_model_or_reports_provider_failure(monkeypatch, api_
     monkeypatch.setitem(
         sys.modules, "anthropic", SimpleNamespace(Anthropic=FakeClient, APIError=OSError)
     )
+    summarizer = audit.ClaudeSummarizer("configured-model")
     if api_fails:
         with pytest.raises(audit.AuditError, match="Claude summary API failed") as error:
-            audit.ClaudeSummarizer("configured-model").summarize(SOURCE)
+            summarizer.summarize(SOURCE)
         assert "private provider output" not in str(error.value)
     else:
-        assert audit.ClaudeSummarizer("configured-model").summarize(SOURCE) == "Chooses a value."
+        assert summarizer.summarize(SOURCE) == "Chooses a value."
 
 
 def test_configured_api_without_sdk_fails_instead_of_switching_provider(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-placeholder")
     monkeypatch.setitem(sys.modules, "anthropic", None)
+    summarizer = audit.ClaudeSummarizer("model")
     with pytest.raises(audit.AuditError, match="SDK is missing"):
-        audit.ClaudeSummarizer("model").summarize(SOURCE)
+        summarizer.summarize(SOURCE)
 
 
 def test_summary_limit_aborts_before_any_model_call(tmp_path, functions, capsys):
     changed = replace(functions[0], text="different content")
+    unavailable = UnavailablePort()
+    cache = audit.Cache(tmp_path)
     with pytest.raises(audit.AuditError, match="2 missing summaries.*--no-summaries"):
         audit.collect_signals(
             [*functions, changed],
-            UnavailablePort(),
-            UnavailablePort(),
-            audit.Cache(tmp_path),
+            unavailable,
+            unavailable,
+            cache,
             "code",
             "claude",
             max_summaries=1,

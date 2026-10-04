@@ -363,21 +363,23 @@ async def _worker_task_events(
         write=options.sse_connect_timeout_seconds,
         pool=options.sse_connect_timeout_seconds,
     )
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        async with client.stream(
+    async with (
+        httpx.AsyncClient(timeout=timeout) as client,
+        client.stream(
             "GET",
             f"{worker.base_url}/tasks/{task_id}/stream",
             headers=_internal_headers(),
-        ) as response:
-            response.raise_for_status()
-            buffer = ""
-            async for chunk in response.aiter_text():
-                buffer += chunk
-                while "\n\n" in buffer:
-                    raw, buffer = buffer.split("\n\n", 1)
-                    parsed = _parse_sse_event(raw)
-                    if parsed is not None:
-                        yield parsed
+        ) as response,
+    ):
+        response.raise_for_status()
+        buffer = ""
+        async for chunk in response.aiter_text():
+            buffer += chunk
+            while "\n\n" in buffer:
+                raw, buffer = buffer.split("\n\n", 1)
+                parsed = _parse_sse_event(raw)
+                if parsed is not None:
+                    yield parsed
 
 
 def _sse_reconnect_delay(

@@ -246,7 +246,8 @@ def test_lora_progress_throttles_until_interval_or_epoch_or_start_changes(
                 job.training_started_at.replace(tzinfo=timezone.utc)
                 if job.training_started_at is not None else None
             )
-            assert (job.progress, job.current_epoch, saved_start) == expected
+            saved_progress = (job.progress, job.current_epoch, saved_start)
+            assert saved_progress == expected
             assert job.train_epochs == 500
             assert job.status == JobStatus.RUNNING
             assert get_user_lora(session, seeded["lora_id"]).status == status
