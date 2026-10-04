@@ -109,7 +109,7 @@ def reset_password(
     from songmaker_cli.db.engine import init_db, resolve_database_url
 
     if len(password) < MIN_PASSWORD_LENGTH:
-        print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")
+        print("Error: password is too short (see --help for the minimum)")
         sys.exit(1)
     try:
         check_password_strength(password)
