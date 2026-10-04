@@ -1,0 +1,8 @@
+claim_id = "9eccc4024ccf49d895645a03b8d7b71f"
+agent = "Claude 255c9087-94fa-477f-af88-8eb64e5acd39"
+role = "builder"
+base = "65aa51fb19a1f4b958c9b6a728f5b207e08afa85"
+branch = "claude/issue-1326-s3-tests-https"
+scope = ["tests"]
+opened_commit = "7eb81e9298a5963e0e08a145e1ed70d2ab3138d9"
+whole_reason = "Reine Teständerung über viele Module mit einem expliziten Helfer – laut Plan eine Scheibe."
