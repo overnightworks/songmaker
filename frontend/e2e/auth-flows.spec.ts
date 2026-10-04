@@ -131,6 +131,7 @@ const ADMIN_PAGE_PATH = '/settings/users';
 const VOICES_PAGE_PATH = '/settings/voices';
 const VOICES_HEADING = 'My Voices';
 const SESSION_COOKIE = 'session_id';
+const APP_HISTORY_STEPS_KEY = 'e2e:app-history-steps';
 
 // The song the deep-link flows ask for: the account's own, so the sign-in
 // that follows may open it.
@@ -284,6 +285,41 @@ async function sessionCookie(context: BrowserContext): Promise<Cookie | undefine
 /** The signed cookie is `<session id>.<hmac>` (`webauth.cookies`). */
 function sessionIdOf(cookie: Cookie): string {
 	return cookie.value.slice(0, cookie.value.lastIndexOf('.'));
+}
+
+/**
+ * Records every Back or jump the app issues itself -- the browser's own Back
+ * goes around it -- in session storage, which survives a document load.
+ */
+function recordAppHistorySteps(storageKey: string): void {
+	const record = (step: string): void => {
+		const steps = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[];
+		sessionStorage.setItem(storageKey, JSON.stringify([...steps, `${step}@${location.pathname}`]));
+	};
+	const back = history.back.bind(history);
+	const go = history.go.bind(history);
+	history.back = () => {
+		record('back()');
+		back();
+	};
+	history.go = (delta?: number) => {
+		record(`go(${delta})`);
+		go(delta);
+	};
+}
+
+function appHistorySteps(page: Page): Promise<string[]> {
+	return page.evaluate(
+		(storageKey) => JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[],
+		APP_HISTORY_STEPS_KEY
+	);
+}
+
+function forgetAppHistorySteps(page: Page): Promise<void> {
+	return page.evaluate(
+		(storageKey) => sessionStorage.removeItem(storageKey),
+		APP_HISTORY_STEPS_KEY
+	);
 }
 
 /** The refusal the lockout flow is about, named by the server itself. */
@@ -562,12 +598,14 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 	isMobile
 }, testInfo) => {
 	test.skip(!isMobile, 'The account menu belongs to the phone shell.'); // NOSONAR S1607: the account menu exists only in the phone shell.
+	await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
 	await signIn(page);
 	await page.goto(VOICES_PAGE_PATH);
 	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
 
 	await signOut(page, 'mobile');
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await forgetAppHistorySteps(page);
 	await page.goBack();
 
 	// Not an empty page on the Voices address, and not the account menu's
@@ -578,6 +616,7 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 			url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === VOICES_PAGE_PATH
 	);
 	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	expect(await appHistorySteps(page)).toEqual([]);
 	await attachShot(page, testInfo, 'auth-signed-out-back');
 });
 

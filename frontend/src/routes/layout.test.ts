@@ -11,7 +11,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import {
@@ -943,14 +943,16 @@ describe('a reload over the phone Now Playing', () => {
 	});
 });
 
-// Sign-in is pushed before the session ends, so the account menu closing as
-// the shell unmounts moves no history under the sign-in page (#1340).
+// The account menu steps off its entry before sign-in is pushed, and sign-in
+// stands before the session ends, so the shell unmounting moves no history
+// under the sign-in page and Back from there finds no menu entry (#1340).
 describe('signing out on the phone', () => {
 	it('from the open account menu stands on sign-in before the session ends, and Back from there asks the page before for the session again', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry('/settings/voices');
 		const target = await renderLayout('/settings/voices');
+		const entriesOnVoices = history.length;
 		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
 		let signedOutOn: string | undefined;
@@ -966,10 +968,13 @@ describe('signing out on the phone', () => {
 		}
 		expect(signedOutOn).toBe('/login');
 		expect(target.querySelector('.app-shell')).toBeNull();
+		expect(history.length).toBe(entriesOnVoices + 1);
 
 		vi.mocked(checkAuth).mockImplementation(async () => null);
 		vi.mocked(checkSetupRequired).mockResolvedValue({ required: false });
 		vi.mocked(goto).mockClear();
+		const backs = vi.spyOn(history, 'back');
+		onTestFinished(() => backs.mockRestore());
 
 		await pressBack();
 
@@ -978,6 +983,7 @@ describe('signing out on the phone', () => {
 		);
 		expect(location.pathname).toBe('/login');
 		expect(standingHistoryEntry()?.layer).toBeUndefined();
+		expect(backs).toHaveBeenCalledTimes(1);
 	});
 });
 

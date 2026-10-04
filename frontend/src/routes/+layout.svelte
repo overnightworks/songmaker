@@ -252,7 +252,13 @@
 		}
 	}
 
+	// The overlay a sign-out is chosen in -- the phone's account menu -- closes
+	// first and steps off its entry, and sign-in is pushed once that step has
+	// landed, the way an app page opened from it is (`openAppPage`): pushed
+	// over the menu's entry instead, sign-in would leave it for Back to land
+	// on and step off again (#1340).
 	async function handleLogout() {
+		closeTopLayer();
 		await logout(async () => {
 			await historyComesToRest();
 			await navigateAway(SIGN_IN_PATH);
