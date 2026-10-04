@@ -35,7 +35,7 @@ class TakeRefused extends Error {
 	}
 }
 
-type TakeNotAppendedReason = 'refused' | 'stream-ended';
+type TakeNotAppendedReason = 'refused' | 'stream-ended' | 'replaced';
 
 /**
  * A take the deck could not append, or not to its end. The deck itself plays
@@ -64,6 +64,15 @@ class DeckClosed extends Error {
 	}
 }
 
+// A take the deck was asked for and has not finished appending. Its entry
+// exists once its append has begun; withdrawing it gives the take up, whether
+// it still waits its turn or is being fetched.
+interface PendingTake<Take> {
+	take: Take;
+	entry: DeckEntry<Take> | null;
+	readonly withdrawal: AbortController;
+}
+
 /**
  * Plays a queue of takes as one continuous stream: each take's MP3 bytes are
  * appended behind the previous one into a single SourceBuffer, so a track
@@ -75,6 +84,7 @@ class DeckClosed extends Error {
  */
 export class ContinuousDeck<Take> {
 	private readonly entries: DeckEntry<Take>[] = [];
+	private readonly pending: PendingTake<Take>[] = [];
 	private steps: Promise<void> = Promise.resolve();
 	private stepsInFlight = 0;
 	private brokenBy: Error | null = null;
@@ -151,11 +161,20 @@ export class ContinuousDeck<Take> {
 	}
 
 	appendTake(take: Take, url: string): Promise<void> {
-		if (this.ending !== null)
-			return Promise.reject(
-				new TakeNotAppended(take, 'stream-ended', `${url} came after the end of the stream`)
-			);
-		return this.queueStep((buffer) => this.appendWholeTake(buffer, take, url));
+		return this.queueTake(take, url, () => undefined);
+	}
+
+	/**
+	 * Makes `take` the one that plays after the take under the playhead (#1299):
+	 * whatever the deck holds or still waits to append after that take is given
+	 * up, its fetch cancelled and its audio removed, and `take` is appended
+	 * where the playing take ends. With nothing ahead it is appended behind the
+	 * last take, as {@link appendTake} does. Before the first take has an entry,
+	 * that take is the one that plays.
+	 */
+	appendNext(take: Take, url: string): Promise<void> {
+		if (this.ending === null) this.withdrawAhead();
+		return this.queueTake(take, url, (buffer) => this.removeAhead(buffer));
 	}
 
 	endStream(): Promise<void> {
@@ -182,7 +201,7 @@ export class ContinuousDeck<Take> {
 		const result = this.steps
 			.then(async () => {
 				if (this.brokenBy) throw this.brokenBy;
-				await step(await this.whileOpen(this.opened));
+				await step(await this.unlessAborted(this.closing.signal, this.opened));
 			})
 			.finally(() => {
 				this.stepsInFlight -= 1;
@@ -193,13 +212,59 @@ export class ContinuousDeck<Take> {
 		return result;
 	}
 
-	private async appendWholeTake(buffer: SourceBuffer, take: Take, url: string): Promise<void> {
+	private queueTake(
+		take: Take,
+		url: string,
+		beforeAppending: (buffer: SourceBuffer) => Promise<void> | void
+	): Promise<void> {
+		if (this.ending !== null)
+			return Promise.reject(
+				new TakeNotAppended(take, 'stream-ended', `${url} came after the end of the stream`)
+			);
+		const pending: PendingTake<Take> = { take, entry: null, withdrawal: new AbortController() };
+		this.pending.push(pending);
+		return this.queueStep(async (buffer) => {
+			await beforeAppending(buffer);
+			await this.appendWholeTake(buffer, pending, url);
+		}).finally(() => this.pending.splice(this.pending.indexOf(pending), 1));
+	}
+
+	private withdrawAhead(): void {
+		const playing = this.entryAt(this.ports.element.currentTime);
+		const firstAhead = playing ? this.pending.findIndex(({ entry }) => entry === playing) + 1 : 1;
+		for (const { take, withdrawal } of this.pending.slice(firstAhead))
+			withdrawal.abort(new TakeNotAppended(take, 'replaced', 'Another take was put next'));
+	}
+
+	// Sequence mode appends wherever timestampOffset points, so pointing it back
+	// at the playing take's end is what makes the next take follow that one.
+	private async removeAhead(buffer: SourceBuffer): Promise<void> {
+		const playing = this.entryAt(this.ports.element.currentTime);
+		if (!playing) return;
+		const ahead = this.entries.indexOf(playing) + 1;
+		const firstAhead = this.entries.at(ahead);
+		if (!firstAhead) return;
+		const playingEnd = firstAhead.start_offset;
+		await this.update(buffer, () => buffer.remove(playingEnd, Infinity));
+		buffer.timestampOffset = playingEnd;
+		this.entries.splice(ahead);
+	}
+
+	private async appendWholeTake(
+		buffer: SourceBuffer,
+		pending: PendingTake<Take>,
+		url: string
+	): Promise<void> {
+		const { take } = pending;
+		const wanted = AbortSignal.any([this.closing.signal, pending.withdrawal.signal]);
+		wanted.throwIfAborted();
 		const entry: DeckEntry<Take> = { take, start_offset: buffer.timestampOffset, duration: 0 };
+		pending.entry = entry;
 		this.entries.push(entry);
 		try {
 			const runningLow = () => this.secondsAhead(buffer) < SECONDS_AHEAD_BEFORE_GATHERING;
-			for await (const chunk of chunked(this.download(take, url), runningLow)) {
-				await this.roomAhead(buffer);
+			for await (const chunk of chunked(this.download(take, url, wanted), runningLow)) {
+				await this.roomAhead(buffer, wanted);
 				await this.evictPlayedTakes(buffer);
 				await this.appendChunk(buffer, chunk);
 				entry.duration = buffer.timestampOffset - entry.start_offset;
@@ -218,20 +283,25 @@ export class ContinuousDeck<Take> {
 		else buffer.abort();
 	}
 
-	private async *download(take: Take, url: string): AsyncGenerator<Uint8Array> {
+	private async *download(
+		take: Take,
+		url: string,
+		wanted: AbortSignal
+	): AsyncGenerator<Uint8Array> {
 		let received = 0;
 		let failedInARow = 0;
 		for (;;) {
 			const attempt = new AbortController();
 			this.requestInFlight = attempt;
 			try {
-				for await (const piece of piecesOf(await this.request(url, received, attempt.signal))) {
+				const body = await this.request(url, received, AbortSignal.any([wanted, attempt.signal]));
+				for await (const piece of piecesOf(body)) {
 					received += piece.byteLength;
 					yield piece;
 				}
 				return;
 			} catch (error) {
-				this.closing.signal.throwIfAborted();
+				wanted.throwIfAborted();
 				if (error instanceof TakeRefused)
 					throw new TakeNotAppended(take, 'refused', error.message, { cause: error });
 				failedInARow = attempt.signal.aborted ? 0 : failedInARow + 1;
@@ -239,17 +309,17 @@ export class ContinuousDeck<Take> {
 				this.requestInFlight = null;
 			}
 			if (failedInARow === DOWNLOAD_ATTEMPTS) {
-				await this.parkDownload();
+				await this.parkDownload(wanted);
 				failedInARow = 0;
 			}
 		}
 	}
 
-	private parkDownload(): Promise<void> {
+	private parkDownload(wanted: AbortSignal): Promise<void> {
 		const woken = new Promise<void>((wake) => {
 			this.wakeParkedDownload = wake;
 		});
-		return this.whileOpen(woken).finally(() => {
+		return this.unlessAborted(wanted, woken).finally(() => {
 			this.wakeParkedDownload = null;
 		});
 	}
@@ -257,12 +327,12 @@ export class ContinuousDeck<Take> {
 	private async request(
 		url: string,
 		fromByte: number,
-		retried: AbortSignal
+		signal: AbortSignal
 	): Promise<ReadableStream<Uint8Array>> {
 		const resuming = fromByte > 0;
 		const response = await this.ports.fetch(url, {
 			headers: resuming ? { Range: `bytes=${fromByte}-` } : {},
-			signal: AbortSignal.any([this.closing.signal, retried])
+			signal
 		});
 		const refusal = refusalOf(response, fromByte);
 		if (refusal) throw new TakeRefused(url, refusal, await cancelFailureOf(response));
@@ -276,11 +346,12 @@ export class ContinuousDeck<Take> {
 
 	// A seek wakes the wait as well: the element announces a seek past the
 	// buffer at once, but its first timeupdate there only once audio arrived.
-	// whileOpen wakes a parked wait on close; tying each listener to the close
-	// signal as well would leave an abort step on it per timeupdate.
-	private async roomAhead(buffer: SourceBuffer): Promise<void> {
+	// unlessAborted wakes a parked wait on close or withdrawal; tying each
+	// listener to the signal as well would leave an abort step on it per
+	// timeupdate.
+	private async roomAhead(buffer: SourceBuffer, wanted: AbortSignal): Promise<void> {
 		while (this.secondsAhead(buffer) >= SECONDS_BUFFERED_AHEAD)
-			await this.whileOpen(firstEventOf(this.ports.element, ['timeupdate', 'seeking']));
+			await this.unlessAborted(wanted, firstEventOf(this.ports.element, ['timeupdate', 'seeking']));
 	}
 
 	private async evictPlayedTakes(buffer: SourceBuffer): Promise<void> {
@@ -314,8 +385,7 @@ export class ContinuousDeck<Take> {
 		await updateEnded(buffer);
 	}
 
-	private whileOpen<Value>(pending: Promise<Value>): Promise<Value> {
-		const { signal } = this.closing;
+	private unlessAborted<Value>(signal: AbortSignal, pending: Promise<Value>): Promise<Value> {
 		return new Promise((resolve, reject) => {
 			const closed = () => reject(signal.reason);
 			if (signal.aborted) {
