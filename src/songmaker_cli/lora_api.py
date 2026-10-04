@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import shutil
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -36,7 +36,11 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool
-from songmaker_cli.audio_paths import AudioFileNotFoundError, resolve_audio_path
+from songmaker_cli.audio_paths import (
+    AudioFileNotFoundError,
+    canonical_audio_path,
+    resolve_audio_path,
+)
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
     ARQ_MUSIC_QUEUE_NAME,
@@ -89,14 +93,14 @@ def _lora_capacity_error(
     return JSONResponse(status_code=409, content=response.model_dump(mode="json"))
 
 
-def _sample_dir(audio_dir: Path, user_id: str, lora_id: str) -> Path:
+def _sample_relative_path(user_id: str, lora_id: str, sample_id: str, suffix: str) -> str:
     return (
-        audio_dir
-        / USER_LORAS_DIRNAME
+        PurePosixPath(USER_LORAS_DIRNAME)
         / user_id
         / lora_id
         / USER_LORA_SAMPLES_DIRNAME
-    )
+        / f"{sample_id}{suffix}"
+    ).as_posix()
 
 
 def _reject_if_active_or_deleted(lora) -> None:
@@ -248,15 +252,13 @@ def api_add_sample_from_generation(
             caption=generation.version.prompt if generation.version else "",
             lyrics=generation.version.lyrics if generation.version else "",
         )
-        relative_path = (
-            Path(USER_LORAS_DIRNAME)
-            / user.id / lora_id / USER_LORA_SAMPLES_DIRNAME
-            / f"{sample.id}{source.suffix.lower()}"
+        relative_path = _sample_relative_path(
+            user.id, lora.id, sample.id, source.suffix.lower(),
         )
-        sample.audio_path = str(relative_path)
+        sample.audio_path = relative_path
         session.flush()
 
-        destination = ctx.audio_dir / relative_path
+        destination = canonical_audio_path(ctx.audio_dir, relative_path)
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         session.commit()
@@ -324,16 +326,12 @@ async def api_add_sample(
             session, lora_id, pending_path,
             caption=caption_clean, lyrics=lyrics_clean, position=position,
         )
-        rel_path = str(
-            Path(USER_LORAS_DIRNAME)
-            / user.id / lora_id / USER_LORA_SAMPLES_DIRNAME / f"{sample.id}{ext}"
-        )
+        rel_path = _sample_relative_path(user.id, lora.id, sample.id, ext)
         sample.audio_path = rel_path
         session.flush()
 
-        dest_dir = _sample_dir(ctx.audio_dir, user.id, lora_id)
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        dest = ctx.audio_dir / rel_path
+        dest = canonical_audio_path(ctx.audio_dir, rel_path)
+        dest.parent.mkdir(parents=True, exist_ok=True)
         dest.write_bytes(content)
 
         session.commit()
