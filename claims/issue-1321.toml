@@ -1,0 +1,8 @@
+claim_id = "03058ecdd2074f419f695a37e9308b76"
+agent = "Claude 255c9087-94fa-477f-af88-8eb64e5acd39"
+role = "builder"
+base = "0b1fcd6ce1ac7ff9a2781c3af86a4524bac0d0d4"
+branch = "claude/issue-1321-s1-hasher-owner"
+scope = ["src/songmaker_cli/app_context.py", "src/songmaker_cli/main.py", "tests"]
+opened_commit = "aacd617730f7ab85a35353c248b2baa2b24733bf"
+whole_reason = "Hasher-Owner plus Umstellung aller 20 Testmodule – mechanisch, eine Scheibe."
