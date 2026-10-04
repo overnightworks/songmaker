@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 from agent_providers.events import AssistantTextEvent, FinalEvent
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
@@ -69,7 +69,7 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="u-u-test"),
     )
-    yield TestClient(app)
+    yield web_client(app)
 
 
 @pytest.fixture
@@ -83,7 +83,7 @@ def stranger_client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-spy", username="u-u-spy"),
     )
-    yield TestClient(app)
+    yield web_client(app)
 
 
 async def _capture(*_args, **kwargs):

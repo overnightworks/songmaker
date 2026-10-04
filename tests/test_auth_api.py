@@ -9,7 +9,7 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from conftest import make_test_app, stored_hash
+from conftest import make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
@@ -185,7 +185,8 @@ def _login_from_peer(
     ``headers`` may be a list of pairs to send the same header field twice —
     the shape a forged chain arrives in.
     """
-    peer_client = TestClient(client.app, client=(peer_ip, 55000))
+    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
+    peer_client = TestClient(client.app, base_url="http://testserver", client=(peer_ip, 55000))
     return peer_client.post(
         "/api/auth/login",
         json={"username": "admin", "password": "admin12345"},
@@ -307,7 +308,7 @@ def test_logout_invalidates_session_in_db(client: TestClient) -> None:
     resp = client.delete("/api/auth/session")
     assert resp.status_code == 200
 
-    other = TestClient(client.app, cookies={})
+    other = web_client(client.app, cookies={})
     other.cookies.set(DEFAULT_SESSION_COOKIE_NAME, cookie)
     resp = other.get("/api/auth/me")
     assert resp.status_code == 401
@@ -475,7 +476,7 @@ def test_password_change_cache_failure_rolls_back_password_and_sessions(client: 
         old_session_ids = {record.id for record in session.query(UserSession).all()}
     cache = installed_web_auth_config(client.app).session_cache
 
-    with closing(TestClient(client.app, raise_server_exceptions=False)) as failing_client:
+    with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(client.cookies)
         failing_client.headers.update(client.headers)
         with patch.object(
@@ -526,8 +527,8 @@ def test_second_login_keeps_existing_sessions(client: TestClient) -> None:
     redis = client.app.state.ctx.redis
     user_id = _get_user_id(client, "admin")
 
-    first = TestClient(client.app, cookies={})
-    second = TestClient(client.app, cookies={})
+    first = web_client(client.app, cookies={})
+    second = web_client(client.app, cookies={})
     assert first.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
@@ -556,9 +557,9 @@ def test_login_prunes_oldest_session_over_cap(
     session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
 
-    first = TestClient(client.app, cookies={})
-    second = TestClient(client.app, cookies={})
-    third = TestClient(client.app, cookies={})
+    first = web_client(client.app, cookies={})
+    second = web_client(client.app, cookies={})
+    third = web_client(client.app, cookies={})
     assert first.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
@@ -601,7 +602,7 @@ def test_login_redis_prune_failure_rolls_back(
     session_cache = installed_web_auth_config(client.app).session_cache
     user_id = _get_user_id(client, "admin")
 
-    first = TestClient(client.app, cookies={})
+    first = web_client(client.app, cookies={})
     assert first.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     ).status_code == 200
@@ -612,7 +613,7 @@ def test_login_redis_prune_failure_rolls_back(
     monkeypatch.setattr(
         session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
     )
-    second = TestClient(client.app, cookies={})
+    second = web_client(client.app, cookies={})
     resp = second.post(
         "/api/auth/login", json={"username": "admin", "password": "admin12345"},
     )

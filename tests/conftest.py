@@ -24,6 +24,7 @@ from collections.abc import Callable  # noqa: E402
 from http.client import HTTPResponse  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
+from typing import Final  # noqa: E402
 from unittest.mock import MagicMock, patch  # noqa: E402
 
 import fakeredis  # noqa: E402
@@ -38,6 +39,12 @@ from webauth.dependencies import AuthenticatedUser  # noqa: E402
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
 
 TEST_SECRET = b"a" * 64
+TEST_ORIGIN: Final = "https://testserver"
+
+
+def web_client(app, **kwargs) -> TestClient:
+    """Build a TestClient that reaches a songmaker web app over its real HTTPS origin."""
+    return TestClient(app, base_url=TEST_ORIGIN, **kwargs)
 
 
 _fake_cli_processes: list[MagicMock] = []
@@ -546,7 +553,7 @@ def make_test_app(
         signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     return client, factory
 
 

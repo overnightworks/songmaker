@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
@@ -58,7 +58,7 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, username="test_user"),
     )
-    yield TestClient(app)
+    yield web_client(app)
 
 
 @pytest.fixture
@@ -68,7 +68,7 @@ def unauthed_client(tmp_path: Path) -> TestClient:
         _seed_db(session)
 
     app = make_router_app(make_router_ctx(tmp_path, db=factory))
-    yield TestClient(app)
+    yield web_client(app)
 
 
 def _whisper_cues_payload(word_count: int) -> list[dict]:
@@ -126,7 +126,7 @@ def gzip_client(tmp_path: Path) -> TestClient:
         minimum_size=GZIP_MINIMUM_SIZE_BYTES,
         compresslevel=GZIP_COMPRESS_LEVEL,
     )
-    yield TestClient(app)
+    yield web_client(app)
 
 
 def test_song_detail_response_is_gzip_compressed(gzip_client: TestClient) -> None:
@@ -163,7 +163,7 @@ def _make_authed_client(
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(user_id, role=role, username=f"test_{role}"),
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def _seed_db(session, owner_id: str | None = None) -> None:
@@ -446,7 +446,7 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="test_user"),
     )
-    tc = TestClient(app)
+    tc = web_client(app)
 
     resp = tc.put("/api/songs/s-other/title", json={"title": "Hijacked"})
     assert resp.status_code == 404
@@ -686,7 +686,7 @@ def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="test_user"),
     )
-    tc = TestClient(app)
+    tc = web_client(app)
 
     resp = tc.put("/api/albums/other", json={"title": "Hijacked"})
     assert resp.status_code == 404
@@ -826,7 +826,7 @@ def test_get_generation_whisper_cues_other_user_blocked(tmp_path: Path) -> None:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="test_user"),
     )
-    tc = TestClient(app)
+    tc = web_client(app)
 
     resp = tc.get("/api/generations/g-other")
     assert resp.status_code == 404
@@ -1151,7 +1151,7 @@ def test_generation_defaults_are_readable_by_any_signed_in_user(tmp_path: Path) 
         user=make_authenticated_user("u-musician", role="user", username="musician"),
     )
 
-    resp = TestClient(musician).get("/api/settings/generation-defaults")
+    resp = web_client(musician).get("/api/settings/generation-defaults")
 
     assert resp.status_code == 200
     assert resp.json() == admin.get("/api/settings/generation-defaults").json()
@@ -3085,7 +3085,7 @@ def _make_pool_capacity_limited_client(
     # directly, not through Depends(), so an override would never reach it
     # anyway -- and the whole point of this client is to exercise the real
     # auth path, the same one production traffic goes through.
-    return TestClient(app), factory
+    return web_client(app), factory
 
 
 def _job_stream_scope(job_id: str, *, cookie: str) -> dict:
@@ -3800,7 +3800,7 @@ def test_body_size_limit_rejects_large_request(tmp_path: Path) -> None:
     )
     app.add_middleware(BodySizeLimitMiddleware, policy=build_body_size_policy(get_settings()))
 
-    tc = TestClient(app)
+    tc = web_client(app)
     large_body = b"x" * 2_000_000
     resp = tc.post(
         "/api/albums",
@@ -4196,7 +4196,7 @@ def _client_beside_a_foreign_take(
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="test_user", role=role),
     )
-    return TestClient(app), factory, foreign_take_file
+    return web_client(app), factory, foreign_take_file
 
 
 def _delete_takes(tc: TestClient, route: str, take_ids: list[str]) -> int:
@@ -4256,7 +4256,7 @@ def test_bulk_delete_cleans_up_files(tmp_path: Path) -> None:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", username="test_user"),
     )
-    tc = TestClient(app)
+    tc = web_client(app)
 
     resp = tc.post(
         "/api/generations/bulk-delete",

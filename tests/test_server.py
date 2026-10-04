@@ -15,7 +15,14 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app, stored_hash
+from conftest import (
+    TEST_SECRET,
+    login_and_csrf,
+    make_fake_redis,
+    make_test_app,
+    stored_hash,
+    web_client,
+)
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import sign_session_id
@@ -132,7 +139,7 @@ def _sveltekit_app_client(tmp_path: Path, assets: dict[str, bytes]) -> TestClien
         signing_key=TEST_SECRET,
         redis=make_fake_redis(),
     )
-    return TestClient(create_app(audio_dir, data_dir, project_root, ctx=ctx))
+    return web_client(create_app(audio_dir, data_dir, project_root, ctx=ctx))
 
 
 def test_create_app_mounts_sveltekit_app(tmp_path: Path) -> None:
@@ -192,7 +199,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin6", "admin12345")
     resp = client.get(f"/audio/{admin_id}/data.mp3")
@@ -251,7 +258,7 @@ def auth_server_app(tmp_path: Path):
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     yield client, owner_sid, other_sid, DEFAULT_SESSION_COOKIE_NAME, owner_id, other_id
 
 
@@ -304,7 +311,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     with patch("songmaker_cli.server.reap_stale_jobs") as mock_reap:
-        with TestClient(app):
+        with web_client(app):
             pass
 
     mock_reap.assert_called_once_with(ctx)
@@ -516,7 +523,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
             redis=make_fake_redis(),
         )
         app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-        client = TestClient(app, cookies={})
+        client = web_client(app, cookies={})
         from conftest import login_and_csrf
         login_and_csrf(client, "admin2", "admin12345")
 
@@ -573,7 +580,8 @@ def _trusting_the_proxy_network(server_app: TestClient):
 def _get_through_peer(
     server_app: TestClient, peer_ip: str, headers: dict[str, str] | list[tuple[str, str]],
 ) -> httpx.Response:
-    peer_client = TestClient(server_app.app, client=(peer_ip, 55000))
+    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
+    peer_client = TestClient(server_app.app, base_url="http://testserver", client=(peer_ip, 55000))
     return peer_client.get("/", headers=headers)
 
 
@@ -585,7 +593,9 @@ def test_hsts_header_on_https_behind_trusted_proxy(server_app: TestClient) -> No
 
 
 def test_hsts_header_not_set_without_trusted_proxy(server_app: TestClient) -> None:
-    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
+    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
+    plain_http = TestClient(server_app.app, base_url="http://testserver")
+    resp = plain_http.get("/", headers={"x-forwarded-proto": "https"})
     assert "Strict-Transport-Security" not in resp.headers
 
 
@@ -931,7 +941,7 @@ def test_cors_specific_origin(tmp_path: Path) -> None:
     )
     with patch.dict("os.environ", {"CORS_ORIGIN": "https://mysite.example.com"}):
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
     resp = client.options(
         "/api/songs",
         headers={
@@ -987,7 +997,7 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
             redis=make_fake_redis(),
         )
         app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-        client = TestClient(app, cookies={})
+        client = web_client(app, cookies={})
         from conftest import login_and_csrf
         login_and_csrf(client, "admin4", "admin12345")
 
@@ -1071,7 +1081,7 @@ def test_ip_rate_limit_429(tmp_path: Path, monkeypatch) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
     for _ in range(3):
         resp = client.get("/api/auth/check")
     assert resp.status_code == 429
@@ -1104,7 +1114,7 @@ def test_static_assets_bypass_rate_limit(tmp_path: Path, monkeypatch) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
     for _ in range(5):
         resp = client.get("/_app/immutable/test.js")
     assert resp.status_code == 200
@@ -1142,7 +1152,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin5", "admin12345")
     resp = client.get("/audio/other-user-id/song.mp3")
@@ -1199,7 +1209,7 @@ def test_startup_prunes_login_attempts(tmp_path: Path, mock_arq_pool) -> None:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    with TestClient(app):
+    with web_client(app):
         pass
 
     with factory() as session:
@@ -1315,7 +1325,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
 
     with (
         client,
@@ -1362,7 +1372,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
 
     with (
         client,
@@ -1406,7 +1416,7 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
 
     with (
         client,
@@ -1450,7 +1460,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
         signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
 
     with (
         client,
@@ -1491,7 +1501,7 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     ctx = AppContext(
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
-    return TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
+    return web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
 
 def test_metrics_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
@@ -1547,7 +1557,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
         db=factory, audio_dir=audio_dir, data_dir=data_dir, signing_key=TEST_SECRET, redis=redis,
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    client = TestClient(app)
+    client = web_client(app)
 
     with client:
         resp = client.get("/metrics")
@@ -1835,7 +1845,7 @@ def test_metrics_endpoint_includes_acestep_gauges_with_seeded_worker(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=sync_redis,
     )
-    client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
+    client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
         saved = _override_arq_pool(async_pool)
@@ -1890,7 +1900,7 @@ def test_metrics_endpoint_offline_worker(
         db=factory, audio_dir=audio_dir, data_dir=data_dir,
         signing_key=TEST_SECRET, redis=redis,
     )
-    client = TestClient(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
+    client = web_client(create_app(audio_dir, data_dir, tmp_path, ctx=ctx))
 
     with client:
         saved = _override_arq_pool(async_pool)
@@ -2053,7 +2063,7 @@ def _pwa_test_app(tmp_path: Path, *, create_files: bool) -> TestClient:
         redis=make_fake_redis(),
     )
     app = create_app(audio_dir, data_dir, tmp_path, ctx=ctx)
-    return TestClient(app)
+    return web_client(app)
 
 
 def test_service_worker_served_with_correct_mime_and_sw_allowed_header(

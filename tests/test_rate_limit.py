@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app, stored_hash
+from conftest import make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.policies import RateLimitClass
@@ -328,7 +328,7 @@ def test_exempt_paths_do_not_consume_api_budget(ip_limited_client: TestClient) -
 
 
 def _check_from(client: TestClient, forwarded_for: str) -> int:
-    peer_client = TestClient(client.app, client=(_TRUSTED_PEER, 55000))
+    peer_client = web_client(client.app, client=(_TRUSTED_PEER, 55000))
     resp = peer_client.get("/api/auth/check", headers={"x-forwarded-for": forwarded_for})
     return resp.status_code
 
