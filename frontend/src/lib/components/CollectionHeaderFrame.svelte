@@ -1,6 +1,10 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import { collectionShuffleLabel, type CollectionPlayKind } from '$lib/constants';
+	import {
+		COLLECTION_SHUFFLE_ACTION,
+		collectionActionLabel,
+		type CollectionPlayKind
+	} from '$lib/constants';
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
@@ -58,7 +62,8 @@
 	}: Props = $props();
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
-	const playLabel = $derived(`${transportButtonLabel(transport)} ${kind}`);
+	const playLabel = $derived(collectionActionLabel(transportButtonLabel(transport), kind));
+	const shuffleLabel = $derived(collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind));
 </script>
 
 {#snippet coverArt()}
@@ -117,8 +122,8 @@
 				data-hitbox="frequent"
 				disabled={!onshuffle}
 				onclick={() => onshuffle?.()}
-				aria-label={collectionShuffleLabel(kind)}
-				title={collectionShuffleLabel(kind)}
+				aria-label={shuffleLabel}
+				title={shuffleLabel}
 			>
 				<Icon name="shuffle" size={20} />
 			</button>

@@ -23,8 +23,7 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
-	collectionPauseLabel,
-	collectionPlayLabel,
+	collectionActionLabel,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
@@ -457,11 +456,11 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		const transport = page.getByRole('contentinfo');
 		const barPause = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
 		const play = workspace(page).getByRole('button', {
-			name: collectionPlayLabel('album'),
+			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
 			exact: true
 		});
 		const headerPause = workspace(page).getByRole('button', {
-			name: collectionPauseLabel('album'),
+			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
 			exact: true
 		});
 		const songTakesRefused = () =>

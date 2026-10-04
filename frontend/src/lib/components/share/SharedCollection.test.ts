@@ -1,6 +1,11 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PLAYING_MARK_LABEL, collectionPauseLabel, collectionPlayLabel } from '$lib/constants';
+import {
+	PLAYING_MARK_LABEL,
+	collectionActionLabel,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
+} from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { SharedTrack } from '$lib/share/sharedCollection';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
@@ -173,11 +178,15 @@ describe('SharedCollection track rows', () => {
 
 		audioPlayer.status = 'playing';
 		await tick();
-		expect(getByRoleButton(header, collectionPauseLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist'))
+		).not.toBeNull();
 
 		audioPlayer.status = 'paused';
 		await tick();
-		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'))
+		).not.toBeNull();
 		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
 	});
 
@@ -194,10 +203,12 @@ describe('SharedCollection track rows', () => {
 
 		audioPlayer.status = 'buffering';
 		await tick();
-		getByRoleButton(header, collectionPauseLabel('playlist')).click();
+		getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist')).click();
 		await tick();
 
-		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'))
+		).not.toBeNull();
 	});
 
 	it.each([
@@ -231,6 +242,8 @@ describe('SharedCollection track rows', () => {
 	it('dims the header play circle of a share without audio', async () => {
 		const target = await renderShare(null);
 
-		expect(getByRoleButton(target, collectionPlayLabel('song')).disabled).toBe(true);
+		expect(
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'song')).disabled
+		).toBe(true);
 	});
 });

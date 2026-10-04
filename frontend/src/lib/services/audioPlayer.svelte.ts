@@ -3,7 +3,8 @@ import {
 	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
+	TRANSPORT_RETRY_LABEL,
+	type TransportLabel
 } from '$lib/constants';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import {
@@ -45,7 +46,7 @@ export function transportIsBusy(transport: TransportState): boolean {
 	return transport === 'loading' || transport === 'recovering';
 }
 
-export function transportButtonLabel(transport: TransportState): string {
+export function transportButtonLabel(transport: TransportState): TransportLabel {
 	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
