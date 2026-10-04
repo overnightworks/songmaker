@@ -11,14 +11,15 @@
 // phone's dropped resource stream never received, so the take can only arrive
 // through the job's own terminal refresh — the path this flow pins.
 
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
 	JOB_TYPE_GENERATE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_SYNC_ERROR,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
-import { takeGroupLabel } from '../src/lib/constants/now-playing';
+import type { VersionItem } from '../src/lib/api/types';
+import { takeGroupLabel, takeVersion, type TakeVersion } from '../src/lib/constants/now-playing';
 import {
 	FlowGuard,
 	loseNetwork,
@@ -47,6 +48,17 @@ const CUT_OFF_MS = 16_000;
 // The ruling on #1032: back online, the take is there within 10 seconds.
 const TAKE_AFTER_RETURN_MS = 10_000;
 
+// The seeded take's version as the app reads it, so a group label names it
+// through the one predicate that decides whether a take has a version.
+async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersion> {
+	const response = await page.request.get(`/api/songs/${songId}/versions`);
+	expect(response.ok()).toBeTruthy();
+	const [seeded] = (await response.json()) as VersionItem[];
+	const version = seeded ? takeVersion(seeded.id, seeded.version_number) : null;
+	if (!version) throw new Error('Expected the seeded song to have a version');
+	return version;
+}
+
 test.describe('a finished generation on the phone', () => {
 	test('brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
 		page,
@@ -62,6 +74,7 @@ test.describe('a finished generation on the phone', () => {
 			TAKE_ARRIVES_VERSION_NUMBER,
 			SEEDED_TAKE_COUNT
 		);
+		const seeded = await seededTakeVersion(page, songId);
 		const jobId = await seedRunningGenerationJob(songId, {
 			progress: 0.5,
 			takeIndex: 1,
@@ -80,9 +93,7 @@ test.describe('a finished generation on the phone', () => {
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
-		await expect(
-			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT))
-		).toBeVisible();
+		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT))).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT);
 
 		await completeGenerationJobWithoutEvent(jobId);
@@ -90,9 +101,7 @@ test.describe('a finished generation on the phone', () => {
 		await expect(
 			page.getByRole('alert').filter({ hasText: GENERATION_COMPLETED_TOAST })
 		).toBeVisible();
-		await expect(
-			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT + 1))
-		).toBeVisible();
+		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toBeVisible();
 		await expect(playButtons).toHaveCount(SEEDED_TAKE_COUNT + 1);
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
 		await expect(page.getByRole('tab', { name: /Takes/ })).toHaveAttribute('aria-selected', 'true');
@@ -123,6 +132,7 @@ test.describe('a take that finished while the phone was offline', () => {
 			TAKE_ARRIVES_VERSION_NUMBER,
 			SEEDED_TAKE_COUNT
 		);
+		const seeded = await seededTakeVersion(page, songId);
 		const jobId = await seedRunningGenerationJob(songId, {
 			progress: 0.4,
 			takeIndex: 1,
@@ -146,18 +156,16 @@ test.describe('a take that finished while the phone was offline', () => {
 
 		await completeGenerationJobWithoutEvent(jobId);
 		await page.waitForTimeout(CUT_OFF_MS);
-		await expect(
-			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT + 1))
-		).toHaveCount(0);
+		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toHaveCount(0);
 
 		await page.unroute(JOB_STREAM_ROUTE);
 		await loseNetwork(page, context);
 		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toBeVisible();
 		await regainNetwork(page, context);
 
-		await expect(
-			panel.getByText(takeGroupLabel(TAKE_ARRIVES_VERSION_NUMBER, SEEDED_TAKE_COUNT + 1))
-		).toBeVisible({ timeout: TAKE_AFTER_RETURN_MS });
+		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toBeVisible({
+			timeout: TAKE_AFTER_RETURN_MS
+		});
 		await expect(panel.getByRole('progressbar')).toHaveCount(0);
 		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toHaveCount(0);
 		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);

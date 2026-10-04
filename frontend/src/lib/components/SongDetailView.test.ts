@@ -46,6 +46,7 @@ import {
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_EMPTIES_EDITOR,
+	VERSION_DELETE_LOAD_UNDO_GOES,
 	VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 	VERSION_REPLACE_DRAFT_TITLE,
 	VERSIONS_SHEET_LABEL,
@@ -1822,6 +1823,26 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		expect(updateSong).not.toHaveBeenCalled();
 	});
 
+	it.runIf(!phone)(
+		'an untouched load says how it differs, not that it is unsaved; a typed edit says it is unsaved',
+		async () => {
+			const target = await renderView();
+			const statusLine = () => target.querySelector('.write-save-hint')?.textContent?.trim();
+			await tapVersion(target, 1);
+
+			expect(statusLine()).toBe('');
+			expect(writeSaveButton(target).disabled).toBe(false);
+			expect(target.querySelector('.draft-banner')?.textContent?.trim()).toMatch(
+				/^Draft — differs from v2\. Generate creates v\d+\.$/
+			);
+
+			setDraftLyrics('first draft, edited');
+			await tick();
+
+			expect(statusLine()).toBe('Unsaved changes');
+		}
+	);
+
 	it.each([
 		{ next: 2, lyrics: 'verse' },
 		{ next: 1, lyrics: 'first draft' }
@@ -1864,6 +1885,23 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			expect.objectContaining({ label: TOAST_UNDO_LABEL }),
 			'brief'
 		);
+	});
+
+	it('Open on the clean current version answers: "v2 is already the draft" and the focus moves to the lyrics', async () => {
+		const takeOfV2 = generation({ ...sourceRecipeDefaults(), version_id: 'v2', version_number: 2 });
+		songList.set([song({ ...editableSongDefaults(), generations: [takeOfV2] })]);
+		navigateToSongTab('takes');
+		const target = await renderView();
+		await vi.waitFor(() => expect(get(versions)).toHaveLength(2));
+
+		takeGroupOpenLink(target, 2).click();
+		await vi.waitFor(() =>
+			expect(document.activeElement).toBe(target.querySelector('textarea.lyrics-area'))
+		);
+
+		expect(addToast).toHaveBeenCalledWith('v2 is already the draft', 'info');
+		expect(addUndoToast).not.toHaveBeenCalled();
+		expect(get(editLyrics)).toBe('verse');
 	});
 
 	it('an Open from Now Playing loads that version on arrival and shows it on Edit', async () => {
@@ -1975,7 +2013,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 		}
 	);
 
-	it('loading the version the draft already holds raises no toast once its Undo timed out', async () => {
+	it('loading the version the draft already holds brings back no Undo toast once its Undo timed out', async () => {
 		const target = await renderView();
 		vi.useFakeTimers();
 		await replaceTypedDraftWith(target, 1);
@@ -2137,6 +2175,7 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 	const THIRD = version({ id: 'v3', version_number: 3, lyrics: 'chorus', prompt: 'dark folk' });
 	const typeAnEdit = () => setDraftLyrics('unsaved edit');
 	const loadV1Untouched = () => void loadVersionAsDraft(FIRST);
+	const loadV1WithItsUndoTimedOut = () => loadVersionAsDraft(FIRST)?.expire();
 	const leaveTheCurrentVersion = () => undefined;
 
 	it.each([
@@ -2152,12 +2191,27 @@ describe.each([false, true])('SongDetailView loading a version, phone layout %s'
 			draft: 'an untouched load of v1',
 			prepare: loadV1Untouched,
 			held: [LATEST, FIRST],
-			shown: [versionDeleteTitle(1, 1), 'The draft loaded from v1 goes too.']
+			shown: [
+				versionDeleteTitle(1, 1),
+				'The draft loaded from v1 goes too.',
+				'Undo for your earlier draft goes too.'
+			]
 		},
 		{
 			deleted: 2,
 			draft: 'an untouched load of v1',
 			prepare: loadV1Untouched,
+			held: [THIRD, LATEST, FIRST],
+			shown: [
+				'Delete v2?',
+				'The draft loaded from v1 leaves the editor; v3 replaces it.',
+				VERSION_DELETE_LOAD_UNDO_GOES
+			]
+		},
+		{
+			deleted: 2,
+			draft: 'an untouched load of v1 whose Undo timed out',
+			prepare: loadV1WithItsUndoTimedOut,
 			held: [THIRD, LATEST, FIRST],
 			shown: ['Delete v2?', 'The draft loaded from v1 leaves the editor; v3 replaces it.']
 		},

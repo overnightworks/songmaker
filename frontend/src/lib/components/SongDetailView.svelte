@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { get } from 'svelte/store';
-	import { onMount, type ComponentProps } from 'svelte';
+	import { onMount, tick, type ComponentProps } from 'svelte';
 	import {
 		fetchSong,
 		renameSong,
@@ -52,6 +52,7 @@
 		loadVersionAsDraft,
 		pendingVersionLoad,
 		versionDeleteRequest,
+		versionLoadUndoOutstanding,
 		handleDeleteVersion,
 		handleSave,
 		computeDraftVersionNumber,
@@ -106,6 +107,7 @@
 		TOAST_UNDO_LABEL,
 		VERSION_DELETE_CONFIRM_LABEL,
 		VERSION_DELETE_DRAFT_GOES,
+		VERSION_DELETE_LOAD_UNDO_GOES,
 		VERSION_DELETE_EMPTIES_EDITOR,
 		VERSION_REPLACE_DRAFT_CONFIRM_LABEL,
 		VERSION_REPLACE_DRAFT_TITLE,
@@ -114,6 +116,7 @@
 		versionDeleteLoadedDraftGoes,
 		versionDeleteLoadedDraftReplacedBy,
 		versionDeletePickWarning,
+		versionAlreadyTheDraftLabel,
 		versionLabel,
 		versionLoadedToastLabel,
 		versionReplaceDraftMessage
@@ -138,8 +141,9 @@
 	let showDeleteConfirm = $state(false);
 	let versionAwaitingReplace = $state<{
 		version: VersionItem;
-		answer: (loaded: boolean) => void;
+		answer: (answer: VersionLoadAnswer) => void;
 	} | null>(null);
+	let detailPanel = $state<HTMLElement>();
 	let compact = $state(false);
 	let songRail = $state(false);
 	let takesStatus = $state<'loading' | 'ready' | 'error'>('ready');
@@ -461,19 +465,20 @@
 		if (compact) openEditTab();
 	}
 
+	type VersionLoadAnswer = 'loaded' | 'already-the-draft' | 'declined';
+
 	async function onVersionClick(versionId: string): Promise<boolean> {
-		const loaded = await askToLoadVersion(versionId);
-		if (loaded && compact) openEditTab();
-		return loaded;
+		const answer = await askToLoadVersion(versionId);
+		if (answer === 'declined') return false;
+		if (compact) openEditTab();
+		if (answer === 'already-the-draft') void focusLyrics();
+		return true;
 	}
 
-	function askToLoadVersion(versionId: string): Promise<boolean> {
+	function askToLoadVersion(versionId: string): Promise<VersionLoadAnswer> {
 		const version = get(versions).find((v) => v.id === versionId);
-		if (!version) return Promise.resolve(false);
-		if (!get(draftHasUnversionedChanges)) {
-			loadVersionWithUndo(version);
-			return Promise.resolve(true);
-		}
+		if (!version) return Promise.resolve('declined');
+		if (!get(draftHasUnversionedChanges)) return Promise.resolve(loadVersionWithUndo(version));
 		return new Promise((answer) => {
 			versionAwaitingReplace = { version, answer };
 		});
@@ -483,8 +488,13 @@
 		const awaiting = versionAwaitingReplace;
 		versionAwaitingReplace = null;
 		if (!awaiting) return;
-		if (replace) loadVersionWithUndo(awaiting.version);
-		awaiting.answer(replace);
+		awaiting.answer(replace ? loadVersionWithUndo(awaiting.version) : 'declined');
+	}
+
+	// The Edit tab a phone just switched to mounts its lyrics on the next tick.
+	async function focusLyrics(): Promise<void> {
+		await tick();
+		detailPanel?.querySelector<HTMLTextAreaElement>('textarea.lyrics-area')?.focus();
 	}
 
 	async function confirmVersionDelete(): Promise<void> {
@@ -519,17 +529,22 @@
 	function versionDeleteConsequences(
 		takeCount: number,
 		holdsPick: boolean,
-		editorLoss: VersionDeleteEditorLoss | null
+		editorLoss: VersionDeleteEditorLoss | null,
+		dropsLoadUndo: boolean
 	): string[] {
 		return [
 			...(holdsPick ? [versionDeletePickWarning(takeCount)] : []),
-			...(editorLoss ? editorLossLines(editorLoss) : [])
+			...(editorLoss ? editorLossLines(editorLoss) : []),
+			...(dropsLoadUndo ? [VERSION_DELETE_LOAD_UNDO_GOES] : [])
 		];
 	}
 
-	function loadVersionWithUndo(version: VersionItem): void {
+	function loadVersionWithUndo(version: VersionItem): VersionLoadAnswer {
 		const load = loadVersionAsDraft(version);
-		if (!load) return;
+		if (!load) {
+			addToast(versionAlreadyTheDraftLabel(version.version_number), 'info');
+			return 'already-the-draft';
+		}
 		addUndoToast(
 			versionLoadedToastLabel(version.version_number),
 			{
@@ -541,6 +556,7 @@
 			},
 			'brief'
 		);
+		return 'loaded';
 	}
 
 	async function onRenameSong(newTitle: string): Promise<void> {
@@ -713,7 +729,7 @@
 	{#snippet saveAction()}
 		<div class="write-save">
 			<p class="write-save-hint" role="status">
-				{#if dirty}{EDITOR_UNSAVED_TITLE}{/if}
+				{#if $draftHasUnversionedChanges}{EDITOR_UNSAVED_TITLE}{/if}
 			</p>
 			<button
 				type="button"
@@ -817,6 +833,7 @@
 	{/snippet}
 
 	<div
+		bind:this={detailPanel}
 		class="detail-panel"
 		class:compact
 		class:grows-with-content={compact && $detailTab !== 'cowriter'}
@@ -905,7 +922,12 @@
 	{@const request = $versionDeleteRequest}
 	<ConfirmDeleteDialog
 		title={versionDeleteTitle(request.version.version_number, request.takeCount)}
-		items={versionDeleteConsequences(request.takeCount, request.holdsPick, request.editorLoss)}
+		items={versionDeleteConsequences(
+			request.takeCount,
+			request.holdsPick,
+			request.editorLoss,
+			$versionLoadUndoOutstanding
+		)}
 		confirmLabel={VERSION_DELETE_CONFIRM_LABEL}
 		onconfirm={() => void confirmVersionDelete()}
 		oncancel={() => versionDeleteRequest.set(null)}

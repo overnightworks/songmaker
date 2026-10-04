@@ -441,13 +441,25 @@ describe('NowPlayingTake Open vN', () => {
 		expect(openTakeVersion).toHaveBeenCalledWith(withSong, takeOfV5.id, 'ver-5');
 	});
 
-	it('offers no Open link for an imported take', async () => {
-		await render({
-			generation: generation({ ...generationDefaults, version_id: null, version_number: null })
-		});
+	it.each([
+		{ origin: 'no version at all', version_number: null },
+		{ origin: 'a version number but no version', version_number: 3 }
+	])(
+		'names an imported take with $origin "Imported take", with no model and no Open link',
+		async ({ version_number }) => {
+			await render({
+				generation: generation({
+					...generationDefaults,
+					version_id: null,
+					version_number,
+					model_mode: 'sft'
+				})
+			});
 
-		expect(target.textContent).not.toContain('Open v');
-	});
+			expect(target.querySelector('.take-heading')?.textContent).toBe('Imported take');
+			expect(target.textContent).not.toContain('Open v');
+		}
+	);
 });
 
 describe('NowPlayingTake recipe section', () => {

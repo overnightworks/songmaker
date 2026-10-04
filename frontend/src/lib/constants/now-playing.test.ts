@@ -24,12 +24,12 @@ describe('nowPlayingTakeLabel', () => {
 
 describe('takeGroupLabel', () => {
 	it.each([
-		{ versionNumber: 7, count: 4, label: 'v7 · 4 takes' },
-		{ versionNumber: 2, count: 1, label: 'v2 · 1 take' },
-		{ versionNumber: null, count: 3, label: 'Imported · 3 takes' },
-		{ versionNumber: null, count: 1, label: 'Imported · 1 take' }
-	])('names the group "$label"', ({ versionNumber, count, label }) => {
-		expect(takeGroupLabel(versionNumber, count)).toBe(label);
+		{ version: takeVersion('ver-7', 7), count: 4, label: 'v7 · 4 takes' },
+		{ version: takeVersion('ver-2', 2), count: 1, label: 'v2 · 1 take' },
+		{ version: takeVersion(null, null), count: 3, label: 'Imported · 3 takes' },
+		{ version: takeVersion(null, 5), count: 1, label: 'Imported · 1 take' }
+	])('names the group "$label"', ({ version, count, label }) => {
+		expect(takeGroupLabel(version, count)).toBe(label);
 	});
 });
 

@@ -21,7 +21,7 @@ import {
 	minSquarePx,
 	setPointer
 } from '$lib/test-utils/hitbox';
-import { openVersionLabel, takeGroupLabel } from '$lib/constants/now-playing';
+import { openVersionLabel, takeGroupLabel, takeVersion } from '$lib/constants/now-playing';
 import { get } from 'svelte/store';
 import { clearSelection, selectedIds, toggleSelection } from '$lib/stores/selection';
 
@@ -346,7 +346,9 @@ describe('TakesList', () => {
 		openVersionLink(target, 5)?.click();
 		await tick();
 
-		expect(openVersionLink(target, 7)?.textContent).toContain(takeGroupLabel(7, 1));
+		expect(openVersionLink(target, 7)?.textContent).toContain(
+			takeGroupLabel(takeVersion('ver-7', 7), 1)
+		);
 		expect(clickVersion).toHaveBeenCalledExactlyOnceWith('ver-5');
 	});
 
@@ -377,12 +379,30 @@ describe('TakesList', () => {
 		}
 	);
 
-	it('shows the draft banner with the next version number only when dirty', async () => {
+	it('shows the draft banner, naming the version it differs from and the one Generate creates, only when dirty', async () => {
 		const { target: clean } = await render({ dirty: false });
 		expect(clean.querySelector('.draft-banner')).toBeNull();
 
-		const { target: dirty } = await render({ dirty: true, draftVersionNumber: 4 });
-		expect(dirty.querySelector('.draft-banner')?.textContent).toContain('v4');
+		const { target: dirty } = await render({
+			dirty: true,
+			latestVersionNumber: 3,
+			draftVersionNumber: 4
+		});
+		expect(dirty.querySelector('.draft-banner')?.textContent?.trim()).toBe(
+			'Draft — differs from v3. Generate creates v4.'
+		);
+	});
+
+	it('names no version to differ from once the last version of the song is deleted', async () => {
+		const { target } = await render({
+			song: song({ ...versionedSongDefaults(), version_count: 0, generations: [] }),
+			dirty: true,
+			latestVersionNumber: 0,
+			draftVersionNumber: 1
+		});
+		expect(target.querySelector('.draft-banner')?.textContent?.trim()).toBe(
+			'Draft — unsaved changes. Generate creates v1.'
+		);
 	});
 
 	it.each([true, false])(
