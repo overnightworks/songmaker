@@ -68,8 +68,8 @@ import {
 	takeVersion,
 	type TakeVersion
 } from '../src/lib/constants/now-playing';
-import type { SongItem, VersionItem } from '../src/lib/api/types';
-import { containing, csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
+import type { GenerationItem, SongItem, VersionItem } from '../src/lib/api/types';
+import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -204,12 +204,17 @@ async function readVersions(page: Page, songId: string): Promise<VersionItem[]> 
 	return (await response.json()) as VersionItem[];
 }
 
-async function pickTheTakeOf(page: Page, songId: string, versionNumber: number): Promise<void> {
+async function takeOf(page: Page, songId: string, versionNumber: number): Promise<GenerationItem> {
 	const response = await page.request.get(`/api/songs/${songId}`);
 	expect(response.ok()).toBeTruthy();
 	const song = (await response.json()) as SongItem;
 	const take = song.generations.find((generation) => generation.version_number === versionNumber);
 	if (!take) throw new Error(`Expected a take of v${versionNumber}`);
+	return take;
+}
+
+async function pickTheTakeOf(page: Page, songId: string, versionNumber: number): Promise<void> {
+	const take = await takeOf(page, songId, versionNumber);
 	const picked = await page.request.post(`/api/generations/${take.id}/pick`, {
 		headers: await csrfHeaders(page)
 	});
@@ -323,20 +328,28 @@ async function heldTakePosition(page: Page): Promise<number> {
 	});
 }
 
-async function shownTakePosition(page: Page, mobile: boolean): Promise<number> {
+// The phone's transport shows only a progress line, drawn over the length the
+// take was recorded with -- the deck's own duration reads Infinity for the
+// audio blob it plays.
+async function shownTakePosition(page: Page, phoneTakeSeconds: number | null): Promise<number> {
 	const transport = page.getByRole('contentinfo');
-	if (!mobile) {
+	if (phoneTakeSeconds === null) {
 		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
 	}
 	const progress = await transport
 		.locator('.mobile-progress-fill')
 		.evaluate((line) => parseFloat((line as HTMLElement).style.width));
-	const duration = await page.evaluate(() => {
-		const held = (window as unknown as DeckWindow).heldDeck;
-		if (!held) throw new Error('No take is held');
-		return held.duration;
-	});
-	return (progress / 100) * duration;
+	return (progress / 100) * phoneTakeSeconds;
+}
+
+async function recordedSecondsOf(
+	page: Page,
+	songId: string,
+	versionNumber: number
+): Promise<number> {
+	const seconds = (await takeOf(page, songId, versionNumber)).audio_duration_sec;
+	if (seconds === null) throw new Error(`Expected the take of v${versionNumber} to have a length`);
+	return seconds;
 }
 
 async function tapVersion(page: Page, versionNumber: number): Promise<void> {
@@ -704,15 +717,18 @@ test.describe('the versions of a song', () => {
 		await takeGroup(page, song.v1, 1)
 			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
 			.click();
+		await expect(page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB })).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
 
 		// Back closes one layer at a time: the phone's This take sheet, which
 		// covers the transport, and its Now Playing first, then the song, back
 		// to the album it came from.
 		const mobile = shellOf(testInfo) === 'mobile';
+		const phoneTakeSeconds = mobile ? await recordedSecondsOf(page, song.songId, 1) : null;
 		if (mobile) {
 			await page.goBack();
 			await expect(page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })).toBeHidden();
+			await expect(page.getByRole('dialog', { name: song.title })).toBeVisible();
 		}
 		const heldAt = await holdThePlayingTakeAt(page, HELD_TAKE_SECONDS);
 		expect(heldAt).toBeCloseTo(HELD_TAKE_SECONDS, 1);
@@ -721,12 +737,11 @@ test.describe('the versions of a song', () => {
 			await expect(page.getByRole('dialog', { name: song.title })).toBeHidden();
 		}
 		await page.goBack();
-		const albumSong = mobile
-			? workspace(page).locator('.item-row').filter({ hasText: song.title })
-			: workspace(page).getByRole('button', { name: containing(song.title) });
-		await expect(albumSong).toBeVisible();
-		await expect.poll(() => shownTakePosition(page, mobile)).toBeCloseTo(heldAt, 1);
-		const shownAt = await shownTakePosition(page, mobile);
+		await expect(
+			workspace(page).getByRole('button', { name: nameStartingWith(song.title) })
+		).toBeVisible();
+		await expect.poll(() => shownTakePosition(page, phoneTakeSeconds)).toBeCloseTo(heldAt, 1);
+		const shownAt = await shownTakePosition(page, phoneTakeSeconds);
 		if (mobile) {
 			await page
 				.getByRole('contentinfo')
@@ -747,7 +762,7 @@ test.describe('the versions of a song', () => {
 			page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
 		).toBeVisible();
 		expect(await heldTakePosition(page)).toBe(heldAt);
-		await expect.poll(() => shownTakePosition(page, mobile)).toBe(shownAt);
+		await expect.poll(() => shownTakePosition(page, phoneTakeSeconds)).toBe(shownAt);
 	});
 
 	test('deleting v1 from its row asks with its take and the album pick, then v1 and its take are gone while v2 stays', async ({
