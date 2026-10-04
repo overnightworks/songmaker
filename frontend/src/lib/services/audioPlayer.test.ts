@@ -1459,6 +1459,39 @@ describe('patient recovery while the screen is off', () => {
 			aMinuteLater: { status: 'loading', error: null }
 		});
 	});
+
+	describe('a take asked for while the offline strip says the network is gone (#1312)', () => {
+		beforeEach(() => {
+			audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => true }));
+			audioPlayer.load(makeInfo());
+		});
+
+		it('waits with Pause from the tap and gives up after the stalled take deadline', async () => {
+			const fromTheTap = audioPlayer.transport;
+			await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE - SECOND);
+			const beforeTheDeadline = audioPlayer.transport;
+			await vi.advanceTimersByTimeAsync(10 * SECOND);
+
+			expect({ fromTheTap, beforeTheDeadline, afterIt: audioPlayer.transport }).toEqual({
+				fromTheTap: 'recovering',
+				beforeTheDeadline: 'recovering',
+				afterIt: 'waiting-for-network'
+			});
+		});
+
+		it('pauses deliberately on a press during the wait', () => {
+			audioPlayer.toggle();
+			fakeAudio.fire('canplay');
+
+			expect({
+				transport: audioPlayer.transport,
+				played: fakeAudio.playMock.mock.calls.length
+			}).toEqual({
+				transport: 'paused',
+				played: 0
+			});
+		});
+	});
 });
 
 describe('stream playback', () => {

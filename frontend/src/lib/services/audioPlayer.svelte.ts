@@ -138,8 +138,9 @@ const END_OF_DECK_SLACK_SECONDS = 0.5;
 // the network gone, reloaded.
 const STALL_RECOVERY_MS = 5000;
 // How long a stalled take is tried before the player gives up and asks for
-// Retry: long enough to ride out a dropout with the screen off (#1187 P3).
-const RECOVERY_DEADLINE_MS = 2 * 60 * 1000;
+// Retry: long enough to ride out a dropout with the screen off (#1187 P3). A
+// start that waits for the network gives up after the same time (#1312).
+export const RECOVERY_DEADLINE_MS = 2 * 60 * 1000;
 const RECOVERY_SEEK_BACK_SECONDS = 0.75;
 // A server that never answers the probe must not hold recovery or the error
 // words back for good.
@@ -438,10 +439,20 @@ class AudioPlayer {
 		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
 		this.autoplayPending = opts.autoplay ?? true;
+		this.waitForTheNetworkFromTheTap();
 		const el = this.ensureAudio();
 		this.status = 'loading';
 		this.pauseElement(el);
 		this.attachTake(el, info, url, attachSource);
+	}
+
+	// A take asked for while the network is announced gone waits for it as
+	// a stalled take does, from the tap: the transport offers Pause and the
+	// recovery deadline runs, exactly as for a start that cannot read its
+	// takes offline (#1312).
+	private waitForTheNetworkFromTheTap(): void {
+		if (this.autoplayPending && this.callbacks.networkFailureIsAnnounced())
+			this.recoveryStartedAt = Date.now();
 	}
 
 	private attachTake(

@@ -6,12 +6,12 @@
 // reads "Reconnecting…" with the last progress it saw, in grey, its cancel and
 // the Takes ring grey too, and when the job ended while the network was gone
 // the card stays until its take is in the list. The card reads the same while
-// the browser is online but the job's stream stays refused, and a take tapped
-// offline plays by itself once the network is back (#1161). Mobile project
+// the browser is online but the job's stream stays refused. Mobile project
 // only: the phone's Generate bar is compact-shell UI, and the unit suite pins
-// the desktop placement (PlayerBar.test.ts). The album header Play pressed
-// offline waits and starts the album once the network is back (#1288), on
-// the phone and the desktop alike.
+// the desktop placement (PlayerBar.test.ts). A take row tapped offline plays
+// by itself once the network is back (#1161), and the album header Play
+// pressed offline waits and starts the album then (#1288); both show the same
+// waiting transport from the tap (#1312), on the phone and the desktop alike.
 //
 // The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
 // already open event stream running, so the page's open loads are stopped
@@ -62,8 +62,8 @@ const OFFLINE_SONG_TITLE = 'Offline Strip';
 const OFFLINE_NOTICE_MS = 1_500;
 // The ruling on #1032: back online, the page has caught up within 10 seconds.
 const BACK_ONLINE_MS = 10_000;
-// The player's first stall look comes 5 s after Play; until it the transport
-// says 'loading', from it on 'recovering'.
+// The player's first stall look comes 5 s after Play; a take tapped offline
+// already says 'recovering' from the tap (#1312), and still does after it.
 const FIRST_STALL_LOOK_MS = 10_000;
 const TAKE_AUDIO_PATH_PREFIX = '/audio/';
 // The request an album start makes for a song's takes (`fetchSong`).
@@ -303,34 +303,32 @@ test.describe('losing the network while a take plays on the phone', () => {
 // its download parks after its attempts, the player's stall looks wait
 // without asking again while the network is announced gone, and the
 // transport keeps its spinner until the network's return resumes the take.
-test.describe('tapping Play while the network is gone on the phone', () => {
+// From the tap it shows the album header start's waiting transport, Pause
+// with its spinner (#1312), on the phone and the desktop alike.
+test.describe('tapping a take row Play while the network is gone', () => {
 	// The take must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
 
-	test('waits with the spinner and no Retry, and plays the take by itself once the network is back (#1161 R2)', async ({
+	test('waits with Pause and its spinner from the tap and no Retry, and plays the take by itself once the network is back (#1161 R2, #1312)', async ({
 		page,
 		context,
 		isMobile
 	}) => {
-		test.skip(!isMobile, 'Mobile-only mini player; see the file header.');
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		const library = readSeededLibrary();
 		const songTitle = `${OFFLINE_SONG_TITLE} Tapped ${runMarker()}`;
 		await seedSongPhoneSong(library.songPhoneAlbumId, songTitle, 1, 1);
-		const miniPlayer = page.getByRole('contentinfo');
-		const pause = miniPlayer.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-		const retry = miniPlayer.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
-		const spinner = miniPlayer.locator('.play-btn .spinner');
-		const loadingSpinner = miniPlayer
-			.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
-			.locator('.spinner');
-		const recoveringSpinner = pause.locator('.spinner');
+		const transport = page.getByRole('contentinfo');
+		const pause = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+		const retry = transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
+		const spinner = transport.locator('.play-btn .spinner');
+		const waitingSpinner = pause.locator('.spinner');
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
 			.getByRole('button', { name: nameStartingWith(songTitle) })
 			.click();
-		await page.getByRole('tab', { name: /Takes/ }).click();
+		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 
 		await loseNetwork(page, context);
@@ -344,9 +342,9 @@ test.describe('tapping Play while the network is gone on the phone', () => {
 			.getByRole('tabpanel')
 			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
 			.click();
-		await expect(loadingSpinner).toBeVisible();
+		await expect(waitingSpinner).toBeVisible();
 		await expect.poll(() => offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
-		await expect(recoveringSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
+		await expect(waitingSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });
 		expect(offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(retry).toHaveCount(0);
 		await expect(page.getByRole('alert')).toHaveCount(0);
@@ -394,7 +392,9 @@ test.describe('pressing the album header Play while the network is gone', () => 
 
 		await expect(waiting).toBeVisible();
 		await expect(
-			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+			transport
+				.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+				.locator('.spinner')
 		).toBeVisible();
 		await expect(page.getByRole('alert')).toHaveCount(0);
 
