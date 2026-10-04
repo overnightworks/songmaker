@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 from typing import Annotated, NoReturn, Optional
 
-from cyclopts import App, Parameter
+from cyclopts import App, CycloptsError, CycloptsPanel, Parameter
+from cyclopts.exceptions import UnusedCliTokensError
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -27,7 +28,21 @@ from songmaker_cli.logging_config import configure_cli_logging
 
 log = logging.getLogger(__name__)
 
-app = App(name="songmaker", help="AI-powered song generation platform.")
+
+
+def _format_usage_error(error: CycloptsError) -> str | CycloptsPanel:
+    # Cyclopts would echo the leftover tokens, and a leftover token is typically
+    # a password typed on the command line out of habit; never print it back.
+    if isinstance(error, UnusedCliTokensError):
+        return "Error: unexpected extra argument; passwords are only read at the prompt"
+    return CycloptsPanel(error)
+
+
+app = App(
+    name="songmaker",
+    help="AI-powered song generation platform.",
+    error_formatter=_format_usage_error,
+)
 
 
 @app.meta.default
@@ -66,7 +81,7 @@ def login(
     username: Annotated[str, Parameter(help="Username")],
 ) -> None:
     """Authenticate with the songmaker server and save the session (asks for the password)."""
-    user = cli_login(_server(), username, getpass.getpass("Password: "))
+    user = cli_login(_server(), username, _ask_password("Password: "))
     log.info("Logged in as '%s' (role=%s)", user["username"], user["role"])
 
 
@@ -112,8 +127,8 @@ def reset_password(
     from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
-    password = getpass.getpass("Password: ")
-    if getpass.getpass("Repeat password: ") != password:
+    password = _ask_password("Password: ")
+    if _ask_password("Repeat password: ") != password:
         _exit_with_error("the passwords do not match")
     refusal = chosen_rule_refusal(password)
     if refusal is not None:
@@ -133,6 +148,13 @@ def reset_password(
             _exit_with_error("the session cache is unreachable, so nothing was changed")
         session.commit()
         print(f"Password reset for '{username}' (role={user.role}); {_sessions_ended(ended)}")
+
+
+def _ask_password(prompt: str) -> str:
+    try:
+        return getpass.getpass(prompt)
+    except EOFError:
+        _exit_with_error("no password given")
 
 
 def _exit_with_error(message: str) -> NoReturn:
