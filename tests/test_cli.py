@@ -128,9 +128,12 @@ def test_reset_password_stores_the_new_password(local_db, capsys) -> None:
 @pytest.mark.parametrize(
     "password, message",
     [
-        ("Ab1!xyz", "Error: password is too short (see --help for the minimum)"),
-        ("password123", "Error: Password is too common — choose something less predictable"),
-        ("aaaabbbb", "Error: Password must contain at least 4 unique characters"),
+        ("Ab1!xyz", "Error: String should have at least 8 characters"),
+        (
+            "password123",
+            "Error: Value error, Password is too common — choose something less predictable",
+        ),
+        ("aaaabbbb", "Error: Value error, Password must contain at least 4 unique characters"),
     ],
 )
 def test_reset_password_refuses_a_weak_password_without_echoing_it(
