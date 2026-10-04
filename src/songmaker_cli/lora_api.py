@@ -60,6 +60,7 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     add_user_lora_sample,
     count_active_user_loras,
     count_queued_lora_training_jobs,
@@ -501,7 +502,9 @@ def _fail_training_job(ctx: AppContext, job_id: str, lora_id: str) -> None:
     try:
         with ctx.db() as session:
             update_job_status(
-                session, job_id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL,
+                session,
+                job_id,
+                JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
             )
             update_user_lora(
                 session, lora_id,

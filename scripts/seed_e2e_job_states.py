@@ -68,6 +68,7 @@ from songmaker_cli.constants import MODEL_DEFAULT_MODE, GenerationPhase, JobStat
 from songmaker_cli.db.engine import connect_db, resolve_database_url
 from songmaker_cli.db.models import Generation, Job
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     create_generation,
     create_generation_created_event,
     create_job,
@@ -182,7 +183,7 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     ``owner_username`` resolves the same way ``create-song``'s does: a real
     generate job always carries its requester's id (``jobs_api.py``'s own
     ownership check reads it), never ``None``.
-    ``update_job_status(..., JobStatus.RUNNING, ...)`` sets ``heartbeat_at``
+    ``update_job_status(..., JobStatusUpdate(JobStatus.RUNNING, ...))`` sets ``heartbeat_at``
     to now itself, so the job starts well inside
     ``GENERATE_JOB_HEARTBEAT_STALE_THRESHOLD_SECONDS`` with no further work
     here. ``generation_started_at``, which a generating phase sets to now,
@@ -196,11 +197,13 @@ def cmd_set_running(session: Session, args: argparse.Namespace) -> None:
     update_job_status(
         session,
         job.id,
-        JobStatus.RUNNING,
-        progress=args.progress,
-        take_index=args.take_index,
-        take_count=args.take_count,
-        phase=args.phase,
+        JobStatusUpdate(
+            JobStatus.RUNNING,
+            progress=args.progress,
+            take_index=args.take_index,
+            take_count=args.take_count,
+            phase=args.phase,
+        ),
     )
     _backdate_generation_start(job, args)
     session.commit()
@@ -217,7 +220,9 @@ def cmd_set_phase(session: Session, args: argparse.Namespace) -> None:
     if job is None or job.status != JobStatus.RUNNING:
         raise SystemExit(f"Job {args.job_id} is not running")
     update_job_status(
-        session, job.id, JobStatus.RUNNING, progress=args.progress, phase=args.phase,
+        session,
+        job.id,
+        JobStatusUpdate(JobStatus.RUNNING, progress=args.progress, phase=args.phase),
     )
     _backdate_generation_start(job, args)
     session.commit()
@@ -242,7 +247,9 @@ def cmd_set_failed(session: Session, args: argparse.Namespace) -> None:
     resemble.
     """
     updated = update_job_status(
-        session, args.job_id, JobStatus.FAILED, error=args.error, error_type="generation_error",
+        session,
+        args.job_id,
+        JobStatusUpdate(JobStatus.FAILED, error=args.error, error_type="generation_error"),
     )
     if not updated:
         raise SystemExit(f"Job {args.job_id} was already terminal or does not exist")
@@ -273,7 +280,9 @@ def cmd_set_completed(session: Session, args: argparse.Namespace) -> None:
         session, _resolve_audio_dir(), mp3_bytes,
         song_id=job.song_id, version_id=version.id, owner_id=job.user_id,
     )
-    if not update_job_status(session, args.job_id, JobStatus.COMPLETED, progress=1.0):
+    if not update_job_status(
+        session, args.job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
+    ):
         raise SystemExit(f"Job {args.job_id} was already terminal")
     session.commit()
 

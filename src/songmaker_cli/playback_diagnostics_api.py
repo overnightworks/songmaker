@@ -7,7 +7,7 @@ removes the whole feature.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Annotated, Final
 
 import structlog
 from fastapi import APIRouter, Depends, Response, status
@@ -26,7 +26,7 @@ log = structlog.stdlib.get_logger(PLAYBACK_DIAGNOSTICS_LOGGER)
 @router.post("/playback-diagnostics", status_code=status.HTTP_204_NO_CONTENT)
 def record_playback_diagnostics(
     report: PlaybackDiagnosticsReport,
-    user: AuthenticatedUser = Depends(get_current_user),
+    user: Annotated[AuthenticatedUser, Depends(get_current_user)],
 ) -> Response:
     report_fields = report.model_dump(mode="json", exclude={"events"})
     for event in report.events:
