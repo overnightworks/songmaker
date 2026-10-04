@@ -131,7 +131,10 @@ interface PlaylistQueueSource {
 
 // A take the deck could not fetch stays skipped for the life of its queue,
 // and is named once, when playback reaches the place it would have started.
-type SkipNotice = 'pending' | 'announced';
+interface SkipNotice {
+	state: 'pending' | 'announced';
+	index: number;
+}
 
 interface QueueSkips {
 	skipped?: ReadonlyMap<PlaybackInfo, SkipNotice>;
@@ -544,6 +547,7 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 }
 
 interface LibraryTakeStart extends QueueStart {
+	keepPlaying?: boolean;
 	tappedRowSong?: SongItem;
 	// A restore reports nothing it cannot rebuild (#1187 P2), so the listener
 	// who reopens the page is never asked to retry a play they did not start.
@@ -609,7 +613,13 @@ async function playLibraryFromGeneration(
 	}
 	libraryQueueSkipped.set(queue.skipped ?? []);
 	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-	playNativeLibraryTakes(takes, startIndex, opts);
+	playNativeLibraryTakes(
+		takes,
+		startIndex,
+		opts.keepPlaying
+			? { ...opts, resumeAtTrackTime: audioPlayer.currentTimeNow ?? audioPlayer.currentTime }
+			: opts
+	);
 }
 
 async function playLibrary(opts: QueueStart = {}): Promise<void> {
@@ -751,7 +761,7 @@ async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
 	if (!audioPlayer.current) return;
 	if (get(queueContext).type !== 'library') return;
 	await playLibraryFromGeneration(audioPlayer.current.generation, {
-		resumeAtTrackTime: audioPlayer.currentTime
+		keepPlaying: true
 	});
 }
 
@@ -761,7 +771,7 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 	const trackTime = audioPlayer.currentTime;
 	const ctx = get(queueContext);
 	if (ctx.type === 'library') {
-		await playLibraryFromGeneration(current.generation, { resumeAtTrackTime: trackTime });
+		await playLibraryFromGeneration(current.generation, { keepPlaying: true });
 		return;
 	}
 	if (ctx.type === 'album') {
@@ -792,8 +802,9 @@ export function canPlayPrevSong(
 ): boolean {
 	if (audioPlayer.mode === 'stream') return audioPlayer.canPrevStreamTrack;
 	if (!current) return false;
-	if (ctx.type === 'playlist') return ctx.entries.length > 1;
-	if (ctx.takes && ctx.takes.length > 0) return ctx.takes.length > 1;
+	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
+		return adjacentQueueTake(ctx, current, -1).kind === 'take';
+	}
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
 	return pool.filter((s) => s.generation_count > 0).length > 1;
@@ -808,7 +819,7 @@ export function canPlayNextSong(
 	if (audioPlayer.mode === 'stream') return audioPlayer.canNextStreamTrack;
 	if (!current) return false;
 	if (ctx.type === 'playlist' || (ctx.takes && ctx.takes.length > 0)) {
-		return nextQueueTake(ctx, current).kind === 'take';
+		return adjacentQueueTake(ctx, current).kind === 'take';
 	}
 	if (ctx.type === 'library') return false;
 	const pool = songs.filter((s) => s.album_id === ctx.albumId);
@@ -978,7 +989,7 @@ function upNextItem(
 	ctx: QueueContext,
 	current: PlaybackInfo | null
 ): QueueRowItem | null {
-	const next = nextQueueTake(ctx, current);
+	const next = adjacentQueueTake(ctx, current);
 	return next.kind === 'take' ? (items[next.index] ?? null) : null;
 }
 
@@ -1249,28 +1260,40 @@ type NextQueueTake =
 
 const NO_NEXT_TAKE: NextQueueTake = { kind: 'none' };
 
-// The one decider of which take follows the current one: Next plays it, and
-// the preload loads it while the current one still plays, so the two can
-// never disagree. A queue wraps around and passes over a take the deck skipped;
+// Previous, Next and preload share the same playable queue places.
+// A queue wraps around and passes over a take the deck skipped;
 // the library window's last take is followed by its end, not by a take.
-function nextQueueTake(ctx: QueueContext, current: PlaybackInfo | null): NextQueueTake {
+function adjacentQueueTake(
+	ctx: QueueContext,
+	current: PlaybackInfo | null,
+	direction: QueueDirection = 1
+): NextQueueTake {
 	if (ctx.type === 'playlist') {
-		return firstPlayableAfter(ctx, {
-			index: currentPlaylistIndex(ctx, current),
-			length: ctx.entries.length,
-			takeAt: (index) => playlistEntryToPlaybackInfo(ctx.entries[index]),
-			endsWithItsWindow: false
-		});
+		return firstPlayableInDirection(
+			ctx,
+			{
+				index: currentPlaylistIndex(ctx, current),
+				length: ctx.entries.length,
+				takeAt: (index) => playlistEntryToPlaybackInfo(ctx.entries[index]),
+				endsWithItsWindow: false
+			},
+			direction
+		);
 	}
 	const index = nativeTakeIndex(ctx, current);
 	const takes = ctx.takes;
 	if (index < 0 || takes === undefined) return NO_NEXT_TAKE;
-	return firstPlayableAfter(ctx, {
-		index,
-		length: takes.length,
-		takeAt: (place) => takes[place],
-		endsWithItsWindow: ctx.type === 'library' && !get(libraryQueueSkippedComplete)
-	});
+	return firstPlayableInDirection(
+		ctx,
+		{
+			index,
+			length: takes.length,
+			takeAt: (place) => takes[place],
+			endsWithItsWindow:
+				direction === 1 && ctx.type === 'library' && !get(libraryQueueSkippedComplete)
+		},
+		direction
+	);
 }
 
 interface QueuePlace {
@@ -1280,11 +1303,15 @@ interface QueuePlace {
 	endsWithItsWindow: boolean;
 }
 
-function firstPlayableAfter(ctx: QueueContext, place: QueuePlace): NextQueueTake {
+function firstPlayableInDirection(
+	ctx: QueueContext,
+	place: QueuePlace,
+	direction: QueueDirection
+): NextQueueTake {
 	const windowEnd: NextQueueTake = place.endsWithItsWindow ? { kind: 'window-end' } : NO_NEXT_TAKE;
 	for (let step = 1; step < place.length; step++) {
 		if (place.endsWithItsWindow && place.index + step === place.length) return windowEnd;
-		const index = (place.index + step) % place.length;
+		const index = (place.index + direction * step + place.length) % place.length;
 		const take = place.takeAt(index);
 		if (!ctx.skipped?.has(take)) return { kind: 'take', index, take };
 	}
@@ -1296,7 +1323,7 @@ function takeAfterCurrent(): PlaybackInfo | null {
 }
 
 function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
-	const next = nextQueueTake(get(queueContext), take);
+	const next = adjacentQueueTake(get(queueContext), take);
 	return next.kind === 'take' ? next.take : null;
 }
 
@@ -1304,7 +1331,7 @@ function takeAfter(take: PlaybackInfo | null): PlaybackInfo | null {
 // queue plays next, or, where the library window ends, the ended take itself,
 // since a restored library queue builds its next window from there (#1236).
 function takeAfterTheEnd(): PlaybackInfo | null {
-	const next = nextQueueTake(get(queueContext), audioPlayer.current);
+	const next = adjacentQueueTake(get(queueContext), audioPlayer.current);
 	if (next.kind === 'window-end') return audioPlayer.current;
 	return next.kind === 'take' ? next.take : null;
 }
@@ -1319,31 +1346,17 @@ function playPlaylistInDirection(
 	ctx: Extract<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
-	if (direction === 1) {
-		const next = nextQueueTake(ctx, audioPlayer.current);
-		if (next.kind === 'take') playPlaylistIndex(ctx, next.index, { restart: true });
-		return;
-	}
-	if (ctx.entries.length <= 1) return;
-	const currentIndex = currentPlaylistIndex(ctx);
-	playPlaylistIndex(ctx, (currentIndex - 1 + ctx.entries.length) % ctx.entries.length, {
-		restart: true
-	});
+	const next = adjacentQueueTake(ctx, audioPlayer.current, direction);
+	if (next.kind === 'take') playPlaylistIndex(ctx, next.index, { restart: true });
 }
 
 function playNativeTakesInDirection(
 	ctx: Exclude<QueueContext, { type: 'playlist' }>,
 	direction: QueueDirection
 ): void {
-	if (direction === 1) {
-		const next = nextQueueTake(ctx, audioPlayer.current);
-		if (next.kind === 'window-end') windowEnded.set(true);
-		if (next.kind === 'take') playNativeIndex(ctx, next.index);
-		return;
-	}
-	const index = nativeTakeIndex(ctx, audioPlayer.current);
-	if (index < 0 || ctx.takes === undefined || ctx.takes.length <= 1) return;
-	playNativeIndex(ctx, (index - 1 + ctx.takes.length) % ctx.takes.length);
+	const next = adjacentQueueTake(ctx, audioPlayer.current, direction);
+	if (next.kind === 'window-end') windowEnded.set(true);
+	if (next.kind === 'take') playNativeIndex(ctx, next.index);
 }
 
 function playContextInDirection(ctx: QueueContext, direction: QueueDirection): boolean {
@@ -1788,7 +1801,7 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 	if (audioPlayer.status === 'playing') recordFirstTakeListen();
 	if (current === null) return;
 	moveQueueIndexTo(current);
-	announceSkipsReachedBy(current);
+	announcePendingSkips();
 	preloadNextTake();
 }
 
@@ -1798,39 +1811,39 @@ function handleCurrentChange(current: PlaybackInfo | null): void {
 function recordSkippedTake(take: PlaybackInfo): void {
 	const ctx = get(queueContext);
 	if (ctx.skipped?.has(take)) return;
-	const skipped = new Map(ctx.skipped).set(take, 'pending');
+	const skipped = new Map(ctx.skipped).set(take, {
+		state: 'pending' as const,
+		index: queuePlaceOf(ctx, take)
+	});
 	queueContext.set({ ...ctx, skipped });
-	announceSkips(
-		[...skipped]
-			.filter(([pending, notice]) => notice === 'pending' && noOtherTakeStartsInPlaceOf(pending))
-			.map(([pending]) => pending)
-	);
+	announcePendingSkips();
 }
 
-// Where the queue ends at a skipped take's place, or only the playing take
-// would play again there, no take change ever reaches that place, so the take
-// is named at once rather than never. A later skip can close a place an
-// earlier pending skip was waiting on, so every pending skip is asked again.
-function noOtherTakeStartsInPlaceOf(take: PlaybackInfo): boolean {
-	const ctx = get(queueContext);
-	const follower = nextQueueTake(ctx, take);
+// A repick changes the take at a place, not the place awaiting its notice.
+// No follower, or only the playing take, closes it without a take-change event (#1298).
+function skipReachedOrClosed(ctx: QueueContext, take: PlaybackInfo, notice: SkipNotice): boolean {
+	const atPlace =
+		ctx.type === 'playlist'
+			? playlistEntryToPlaybackInfo(ctx.entries[notice.index])
+			: ctx.takes?.[notice.index];
+	if (!atPlace) return true;
+	const follower =
+		atPlace !== take && !ctx.skipped?.has(atPlace)
+			? { kind: 'take', index: notice.index }
+			: adjacentQueueTake(ctx, atPlace);
 	return follower.kind !== 'take' || follower.index === queuePlaceOf(ctx, audioPlayer.current);
 }
 
-function announceSkipsReachedBy(current: PlaybackInfo): void {
-	const reached = [...(get(queueContext).skipped ?? [])]
-		.filter(([take, notice]) => notice === 'pending' && takeAfter(take) === current)
-		.map(([take]) => take);
-	announceSkips(reached);
-}
-
-function announceSkips(takes: PlaybackInfo[]): void {
-	if (takes.length === 0) return;
+function announcePendingSkips(): void {
 	const ctx = get(queueContext);
+	const reached = [...(ctx.skipped ?? [])].filter(
+		([take, notice]) => notice.state === 'pending' && skipReachedOrClosed(ctx, take, notice)
+	);
+	if (reached.length === 0) return;
 	const skipped = new Map(ctx.skipped);
-	for (const take of takes) {
+	for (const [take, notice] of reached) {
 		addToast(`${take.songTitle} couldn't be loaded, skipped.`, 'error');
-		skipped.set(take, 'announced');
+		skipped.set(take, { ...notice, state: 'announced' });
 	}
 	queueContext.set({ ...ctx, skipped });
 }

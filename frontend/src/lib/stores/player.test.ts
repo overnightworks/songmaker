@@ -2399,6 +2399,38 @@ describe('the queue names its next take', () => {
 		);
 
 		it.each(startsOfAQueueOfThree)(
+			'Previous passes over it to the take before it ($queue)',
+			async ({ start }) => {
+				await startAndSkipTheSecondTake(start);
+				moveOnAsTheDeckDoes();
+
+				await playPrevSong();
+
+				expect(audioPlayer.current?.generation.id).toBe('g1');
+			}
+		);
+
+		it('a pending skip survives a repick of its place and is named once when that place plays', async () => {
+			await startAndSkipTheSecondTake(startsOfAQueueOfThree[0].start);
+			const song = albumSong(2);
+			const replacement = makeGen({
+				...song.generations[0],
+				id: 'g2-repicked',
+				mp3_path: 'a1/s2-repicked.mp3'
+			});
+
+			upsertSongInList({ ...song, generations: [replacement] });
+
+			expect(upNextGenerationId()).toBe(replacement.id);
+			expect(get(toasts)).toEqual([]);
+			moveOnAsTheDeckDoes();
+			expect(audioPlayer.current?.generation.id).toBe(replacement.id);
+			expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+			for (let step = 0; step < 3; step++) moveOnAsTheDeckDoes();
+			expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+		});
+
+		it.each(startsOfAQueueOfThree)(
 			'is named when the take after it starts, not when its fetch fails ($queue)',
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
@@ -2453,6 +2485,17 @@ describe('the queue names its next take', () => {
 		];
 
 		it.each(startsOfAQueueOfTwo)(
+			'Previous stays on the current take when every other take is skipped ($queue)',
+			async ({ start }) => {
+				await startAndSkipTheSecondTake(start);
+
+				await playPrevSong();
+
+				expect(audioPlayer.current?.generation.id).toBe('g1');
+			}
+		);
+
+		it.each(startsOfAQueueOfTwo)(
 			'is named at once where only the playing take would start in its place ($queue)',
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
@@ -2488,6 +2531,21 @@ describe('the queue names its next take', () => {
 				expect(get(toasts)).toEqual([SKIPPED_TOAST, skippedToast('Song 3')]);
 			}
 		);
+
+		it('a refused last take of a library window is named at once and Next ends the window', async () => {
+			await libraryWindowOfThree.start();
+			moveOnAsTheDeckDoes();
+			const last = preloadedTake();
+			expect(last?.generation.id).toBe('g3');
+			if (last) audioPlayer.currentCallbacks.onTakeSkipped?.(last);
+
+			expect(upNextGenerationId()).toBeUndefined();
+			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
+			await playNextSong();
+			expect(get(windowEnded)).toBe(true);
+			expect(audioPlayer.current?.generation.id).toBe('g2');
+			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
+		});
 
 		it.each(startsOfAQueueOfThree)('a new queue forgets it ($queue)', async ({ start }) => {
 			await startAndSkipTheSecondTake(start);
@@ -2888,6 +2946,36 @@ describe('shuffle rebuilds the playing queue', () => {
 	beforeEach(() => {
 		toasts.set([]);
 	});
+
+	it.each([
+		{ change: 'shuffle', rebuild: () => toggleShuffle() },
+		{ change: 'pool', rebuild: () => chooseLibraryTakePool('all') }
+	])(
+		'$change keeps the position reached while the library fetch was pending',
+		async ({ rebuild }) => {
+			const gen = makeGen(genDefaults);
+			audioPlayer.current = makePlayback(gen, makeSong(queuedSongDefaults()));
+			audioPlayer.currentTime = 70;
+			audioPlayer.status = 'playing';
+			queueContext.set({ type: 'library' });
+			let finishFetch!: (queue: LibraryPoolQueue) => void;
+			vi.mocked(fetchLibraryPoolQueue).mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishFetch = resolve;
+				})
+			);
+
+			const rebuilding = rebuild();
+			audioPlayer.currentTime = 72;
+			finishFetch(makePoolQueue({ takes: [makePoolTake({ generation_id: gen.id })] }));
+			await rebuilding;
+
+			expect(audioPlayer.load).toHaveBeenLastCalledWith(
+				expect.objectContaining({ generation: expect.objectContaining({ id: gen.id }) }),
+				expect.objectContaining({ startAt: 72 })
+			);
+		}
+	);
 
 	it('toggling shuffle mid-library-play rebuilds at the current take and time', async () => {
 		const gen = makeGen({ ...genDefaults, id: 'g-cur' });
