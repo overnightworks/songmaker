@@ -9,10 +9,9 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_test_app
+from conftest import make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.passwords import hash_password
 from webauth.policies import RateLimitClass
 from webauth.proxies import TrustedProxies
 
@@ -60,7 +59,7 @@ def client(tmp_path: Path) -> TestClient:
 def _login_as(client: TestClient, role: str) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        user = create_user(session, f"test_{role}", hash_password("t3stP@ssw0rd"), role=role)
+        user = create_user(session, f"test_{role}", stored_hash("t3stP@ssw0rd"), role=role)
         album = session.query(Album).filter_by(id="rock").first()
         if album and not album.created_by:
             album.created_by = user.id
@@ -179,7 +178,7 @@ def test_stale_own_job_does_not_block_generate_at_active_job_limit(
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        other_user = create_user(session, "other_user", hash_password("t3stP@ssw0rd"))
+        other_user = create_user(session, "other_user", stored_hash("t3stP@ssw0rd"))
         own_job = Job(
             type="generate", user_id=user_id, status="running",
             started_at=stale_at, heartbeat_at=stale_at,
@@ -531,7 +530,7 @@ def shared_slug_client(tmp_path: Path, monkeypatch) -> tuple[TestClient, str]:
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        admin = create_user(session, "admin", hash_password("t3stP@ssw0rd"), role="admin")
+        admin = create_user(session, "admin", stored_hash("t3stP@ssw0rd"), role="admin")
         album = session.query(Album).filter_by(id="shared_album").first()
         album.created_by = admin.id
         session.commit()
