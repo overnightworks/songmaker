@@ -874,8 +874,8 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 // pressed before the library on the first one's page attaches its landing
 // handler -- is heard once it does (`attachLandingHandler`), and meanwhile the
 // apply for the entry it left neither finishes over the entry history stands
-// on nor writes its library there. An entry without an id tells nothing apart, so there only the newer
-// apply and the write stop it.
+// on nor writes its library there. An entry without an id tells nothing
+// apart, so there only the newer apply and the write stop it.
 interface HistoryApply {
 	readonly entry: number | null;
 }

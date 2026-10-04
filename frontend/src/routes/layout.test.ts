@@ -904,8 +904,8 @@ describe('a reload on a library page', () => {
 });
 
 // A phone tab reloaded over the full Now Playing comes back onto that layer's
-// entry; the history listener steps off it once the library starts -- but
-// only while the page still stands there (issue #1002).
+// entry; the installed history controller steps off it once the router start
+// has run -- but only while the page still stands there (issue #1002).
 describe('a reload over the phone Now Playing', () => {
 	it('stays on the Library wall the sign-in redirect lands on', async () => {
 		resetLibraryContextForTests();
