@@ -45,6 +45,8 @@ prometheus_config_last_reload_successful 1
 # Any fixed point in time — the script only ever reads differences.
 CLOCK_START_EPOCH = 1_756_000_000
 CHECK_RUN_FIELD_SEPARATOR = "\x1f"
+REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
+ADVISORY_ACTIONS_JOB_NAME = "SonarCloud scan"
 
 VALID_ALERT_ENV = """\
 ALERT_EMAIL_TO='operator@example.com'
@@ -56,19 +58,29 @@ SMTP_PASSWORD='correct-horse-battery-staple'
 
 
 def _check_runs_response(*runs: tuple[str, ...]) -> str:
-    """Project GitHub check runs as the auto-deploy script's jq query does."""
+    """Project GitHub check runs as the auto-deploy script's jq query does.
+
+    A run is status/conclusion, app/status/conclusion, or
+    app/name/status/conclusion; the omitted app is GitHub Actions and the
+    omitted name an ordinary required CI job.
+    """
     records = []
     for run in runs:
         if len(run) == 2:
+            app_slug, name = "github-actions", REQUIRED_ACTIONS_JOB_NAME
             status, conclusion = run
-            app_slug = "github-actions"
         elif len(run) == 3:
+            name = REQUIRED_ACTIONS_JOB_NAME
             app_slug, status, conclusion = run
+        elif len(run) == 4:
+            app_slug, name, status, conclusion = run
         else:
-            raise ValueError("a check run needs status/conclusion or app/status/conclusion")
+            raise ValueError(
+                "a check run needs status/conclusion, app/status/conclusion, "
+                "or app/name/status/conclusion",
+            )
         records.append(
-            f"check{CHECK_RUN_FIELD_SEPARATOR}{app_slug}{CHECK_RUN_FIELD_SEPARATOR}"
-            f"{status}{CHECK_RUN_FIELD_SEPARATOR}{conclusion}\n",
+            CHECK_RUN_FIELD_SEPARATOR.join(("check", app_slug, name, status, conclusion)) + "\n",
         )
     return f"envelope{CHECK_RUN_FIELD_SEPARATOR}{len(runs)}\n" + "".join(records)
 
@@ -852,9 +864,17 @@ def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
     assert "compose build" in checkout.docker_calls
 
 
-@pytest.mark.parametrize("conclusion", ["failure", "cancelled"])
+@pytest.mark.parametrize(
+    ("job_name", "conclusion"),
+    [
+        (REQUIRED_ACTIONS_JOB_NAME, "failure"),
+        (REQUIRED_ACTIONS_JOB_NAME, "cancelled"),
+        ("Sonarcloud scan", "failure"),
+    ],
+)
 def test_non_successful_github_actions_checks_are_skipped(
     tmp_path: Path,
+    job_name: str,
     conclusion: str,
 ) -> None:
     checkout = Checkout(tmp_path)
@@ -864,7 +884,10 @@ def test_non_successful_github_actions_checks_are_skipped(
     local_head_before = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
-    checkout.set_check_runs(("completed", "success"), ("completed", conclusion))
+    checkout.set_check_runs(
+        ("completed", "success"),
+        ("github-actions", job_name, "completed", conclusion),
+    )
 
     result = checkout.tick()
 
@@ -880,8 +903,22 @@ def test_non_successful_github_actions_checks_are_skipped(
     assert "builder prune" not in checkout.docker_calls
 
 
+@pytest.mark.parametrize(
+    ("app_slug", "name", "advisory_log"),
+    [
+        ("sonarcloud", "SonarCloud Code Analysis", "app 'sonarcloud' is advisory, ignored"),
+        (
+            "github-actions",
+            ADVISORY_ACTIONS_JOB_NAME,
+            f"GitHub Actions job '{ADVISORY_ACTIONS_JOB_NAME}' is advisory, ignored",
+        ),
+    ],
+)
 def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
+    app_slug: str,
+    name: str,
+    advisory_log: str,
 ) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
@@ -890,7 +927,7 @@ def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate
     expected_head = checkout.remote_main_sha()
     checkout.set_check_runs(
         ("github-actions", "completed", "success"),
-        ("sonarcloud", "completed", "failure"),
+        (app_slug, name, "completed", "failure"),
     )
 
     result = checkout.tick()
@@ -898,7 +935,7 @@ def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate
     assert result.returncode == 0
     assert checkout.deployed_sha_file.read_text() == expected_head
     assert "compose build" in checkout.docker_calls
-    assert "app 'sonarcloud' is advisory, ignored" in checkout.journal
+    assert advisory_log in checkout.journal
 
 
 def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
@@ -911,8 +948,10 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
     ).strip()
     checkout.set_check_runs_response(
         f"envelope{CHECK_RUN_FIELD_SEPARATOR}1\n"
-        f"check{CHECK_RUN_FIELD_SEPARATOR}{CHECK_RUN_FIELD_SEPARATOR}completed"
-        f"{CHECK_RUN_FIELD_SEPARATOR}failure\n",
+        + CHECK_RUN_FIELD_SEPARATOR.join(
+            ("check", "", REQUIRED_ACTIONS_JOB_NAME, "completed", "failure"),
+        )
+        + "\n",
     )
 
     result = checkout.tick()
@@ -926,7 +965,24 @@ def test_a_missing_check_run_app_slug_refuses_to_deploy(tmp_path: Path) -> None:
     assert "compose build" not in checkout.docker_calls
 
 
-def test_a_nul_in_a_check_run_conclusion_refuses_to_deploy(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "check_run_record",
+    [
+        pytest.param(
+            r'{"app":{"slug":"github-actions"},"name":"Backend",'
+            r'"status":"completed","conclusion":"suc\u0000cess"}',
+            id="nul-in-conclusion",
+        ),
+        pytest.param(
+            r'{"app":{"slug":"github-actions"},"status":"completed","conclusion":"success"}',
+            id="missing-job-name",
+        ),
+    ],
+)
+def test_a_malformed_check_run_record_refuses_to_deploy(
+    tmp_path: Path,
+    check_run_record: str,
+) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
@@ -935,8 +991,7 @@ def test_a_nul_in_a_check_run_conclusion_refuses_to_deploy(tmp_path: Path) -> No
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
     checkout.set_check_runs_raw_response(
-        r'{"total_count":1,"check_runs":[{"app":{"slug":"github-actions"},'
-        r'"status":"completed","conclusion":"suc\u0000cess"}]}',
+        f'{{"total_count":1,"check_runs":[{check_run_record}]}}',
     )
 
     result = checkout.tick()
@@ -1512,8 +1567,10 @@ def test_malformed_check_status_refuses_to_pull_with_a_named_failure(tmp_path: P
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     checkout.set_check_runs_response(
-        f"check{CHECK_RUN_FIELD_SEPARATOR}github-actions{CHECK_RUN_FIELD_SEPARATOR}"
-        f"completed{CHECK_RUN_FIELD_SEPARATOR}success\n",
+        CHECK_RUN_FIELD_SEPARATOR.join(
+            ("check", "github-actions", REQUIRED_ACTIONS_JOB_NAME, "completed", "success"),
+        )
+        + "\n",
     )
 
     result = checkout.tick()
