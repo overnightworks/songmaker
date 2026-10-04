@@ -15,6 +15,7 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -1261,6 +1262,8 @@ test.describe('Back closes the open overlay outside the library', () => {
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		await openVoicesOverTheWall(page, 'mobile');
+		const rail = await openRailNav(page, 'mobile');
+		await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
 
 		await openAlbumFromRail(page, 'mobile', library.albumTitle);
 		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
