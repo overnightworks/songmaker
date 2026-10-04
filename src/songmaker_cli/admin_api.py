@@ -57,7 +57,12 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.arq_pool import get_arq_pool_dep
-from songmaker_cli.auth_dependencies import _audit_sink, require_admin, user_management
+from songmaker_cli.auth_dependencies import (
+    _audit_sink,
+    get_verified_session_id,
+    require_admin,
+    user_management,
+)
 from songmaker_cli.auth_stores import DatabaseAuditSink
 from songmaker_cli.constants import (
     MODEL_CONFIG_PATHS,
@@ -295,11 +300,14 @@ def sessions_endpoint(
     page: AdminPagination,
     db: Session = Depends(get_db_session),
     _admin: AuthenticatedUser = Depends(require_admin),
+    current_session_id: str = Depends(get_verified_session_id),
 ) -> PaginatedResponse[SessionResponse]:
     total = count_active_sessions(db)
     sessions = list_active_sessions(db, offset=page.offset, limit=page.limit)
     return PaginatedResponse(
-        items=[SessionResponse.from_orm(s) for s in sessions],
+        items=[
+            SessionResponse.from_orm(s, is_current=s.id == current_session_id) for s in sessions
+        ],
         total=total, offset=page.offset, limit=page.limit,
         has_more=page_has_more(offset=page.offset, fetched=len(sessions), total=total),
     )

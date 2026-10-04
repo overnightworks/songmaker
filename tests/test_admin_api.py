@@ -596,6 +596,25 @@ def test_list_sessions(client: TestClient) -> None:
     assert data["items"][0]["username"] == "admin"
 
 
+def test_each_admin_device_sees_only_its_own_session_as_current(admin_client: TestClient) -> None:
+    from conftest import login_and_csrf
+
+    with closing(TestClient(admin_client.app, cookies={})) as second_device:
+        login_and_csrf(second_device, "admin", "admin12345")
+
+        current_on_first = [
+            entry["id"] for entry in admin_client.get("/api/admin/sessions").json()["items"]
+            if entry["is_current"]
+        ]
+        listed_on_second = second_device.get("/api/admin/sessions").json()["items"]
+        current_on_second = [entry["id"] for entry in listed_on_second if entry["is_current"]]
+
+    assert len(listed_on_second) == 2
+    assert len(current_on_first) == 1
+    assert len(current_on_second) == 1
+    assert current_on_first != current_on_second
+
+
 def test_force_logout(client: TestClient) -> None:
     _login_as_admin(client)
 

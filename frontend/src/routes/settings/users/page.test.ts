@@ -21,6 +21,7 @@ import {
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
 	MODELS_SAVE_FAILED_FALLBACK,
+	PASSWORD_MIN_LENGTH,
 	UNREACHABLE_RELOAD_DELAYS_MS
 } from '$lib/constants';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
@@ -90,7 +91,15 @@ const SESSION: SessionItem = {
 	created_at: '2026-01-03T00:00:00Z',
 	expires_at: '2026-01-04T00:00:00Z',
 	ip_address: '203.0.113.10',
-	user_agent: 'vitest'
+	user_agent: 'vitest',
+	is_current: false
+};
+const OWN_SESSION: SessionItem = {
+	...SESSION,
+	id: 's0',
+	user_id: 'u1',
+	username: 'felix',
+	is_current: true
 };
 const ATTEMPT: LoginAttemptItem = {
 	id: 'a1',
@@ -471,7 +480,7 @@ describe('admin settings compact layout', () => {
 
 		const form = requireElement<HTMLFormElement>(target, '.inline-form-row .inline-form');
 		expect(form.querySelector('input')?.getAttribute('placeholder')).toBe(
-			'New password (min 8 chars)'
+			`New password (min ${PASSWORD_MIN_LENGTH} chars)`
 		);
 		expect(form.textContent).toContain('Save');
 		expect(form.textContent).toContain('Cancel');
@@ -630,6 +639,114 @@ describe('admin settings compact layout', () => {
 		expect(target.querySelector(`select[aria-label="${ADMIN_TABS_LABEL}"]`)).toBeNull();
 		expect(buttons).toEqual(TAB_LABELS);
 		expect(getComputedStyle(requireElement(target, '.stack-table')).display).not.toBe('block');
+	});
+});
+
+describe('admin own session and create-form errors', () => {
+	function rowOf(section: HTMLElement, username: string): HTMLElement {
+		const row = Array.from(section.querySelectorAll<HTMLElement>('tbody tr')).find(
+			(el) => el.querySelector('[data-label="User"]')?.textContent?.trim() === username
+		);
+		if (!row) throw new Error(`Expected a session row for ${username}`);
+		return row;
+	}
+
+	function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
+		const input = requireElement<HTMLInputElement>(form, `input[placeholder="${placeholder}"]`);
+		input.value = value;
+		input.dispatchEvent(new Event('input', { bubbles: true }));
+	}
+
+	async function submitCreate(target: HTMLElement): Promise<HTMLFormElement> {
+		const form = requireElement<HTMLFormElement>(target, '.create-form');
+		typeInto(form, 'Username', 'jane');
+		typeInto(form, 'Password', 'example-password');
+		form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+		await flush();
+		return form;
+	}
+
+	it.each([true, false])(
+		'marks the own session This device and offers Revoke only on the others (compact: %s)',
+		async (compact) => {
+			api.fetchSessions.mockResolvedValue(pageOf([OWN_SESSION, SESSION]));
+			const target = await renderPage(compact);
+			if (compact) await selectTab(target, 'sessions');
+			else {
+				const button = Array.from(target.querySelectorAll<HTMLButtonElement>('.tabs button')).find(
+					(el) => el.textContent?.trim() === 'Sessions'
+				);
+				button?.click();
+				await flush();
+			}
+			const sessions = sectionByHeading(target, 'Active Sessions');
+			const own = rowOf(sessions, 'felix');
+			const other = rowOf(sessions, 'jane');
+
+			expect(own.querySelector('.actions')?.textContent?.trim()).toBe('This device');
+			expect(own.querySelector('button')).toBeNull();
+			expect(other.querySelector('button')?.textContent?.trim()).toBe('Revoke');
+		}
+	);
+
+	it('shows a create refusal inside the create form, not in the page banner', async () => {
+		api.createUser.mockRejectedValueOnce(serverRefusal('Username already exists'));
+		const target = await renderPage(true);
+		await submitCreate(target);
+
+		expect(sectionByHeading(target, 'Create User').textContent).toContain(
+			'Username already exists'
+		);
+		expect(target.querySelectorAll('.error')).toHaveLength(1);
+	});
+
+	it('typing in the create form clears its own refusal and leaves a revoke failure standing', async () => {
+		api.fetchSessions.mockResolvedValue(pageOf([OWN_SESSION, SESSION]));
+		api.forceLogout.mockRejectedValueOnce(serverRefusal('Session not found'));
+		api.createUser.mockRejectedValueOnce(serverRefusal('Username already exists'));
+		const target = await renderPage(true);
+		await selectTab(target, 'sessions');
+		rowOf(sectionByHeading(target, 'Active Sessions'), 'jane').querySelector('button')?.click();
+		await flush();
+		await selectTab(target, 'users');
+		const form = await submitCreate(target);
+		expect(target.textContent).toContain('Username already exists');
+
+		typeInto(form, 'Username', 'janet');
+		await flush();
+
+		expect(target.textContent).not.toContain('Username already exists');
+		expect(target.textContent).toContain('Session not found');
+	});
+
+	it('takes every password minimum from the one shared constant', async () => {
+		const target = await renderPage(true);
+		const janeRow = Array.from(target.querySelectorAll('tr')).find((el) =>
+			el.textContent?.includes('jane')
+		);
+		const reset = Array.from(janeRow?.querySelectorAll('button') ?? []).find(
+			(button) => button.textContent?.trim() === 'Reset PW'
+		);
+		reset?.click();
+		await tick();
+
+		const passwordInputs = Array.from(
+			target.querySelectorAll<HTMLInputElement>('input[type="password"]')
+		);
+		expect(passwordInputs).toHaveLength(2);
+		for (const input of passwordInputs) expect(input.minLength).toBe(PASSWORD_MIN_LENGTH);
+
+		const resetForm = requireElement<HTMLFormElement>(target, '.inline-form-row .inline-form');
+		const resetInput = requireElement<HTMLInputElement>(resetForm, 'input');
+		resetInput.value = 'x'.repeat(PASSWORD_MIN_LENGTH - 1);
+		resetInput.dispatchEvent(new Event('input', { bubbles: true }));
+		resetForm.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+		await flush();
+
+		expect(target.textContent).toContain(
+			`Password must be at least ${PASSWORD_MIN_LENGTH} characters`
+		);
+		expect(api.updateUser).not.toHaveBeenCalled();
 	});
 });
 
