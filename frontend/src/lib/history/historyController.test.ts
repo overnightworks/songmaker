@@ -4,9 +4,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { goto } from '$app/navigation';
 import {
 	allocateEntryId,
+	attachLandingHandler,
+	forgetLayerEntries,
+	historyStandsStill,
+	installHistoryController,
 	land,
 	landedEntry,
-	listenForLandings,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	navigateTo,
@@ -179,7 +182,7 @@ describe('entry ids', () => {
 
 describe('history adapter', () => {
 	const landings: Landing[] = [];
-	let stopListening: () => void;
+	let detachLandingHandler: () => void;
 	let landingHeard: (() => void) | null = null;
 
 	function nextLanding(): Promise<void> {
@@ -188,19 +191,30 @@ describe('history adapter', () => {
 		});
 	}
 
-	beforeEach(() => {
-		sessionStorage.clear();
-		history.replaceState(null, '', '/');
-		resetHistoryControllerForTests();
-		landings.length = 0;
-		stopListening = listenForLandings((landing) => {
+	function attachRecordingHandler(): void {
+		detachLandingHandler = attachLandingHandler((landing) => {
 			landings.push(landing);
 			landingHeard?.();
 		});
+	}
+
+	// A page load, the way the app starts one: the controller starts afresh,
+	// the root layout installs it, and the library attaches its handler.
+	function loadPage(): void {
+		resetHistoryControllerForTests();
+		installHistoryController();
+		attachRecordingHandler();
+	}
+
+	beforeEach(() => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/');
+		landings.length = 0;
+		loadPage();
 	});
 
 	afterEach(() => {
-		stopListening();
+		resetHistoryControllerForTests();
 		resetLayersForTests();
 		vi.restoreAllMocks();
 	});
@@ -243,7 +257,7 @@ describe('history adapter', () => {
 	it('steps off a stale layer entry Forward lands on after a reload', async () => {
 		const page = pushEntry('/album/a', {});
 		pushEntry('/album/a', {}, 'album-menu');
-		resetHistoryControllerForTests();
+		loadPage();
 		await stepBackTo(page.id);
 
 		const steppedBack = nextLanding().then(nextLanding);
@@ -279,7 +293,7 @@ describe('history adapter', () => {
 	it('ids stay above the entry a reload lands on while session storage refuses writes', () => {
 		sessionStorageRefusingWritesAfter(0);
 		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
-		resetHistoryControllerForTests();
+		loadPage();
 
 		const layer = pushEntry('/album/c', {}, 'now-playing');
 
@@ -290,7 +304,7 @@ describe('history adapter', () => {
 		sessionStorageRefusingWritesAfter(0);
 		['/album/a', '/album/b', '/album/c'].forEach((url) => pushEntry(url, {}));
 		await traverse(() => history.back());
-		resetHistoryControllerForTests();
+		loadPage();
 		await traverse(() => history.forward());
 
 		const layer = pushEntry('/album/c', {}, 'now-playing');
@@ -402,10 +416,10 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual({ id: expect.any(Number) });
 	});
 
-	it('a Back while nobody listened is heard once the handler listens again, and only once', async () => {
+	it('a Back while no handler was attached is heard once a handler attaches, and only once', async () => {
 		const album = pushEntry('/album/a', {});
 		pushEntry('/album/b', {});
-		stopListening();
+		detachLandingHandler();
 		const landed = new Promise((resolve) =>
 			window.addEventListener('popstate', resolve, { once: true })
 		);
@@ -413,12 +427,48 @@ describe('history adapter', () => {
 		await landed;
 
 		const heard: Landing[] = [];
-		stopListening = listenForLandings((landing) => heard.push(landing));
-		stopListening();
-		stopListening = listenForLandings((landing) => heard.push(landing));
+		detachLandingHandler = attachLandingHandler((landing) => heard.push(landing));
+		detachLandingHandler();
+		detachLandingHandler = attachLandingHandler((landing) => heard.push(landing));
 
 		expect(heard).toHaveLength(1);
 		expect(heard[0]).toMatchObject({ apply: true, ledger: { current: album } });
+	});
+
+	it('Back closes the open layer while no handler is attached, and leaves the page where it is', async () => {
+		const page = pushEntry('/settings/voices', {});
+		let menuOpen = true;
+		holdLayer('account-menu', () => (menuOpen = false));
+		detachLandingHandler();
+
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+
+		expect(menuOpen).toBe(false);
+		expect(stackedLayers()).toEqual([]);
+		expect(standingEntry()).toEqual(page);
+		expect(location.pathname).toBe('/settings/voices');
+	});
+
+	it('a layer opened after its entries were forgotten still gets an entry of its own', () => {
+		const page = pushEntry('/settings', {});
+		forgetLayerEntries();
+
+		holdLayer('rail-drawer', () => undefined);
+
+		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'rail-drawer' });
+		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+	});
+
+	it('refuses a second install', () => {
+		expect(() => installHistoryController()).toThrow(/already installed/);
+	});
+
+	it('refuses a second landing handler while one is attached', () => {
+		expect(() => attachLandingHandler(() => undefined)).toThrow(/already attached/);
 	});
 
 	it('the page entry under an open layer is the page the layer covers', () => {
@@ -491,10 +541,50 @@ describe('history adapter', () => {
 		expect(standingEntry()).toEqual(loaded);
 		expect(location.pathname).toBe('/album/a');
 	});
+
+	// The router starts listening for popstate only after the page it started on
+	// is mounted, and its handling would abort a navigation the controller's
+	// part of a landing released before it.
+	it('hears a landing after the router once the router start has run to its end', async () => {
+		pushEntry('/album/a', {});
+		pushEntry('/album/b', {});
+		const heard: string[] = [];
+		const routerHears = (): number => heard.push('router');
+		stampNavigatedEntry('enter');
+		window.addEventListener('popstate', routerHears);
+		await historyStandsStill();
+		detachLandingHandler();
+		detachLandingHandler = attachLandingHandler(() => heard.push('controller'));
+
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+		window.removeEventListener('popstate', routerHears);
+
+		expect(heard).toEqual(['router', 'controller']);
+	});
+
+	it('the router start steps off a layer entry a reload came back onto', async () => {
+		const page = pushEntry('/settings/voices', {});
+		pushEntry('/settings/voices', {}, 'account-menu');
+		resetHistoryControllerForTests();
+		loadHistoryPageForTests();
+		startFakeRouter();
+		installHistoryController();
+		attachRecordingHandler();
+
+		const steppedOff = nextLanding();
+		stampNavigatedEntry('enter');
+		await steppedOff;
+
+		expect(standingEntry()).toEqual(page);
+		expect(location.pathname).toBe('/settings/voices');
+	});
 });
 
 describe('route convergence after a landing', () => {
-	let stopListening: () => void;
 	let stopConverging: () => void;
 
 	beforeEach(async () => {
@@ -502,7 +592,8 @@ describe('route convergence after a landing', () => {
 		history.replaceState(null, '', '/');
 		resetHistoryControllerForTests();
 		startFakeRouter();
-		stopListening = listenForLandings(() => undefined);
+		installHistoryController();
+		attachLandingHandler(() => undefined);
 		stopConverging = followBeforeNavigate(mountRouteOfLandedAddress);
 		await vi.mocked(goto)('/album/a');
 		stampNavigatedEntry('goto');
@@ -510,7 +601,7 @@ describe('route convergence after a landing', () => {
 
 	afterEach(() => {
 		stopConverging();
-		stopListening();
+		resetHistoryControllerForTests();
 		vi.restoreAllMocks();
 	});
 

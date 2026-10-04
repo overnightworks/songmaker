@@ -28,7 +28,11 @@ import {
 	reportedNavigations,
 	startFakeRouter
 } from '$lib/test-utils/app-navigation';
-import { mountRouteOfLandedAddress, stampNavigatedEntry } from '$lib/history/historyController';
+import {
+	installHistoryController,
+	mountRouteOfLandedAddress,
+	stampNavigatedEntry
+} from '$lib/history/historyController';
 import SongDetailView from '$lib/components/SongDetailView.svelte';
 
 import { resetLibrarySearchForTests, searchQuery } from '$lib/stores/librarySearch';
@@ -241,6 +245,7 @@ beforeEach(() => {
 	resetCollectionForTests();
 	replaceHistoryEntry('/');
 	startFakeRouter();
+	installHistoryController();
 	vi.mocked(goto).mockClear();
 });
 
@@ -2050,20 +2055,21 @@ describe('full Now Playing owns one history entry', () => {
 		leaveSheetOwner();
 	});
 
-	it('stays on the playlist Back reaches from the Now Playing entry a reload left before navigation started', async () => {
+	it('steps off the Now Playing entry a reload left before navigation started, so one Back then leaves the playlist', async () => {
 		await openPlaylist('p1');
 		const page = standingHistoryEntry();
 		const playlistPath = location.pathname;
 		openNowPlaying('take');
 		await expectStandingLayer('now-playing');
+
 		await reloadBeforeNavigationStarts();
-		await pressBack();
 
-		stopNavigation = initNavigation();
-
-		await vi.waitFor(() => expect(currentLibraryHistoryState()).toBe(historyEntry()));
-		expect(standingHistoryEntry()).toEqual(page);
+		await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(page));
 		expect(location.pathname).toBe(playlistPath);
+		await pressBack();
+		stopNavigation = initNavigation();
+		await vi.waitFor(() => expect(location.pathname).toBe('/'));
+		expect(standingHistoryEntry()?.id).toBeLessThan(page?.id ?? Number.NEGATIVE_INFINITY);
 	});
 
 	it('Forward onto a Now Playing entry the library below has since outgrown shows the library of the entry it steps back onto', async () => {
@@ -2644,22 +2650,23 @@ describe('a menu kept in historyLayerState owns one history entry while open', (
 });
 
 describe('overlays outside the library', () => {
-	it('hold a layer Escape closes on /settings, and opening the drawer or a menu there writes no history', () => {
+	it('Back closes the topmost overlay on /settings before it leaves the page', async () => {
 		replaceHistoryEntry('/settings/voices');
-		const before = { length: historyLength(), state: historyEntry() };
 		const menu = historyLayerState('a-menu', false);
 		const leaveOwner = menu.subscribe(() => undefined);
-
 		toggleSidebar();
 		menu.set(true);
 
-		expect({ length: historyLength(), state: historyEntry() }).toEqual(before);
-		expect(closeTopLayer()).toBe(true);
+		await pressBack();
+
 		expect(get(menu)).toBe(false);
 		expect(get(sidebarOpen)).toBe(true);
-		expect(closeTopLayer()).toBe(true);
+		expect(location.pathname).toBe('/settings/voices');
+
+		await pressBack();
+
 		expect(get(sidebarOpen)).toBe(false);
-		expect(closeTopLayer()).toBe(false);
+		expect(location.pathname).toBe('/settings/voices');
 		leaveOwner();
 	});
 });

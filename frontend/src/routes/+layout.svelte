@@ -32,7 +32,12 @@
 	} from '$lib/stores/navigation';
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
-	import { mountRouteOfLandedAddress, stampNavigatedEntry } from '$lib/history/historyController';
+	import {
+		historyStandsStill,
+		installHistoryController,
+		mountRouteOfLandedAddress,
+		stampNavigatedEntry
+	} from '$lib/history/historyController';
 	import {
 		startLibraryResourceSync,
 		stopLibraryResourceSync,
@@ -84,7 +89,7 @@
 	// the browser genuinely leaves it. Signed out, and on login, setup, share and
 	// Settings, it is false — exactly the routes outside the `(library)` route
 	// group, which owns the workspace's own mount (issue #276); this layout
-	// keeps the stream and the history listener, which outlive a route swap
+	// keeps the stream and the landing handler, which outlive a route swap
 	// inside that group the same way they always have.
 	const libraryRouteActive = $derived(
 		hasPrivatePlayer && isLibraryWorkspacePath(page.url.pathname)
@@ -158,6 +163,10 @@
 		return startPlaybackDiagnostics(signedInUserId);
 	});
 
+	// The history controller runs on every page, so Back closes the topmost
+	// overlay before it leaves the page, signed in or not.
+	$effect(() => installHistoryController());
+
 	// Every entry a navigation writes gets its history entry id, and library
 	// history -- shallow routing, which waits for the router -- goes once the
 	// first navigation it reports, the page it started on, has its id back. A
@@ -170,7 +179,7 @@
 	});
 	beforeNavigate(mountRouteOfLandedAddress);
 
-	// The live-sync stream and the history listener outlive a route swap
+	// The live-sync stream and the library's landing handler outlive a route swap
 	// between the library's three addresses, so this layout owns them rather
 	// than the `(library)` route group below it: the workspace page used to
 	// own them, and a swap tore them down and rebuilt them under the user.
@@ -224,6 +233,7 @@
 		if (get(authCheckError) || get(authCheckUnreachable)) {
 			return;
 		}
+		await historyStandsStill();
 		const signIn = signInAddress(page.url.pathname + page.url.search);
 		try {
 			const { required } = await checkSetupRequired();

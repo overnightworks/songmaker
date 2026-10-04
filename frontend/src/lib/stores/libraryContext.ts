@@ -871,11 +871,11 @@ export function holdLibraryRestoresUntil(release: Promise<void>): Promise<void> 
 // leaving that entry stops it, and so do a newer apply and a write
 // (`cancelLibraryHistoryApply`). A Back the library heard starts the newer
 // apply; one it did not -- the second of two quick Backs from Settings,
-// pressed before the library on the first one's page listens -- is heard once
-// it does (`listenForLandings`), and meanwhile the apply for the entry it left
-// neither finishes over the entry history stands on nor writes its library
-// there. An entry without an id tells nothing apart, so there only the newer
-// apply and the write stop it.
+// pressed before the library on the first one's page attaches its landing
+// handler -- is heard once it does (`attachLandingHandler`), and meanwhile the
+// apply for the entry it left neither finishes over the entry history stands
+// on nor writes its library there. An entry without an id tells nothing
+// apart, so there only the newer apply and the write stop it.
 interface HistoryApply {
 	readonly entry: number | null;
 }

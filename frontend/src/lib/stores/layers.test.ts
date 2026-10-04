@@ -10,7 +10,8 @@ import {
 	type Layer
 } from './layers';
 import {
-	listenForLandings,
+	attachLandingHandler,
+	installHistoryController,
 	replaceEntry,
 	resetHistoryControllerForTests
 } from '$lib/history/historyController';
@@ -140,7 +141,6 @@ describe('a layer held open while its overlay saves (#1184 K1)', () => {
 // history controller pushed for it, and a landing closes exactly the layers
 // whose entries it left.
 describe('layers as history entries', () => {
-	let stopListening: () => void;
 	let page: number;
 
 	beforeEach(() => {
@@ -149,11 +149,12 @@ describe('layers as history entries', () => {
 		resetHistoryControllerForTests();
 		startFakeRouter();
 		page = replaceEntry('/', {})?.id ?? Number.NaN;
-		stopListening = listenForLandings(() => undefined);
+		installHistoryController();
+		attachLandingHandler(() => undefined);
 	});
 
 	afterEach(() => {
-		stopListening();
+		resetHistoryControllerForTests();
 		resetLayersForTests();
 	});
 
