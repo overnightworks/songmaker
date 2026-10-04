@@ -1,0 +1,8 @@
+claim_id = "af0f030147f141a9aa7629fdf607d198"
+agent = "claude-head"
+role = "builder"
+base = "a48cc8cdd4961bc381cb86908d3e88ec1086b1cf"
+branch = "claude-head/issue-1330-waiting-start-polish"
+scope = ["frontend/e2e/offline.spec.ts", "frontend/e2e/playback-restore.spec.ts", "frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/TransportBarFrame.test.ts", "frontend/src/lib/components/editor/TakeStrip.svelte", "frontend/src/lib/components/editor/TakesList.svelte", "frontend/src/lib/components/editor/TakesList.test.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/mediaSession.test.ts", "frontend/src/lib/services/mediaSession.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "add818c6314f580c6c5647fa47fe983ee3c8c4a3"
+whole_reason = "waiting-start polish across player, deck, media session, bar, Now Playing, album header and takes list"
