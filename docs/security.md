@@ -937,7 +937,7 @@ The scorer's two Hugging Face models (`faster-whisper`'s `large-v3`, `audiobox-a
 ## Admin Session Management
 
 The admin sessions endpoint (`GET /api/admin/sessions`) returns the public
-reference from `webauth.users.session_reference`, a SHA256 hash of the session
+reference from `webauth.cookies.session_reference`, a SHA256 hash of the session
 token. This prevents session hijacking via the admin panel. Songmaker supplies
 the list's timestamps and pagination from its own records. Force-logout
 (`DELETE /api/admin/sessions/{hash}`) calls `UserManagement.revoke_session` and

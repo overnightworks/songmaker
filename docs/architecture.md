@@ -831,7 +831,7 @@ as one frozen `WebAuthConfig`, built by
 installed on the application in `server.create_app`. Middleware and endpoints
 read it through `webauth.config.web_auth_config(request)`; an application that
 never installed one fails loudly at its first auth-protected request. Songmaker
-binds `BcryptPasswordHasher`, `RedisRateLimitBackend`, `ExpiryColumnLiveness`
+binds `Argon2idPasswordHasher`, `RedisRateLimitBackend`, `ExpiryColumnLiveness`
 (with the configured absolute age), and `RedisSessionCache` to those ports;
 the Redis adapters own the connection and key prefixes. The cache is read
 from the installed configuration, including by the lifecycle sync loop.

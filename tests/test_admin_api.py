@@ -599,7 +599,7 @@ def test_list_sessions(client: TestClient) -> None:
 def test_each_admin_device_sees_only_its_own_session_as_current(admin_client: TestClient) -> None:
     from conftest import login_and_csrf
 
-    with closing(TestClient(admin_client.app, cookies={})) as second_device:
+    with closing(web_client(admin_client.app, cookies={})) as second_device:
         login_and_csrf(second_device, "admin", "admin12345")
 
         current_on_first = [
