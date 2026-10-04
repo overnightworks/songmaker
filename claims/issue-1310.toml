@@ -1,8 +1,0 @@
-claim_id = "11ecf3113b70474eb3eabb268830c014"
-agent = "claude-head"
-role = "builder"
-base = "3d25073a0dc88da5388ec5cb914a834a7b3ae393"
-branch = "claude-head/issue-1310-python-smells"
-scope = ["src/songmaker_cli/api_models/health.py", "src/songmaker_cli/api_models/jobs.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/resource_event_api.py", "src/songmaker_cli/scheduler.py", "tests/acestep_worker/test_task_store.py", "tests/test_agent_provider_runtime.py", "tests/test_app_context.py", "tests/test_auth_stores.py", "tests/test_conversation_api.py", "tests/test_health_api.py", "tests/test_jobs_lora_training.py", "tests/test_lifecycle_session_sync.py", "tests/test_similar_functions.py"]
-opened_commit = "1403b1e17c37a8ac61b558511d7368ac2d48a73d"
-whole_reason = "Python smells from #940 S3 except update_job_status"
