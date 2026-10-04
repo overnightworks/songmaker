@@ -325,34 +325,52 @@ describe('AlbumDetailView header', () => {
 			face: 'spinner'
 		};
 
-		it('a header start waiting for the network reads Pause with its spinner, and a tap withdraws it', async () => {
-			pendingStart.set({
-				albumId: 'a-local',
-				song: { songTitle: 'Song', artist: 'Artist', albumTitle: 'Night Drive' }
-			});
-			playStartNotice.set('awaiting-network');
-			const target = await renderDetail();
-			const whileWaiting = circleFacts(playCircle(target));
+		// A take of another album, loaded and paused, as after a reload or a
+		// pause before the listener opened this album.
+		function loadPausedTakeOfAnotherAlbum(): void {
+			queueContext.set({ type: 'album', albumId: 'a-other' });
+			audioPlayer.current = {
+				songId: 's-other',
+				generation: generation({ song_id: 's-other' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = 'paused';
+		}
 
-			playCircle(target).click();
-			await tick();
+		it.each([
+			{ loaded: 'no take', load: () => {} },
+			{ loaded: 'a paused take of another album', load: loadPausedTakeOfAnotherAlbum }
+		])(
+			'with $loaded loaded, a header start waiting for the network reads Pause with its spinner, and a tap withdraws it',
+			async ({ load }) => {
+				load();
+				pendingStart.set({
+					albumId: 'a-local',
+					song: { songTitle: 'Song', artist: 'Artist', albumTitle: 'Night Drive' }
+				});
+				playStartNotice.set('awaiting-network');
+				const target = await renderDetail();
+				const whileWaiting = circleFacts(playCircle(target));
 
-			expect({
-				whileWaiting,
-				afterTheTap: circleFacts(playCircle(target)),
-				waiting: get(pendingStart),
-				startedAgain: vi.mocked(playAlbum).mock.calls.length
-			}).toEqual({
-				whileWaiting: readsBusyPause,
-				afterTheTap: {
-					label: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-					busy: 'false',
-					face: 'play'
-				},
-				waiting: null,
-				startedAgain: 0
-			});
-		});
+				playCircle(target).click();
+				await tick();
+
+				expect({
+					whileWaiting,
+					afterTheTap: circleFacts(playCircle(target)),
+					waiting: get(pendingStart),
+					startedAgain: vi.mocked(playAlbum).mock.calls.length
+				}).toEqual({
+					whileWaiting: readsBusyPause,
+					afterTheTap: {
+						label: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+						busy: 'false',
+						face: 'play'
+					},
+					waiting: null,
+					startedAgain: 0
+				});
+			}
+		);
 
 		it('a take of it waiting for its bytes reads Pause with its spinner, and a tap pauses it', async () => {
 			queueContext.set({ type: 'album', albumId: 'a-local' });

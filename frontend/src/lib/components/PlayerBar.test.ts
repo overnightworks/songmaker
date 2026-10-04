@@ -179,6 +179,12 @@ function holdAlbumStart(notice: 'awaiting-network' | 'gave-up-on-network' | 'idl
 	playStartNotice.set(notice);
 }
 
+// A take of another album, loaded and paused, as after a reload or a pause
+// before the listener opened the album that now waits.
+function loadPausedTake(): void {
+	audioPlayer.load(barTake('Earlier Song'), { autoplay: false });
+}
+
 const RESTORED_POSITION = 13;
 const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
 
@@ -249,29 +255,49 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
-	it('a start that waits for the network shows the waiting transport, and a press goes to the start (#1288)', async () => {
-		holdAlbumStart('awaiting-network');
-		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
-		component = mount(PlayerBar, { target });
-		await tick();
+	it.each([
+		{ loaded: 'no take', load: () => {} },
+		{ loaded: 'a paused take', load: loadPausedTake }
+	])(
+		'with $loaded loaded, a start that waits for the network shows the waiting transport, and a press goes to the start (#1288, #1330)',
+		async ({ load }) => {
+			load();
+			holdAlbumStart('awaiting-network');
+			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+			component = mount(PlayerBar, { target });
+			await tick();
 
-		const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
-		expect(transport?.querySelector('.spinner')).not.toBeNull();
-		transport?.click();
-		expect(playIdleStart).toHaveBeenCalledOnce();
-	});
+			const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+			expect(transport?.querySelector('.spinner')).not.toBeNull();
+			transport?.click();
+			expect(playIdleStart).toHaveBeenCalledOnce();
+		}
+	);
 
-	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
-		'while an album header start waits ($0), the bar names its song and album, as the lock screen does (#1330)',
-		async (notice) => {
+	it.each([
+		{ notice: 'awaiting-network', loaded: 'no take', load: () => {} },
+		{ notice: 'gave-up-on-network', loaded: 'no take', load: () => {} },
+		{ notice: 'awaiting-network', loaded: 'a paused take', load: loadPausedTake }
+	] as const)(
+		'while an album header start waits ($notice) with $loaded loaded, the bar names its song and album with Pause, as the lock screen does (#1330)',
+		async ({ notice, load }) => {
+			useDesktopLayout();
+			load();
 			holdAlbumStart(notice);
 			component = mount(PlayerBar, { target });
 			await tick();
 
 			expect({
 				title: target.querySelector('.track-title')?.textContent,
-				detail: target.querySelector('.track-detail')?.textContent
-			}).toEqual({ title: WAITING_SONG.songTitle, detail: WAITING_SONG.albumTitle });
+				detail: target.querySelector('.track-detail')?.textContent,
+				main: playButton().getAttribute('aria-label'),
+				timeReadouts: target.querySelectorAll('.timeline .time').length
+			}).toEqual({
+				title: WAITING_SONG.songTitle,
+				detail: WAITING_SONG.albumTitle,
+				main: TRANSPORT_PAUSE_LABEL,
+				timeReadouts: 0
+			});
 		}
 	);
 

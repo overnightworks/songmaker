@@ -73,7 +73,10 @@
 	// A start that waits for the network shows as the transport's own wait, here
 	// and on the lock screen, which is the only surface with the screen off.
 	const barTransport = $derived(transportOfTheStart(current, startNotice, transport));
-	const waitingSong = $derived(waitingStartOf(current, startNotice, $pendingStart)?.song ?? null);
+	const waitingSong = $derived(waitingStartOf(startNotice, $pendingStart)?.song ?? null);
+	// While a start waits, the bar names it in place of any take still loaded,
+	// so the take it shows, and a press acts on, is none (#1330).
+	const shownTake = $derived(waitingSong ? null : current);
 	const errorMsg = $derived(transportWaitingNotice(barTransport) ?? audioPlayer.error);
 
 	const isPlaying = $derived(transport === 'playing');
@@ -95,19 +98,19 @@
 	// The phone names where the music comes from under the title; the
 	// desktop row, and a queue with no source, name the take.
 	const detailLine = $derived.by(() => {
-		if (!current) return '';
+		if (!shownTake) return '';
 		if (mobileTransport && $playbackSource) return nowPlayingFromLabel($playbackSource.title);
 		return nowPlayingTakeLabel(
-			current.generation.version_number,
-			current.generation.generation_number
+			shownTake.generation.version_number,
+			shownTake.generation.generation_number
 		);
 	});
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 
 	const coverUrl = $derived.by(() => {
-		if (!current) return null;
-		const song = songs.find((item) => item.id === current.songId);
+		if (!shownTake) return null;
+		const song = songs.find((item) => item.id === shownTake.songId);
 		const album = song ? $albumList.find((item) => item.id === song.album_id) : undefined;
 		return album?.cover?.card ?? null;
 	});
@@ -138,7 +141,7 @@
 	};
 
 	function togglePlay(): void {
-		if (!current) {
+		if (!shownTake) {
 			void playIdleStart();
 			return;
 		}
@@ -150,7 +153,7 @@
 	// The docked panel is a disclosure the bar owns: the same press that opened
 	// it puts it away again. A dialog surface only ever opens from here.
 	function onNowPlayingClick(): void {
-		if (!current) return;
+		if (!shownTake) return;
 		if (docked) closeNowPlaying();
 		else openNowPlaying('queue');
 	}
@@ -198,13 +201,13 @@
 		</span>
 	{/if}
 	<span class="track-text">
-		{#if current}
-			{#key current.songTitle}
+		{#if shownTake}
+			{#key shownTake.songTitle}
 				<span
 					class="track-title"
 					class:glowing={isPlaying}
 					style={titleGlowStyle}
-					{@attach mobileTransport && scrollTitleOnceWhenCut}>{current.songTitle}</span
+					{@attach mobileTransport && scrollTitleOnceWhenCut}>{shownTake.songTitle}</span
 				>
 			{/key}
 			<span class="track-detail" id={detailId}
@@ -237,7 +240,7 @@
 	<TransportBarFrame
 		transport={barTransport}
 		{errorMsg}
-		takeIsCurrent={current !== null}
+		takeIsCurrent={shownTake !== null}
 		{currentTime}
 		{duration}
 		{formatTime}
@@ -254,9 +257,9 @@
 		nowPlayingOpen={$nowPlayingOpen}
 		onOpenNowPlaying={onNowPlayingClick}
 		nowPlayingDocked={docked}
-		nowPlayingDisabled={!current}
-		nowPlayingTargetLabel={current ? openNowPlayingLabel(current.songTitle) : undefined}
-		nowPlayingTargetDescriptionId={current ? detailId : undefined}
+		nowPlayingDisabled={!shownTake}
+		nowPlayingTargetLabel={shownTake ? openNowPlayingLabel(shownTake.songTitle) : undefined}
+		nowPlayingTargetDescriptionId={shownTake ? detailId : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>

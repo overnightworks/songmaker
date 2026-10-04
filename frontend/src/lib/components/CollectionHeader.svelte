@@ -171,8 +171,7 @@
 	// A start of this album that waits for the network is the queue to come:
 	// the circle shows its wait as the bar does, and a tap withdraws it (#1330).
 	const startWaitsHere = $derived(
-		kind === 'album' &&
-			waitingStartOf(audioPlayer.current, $playStartNotice, $pendingStart)?.albumId === collectionId
+		kind === 'album' && waitingStartOf($playStartNotice, $pendingStart)?.albumId === collectionId
 	);
 	const circleTransport: TransportState = $derived.by(() => {
 		if (startWaitsHere) return transportOfTheStart(null, $playStartNotice, 'idle');

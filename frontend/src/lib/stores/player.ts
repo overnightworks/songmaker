@@ -432,14 +432,17 @@ let pendingStartGiveUp: ReturnType<typeof setTimeout> | undefined;
 
 // The bar shows the start waiting until it runs again, a newer start
 // replaces it, or the listener stops it. Running again once the network is
-// back continues this same start, so nothing it shows lapses meanwhile.
+// back continues this same start, so nothing it shows lapses meanwhile. The
+// start is what the listener asked to hear, so it takes the place of a take
+// already loaded, and that take falls silent rather than play on under it.
 function noticeStartAwaitingNetwork(
 	start: PendingStart,
 	runAgain: (playStart: PlayStart) => Promise<void>
 ): void {
 	pendingStart.set(start);
 	runPendingStartAgain = runAgain;
-	if (!audioPlayer.current) updateMediaSessionMetadata(start.song);
+	if (audioPlayer.current) audioPlayer.pause();
+	updateMediaSessionMetadata(start.song);
 	playStartNotice.set('awaiting-network');
 	clearTimeout(pendingStartGiveUp);
 	pendingStartGiveUp = setTimeout(
@@ -450,7 +453,7 @@ function noticeStartAwaitingNetwork(
 
 function stopPendingStartWait(): void {
 	clearTimeout(pendingStartGiveUp);
-	if (startAwaitsNetwork(null, get(playStartNotice))) playStartNotice.set('idle');
+	if (startAwaitsNetwork(get(playStartNotice))) playStartNotice.set('idle');
 }
 
 function dropPendingStart(): void {
@@ -458,7 +461,15 @@ function dropPendingStart(): void {
 	if (get(pendingStart) === null) return;
 	pendingStart.set(null);
 	runPendingStartAgain = null;
-	if (!audioPlayer.current) updateMediaSessionMetadata(null);
+	updateMediaSessionMetadata(audioPlayer.current);
+}
+
+// A take that plays is what the listener now hears, so a start still pending
+// is over: the lock screen names that take, and the network starts nothing.
+function endPendingStartForThePlayingTake(): void {
+	if (get(pendingStart) === null) return;
+	cancelPlayStart();
+	dropPendingStart();
 }
 
 function lockScreenTitleOf(song: SongItem): LockScreenTitle {
@@ -805,19 +816,19 @@ export async function playIdleStart(): Promise<void> {
 }
 
 // The bar and the lock screen show a start that waits for the network as the
-// transport's own wait, and their presses stop it (#1288).
-function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
-	return !current && (notice === 'awaiting-network' || notice === 'gave-up-on-network');
+// transport's own wait, whatever take is loaded, and their presses stop it
+// (#1288, #1330).
+function startAwaitsNetwork(notice: PlayStartNotice): boolean {
+	return notice === 'awaiting-network' || notice === 'gave-up-on-network';
 }
 
 // The start the bar and the album header show as waiting, naming its song and
 // its album, as the lock screen does (#1330).
 export function waitingStartOf(
-	current: PlaybackInfo | null,
 	notice: PlayStartNotice,
 	pending: PendingStart | null
 ): PendingStart | null {
-	return startAwaitsNetwork(current, notice) ? pending : null;
+	return startAwaitsNetwork(notice) ? pending : null;
 }
 
 // A start that waits for the network shows the transport a take waiting for
@@ -830,7 +841,7 @@ export function transportOfTheStart(
 	transport: TransportState
 ): TransportState {
 	if (!current && notice === 'restoring') return 'loading';
-	if (!startAwaitsNetwork(current, notice)) return transport;
+	if (!startAwaitsNetwork(notice)) return transport;
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
@@ -844,7 +855,7 @@ export function stopStartAwaitingNetwork(): boolean {
 // The lock screen pauses a waiting start the way it pauses a take: it stops
 // waiting but stays named, and the lock screen's Play runs it again (#1330).
 function pauseStartAwaitingNetwork(): boolean {
-	if (!startAwaitsNetwork(audioPlayer.current, get(playStartNotice))) return false;
+	if (!startAwaitsNetwork(get(playStartNotice))) return false;
 	cancelPlayStart();
 	stopPendingStartWait();
 	return true;
@@ -852,8 +863,8 @@ function pauseStartAwaitingNetwork(): boolean {
 
 function resumePausedStart(): boolean {
 	const runAgain = runPendingStartAgain;
-	if (runAgain === null || audioPlayer.current) return false;
-	if (startAwaitsNetwork(null, get(playStartNotice))) return true;
+	if (runAgain === null) return false;
+	if (startAwaitsNetwork(get(playStartNotice))) return true;
 	const playStart = openPlayStart();
 	playStartNotice.set('awaiting-network');
 	void runAgain(playStart).catch(toastAlbumSongsFailure);
@@ -1937,6 +1948,7 @@ function recordFirstTakeListen(): void {
 }
 
 function handlePlaybackStarted(): void {
+	endPendingStartForThePlayingTake();
 	recordFirstTakeListen();
 	gatherRestoredAlbumQueue();
 }

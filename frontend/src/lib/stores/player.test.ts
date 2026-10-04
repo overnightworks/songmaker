@@ -141,6 +141,7 @@ import {
 	shuffleLabel,
 	toggleShuffle,
 	transportOfTheStart,
+	waitingStartOf,
 	pendingStart,
 	stopStartAwaitingNetwork,
 	windowEnded
@@ -2772,6 +2773,27 @@ describe('playAlbum start track', () => {
 	});
 
 	describe('offline, while the start waits (#1312)', () => {
+		const LOADED_TAKE_TITLE = 'Earlier Song';
+
+		// A take of another album, loaded and paused, as after a reload or a
+		// pause before the listener opened this album.
+		function loadPausedTake(): void {
+			const song = makeSong({
+				...queuedSongDefaults(),
+				id: 's9',
+				album_id: 'a9',
+				title: LOADED_TAKE_TITLE
+			});
+			audioPlayer.current = makePlayback(
+				makeGen({ ...genDefaults, id: 'g9', song_id: 's9' }),
+				song
+			);
+			audioPlayer.status = 'paused';
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+		}
+
 		beforeEach(() => {
 			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 			reportResourceStreamReachable(false);
@@ -2783,17 +2805,69 @@ describe('playAlbum start track', () => {
 			vi.useRealTimers();
 		});
 
-		it('the lock screen names the song it waits for, and goes blank once the wait is stopped', async () => {
+		it.each([
+			{ loaded: 'no take', load: () => {}, afterTheStop: null },
+			{
+				loaded: 'a paused take',
+				load: loadPausedTake,
+				afterTheStop: expect.objectContaining({ title: LOADED_TAKE_TITLE })
+			}
+		])(
+			'with $loaded loaded, the transport waits and the lock screen names the song, until the wait is stopped (#1330)',
+			async ({ load, afterTheStop }) => {
+				load();
+				const lockScreen = watchLockScreenTitle();
+				await playAlbum('a1');
+				const whileWaiting = {
+					transport: transportOfTheStart(
+						audioPlayer.current,
+						get(playStartNotice),
+						audioPlayer.transport
+					),
+					bar: waitingStartOf(get(playStartNotice), get(pendingStart))?.song.songTitle,
+					lockScreen: lockScreen.metadata
+				};
+
+				stopStartAwaitingNetwork();
+
+				expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
+					whileWaiting: {
+						transport: 'recovering',
+						bar: 'Song',
+						lockScreen: expect.objectContaining({ title: 'Song', artist: 'Artist' })
+					},
+					afterTheStop
+				});
+			}
+		);
+
+		it('a take still playing falls silent under the start that took its place (#1330)', async () => {
+			loadPausedTake();
+			audioPlayer.status = 'playing';
+			vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+
+			await playAlbum('a1');
+
+			expect(audioPlayer.transport).toBe('paused');
+		});
+
+		it('a take that plays ends the start, so the lock screen names it and the network starts nothing (#1330)', async () => {
+			loadPausedTake();
 			const lockScreen = watchLockScreenTitle();
 			await playAlbum('a1');
-			const whileWaiting = lockScreen.metadata;
 
-			await playIdleStart();
+			audioPlayer.currentCallbacks.onPlaybackStarted?.();
+			reportResourceStreamReachable(true);
+			await Promise.resolve();
 
-			expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
-				whileWaiting: expect.objectContaining({ title: 'Song', artist: 'Artist' }),
-				afterTheStop: null
-			});
+			expect({
+				notice: get(playStartNotice),
+				waiting: get(pendingStart),
+				lockScreen: lockScreen.metadata?.title,
+				loads: vi.mocked(audioPlayer.load).mock.calls.length
+			}).toEqual({ notice: 'idle', waiting: null, lockScreen: LOADED_TAKE_TITLE, loads: 0 });
 		});
 
 		it('once the network is back, the lock screen keeps the song and its Pause until the take plays (#1330)', async () => {
@@ -2823,25 +2897,32 @@ describe('playAlbum start track', () => {
 			}).toEqual({ wentBlank: false, droppedItsPause: false });
 		});
 
-		it("a lock-screen pause keeps naming the song, and the lock screen's Play waits again (#1330)", async () => {
-			const lockScreenTitle = watchLockScreenTitle();
-			await playAlbum('a1');
+		it.each([
+			{ loaded: 'no take', load: () => {} },
+			{ loaded: 'a paused take', load: loadPausedTake }
+		])(
+			"with $loaded loaded, a lock-screen pause keeps naming the song, and the lock screen's Play waits again (#1330)",
+			async ({ load }) => {
+				load();
+				const lockScreenTitle = watchLockScreenTitle();
+				await playAlbum('a1');
 
-			pressLockScreenPause();
-			const afterThePause = {
-				title: lockScreenTitle.metadata?.title,
-				notice: get(playStartNotice),
-				named: get(pendingStart)?.song.songTitle
-			};
-			vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
-			pressLockScreenPlay();
-			await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledTimes(2));
+				pressLockScreenPause();
+				const afterThePause = {
+					title: lockScreenTitle.metadata?.title,
+					notice: get(playStartNotice),
+					named: get(pendingStart)?.song.songTitle
+				};
+				vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+				pressLockScreenPlay();
+				await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledTimes(2));
 
-			expect({ afterThePause, afterPlay: get(playStartNotice) }).toEqual({
-				afterThePause: { title: 'Song', notice: 'idle', named: 'Song' },
-				afterPlay: 'awaiting-network'
-			});
-		});
+				expect({ afterThePause, afterPlay: get(playStartNotice) }).toEqual({
+					afterThePause: { title: 'Song', notice: 'idle', named: 'Song' },
+					afterPlay: 'awaiting-network'
+				});
+			}
+		);
 
 		it("a lock-screen Play on the paused start plays the album once the songs' takes can be read (#1330)", async () => {
 			await playAlbum('a1');
