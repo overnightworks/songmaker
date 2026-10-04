@@ -1,8 +1,0 @@
-claim_id = "d3b2a67cc9e1410e8cab50eb61fa9bf5"
-agent = "claude-head"
-role = "builder"
-base = "0bef6e614e5c6d05896ae9e982be054be54752db"
-branch = "claude-head/issue-1308-security-findings"
-scope = ["frontend/src/lib/api/types.ts", "scripts/check_style_literals.py", "scripts/seed_e2e_song_takes.py", "src/songmaker_cli/api_models/auth.py", "src/songmaker_cli/health_api.py", "src/songmaker_cli/lora_api.py", "src/songmaker_cli/main.py", "src/songmaker_cli/reimport.py", "src/songmaker_cli/reimport_api.py", "src/songmaker_cli/server.py", "tests/test_auth_api.py", "tests/test_check_style_literals.py", "tests/test_cli.py", "tests/test_lora_api.py", "tests/test_main.py", "tests/test_reimport.py", "tests/test_server.py", "tests/test_upload_limits.py"]
-opened_commit = "ca57d11faa2d1631b85afcbc56bd2c16909c5d67"
-whole_reason = "security findings 10-14 from #940, with one owner for the password rule"
