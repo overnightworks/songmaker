@@ -4,8 +4,9 @@
 	import type { PlaybackInfo } from '$lib/services/playbackTypes';
 	import {
 		audioPlayer,
+		transportButtonFace,
 		transportButtonLabel,
-		transportOffersPause
+		transportIsBusy
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		HITBOX_FREQUENT_PX,
@@ -137,9 +138,7 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const transport = $derived(audioPlayer.transport);
-	const transportIcon = $derived(
-		transport === 'failed' ? 'refresh-cw' : transportOffersPause(transport) ? 'pause' : 'play'
-	);
+	const buttonFace = $derived(transportButtonFace(transport));
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
@@ -312,8 +311,12 @@
 							class="play-btn"
 							onclick={() => audioPlayer.toggle()}
 							aria-label={transportButtonLabel(transport)}
+							aria-busy={transportIsBusy(transport)}
 						>
-							<Icon name={transportIcon} size={26} />
+							{#if buttonFace === 'spinner'}<span class="spinner"></span>{:else}<Icon
+									name={buttonFace}
+									size={26}
+								/>{/if}
 						</button>
 						<div class="transport-side after">
 							{#if onnext}
@@ -640,6 +643,19 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		border-color: transparent;
 		color: #fff;
+	}
+	.spinner {
+		width: 26px;
+		height: 26px;
+		border: 2px solid currentColor;
+		border-right-color: transparent;
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	.np-lyrics-col {
 		display: flex;

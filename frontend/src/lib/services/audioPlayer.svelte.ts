@@ -20,14 +20,18 @@ export type { StreamFallbackState } from './queueStreamEngine';
 
 type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
-// What every surface that draws the transport shows. A stalled take that is
-// being brought back is 'recovering' and one given up while the offline strip
-// names the cause is 'waiting-for-network': the listener asked for sound in
-// both, so both offer Pause. A given-up take the listener paused is 'paused'.
+// What every surface that draws the transport shows. A take loading after
+// the listener asked for sound is 'loading', a stalled take that is being
+// brought back is 'recovering' and one given up while the offline strip names
+// the cause is 'waiting-for-network': the listener asked for sound in all
+// three, so all three offer Pause. A take loading that nobody asked to play,
+// like one restored after a reload, and a given-up take the listener paused
+// are 'paused'.
 export type TransportState =
 	'idle' | 'loading' | 'playing' | 'recovering' | 'paused' | 'waiting-for-network' | 'failed';
 
 const TRANSPORT_OFFERING_PAUSE: ReadonlySet<TransportState> = new Set([
+	'loading',
 	'playing',
 	'recovering',
 	'waiting-for-network'
@@ -37,9 +41,23 @@ export function transportOffersPause(transport: TransportState): boolean {
 	return TRANSPORT_OFFERING_PAUSE.has(transport);
 }
 
+export function transportIsBusy(transport: TransportState): boolean {
+	return transport === 'loading' || transport === 'recovering';
+}
+
 export function transportButtonLabel(transport: TransportState): string {
 	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
+}
+
+type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
+
+// The play button's face on every surface: a spinner while sound is asked for
+// and not there yet, otherwise the action its click takes.
+export function transportButtonFace(transport: TransportState): TransportButtonFace {
+	if (transportIsBusy(transport)) return 'spinner';
+	if (transport === 'failed') return 'refresh-cw';
+	return transportOffersPause(transport) ? 'pause' : 'play';
 }
 
 const TRANSPORT_OF_SETTLED_STATUS: Readonly<
@@ -132,8 +150,9 @@ const END_OF_DECK_SLACK_SECONDS = 0.5;
 // the network gone, reloaded.
 const STALL_RECOVERY_MS = 5000;
 // How long a stalled take is tried before the player gives up and asks for
-// Retry: long enough to ride out a dropout with the screen off (#1187 P3).
-const RECOVERY_DEADLINE_MS = 2 * 60 * 1000;
+// Retry: long enough to ride out a dropout with the screen off (#1187 P3). A
+// start that waits for the network gives up after the same time (#1312).
+export const RECOVERY_DEADLINE_MS = 2 * 60 * 1000;
 const RECOVERY_SEEK_BACK_SECONDS = 0.75;
 // A server that never answers the probe must not hold recovery or the error
 // words back for good.
@@ -195,10 +214,14 @@ class AudioPlayer {
 	}
 
 	get transport(): TransportState {
-		if (this.status === 'loading')
-			return this.recoveryStartedAt === null ? 'loading' : 'recovering';
+		if (this.status === 'loading') return this.loadingTransport;
 		if (this.status === 'error') return this.failedTransport;
 		return TRANSPORT_OF_SETTLED_STATUS[this.status];
+	}
+
+	private get loadingTransport(): TransportState {
+		if (this.recoveryStartedAt !== null) return 'recovering';
+		return this.autoplayPending ? 'loading' : 'paused';
 	}
 
 	private get failedTransport(): TransportState {
@@ -432,10 +455,20 @@ class AudioPlayer {
 		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
 		this.autoplayPending = opts.autoplay ?? true;
+		this.waitForTheNetworkFromTheTap();
 		const el = this.ensureAudio();
 		this.status = 'loading';
 		this.pauseElement(el);
 		this.attachTake(el, info, url, attachSource);
+	}
+
+	// A take asked for while the network is announced gone waits for it as
+	// a stalled take does, from the tap: the transport offers Pause and the
+	// recovery deadline runs, exactly as for a start that cannot read its
+	// takes offline (#1312).
+	private waitForTheNetworkFromTheTap(): void {
+		if (this.autoplayPending && this.callbacks.networkFailureIsAnnounced())
+			this.recoveryStartedAt = Date.now();
 	}
 
 	private attachTake(
@@ -693,6 +726,7 @@ class AudioPlayer {
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
 			this.autoplayPending = true;
+			this.scheduleStallRecovery();
 			if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'play');
 			return;
 		}
@@ -718,19 +752,21 @@ class AudioPlayer {
 
 	toggle(): void {
 		if (!this.audio || !this.current) return;
+		if (this.status === 'loading' && this.recoveryStartedAt === null) {
+			// The take keeps loading either way: a press only asks for its sound
+			// or withdraws the ask, so the element plays once it is ready only if
+			// the last press asked (#1312).
+			this.autoplayPending = !this.autoplayPending;
+			if (this.autoplayPending) this.scheduleStallRecovery();
+			else this.clearStallRecoveryTimer();
+			return;
+		}
 		if (transportOffersPause(this.transport)) {
 			this.pause();
 			return;
 		}
 		if (this.status === 'error') {
 			this.play();
-			return;
-		}
-		if (this.status === 'loading') {
-			// A press while loading must not be dropped: flip the queued intent
-			// (second press cancels), delivered by the existing autoplayPending
-			// machinery once the element is ready.
-			this.autoplayPending = !this.autoplayPending;
 			return;
 		}
 		this.play();
@@ -1014,7 +1050,7 @@ class AudioPlayer {
 	// it would throw its buffer away and fetch the take from byte 0 again.
 	private scheduleStallRecovery(): void {
 		const el = this.audio;
-		if (this.stallRecoveryTimer || !this.current || !el) return;
+		if (this.stallRecoveryTimer || !this.current || !el || this.loadsUnasked) return;
 		const bufferedAtStall = bufferedUntil(el);
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
@@ -1022,6 +1058,14 @@ class AudioPlayer {
 			if (bufferedUntil(el) > bufferedAtStall) this.scheduleStallRecovery();
 			else this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
+	}
+
+	// A take that loads while nobody asked for its sound, a restored one or one
+	// whose ask a press withdrew, has no stall to recover: it waits for the
+	// listener, not for its bytes, and must not turn busy or start by itself
+	// (#1312). The bar's Play decides that wait, so the stall watch follows it.
+	private get loadsUnasked(): boolean {
+		return this.status === 'loading' && this.loadingTransport === 'paused';
 	}
 
 	private recoverFromStall(reason: StallReason): void {
@@ -1162,8 +1206,9 @@ class AudioPlayer {
 
 	// Loading a source drops the 'pause' event an app pause just queued, so the
 	// app's pause marker is settled here instead of by that event. A source
-	// whose data never arrives — not even its first byte — is watched like a
-	// buffering stall, so it ends in Retry instead of loading forever.
+	// the listener asked to hear whose data never arrives — not even its first
+	// byte — is watched like a buffering stall, so it ends in Retry instead of
+	// loading forever.
 	private loadSource(el: HTMLAudioElement, url: string): void {
 		this.pauseRequestedByApp = false;
 		el.src = url;

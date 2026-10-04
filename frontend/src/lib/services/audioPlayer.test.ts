@@ -1,7 +1,14 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
+import {
+	audioPlayer,
+	transportButtonLabel,
+	transportIsBusy,
+	type AudioPlayerCallbacks,
+	type PlaybackInfo
+} from './audioPlayer.svelte';
 import { TakeNotAppended } from './continuousDeck';
 import { readThePlayingTakeFrom, recordPlaybackEvent } from './playbackDiagnostics';
 
@@ -1345,7 +1352,7 @@ describe('patient recovery while the screen is off', () => {
 				interruption: 'another take loads',
 				interrupt: () =>
 					audioPlayer.load(makeInfo({ songTitle: 'Next take' }), { autoplay: false }),
-				afterwards: { song: 'Next take', transport: 'loading' }
+				afterwards: { song: 'Next take', transport: 'paused' }
 			}
 		])(
 			'a snapshot rebuild that answers after $interruption leaves the player alone',
@@ -1450,6 +1457,39 @@ describe('patient recovery while the screen is off', () => {
 		}).toEqual({
 			afterTheReloadFailed: { status: 'loading', error: null },
 			aMinuteLater: { status: 'loading', error: null }
+		});
+	});
+
+	describe('a take asked for while the offline strip says the network is gone (#1312)', () => {
+		beforeEach(() => {
+			audioPlayer.swapCallbacks(callbacks({ networkFailureIsAnnounced: () => true }));
+			audioPlayer.load(makeInfo());
+		});
+
+		it('waits with Pause from the tap and gives up after the stalled take deadline', async () => {
+			const fromTheTap = audioPlayer.transport;
+			await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE - SECOND);
+			const beforeTheDeadline = audioPlayer.transport;
+			await vi.advanceTimersByTimeAsync(10 * SECOND);
+
+			expect({ fromTheTap, beforeTheDeadline, afterIt: audioPlayer.transport }).toEqual({
+				fromTheTap: 'recovering',
+				beforeTheDeadline: 'recovering',
+				afterIt: 'waiting-for-network'
+			});
+		});
+
+		it('pauses deliberately on a press during the wait', () => {
+			audioPlayer.toggle();
+			fakeAudio.fire('canplay');
+
+			expect({
+				transport: audioPlayer.transport,
+				played: fakeAudio.playMock.mock.calls.length
+			}).toEqual({
+				transport: 'paused',
+				played: 0
+			});
 		});
 	});
 });
@@ -2069,12 +2109,28 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
-	it('second toggle while loading cancels queued play', () => {
+	it('a second press while loading withdraws the queued play (#1312)', () => {
 		audioPlayer.toggle();
 		audioPlayer.toggle();
 		fakeAudio.fire('canplay');
 		expect(fakeAudio.playMock).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ moment: 'nobody pressed yet', presses: 0, label: TRANSPORT_PLAY_LABEL, busy: false },
+		{ moment: 'a press asked for sound', presses: 1, label: TRANSPORT_PAUSE_LABEL, busy: true },
+		{ moment: 'a second press withdrew it', presses: 2, label: TRANSPORT_PLAY_LABEL, busy: false }
+	])(
+		'names a loading take $label, busy $busy, once $moment (#1312)',
+		({ presses, label, busy }) => {
+			for (let press = 0; press < presses; press++) audioPlayer.toggle();
+
+			expect({
+				label: transportButtonLabel(audioPlayer.transport),
+				busy: transportIsBusy(audioPlayer.transport)
+			}).toEqual({ label, busy });
+		}
+	);
 
 	it('play while loading queues until canplay and does not throw', () => {
 		expect(audioPlayer.status).toBe('loading');
@@ -2205,6 +2261,45 @@ describe('toggle / play / pause', () => {
 		audioPlayer.play();
 		await new Promise((r) => setTimeout(r, 0));
 		expect(audioPlayer.status).toBe('error');
+	});
+});
+
+describe('a loading take whose bytes never come, past the stall check (#1312)', () => {
+	const PAST_THE_STALL_CHECK_MS = 5 * SECOND + 1;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false, startAt: 73 });
+	});
+
+	it.each([
+		{ moment: 'nobody pressed yet', presses: 0 },
+		{ moment: 'a second press withdrew the ask', presses: 2 }
+	])('still reads Play, not busy, and stays paused once $moment', ({ presses }) => {
+		for (let press = 0; press < presses; press++) audioPlayer.toggle();
+
+		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+		const shown = {
+			label: transportButtonLabel(audioPlayer.transport),
+			busy: transportIsBusy(audioPlayer.transport)
+		};
+		fakeAudio.fire('canplay');
+
+		expect({ shown, played: fakeAudio.playMock.mock.calls.length > 0 }).toEqual({
+			shown: { label: TRANSPORT_PLAY_LABEL, busy: false },
+			played: false
+		});
+	});
+
+	it('keeps waiting busy with Pause once a press asked for sound', () => {
+		audioPlayer.toggle();
+
+		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+
+		expect({
+			label: transportButtonLabel(audioPlayer.transport),
+			busy: transportIsBusy(audioPlayer.transport)
+		}).toEqual({ label: TRANSPORT_PAUSE_LABEL, busy: true });
 	});
 });
 
