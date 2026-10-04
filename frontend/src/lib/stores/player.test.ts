@@ -2399,6 +2399,39 @@ describe('the queue names its next take', () => {
 		);
 
 		it.each(startsOfAQueueOfThree)(
+			'Previous passes over it to the take before it ($queue)',
+			async ({ start }) => {
+				await startAndSkipTheSecondTake(start);
+				moveOnAsTheDeckDoes();
+
+				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(true);
+				await playPrevSong();
+
+				expect(audioPlayer.current?.generation.id).toBe('g1');
+			}
+		);
+
+		it('a pending skip survives a repick of its place and is named once when that place plays', async () => {
+			await startAndSkipTheSecondTake(startsOfAQueueOfThree[0].start);
+			const song = albumSong(2);
+			const replacement = makeGen({
+				...song.generations[0],
+				id: 'g2-repicked',
+				mp3_path: 'a1/s2-repicked.mp3'
+			});
+
+			upsertSongInList({ ...song, generations: [replacement] });
+
+			expect(upNextGenerationId()).toBe(replacement.id);
+			expect(get(toasts)).toEqual([]);
+			moveOnAsTheDeckDoes();
+			expect(audioPlayer.current?.generation.id).toBe(replacement.id);
+			expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+			for (let step = 0; step < 3; step++) moveOnAsTheDeckDoes();
+			expect(get(toasts)).toEqual([SKIPPED_TOAST]);
+		});
+
+		it.each(startsOfAQueueOfThree)(
 			'is named when the take after it starts, not when its fetch fails ($queue)',
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
@@ -2453,6 +2486,18 @@ describe('the queue names its next take', () => {
 		];
 
 		it.each(startsOfAQueueOfTwo)(
+			'Previous stays on the current take when every other take is skipped ($queue)',
+			async ({ start }) => {
+				await startAndSkipTheSecondTake(start);
+
+				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
+				await playPrevSong();
+
+				expect(audioPlayer.current?.generation.id).toBe('g1');
+			}
+		);
+
+		it.each(startsOfAQueueOfTwo)(
 			'is named at once where only the playing take would start in its place ($queue)',
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
@@ -2488,6 +2533,21 @@ describe('the queue names its next take', () => {
 				expect(get(toasts)).toEqual([SKIPPED_TOAST, skippedToast('Song 3')]);
 			}
 		);
+
+		it('a refused last take of a library window is named at once and Next ends the window', async () => {
+			await libraryWindowOfThree.start();
+			moveOnAsTheDeckDoes();
+			const last = preloadedTake();
+			expect(last?.generation.id).toBe('g3');
+			if (last) audioPlayer.currentCallbacks.onTakeSkipped?.(last);
+
+			expect(upNextGenerationId()).toBeUndefined();
+			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
+			await playNextSong();
+			expect(get(windowEnded)).toBe(true);
+			expect(audioPlayer.current?.generation.id).toBe('g2');
+			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
+		});
 
 		it.each(startsOfAQueueOfThree)('a new queue forgets it ($queue)', async ({ start }) => {
 			await startAndSkipTheSecondTake(start);
@@ -2888,6 +2948,81 @@ describe('shuffle rebuilds the playing queue', () => {
 	beforeEach(() => {
 		toasts.set([]);
 	});
+
+	const rebuildsOfThePlayingQueue = [
+		{ change: 'shuffle', rebuild: () => toggleShuffle() },
+		{ change: 'pool', rebuild: () => chooseLibraryTakePool('all') }
+	];
+
+	it.each(
+		rebuildsOfThePlayingQueue.flatMap((rebuildCase) => [
+			{ ...rebuildCase, answer: 'holds the advanced take', firstAnswerHoldsAdvancedTake: true },
+			{
+				...rebuildCase,
+				answer: 'leaves the advanced take out',
+				firstAnswerHoldsAdvancedTake: false
+			}
+		])
+	)(
+		'$change keeps the take and position reached by automatic advancement while the library fetch was pending, when the answer $answer',
+		async ({ rebuild, firstAnswerHoldsAdvancedTake }) => {
+			const first = makeGen({ ...genDefaults, id: 'g-first' });
+			const second = makeGen({
+				...genDefaults,
+				id: 'g-second',
+				song_id: 's2',
+				mp3_path: 'a1/s2.mp3'
+			});
+			audioPlayer.current = makePlayback(first, makeSong(queuedSongDefaults()));
+			audioPlayer.currentTime = 70;
+			vi.spyOn(audioPlayer, 'currentTimeNow', 'get').mockImplementation(
+				() => audioPlayer.currentTime + 0.125
+			);
+			audioPlayer.status = 'playing';
+			queueContext.set({ type: 'library' });
+			let finishFetch!: (queue: LibraryPoolQueue) => void;
+			vi.mocked(fetchLibraryPoolQueue).mockReturnValueOnce(
+				new Promise((resolve) => {
+					finishFetch = resolve;
+				})
+			);
+
+			const rebuilding = rebuild();
+			audioPlayer.currentTime = 72;
+			const advanced = makePlayback(
+				second,
+				makeSong({ ...queuedSongDefaults(), id: 's2', title: 'Second', generations: [second] })
+			);
+			audioPlayer.current = advanced;
+			audioPlayer.currentCallbacks.onCurrentChange?.(advanced);
+			const secondPoolTake = makePoolTake({
+				generation_id: second.id,
+				song_id: 's2',
+				song_title: 'Second',
+				mp3_path: second.mp3_path
+			});
+			const firstPoolTake = makePoolTake({ generation_id: first.id });
+			if (!firstAnswerHoldsAdvancedTake) {
+				vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+					makePoolQueue({ takes: [makePoolTake({ generation_id: 'g-other' }), secondPoolTake] })
+				);
+			}
+			finishFetch(
+				makePoolQueue({
+					takes: firstAnswerHoldsAdvancedTake ? [firstPoolTake, secondPoolTake] : [firstPoolTake]
+				})
+			);
+			await rebuilding;
+
+			expect(get(toasts).map((toast) => toast.message)).not.toContain(QUEUE_TAKE_MISSING_TOAST);
+			expect(audioPlayer.load).toHaveBeenLastCalledWith(
+				expect.objectContaining({ generation: expect.objectContaining({ id: second.id }) }),
+				expect.objectContaining({ startAt: 72.125 })
+			);
+			const ctx = get(queueContext);
+			expect(ctx.type === 'library' && ctx.takes?.[ctx.index ?? -1]?.generation.id).toBe(second.id);
+		}
+	);
 
 	it('toggling shuffle mid-library-play rebuilds at the current take and time', async () => {
 		const gen = makeGen({ ...genDefaults, id: 'g-cur' });

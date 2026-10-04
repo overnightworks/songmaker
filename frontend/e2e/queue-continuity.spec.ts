@@ -13,11 +13,13 @@ import {
 	collectionPlayLabel,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
+	SHUFFLE_SCOPE_LIBRARY,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
 import {
+	NOW_PLAYING_QUEUE_TAB,
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	NOW_PLAYING_UP_NEXT_PREFIX
@@ -76,6 +78,8 @@ class PlaybackTimeline {
 	readonly seeks: number[] = [];
 	readonly sourcesPlayed: string[] = [];
 	readonly recoveryRequests: string[] = [];
+	readonly backwardSeeks: number[] = [];
+	position = 0;
 	sourceSwaps = 0;
 
 	static async watch(page: Page): Promise<PlaybackTimeline> {
@@ -83,14 +87,35 @@ class PlaybackTimeline {
 		page.on('request', (sent) => timeline.recordRequest(sent.url()));
 		await page.exposeFunction(
 			MEDIA_EVENT_BINDING,
-			(element: number, event: string, source: string, position: number) =>
-				timeline.recordMediaEvent(element, event, source, position)
+			(element: number, event: string, source: string, position: number) => {
+				if (event === 'seek-back') timeline.backwardSeeks.push(position);
+				else if (event === 'timeupdate') timeline.position = position;
+				else timeline.recordMediaEvent(element, event, source, position);
+			}
 		);
 		await page.addInitScript(
 			({ binding, elementsKey, watchedEvents }) => {
 				const elementIds = new WeakMap<HTMLMediaElement, number>();
 				const played: HTMLMediaElement[] = [];
 				Reflect.set(window, elementsKey, played);
+				const position = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+				if (!position?.set) throw new Error('HTMLMediaElement has no currentTime setter');
+				const setPosition = position.set;
+				Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+					...position,
+					set(this: HTMLMediaElement, to: number) {
+						const from = this.currentTime;
+						if (to < from)
+							Reflect.get(window, binding).call(
+								window,
+								elementIds.get(this),
+								'seek-back',
+								this.src,
+								from - to
+							);
+						setPosition.call(this, to);
+					}
+				});
 				const nativePlay = HTMLMediaElement.prototype.play;
 				HTMLMediaElement.prototype.play = function () {
 					if (!elementIds.has(this)) {
@@ -99,6 +124,7 @@ class PlaybackTimeline {
 						const report = (event: string) =>
 							Reflect.get(window, binding).call(window, id, event, this.src, this.currentTime);
 						report('play');
+						this.addEventListener('timeupdate', () => report('timeupdate'));
 						for (const event of watchedEvents) this.addEventListener(event, () => report(event));
 					}
 					return nativePlay.call(this);
@@ -246,6 +272,82 @@ test('an album plays from one take into the next on one element that never stops
 	await expectTransportMovesOn(page, first, second);
 	const movedOnAt = performance.now();
 	expect(timeline.requestedAt(second)).toBeLessThan(movedOnAt);
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.stops).toEqual([]);
+	guard.assertClean();
+});
+
+// A shuffle toggle in the library queue rebuilds it from a pool fetch
+// (#1304): the take plays on from where it stands when the new queue arrives,
+// not from where it stood when the fetch began. The fetch is held until the
+// take has played on past it, so a position read before the fetch would seek
+// back. The queue has no current row while it is rebuilt, and has one again
+// once the new queue is in place. On the phone the queue is a sheet of Now
+// Playing, opened once the toggle has been pressed.
+test('shuffle while a library take plays keeps the position reached during the pool fetch', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const shell = shellOf(testInfo);
+	const timeline = await PlaybackTimeline.watch(page);
+	await page.addInitScript(() => {
+		const nativePlay = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function () {
+			this.playbackRate = 0.25;
+			return nativePlay.call(this);
+		};
+	});
+	await page.goto('/');
+	const transport = page.getByRole('contentinfo');
+	await transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }).click();
+	await expect.poll(() => timeline.position).toBeGreaterThan(0);
+	await transport
+		.getByRole('button', {
+			name: shell === 'mobile' ? new RegExp(`${openNowPlayingLabel('')}$`) : NOW_PLAYING_LABEL,
+			exact: true
+		})
+		.click();
+	const controls = shell === 'desktop' ? transport : page.getByRole('dialog');
+	const shuffle = controls.getByRole('button', {
+		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+	});
+	const queue = page.getByRole('region', { name: NOW_PLAYING_QUEUE_TAB });
+	const currentQueueRow = queue.locator('button[aria-current="true"]');
+	await expect(shuffle).toHaveAccessibleName(
+		`${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${SHUFFLE_SCOPE_LIBRARY}`
+	);
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
+	let positionAtRelease = 0;
+	let responseReady!: () => void;
+	const responseIsReady = new Promise<void>((resolve) => {
+		responseReady = resolve;
+	});
+	let allowFulfillment!: () => void;
+	const fulfillmentAllowed = new Promise<void>((resolve) => {
+		allowFulfillment = resolve;
+	});
+	await page.route('**/api/library/pool-queue?**', async (route) => {
+		const positionAtFetch = timeline.position;
+		const response = await route.fetch();
+		await expect.poll(() => timeline.position).toBeGreaterThan(positionAtFetch + 0.4);
+		positionAtRelease = timeline.position;
+		responseReady();
+		await fulfillmentAllowed;
+		await route.fulfill({ response });
+	});
+
+	await shuffle.click();
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
+
+	await responseIsReady;
+	if (shell === 'mobile')
+		await controls.getByRole('button', { name: NOW_PLAYING_QUEUE_TAB, exact: true }).click();
+	await expect(queue).toBeVisible();
+	await expect(currentQueueRow).toHaveCount(0);
+	allowFulfillment();
+	await expect(currentQueueRow).toBeVisible();
+	await expect.poll(() => timeline.position).toBeGreaterThan(positionAtRelease + 0.15);
+	expect(Math.max(0, ...timeline.backwardSeeks)).toBeLessThan(0.02);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
 	guard.assertClean();
