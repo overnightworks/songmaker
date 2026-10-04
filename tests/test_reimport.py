@@ -213,15 +213,20 @@ def reimport_client(tmp_path: Path):
     return TestClient(app)
 
 
-def test_reimport_api_mp3(reimport_client: TestClient) -> None:
+def test_reimport_api_stores_each_upload_unchanged(reimport_client: TestClient) -> None:
     resp = reimport_client.post(
         f"/api/songs/{SONG_ID}/reimport",
-        files={"mp3": ("test.mp3", b"fake-mp3", "audio/mpeg")},
+        files={
+            "mp3": ("test.mp3", b"fake-mp3", "audio/mpeg"),
+            "wav": ("test.wav", b"fake-wav", "audio/wav"),
+        },
     )
     assert resp.status_code == 200
     data = resp.json()
-    assert data["mp3_path"].endswith(".mp3")
     assert data["song_id"] == SONG_ID
+    audio_dir = reimport_client.app.state.ctx.audio_dir
+    assert (audio_dir / data["mp3_path"]).read_bytes() == b"fake-mp3"
+    assert (audio_dir / data["wav_path"]).read_bytes() == b"fake-wav"
     with reimport_client.app.state.ctx.db() as session:
         event = session.query(ResourceEvent).one()
         assert event.generation_id == data["id"]

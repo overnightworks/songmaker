@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Annotated, Optional
 
 from cyclopts import App, Parameter
+from webauth.passwords import MIN_PASSWORD_LENGTH
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -101,20 +102,19 @@ def server(
 @app.command(name="reset-password")
 def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
-    password: Annotated[str, Parameter(help="New password (min 8 chars)")],
+    password: Annotated[str, Parameter(help=f"New password (min {MIN_PASSWORD_LENGTH} chars)")],
 ) -> None:
     """Reset a user's password (requires local DB access)."""
-    from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength, hash_password
+    from pydantic import ValidationError
+    from webauth.passwords import hash_password
 
+    from songmaker_cli.api_models.auth import chosen_password_rule
     from songmaker_cli.db.engine import init_db, resolve_database_url
 
-    if len(password) < MIN_PASSWORD_LENGTH:
-        print(f"Error: password must be at least {MIN_PASSWORD_LENGTH} characters")
-        sys.exit(1)
     try:
-        check_password_strength(password)
-    except ValueError as exc:
-        print(f"Error: {exc}")
+        chosen_password_rule.validate_python(password)
+    except ValidationError as exc:
+        print(f"Error: {exc.errors()[0]['msg']}")
         sys.exit(1)
 
     db_url = resolve_database_url()

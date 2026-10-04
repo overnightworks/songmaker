@@ -108,6 +108,7 @@ def test_issue_references_in_test_files_are_not_style_literals(gate, suffix):
         ("card.ts", "// #abc\n/* box-shadow: 0 0 2px; */\nconst color = '#def';", 3),
         ("Card.svelte", "<!-- #abc\n border-radius: 2px; -->\n<style>p {color: #def;}</style>", 3),
         ("Card.svelte", "<script>\n// #abc\nconst color = '#def';\n</script>", 3),
+        ("Card.svelte", "<SCRIPT lang=\"ts\">\n// #abc\nconst color = '#def';\n</script >", 3),
         ("card.ts", "const url = 'https://example.test'; const color = '#def';", 1),
         ("card.css", 'p { background: url(https://example.test); color: #def; }', 1),
         ("card.ts", 'const css = `p {background: url("https://example.test"); color: #def;}`;', 1),

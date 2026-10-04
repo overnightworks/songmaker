@@ -2,49 +2,48 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Annotated, Final, Literal
 
-from pydantic import BaseModel, Field, field_validator
-from webauth.passwords import check_password_strength
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength
 from webauth.users import session_reference
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import LoginAttempt, User, UserSession
 
+MAX_PASSWORD_LENGTH: Final = 128
+
+PasswordText = Annotated[str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=MAX_PASSWORD_LENGTH)]
+ChosenPassword = Annotated[PasswordText, AfterValidator(check_password_strength)]
+
+chosen_password_rule: Final = TypeAdapter(ChosenPassword)
+
 
 class LoginRequest(BaseModel):
     username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
+    password: PasswordText
 
 
 class SetupRequest(BaseModel):
     username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
-
-    _check_strength = field_validator("password")(check_password_strength)
+    password: ChosenPassword
 
 
 class ChangePasswordRequest(BaseModel):
-    current: str = Field(min_length=1, max_length=128)
-    new: str = Field(min_length=8, max_length=128, alias="new_password")
-
-    _check_strength = field_validator("new")(check_password_strength)
+    current: str = Field(min_length=1, max_length=MAX_PASSWORD_LENGTH)
+    new: ChosenPassword = Field(alias="new_password")
 
 
 class CreateUserRequest(BaseModel):
     username: str = Field(min_length=3, max_length=100)
-    password: str = Field(min_length=8, max_length=128)
+    password: ChosenPassword
     role: Literal["admin", "user"] = "user"
-
-    _check_strength = field_validator("password")(check_password_strength)
 
 
 class UpdateUserRequest(BaseModel):
     role: Literal["admin", "user"] | None = None
     is_active: bool | None = None
-    password: str | None = Field(None, min_length=8, max_length=128)
-
-    _check_strength = field_validator("password")(check_password_strength)
+    password: ChosenPassword | None = None
 
 
 class UserResponse(BaseModel):

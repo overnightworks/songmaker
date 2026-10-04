@@ -42,7 +42,7 @@ def without_comments(text: str, *, javascript: bool) -> str:
 
 def findings(text: str, suffix: str) -> list[Finding]:
     if suffix == ".svelte":
-        text = re.sub(r"(<script\b[^>]*>)(.*?)(</script>)",
+        text = re.sub(r"(<script\b[^>]*>)(.*?)(</script\b[^>]*>)",
                       lambda m: m[1] + without_comments(m[2], javascript=True) + m[3],
                       text, flags=re.DOTALL | re.IGNORECASE)
     text = without_comments(text, javascript=suffix == ".ts")
