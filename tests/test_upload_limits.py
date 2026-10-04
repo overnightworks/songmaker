@@ -111,8 +111,12 @@ def test_reimport_suffix_does_not_expand_unrelated_route_budget(tmp_path: Path) 
     assert resp.status_code == 413
 
 
+@pytest.mark.parametrize(
+    "field, content_type, detail",
+    [("mp3", "audio/mpeg", "MP3 file too large"), ("wav", "audio/wav", "WAV file too large")],
+)
 def test_reimport_keeps_per_file_limit_separate(
-    tmp_path: Path, monkeypatch,
+    tmp_path: Path, monkeypatch, field: str, content_type: str, detail: str,
 ) -> None:
     client = _authed_app(tmp_path)
     song_resp = client.post("/api/songs", json={"title": "Song", "album_id": "a1"})
@@ -120,10 +124,10 @@ def test_reimport_keeps_per_file_limit_separate(
     monkeypatch.setattr("songmaker_cli.reimport_api.AUDIO_UPLOAD_FILE_MAX_BYTES", 4)
     resp = client.post(
         f"/api/songs/{song_resp.json()['id']}/reimport",
-        files={"mp3": ("take.mp3", b"12345", "audio/mpeg")},
+        files={field: (f"take.{field}", b"12345", content_type)},
     )
     assert resp.status_code == 413
-    assert resp.json()["detail"] == "MP3 file too large"
+    assert resp.json()["detail"] == detail
 
 
 def test_50mib_file_with_multipart_envelope_is_accepted(tmp_path: Path) -> None:

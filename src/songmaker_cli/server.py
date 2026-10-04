@@ -51,7 +51,7 @@ from songmaker_cli.cover_runner import (
     cover_runner_loop,
     recover_web_cover_jobs,
 )
-from songmaker_cli.health_api import _compute_script_hashes
+from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.lifecycle import (
     BackgroundLoopName,
     BackgroundLoopRegistry,
@@ -275,7 +275,7 @@ def create_app(
     #     allowlist, so GZip forwards those messages one-for-one with no
     #     buffering, exactly as if it were absent (see `middleware/gzip.py`
     #     and `test_server_middleware.py`'s SSE test).
-    script_hashes = _compute_script_hashes(project_root / "frontend" / "build" / "index.html")
+    script_hashes = compute_script_hashes(project_root / "frontend" / "build" / "index.html")
     settings = get_settings()
     csrf_policy = build_csrf_policy()
     app.add_middleware(
