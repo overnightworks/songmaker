@@ -1,0 +1,8 @@
+claim_id = "dda20a1d123a4e37acf0362d0ad07f72"
+agent = "claude-head"
+role = "builder"
+base = "f4f0fd50e7f6b0fc1ebf0d7a4afed001b500bd89"
+branch = "claude-head/issue-1312-pending-start-display"
+scope = ["frontend/e2e/offline.spec.ts", "frontend/e2e/playback-restore.spec.ts", "frontend/src/lib/components/NowPlaying.svelte", "frontend/src/lib/components/NowPlaying.test.ts", "frontend/src/lib/components/PlayerBar.svelte", "frontend/src/lib/components/PlayerBar.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/services/audioPlayer.svelte.ts", "frontend/src/lib/services/audioPlayer.test.ts", "frontend/src/lib/services/mediaSession.test.ts", "frontend/src/lib/services/mediaSession.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts"]
+opened_commit = "c496d35081b19683da030a8bcd780b25413cb93a"
+whole_reason = "a waiting start says so everywhere"
