@@ -713,6 +713,31 @@ def test_logout_removes_the_session_from_the_database_and_from_redis(
     assert session_cache.get(session_id) is None
 
 
+def test_logout_redis_failure_rolls_back(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+
+    session_cache = installed_web_auth_config(client.app).session_cache
+    user_id = _get_user_id(client, "admin")
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session_id = session.query(UserSession).filter_by(user_id=user_id).one().id
+
+    monkeypatch.setattr(
+        session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
+    )
+    resp = client.delete("/api/auth/session")
+
+    assert resp.status_code == 503
+    assert "degraded" in resp.json()["detail"]
+    with factory() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).one().id == session_id
+    assert client.get("/api/auth/me").status_code == 200
+    assert session_cache.get(session_id) is not None
+
+
 def test_password_change_clears_old_populates_new(client: TestClient) -> None:
     from webauth.ports import SessionCache
 

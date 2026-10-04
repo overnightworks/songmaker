@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from conftest import make_test_app, stored_hash, web_client
@@ -841,6 +841,27 @@ def test_hard_delete_user_keeps_playlist_cover_when_commit_fails(client: TestCli
             client.delete(f"/api/admin/users/{user_id}/permanent")
 
     assert cover_dir.is_dir()
+
+
+def test_hard_delete_user_rolls_back_when_session_cache_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+
+    session_cache = installed_web_auth_config(client.app).session_cache
+    monkeypatch.setattr(
+        session_cache, "delete_user_sessions", MagicMock(side_effect=RuntimeError("redis down")),
+    )
+
+    with pytest.raises(RuntimeError, match="redis down"):
+        client.delete(f"/api/admin/users/{user_id}/permanent")
+
+    from songmaker_cli.db.queries import get_user
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        assert get_user(session, user_id) is not None
 
 
 def test_hard_delete_user_no_data(client: TestClient) -> None:
