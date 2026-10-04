@@ -42,6 +42,13 @@ vi.mock('$app/navigation', async () =>
 const lockScreen = vi.hoisted(() => ({
 	handlers: null as { pause: () => void } | null
 }));
+// The store installs its lock-screen actions on import; a missing one is a
+// failure, not a silent no-op.
+function pressLockScreenPause(): void {
+	if (!lockScreen.handlers) throw new Error('Expected the lock-screen actions to be installed');
+	lockScreen.handlers.pause();
+}
+
 vi.mock('$lib/services/mediaSession', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/services/mediaSession')>();
 	return {
@@ -2688,7 +2695,7 @@ describe('playAlbum start track', () => {
 
 	it.each([
 		{ press: "the bar's transport", stop: () => playIdleStart() },
-		{ press: "the lock screen's Pause", stop: async () => lockScreen.handlers?.pause() }
+		{ press: "the lock screen's Pause", stop: async () => pressLockScreenPause() }
 	])('offline, $press stops the waiting start so the network starts nothing', async ({ stop }) => {
 		songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 		reportResourceStreamReachable(false);

@@ -68,7 +68,8 @@
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
-	// With the screen off the lock screen is the only surface, so it shows the same.
+	// A start that waits for the network shows as the transport's own wait, here
+	// and on the lock screen, which is the only surface with the screen off.
 	const barTransport = $derived(
 		startAwaitsNetwork(current, startNotice) ? 'recovering' : transport
 	);
