@@ -175,7 +175,15 @@
 	afterNavigate((navigation) => {
 		stampNavigatedEntry(navigation.type);
 		reportRouterStarted();
+		if (navigation.type !== 'enter' && signedOutOnAppPage()) void initAuth();
 	});
+
+	// Back from sign-in onto the app page a sign-out left is a router
+	// navigation, not a page load: nobody is signed in there, so the page asks
+	// for the session again as a load would, rather than standing empty.
+	function signedOutOnAppPage(): boolean {
+		return !isPublicRoute && get(currentUser) === null && !get(authLoading);
+	}
 	beforeNavigate(mountRouteOfLandedAddress);
 
 	// The live-sync stream and the library's landing handler outlive a route swap

@@ -24,6 +24,7 @@ import {
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
 import { handleSessionLost, signInAddress } from '$lib/api/fetch';
+import { checkSetupRequired } from '$lib/api/client';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -945,7 +946,7 @@ describe('a reload over the phone Now Playing', () => {
 // Sign-in is pushed before the session ends, so the account menu closing as
 // the shell unmounts moves no history under the sign-in page (#1340).
 describe('signing out on the phone', () => {
-	it('from the open account menu stands on sign-in before the session ends, and Back leaves it for the page before', async () => {
+	it('from the open account menu stands on sign-in before the session ends, and Back from there asks the page before for the session again', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry('/settings/voices');
@@ -966,12 +967,17 @@ describe('signing out on the phone', () => {
 		expect(signedOutOn).toBe('/login');
 		expect(target.querySelector('.app-shell')).toBeNull();
 
+		vi.mocked(checkAuth).mockImplementation(async () => null);
+		vi.mocked(checkSetupRequired).mockResolvedValue({ required: false });
+		vi.mocked(goto).mockClear();
+
 		await pressBack();
 
-		await vi.waitFor(() => {
-			expect(location.pathname).toBe('/settings/voices');
-			expect(standingHistoryEntry()?.layer).toBeUndefined();
-		});
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(signInAddress('/settings/voices'), { replaceState: true })
+		);
+		expect(location.pathname).toBe('/login');
+		expect(standingHistoryEntry()?.layer).toBeUndefined();
 	});
 });
 
