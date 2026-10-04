@@ -968,7 +968,7 @@ describe('signing out on the phone', () => {
 		}
 		expect(signedOutOn).toBe('/login');
 		expect(target.querySelector('.app-shell')).toBeNull();
-		expect(history.length).toBe(entriesOnVoices + 1);
+		expect(history).toHaveLength(entriesOnVoices + 1);
 
 		vi.mocked(checkAuth).mockImplementation(async () => null);
 		vi.mocked(checkSetupRequired).mockResolvedValue({ required: false });
