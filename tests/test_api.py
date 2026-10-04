@@ -2353,7 +2353,7 @@ def test_get_running_generation_exposes_take_counters_and_eta(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     now = datetime(2030, 1, 1, 0, 10, tzinfo=timezone.utc)
 
@@ -2367,8 +2367,15 @@ def test_get_running_generation_exposes_take_counters_and_eta(
     with ctx.db() as session:
         job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
         update_job_status(
-            session, job.id, JobStatus.RUNNING, progress=progress,
-            take_index=1, take_count=2, phase=GenerationPhase.WRITING,
+            session,
+            job.id,
+            JobStatusUpdate(
+                JobStatus.RUNNING,
+                progress=progress,
+                take_index=1,
+                take_count=2,
+                phase=GenerationPhase.WRITING,
+            ),
         )
         job.started_at = now - timedelta(hours=1)
         job.generation_started_at = now - timedelta(seconds=100)
@@ -2400,7 +2407,7 @@ def test_generation_estimate_leaves_the_model_load_out(
 ) -> None:
     from songmaker_cli.api_models import jobs as job_models
     from songmaker_cli.constants import GenerationPhase, JobStatus, JobType
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.db.queries import jobs as job_queries
 
     clock = [datetime(2030, 1, 1, tzinfo=timezone.utc)]
@@ -2417,8 +2424,9 @@ def test_generation_estimate_leaves_the_model_load_out(
         job = create_job(session, JobType.GENERATE, user_id=_DEFAULT_USER_ID, song_id="s1")
         for phase, progress, seconds in timeline:
             update_job_status(
-                session, job.id, JobStatus.RUNNING,
-                progress=progress, phase=GenerationPhase(phase),
+                session,
+                job.id,
+                JobStatusUpdate(JobStatus.RUNNING, progress=progress, phase=GenerationPhase(phase)),
             )
             clock[0] += timedelta(seconds=seconds)
         session.commit()
@@ -2655,7 +2663,7 @@ def test_cancel_queued_job(client: TestClient) -> None:
 
 
 def test_cancel_already_completed_job(client: TestClient) -> None:
-    from songmaker_cli.db.queries import update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2665,7 +2673,7 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
-        update_job_status(session, job_id, "completed", progress=1.0)
+        update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
         session.commit()
 
     resp = client.post(f"/api/jobs/{job_id}/cancel")
@@ -2677,7 +2685,7 @@ def test_cancel_already_completed_job(client: TestClient) -> None:
 
 
 def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
-    from songmaker_cli.db.queries import update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
 
     with _mock_worker():
         resp = client.post(
@@ -2687,7 +2695,7 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
-        update_job_status(session, job_id, "running", progress=0.4)
+        update_job_status(session, job_id, JobStatusUpdate("running", progress=0.4))
         session.commit()
 
     resp = client.post(f"/api/jobs/{job_id}/cancel")
@@ -2696,9 +2704,12 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
     assert resp.json()["completed_at"] is not None
 
     with ctx.db() as session:
-        assert update_job_status(session, job_id, "running", progress=0.9) is False
-        assert update_job_status(session, job_id, "completed", progress=1.0) is False
-        assert update_job_status(session, job_id, "failed", error="late") is False
+        assert update_job_status(session, job_id, JobStatusUpdate("running", progress=0.9)) is False
+        assert (
+            update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
+            is False
+        )
+        assert update_job_status(session, job_id, JobStatusUpdate("failed", error="late")) is False
         session.commit()
 
     got = client.get(f"/api/jobs/{job_id}")
@@ -2710,12 +2721,12 @@ def test_cancel_wins_over_progress_and_finalize(client: TestClient) -> None:
 def test_cancel_running_cover_job_signals_the_web_runner(client: TestClient) -> None:
     from songmaker_cli.constants import JobStatus, JobType
     from songmaker_cli.cover_runner import CoverJobCancellationRegistry
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, JobType.COVER, user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, JobStatus.RUNNING)
+        update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
         job_id = job.id
     registry = CoverJobCancellationRegistry()
@@ -2796,12 +2807,12 @@ def _authenticate_job_stream_client(
 def test_stream_job_initial_state(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, "completed", progress=1.0)
+        update_job_status(session, job.id, JobStatusUpdate("completed", progress=1.0))
         session.commit()
         job_id = job.id
 
@@ -2855,7 +2866,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
@@ -2868,7 +2879,7 @@ def test_stream_job_sends_updates(client: TestClient) -> None:
         stream = _job_event_generator(ctx, job_id)
         first = json.loads((await anext(stream)).removeprefix("data: "))
         with ctx.db() as session:
-            update_job_status(session, job_id, "completed", progress=1.0)
+            update_job_status(session, job_id, JobStatusUpdate("completed", progress=1.0))
             session.commit()
         second = json.loads((await anext(stream)).removeprefix("data: "))
         await stream.aclose()
@@ -2904,14 +2915,14 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
     import asyncio
     import json
 
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         create_job(session, "generate", user_id=_DEFAULT_USER_ID)
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, status, **before)
+        update_job_status(session, job.id, JobStatusUpdate(status, **before))
         session.commit()
         job_id = job.id
 
@@ -2919,7 +2930,7 @@ def test_stream_job_emits_a_change_without_a_status_or_progress_change(
         stream = _job_event_generator(ctx, job_id)
         first = json.loads((await anext(stream)).removeprefix("data: "))
         with ctx.db() as session:
-            update_job_status(session, job_id, status, **after)
+            update_job_status(session, job_id, JobStatusUpdate(status, **after))
             session.commit()
         second = json.loads((await anext(stream)).removeprefix("data: "))
         await stream.aclose()
@@ -2992,12 +3003,12 @@ def test_stream_job_reraises_client_cancellation(client: TestClient) -> None:
 def test_stream_job_closes_on_terminal_status(client: TestClient) -> None:
     import json
 
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, "failed", error="test error")
+        update_job_status(session, job.id, JobStatusUpdate("failed", error="test error"))
         session.commit()
         job_id = job.id
 
@@ -3120,7 +3131,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     client, factory = _make_pool_capacity_limited_client(
         tmp_path, pool_size=1, max_overflow=0, pool_timeout=2,
@@ -3131,7 +3142,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
 
     with factory() as session:
         job_a = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job_a.id, "running", progress=0.1)
+        update_job_status(session, job_a.id, JobStatusUpdate("running", progress=0.1))
         job_b = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
         session.commit()
         job_a_id, job_b_id = job_a.id, job_b.id
@@ -3168,7 +3179,7 @@ def test_stream_job_does_not_pin_the_only_pool_connection_for_the_stream_lifetim
         )
 
         with ctx.db() as session:
-            update_job_status(session, job_a_id, "completed", progress=1.0)
+            update_job_status(session, job_a_id, JobStatusUpdate("completed", progress=1.0))
             session.commit()
         await asyncio.wait_for(stream_task, timeout=5)
         return response_status["status"], response_b
@@ -3267,7 +3278,7 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "JOB_STREAM_CONNECTION_SECONDS", 0.05)
@@ -3276,7 +3287,7 @@ def test_stream_job_deadline_closes_a_stream_that_never_reaches_terminal(
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, "running", progress=0.1)
+        update_job_status(session, job.id, JobStatusUpdate("running", progress=0.1))
         session.commit()
         job_id = job.id
 
@@ -3303,12 +3314,12 @@ def test_stream_job_lease_is_acquired_and_released_around_the_stream(
     import asyncio
 
     from songmaker_cli import redis_client
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
 
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, "completed", progress=1.0)
+        update_job_status(session, job.id, JobStatusUpdate("completed", progress=1.0))
         session.commit()
         job_id = job.id
 
@@ -3400,7 +3411,7 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
     import asyncio
 
     from songmaker_cli import jobs_api
-    from songmaker_cli.db.queries import create_job, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, create_job, update_job_status
     from songmaker_cli.jobs_api import _job_event_generator
 
     monkeypatch.setattr(jobs_api, "SSE_HEARTBEAT_SECONDS", 0)
@@ -3409,7 +3420,7 @@ def test_stream_job_heartbeat_survives_the_lease_and_deadline_changes(
     ctx: AppContext = client.app.state.ctx
     with ctx.db() as session:
         job = create_job(session, "generate", user_id=_DEFAULT_USER_ID)
-        update_job_status(session, job.id, "running", progress=0.1)
+        update_job_status(session, job.id, JobStatusUpdate("running", progress=0.1))
         session.commit()
         job_id = job.id
 

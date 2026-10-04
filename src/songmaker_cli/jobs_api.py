@@ -35,7 +35,13 @@ from songmaker_cli.constants import (
     ResourceType,
 )
 from songmaker_cli.db.models import Job
-from songmaker_cli.db.queries import get_job, get_queue_position, record_audit, update_job_status
+from songmaker_cli.db.queries import (
+    JobStatusUpdate,
+    get_job,
+    get_queue_position,
+    record_audit,
+    update_job_status,
+)
 from songmaker_cli.redis_client import RedisConcurrentLeaseLimiter, release_lease_in_background
 from songmaker_cli.settings import get_settings
 
@@ -251,7 +257,7 @@ def api_cancel_job(
     job = _check_job_access(session, job_id, user)
     if job.status not in JOB_ACTIVE_STATUSES:
         raise HTTPException(409, "Only queued or running jobs can be cancelled")
-    if not update_job_status(session, job_id, JobStatus.CANCELLED):
+    if not update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED)):
         raise HTTPException(409, "Only queued or running jobs can be cancelled")
     record_audit(session, user.id, AuditAction.CANCEL, ResourceType.JOB, job_id)
     session.commit()
