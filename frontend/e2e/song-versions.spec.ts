@@ -721,9 +721,10 @@ test.describe('the versions of a song', () => {
 			await expect(page.getByRole('dialog', { name: song.title })).toBeHidden();
 		}
 		await page.goBack();
-		await expect(
-			workspace(page).getByRole('button', { name: containing(song.title) })
-		).toBeVisible();
+		const albumSong = mobile
+			? workspace(page).locator('.item-row').filter({ hasText: song.title })
+			: workspace(page).getByRole('button', { name: containing(song.title) });
+		await expect(albumSong).toBeVisible();
 		await expect.poll(() => shownTakePosition(page, mobile)).toBeCloseTo(heldAt, 1);
 		const shownAt = await shownTakePosition(page, mobile);
 		if (mobile) {
