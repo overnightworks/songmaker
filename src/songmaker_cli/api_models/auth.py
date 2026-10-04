@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated, Final, Literal
 
 from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationError
+from webauth.cookies import session_reference
 from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength
-from webauth.users import session_reference
 
 if TYPE_CHECKING:
     from pydantic_core import ErrorDetails

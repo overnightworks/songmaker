@@ -795,7 +795,7 @@ events.
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.4.0`; `uv.lock`
+pinned in the `server` extra to the release wheel of tag `v0.11.0`; `uv.lock`
 records that wheel's hash, so every image installs the same bytes and no image
 needs `git`. The import package is still `webauth`, so nothing in
 `songmaker_cli` changed when the source moved. Its own tests moved with it.
@@ -1025,7 +1025,7 @@ The in-tree packages beside the application — `acestep_engine`, `acestep_worke
 ## Data Model
 
 ```
-User (username, role: admin|user, bcrypt hash)
+User (username, role: admin|user, Argon2id hash)
   ├── Album (title, artist, share_slug?, is_shared — owned via created_by)
   │     ├── AlbumCoverSuggestion (job, private PNG path, created_at)
   │     └── Song (title, slug — unique per album, track_number, share_slug?, is_shared)

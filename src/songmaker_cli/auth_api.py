@@ -119,7 +119,7 @@ def setup(
     db.commit()
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
-    issue_session_cookies(response, request, user_session.id, config)
+    issue_session_cookies(response, user_session.id, config)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
 
@@ -192,7 +192,7 @@ def login(
                 log.warning("Redis session cache delete failed after login commit failure")
         raise
 
-    issue_session_cookies(response, request, user_session.id, config)
+    issue_session_cookies(response, user_session.id, config)
     return UserResponse.from_orm(user)
 
 
@@ -289,5 +289,5 @@ def change_password(
     db.commit()
 
     _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
-    issue_session_cookies(response, request, new_session.id, config)
+    issue_session_cookies(response, new_session.id, config)
     return StatusResponse(status="ok")
