@@ -164,6 +164,7 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 }
 
 const RESTORED_POSITION = 13;
+const PAST_THE_STALL_CHECK_MS = 5001;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -330,6 +331,29 @@ describe('PlayerBar stream boundaries', () => {
 				position: RESTORED_POSITION
 			});
 		});
+
+		it.each([
+			{ moment: 'before any press', presses: 0 },
+			{ moment: 'after a press withdrew the ask', presses: 2 }
+		])(
+			'still reads Play $moment when the data takes longer than the stall check, and stays paused when it arrives',
+			async ({ presses }) => {
+				vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+				onTestFinished(() => vi.useRealTimers());
+				const transport = await mountRestoredTake();
+				for (let press = 0; press < presses; press++) await clickAndSettle(transport);
+
+				vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+				await tick();
+				const pastTheStallCheck = buttonFacts(transport);
+				await dataArrives();
+
+				expect({ pastTheStallCheck, playing: !audio.paused }).toEqual({
+					pastTheStallCheck: readsPlay,
+					playing: false
+				});
+			}
+		);
 	});
 
 	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {

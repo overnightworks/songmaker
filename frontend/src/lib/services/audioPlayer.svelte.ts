@@ -726,6 +726,7 @@ class AudioPlayer {
 		}
 		if (this.status === 'loading' || this.status === 'buffering') {
 			this.autoplayPending = true;
+			this.scheduleStallRecovery();
 			if (this.deckSession) this.resumeDeckDownload(this.deckSession, 'play');
 			return;
 		}
@@ -756,6 +757,8 @@ class AudioPlayer {
 			// or withdraws the ask, so the element plays once it is ready only if
 			// the last press asked (#1312).
 			this.autoplayPending = !this.autoplayPending;
+			if (this.autoplayPending) this.scheduleStallRecovery();
+			else this.clearStallRecoveryTimer();
 			return;
 		}
 		if (transportOffersPause(this.transport)) {
@@ -1047,7 +1050,7 @@ class AudioPlayer {
 	// it would throw its buffer away and fetch the take from byte 0 again.
 	private scheduleStallRecovery(): void {
 		const el = this.audio;
-		if (this.stallRecoveryTimer || !this.current || !el) return;
+		if (this.stallRecoveryTimer || !this.current || !el || this.loadsUnasked) return;
 		const bufferedAtStall = bufferedUntil(el);
 		this.stallRecoveryTimer = setTimeout(() => {
 			this.stallRecoveryTimer = null;
@@ -1055,6 +1058,14 @@ class AudioPlayer {
 			if (bufferedUntil(el) > bufferedAtStall) this.scheduleStallRecovery();
 			else this.recoverFromStall('stall-timeout');
 		}, STALL_RECOVERY_MS);
+	}
+
+	// A take that loads while nobody asked for its sound, a restored one or one
+	// whose ask a press withdrew, has no stall to recover: it waits for the
+	// listener, not for its bytes, and must not turn busy or start by itself
+	// (#1312).
+	private get loadsUnasked(): boolean {
+		return this.status === 'loading' && !this.autoplayPending && this.recoveryStartedAt === null;
 	}
 
 	private recoverFromStall(reason: StallReason): void {

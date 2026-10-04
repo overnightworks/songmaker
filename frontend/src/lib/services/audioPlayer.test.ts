@@ -2264,6 +2264,45 @@ describe('toggle / play / pause', () => {
 	});
 });
 
+describe('a loading take whose bytes never come, past the stall check (#1312)', () => {
+	const PAST_THE_STALL_CHECK_MS = 5001;
+
+	beforeEach(() => {
+		vi.useFakeTimers();
+		audioPlayer.load(makeInfo(), { autoplay: false, startAt: 73 });
+	});
+
+	it.each([
+		{ moment: 'nobody pressed yet', presses: 0 },
+		{ moment: 'a second press withdrew the ask', presses: 2 }
+	])('still reads Play, not busy, and stays paused once $moment', ({ presses }) => {
+		for (let press = 0; press < presses; press++) audioPlayer.toggle();
+
+		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+		const shown = {
+			label: transportButtonLabel(audioPlayer.transport),
+			busy: transportIsBusy(audioPlayer.transport)
+		};
+		fakeAudio.fire('canplay');
+
+		expect({ shown, played: fakeAudio.playMock.mock.calls.length > 0 }).toEqual({
+			shown: { label: TRANSPORT_PLAY_LABEL, busy: false },
+			played: false
+		});
+	});
+
+	it('keeps waiting busy with Pause once a press asked for sound', () => {
+		audioPlayer.toggle();
+
+		vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+
+		expect({
+			label: transportButtonLabel(audioPlayer.transport),
+			busy: transportIsBusy(audioPlayer.transport)
+		}).toEqual({ label: TRANSPORT_PAUSE_LABEL, busy: true });
+	});
+});
+
 describe('seek()', () => {
 	beforeEach(() => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
