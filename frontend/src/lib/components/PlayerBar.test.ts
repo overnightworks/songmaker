@@ -132,7 +132,7 @@ function useDesktopLayout(): void {
 	);
 }
 
-function takeInfo(songTitle = 'Opening Move'): PlaybackInfo {
+function barTake(songTitle = 'Opening Move'): PlaybackInfo {
 	return {
 		generation: makeGeneration({
 			version_number: 7,
@@ -148,7 +148,7 @@ function takeInfo(songTitle = 'Opening Move'): PlaybackInfo {
 }
 
 function loadTake(songTitle?: string): void {
-	audioPlayer.load(takeInfo(songTitle), { autoplay: false });
+	audioPlayer.load(barTake(songTitle), { autoplay: false });
 }
 
 function installLockScreen(): Pick<MediaSession, 'playbackState'> {
@@ -266,7 +266,7 @@ describe('PlayerBar stream boundaries', () => {
 
 	describe('during the restore wait (#1312)', () => {
 		async function mountRestoredTake(): Promise<HTMLButtonElement> {
-			audioPlayer.load(takeInfo(), { autoplay: false, startAt: RESTORED_POSITION });
+			audioPlayer.load(barTake(), { autoplay: false, startAt: RESTORED_POSITION });
 			component = mount(PlayerBar, { target });
 			await tick();
 			return playButton();
@@ -1295,7 +1295,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 
 	async function tapATakeRowOffline(): Promise<void> {
 		reportResourceStreamReachable(false);
-		audioPlayer.load(takeInfo());
+		audioPlayer.load(barTake());
 		component = mount(PlayerBar, { target });
 		await tick();
 	}

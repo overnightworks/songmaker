@@ -764,7 +764,7 @@ export async function playIdleStart(): Promise<void> {
 
 // The bar and the lock screen show a start that waits for the network as the
 // transport's own wait, and their presses stop it (#1288).
-export function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
+function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
 	return !current && (notice === 'awaiting-network' || notice === 'gave-up-on-network');
 }
 

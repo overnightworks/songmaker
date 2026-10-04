@@ -50,7 +50,7 @@ export function transportButtonLabel(transport: TransportState): string {
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
-export type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
+type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
 
 // The play button's face on every surface: a spinner while sound is asked for
 // and not there yet, otherwise the action its click takes.

@@ -323,6 +323,9 @@ test.describe('tapping a take row Play while the network is gone', () => {
 		const retry = transport.getByRole('button', { name: TRANSPORT_RETRY_LABEL, exact: true });
 		const spinner = transport.locator('.play-btn .spinner');
 		const waitingSpinner = pause.locator('.spinner');
+		const takeRowPlay = workspace(page)
+			.locator('.take-row')
+			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) });
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
@@ -330,6 +333,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 			.click();
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
+		await expect(takeRowPlay).toBeVisible();
 
 		await loseNetwork(page, context);
 		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
@@ -338,10 +342,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 			if (new URL(sent.url()).pathname.startsWith(TAKE_AUDIO_PATH_PREFIX))
 				offlineAudioRequests += 1;
 		});
-		await page
-			.getByRole('tabpanel')
-			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
-			.click();
+		await takeRowPlay.click();
 		await expect(waitingSpinner).toBeVisible();
 		await expect.poll(() => offlineAudioRequests).toBe(DECK_DOWNLOAD_ATTEMPTS);
 		await expect(waitingSpinner).toBeVisible({ timeout: FIRST_STALL_LOOK_MS });

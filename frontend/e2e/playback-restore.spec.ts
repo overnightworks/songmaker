@@ -196,7 +196,7 @@ async function playTheSongsTake(
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
 	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
-	await expect(transportOf(page).pause).toBeVisible();
+	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
 }
 
 // Plays the song's one take from its album, pauses it mid-take and reloads,
