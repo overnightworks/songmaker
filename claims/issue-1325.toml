@@ -1,8 +1,0 @@
-claim_id = "e6c7ef1b289448f4b519a1341390bd36"
-agent = "Claude 255c9087-94fa-477f-af88-8eb64e5acd39"
-role = "builder"
-base = "65aa51fb19a1f4b958c9b6a728f5b207e08afa85"
-branch = "claude/issue-1325-s2-hidden-prompts"
-scope = ["docs", "src/songmaker_cli/cli_client.py", "src/songmaker_cli/main.py", "tests/test_cli.py"]
-opened_commit = "b3bd000aba4dedd90a7246ac8ca49c7e8c94e8e9"
-whole_reason = "CLI-Passworteingabe an zwei Befehlen samt Tests und Doku."
