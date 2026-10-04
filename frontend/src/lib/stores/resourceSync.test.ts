@@ -21,7 +21,8 @@ vi.mock('$lib/stores/auth', () => {
 	return {
 		clearAuth: vi.fn(() => currentUser.set(null)),
 		classifyAuthFailure: mockClassifyAuthFailure,
-		currentUser
+		currentUser,
+		hasSessionToLose: () => user !== null
 	};
 });
 vi.mock('$app/navigation', async () =>

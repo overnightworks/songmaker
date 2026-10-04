@@ -234,9 +234,10 @@ export function handleSessionLost(): Promise<void> {
 	return sessionLostRun;
 }
 
-// No-ops when `currentUser` is already null: that caller has no session to
-// lose (first load, or a second caller that lost the in-flight race above),
-// so this leaves +layout.svelte's own /login-vs-/setup routing to decide
+// No-ops when there is no session to lose (`hasSessionToLose`): the first
+// load, a second caller that lost the in-flight race above, or a deliberate
+// sign-out under way, which leaves for sign-in itself. This leaves
+// +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
 // instead of forcing a redirect that could race it.
 //
 // The address standing when the session was lost is read before anything is
@@ -248,12 +249,12 @@ export function handleSessionLost(): Promise<void> {
 // sign-in page (#1230).
 async function reactToSessionLost(): Promise<void> {
 	const lostAt = window.location.pathname + window.location.search;
-	const [{ currentUser, clearAuth }, { historyStandsStill }, { goto }] = await Promise.all([
+	const [{ hasSessionToLose, clearAuth }, { historyStandsStill }, { goto }] = await Promise.all([
 		import('$lib/stores/auth'),
 		import('$lib/history/historyController'),
 		import('$app/navigation')
 	]);
-	if (get(currentUser) === null) return;
+	if (!hasSessionToLose()) return;
 	await historyStandsStill();
 	try {
 		await goto(signInAddress(lostAt));

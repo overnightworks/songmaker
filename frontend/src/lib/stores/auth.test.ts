@@ -26,6 +26,10 @@ vi.mock('$lib/stores/resourceSync', () => ({
 	stopLibraryResourceSync: (...args: unknown[]) => mockStopLibraryResourceSync(...args)
 }));
 
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
+
 import {
 	currentUser,
 	authLoading,
@@ -47,7 +51,9 @@ import {
 	AUTH_SESSION_EXPIRED_DETAIL
 } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import { NetworkError, apiFetch } from '$lib/api/fetch';
+import { resolve } from '$app/paths';
+import { goto } from '$app/navigation';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
@@ -404,6 +410,28 @@ describe('logout', () => {
 
 		expect(recordedBefore).not.toBeNull();
 		expect(localStorage.getItem(diagnosticsKey)).toBeNull();
+	});
+
+	it('stays a sign-out when a request is refused while it leaves for sign-in', async () => {
+		currentUser.set(KNOWN_USER);
+		vi.mocked(goto).mockClear();
+		const noticesShown: Array<string | null> = [];
+		const stopWatching = authNotice.subscribe((notice) => noticesShown.push(notice));
+		const refused = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(
+				new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
+			);
+
+		await logout(async () => {
+			await apiFetch('/api/songs/s1').catch(() => undefined);
+			await goto(resolve('/login'));
+		});
+		refused.mockRestore();
+		stopWatching();
+
+		expect(vi.mocked(goto).mock.calls).toEqual([['/login']]);
+		expect(noticesShown).not.toContain('unauthorized');
 	});
 
 	it('clears user even if API fails', async () => {

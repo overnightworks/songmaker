@@ -21,7 +21,11 @@ vi.mock('$lib/stores/auth', () => {
 			subscribers.forEach((fn) => fn(user));
 		}
 	};
-	return { clearAuth: vi.fn(() => currentUser.set(null)), currentUser };
+	return {
+		clearAuth: vi.fn(() => currentUser.set(null)),
+		currentUser,
+		hasSessionToLose: () => user !== null
+	};
 });
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()

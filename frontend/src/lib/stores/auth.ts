@@ -27,6 +27,7 @@ export const authCheckError = writable<string | null>(null);
 export const authCheckUnreachable = writable(false);
 let sessionGate: () => void = () => {};
 let pendingSessionCheck: ReturnType<typeof setTimeout> | null = null;
+let signingOut = false;
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 type AuthNotice = 'unauthorized' | 'disabled';
@@ -174,10 +175,14 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 // overlays closing with it move no history (#1340). That leave stays inside
 // the app, so the player is unloaded here: no take of the signed-out user
 // plays on, or records into the next user's diagnostics (#1187).
+// While it runs the user is still set but no longer has a session to lose: a
+// request refused meanwhile -- a poll, or a refetch of a page unmounting on
+// the way to sign-in -- is this sign-out, not an expiry (#1340).
 export async function logout(leaveForSignIn: () => Promise<void>): Promise<void> {
 	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
 	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
 	const user = get(currentUser);
+	signingOut = true;
 	stopLibraryResourceSync();
 	try {
 		await apiLogout();
@@ -189,9 +194,15 @@ export async function logout(leaveForSignIn: () => Promise<void>): Promise<void>
 	} finally {
 		audioPlayer.unload();
 		clearAuth();
+		signingOut = false;
 		if (user) {
 			forgetPlaybackResume(user.id);
 			forgetPlaybackDiagnostics(user.id);
 		}
 	}
+}
+
+// What a refused request asks before it reacts as a lost session.
+export function hasSessionToLose(): boolean {
+	return get(currentUser) !== null && !signingOut;
 }

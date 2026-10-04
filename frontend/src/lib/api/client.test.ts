@@ -25,7 +25,8 @@ vi.mock('$lib/stores/auth', () => {
 			currentUser.set(null);
 			return mockClearAuth(...args);
 		},
-		currentUser
+		currentUser,
+		hasSessionToLose: () => user !== null
 	};
 });
 vi.mock('$app/navigation', async () =>
