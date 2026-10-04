@@ -7,8 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from conftest import TEST_SECRET, stored_hash
-from fastapi.testclient import TestClient
+from conftest import TEST_SECRET, stored_hash, web_client
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -104,7 +103,7 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> N
         patch("songmaker_cli.arq_pool.is_scoring_worker_healthy", return_value=False),
         patch("songmaker_cli.arq_pool.get_music_queue_depth", return_value=0),
         patch("songmaker_cli.arq_pool.get_scoring_queue_depth", return_value=0),
-        TestClient(app) as client,
+        web_client(app) as client,
     ):
         resp = client.get("/health")
     data = resp.json()
@@ -114,7 +113,7 @@ def test_health_reports_redis_ok(tmp_path: Path, fake_redis, mock_arq_pool) -> N
 def test_health_reports_redis_error(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with TestClient(app) as client:
+    with web_client(app) as client:
         with patch("songmaker_cli.redis_client.redis_health", return_value=False):
             resp = client.get("/health")
     data = resp.json()
@@ -126,7 +125,7 @@ def test_health_reports_redis_error(tmp_path: Path, fake_redis, mock_arq_pool) -
 def test_ip_rate_limit_middleware_uses_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin", "admin12345")
     for _ in range(5):
@@ -153,7 +152,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
         signing_key=TEST_SECRET, redis=broken_redis,
     )
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={}, raise_server_exceptions=False)
+    client = web_client(app, cookies={}, raise_server_exceptions=False)
     resp = client.get("/api/songs")
     assert resp.status_code == 503
     assert resp.headers["Retry-After"] == "5"
@@ -162,7 +161,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
 def test_metrics_with_redis(tmp_path: Path, fake_redis, mock_arq_pool) -> None:
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    with TestClient(app) as client:
+    with web_client(app) as client:
         client.get("/health")
         resp = client.get("/metrics")
     body = resp.text
@@ -178,7 +177,7 @@ def test_ip_rate_limit_middleware_writes_to_redis(
 
     ctx, audio_dir, data_dir, project_root = _make_redis_ctx(tmp_path, fake_redis)
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     from conftest import login_and_csrf
     login_and_csrf(client, "admin", "admin12345")
     client.get("/api/songs")

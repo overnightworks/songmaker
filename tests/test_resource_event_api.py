@@ -10,7 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
-from conftest import TEST_SECRET, make_fake_redis, make_test_app
+from conftest import TEST_SECRET, make_fake_redis, make_test_app, web_client
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import event as sqlalchemy_event
@@ -66,7 +66,7 @@ def _authenticated_clients(tmp_path: Path):
             client = (
                 base_client
                 if username == "alice"
-                else TestClient(
+                else web_client(
                     base_client.app,
                     cookies={},
                 )
@@ -584,7 +584,7 @@ def test_route_requires_auth_and_validates_cursor_after_auth(
 ) -> None:
     clients, _, _ = _authenticated_clients(tmp_path)
     _install_finite_route_stream(monkeypatch)
-    unauthenticated = TestClient(clients["alice"].app, cookies={})
+    unauthenticated = web_client(clients["alice"].app, cookies={})
     assert unauthenticated.get("/api/resource-events/stream").status_code == 401
     response = clients["alice"].get(
         "/api/resource-events/stream",

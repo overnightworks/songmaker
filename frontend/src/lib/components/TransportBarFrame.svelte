@@ -3,15 +3,12 @@
 	import Icon from './Icon.svelte';
 	import {
 		audioPlayer,
+		transportButtonFace,
 		transportButtonLabel,
-		transportOffersPause,
+		transportIsBusy,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
-	import {
-		NOW_PLAYING_LABEL,
-		NOW_PLAYING_SWIPE_RISE_PX,
-		TRANSPORT_RETRY_LABEL
-	} from '$lib/constants';
+	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '$lib/constants';
 	import {
 		AudioVisualizer,
 		FFT_SIZE,
@@ -25,8 +22,9 @@
 	interface Props {
 		transport: TransportState;
 		errorMsg?: string | null;
-		// A take waiting for the network keeps a small Retry beside its words.
-		onRetry: () => void;
+		// Without a current take there is no position to read, so the bar
+		// shows no 0:00/0:00 (#1312).
+		takeIsCurrent: boolean;
 		currentTime: number;
 		duration: number;
 		formatTime: (seconds: number) => string;
@@ -60,7 +58,7 @@
 	let {
 		transport,
 		errorMsg = null,
-		onRetry,
+		takeIsCurrent,
 		currentTime,
 		duration,
 		formatTime,
@@ -101,10 +99,10 @@
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
 	const isPlaying = $derived(transport === 'playing');
-	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
+	const isLoading = $derived(transportIsBusy(transport));
 	const isError = $derived(transport === 'failed');
 	const waitingForNetwork = $derived(transport === 'waiting-for-network');
-	const offersPause = $derived(transportOffersPause(transport));
+	const buttonFace = $derived(transportButtonFace(transport));
 
 	const phoneNoticeId = $props.id();
 	const playbackFailure = $derived(isError ? errorMsg : null);
@@ -254,13 +252,14 @@
 		class:errored={isError}
 		onclick={onTogglePlay}
 		aria-label={transportButtonLabel(transport)}
+		aria-busy={isLoading}
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>
-			{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-					name="refresh-cw"
-					size={24}
-				/>{:else}<Icon name={offersPause ? 'pause' : 'play'} size={26} />{/if}
+			{#if buttonFace === 'spinner'}<span class="spinner"></span>{:else}<Icon
+					name={buttonFace}
+					size={buttonFace === 'refresh-cw' ? 24 : 26}
+				/>{/if}
 		</span>
 	</button>
 	<button
@@ -276,11 +275,10 @@
 {/snippet}
 
 <!-- Calm words, not a failure: the network's return retries by itself, so
-	Retry is offered small and nobody is asked to press it. -->
+	no Retry is offered (#1312). -->
 {#snippet waitingNotice(wordsId?: string)}
 	<span class="waiting-notice">
 		<span role="status" id={wordsId}>{errorMsg}</span>
-		<button type="button" class="waiting-retry" onclick={onRetry}>{TRANSPORT_RETRY_LABEL}</button>
 	</span>
 {/snippet}
 
@@ -366,21 +364,23 @@
 			</div>
 			<div class="timeline">
 				{#if waitingForNetwork}{@render waitingNotice()}{/if}
-				<span class="time">{formatTime(currentTime)}</span>
-				<input
-					class="timeline-range"
-					style={`--progress: ${progressPercent}%`}
-					type="range"
-					min="0"
-					max={duration || 0}
-					step="0.1"
-					value={duration > 0 ? currentTime : 0}
-					oninput={seekFromRange}
-					onclick={(e) => seekFromClick(e)}
-					disabled={duration <= 0}
-					aria-label="Seek playback"
-				/>
-				<span class="time">{formatTime(duration)}</span>
+				{#if takeIsCurrent}
+					<span class="time">{formatTime(currentTime)}</span>
+					<input
+						class="timeline-range"
+						style={`--progress: ${progressPercent}%`}
+						type="range"
+						min="0"
+						max={duration || 0}
+						step="0.1"
+						value={duration > 0 ? currentTime : 0}
+						oninput={seekFromRange}
+						onclick={(e) => seekFromClick(e)}
+						disabled={duration <= 0}
+						aria-label="Seek playback"
+					/>
+					<span class="time">{formatTime(duration)}</span>
+				{/if}
 			</div>
 			<button
 				bind:this={nowPlayingTrigger}
@@ -764,16 +764,6 @@
 	.phone-side .waiting-notice {
 		height: 100%;
 		padding-left: 8px;
-	}
-	.waiting-retry {
-		min-height: 24px;
-		padding: 2px 10px;
-		border: 1px solid var(--border);
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text);
-		font: inherit;
-		cursor: pointer;
 	}
 	.open-now-playing {
 		margin: 0;

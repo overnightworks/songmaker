@@ -348,24 +348,37 @@ export async function boundingBoxes(...locators: Locator[]): Promise<RenderedBox
 }
 
 /**
- * Paths whose refusal is the behaviour a flow is there to prove rather than a
+ * A refusal that is the behaviour a flow is there to prove rather than a
  * guard-rail failure. `auth-flows.spec.ts` drives real ones — a locked account,
- * a session the server no longer honours, an admin page a non-admin asks for —
- * and Chromium reports every refused fetch as a console error of its own, on
- * top of the response itself. Both are forgiven on exactly these paths and
- * nowhere else; a 5xx never is.
+ * a session the server no longer honours, an admin page a non-admin asks for,
+ * a revoke of a session already gone — and Chromium reports every refused
+ * fetch as a console error of its own, on top of the response itself. Both are
+ * forgiven for exactly these statuses on exactly this path and nowhere else; a
+ * 5xx never is. A `path` ending in `/` covers every path beneath it, for a
+ * refusal whose address carries an id.
  */
+export interface ExpectedRefusal {
+	path: string;
+	statuses: readonly number[];
+}
+
+/** The refusals a session or rate limit answers with. */
+export const SESSION_REFUSAL_STATUSES: readonly number[] = [401, 403, 429];
+
 export interface FlowGuardOptions {
-	refusalsExpectedOn?: readonly string[];
+	refusalsExpectedOn?: readonly ExpectedRefusal[];
 	// A flow that calls `loseNetwork` drives that loss on purpose, so neither
 	// the failed request nor the console line Chromium adds for it is a guard
 	// failure there — and stays one in every other flow.
 	losesNetworkOnPurpose?: boolean;
 }
 
-const REFUSED_STATUSES: readonly number[] = [401, 403, 429];
 const REFUSED_RESOURCE_CONSOLE_MESSAGE =
-	/^Failed to load resource: the server responded with a status of (401|403|429)\b/;
+	/^Failed to load resource: the server responded with a status of (\d{3})\b/;
+
+function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
+	return refusal.path.endsWith('/') ? pathname.startsWith(refusal.path) : pathname === refusal.path;
+}
 
 /**
  * Fails the flow on a rate-limited or failed response, on a browser console
@@ -379,8 +392,15 @@ export class FlowGuard {
 	constructor(page: Page, options: FlowGuardOptions = {}) {
 		const refusalsExpectedOn = options.refusalsExpectedOn ?? [];
 		const losesNetworkOnPurpose = options.losesNetworkOnPurpose ?? false;
-		const refusalIsExpectedOn = (url: string): boolean =>
-			refusalsExpectedOn.includes(new URL(url).pathname);
+		const refusalIsExpected = (url: string, status: number): boolean => {
+			const pathname = new URL(url).pathname;
+			return (
+				status < 500 &&
+				refusalsExpectedOn.some(
+					(refusal) => refusal.statuses.includes(status) && coversPath(refusal, pathname)
+				)
+			);
+		};
 		page.on('request', (request) => {
 			if (new URL(request.url()).pathname.startsWith(API_PATH_PREFIX)) this.apiRequests += 1;
 		});
@@ -400,7 +420,7 @@ export class FlowGuard {
 		});
 		page.on('response', (response) => {
 			const status = response.status();
-			if (REFUSED_STATUSES.includes(status) && refusalIsExpectedOn(response.url())) return;
+			if (refusalIsExpected(response.url(), status)) return;
 			if (status === 429 || status >= 500) {
 				this.failures.push(`${status} from ${response.url()}`);
 			}
@@ -408,9 +428,10 @@ export class FlowGuard {
 		page.on('console', (message) => {
 			if (message.type() !== 'error') return;
 			if (losesNetworkOnPurpose && message.text().includes(NETWORK_LOST_ERROR)) return;
+			const refusedStatus = REFUSED_RESOURCE_CONSOLE_MESSAGE.exec(message.text())?.[1];
 			const reportsAnExpectedRefusal =
-				REFUSED_RESOURCE_CONSOLE_MESSAGE.test(message.text()) &&
-				refusalIsExpectedOn(message.location().url);
+				refusedStatus !== undefined &&
+				refusalIsExpected(message.location().url, Number(refusedStatus));
 			if (reportsAnExpectedRefusal) return;
 			this.failures.push(`console error: ${message.text()}`);
 		});

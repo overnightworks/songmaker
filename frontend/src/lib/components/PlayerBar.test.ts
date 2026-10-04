@@ -20,7 +20,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
@@ -132,22 +132,23 @@ function useDesktopLayout(): void {
 	);
 }
 
-function loadTake(songTitle = 'Opening Move'): void {
-	audioPlayer.load(
-		{
-			generation: makeGeneration({
-				version_number: 7,
-				generation_number: 2,
-				mp3_path: 'take.mp3'
-			}),
-			songId: 's1',
-			songTitle,
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		},
-		{ autoplay: false }
-	);
+function barTake(songTitle = 'Opening Move'): PlaybackInfo {
+	return {
+		generation: makeGeneration({
+			version_number: 7,
+			generation_number: 2,
+			mp3_path: 'take.mp3'
+		}),
+		songId: 's1',
+		songTitle,
+		artist: 'Artist',
+		albumTitle: 'Album',
+		lyrics: null
+	};
+}
+
+function loadTake(songTitle?: string): void {
+	audioPlayer.load(barTake(songTitle), { autoplay: false });
 }
 
 function installLockScreen(): Pick<MediaSession, 'playbackState'> {
@@ -161,6 +162,9 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 	});
 	return lockScreen;
 }
+
+const RESTORED_POSITION = 13;
+const PAST_THE_STALL_CHECK_MS = 5001;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -241,6 +245,117 @@ describe('PlayerBar stream boundaries', () => {
 		expect(transport?.querySelector('.spinner')).not.toBeNull();
 		transport?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
+	});
+
+	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
+		useDesktopLayout();
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set('awaiting-network');
+		component = mount(PlayerBar, { target });
+		await tick();
+
+		playStartNotice.set('idle');
+		await tick();
+
+		expect({
+			title: target.querySelector('.track-title')?.textContent,
+			main: playButton().getAttribute('aria-label'),
+			timeReadouts: target.querySelectorAll('.timeline .time').length
+		}).toEqual({ title: 'Nachtstrom', main: TRANSPORT_PLAY_LABEL, timeReadouts: 0 });
+	});
+
+	describe('during the restore wait (#1312)', () => {
+		async function mountRestoredTake(): Promise<HTMLButtonElement> {
+			audioPlayer.load(barTake(), { autoplay: false, startAt: RESTORED_POSITION });
+			component = mount(PlayerBar, { target });
+			await tick();
+			return playButton();
+		}
+
+		function buttonFacts(button: HTMLButtonElement) {
+			return {
+				label: button.getAttribute('aria-label'),
+				busy: button.getAttribute('aria-busy'),
+				spinner: button.querySelector('.spinner') !== null
+			};
+		}
+
+		async function dataArrives(): Promise<void> {
+			audio.fire('loadedmetadata');
+			audio.fire('canplay');
+			await tick();
+		}
+
+		const readsPlay = { label: TRANSPORT_PLAY_LABEL, busy: 'false', spinner: false };
+		const readsBusyPause = { label: TRANSPORT_PAUSE_LABEL, busy: 'true', spinner: true };
+
+		it('reads Play before any press, and Pause with its spinner after the first', async () => {
+			const transport = await mountRestoredTake();
+			const beforeAnyPress = buttonFacts(transport);
+			await clickAndSettle(transport);
+
+			expect({ beforeAnyPress, afterThePress: buttonFacts(transport) }).toEqual({
+				beforeAnyPress: readsPlay,
+				afterThePress: readsBusyPause
+			});
+		});
+
+		it('a press on that Pause withdraws the ask, and the take stays paused at the restored position', async () => {
+			const transport = await mountRestoredTake();
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			const afterTheWithdrawal = buttonFacts(transport);
+
+			await dataArrives();
+
+			expect({ afterTheWithdrawal, playing: !audio.paused, position: audio.currentTime }).toEqual({
+				afterTheWithdrawal: readsPlay,
+				playing: false,
+				position: RESTORED_POSITION
+			});
+		});
+
+		it('Play again after the withdrawal plays from the restored position once the data arrives', async () => {
+			const transport = await mountRestoredTake();
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			const whileWaiting = buttonFacts(transport);
+
+			await dataArrives();
+
+			expect({ whileWaiting, playing: !audio.paused, position: audio.currentTime }).toEqual({
+				whileWaiting: readsBusyPause,
+				playing: true,
+				position: RESTORED_POSITION
+			});
+		});
+
+		it.each([
+			{ moment: 'before any press', presses: 0 },
+			{ moment: 'after a press withdrew the ask', presses: 2 }
+		])(
+			'still reads Play $moment when the data takes longer than the stall check, and stays paused when it arrives',
+			async ({ presses }) => {
+				vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+				onTestFinished(() => {
+					vi.useRealTimers();
+				});
+				const transport = await mountRestoredTake();
+				for (let press = 0; press < presses; press++) await clickAndSettle(transport);
+
+				vi.advanceTimersByTime(PAST_THE_STALL_CHECK_MS);
+				await tick();
+				const pastTheStallCheck = buttonFacts(transport);
+				await dataArrives();
+
+				expect({ pastTheStallCheck, playing: !audio.paused }).toEqual({
+					pastTheStallCheck: readsPlay,
+					playing: false
+				});
+			}
+		);
 	});
 
 	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {
@@ -354,25 +469,6 @@ describe('PlayerBar stream boundaries', () => {
 
 		expect(playSpy).toHaveBeenCalledOnce();
 		expect(audioContextConstructor).not.toHaveBeenCalled();
-	});
-
-	it('cancels a queued loading play on a second tap', async () => {
-		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
-		const play = target.querySelector<HTMLButtonElement>('.play-btn');
-		if (!play) throw new Error('Expected player Play button');
-		const playSpy = vi.spyOn(audio, 'play');
-
-		play.click();
-		play.click();
-		await tick();
-		await Promise.resolve();
-		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-		audio.fire('canplay');
-		await tick();
-
-		expect(playSpy).not.toHaveBeenCalled();
 	});
 });
 
@@ -1211,11 +1307,60 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await giveUpWhileOfflineAfterStall();
 	}
 
-	function waitingRetry(): HTMLButtonElement {
-		const button = target.querySelector<HTMLButtonElement>('.waiting-retry');
-		if (!button) throw new Error('Expected a small Retry beside the waiting words');
-		return button;
+	async function mountWithAlbumStartNotice(
+		notice: 'awaiting-network' | 'gave-up-on-network',
+		arrange: () => void = () => {}
+	): Promise<void> {
+		arrange();
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set(notice);
+		component = mount(PlayerBar, { target });
+		await tick();
 	}
+
+	async function tapATakeRowOffline(): Promise<void> {
+		reportResourceStreamReachable(false);
+		audioPlayer.load(barTake());
+		component = mount(PlayerBar, { target });
+		await tick();
+	}
+
+	function transportFacts(lockScreen: Pick<MediaSession, 'playbackState'>) {
+		return {
+			main: playButton().getAttribute('aria-label'),
+			spinner: playButton().querySelector('.spinner') !== null,
+			lockScreen: lockScreen.playbackState
+		};
+	}
+
+	it.each([
+		{ start: 'album header', tap: () => mountWithAlbumStartNotice('awaiting-network') },
+		{ start: 'take row', tap: tapATakeRowOffline }
+	])(
+		'an offline $start shows the waiting transport from the tap: Pause with its spinner (#1312)',
+		async ({ tap }) => {
+			const lockScreen = installLockScreen();
+			await tap();
+
+			expect(transportFacts(lockScreen)).toEqual({
+				main: TRANSPORT_PAUSE_LABEL,
+				spinner: true,
+				lockScreen: 'playing'
+			});
+		}
+	);
+
+	it('pausing an offline take row start leaves a bar that names the take Play would start (#1312)', async () => {
+		await tapATakeRowOffline();
+
+		await clickAndSettle();
+
+		expect({
+			title: target.querySelector('.track-title')?.textContent,
+			main: playButton().getAttribute('aria-label')
+		}).toEqual({ title: 'Opening Move', main: TRANSPORT_PLAY_LABEL });
+	});
 
 	it.each([
 		{ moment: 'while it buffers', wait: 0 },
@@ -1244,24 +1389,38 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		});
 	});
 
-	it.each([
-		{ layout: 'phone', arrange: () => {} },
-		{ layout: 'desktop', arrange: useDesktopLayout }
-	])('given up offline, the $layout bar waits calmly with a small Retry', async ({ arrange }) => {
-		await giveUpWhileOffline(arrange);
+	const giveUpTake = giveUpWhileOffline;
+	const giveUpAlbumStart = (arrange: () => void) =>
+		mountWithAlbumStartNotice('gave-up-on-network', arrange);
 
-		expect({
-			words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
-			redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
-			main: playButton().getAttribute('aria-label'),
-			smallRetry: waitingRetry().textContent?.trim()
-		}).toEqual({
-			words: PLAYER_WAITING_FOR_NETWORK,
-			redFailure: false,
-			main: TRANSPORT_PAUSE_LABEL,
-			smallRetry: TRANSPORT_RETRY_LABEL
-		});
-	});
+	it.each([
+		{ waiting: 'take', layout: 'phone', arrange: () => {}, giveUp: giveUpTake },
+		{ waiting: 'take', layout: 'desktop', arrange: useDesktopLayout, giveUp: giveUpTake },
+		{ waiting: 'album start', layout: 'phone', arrange: () => {}, giveUp: giveUpAlbumStart },
+		{
+			waiting: 'album start',
+			layout: 'desktop',
+			arrange: useDesktopLayout,
+			giveUp: giveUpAlbumStart
+		}
+	])(
+		'given up offline, the $layout bar of a $waiting waits calmly with no Retry to press (#1312)',
+		async ({ arrange, giveUp }) => {
+			await giveUp(arrange);
+
+			expect({
+				words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
+				redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
+				main: playButton().getAttribute('aria-label'),
+				retryOffered: target.textContent?.includes(TRANSPORT_RETRY_LABEL)
+			}).toEqual({
+				words: PLAYER_WAITING_FOR_NETWORK,
+				redFailure: false,
+				main: TRANSPORT_PAUSE_LABEL,
+				retryOffered: false
+			});
+		}
+	);
 
 	it.each([
 		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },
@@ -1283,15 +1442,6 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			whileWaiting: 'playing',
 			afterPause: 'paused'
 		});
-	});
-
-	it('the small Retry fetches the take again at once', async () => {
-		await giveUpWhileOffline();
-		const load = vi.spyOn(audio, 'load');
-
-		await clickAndSettle(waitingRetry());
-
-		expect(load).toHaveBeenCalledOnce();
 	});
 
 	it.each([

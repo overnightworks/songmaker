@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   # Keep main runs queued so each landing can become a deploy candidate (2026-09-05).
@@ -263,13 +266,20 @@ jobs:
           retention-days: 7
           overwrite: true
 
-  # #679: SonarCloud needs CI-based analysis to receive the backend and
-  # frontend coverage reports; Automatic Analysis cannot consume them.
+  # #679: SonarCloud runs as CI-based analysis so it receives the backend and
+  # frontend coverage reports. The job turns red when SonarCloud reports
+  # findings; the auto-deploy tick treats exactly this job as advisory, so a
+  # red result is visible without holding back a rollout (#623, #1318).
   sonar:
     name: SonarCloud scan
     needs: [backend, frontend]
+    # A fork's pull request and a Dependabot-triggered run receive no
+    # SONAR_TOKEN (Dependabot runs see only Dependabot secrets, and this
+    # repository defines none), so no analysis exists for them to read; the
+    # job shows as skipped there instead of failing on a missing credential.
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
-    # Checkout + artifact download + scan; no test suite runs here.
+    # Checkout + artifact download + scan + findings query; no test suite runs here.
     timeout-minutes: 10
     steps:
       - name: Check out the event commit with full history
@@ -285,10 +295,21 @@ jobs:
           path: reports
           merge-multiple: true
 
+      # Blocks until SonarCloud has processed the analysis
+      # (sonar.qualitygate.wait=true in sonar-project.properties) and fails on
+      # a failed quality gate.
       - name: SonarCloud scan
-        # Until the operator disables Automatic Analysis in SonarCloud, the
-        # service rejects CI analysis. The advisory scan must not block CI.
-        continue-on-error: true
         uses: SonarSource/sonarqube-scan-action@22918119ff8e1ca75a623e15c8296b6ea4fbe28f # v8.2.1
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+      # The quality gate passes on ratings, not on "no open findings"; the
+      # fleet's findings gate asks the API for that stronger bar and fails with
+      # the list. The scan step above already waited, so the report is final.
+      - name: SonarCloud open findings
+        # The gate pages through the API; a composite action's inner steps
+        # take no timeout-minutes, so the ceiling sits on this calling step.
+        timeout-minutes: 5
+        uses: overnightworks/marketplace/.github/actions/sonar-findings-gate@85b0e13e0530ed12b5a81208681015eda6f7854b # sonar-findings-gate-v1
+        with:
+          sonar-token: ${{ secrets.SONAR_TOKEN }}

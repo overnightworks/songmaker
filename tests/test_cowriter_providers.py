@@ -35,8 +35,8 @@ from conftest import (
     override_provider_runtime,
     refresh_provider_snapshots,
     seed_judge_route,
+    web_client,
 )
-from fastapi.testclient import TestClient
 
 from songmaker_cli.auth_dependencies import get_current_user
 from songmaker_cli.constants import (
@@ -187,7 +187,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
-    yield TestClient(app), factory
+    yield web_client(app), factory
 
 
 def test_unknown_provider_rejected_at_settings_boundary(admin_client):

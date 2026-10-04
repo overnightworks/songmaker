@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -340,7 +340,7 @@ def _make_client(tmp_path: Path, role: str = "user") -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, role=role, username=f"u_{role}"),
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def test_api_delete_album_soft_deletes(tmp_path: Path) -> None:
@@ -396,13 +396,13 @@ def test_api_restore_other_users_album_404(tmp_path: Path) -> None:
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory), user=make_authenticated_user("u1", username="u_user")
     )
-    c1 = TestClient(app)
+    c1 = web_client(app)
     c1.delete("/api/albums/rock")
 
     app.dependency_overrides[get_current_user] = lambda: make_authenticated_user(
         "u2", username="u_user"
     )
-    c2 = TestClient(app)
+    c2 = web_client(app)
     r = c2.post("/api/albums/rock/restore")
     assert r.status_code == 404
 

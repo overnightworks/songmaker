@@ -6,7 +6,13 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx, stored_hash
+from conftest import (
+    make_authenticated_user,
+    make_router_app,
+    make_router_ctx,
+    stored_hash,
+    web_client,
+)
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -209,7 +215,7 @@ def reimport_client(tmp_path: Path):
     app = make_router_app(
         ctx, user=make_authenticated_user(USER_ID, role="admin", username="reimporter")
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def test_reimport_api_stores_each_upload_unchanged(reimport_client: TestClient) -> None:

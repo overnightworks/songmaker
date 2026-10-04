@@ -65,6 +65,9 @@ const MPEG2_SAMPLE_RATES = [22050, 24000, 16000];
 /** Mid-take in the fixture take. */
 const MID_TAKE_SECONDS = 1.5;
 
+/** Every take download, the continuous deck's included. */
+const TAKE_AUDIO_ROUTE = '**/audio/**';
+
 /** The rest of the fixture take plus the next take's start, with room for a slow runner. */
 const TRACK_CHANGE_TIMEOUT_MS = 15_000;
 
@@ -193,16 +196,18 @@ async function playTheSongsTake(
 	const take = workspace(page).locator('.take-row');
 	await expect(take).toHaveCount(1);
 	await take.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) }).click();
-	await expect(transportOf(page).pause).toBeVisible();
+	await expect(transportOf(page).pause).toHaveAttribute('aria-busy', 'false');
 }
 
 // Plays the song's one take from its album, pauses it mid-take and reloads,
-// as a page Android killed and the listener reopened.
+// as a page Android killed and the listener reopened. A flow that must catch
+// the reopened page before its take arrives arranges that before the reload.
 async function pauseMidTakeAndReload(
 	page: Page,
 	shell: Shell,
 	albumId: string,
-	songTitle: string
+	songTitle: string,
+	beforeTheReload: () => Promise<void> = async () => {}
 ): Promise<void> {
 	const { play, pause } = transportOf(page);
 	await playTheSongsTake(page, shell, albumId, songTitle);
@@ -210,7 +215,22 @@ async function pauseMidTakeAndReload(
 	await pause.click();
 	await expect(play).toBeVisible();
 
+	await beforeTheReload();
 	await page.reload();
+}
+
+// Holds every take download back until the flow releases it, as a slow
+// network holds the restored take's first bytes.
+async function holdTakeAudioBack(page: Page): Promise<() => void> {
+	let release: () => void = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	await page.route(TAKE_AUDIO_ROUTE, async (route) => {
+		await released;
+		await route.continue();
+	});
+	return release;
 }
 
 // The desktop transport shows the take's position on its seek slider; the
@@ -311,6 +331,47 @@ test('reload mid-take shows the same take at the same position, paused', async (
 	console.log(`Playback restore flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertClean();
 	guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+});
+
+test.describe('a slow network holds the restored take back', () => {
+	// The take must come over the network, not from the service worker's cache.
+	test.use({ serviceWorkers: 'block' });
+
+	test('while the restored take still loads, Play reads Pause with its spinner, Pause withdraws, and Play again plays from the saved position (#1312)', async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const shell = shellOf(testInfo);
+		const marker = `${shell} ${runMarker()}`;
+		const songTitle = `Restore Wait ${marker}`;
+		await followTheAudioDecks(page);
+		const { transport, play, pause } = transportOf(page);
+		let releaseTheTake: () => void = () => {};
+
+		await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
+			await pauseMidTakeAndReload(page, shell, albumId, songTitle, async () => {
+				releaseTheTake = await holdTakeAudioBack(page);
+			});
+
+			await expect(transport).toContainText(songTitle);
+			await expect(play).toHaveAttribute('aria-busy', 'false');
+			await play.click();
+			await expect(pause).toHaveAttribute('aria-busy', 'true');
+			await pause.click();
+			await expect(play).toHaveAttribute('aria-busy', 'false');
+			await play.click();
+			await expect(pause).toHaveAttribute('aria-busy', 'true');
+			releaseTheTake();
+
+			await expect(pause).toHaveAttribute('aria-busy', 'false');
+			expect(await loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
+			await pause.click();
+		});
+
+		console.log(`Playback restore wait flow /api requests (${shell}): ${guard.apiRequestCount}`);
+		guard.assertClean();
+		guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+	});
 });
 
 test('reload mid-album, one tap plays on, and the next song follows when the take ends', async ({

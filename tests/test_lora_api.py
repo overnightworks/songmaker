@@ -7,7 +7,7 @@ from pathlib import Path
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -62,7 +62,7 @@ def client_and_ctx(tmp_path: Path) -> tuple[TestClient, AppContext]:
         make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_A)
     )
     ctx = app.state.ctx
-    return TestClient(app), ctx
+    return web_client(app), ctx
 
 
 @pytest.fixture
@@ -287,7 +287,7 @@ def test_cross_user_access_is_404(client_and_ctx: tuple[TestClient, AppContext])
         lora_id = lora_a.id
 
     app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
-    client_b = TestClient(app_b)
+    client_b = web_client(app_b)
 
     assert client_b.get(f"/api/loras/{lora_id}").status_code == 404
     assert client_b.delete(f"/api/loras/{lora_id}").status_code == 404
@@ -423,7 +423,7 @@ def _make_take(
 
 def _client_for_user(ctx: AppContext, user_id: str, role: str = "user") -> TestClient:
     app = make_router_app(ctx, user=make_authenticated_user(user_id, role=role))
-    return TestClient(app)
+    return web_client(app)
 
 
 def test_add_sample_from_own_take_copies_audio_and_take_version(
@@ -866,7 +866,7 @@ def test_add_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContext]
     lora_id = _make_lora(ctx, USER_A)
 
     app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
-    client_b = TestClient(app_b)
+    client_b = web_client(app_b)
     resp = client_b.post(
         f"/api/loras/{lora_id}/samples",
         data={"caption": "c", "lyrics": "l"},
@@ -1023,7 +1023,7 @@ def test_patch_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppContex
         sample_id = sample.id
 
     app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
-    client_b = TestClient(app_b)
+    client_b = web_client(app_b)
     resp = client_b.patch(
         f"/api/loras/{lora_id}/samples/{sample_id}",
         json={"caption": "x"},
@@ -1127,7 +1127,7 @@ def test_delete_sample_cross_user_404(client_and_ctx: tuple[TestClient, AppConte
         sample_id = sample.id
 
     app_b = make_router_app(ctx, user=make_authenticated_user(USER_B))
-    client_b = TestClient(app_b)
+    client_b = web_client(app_b)
     resp = client_b.delete(f"/api/loras/{lora_id}/samples/{sample_id}")
     assert resp.status_code == 404
 

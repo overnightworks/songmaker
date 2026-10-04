@@ -6,7 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context, make_fake_redis, stored_hash
+from conftest import install_app_context, make_fake_redis, stored_hash, web_client
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -70,7 +70,7 @@ def _build_auth_app(_db, redis=None):
 def auth_app(_db) -> TestClient:
     """Minimal FastAPI app with auth dependency — no middleware stack."""
     app = _build_auth_app(_db)
-    return TestClient(app, cookies={})
+    return web_client(app, cookies={})
 
 
 def _make_user_and_session(
@@ -299,7 +299,7 @@ def test_redis_failure_falls_back_to_db(_db, create_session_id) -> None:
     broken_redis.get.side_effect = ConnectionError("Redis down")
 
     app = _build_auth_app(_db, redis=broken_redis)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
 
     sid = create_session_id()
     client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(sid, _TEST_SECRET))
