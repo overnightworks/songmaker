@@ -7,11 +7,10 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from PIL import Image
 from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -44,9 +43,9 @@ def _png_bytes() -> bytes:
 
 
 def _seed_albums(session) -> None:
-    alice = User(username="alice", password_hash=hash_password("alicepass1"), role="user")
-    bob = User(username="bob", password_hash=hash_password("bobpass12"), role="user")
-    admin = User(username="admin", password_hash=hash_password("adminpass1"), role="admin")
+    alice = User(username="alice", password_hash=stored_hash("alicepass1"), role="user")
+    bob = User(username="bob", password_hash=stored_hash("bobpass12"), role="user")
+    admin = User(username="admin", password_hash=stored_hash("adminpass1"), role="admin")
     session.add_all([alice, bob, admin])
     session.flush()
     session.add_all([

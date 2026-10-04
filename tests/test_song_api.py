@@ -17,9 +17,8 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from sqlalchemy import event
-from webauth.passwords import hash_password
 
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
 from songmaker_cli.db.queries.songs import list_songs
@@ -60,7 +59,7 @@ def _add_song_with_generations(
 
 def _seed_generation_count_scenarios(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
     ))
     session.add(Album(id="alb", title="Album", artist="A"))
     _add_song_with_generations(
@@ -167,7 +166,7 @@ _DETAIL_SCORES_PER_GENERATION = 7
 
 def _seed_worked_through_song(session) -> None:
     session.add(User(
-        username=_ADMIN_USER, password_hash=hash_password(_ADMIN_PASSWORD), role="admin",
+        username=_ADMIN_USER, password_hash=stored_hash(_ADMIN_PASSWORD), role="admin",
     ))
     session.add(Album(id="alb", title="Album", artist="A"))
     session.add(Album(id="source-alb", title="Source album", artist="A"))

@@ -8,11 +8,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_test_app
+from conftest import make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.passwords import hash_password
 
 from songmaker_cli.constants import PLAYLIST_COVER_DIRNAME, AuditAction, ResourceType
 from songmaker_cli.db.models import AuditLog
@@ -29,7 +28,7 @@ def _login_as_admin(client: TestClient) -> None:
     from conftest import login_and_csrf
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "admin", hash_password("admin12345"), role="admin")
+        create_user(session, "admin", stored_hash("admin12345"), role="admin")
         session.commit()
     login_and_csrf(client, "admin", "admin12345")
 
@@ -38,7 +37,7 @@ def _login_as_user(client: TestClient) -> None:
     from conftest import login_and_csrf
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "regular", hash_password("user123456"), role="user")
+        create_user(session, "regular", stored_hash("user123456"), role="user")
         session.commit()
     login_and_csrf(client, "regular", "user123456")
 
@@ -301,7 +300,7 @@ def test_admin_lists_every_musicians_active_voice(client: TestClient) -> None:
     _login_as_admin(client)
     factory = client.app.state.ctx.db
     with factory() as session:
-        musician = create_user(session, "musician", hash_password("user123456"))
+        musician = create_user(session, "musician", stored_hash("user123456"))
         warm_tenor = create_user_lora(session, musician.id, "Warm Tenor", "warm-tenor")
         dry_spoken_word = create_user_lora(
             session, musician.id, "Dry Spoken Word", "dry-spoken-word",
@@ -621,7 +620,7 @@ def test_force_logout(client: TestClient) -> None:
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "victim", hash_password("t3stP@ssw0rd"))
+        create_user(session, "victim", stored_hash("t3stP@ssw0rd"))
         session.commit()
 
     other_client = TestClient(client.app, cookies={})
@@ -698,7 +697,7 @@ def test_force_logout_clears_redis(client: TestClient) -> None:
 
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "victim2", hash_password("t3stP@ssw0rd"))
+        create_user(session, "victim2", stored_hash("t3stP@ssw0rd"))
         session.commit()
 
     victim_client = TestClient(client.app, cookies={})
@@ -766,7 +765,7 @@ def _create_user_with_data(client: TestClient, username: str) -> str:
             create_song,
         )
 
-        user = create_user(session, username, hash_password("t3stP@ssw0rd"))
+        user = create_user(session, username, stored_hash("t3stP@ssw0rd"))
         album = create_album(session, f"{username}-album", "Test Album", created_by=user.id)
         song = create_song(session, "Test Song", album.id, slug="test-song")
         mp3_rel = f"{user.id}/{song.id}.mp3"

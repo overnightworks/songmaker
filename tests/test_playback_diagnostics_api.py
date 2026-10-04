@@ -6,9 +6,8 @@ import json
 from pathlib import Path
 
 import pytest
-from conftest import apply_csrf_header, make_test_app
+from conftest import apply_csrf_header, make_test_app, stored_hash
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-from webauth.passwords import hash_password
 
 from songmaker_cli.db.models import User
 from songmaker_cli.db.queries import create_user
@@ -20,7 +19,7 @@ _DIAGNOSTICS_LOGGER = "songmaker.playback_diagnostics"
 
 
 def _seed_listener(session) -> None:
-    create_user(session, _LISTENER, hash_password(_PASSWORD))
+    create_user(session, _LISTENER, stored_hash(_PASSWORD))
 
 
 def _event(**overrides) -> dict:

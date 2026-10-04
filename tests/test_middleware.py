@@ -6,14 +6,13 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import install_app_context, make_fake_redis
+from conftest import install_app_context, make_fake_redis, stored_hash
 from fastapi import Depends, FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME, sign_session_id
 from webauth.dependencies import AuthenticatedUser
-from webauth.passwords import hash_password
 
 from songmaker_cli.auth_dependencies import (
     get_current_user,
@@ -82,7 +81,7 @@ def _make_user_and_session(
     with factory() as session:
         user = create_user(
             session, f"test_{role}_{active}_{expired}_{created_days_ago}",
-            hash_password("t3stP@ssw0rd"), role=role,
+            stored_hash("t3stP@ssw0rd"), role=role,
         )
         user.is_active = active
         session.flush()

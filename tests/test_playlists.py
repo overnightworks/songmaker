@@ -14,12 +14,12 @@ from conftest import (
     make_router_app,
     make_router_ctx,
     make_test_app,
+    stored_hash,
 )
 from fastapi.testclient import TestClient
 from PIL import Image
 from sqlalchemy import event
 from sqlalchemy.orm import Session
-from webauth.passwords import hash_password
 
 from songmaker_cli.api_helpers import slugify
 from songmaker_cli.constants import (
@@ -890,7 +890,7 @@ def test_api_add_nonexistent_generation(client: TestClient) -> None:
 
 
 def _seed_sharing_data(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="a1", title="Album", artist="Artist"))
     session.add(

@@ -8,11 +8,11 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from redis import Redis
-from webauth.passwords import hash_password, verify_password
 
+from songmaker_cli.app_context import build_password_hasher
 from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
@@ -103,7 +103,7 @@ def test_main_error_handling() -> None:
 RESET_USERNAME = "alice"
 OLD_PASSWORD = "old-Passw0rd"
 NEW_PASSWORD = "fresh-Passw0rd"
-OLD_PASSWORD_HASH = hash_password(OLD_PASSWORD)
+OLD_PASSWORD_HASH = stored_hash(OLD_PASSWORD)
 CLOSED_REDIS_URL = "redis://127.0.0.1:1/0"
 
 
@@ -140,7 +140,7 @@ def _reset_password(password: str) -> None:
 def test_reset_password_stores_the_new_password(served_app, capsys) -> None:
     _reset_password(NEW_PASSWORD)
 
-    assert verify_password(NEW_PASSWORD, _stored_hash(served_app))
+    assert build_password_hasher().verify(NEW_PASSWORD, _stored_hash(served_app))
     assert capsys.readouterr().out == (
         f"Password reset for '{RESET_USERNAME}' (role=admin); 0 sessions ended\n"
     )
