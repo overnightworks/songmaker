@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -15,6 +16,24 @@ from songmaker_cli.health_types import (
 )
 
 ClaudeCliToolSurface = Literal["ok", "drift", "unverified"]
+
+
+@dataclass(frozen=True)
+class HealthSignals:
+    db_ok: bool
+    redis_ok: bool
+    music_running: bool
+    scoring_running: bool
+    music_queue_depth: int
+    scoring_queue_depth: int
+    session_cache_failures: int
+    workers_total: int
+    workers_online: int
+    queue_depth_cap_reached: bool
+    uptime_seconds: int
+    claude_cli_tool_surface: ClaudeCliToolSurface
+    codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth
+    background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth]
 
 
 class BackgroundLoopResponse(BaseModel):
@@ -66,45 +85,38 @@ class HealthResponse(BaseModel):
     background_loops: dict[BackgroundLoopName, BackgroundLoopResponse]
 
     @classmethod
-    def from_signals(
-        cls, *, db_ok: bool, redis_ok: bool, music_running: bool, scoring_running: bool,
-        music_queue_depth: int, scoring_queue_depth: int, session_cache_failures: int,
-        workers_total: int, workers_online: int, queue_depth_cap_reached: bool,
-        uptime_seconds: int, claude_cli_tool_surface: ClaudeCliToolSurface,
-        codex_image_sandbox_runtime: CodexImageSandboxRuntimeHealth,
-        background_loops: Mapping[BackgroundLoopName, BackgroundLoopHealth],
-    ) -> HealthResponse:
+    def from_signals(cls, signals: HealthSignals) -> HealthResponse:
         acestep: Literal["healthy", "unknown", "unhealthy"]
-        if workers_online > 0:
+        if signals.workers_online > 0:
             acestep = "healthy"
-        elif workers_total == 0:
+        elif signals.workers_total == 0:
             acestep = "unknown"
         else:
             acestep = "unhealthy"
         degraded = (
-            not db_ok
-            or (not music_running and not scoring_running)
-            or not redis_ok
+            not signals.db_ok
+            or (not signals.music_running and not signals.scoring_running)
+            or not signals.redis_ok
             or acestep == "unhealthy"
         )
         return cls(
             status="degraded" if degraded else "ok",
-            music_worker="running" if music_running else "stopped",
-            scoring_worker="running" if scoring_running else "stopped",
-            music_queue_depth=music_queue_depth,
-            scoring_queue_depth=scoring_queue_depth,
-            db="ok" if db_ok else "error",
-            redis="ok" if redis_ok else "error",
-            redis_session_cache_failures=session_cache_failures,
+            music_worker="running" if signals.music_running else "stopped",
+            scoring_worker="running" if signals.scoring_running else "stopped",
+            music_queue_depth=signals.music_queue_depth,
+            scoring_queue_depth=signals.scoring_queue_depth,
+            db="ok" if signals.db_ok else "error",
+            redis="ok" if signals.redis_ok else "error",
+            redis_session_cache_failures=signals.session_cache_failures,
             acestep=acestep,
-            acestep_workers_total=workers_total,
-            acestep_workers_online=workers_online,
-            queue_depth_cap_reached=queue_depth_cap_reached,
-            uptime_seconds=uptime_seconds,
-            claude_cli_tool_surface=claude_cli_tool_surface,
-            codex_image_sandbox_runtime=codex_image_sandbox_runtime,
+            acestep_workers_total=signals.workers_total,
+            acestep_workers_online=signals.workers_online,
+            queue_depth_cap_reached=signals.queue_depth_cap_reached,
+            uptime_seconds=signals.uptime_seconds,
+            claude_cli_tool_surface=signals.claude_cli_tool_surface,
+            codex_image_sandbox_runtime=signals.codex_image_sandbox_runtime,
             background_loops={
                 name: BackgroundLoopResponse.from_health(health)
-                for name, health in background_loops.items()
+                for name, health in signals.background_loops.items()
             },
         )

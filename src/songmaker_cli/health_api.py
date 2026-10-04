@@ -17,7 +17,7 @@ from sqlalchemy import text
 from webauth.config import web_auth_config
 
 from songmaker_cli import acestep_state, arq_pool, redis_client, settings
-from songmaker_cli.api_models.health import HealthResponse
+from songmaker_cli.api_models.health import HealthResponse, HealthSignals
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.constants import (
     PROM_ACESTEP_WORKER_LOADED_MODELS,
@@ -340,7 +340,7 @@ async def health_check(request: Request) -> HealthResponse:
     session_cache_failures = (
         session_cache.consecutive_failures if session_cache else 0
     )
-    return HealthResponse.from_signals(
+    return HealthResponse.from_signals(HealthSignals(
         db_ok=db_ok,
         redis_ok=redis_ok,
         music_running=music_running,
@@ -355,4 +355,4 @@ async def health_check(request: Request) -> HealthResponse:
         claude_cli_tool_surface=provider.claude_cli_tool_surface_health(),
         codex_image_sandbox_runtime=codex_image_sandbox_runtime_health(),
         background_loops=request.app.state.background_loop_registry.loop_health(),
-    )
+    ))

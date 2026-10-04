@@ -30,41 +30,36 @@ def _remaining_time_estimate(
         return 0
     if job.status != JobStatus.RUNNING:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-
     if job.type == JobType.GENERATE:
-        if job.progress >= 1:
-            return 0
-        if job.progress < GENERATION_ETA_MIN_PROGRESS or job.generation_started_at is None:
-            return REMAINING_TIME_ESTIMATE_CALCULATING
-        elapsed_seconds = (now - aware_timestamp(job.generation_started_at)).total_seconds()
-        if elapsed_seconds <= 0:
-            return REMAINING_TIME_ESTIMATE_CALCULATING
-        return ceil(elapsed_seconds * (1 - job.progress) / job.progress)
+        return _generation_remaining_time(job, now=now)
+    return _training_remaining_time(job, now=now)
 
-    current_epoch = job.current_epoch
-    train_epochs = job.train_epochs
-    if (
-        current_epoch is None
-        or train_epochs is None
-        or current_epoch <= 0
-        or train_epochs <= current_epoch
-    ):
-        if (
-            train_epochs is not None
-            and current_epoch is not None
-            and train_epochs == current_epoch
-        ):
-            return 0
-        return REMAINING_TIME_ESTIMATE_CALCULATING
 
-    training_started_at = job.training_started_at
-    if training_started_at is None:
+def _generation_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
+    if job.progress >= 1:
+        return 0
+    if job.progress < GENERATION_ETA_MIN_PROGRESS or job.generation_started_at is None:
         return REMAINING_TIME_ESTIMATE_CALCULATING
-    training_started_at = aware_timestamp(training_started_at)
-    elapsed_seconds = (now - training_started_at).total_seconds()
+    elapsed_seconds = (now - aware_timestamp(job.generation_started_at)).total_seconds()
     if elapsed_seconds <= 0:
         return REMAINING_TIME_ESTIMATE_CALCULATING
+    return ceil(elapsed_seconds * (1 - job.progress) / job.progress)
 
+
+def _training_remaining_time(job, *, now: datetime) -> RemainingTimeEstimate:
+    current_epoch = job.current_epoch
+    train_epochs = job.train_epochs
+    if current_epoch is None or train_epochs is None:
+        return REMAINING_TIME_ESTIMATE_CALCULATING
+    if train_epochs == current_epoch:
+        return 0
+    if current_epoch <= 0 or train_epochs < current_epoch:
+        return REMAINING_TIME_ESTIMATE_CALCULATING
+    if job.training_started_at is None:
+        return REMAINING_TIME_ESTIMATE_CALCULATING
+    elapsed_seconds = (now - aware_timestamp(job.training_started_at)).total_seconds()
+    if elapsed_seconds <= 0:
+        return REMAINING_TIME_ESTIMATE_CALCULATING
     seconds_per_epoch = elapsed_seconds / current_epoch
     return ceil(seconds_per_epoch * (train_epochs - current_epoch))
 

@@ -132,6 +132,7 @@ def test_an_unusable_entry_names_the_variable_that_carries_it(
     """The operator has to find the wrong line in .env, so the failure says
     which variable it came from, not only which value was unusable."""
     monkeypatch.setenv("TRUSTED_PROXIES", entry)
+    settings = get_settings()
 
     with pytest.raises(ValueError, match="TRUSTED_PROXIES"):
-        parse_trusted_proxies(get_settings())
+        parse_trusted_proxies(settings)
