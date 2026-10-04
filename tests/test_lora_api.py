@@ -514,6 +514,74 @@ def test_add_sample_from_take_with_escaping_audio_path_returns_404(
         assert session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count() == 0
 
 
+def _post_sample_from_take(client: TestClient, lora_id: str, take_id: str):
+    return client.post(
+        f"/api/loras/{lora_id}/samples/from-generation",
+        json={"generation_id": take_id},
+    )
+
+
+def _post_sample_upload(client: TestClient, lora_id: str, _take_id: str):
+    return client.post(
+        f"/api/loras/{lora_id}/samples",
+        data={"caption": "chill verse", "lyrics": "oh yeah"},
+        files={"audio": ("clip.wav", b"RIFFxxxxWAVE", "audio/wav")},
+    )
+
+
+sample_routes = pytest.mark.parametrize(
+    "post_sample", [_post_sample_from_take, _post_sample_upload],
+    ids=["from-generation", "upload"],
+)
+
+
+def _files_outside_data_dir(root: Path) -> set[Path]:
+    return {
+        path for path in root.rglob("*")
+        if path.is_file() and not path.is_relative_to(root / "data")
+    }
+
+
+@sample_routes
+@pytest.mark.parametrize(
+    "crafted_lora_id", ["..", "%2E%2E", "..%2F..%2F..%2Fetc", "%2E%2E%2F%2E%2E%2Foutside"],
+)
+def test_a_crafted_lora_id_adds_no_sample_and_writes_nothing(
+    client_and_ctx: tuple[TestClient, AppContext], post_sample, crafted_lora_id: str,
+) -> None:
+    client, ctx = client_and_ctx
+    _make_lora(ctx)
+    take_id = _make_take(ctx)
+    tmp_root = ctx.audio_dir.parent
+    files_before = _files_outside_data_dir(tmp_root)
+
+    response = post_sample(client, crafted_lora_id, take_id)
+
+    assert response.status_code == 404
+    assert _files_outside_data_dir(tmp_root) == files_before
+    with ctx.db() as session:
+        assert session.query(UserLoraSample).count() == 0
+
+
+@sample_routes
+def test_a_sample_target_resolving_outside_the_audio_dir_is_refused(
+    client_and_ctx: tuple[TestClient, AppContext], post_sample,
+) -> None:
+    client, ctx = client_and_ctx
+    lora_id = _make_lora(ctx)
+    take_id = _make_take(ctx)
+    outside = ctx.audio_dir.parent / "outside"
+    outside.mkdir()
+    (ctx.audio_dir / "user_loras").symlink_to(outside, target_is_directory=True)
+
+    response = post_sample(client, lora_id, take_id)
+
+    assert response.status_code == 404
+    assert list(outside.rglob("*")) == []
+    with ctx.db() as session:
+        assert session.query(UserLoraSample).count() == 0
+
+
 def test_versionless_own_take_is_listed_and_copied_with_empty_metadata(
     client_and_ctx: tuple[TestClient, AppContext],
 ) -> None:
@@ -608,18 +676,18 @@ def test_add_sample_happy_path(
     client, ctx = client_and_ctx
     lora_id = _make_lora(ctx)
 
+    audio = b"RIFFxxxxWAVE" + b"\0" * 200
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
         data={"caption": "chill verse", "lyrics": "oh yeah"},
-        files={"audio": ("clip.wav", b"RIFFxxxxWAVE" + b"\0" * 200, "audio/wav")},
+        files={"audio": ("clip.wav", audio, "audio/wav")},
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()
     assert payload["caption"] == "chill verse"
     assert payload["lyrics"] == "oh yeah"
     assert payload["audio_path"].endswith(".wav")
-    on_disk = ctx.audio_dir / payload["audio_path"]
-    assert on_disk.exists()
+    assert (ctx.audio_dir / payload["audio_path"]).read_bytes() == audio
 
 
 def test_add_sample_rejects_wrong_extension(
@@ -770,7 +838,7 @@ def test_add_sample_rollback_on_write_failure(
     lora_id = _make_lora(ctx)
 
     with (
-        patch("pathlib.Path.write_bytes", side_effect=OSError("disk full")),
+        patch("shutil.copyfileobj", side_effect=OSError("disk full")),
         pytest.raises(OSError, match="disk full"),
     ):
         client.post(
@@ -781,6 +849,7 @@ def test_add_sample_rollback_on_write_failure(
     with ctx.db() as session:
         count = session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count()
     assert count == 0
+    assert [path for path in ctx.audio_dir.rglob("*") if path.is_file()] == []
 
 
 def test_add_sample_missing_lora_404(client_a: TestClient) -> None:

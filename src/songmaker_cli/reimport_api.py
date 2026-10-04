@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -37,6 +38,13 @@ def _validate_upload(file: UploadFile, label: str) -> None:
         raise HTTPException(422, f"Invalid {label} content type: {content_type}")
 
 
+def _store_upload(upload: UploadFile, destination: Path, label: str) -> None:
+    with destination.open("wb") as target:
+        shutil.copyfileobj(upload.file, target)
+    if destination.stat().st_size > AUDIO_UPLOAD_FILE_MAX_BYTES:
+        raise HTTPException(413, f"{label} file too large")
+
+
 @router.post(
     "/songs/{song_id}/reimport",
     responses={
@@ -44,7 +52,7 @@ def _validate_upload(file: UploadFile, label: str) -> None:
         422: {"description": "Reimport upload is invalid"},
     },
 )
-async def api_reimport(
+def api_reimport(
     song_id: str,
     mp3: UploadFile | None = None,
     wav: UploadFile | None = None,
@@ -69,17 +77,11 @@ async def api_reimport(
 
         if mp3:
             mp3_path = tmp_path / "upload.mp3"
-            content = await mp3.read(AUDIO_UPLOAD_FILE_MAX_BYTES + 1)
-            if len(content) > AUDIO_UPLOAD_FILE_MAX_BYTES:
-                raise HTTPException(413, "MP3 file too large")
-            mp3_path.write_bytes(content)
+            _store_upload(mp3, mp3_path, "MP3")
 
         if wav:
             wav_path = tmp_path / "upload.wav"
-            content = await wav.read(AUDIO_UPLOAD_FILE_MAX_BYTES + 1)
-            if len(content) > AUDIO_UPLOAD_FILE_MAX_BYTES:
-                raise HTTPException(413, "WAV file too large")
-            wav_path.write_bytes(content)
+            _store_upload(wav, wav_path, "WAV")
 
         gen_id = reimport_files(
             session, ctx.audio_dir, user.id, song_id,

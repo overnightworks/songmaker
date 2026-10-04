@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import dataclasses
+import hashlib
 import json
 import logging
 from contextlib import contextmanager
@@ -23,6 +25,7 @@ from webauth.proxies import TrustedProxies
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
 from songmaker_cli.db.models import Album, Generation, Score, Song, User, Version
+from songmaker_cli.health_api import compute_script_hashes
 from songmaker_cli.server import create_app, parse_allowed_hosts, run_server
 
 _ADMIN_ID = "admin-user-id"
@@ -1010,7 +1013,36 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
 def test_parse_allowed_hosts() -> None:
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "example.com"}):
         exact, patterns = parse_allowed_hosts()
-        assert "example.com" in exact
+        assert exact == {"example.com"}
+
+
+# ── CSP hashes for the inline scripts of index.html ────────────────
+
+
+def _csp_sha256(script: str) -> str:
+    return f"sha256-{base64.b64encode(hashlib.sha256(script.encode()).digest()).decode()}"
+
+
+@pytest.mark.parametrize(
+    "index_html, inline_scripts",
+    [
+        ("<html><script>boot()</script></html>", ["boot()"]),
+        ('<SCRIPT type="module">start()</script >', ["start()"]),
+        ("<script>\n  a();\n</script\n><script>b()</SCRIPT>", ["\n  a();\n", "b()"]),
+        ('<script>x = "</scr" + "ipt>";</script foo>', ['x = "</scr" + "ipt>";']),
+        ('<script src="/_app/start.js"></script><script>c()</script>', ["c()"]),
+    ],
+)
+def test_every_inline_script_of_the_index_gets_a_csp_hash(
+    tmp_path: Path, index_html: str, inline_scripts: list[str],
+) -> None:
+    index = tmp_path / "index.html"
+    index.write_text(index_html)
+    assert compute_script_hashes(index) == [_csp_sha256(script) for script in inline_scripts]
+
+
+def test_a_missing_index_has_no_csp_hashes(tmp_path: Path) -> None:
+    assert compute_script_hashes(tmp_path / "index.html") == []
 
 
 # ── IpRateLimitMiddleware ──────────────────────────────────────────

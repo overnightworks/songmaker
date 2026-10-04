@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import base64
 import hashlib
-import re
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
 
 from agent_providers.claude import provider
@@ -65,15 +65,40 @@ class _PrometheusMetrics:
     background_loop_alive: dict[str, bool]
 
 
-def _compute_script_hashes(index_html: Path) -> list[str]:
+class _InlineScriptCollector(HTMLParser):
+    """Collect the text of every script element that loads no ``src``."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.scripts: list[str] = []
+        self._open_script: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "script" and all(name != "src" for name, _ in attrs):
+            self._open_script = []
+
+    def handle_data(self, data: str) -> None:
+        if self._open_script is not None:
+            self._open_script.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "script" and self._open_script is not None:
+            self.scripts.append("".join(self._open_script))
+            self._open_script = None
+
+
+def _csp_sha256(script: str) -> str:
+    digest = hashlib.sha256(script.encode()).digest()
+    return f"sha256-{base64.b64encode(digest).decode()}"
+
+
+def compute_script_hashes(index_html: Path) -> list[str]:
     if not index_html.exists():
         return []
-    content = index_html.read_text()
-    hashes = []
-    for match in re.finditer(r"<script>(.*?)</script>", content, re.DOTALL):
-        digest = hashlib.sha256(match.group(1).encode()).digest()
-        hashes.append(f"sha256-{base64.b64encode(digest).decode()}")
-    return hashes
+    collector = _InlineScriptCollector()
+    collector.feed(index_html.read_text())
+    collector.close()
+    return [_csp_sha256(script) for script in collector.scripts]
 
 
 def _check_db(ctx: AppContext) -> bool:
