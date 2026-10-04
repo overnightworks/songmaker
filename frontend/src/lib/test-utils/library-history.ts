@@ -9,6 +9,7 @@ import {
 } from '$lib/stores/libraryContext';
 import { followShellLayers, initNavigation, resetNavigationForTests } from '$lib/stores/navigation';
 import {
+	installHistoryController,
 	mountRouteOfLandedAddress,
 	ownStepBacksUnderwayForTests,
 	pageStateOfHistoryState,
@@ -146,11 +147,13 @@ export function standingHistoryEntry(): HistoryEntry | null {
 }
 
 // A library page with the history layer stack running, the way the app layout
-// starts it on a fresh tab -- the page's entry stamped, the shell's own layers
+// starts it on a fresh tab -- the page's entry stamped, the history controller
+// installed and the library's landing handler attached, the shell's own layers
 // followed and Escape listened for; the returned function stops it.
 function startLibraryHistory(): () => void {
 	replaceHistoryEntry('/');
 	resetHistoryControllerForTests();
+	const uninstallHistoryController = installHistoryController();
 	const stopFollowingShellLayers = followShellLayers();
 	const stopListening = listenForGlobalEscape();
 	const stopNavigation = initNavigation();
@@ -159,6 +162,7 @@ function startLibraryHistory(): () => void {
 		stopListening();
 		stopFollowingShellLayers();
 		resetNavigationForTests();
+		uninstallHistoryController();
 	};
 }
 

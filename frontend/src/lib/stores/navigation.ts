@@ -4,8 +4,8 @@ import { get, writable } from 'svelte/store';
 import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
 import {
+	attachLandingHandler,
 	forgetLayerEntries,
-	listenForLandings,
 	stepBackOffStandingEntry,
 	type Landing
 } from '$lib/history/historyController';
@@ -638,7 +638,7 @@ export function initNavigation(): () => void {
 		);
 	}
 
-	return listenForLandings(onLanding);
+	return attachLandingHandler(onLanding);
 }
 
 export function resetNavigationForTests(): void {

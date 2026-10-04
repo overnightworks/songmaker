@@ -5,6 +5,7 @@ import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
+	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
@@ -14,6 +15,7 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
+	RAIL_SEARCH_CLEAR_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -29,6 +31,8 @@ import {
 	takeRowLabel
 } from '../src/lib/constants/now-playing';
 import {
+	accountCircle,
+	accountMenu,
 	appBar,
 	containing,
 	csrfHeaders,
@@ -43,7 +47,14 @@ import {
 	workspace,
 	type Shell
 } from './helpers';
-import { readSeededLibrary, runMarker, seedPlaylist, type SeededPlaylist } from './seed';
+import {
+	deleteVoiceProofData,
+	readSeededLibrary,
+	runMarker,
+	seedPlaylist,
+	seedVoiceDrafts,
+	type SeededPlaylist
+} from './seed';
 
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_HEADING = 'My Voices';
@@ -1128,4 +1139,159 @@ test('Back closes the share warning on the phone and keeps the album', async ({
 	} finally {
 		await deleteAlbum(page, album.id);
 	}
+});
+
+// Issue #1331: the history controller runs on every page, so Back closes the
+// topmost overlay on Settings and on a share page before it leaves the page.
+test.describe('Back closes the open overlay outside the library', () => {
+	const ACCOUNT_MENU_ON_PHONE = 'The account menu belongs to the mobile shell.';
+	const VOICE_DELETE_TITLE = 'Delete voice?';
+
+	function standsOnLayerEntry(page: Page): Promise<boolean> {
+		return page.evaluate(() => JSON.stringify(history.state).includes('"layer"'));
+	}
+
+	async function openVoicesOverTheWall(page: Page, shell: Shell): Promise<void> {
+		await page.goto('/');
+		await expect(workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await openVoicesSettings(page, shell);
+	}
+
+	async function voiceNamed(request: APIRequestContext, voiceId: string): Promise<string> {
+		const response = await request.get(`/api/loras/${voiceId}`);
+		expect(response.ok()).toBe(true);
+		return ((await response.json()) as { name: string }).name;
+	}
+
+	test('Back closes the account menu on Voices and the address stays', async ({
+		page
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
+		const guard = new FlowGuard(page);
+		await openVoicesOverTheWall(page, 'mobile');
+		await accountCircle(page).click();
+		await expect(accountMenu(page)).toBeVisible();
+
+		await page.goBack();
+
+		await expect(accountMenu(page)).toBeHidden();
+		await expectSettingsStands(page);
+		guard.assertClean();
+	});
+
+	test('Back cancels the voice delete confirmation: still on Voices, the voice listed', async ({
+		page,
+		request
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const voiceIds = await seedVoiceDrafts(request, 1);
+		try {
+			const name = await voiceNamed(request, voiceIds[0]);
+			await openVoicesOverTheWall(page, shellOf(testInfo));
+			const card = page.locator('.lora-card').filter({ hasText: name });
+			await card.getByRole('button', { name: 'Delete', exact: true }).click();
+			const confirm = page
+				.getByRole('dialog')
+				.filter({ has: page.getByRole('heading', { name: VOICE_DELETE_TITLE, exact: true }) });
+			await expect(confirm).toBeVisible();
+
+			await page.goBack();
+
+			await expect(confirm).toBeHidden();
+			await expectSettingsStands(page);
+			await expect(card.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
+			guard.assertClean();
+		} finally {
+			await deleteVoiceProofData(request, voiceIds);
+		}
+	});
+
+	test('Back closes the share page Now Playing, and its close button leaves no entry behind', async ({
+		browser
+	}, testInfo) => {
+		const library = readSeededLibrary();
+		const { viewport, isMobile, hasTouch } = testInfo.project.use;
+		const loggedOut = await browser.newContext({
+			storageState: undefined,
+			viewport,
+			isMobile,
+			hasTouch
+		});
+		try {
+			const sharePage = await loggedOut.newPage();
+			const guard = new FlowGuard(sharePage);
+			await sharePage.goto(library.albumShareUrl);
+			await expect(sharePage.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+			const shareAddress = sharePage.url();
+			await sharePage
+				.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
+				.click();
+			const openNowPlaying = sharePage.getByRole('button', {
+				name: NOW_PLAYING_LABEL,
+				exact: true
+			});
+			const closeNowPlaying = sharePage.getByRole('button', {
+				name: NOW_PLAYING_CLOSE,
+				exact: true
+			});
+			await openNowPlaying.click();
+			await expect(closeNowPlaying).toBeVisible();
+
+			await sharePage.goBack();
+
+			await expect(closeNowPlaying).toBeHidden();
+			expect(sharePage.url()).toBe(shareAddress);
+
+			await openNowPlaying.click();
+			await expect(closeNowPlaying).toBeVisible();
+			await closeNowPlaying.click();
+
+			await expect(closeNowPlaying).toBeHidden();
+			await expect.poll(() => standsOnLayerEntry(sharePage)).toBe(false);
+			expect(sharePage.url()).toBe(shareAddress);
+			guard.assertClean();
+		} finally {
+			await loggedOut.close();
+		}
+	});
+
+	test('an album tapped in the phone drawer over Voices leaves one Back to Voices', async ({
+		page
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY); // NOSONAR S1607: the drawer is a phone layer only.
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		await openVoicesOverTheWall(page, 'mobile');
+		const rail = await openRailNav(page, 'mobile');
+		await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
+
+		await openAlbumFromRail(page, 'mobile', library.albumTitle);
+		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
+		await expect(railDrawer(page)).toBeHidden();
+
+		await page.goBack();
+
+		await expectSettingsStands(page);
+		await expect(railDrawer(page)).toBeHidden();
+		guard.assertClean();
+	});
+
+	test('the account menu left open over a reload on Voices is gone, and one Back leaves the page', async ({
+		page
+	}, testInfo) => {
+		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
+		const guard = new FlowGuard(page);
+		await openVoicesOverTheWall(page, 'mobile');
+		await accountCircle(page).click();
+		await expect(accountMenu(page)).toBeVisible();
+
+		await page.reload();
+
+		await expect(accountMenu(page)).toBeHidden();
+		await expectSettingsStands(page);
+		await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
+		await page.goBack();
+		await expect(page).toHaveURL(/\/$/);
+		guard.assertClean();
+	});
 });
