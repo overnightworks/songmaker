@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { signInReturnPath } from '$lib/api/fetch';
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME, PASSWORD_MIN_LENGTH } from '$lib/constants';
 	import { AUTH_ACCOUNT_DISABLED_MESSAGE, AUTH_SESSION_EXPIRED_MESSAGE } from '$lib/constants/auth';
 	import { login, authError, authNotice } from '$lib/stores/auth';
 
@@ -61,7 +61,7 @@
 					<input
 						type={showPassword ? 'text' : 'password'}
 						bind:value={password}
-						minlength={8}
+						minlength={PASSWORD_MIN_LENGTH}
 						required
 						autocomplete="current-password"
 						disabled={submitting}

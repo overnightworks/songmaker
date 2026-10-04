@@ -108,9 +108,10 @@ class SessionResponse(BaseModel):
     expires_at: str
     ip_address: str = ""
     user_agent: str = ""
+    is_current: bool
 
     @classmethod
-    def from_orm(cls, sess: UserSession) -> SessionResponse:
+    def from_orm(cls, sess: UserSession, *, is_current: bool = False) -> SessionResponse:
         return cls(
             id=session_reference(sess.id),
             user_id=sess.user_id,
@@ -119,6 +120,7 @@ class SessionResponse(BaseModel):
             expires_at=sess.expires_at.isoformat(),
             ip_address=sess.ip_address,
             user_agent=sess.user_agent,
+            is_current=is_current,
         )
 
 

@@ -866,6 +866,7 @@ export interface SessionItem {
 	expires_at: string;
 	ip_address: string;
 	user_agent: string;
+	is_current: boolean;
 }
 
 export interface SetupRequest {
