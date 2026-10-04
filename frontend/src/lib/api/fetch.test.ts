@@ -47,6 +47,8 @@ import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/cons
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { clearAuth, currentUser } from '$lib/stores/auth';
 import { goto } from '$app/navigation';
+import { navigateTo } from '$lib/history/historyController';
+import { holdRouteLoads } from '$lib/test-utils/app-navigation';
 import type { AuthUser } from '$lib/api/types';
 
 function streamFrom(chunks: string[]): ReadableStream<Uint8Array> {
@@ -574,15 +576,25 @@ describe('session lost (401)', () => {
 		expect(clearedOn).toBe('/login');
 	});
 
-	it('returns to the address standing when the session was lost, not one a tap reached meanwhile', async () => {
+	it('returns to the page a navigation started before the session was lost lands on', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		replaceHistoryEntry('/album/a1');
+		replaceHistoryEntry('/settings/voices');
+		const releaseRouteLoads = holdRouteLoads();
+		const albumOpened = navigateTo('/album/b2', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
 
 		const reaction = handleSessionLost();
-		replaceHistoryEntry('/album/b2');
-		await reaction;
+		await vi.dynamicImportSettled();
+		expect(location.pathname).toBe('/settings/voices');
+		releaseRouteLoads();
+		await Promise.all([albumOpened, reaction]);
 
-		expect(goto).toHaveBeenCalledWith(signInAddress('/album/a1'));
+		expect(goto).toHaveBeenLastCalledWith(signInAddress('/album/b2'));
+		expect(location.pathname).toBe('/login');
 	});
 
 	it('reacts the same way through sseFetch as through apiFetch', async () => {

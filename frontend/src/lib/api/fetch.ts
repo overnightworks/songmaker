@@ -240,22 +240,25 @@ export function handleSessionLost(): Promise<void> {
 // +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
 // instead of forcing a redirect that could race it.
 //
-// The address standing when the session was lost is read before anything is
-// awaited, so a tap landing meanwhile -- an album opened from the drawer --
-// does not become the address the sign-in returns to. Sign-in is pushed once
-// history stands still, and before auth is cleared: the shell unmounts on
-// that push, so the overlays closing with it -- the phone drawer above all --
-// leave from an entry that no longer stands and move no history under the
-// sign-in page (#1230).
+// A navigation the person already started counts as where they meant to be:
+// sign-in waits until every step of it has landed (`libraryHistoryStepsLanded`)
+// and returns to the address history stands on then -- the album a tap in the
+// drawer opened, whichever of its requests the server refused first. Sign-in
+// is pushed before auth is cleared: the shell unmounts on that push, so the
+// overlays closing with it -- the phone drawer above all -- leave from an
+// entry that no longer stands and move no history under the sign-in page
+// (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const lostAt = window.location.pathname + window.location.search;
-	const [{ hasSessionToLose, clearAuth }, { historyStandsStill, navigateAway }] = await Promise.all(
-		[import('$lib/stores/auth'), import('$lib/history/historyController')]
-	);
+	const [{ hasSessionToLose, clearAuth }, { libraryHistoryStepsLanded }, { navigateAway }] =
+		await Promise.all([
+			import('$lib/stores/auth'),
+			import('$lib/stores/libraryContext'),
+			import('$lib/history/historyController')
+		]);
 	if (!hasSessionToLose()) return;
-	await historyStandsStill();
+	await libraryHistoryStepsLanded();
 	try {
-		await navigateAway(signInAddress(lostAt));
+		await navigateAway(signInAddress(window.location.pathname + window.location.search));
 	} finally {
 		clearAuth('unauthorized');
 	}

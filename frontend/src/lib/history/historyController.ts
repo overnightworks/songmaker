@@ -439,10 +439,10 @@ function mountStandingAddress(): void {
 // navigation that aborts another is known to have started only here.
 let navigationsStarted = 0;
 
-function startNavigation(url: string, options?: Parameters<typeof goto>[1]): Promise<void> {
+function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> {
 	navigationsStarted += 1;
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	return goto(url, options);
+	return goto(...navigation);
 }
 
 // A navigation to another page -- sign-in after signing out or after a lost

@@ -35,6 +35,7 @@
 		historyStandsStill,
 		installHistoryController,
 		mountRouteOfLandedAddress,
+		navigateAway,
 		stampNavigatedEntry
 	} from '$lib/history/historyController';
 	import {
@@ -253,7 +254,7 @@
 	async function handleLogout() {
 		await logout(async () => {
 			await historyStandsStill();
-			await goto(SIGN_IN_PATH);
+			await navigateAway(SIGN_IN_PATH);
 		});
 	}
 
