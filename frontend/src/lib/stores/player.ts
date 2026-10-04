@@ -570,6 +570,15 @@ function reportLibraryTakeStartFailure(
 	addToast(toast, 'error');
 }
 
+function currentTakeAtPosition(): { generation: GenerationItem; position: number } | null {
+	const current = audioPlayer.current;
+	if (!current) return null;
+	return {
+		generation: current.generation,
+		position: audioPlayer.currentTimeNow ?? audioPlayer.currentTime
+	};
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
@@ -601,9 +610,11 @@ async function playLibraryFromGeneration(
 	}
 	if (!playStartIsCurrent(seq)) return;
 	const takes = queue.takes.map(poolTakeToPlaybackInfo);
-	const startIndex = takes.findIndex((take) => take.generation.id === gen.id);
+	const continuation = opts.keepPlaying ? currentTakeAtPosition() : null;
+	const startGeneration = continuation?.generation ?? gen;
+	const startIndex = takes.findIndex((take) => take.generation.id === startGeneration.id);
 	if (startIndex < 0) {
-		reportLibraryTakeStartFailure(gen, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
+		reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
 		return;
 	}
 	playStartNotice.set('idle');
@@ -616,9 +627,7 @@ async function playLibraryFromGeneration(
 	playNativeLibraryTakes(
 		takes,
 		startIndex,
-		opts.keepPlaying
-			? { ...opts, resumeAtTrackTime: audioPlayer.currentTimeNow ?? audioPlayer.currentTime }
-			: opts
+		opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts
 	);
 }
 

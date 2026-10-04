@@ -2953,10 +2953,16 @@ describe('shuffle rebuilds the playing queue', () => {
 		{ change: 'shuffle', rebuild: () => toggleShuffle() },
 		{ change: 'pool', rebuild: () => chooseLibraryTakePool('all') }
 	])(
-		'$change keeps the position reached while the library fetch was pending',
+		'$change keeps the take and position reached by automatic advancement while the library fetch was pending',
 		async ({ rebuild }) => {
-			const gen = makeGen(genDefaults);
-			audioPlayer.current = makePlayback(gen, makeSong(queuedSongDefaults()));
+			const first = makeGen({ ...genDefaults, id: 'g-first' });
+			const second = makeGen({
+				...genDefaults,
+				id: 'g-second',
+				song_id: 's2',
+				mp3_path: 'a1/s2.mp3'
+			});
+			audioPlayer.current = makePlayback(first, makeSong(queuedSongDefaults()));
 			audioPlayer.currentTime = 70;
 			vi.spyOn(audioPlayer, 'currentTimeNow', 'get').mockImplementation(
 				() => audioPlayer.currentTime + 0.125
@@ -2972,11 +2978,29 @@ describe('shuffle rebuilds the playing queue', () => {
 
 			const rebuilding = rebuild();
 			audioPlayer.currentTime = 72;
-			finishFetch(makePoolQueue({ takes: [makePoolTake({ generation_id: gen.id })] }));
+			const advanced = makePlayback(
+				second,
+				makeSong({ ...queuedSongDefaults(), id: 's2', title: 'Second', generations: [second] })
+			);
+			audioPlayer.current = advanced;
+			audioPlayer.currentCallbacks.onCurrentChange?.(advanced);
+			finishFetch(
+				makePoolQueue({
+					takes: [
+						makePoolTake({ generation_id: first.id }),
+						makePoolTake({
+							generation_id: second.id,
+							song_id: 's2',
+							song_title: 'Second',
+							mp3_path: second.mp3_path
+						})
+					]
+				})
+			);
 			await rebuilding;
 
 			expect(audioPlayer.load).toHaveBeenLastCalledWith(
-				expect.objectContaining({ generation: expect.objectContaining({ id: gen.id }) }),
+				expect.objectContaining({ generation: expect.objectContaining({ id: second.id }) }),
 				expect.objectContaining({ startAt: 72.125 })
 			);
 		}
