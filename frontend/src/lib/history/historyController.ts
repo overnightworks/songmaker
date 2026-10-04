@@ -14,9 +14,10 @@ import {
 // this module writes or traverses history. Every entry it writes carries an
 // id, so a landing -- a Back, a Forward, a jump of several entries, or one of
 // the controller's own step-backs -- says by itself where history now stands,
-// and which open layers and pending step-backs it has left behind. While the
-// library history runs, every layer opened on the stack (stores/layers.ts)
-// owns one entry on top of the page it covers.
+// and which open layers and pending step-backs it has left behind. Installed
+// once by the root layout, on every page, it gives every layer opened on the
+// stack (stores/layers.ts) one entry on top of the page it covers, so Back
+// closes the topmost overlay before it leaves the page.
 
 // What the controller stamps into an entry's page state. `layer` marks an entry
 // an open layer pushed over the page it covers.
@@ -222,7 +223,7 @@ export function standingPageEntryId(): number | null {
 // The library starts showing the page entry history stands on, so that entry
 // is the page the screen shows from now on, whichever of the library's paths
 // showed it -- a landing on it is no news, and one elsewhere it did not hear
-// is (`listenForLandings`). Answers that entry's id.
+// is (`attachLandingHandler`). Answers that entry's id.
 export function showStandingPage(): number | null {
 	settleOnPage(standingEntry());
 	return standingPageEntryId();
@@ -482,7 +483,9 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // or a `goto` from anywhere, or -- on `enter` -- its start over the entry the
 // page loaded onto. An entry the navigation carried stands as it is, one the
 // start dropped gets back the id it was loaded with, and any other gets a
-// first id on top. A Back or Forward is the landing listener's.
+// first id on top. The start drops the layer mark too, so only once it has
+// the mark back can the installed controller step off a layer entry a reload
+// came back onto. A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
 	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
@@ -508,6 +511,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	if (routerPushed && entry !== null) pushedPage(entry);
 	else settleOnPage(entry);
+	if (type === 'enter' && uninstall !== null) stepOffUnownedLayerEntry();
 }
 
 // A router push -- a link, or a `goto` from anywhere -- stands one place above
@@ -633,18 +637,20 @@ function dropLayers(open: readonly OpenLayerEntry[]): void {
 
 // A layer entry history stands on that no open layer owns -- one a reload
 // came back onto -- is a copy of the page below it, where Back would visibly
-// do nothing.
+// do nothing. A step back off it already underway is not started again.
 function stepOffUnownedLayerEntry(): void {
 	const standing = standingEntry();
 	if (standing?.layer === undefined) return;
 	if (ledger.layers.some((open) => open.entry === standing.id)) return;
+	if (ledger.stepBacks.includes(standing.id - 1)) return;
 	void stepBackTo(standing.id - 1);
 }
 
-// The library history stops: the overlays still open keep their layers, which
-// own no history entry any more, and nothing waits for a landing nobody hears.
+// The open overlays keep their layers, which own no history entry any more,
+// and nothing waits for a landing that would settle them. Layers opened from
+// now on get entries again: a session lost in the app and signed in again
+// keeps Back closing overlays.
 export function forgetLayerEntries(): void {
-	keepLayerHistory(null);
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 	ledger = { ...ledger, layers: [], stepBacks: [] };
@@ -656,15 +662,18 @@ export function forgetLayerEntries(): void {
 
 type LandingHandler = (landing: Landing, landedState: unknown) => void;
 
-// Nobody listens between two pages of the library history -- back from
-// Settings, the library listens only once its page has loaded -- so a Back
+let landingHandler: LandingHandler | null = null;
+let uninstall: (() => void) | null = null;
+
+// Nobody handles landings between two pages of the library -- back from
+// Settings, the library attaches only once its page has loaded -- so a Back
 // pressed meanwhile lands unheard: the second of two quick Backs from
 // Settings stands on the wall while the screen still shows the album the
 // first one reached (issue #1006, H5). A page entry history stands on that is
-// not the page the screen shows is heard as the landing it was once the
-// handler listens. Before the controller has seen any page there is nothing
-// to tell it from.
-function hearLandingMissedWhileNotListening(onLanding: LandingHandler): void {
+// not the page the screen shows is heard as the landing it was once a handler
+// attaches. Before the controller has seen any page there is nothing to tell
+// it from.
+function hearLandingMissedWhileDetached(onLanding: LandingHandler): void {
 	const standing = standingEntry();
 	if (standing === null || standing.layer !== undefined || ledger.current === null) return;
 	if (isSameEntry(standing, ledger.current)) return;
@@ -673,31 +682,53 @@ function hearLandingMissedWhileNotListening(onLanding: LandingHandler): void {
 	onLanding(landing, history.state);
 }
 
-// The landing handler hears each landing once the controller has closed the
-// layers it left, settled its step-backs and, on a layer entry no open layer
-// owns, started stepping off it. While it listens, every layer opened owns an
-// entry.
-export function listenForLandings(onLanding: LandingHandler): () => void {
-	function onPopstate(event: PopStateEvent): void {
-		const landed = landedEntry(event);
-		countEntryMet(historyStorage, landed);
-		const landing = land(ledger, landed);
-		ledger = landing.ledger;
-		standsOnTop = false;
-		lastRouterIndex = routerIndexOf(event.state);
-		dropLayers(landing.dropLayers);
-		for (const target of landing.settled) settleStepBack(target);
-		if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
-		settleStillness();
-		onLanding(landing, event.state);
-	}
+// Every landing closes the layers it left, settles the step-backs it reached
+// and, on a layer entry no open layer owns, starts stepping off it. Only an
+// attached handler moves the page the screen shows: without one, that page
+// stays where the last navigation put it, so the handler attaching next still
+// hears the landing it missed.
+function onPopstate(event: PopStateEvent): void {
+	const landed = landedEntry(event);
+	countEntryMet(historyStorage, landed);
+	const landing = land(ledger, landed);
+	ledger =
+		landingHandler === null ? { ...landing.ledger, current: ledger.current } : landing.ledger;
+	standsOnTop = false;
+	lastRouterIndex = routerIndexOf(event.state);
+	dropLayers(landing.dropLayers);
+	for (const target of landing.settled) settleStepBack(target);
+	if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
+	settleStillness();
+	landingHandler?.(landing, event.state);
+}
+
+// The root layout installs the controller once for the whole app: from then
+// on every landing is heard and every layer opened owns an entry. The
+// returned function uninstalls it.
+export function installHistoryController(): () => void {
+	if (uninstall !== null) throw new Error('The history controller is already installed');
 	window.addEventListener('popstate', onPopstate);
 	keepLayerHistory(layerEntries);
 	stepOffUnownedLayerEntry();
-	hearLandingMissedWhileNotListening(onLanding);
-	return () => {
+	const uninstallThis = (): void => {
 		window.removeEventListener('popstate', onPopstate);
+		keepLayerHistory(null);
 		forgetLayerEntries();
+		uninstall = null;
+	};
+	uninstall = uninstallThis;
+	return uninstallThis;
+}
+
+// The library attaches the one landing handler while its page shows: it hears
+// each landing after the controller's own part, and on attach the landing it
+// missed while detached. The returned function detaches it.
+export function attachLandingHandler(onLanding: LandingHandler): () => void {
+	if (landingHandler !== null) throw new Error('A landing handler is already attached');
+	landingHandler = onLanding;
+	hearLandingMissedWhileDetached(onLanding);
+	return () => {
+		if (landingHandler === onLanding) landingHandler = null;
 	};
 }
 
@@ -709,6 +740,8 @@ export function loadHistoryPageForTests(): void {
 }
 
 export function resetHistoryControllerForTests(): void {
+	uninstall?.();
+	landingHandler = null;
 	historyStorage = tabStorage(() => sessionStorage);
 	stateOnLoad = readStateOnLoad();
 	ledger = EMPTY_LEDGER;

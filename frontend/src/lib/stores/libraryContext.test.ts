@@ -94,7 +94,12 @@ vi.mock('$lib/api/client', () => ({
 }));
 
 import { goto, pushState, replaceState } from '$app/navigation';
-import { listenForLandings, pushEntry, replaceEntry } from '$lib/history/historyController';
+import {
+	attachLandingHandler,
+	installHistoryController,
+	pushEntry,
+	replaceEntry
+} from '$lib/history/historyController';
 import { holdLayer } from '$lib/stores/layers';
 import { fakePage, holdRouteLoads } from '$lib/test-utils/app-navigation';
 import { albumRoutePath, songRoutePath } from '$lib/routes/addresses';
@@ -129,8 +134,6 @@ import {
 function stampedLibrary(library: LibraryHistoryState): App.PageState {
 	return { library, entry: { id: expect.any(Number) } };
 }
-
-let stopListeningForLandings: () => void = () => undefined;
 
 function emptyPage<T>(items: T[] = []) {
 	return { items, total: items.length, offset: 0, limit: 50, has_more: false };
@@ -177,11 +180,11 @@ beforeEach(() => {
 	vi.mocked(goto).mockClear();
 	vi.mocked(pushState).mockClear();
 	vi.mocked(replaceState).mockClear();
-	stopListeningForLandings = listenForLandings(() => undefined);
+	installHistoryController();
+	attachLandingHandler(() => undefined);
 });
 
 afterEach(() => {
-	stopListeningForLandings();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetPlaylists();
