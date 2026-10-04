@@ -1,0 +1,8 @@
+claim_id = "f8d6df03db6b43f9b1cf1219ae363387"
+agent = "Claude 255c9087-94fa-477f-af88-8eb64e5acd39"
+role = "builder"
+base = "54ca210c4c41b66ae2d9922b1b771286af49ad78"
+branch = "claude/issue-1334-s4-host-csrf"
+scope = ["frontend/src/lib/api/fetch.test.ts", "frontend/src/lib/api/fetch.ts", "src/songmaker_cli/cli_client.py", "tests/conftest.py", "tests/test_cli_client.py"]
+opened_commit = "7b0e00462cbf9b9fefe80dd8cd74e2294473b475"
+whole_reason = "CSRF-Leser in Frontend und CLI samt ihren Tests und dem Test-Fixture."
