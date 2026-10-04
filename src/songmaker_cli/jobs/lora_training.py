@@ -42,6 +42,7 @@ from songmaker_cli.db.queries import (
     get_job,
     list_active_user_loras,
     record_audit,
+    unset_if_none,
     update_user_lora,
 )
 from songmaker_cli.scheduler import (
@@ -129,7 +130,7 @@ class _LoraProgressThrottle:
             progress=fraction,
             current_epoch=current_epoch,
             train_epochs=train_epochs,
-            training_started_at=training_started_at,
+            training_started_at=unset_if_none(training_started_at),
         )
 
 

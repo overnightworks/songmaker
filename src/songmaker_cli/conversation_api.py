@@ -81,6 +81,7 @@ from songmaker_cli.cowriter.history import compact_conversation, count_tokens, f
 from songmaker_cli.cowriter.routing import stream_cowriter_turn
 from songmaker_cli.db.models import ChatMessage, Conversation, Generation, Song
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     archive_conversation,
     best_playable_generation,
     count_user_active_jobs,
@@ -655,7 +656,7 @@ def _prepare_chat_turn(
         redis=request.app.state.ctx.redis,
     )
     _refuse_while_another_turn_runs(session, user)
-    update_job_status(session, job.id, JobStatus.RUNNING)
+    update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
     session.commit()
     return _prepare_chat_messages(req, user, session, envelope, provider, route, model, job.id)
 
@@ -948,7 +949,9 @@ def _complete_chat_turn(
         assistant_text,
         song_id=req.current_song_id,
     )
-    if not update_job_status(session, prepared.job_id, JobStatus.COMPLETED, progress=1.0):
+    if not update_job_status(
+        session, prepared.job_id, JobStatusUpdate(JobStatus.COMPLETED, progress=1.0),
+    ):
         log.warning("Chat job %s was already terminal at completion", prepared.job_id)
     session.commit()
     return {

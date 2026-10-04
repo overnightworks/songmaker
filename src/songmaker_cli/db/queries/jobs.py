@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Collection, Mapping
-from dataclasses import dataclass
+from dataclasses import KW_ONLY, dataclass, fields
 from datetime import datetime, timedelta, timezone
 from typing import Final
 
@@ -21,6 +21,7 @@ from songmaker_cli.constants import (
     stale_job_thresholds,
 )
 from songmaker_cli.db.models import Job, aware_timestamp
+from songmaker_cli.db.queries.sentinels import UNSET, _Unset
 from songmaker_cli.settings import get_settings
 from songmaker_cli.worker_liveness import WorkerLiveness, liveness_for_job_type
 
@@ -159,19 +160,31 @@ def claim_next_cover_job(session: Session) -> Job | None:
     return session.get(Job, claimed_id)
 
 
-def update_job_status(
-    session: Session, job_id: str, status: str,
-    progress: float = 0.0, error: str | None = None,
-    error_type: str | None = None,
-    queue_reason: str | None = None,
-    worker_pid: int | None = None,
-    current_epoch: int | None = None,
-    train_epochs: int | None = None,
-    training_started_at: datetime | None = None,
-    take_index: int | None = None,
-    take_count: int | None = None,
-    phase: GenerationPhase | None = None,
-) -> bool:
+@dataclass(frozen=True)
+class JobStatusUpdate:
+    """One status write for a job; each field names the job column it writes.
+
+    Progress, error, error type and queue reason describe the job at this
+    write, so leaving them out resets them. The remaining fields only some
+    writers know; ``UNSET`` keeps what the job already holds.
+    """
+
+    status: JobStatus
+    _: KW_ONLY
+    progress: float = 0.0
+    error: str | None = None
+    error_type: str | None = None
+    queue_reason: str | None = None
+    worker_pid: int | _Unset = UNSET
+    current_epoch: int | _Unset = UNSET
+    train_epochs: int | _Unset = UNSET
+    training_started_at: datetime | _Unset = UNSET
+    take_index: int | _Unset = UNSET
+    take_count: int | _Unset = UNSET
+    phase: GenerationPhase | _Unset = UNSET
+
+
+def update_job_status(session: Session, job_id: str, update: JobStatusUpdate) -> bool:
     job = (
         session.query(Job)
         .filter_by(id=job_id)
@@ -181,31 +194,17 @@ def update_job_status(
     if job is None or job.status in JOB_TERMINAL_STATUSES:
         return False
     now = datetime.now(timezone.utc)
-    _move_generation_start(job, status, phase, now)
+    status = update.status
+    _move_generation_start(job, status, update.phase, now)
     if _enters_running(job, status):
         job.phase = None
     if status == JobStatus.QUEUED:
         job.take_index = None
         job.take_count = None
-    job.status = status
-    job.progress = progress
-    job.error = error
-    job.error_type = error_type
-    job.queue_reason = queue_reason
-    if current_epoch is not None:
-        job.current_epoch = current_epoch
-    if train_epochs is not None:
-        job.train_epochs = train_epochs
-    if training_started_at is not None:
-        job.training_started_at = training_started_at
-    if take_index is not None:
-        job.take_index = take_index
-    if take_count is not None:
-        job.take_count = take_count
-    if phase is not None:
-        job.phase = phase
-    if worker_pid is not None:
-        job.worker_pid = worker_pid
+    for column in fields(update):
+        value = getattr(update, column.name)
+        if value is not UNSET:
+            setattr(job, column.name, value)
     if status in (JobStatus.RUNNING, JobStatus.PARTIAL):
         job.heartbeat_at = now
     if status in (JobStatus.COMPLETED, JobStatus.FAILED, JobStatus.CANCELLED):
@@ -219,7 +218,7 @@ def _enters_running(job: Job, status: str) -> bool:
 
 
 def _move_generation_start(
-    job: Job, status: str, phase: GenerationPhase | None, now: datetime,
+    job: Job, status: str, phase: GenerationPhase | _Unset, now: datetime,
 ) -> None:
     """Anchor the remaining-time estimate at the first generating phase.
 

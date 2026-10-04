@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from contextlib import suppress
-from typing import Callable
+from typing import Any, Callable
 
 from agent_providers.codex.image import (
     CodexImageCliError,
@@ -47,7 +47,12 @@ from songmaker_cli.constants import (
     JobStatus,
 )
 from songmaker_cli.cover_job_errors import CoverImageToolUnavailableError
-from songmaker_cli.db.queries import get_job, update_job_heartbeat, update_job_status
+from songmaker_cli.db.queries import (
+    JobStatusUpdate,
+    get_job,
+    update_job_heartbeat,
+    update_job_status,
+)
 from songmaker_cli.scheduler import (
     NoCapacityError,
     WorkerTaskFailed,
@@ -142,12 +147,13 @@ def _job_is_terminal(factory, job_id: str) -> bool:
         return job is None or job.status in JOB_TERMINAL_STATUSES
 
 
-def _update_job(factory, job_id: str, status: str, **kwargs) -> bool:
+def _update_job(factory, job_id: str, status: JobStatus, **fields: Any) -> bool:
+    update = JobStatusUpdate(status, **fields)
     last_exc: Exception | None = None
     for attempt in range(2):
         try:
             with factory() as session:
-                applied = update_job_status(session, job_id, status, **kwargs)
+                applied = update_job_status(session, job_id, update)
                 session.commit()
             return applied
         except Exception as exc:
@@ -224,8 +230,6 @@ def _fail_chat_job(
     update_job_status(
         session,
         job_id,
-        JobStatus.FAILED,
-        error=error,
-        error_type=error_type,
+        JobStatusUpdate(JobStatus.FAILED, error=error, error_type=error_type),
     )
     session.commit()

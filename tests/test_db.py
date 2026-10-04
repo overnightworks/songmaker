@@ -47,6 +47,7 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries import (
     UNSET,
+    JobStatusUpdate,
     archive_generation,
     cleanup_album,
     cleanup_song,
@@ -98,12 +99,14 @@ from songmaker_cli.db.queries import (
     unarchive_generation,
     unkeep_generation,
     unpick_generation,
+    unset_if_none,
     update_job_heartbeat,
     update_job_status,
     update_song,
     update_user,
     user_count,
 )
+from songmaker_cli.db.queries.sentinels import _Unset
 from songmaker_cli.worker_liveness import WorkerLiveness
 
 
@@ -667,7 +670,7 @@ def test_create_job(seeded_session: Session) -> None:
 def test_update_job_status(seeded_session: Session) -> None:
     job = create_job(seeded_session, "score")
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, "running", progress=0.5)
+    update_job_status(seeded_session, job.id, JobStatusUpdate("running", progress=0.5))
     seeded_session.commit()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "running"
@@ -681,14 +684,17 @@ def test_job_progress_preserves_generation_start_phase_and_take_counters(
 ) -> None:
     job = create_job(seeded_session, JobType.GENERATE)
     update_job_status(
-        seeded_session, job.id, JobStatus.RUNNING,
-        take_index=1, take_count=2, phase=GenerationPhase.WRITING,
+        seeded_session,
+        job.id,
+        JobStatusUpdate(
+            JobStatus.RUNNING, take_index=1, take_count=2, phase=GenerationPhase.WRITING
+        ),
     )
     generation_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
     job.generation_started_at = generation_started_at
     seeded_session.commit()
 
-    update_job_status(seeded_session, job.id, JobStatus.RUNNING, progress=0.25)
+    update_job_status(seeded_session, job.id, JobStatusUpdate(JobStatus.RUNNING, progress=0.25))
     update_job_heartbeat(seeded_session, job.id)
     seeded_session.commit()
     seeded_session.expire_all()
@@ -697,6 +703,41 @@ def test_job_progress_preserves_generation_start_phase_and_take_counters(
     assert aware_timestamp(fetched.generation_started_at) == generation_started_at
     assert fetched.phase == GenerationPhase.WRITING
     assert (fetched.take_index, fetched.take_count, fetched.progress) == (1, 2, 0.25)
+
+
+def test_job_progress_keeps_a_training_start_the_write_does_not_know(
+    seeded_session: Session,
+) -> None:
+    job = create_job(seeded_session, JobType.LORA_TRAINING)
+    training_started_at = datetime(2030, 1, 1, tzinfo=timezone.utc)
+    update_job_status(
+        seeded_session,
+        job.id,
+        JobStatusUpdate(
+            JobStatus.RUNNING,
+            current_epoch=1,
+            train_epochs=4,
+            training_started_at=training_started_at,
+        ),
+    )
+    seeded_session.commit()
+
+    update_job_status(
+        seeded_session,
+        job.id,
+        JobStatusUpdate(
+            JobStatus.RUNNING,
+            progress=0.5,
+            current_epoch=2,
+            training_started_at=unset_if_none(None),
+        ),
+    )
+    seeded_session.commit()
+    seeded_session.expire_all()
+
+    fetched = get_job(seeded_session, job.id)
+    assert aware_timestamp(fetched.training_started_at) == training_started_at
+    assert (fetched.current_epoch, fetched.train_epochs, fetched.progress) == (2, 4, 0.5)
 
 
 @pytest.mark.parametrize("claim_cover", [False, True])
@@ -711,7 +752,9 @@ def test_entering_running_starts_without_a_generation_start(
         assert job_queries.claim_next_cover_job(seeded_session).id == job.id
     else:
         update_job_status(
-            seeded_session, job.id, JobStatus.RUNNING, phase=GenerationPhase.LOADING_MODEL,
+            seeded_session,
+            job.id,
+            JobStatusUpdate(JobStatus.RUNNING, phase=GenerationPhase.LOADING_MODEL),
         )
     seeded_session.commit()
     seeded_session.expire_all()
@@ -727,8 +770,8 @@ def test_generation_start_is_the_first_generating_phase_after_each_running_entry
     job = create_job(seeded_session, JobType.GENERATE)
     earlier_start = datetime(2020, 1, 1, tzinfo=timezone.utc)
 
-    def generation_started_after(status: JobStatus, phase: GenerationPhase | None = None):
-        update_job_status(seeded_session, job.id, status, phase=phase)
+    def generation_started_after(status: JobStatus, phase: GenerationPhase | _Unset = UNSET):
+        update_job_status(seeded_session, job.id, JobStatusUpdate(status, phase=phase))
         seeded_session.commit()
         seeded_session.expire_all()
         started_at = get_job(seeded_session, job.id).generation_started_at
@@ -759,7 +802,9 @@ def test_recovery_failing_a_generating_job_clears_its_generation_start(
     seeded_session: Session, recover,
 ) -> None:
     job = create_job(seeded_session, JobType.GENERATE)
-    update_job_status(seeded_session, job.id, JobStatus.RUNNING, phase=GenerationPhase.WRITING)
+    update_job_status(
+        seeded_session, job.id, JobStatusUpdate(JobStatus.RUNNING, phase=GenerationPhase.WRITING)
+    )
     seeded_session.commit()
     now = aware_timestamp(get_job(seeded_session, job.id).generation_started_at)
 
@@ -775,7 +820,7 @@ def test_recovery_failing_a_generating_job_clears_its_generation_start(
 def test_update_job_completed(seeded_session: Session) -> None:
     job = create_job(seeded_session, "score")
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, "completed", progress=1.0)
+    update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
     seeded_session.commit()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "completed"
@@ -785,7 +830,7 @@ def test_update_job_completed(seeded_session: Session) -> None:
 def test_update_job_failed(seeded_session: Session) -> None:
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, "failed", error="ACE-Step down")
+    update_job_status(seeded_session, job.id, JobStatusUpdate("failed", error="ACE-Step down"))
     seeded_session.commit()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "failed"
@@ -799,11 +844,11 @@ def test_update_job_status_does_not_overwrite_terminal(
 ) -> None:
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
-    applied = update_job_status(seeded_session, job.id, terminal, progress=0.4)
+    applied = update_job_status(seeded_session, job.id, JobStatusUpdate(terminal, progress=0.4))
     seeded_session.commit()
     assert applied is True
 
-    applied = update_job_status(seeded_session, job.id, "running", progress=0.9)
+    applied = update_job_status(seeded_session, job.id, JobStatusUpdate("running", progress=0.9))
     seeded_session.commit()
     assert applied is False
     fetched = get_job(seeded_session, job.id)
@@ -814,15 +859,15 @@ def test_update_job_status_does_not_overwrite_terminal(
 def test_update_job_status_cancelled_sets_completed_at(seeded_session: Session) -> None:
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, "cancelled")
+    update_job_status(seeded_session, job.id, JobStatusUpdate("cancelled"))
     seeded_session.commit()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "cancelled"
     assert fetched.completed_at is not None
 
     completed_at = fetched.completed_at
-    update_job_status(seeded_session, job.id, "completed", progress=1.0)
-    update_job_status(seeded_session, job.id, "failed", error="late")
+    update_job_status(seeded_session, job.id, JobStatusUpdate("completed", progress=1.0))
+    update_job_status(seeded_session, job.id, JobStatusUpdate("failed", error="late"))
     seeded_session.commit()
     fetched = get_job(seeded_session, job.id)
     assert fetched.status == "cancelled"
@@ -838,7 +883,7 @@ def test_update_job_heartbeat_skips_terminal(seeded_session: Session) -> None:
     stale = datetime.now(timezone.utc) - timedelta(hours=1)
     job.heartbeat_at = stale
     seeded_session.flush()
-    update_job_status(seeded_session, job.id, "cancelled")
+    update_job_status(seeded_session, job.id, JobStatusUpdate("cancelled"))
     seeded_session.commit()
 
     before = get_job(seeded_session, job.id).heartbeat_at
@@ -854,7 +899,7 @@ def test_update_job_heartbeat_updates_running(seeded_session: Session) -> None:
 
     job = create_job(seeded_session, "generate")
     seeded_session.commit()
-    update_job_status(seeded_session, job.id, "running")
+    update_job_status(seeded_session, job.id, JobStatusUpdate("running"))
     stale = datetime.now(timezone.utc) - timedelta(hours=1)
     job.heartbeat_at = stale
     seeded_session.flush()
@@ -1565,7 +1610,7 @@ def test_update_song_not_found(db_session: Session) -> None:
 
 
 def test_update_job_status_missing_job(db_session: Session) -> None:
-    update_job_status(db_session, "nonexistent", "running")
+    update_job_status(db_session, "nonexistent", JobStatusUpdate("running"))
 
 
 def test_pick_generation_not_found(db_session: Session) -> None:
@@ -2003,7 +2048,7 @@ def test_count_user_jobs_outside_window(db_session: Session) -> None:
 
 
 def test_count_user_active_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
 
     user = create_user(db_session, "testuser", "hash", role="user")
     db_session.flush()
@@ -2012,7 +2057,7 @@ def test_count_user_active_jobs(db_session: Session) -> None:
     create_job(db_session, "score", user_id=user.id)
     db_session.commit()
 
-    update_job_status(db_session, j2.id, "completed", progress=1.0)
+    update_job_status(db_session, j2.id, JobStatusUpdate("completed", progress=1.0))
     db_session.commit()
 
     assert count_user_active_jobs(db_session, user.id) == 2
@@ -2022,7 +2067,7 @@ def test_count_user_active_jobs(db_session: Session) -> None:
 
 
 def test_count_total_queued_jobs(db_session: Session) -> None:
-    from songmaker_cli.db.queries import update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
 
     u1 = create_user(db_session, "user1", "hash", role="user")
     u2 = create_user(db_session, "user2", "hash", role="user")
@@ -2032,7 +2077,7 @@ def test_count_total_queued_jobs(db_session: Session) -> None:
     j3 = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j3.id, "completed", progress=1.0)
+    update_job_status(db_session, j3.id, JobStatusUpdate("completed", progress=1.0))
     db_session.commit()
 
     assert count_total_queued_jobs(db_session) == 2
@@ -2049,9 +2094,9 @@ def test_reaper_marks_a_stale_running_job_as_heartbeat_lost(db_session: Session)
     j_completed = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j_old.id, "running", progress=0.5)
-    update_job_status(db_session, j_recent.id, "running", progress=0.3)
-    update_job_status(db_session, j_completed.id, "completed", progress=1.0)
+    update_job_status(db_session, j_old.id, JobStatusUpdate("running", progress=0.5))
+    update_job_status(db_session, j_recent.id, JobStatusUpdate("running", progress=0.3))
+    update_job_status(db_session, j_completed.id, JobStatusUpdate("completed", progress=1.0))
     db_session.commit()
 
     old_time = datetime.now(timezone.utc) - timedelta(seconds=3600)
@@ -2082,7 +2127,7 @@ def test_reaper_does_not_overwrite_job_completed_between_read_and_update(
 ) -> None:
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
     job = create_job(db_session, JobType.GENERATE)
-    update_job_status(db_session, job.id, JobStatus.RUNNING)
+    update_job_status(db_session, job.id, JobStatusUpdate(JobStatus.RUNNING))
     job.heartbeat_at = now - timedelta(hours=1)
     db_session.commit()
 
@@ -2105,7 +2150,7 @@ def test_reaper_leaves_a_recent_job_alone(db_session: Session) -> None:
     j1 = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j1.id, "running")
+    update_job_status(db_session, j1.id, JobStatusUpdate("running"))
     db_session.commit()
 
     assert recover_stale_jobs_by_age_and_type(db_session) == {}
@@ -2181,8 +2226,8 @@ def test_reaper_uses_each_types_queued_and_heartbeat_threshold(
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
     healthy = create_job(db_session, job_type)
-    update_job_status(db_session, running.id, JobStatus.RUNNING)
-    update_job_status(db_session, healthy.id, JobStatus.RUNNING)
+    update_job_status(db_session, running.id, JobStatusUpdate(JobStatus.RUNNING))
+    update_job_status(db_session, healthy.id, JobStatusUpdate(JobStatus.RUNNING))
     queued.started_at = now - timedelta(seconds=thresholds.queued_seconds + 1)
     running.heartbeat_at = now - timedelta(seconds=thresholds.heartbeat_seconds + 1)
     healthy.heartbeat_at = now
@@ -2224,7 +2269,7 @@ def test_reaper_keeps_jobs_at_each_strict_threshold_cutoff(
     )[job_type]
     queued = create_job(db_session, job_type)
     running = create_job(db_session, job_type)
-    update_job_status(db_session, running.id, JobStatus.RUNNING)
+    update_job_status(db_session, running.id, JobStatusUpdate(JobStatus.RUNNING))
     queued.started_at = now - timedelta(seconds=thresholds.queued_seconds)
     running.heartbeat_at = now - timedelta(seconds=thresholds.heartbeat_seconds)
     db_session.commit()
@@ -2263,7 +2308,7 @@ def test_chat_recovery_reads_its_constant_table_not_settings(
 
     job = create_job(db_session, JobType.CHAT)
     db_session.commit()
-    update_job_status(db_session, job.id, JobStatus.RUNNING, progress=0.5)
+    update_job_status(db_session, job.id, JobStatusUpdate(JobStatus.RUNNING, progress=0.5))
     db_session.commit()
 
     now = datetime(2030, 1, 1, tzinfo=timezone.utc)
@@ -2292,7 +2337,7 @@ def test_reaper_distinguishes_queued_vs_running(
     j_running = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j_running.id, "running", progress=0.5)
+    update_job_status(db_session, j_running.id, JobStatusUpdate("running", progress=0.5))
     db_session.commit()
 
     old = datetime.now(timezone.utc) - timedelta(seconds=3600)
@@ -2324,8 +2369,8 @@ def test_user_filtered_reaper(db_session: Session) -> None:
     j_recent = create_job(db_session, "generate", user_id=user.id)
     db_session.commit()
 
-    update_job_status(db_session, j_stale.id, "running")
-    update_job_status(db_session, j_recent.id, "running")
+    update_job_status(db_session, j_stale.id, JobStatusUpdate("running"))
+    update_job_status(db_session, j_recent.id, JobStatusUpdate("running"))
     db_session.commit()
 
     stale = datetime.now(timezone.utc) - timedelta(seconds=3600)
@@ -2350,8 +2395,8 @@ def test_user_filtered_reaper_only_owns_its_jobs(db_session: Session) -> None:
     j_b = create_job(db_session, "generate", user_id=user_b.id)
     db_session.commit()
 
-    update_job_status(db_session, j_a.id, "running")
-    update_job_status(db_session, j_b.id, "running")
+    update_job_status(db_session, j_a.id, JobStatusUpdate("running"))
+    update_job_status(db_session, j_b.id, JobStatusUpdate("running"))
     db_session.commit()
 
     stale = datetime.now(timezone.utc) - timedelta(seconds=3600)
@@ -2391,7 +2436,7 @@ def test_user_filtered_reaper_leaves_fresh_jobs_alone(db_session: Session) -> No
     j = create_job(db_session, "generate", user_id=user.id)
     db_session.commit()
 
-    update_job_status(db_session, j.id, "running")
+    update_job_status(db_session, j.id, JobStatusUpdate("running"))
     db_session.commit()
 
     assert recover_stale_jobs_by_age_and_type(db_session, user_id=user.id) == {}
@@ -2414,26 +2459,26 @@ def test_queue_position_queued_jobs(db_session: Session) -> None:
 
 
 def test_queue_position_not_queued(db_session: Session) -> None:
-    from songmaker_cli.db.queries import get_queue_position, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, get_queue_position, update_job_status
 
     j1 = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j1.id, "running", progress=0.5)
+    update_job_status(db_session, j1.id, JobStatusUpdate("running", progress=0.5))
     db_session.commit()
 
     assert get_queue_position(db_session, j1) is None
 
 
 def test_queue_position_mixed_statuses(db_session: Session) -> None:
-    from songmaker_cli.db.queries import get_queue_position, update_job_status
+    from songmaker_cli.db.queries import JobStatusUpdate, get_queue_position, update_job_status
 
     j1 = create_job(db_session, "generate")
     j2 = create_job(db_session, "generate")
     j3 = create_job(db_session, "generate")
     db_session.commit()
 
-    update_job_status(db_session, j1.id, "running")
+    update_job_status(db_session, j1.id, JobStatusUpdate("running"))
     db_session.commit()
 
     assert get_queue_position(db_session, j1) is None

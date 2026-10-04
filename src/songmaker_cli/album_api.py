@@ -68,6 +68,7 @@ from songmaker_cli.covers import (
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
     UNSET,
+    JobStatusUpdate,
     RestoreWindowExpiredError,
     archive_album,
     cleanup_album,
@@ -448,9 +449,11 @@ async def api_create_cover_suggestions(
         update_job_status(
             session,
             job.id,
-            JobStatus.FAILED,
-            error="Job queue unavailable",
-            error_type="queue_unavailable",
+            JobStatusUpdate(
+                JobStatus.FAILED,
+                error="Job queue unavailable",
+                error_type="queue_unavailable",
+            ),
         )
         session.commit()
         raise HTTPException(503, "Job queue unavailable")

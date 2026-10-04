@@ -14,3 +14,8 @@ class _Unset:
 
 
 UNSET = _Unset()
+
+
+def unset_if_none[T](value: T | None) -> T | _Unset:
+    """Turn a value the caller may not know yet into ``UNSET``, so the stored one stays."""
+    return UNSET if value is None else value
