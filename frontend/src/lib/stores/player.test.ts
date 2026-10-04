@@ -2404,6 +2404,7 @@ describe('the queue names its next take', () => {
 				await startAndSkipTheSecondTake(start);
 				moveOnAsTheDeckDoes();
 
+				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(true);
 				await playPrevSong();
 
 				expect(audioPlayer.current?.generation.id).toBe('g1');
@@ -2489,6 +2490,7 @@ describe('the queue names its next take', () => {
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
 
+				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
 				await playPrevSong();
 
 				expect(audioPlayer.current?.generation.id).toBe('g1');
@@ -2956,6 +2958,9 @@ describe('shuffle rebuilds the playing queue', () => {
 			const gen = makeGen(genDefaults);
 			audioPlayer.current = makePlayback(gen, makeSong(queuedSongDefaults()));
 			audioPlayer.currentTime = 70;
+			vi.spyOn(audioPlayer, 'currentTimeNow', 'get').mockImplementation(
+				() => audioPlayer.currentTime + 0.125
+			);
 			audioPlayer.status = 'playing';
 			queueContext.set({ type: 'library' });
 			let finishFetch!: (queue: LibraryPoolQueue) => void;
@@ -2972,7 +2977,7 @@ describe('shuffle rebuilds the playing queue', () => {
 
 			expect(audioPlayer.load).toHaveBeenLastCalledWith(
 				expect.objectContaining({ generation: expect.objectContaining({ id: gen.id }) }),
-				expect.objectContaining({ startAt: 72 })
+				expect.objectContaining({ startAt: 72.125 })
 			);
 		}
 	);

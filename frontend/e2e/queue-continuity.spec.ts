@@ -13,10 +13,16 @@ import {
 	collectionPlayLabel,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
+	SHUFFLE_SCOPE_LIBRARY,
+	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
-import { NOW_PLAYING_UP_NEXT_PREFIX } from '../src/lib/constants/now-playing';
+import {
+	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
+	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
+	NOW_PLAYING_UP_NEXT_PREFIX
+} from '../src/lib/constants/now-playing';
 import { FlowGuard, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	BASE_URL,
@@ -53,27 +59,51 @@ class PlaybackTimeline {
 	readonly stops: string[] = [];
 	readonly sourcesPlayed: string[] = [];
 	readonly recoveryRequests: string[] = [];
+	readonly backwardSeeks: number[] = [];
+	position = 0;
 
 	static async watch(page: Page): Promise<PlaybackTimeline> {
 		const timeline = new PlaybackTimeline();
 		page.on('request', (sent) => timeline.recordRequest(sent.url()));
 		await page.exposeFunction(
 			MEDIA_EVENT_BINDING,
-			(element: number, event: string, source: string) =>
-				timeline.recordMediaEvent(element, event, source)
+			(element: number, event: string, source: string, position: number) => {
+				if (event === 'seek-back') timeline.backwardSeeks.push(position);
+				else if (event === 'timeupdate') timeline.position = position;
+				else timeline.recordMediaEvent(element, event, source);
+			}
 		);
 		await page.addInitScript(
 			({ binding, stoppingEvents }) => {
 				const elementIds = new WeakMap<HTMLMediaElement, number>();
 				let nextId = 0;
+				const position = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'currentTime');
+				if (!position?.set) throw new Error('HTMLMediaElement has no currentTime setter');
+				const setPosition = position.set;
+				Object.defineProperty(HTMLMediaElement.prototype, 'currentTime', {
+					...position,
+					set(this: HTMLMediaElement, to: number) {
+						const from = this.currentTime;
+						if (to < from)
+							Reflect.get(window, binding).call(
+								window,
+								elementIds.get(this),
+								'seek-back',
+								this.src,
+								from - to
+							);
+						setPosition.call(this, to);
+					}
+				});
 				const nativePlay = HTMLMediaElement.prototype.play;
 				HTMLMediaElement.prototype.play = function () {
 					if (!elementIds.has(this)) {
 						const id = nextId++;
 						elementIds.set(this, id);
 						const report = (event: string) =>
-							Reflect.get(window, binding).call(window, id, event, this.src);
+							Reflect.get(window, binding).call(window, id, event, this.src, this.currentTime);
 						report('play');
+						this.addEventListener('timeupdate', () => report('timeupdate'));
 						for (const event of stoppingEvents) this.addEventListener(event, () => report(event));
 					}
 					return nativePlay.call(this);
@@ -166,6 +196,57 @@ test('an album plays from one take into the next on one element that never stops
 	await expectTransportMovesOn(page, first, second);
 	const movedOnAt = performance.now();
 	expect(timeline.requestedAt(second)).toBeLessThan(movedOnAt);
+	expect(timeline.elementsPlayed).toBe(1);
+	expect(timeline.stops).toEqual([]);
+	guard.assertClean();
+});
+
+test('shuffle while a library take plays keeps the position reached during the pool fetch', async ({
+	page
+}, testInfo) => {
+	const guard = new FlowGuard(page);
+	const timeline = await PlaybackTimeline.watch(page);
+	await page.addInitScript(() => {
+		const nativePlay = HTMLMediaElement.prototype.play;
+		HTMLMediaElement.prototype.play = function () {
+			this.playbackRate = 0.25;
+			return nativePlay.call(this);
+		};
+	});
+	await page.goto('/');
+	const transport = page.getByRole('contentinfo');
+	await transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }).click();
+	await expect.poll(() => timeline.position).toBeGreaterThan(0);
+	if (shellOf(testInfo) === 'mobile') {
+		await transport
+			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
+			.click();
+	}
+	const shuffle = page.getByRole('button', {
+		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
+	});
+	await expect(shuffle).toHaveAccessibleName(
+		`${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${SHUFFLE_SCOPE_LIBRARY}`
+	);
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
+	let positionAtRelease = 0;
+	await page.route('**/api/library/pool-queue?**', async (route) => {
+		const positionAtFetch = timeline.position;
+		const response = await route.fetch();
+		await expect.poll(() => timeline.position).toBeGreaterThan(positionAtFetch + 0.4);
+		positionAtRelease = timeline.position;
+		await route.fulfill({ response });
+	});
+
+	await shuffle.click();
+
+	await expect.poll(() => positionAtRelease).toBeGreaterThan(0);
+	await expect.poll(() => timeline.position).toBeGreaterThan(positionAtRelease + 0.15);
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
+	await expect(
+		page.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+	).toBeVisible();
+	expect(Math.max(0, ...timeline.backwardSeeks)).toBeLessThan(0.02);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
 	guard.assertClean();
