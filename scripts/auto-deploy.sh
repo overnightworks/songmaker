@@ -6,8 +6,8 @@
 # fast-forwards + redeploys the local checkout when main has moved. Before it
 # pulls, it verifies through GitHub that every GitHub Actions check run for
 # the newest green commit in the fetched main history has completed
-# successfully; check runs from other apps are advisory. The script itself
-# does not re-run tests.
+# successfully; check runs from other apps and the "SonarCloud scan" job are
+# advisory. The script itself does not re-run tests.
 #
 # Safety rules below come from real incidents, not hypotheticals:
 #   - A redeploy on 2026-08-30 18:31 mid-generation killed every in-flight
@@ -148,6 +148,9 @@ PROMETHEUS_HTTP_TIMEOUT_SECONDS=30
 # report check runs too, but their results are advisory rather than rollout
 # decisions.
 REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
+# The one Actions job whose verdict is advisory: SonarCloud findings turn CI
+# red so they are seen, but they never hold back a rollout (#623, #1318).
+ADVISORY_ACTIONS_JOB_NAME="SonarCloud scan"
 # A non-whitespace separator preserves empty fields in Bash `read`; a tab
 # would collapse a missing app slug into the status field before validation.
 CHECK_RUN_FIELD_SEPARATOR=$'\x1f'
@@ -775,7 +778,7 @@ remote_check_status() {
     fi
     if check_runs="$(timeout --kill-after="$CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS" "$CHECK_RUN_LOOKUP_TIMEOUT_SECONDS" gh api --paginate \
         "repos/FlexOr2/songmaker/commits/$commit_sha/check-runs?per_page=100" \
-        --jq 'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.status)\u001f\(.conclusion // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
+        --jq 'def record_field: type == "string" and length > 0 and (test("[\u0000-\u001f]") | not); def optional_record_field: . == null or (type == "string" and (test("[\u0000-\u001f]") | not)); if (type == "object" and (.total_count | type == "number") and (.check_runs | type == "array")) then "envelope\u001f\(.total_count)", (.check_runs[] | if ((.app | type == "object") and (.app.slug | record_field) and (.name | record_field) and (.status | record_field) and (.conclusion | optional_record_field)) then "check\u001f\(.app.slug)\u001f\(.name)\u001f\(.status)\u001f\(.conclusion // "")" else error("GitHub returned malformed check-run record") end) else error("GitHub returned malformed check-runs response") end' 2>"$gh_stderr_file")"; then
         rm -f "$gh_stderr_file"
     else
         lookup_exit=$?
@@ -789,17 +792,17 @@ remote_check_status() {
         return 1
     fi
 
-    local record app_slug status conclusion
+    local record app_slug name status conclusion
     local expected_check_count=""
     local observed_check_count=0
     local observed_required_check_count=0
     local has_envelope=false
     local has_running_check=false
     local has_failed_check=false
-    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug status conclusion; do
+    while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion; do
         case "$record" in
             envelope)
-                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$status" || -n "$conclusion" ]]; then
+                if [[ ! "$app_slug" =~ ^[0-9]+$ || -n "$name" || -n "$status" || -n "$conclusion" ]]; then
                     printf 'GitHub returned a malformed check-runs envelope'
                     return 1
                 fi
@@ -812,12 +815,16 @@ remote_check_status() {
                 ;;
             check)
                 ((observed_check_count += 1))
-                if [[ -z "$app_slug" || -z "$status" ]]; then
+                if [[ -z "$app_slug" || -z "$name" || -z "$status" ]]; then
                     printf 'GitHub returned an incomplete check-run status'
                     return 1
                 fi
                 if [[ "$app_slug" != "$REQUIRED_CHECK_RUN_APP_SLUG" ]]; then
                     log_info "GitHub check run from app '$app_slug' is advisory, ignored"
+                    continue
+                fi
+                if [[ "$name" == "$ADVISORY_ACTIONS_JOB_NAME" ]]; then
+                    log_info "GitHub Actions job '$name' is advisory, ignored"
                     continue
                 fi
                 ((observed_required_check_count += 1))
