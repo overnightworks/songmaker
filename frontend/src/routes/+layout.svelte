@@ -32,6 +32,7 @@
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
+		historyComesToRest,
 		historyStandsStill,
 		installHistoryController,
 		mountRouteOfLandedAddress,
@@ -253,7 +254,7 @@
 
 	async function handleLogout() {
 		await logout(async () => {
-			await historyStandsStill();
+			await historyComesToRest();
 			await navigateAway(SIGN_IN_PATH);
 		});
 	}
