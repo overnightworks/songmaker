@@ -23,7 +23,8 @@ import {
 	PLAYING_MARK_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	COLLECTION_SHUFFLE_ACTION,
-	TRANSPORT_PAUSE_LABEL
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { shownTransportFace } from '$lib/test-utils/transport-face';
@@ -402,7 +403,11 @@ describe('AlbumDetailView header', () => {
 			label: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
 			face: 'pause'
 		},
-		{ status: 'error', label: 'Retry album', face: 'refresh-cw' }
+		{
+			status: 'error',
+			label: collectionActionLabel(TRANSPORT_RETRY_LABEL, 'album'),
+			face: 'refresh-cw'
+		}
 	] as const)(
 		'names and draws the circle as the bar does while a take of this album is $status (#1330)',
 		async ({ status, label, face }) => {
