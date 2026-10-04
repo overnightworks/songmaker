@@ -477,13 +477,12 @@ def test_a_turn_the_web_process_ran_before_a_restart_no_longer_runs_after_it(
     tmp_path, mock_arq_pool, chat_job_status,
 ):
     """A restart mid-turn leaves the message unanswered at once, not locked for minutes (#1014)."""
-    from conftest import login_and_csrf, make_test_app
-    from webauth.passwords import hash_password
+    from conftest import login_and_csrf, make_test_app, stored_hash
 
     from songmaker_cli.db.queries import create_user
 
     def _seed_a_turn_the_restart_interrupted(session) -> None:
-        musician = create_user(session, "musician", hash_password("musician-pass"), role="user")
+        musician = create_user(session, "musician", stored_hash("musician-pass"), role="user")
         session.add(Conversation(id="conv-1", user_id=musician.id))
         session.add(ChatMessage(conversation_id="conv-1", role="user", content="Ja bitte"))
         session.add(Job(type="chat", user_id=musician.id, status=chat_job_status))

@@ -9,11 +9,10 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from conftest import make_test_app
+from conftest import make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
-from webauth.passwords import hash_password
 from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
@@ -34,14 +33,14 @@ def client(tmp_path: Path) -> TestClient:
 def _seed_admin(client: TestClient) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        create_user(session, "admin", hash_password("admin12345"), role="admin")
+        create_user(session, "admin", stored_hash("admin12345"), role="admin")
         session.commit()
 
 
 def _seed_user(client: TestClient, username: str = "alice", active: bool = True) -> None:
     factory = client.app.state.ctx.db
     with factory() as session:
-        user = create_user(session, username, hash_password("t3stP@ssw0rd"), role="user")
+        user = create_user(session, username, stored_hash("t3stP@ssw0rd"), role="user")
         user.is_active = active
         session.flush()
         session.commit()

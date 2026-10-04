@@ -7,10 +7,9 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
+from conftest import login_and_csrf, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from PIL import Image
-from webauth.passwords import hash_password
 
 from songmaker_cli.cleanup import run_cleanup_expired
 from songmaker_cli.constants import (
@@ -103,8 +102,8 @@ def _png_header(width: int, height: int) -> bytes:
 
 
 def _seed_owners(session) -> None:
-    alice = create_user(session, "alice", hash_password(ALICE_PASSWORD), role="user")
-    bob = create_user(session, "bob", hash_password(BOB_PASSWORD), role="user")
+    alice = create_user(session, "alice", stored_hash(ALICE_PASSWORD), role="user")
+    bob = create_user(session, "bob", stored_hash(BOB_PASSWORD), role="user")
     session.add(Album(id="alice-album", title="Alice Album", artist="Alice", created_by=alice.id))
     session.add(Album(id="bob-album", title="Bob Album", artist="Bob", created_by=bob.id))
     session.add(
@@ -435,7 +434,7 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) ->
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     with factory() as session:
-        owner = create_user(session, "alice", hash_password(ALICE_PASSWORD))
+        owner = create_user(session, "alice", stored_hash(ALICE_PASSWORD))
         session.add(Album(id="expired-album", title="Expired", artist="A", created_by=owner.id))
         session.add(Album(id="live-album", title="Live", artist="A", created_by=owner.id))
         session.add(
@@ -495,8 +494,8 @@ def test_cleanup_expired_unlinks_orphan_and_album_song_covers(tmp_path: Path) ->
 
 def test_hard_delete_user_unlinks_song_covers_including_soft_deleted(tmp_path: Path) -> None:
     def seed(session) -> None:
-        create_user(session, "admin", hash_password("admin12345"), role="admin")
-        victim = create_user(session, "victim", hash_password("victimpass1"), role="user")
+        create_user(session, "admin", stored_hash("admin12345"), role="admin")
+        victim = create_user(session, "victim", stored_hash("victimpass1"), role="user")
         session.add(Album(id="live-album", title="Live", artist="V", created_by=victim.id))
         session.add(
             Song(
