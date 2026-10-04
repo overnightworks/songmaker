@@ -409,17 +409,23 @@ describe('NowPlaying', () => {
 	});
 
 	it.each([
-		{ transport: 'recovering', named: TRANSPORT_PAUSE_LABEL },
-		{ transport: 'waiting-for-network', named: TRANSPORT_PAUSE_LABEL },
-		{ transport: 'failed', named: TRANSPORT_RETRY_LABEL },
-		{ transport: 'paused', named: TRANSPORT_PLAY_LABEL }
+		{ transport: 'loading', named: TRANSPORT_PAUSE_LABEL, busy: true },
+		{ transport: 'recovering', named: TRANSPORT_PAUSE_LABEL, busy: true },
+		{ transport: 'waiting-for-network', named: TRANSPORT_PAUSE_LABEL, busy: false },
+		{ transport: 'failed', named: TRANSPORT_RETRY_LABEL, busy: false },
+		{ transport: 'paused', named: TRANSPORT_PLAY_LABEL, busy: false }
 	] as const)(
-		'names its play button $named while the take is $transport, as the bar does (#1234)',
-		async ({ transport, named }) => {
+		'names its play button $named, busy $busy, while the take is $transport, as the bar does (#1234, #1312)',
+		async ({ transport, named, busy }) => {
 			vi.spyOn(audioPlayer, 'transport', 'get').mockReturnValue(transport);
 			await renderSurface(info());
+			const play = target.querySelector('.transport .play-btn');
 
-			expect(target.querySelector('.transport .play-btn')?.getAttribute('aria-label')).toBe(named);
+			expect({
+				named: play?.getAttribute('aria-label'),
+				busy: play?.getAttribute('aria-busy'),
+				spinner: play?.querySelector('.spinner') !== null
+			}).toEqual({ named, busy: String(busy), spinner: busy });
 		}
 	);
 

@@ -21,9 +21,11 @@ import type {
 } from '$lib/api/types';
 import {
 	audioPlayer,
+	RECOVERY_DEADLINE_MS,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
-	type StreamFallbackState
+	type StreamFallbackState,
+	type TransportState
 } from '$lib/services/audioPlayer.svelte';
 import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
@@ -231,8 +233,11 @@ export const playbackSource = derived(
 );
 
 // 'awaiting-network': a start that could not read its takes offline waits
-// for the network, with nothing playing yet (#1288).
-type PlayStartNotice = 'idle' | 'building' | 'awaiting-network' | 'empty' | 'error';
+// for the network, with nothing playing yet (#1288). 'gave-up-on-network':
+// it waited as long as a stalled take does and now waits calmly, as a given-up
+// take does, until the network's return runs it again (#1312).
+type PlayStartNotice =
+	'idle' | 'building' | 'awaiting-network' | 'gave-up-on-network' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -397,10 +402,25 @@ function retryOnceBackOnline(
 }
 
 // The bar shows the start waiting until it runs again, a newer start
-// replaces it, or the listener stops it.
-function noticeStartAwaitingNetwork(signal: AbortSignal): void {
+// replaces it, or the listener stops it; the lock screen, the only surface
+// with the screen off, names the song it waits for (#1312).
+function noticeStartAwaitingNetwork(signal: AbortSignal, waitingFor: SongItem): void {
 	playStartNotice.set('awaiting-network');
-	signal.addEventListener('abort', () => playStartNotice.set('idle'), { once: true });
+	updateMediaSessionMetadata({
+		songTitle: waitingFor.title,
+		artist: waitingFor.artist,
+		albumTitle: waitingFor.album_title
+	});
+	const giveUp = setTimeout(() => playStartNotice.set('gave-up-on-network'), RECOVERY_DEADLINE_MS);
+	signal.addEventListener(
+		'abort',
+		() => {
+			clearTimeout(giveUp);
+			playStartNotice.set('idle');
+			if (!audioPlayer.current) updateMediaSessionMetadata(null);
+		},
+		{ once: true }
+	);
 }
 
 function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
@@ -744,8 +764,19 @@ export async function playIdleStart(): Promise<void> {
 
 // The bar and the lock screen show a start that waits for the network as the
 // transport's own wait, and their presses stop it (#1288).
-export function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
-	return !current && notice === 'awaiting-network';
+function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
+	return !current && (notice === 'awaiting-network' || notice === 'gave-up-on-network');
+}
+
+// A start that waits for the network shows the transport a take waiting for
+// it shows: recovering at first, then given up after the same deadline (#1312).
+export function transportOfTheStart(
+	current: PlaybackInfo | null,
+	notice: PlayStartNotice,
+	transport: TransportState
+): TransportState {
+	if (!startAwaitsNetwork(current, notice)) return transport;
+	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
 function stopStartAwaitingNetwork(): boolean {
@@ -1447,17 +1478,21 @@ export async function playPrevSong(): Promise<void> {
 // all archived is skipped rather than taken as proof the album is
 // unplayable. Returns null both when nothing is playable and when a newer
 // play start superseded this one — the caller separates the two with its
-// own playStartIsCurrent check. A rejected load (e.g. 429) is left
-// uncaught here and propagates to the caller.
+// own playStartIsCurrent check. A rejected load (e.g. 429) is handed to the
+// caller with the song whose takes it could not read.
 async function firstPlayableAlbumTake(
 	albumId: string,
 	seq: number,
 	start: CollectionStart
-): Promise<{ song: SongItem; gen: GenerationItem } | null> {
+): Promise<{ song: SongItem; gen: GenerationItem } | { unread: SongItem; error: unknown } | null> {
 	const inOrder = albumSongsInOrder(albumId);
 	for (const song of start === 'random' ? shuffled(inOrder) : inOrder) {
 		if (song.generation_count === 0) continue;
-		await ensureGenerationsLoaded(song.id);
+		try {
+			await ensureGenerationsLoaded(song.id);
+		} catch (error) {
+			return { unread: song, error };
+		}
 		if (!playStartIsCurrent(seq)) return null;
 		const fresh = get(songList).find((item) => item.id === song.id) ?? song;
 		const gen = bestGen(fresh);
@@ -1478,20 +1513,17 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
 	}
-	let startTake: { song: SongItem; gen: GenerationItem } | null;
-	try {
-		startTake = await firstPlayableAlbumTake(albumId, seq, start);
-	} catch (err) {
-		if (!playStartIsCurrent(seq)) return;
-		if (retryOnceBackOnline(err, signal, () => playAlbum(albumId, start))) {
-			noticeStartAwaitingNetwork(signal);
+	const startTake = await firstPlayableAlbumTake(albumId, seq, start);
+	if (!playStartIsCurrent(seq)) return;
+	if (startTake && 'unread' in startTake) {
+		if (retryOnceBackOnline(startTake.error, signal, () => playAlbum(albumId, start))) {
+			noticeStartAwaitingNetwork(signal, startTake.unread);
 			return;
 		}
 		playStartNotice.set('idle');
-		toastAlbumSongsFailure(err);
+		toastAlbumSongsFailure(startTake.error);
 		return;
 	}
-	if (!playStartIsCurrent(seq)) return;
 	if (!startTake) {
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
 		return;

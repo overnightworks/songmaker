@@ -1,0 +1,55 @@
+import { createRawSnippet, mount, tick, unmount } from 'svelte';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import TransportBarFrame from './TransportBarFrame.svelte';
+
+let component: ReturnType<typeof mount> | undefined;
+
+afterEach(async () => {
+	if (component) await unmount(component);
+	component = undefined;
+	document.body.replaceChildren();
+	vi.restoreAllMocks();
+});
+
+async function mountDesktopFrame(takeIsCurrent: boolean): Promise<HTMLElement> {
+	vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+	const target = document.createElement('div');
+	document.body.appendChild(target);
+	component = mount(TransportBarFrame, {
+		target,
+		props: {
+			transport: 'paused',
+			takeIsCurrent,
+			currentTime: 0,
+			duration: 0,
+			formatTime: () => '0:00',
+			canPrev: false,
+			canNext: false,
+			onPrev: () => {},
+			onNext: () => {},
+			onTogglePlay: () => {},
+			onSeek: () => {},
+			trackInfo: createRawSnippet(() => ({ render: () => '<span>Nachtstrom</span>' })),
+			nowPlayingOpen: false,
+			onOpenNowPlaying: () => {},
+			nowPlayingDisabled: true,
+			mobileTransport: false
+		}
+	});
+	await tick();
+	return target;
+}
+
+describe('TransportBarFrame time readouts (#1312)', () => {
+	it.each([
+		{ moment: 'a take is current', takeIsCurrent: true, readouts: ['0:00', '0:00'], seek: true },
+		{ moment: 'no take is current', takeIsCurrent: false, readouts: [], seek: false }
+	])('shows the position only while $moment', async ({ takeIsCurrent, readouts, seek }) => {
+		const target = await mountDesktopFrame(takeIsCurrent);
+
+		expect({
+			readouts: Array.from(target.querySelectorAll('.timeline .time'), (el) => el.textContent),
+			seek: target.querySelector('[aria-label="Seek playback"]') !== null
+		}).toEqual({ readouts, seek });
+	});
+});
