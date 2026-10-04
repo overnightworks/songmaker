@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Annotated, NoReturn, Optional
 
 from cyclopts import App, CycloptsError, CycloptsPanel, Parameter
+from cyclopts.core import _normalize_for_matching as _cyclopts_normalize_command_name
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -30,14 +31,41 @@ log = logging.getLogger(__name__)
 
 
 _PASSWORD_COMMANDS = frozenset({"login", "reset-password"})
+_PASSWORD_COMMANDS_BY_NORMALIZED_NAME = {
+    _cyclopts_normalize_command_name(name): name for name in _PASSWORD_COMMANDS
+}
+
+
+def _implicated_password_command(error: CycloptsError) -> str | None:
+    """Return the password command this usage error concerns, if any.
+
+    Cyclopts resolves command names case- and separator-insensitively (the
+    same normalization as ``_cyclopts_normalize_command_name`` above), so a
+    resolved ``command_chain`` entry is matched the same way rather than by
+    exact string — otherwise an accepted alias like "LOGIN" or
+    "reset_password" slips past. When no command resolved at all (a password
+    typed before the command leaves ``command_chain`` empty), the full argv
+    is the only place left to find the intended command, so every token is
+    checked instead.
+    """
+    if error.command_chain:
+        normalized = _cyclopts_normalize_command_name(error.command_chain[-1])
+        return _PASSWORD_COMMANDS_BY_NORMALIZED_NAME.get(normalized)
+
+    for token in error.root_input_tokens or ():
+        normalized = _cyclopts_normalize_command_name(token)
+        match = _PASSWORD_COMMANDS_BY_NORMALIZED_NAME.get(normalized)
+        if match is not None:
+            return match
+    return None
 
 
 def _format_usage_error(error: CycloptsError) -> str | CycloptsPanel:
     # Cyclopts error messages quote the offending token, and on a password
     # command that token is typically a password typed out of habit (also as
     # "--s3cret"); never print any of them back.
-    command = (error.command_chain or ("",))[-1]
-    if command in _PASSWORD_COMMANDS:
+    command = _implicated_password_command(error)
+    if command is not None:
         return (
             f"Error: usage is 'songmaker {command} USERNAME'; "
             "the password is only read at the prompt"

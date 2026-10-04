@@ -276,19 +276,52 @@ def test_login_sends_the_password_typed_at_the_prompt(sent_logins) -> None:
 
 
 @pytest.mark.parametrize("typed_password", [NEW_PASSWORD, f"--{NEW_PASSWORD}"])
-@pytest.mark.parametrize("command", ["login", "reset-password"])
+@pytest.mark.parametrize(
+    ("typed_command", "canonical_command"),
+    [
+        ("login", "login"),
+        ("LOGIN", "login"),
+        ("log-in", "login"),
+        ("reset-password", "reset-password"),
+        ("reset_password", "reset-password"),
+        ("ResetPassword", "reset-password"),
+    ],
+)
 def test_password_on_the_command_line_is_a_usage_error_that_never_echoes_it(
-    served_app, sent_logins, capsys, command: str, typed_password: str,
+    served_app,
+    sent_logins,
+    capsys,
+    typed_command: str,
+    canonical_command: str,
+    typed_password: str,
 ) -> None:
     with (
         patch("getpass.getpass", return_value=NEW_PASSWORD),
         pytest.raises(SystemExit) as exit_info,
     ):
-        app([command, RESET_USERNAME, typed_password], result_action="return_value")
+        app([typed_command, RESET_USERNAME, typed_password], result_action="return_value")
 
     printed = "".join(capsys.readouterr())
     assert exit_info.value.code == 1
-    assert f"Error: usage is 'songmaker {command} USERNAME'" in printed
+    assert f"Error: usage is 'songmaker {canonical_command} USERNAME'" in printed
+    assert NEW_PASSWORD not in printed
+    assert sent_logins == []
+    assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
+
+
+@pytest.mark.parametrize("typed_password", [NEW_PASSWORD, f"--{NEW_PASSWORD}"])
+def test_password_before_the_command_is_also_a_usage_error_that_never_echoes_it(
+    served_app, sent_logins, capsys, typed_password: str,
+) -> None:
+    with (
+        patch("getpass.getpass", return_value=NEW_PASSWORD),
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        app([typed_password, "login", RESET_USERNAME], result_action="return_value")
+
+    printed = "".join(capsys.readouterr())
+    assert exit_info.value.code == 1
+    assert "Error: usage is 'songmaker login USERNAME'" in printed
     assert NEW_PASSWORD not in printed
     assert sent_logins == []
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
