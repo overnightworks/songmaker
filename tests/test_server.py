@@ -1010,7 +1010,7 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
 def test_parse_allowed_hosts() -> None:
     with patch.dict("os.environ", {"ALLOWED_HOSTS": "example.com"}):
         exact, patterns = parse_allowed_hosts()
-        assert "example.com" in exact
+        assert exact == {"example.com"}
 
 
 # ── IpRateLimitMiddleware ──────────────────────────────────────────
