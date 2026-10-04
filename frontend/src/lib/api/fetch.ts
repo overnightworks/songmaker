@@ -103,11 +103,11 @@ function parseRetryAfterSeconds(resp: {
 	return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
-// webauth sets the `__Host-` prefixed cookie when the connection is secure
-// and falls back to the plain name otherwise (COOKIE_SECURE=false in e2e),
-// so the reader checks the stronger name first and falls back to the plain
-// one -- never both set with different values in practice, but `__Host-`
-// wins if they ever are.
+// webauth sets the `__Host-` prefixed cookie when the static COOKIE_SECURE
+// setting is true and falls back to the plain name otherwise
+// (COOKIE_SECURE=false in e2e), so the reader checks the stronger name first
+// and falls back to the plain one -- never both set with different values in
+// practice, but `__Host-` wins if they ever are.
 function getCsrfToken(): string {
 	const hostPrefixed = /(?:^|;\s*)__Host-csrf_token=([^;]*)/.exec(document.cookie);
 	if (hostPrefixed) return decodeURIComponent(hostPrefixed[1]);

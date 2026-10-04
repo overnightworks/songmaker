@@ -60,7 +60,6 @@ OPTIONAL_DISTRIBUTION_ROOTS = {
     "anthropic": frozenset({"anthropic"}),
     "audiobox-aesthetics": frozenset({"audiobox_aesthetics"}),
     "arq": frozenset({"arq"}),
-    "bcrypt": frozenset({"bcrypt"}),
     "fakeredis": frozenset({"fakeredis"}),
     "fastapi": frozenset({"fastapi"}),
     "faster-whisper": frozenset({"faster_whisper"}),

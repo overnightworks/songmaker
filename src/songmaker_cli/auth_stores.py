@@ -52,7 +52,6 @@ if TYPE_CHECKING:
 
     from songmaker_cli.db.models import UserSession
 
-AUDITED_SESSION_ID_CHARS: Final = 8
 USER_AGENT_CHANGE_DETAIL: Final = "ua_changed"
 
 _AUDIT_ACTIONS: Final = {
@@ -243,7 +242,7 @@ class DatabaseAuditSink:
             event.user_id,
             _AUDIT_ACTIONS[event.change],
             ResourceType.SESSION,
-            event.session_id[:AUDITED_SESSION_ID_CHARS],
+            event.session_ref,
             _identity_change_detail(event),
         )
 

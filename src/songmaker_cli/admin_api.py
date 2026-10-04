@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from webauth.config import web_auth_config
 from webauth.dependencies import AuthenticatedUser
 from webauth.ports import UnknownUserError, UsernameTakenError
+from webauth.session_ending import end_user_sessions
 from webauth.users import (
     LastAdminError,
     SelfDeactivationError,
@@ -103,16 +104,6 @@ SELF_DEACTIVATION_DETAIL: Final = "Cannot deactivate your own account"
 JOB_QUEUE_UNAVAILABLE_DETAIL: Final = "Job queue unavailable"
 
 router = APIRouter(prefix="/admin", tags=["admin"])
-
-
-def _clear_user_session_cache(request: Request, user_id: str) -> None:
-    session_cache = web_auth_config(request).session_cache
-    if not session_cache:
-        return
-    try:
-        session_cache.delete_user_sessions(user_id)
-    except Exception:
-        log.warning("Redis session cache clear failed after hard delete")
 
 
 @router.get("/users")
@@ -256,6 +247,7 @@ def hard_delete_user_endpoint(
                 f"username={user.username}, albums={album_count}, songs={len(song_ids)}",
             )
 
+            end_user_sessions(management.sessions, web_auth_config(request).session_cache, user_id)
             paths, album_ids, playlist_ids = hard_delete_user(db, user_id)
     except UnknownUserError as error:
         raise HTTPException(404, USER_NOT_FOUND_DETAIL) from error
@@ -263,7 +255,6 @@ def hard_delete_user_endpoint(
         raise HTTPException(400, LAST_ADMIN_DETAIL) from error
     db.commit()
 
-    _clear_user_session_cache(request, user.id)
     cleanup_generation_files(ctx.audio_dir, paths)
     for album_id in album_ids:
         remove_album_cover_files(ctx.audio_dir, album_id)

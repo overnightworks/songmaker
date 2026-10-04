@@ -21,6 +21,7 @@ from webauth.login import (
 )
 from webauth.ports import UsernameTakenError
 from webauth.proxies import client_user_agent, resolve_client_ip
+from webauth.session_ending import end_session, prune_sessions
 from webauth.users import (
     SetupAlreadyDoneError,
     SetupRacedError,
@@ -41,18 +42,17 @@ from songmaker_cli.api_models import (
 )
 from songmaker_cli.app_context import get_db_session
 from songmaker_cli.auth_dependencies import (
+    _session_record_store,
     get_current_user,
     get_verified_session_id,
     user_management,
 )
-from songmaker_cli.auth_stores import DatabaseLoginAttemptStore
+from songmaker_cli.auth_stores import DatabaseLoginAttemptStore, DatabaseSessionRecordStore
 from songmaker_cli.db.queries import (
     count_recent_failed_attempts,
     create_session,
-    delete_session,
     get_user,
     get_user_by_username,
-    prune_overflow_sessions,
     record_login_attempt,
     user_count,
 )
@@ -119,7 +119,7 @@ def setup(
     db.commit()
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
-    issue_session_cookies(response, request, user_session.id, config)
+    issue_session_cookies(response, user_session.id, config)
     log.info("Setup completed: admin user '%s' created", req.username)
     return UserResponse.from_orm(user)
 
@@ -138,6 +138,7 @@ def login(
     response: Response,
     db: Session = Depends(get_db_session),
     config: WebAuthConfig = Depends(web_auth_config),
+    sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
 ) -> UserResponse:
     ip = resolve_client_ip(request)
 
@@ -167,19 +168,15 @@ def login(
         db, user.id, expires,
         ip_address=ip, user_agent=ua,
     )
-    pruned_ids = prune_overflow_sessions(
-        db, user.id, get_settings().max_concurrent_sessions_per_user,
-    )
-
     session_cache = web_auth_config(request).session_cache
-    if session_cache is not None:
-        try:
-            for pruned_id in pruned_ids:
-                session_cache.delete(pruned_id, user.id)
-        except Exception:
-            log.warning("Redis session cache delete failed on login prune")
-            db.rollback()
-            raise HTTPException(503, "Service temporarily degraded — try again shortly")
+    try:
+        prune_sessions(
+            sessions, session_cache, user.id, get_settings().max_concurrent_sessions_per_user,
+        )
+    except Exception:
+        log.warning("Redis session cache delete failed on login prune")
+        db.rollback()
+        raise HTTPException(503, "Service temporarily degraded — try again shortly")
 
     _cache_session(request, user_session.id, user, ip, ua, expires, user_session.created_at)
     try:
@@ -192,7 +189,7 @@ def login(
                 log.warning("Redis session cache delete failed after login commit failure")
         raise
 
-    issue_session_cookies(response, request, user_session.id, config)
+    issue_session_cookies(response, user_session.id, config)
     return UserResponse.from_orm(user)
 
 
@@ -208,7 +205,10 @@ def _authenticate_login(
     raise HTTPException(401, INVALID_CREDENTIALS_DETAIL)
 
 
-@router.delete("/session")
+@router.delete(
+    "/session",
+    responses={503: {"description": "Session service is temporarily unavailable"}},
+)
 def logout(
     request: Request,
     response: Response,
@@ -216,16 +216,16 @@ def logout(
     current_user: AuthenticatedUser = Depends(get_current_user),
     session_id: str = Depends(get_verified_session_id),
     config: WebAuthConfig = Depends(web_auth_config),
+    sessions: DatabaseSessionRecordStore = Depends(_session_record_store),
 ) -> StatusResponse:
-    delete_session(db, session_id)
-    db.commit()
-
     session_cache = web_auth_config(request).session_cache
-    if session_cache:
-        try:
-            session_cache.delete(session_id, current_user.id)
-        except Exception:
-            log.warning("Redis session cache delete failed on logout")
+    try:
+        end_session(sessions, session_cache, session_id=session_id, user_id=current_user.id)
+    except Exception:
+        log.warning("Redis session cache delete failed on logout")
+        db.rollback()
+        raise HTTPException(503, "Service temporarily degraded — try again shortly")
+    db.commit()
 
     clear_session_cookies(response, config)
     return StatusResponse(status="ok")
@@ -289,5 +289,5 @@ def change_password(
     db.commit()
 
     _cache_session(request, new_session.id, user, ip, ua, expires, new_session.created_at)
-    issue_session_cookies(response, request, new_session.id, config)
+    issue_session_cookies(response, new_session.id, config)
     return StatusResponse(status="ok")
