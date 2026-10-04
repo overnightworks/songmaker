@@ -148,7 +148,7 @@ const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const END_OF_DECK_SLACK_SECONDS = 0.5;
 // How often a stalled take is looked at again and, unless the owner reports
 // the network gone, reloaded.
-export const STALL_RECOVERY_MS = 5000;
+const STALL_RECOVERY_MS = 5000;
 // How long a stalled take is tried before the player gives up and asks for
 // Retry: long enough to ride out a dropout with the screen off (#1187 P3). A
 // start that waits for the network gives up after the same time (#1312).

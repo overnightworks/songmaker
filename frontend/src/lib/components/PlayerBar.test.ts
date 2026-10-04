@@ -20,11 +20,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import {
-	audioPlayer,
-	STALL_RECOVERY_MS,
-	type PlaybackInfo
-} from '$lib/services/audioPlayer.svelte';
+import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
@@ -168,7 +164,7 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 }
 
 const RESTORED_POSITION = 13;
-const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
+const PAST_THE_STALL_CHECK_MS = 5001;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;

@@ -4,7 +4,6 @@ import type { QueueStreamManifest } from '$lib/api/types';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
 import {
 	audioPlayer,
-	STALL_RECOVERY_MS,
 	transportButtonLabel,
 	transportIsBusy,
 	type AudioPlayerCallbacks,
@@ -2266,7 +2265,7 @@ describe('toggle / play / pause', () => {
 });
 
 describe('a loading take whose bytes never come, past the stall check (#1312)', () => {
-	const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
+	const PAST_THE_STALL_CHECK_MS = 5 * SECOND + 1;
 
 	beforeEach(() => {
 		vi.useFakeTimers();
