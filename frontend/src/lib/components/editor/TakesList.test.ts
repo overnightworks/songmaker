@@ -393,6 +393,18 @@ describe('TakesList', () => {
 		);
 	});
 
+	it('names no version to differ from once the last version of the song is deleted', async () => {
+		const { target } = await render({
+			song: song({ ...versionedSongDefaults(), version_count: 0, generations: [] }),
+			dirty: true,
+			latestVersionNumber: 0,
+			draftVersionNumber: 1
+		});
+		expect(target.querySelector('.draft-banner')?.textContent?.trim()).toBe(
+			'Draft — unsaved changes. Generate creates v1.'
+		);
+	});
+
 	it.each([true, false])(
 		'keeps failures off Takes when existing takes are %s',
 		async (hasTakes) => {

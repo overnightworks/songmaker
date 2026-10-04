@@ -207,8 +207,13 @@ export const TAKES_EMPTY = 'No takes yet · Generate on Write';
 export const TAKES_LOADING = 'Loading takes…';
 export const TAKES_ERROR = 'Failed to load takes';
 export const TAKES_RETRY_LABEL = 'Try again';
-export function takesDraftBanner(latestVersionNumber: number, nextVersionNumber: number): string {
-	return `Draft — differs from v${latestVersionNumber}. Generate creates v${nextVersionNumber}.`;
+export function takesDraftBanner(
+	latestVersionNumber: number | null,
+	nextVersionNumber: number
+): string {
+	const differs =
+		latestVersionNumber === null ? 'unsaved changes' : `differs from v${latestVersionNumber}`;
+	return `Draft — ${differs}. Generate creates v${nextVersionNumber}.`;
 }
 export const EDITOR_QUEUED_LABEL = 'Queued';
 export const WORKER_TRAINING_REMAINING_TEMPLATE = 'Training ({seconds}s remaining)';

@@ -329,7 +329,7 @@
 
 		{#if dirty}
 			<div class="draft-banner">
-				{takesDraftBanner(latestVersionNumber, draftVersionNumber)}
+				{takesDraftBanner(song.version_count > 0 ? latestVersionNumber : null, draftVersionNumber)}
 			</div>
 		{/if}
 
