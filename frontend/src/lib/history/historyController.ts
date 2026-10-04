@@ -612,8 +612,9 @@ export function historyStandsStill(): Promise<void> {
 // Resolves once history has come to rest: a write released when history
 // stands still may navigate and move it again, so the wait starts over until
 // nothing is left to land.
-export async function historyComesToRest(): Promise<void> {
-	while (historyMoves()) await historyStandsStill();
+export function historyComesToRest(): Promise<void> {
+	if (!historyMoves()) return Promise.resolve();
+	return historyStandsStill().then(historyComesToRest);
 }
 
 // Once history stands still the layers held meanwhile get their entries

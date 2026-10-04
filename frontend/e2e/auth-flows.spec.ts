@@ -669,7 +669,7 @@ test(
 	'a session lost behind the drawer on the phone returns to the album tapped in it',
 	{ tag: ALBUM_OPENING_REFUSED_TAG },
 	async ({ page, isMobile }, testInfo) => {
-		test.skip(!isMobile, 'The drawer is the phone shell.');
+		test.skip(!isMobile, 'The drawer is the phone shell.'); // NOSONAR S1607: the drawer exists only in the phone shell.
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		const albumAddress = albumAddressOf(await seedOwnSong());
 		await signIn(page);
