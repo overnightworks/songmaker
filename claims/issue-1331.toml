@@ -1,0 +1,8 @@
+claim_id = "c3cc9cf3c13544e8966ba40aa946826d"
+agent = "claude-head"
+role = "builder"
+base = "a48cc8cdd4961bc381cb86908d3e88ec1086b1cf"
+branch = "claude-head/issue-1331-controller-everywhere"
+scope = ["docs/architecture.md", "frontend/e2e/README.md", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/shell/RailDrawer.test.ts", "frontend/src/lib/history/historyController.test.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/stores/layers.test.ts", "frontend/src/lib/stores/layers.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/test-utils/library-history.ts", "frontend/src/routes/+layout.svelte", "frontend/src/routes/layout.test.ts"]
+opened_commit = "f9801699b7e291f1883af02b7e49950a7c9ee535"
+whole_reason = "history controller installed for the whole app with an attachable library landing handler"
