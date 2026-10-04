@@ -343,7 +343,9 @@ describe('PlayerBar stream boundaries', () => {
 			'still reads Play $moment when the data takes longer than the stall check, and stays paused when it arrives',
 			async ({ presses }) => {
 				vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
-				onTestFinished(() => vi.useRealTimers());
+				onTestFinished(() => {
+					vi.useRealTimers();
+				});
 				const transport = await mountRestoredTake();
 				for (let press = 0; press < presses; press++) await clickAndSettle(transport);
 
