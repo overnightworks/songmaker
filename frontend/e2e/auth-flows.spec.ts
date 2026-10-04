@@ -534,7 +534,7 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 	page,
 	isMobile
 }, testInfo) => {
-	test.skip(!isMobile, 'The account menu belongs to the phone shell.');
+	test.skip(!isMobile, 'The account menu belongs to the phone shell.'); // NOSONAR S1607: the account menu exists only in the phone shell.
 	await signIn(page);
 	await page.goto(VOICES_PAGE_PATH);
 	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
