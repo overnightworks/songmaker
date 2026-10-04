@@ -580,30 +580,27 @@ def _trusting_the_proxy_network(server_app: TestClient):
 def _get_through_peer(
     server_app: TestClient, peer_ip: str, headers: dict[str, str] | list[tuple[str, str]],
 ) -> httpx.Response:
-    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
-    peer_client = TestClient(server_app.app, base_url="http://testserver", client=(peer_ip, 55000))
+    peer_client = web_client(server_app.app, client=(peer_ip, 55000))
     return peer_client.get("/", headers=headers)
 
 
-def test_hsts_header_on_https_behind_trusted_proxy(server_app: TestClient) -> None:
-    with _trusting_the_proxy_network(server_app):
-        resp = _get_through_peer(server_app, _TRUSTED_PEER, {"x-forwarded-proto": "https"})
+def _with_cookie_secure(server_app: TestClient, *, secure: bool):
+    installed = installed_web_auth_config(server_app.app)
+    install_web_auth_config(
+        server_app.app, dataclasses.replace(installed, cookie_secure=secure),
+    )
+    return installed
+
+
+def test_hsts_header_present_when_cookie_secure_is_true(server_app: TestClient) -> None:
+    resp = server_app.get("/")
     assert "Strict-Transport-Security" in resp.headers
     assert "max-age=31536000" in resp.headers["Strict-Transport-Security"]
 
 
-def test_hsts_header_not_set_without_trusted_proxy(server_app: TestClient) -> None:
-    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
-    plain_http = TestClient(server_app.app, base_url="http://testserver")
-    resp = plain_http.get("/", headers={"x-forwarded-proto": "https"})
-    assert "Strict-Transport-Security" not in resp.headers
-
-
-def test_hsts_header_not_set_for_peer_outside_the_trusted_network(
-    server_app: TestClient,
-) -> None:
-    with _trusting_the_proxy_network(server_app):
-        resp = _get_through_peer(server_app, _UNTRUSTED_PEER, {"x-forwarded-proto": "https"})
+def test_hsts_header_absent_when_cookie_secure_is_false(server_app: TestClient) -> None:
+    _with_cookie_secure(server_app, secure=False)
+    resp = server_app.get("/", headers={"x-forwarded-proto": "https"})
     assert "Strict-Transport-Security" not in resp.headers
 
 
@@ -638,18 +635,6 @@ def test_access_log_names_the_peer_when_the_chain_is_malformed(
     messages = _access_log_messages(caplog)
     assert messages
     assert all(f"ACCESS {_TRUSTED_PEER} " in message for message in messages)
-
-
-def test_hsts_follows_the_rightmost_forwarded_proto(server_app: TestClient) -> None:
-    """A client that prepends its own X-Forwarded-Proto: https cannot make the
-    server claim HTTPS — only the value the closest proxy appended counts."""
-    with _trusting_the_proxy_network(server_app):
-        resp = _get_through_peer(
-            server_app,
-            _TRUSTED_PEER,
-            [("x-forwarded-proto", "https"), ("x-forwarded-proto", "http")],
-        )
-    assert "Strict-Transport-Security" not in resp.headers
 
 
 def test_run_server_infers_project_root(tmp_path: Path) -> None:

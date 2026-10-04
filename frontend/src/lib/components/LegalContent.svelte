@@ -74,7 +74,7 @@
 			<p>Wir verarbeiten folgende personenbezogene Daten:</p>
 			<ul>
 				<li>
-					<strong>Benutzerkonto:</strong> Benutzername, Passwort (verschlüsselt gespeichert mit bcrypt).
+					<strong>Benutzerkonto:</strong> Benutzername, Passwort (verschlüsselt gespeichert mit Argon2id).
 					Rechtsgrundlage: Art. 6 Abs. 1 lit. b DSGVO (Vertragserfüllung).
 				</li>
 				<li>

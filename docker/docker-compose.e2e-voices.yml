@@ -11,6 +11,12 @@ services:
   alertmanager:
     profiles: ["gpu"]
 
+  songmaker-web:
+    # Plain http, same as docker-compose.ci.yml this file always layers on
+    # top of; named explicitly so this override stays correct standalone.
+    environment:
+      COOKIE_SECURE: "false"
+
   songmaker-music-worker:
     profiles: !reset []
     build:

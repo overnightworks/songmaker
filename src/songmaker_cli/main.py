@@ -154,11 +154,13 @@ def reset_password(
 ) -> None:
     """Reset a user's password (asked twice) and end all its sessions (needs local DB access)."""
     from redis.exceptions import RedisError
+    from webauth.session_ending import end_user_sessions
 
     from songmaker_cli.api_models.auth import chosen_rule_refusal
     from songmaker_cli.app_context import build_password_hasher, build_session_cache
+    from songmaker_cli.auth_stores import DatabaseSessionRecordStore
     from songmaker_cli.db.engine import init_db, resolve_database_url
-    from songmaker_cli.db.queries import delete_user_sessions, get_user_by_username, update_user
+    from songmaker_cli.db.queries import get_user_by_username, update_user
     from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
@@ -175,9 +177,11 @@ def reset_password(
         if not user:
             _exit_with_error(f"user '{username}' not found")
         update_user(session, user.id, password_hash=build_password_hasher().hash(password))
-        ended = delete_user_sessions(session, user.id)
+        sessions = DatabaseSessionRecordStore(
+            session, session_max_age_seconds=get_settings().session_max_age_seconds,
+        )
         try:
-            build_session_cache(redis).delete_user_sessions(user.id)
+            ended = end_user_sessions(sessions, build_session_cache(redis), user.id)
         except RedisError:
             session.rollback()
             _exit_with_error("the session cache is unreachable, so nothing was changed")

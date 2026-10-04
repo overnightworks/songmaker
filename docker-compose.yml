@@ -94,6 +94,7 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       SONGMAKER_INTERNAL_TOKEN: "${SONGMAKER_INTERNAL_TOKEN:-}"
       COVER_EXECUTOR: "${COVER_EXECUTOR:-web}"
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
       LOG_FORMAT: json
       HOST: "0.0.0.0"
     # Published to the loopback interface only: Docker's NAT chain bypasses

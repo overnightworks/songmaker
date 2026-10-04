@@ -289,14 +289,14 @@ def test_a_moved_session_is_audited_with_where_it_moved(users, audit, session) -
     audit.session_identity_changed(SessionIdentityChanged(
         change=SessionIdentityChange.IP_ADDRESS,
         user_id=user.id,
-        session_id="0123456789abcdef",
+        session_ref="0123456789abcdef",
         previous="1.2.3.4",
         current="9.9.9.9",
     ))
 
     entry = session.query(AuditLog).one()
     assert entry.action == AuditAction.SESSION_IP_CHANGE
-    assert entry.resource_id == "01234567"
+    assert entry.resource_id == "0123456789abcdef"
     assert entry.detail == "from=1.2.3.4 to=9.9.9.9"
 
 
@@ -310,7 +310,7 @@ def test_a_changed_user_agent_is_audited_without_repeating_the_string(
     audit.session_identity_changed(SessionIdentityChanged(
         change=SessionIdentityChange.USER_AGENT,
         user_id=user.id,
-        session_id="0123456789abcdef",
+        session_ref="0123456789abcdef",
         previous="Old/1.0",
         current="New/2.0",
     ))
@@ -442,7 +442,7 @@ def seeded(users, sessions, attempts, audit, session) -> _SeededStores:
             lambda s: s.audit.session_identity_changed(SessionIdentityChanged(
                 change=SessionIdentityChange.IP_ADDRESS,
                 user_id=s.user_id,
-                session_id=s.session_ids[0],
+                session_ref=s.session_ids[0],
                 previous="1.2.3.4",
                 current="9.9.9.9",
             )),

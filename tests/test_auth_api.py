@@ -12,7 +12,12 @@ import pytest
 from conftest import make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
-from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, DEFAULT_SESSION_COOKIE_NAME
+from webauth.cookies import (
+    DEFAULT_CSRF_COOKIE_NAME,
+    DEFAULT_SESSION_COOKIE_NAME,
+    PLAIN_CSRF_COOKIE_NAME,
+    PLAIN_SESSION_COOKIE_NAME,
+)
 from webauth.ports import UsernameTakenError
 from webauth.proxies import TrustedProxies
 
@@ -126,6 +131,26 @@ def test_login_disabled_user(client: TestClient) -> None:
     assert resp.json()["detail"] == "Invalid username or password"
 
 
+def test_login_with_a_stored_pre_argon2_hash_fails_loudly(client: TestClient) -> None:
+    """A hash from before the Argon2id migration is not a wrong password —
+    UnknownHashFormatError must surface as a loud 500, never a quiet 401."""
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        create_user(
+            session, "admin",
+            "$2b$12$C6UzMDM.H6dfI/f/IKcEeO7hwGfCfP01ebE5t1q9b9fjOxnqpBxWC",
+            role="admin",
+        )
+        session.commit()
+
+    with closing(web_client(client.app, raise_server_exceptions=False)) as failing_client:
+        resp = failing_client.post(
+            "/api/auth/login", json={"username": "admin", "password": "admin12345"},
+        )
+
+    assert resp.status_code == 500
+
+
 def test_login_brute_force_lockout(client: TestClient) -> None:
     _seed_admin(client)
     for _ in range(5):
@@ -185,8 +210,7 @@ def _login_from_peer(
     ``headers`` may be a list of pairs to send the same header field twice —
     the shape a forged chain arrives in.
     """
-    # Plain http until S5 (#1320): on webauth 0.4 Secure cookies and HSTS still follow the scheme.
-    peer_client = TestClient(client.app, base_url="http://testserver", client=(peer_ip, 55000))
+    peer_client = web_client(client.app, client=(peer_ip, 55000))
     return peer_client.post(
         "/api/auth/login",
         json={"username": "admin", "password": "admin12345"},
@@ -249,45 +273,36 @@ def test_login_of_a_malformed_chain_is_recorded_against_the_peer(
     assert _recorded_login_ip(client) == _TRUSTED_PEER
 
 
-def test_session_cookies_are_secure_behind_trusted_https_proxy(client: TestClient) -> None:
-    _seed_admin(client)
-    _trust_docker_network(client)
+def _with_cookie_secure(client: TestClient, *, secure: bool) -> None:
+    install_web_auth_config(
+        client.app,
+        dataclasses.replace(installed_web_auth_config(client.app), cookie_secure=secure),
+    )
 
-    resp = _login_from_peer(client, _TRUSTED_PEER, {"x-forwarded-proto": "https"})
+
+def test_login_cookies_are_host_only_and_secure_when_cookie_secure_is_true(
+    client: TestClient,
+) -> None:
+    _seed_admin(client)
+
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
 
     assert resp.status_code == 200
     assert "Secure" in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
     assert "Secure" in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
 
 
-def test_session_cookies_are_plain_when_the_peer_is_not_a_trusted_proxy(
+def test_login_cookies_are_plain_and_not_secure_when_cookie_secure_is_false(
     client: TestClient,
 ) -> None:
     _seed_admin(client)
-    _trust_docker_network(client)
+    _with_cookie_secure(client, secure=False)
 
-    resp = _login_from_peer(client, _UNTRUSTED_PEER, {"x-forwarded-proto": "https"})
-
-    assert resp.status_code == 200
-    assert "Secure" not in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
-    assert "Secure" not in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
-
-
-def test_a_prepended_forwarded_proto_cannot_outvote_the_proxy(client: TestClient) -> None:
-    """The rightmost value is the one the closest proxy appended; a client that
-    sends its own X-Forwarded-Proto first must not decide the cookie flags."""
-    _seed_admin(client)
-    _trust_docker_network(client)
-
-    resp = _login_from_peer(
-        client,
-        _TRUSTED_PEER,
-        [("x-forwarded-proto", "https"), ("x-forwarded-proto", "http")],
-    )
+    resp = client.post("/api/auth/login", json={"username": "admin", "password": "admin12345"})
 
     assert resp.status_code == 200
-    assert "Secure" not in _cookie_attributes(resp, DEFAULT_SESSION_COOKIE_NAME)
-    assert "Secure" not in _cookie_attributes(resp, DEFAULT_CSRF_COOKIE_NAME)
+    assert "Secure" not in _cookie_attributes(resp, PLAIN_SESSION_COOKIE_NAME)
+    assert "Secure" not in _cookie_attributes(resp, PLAIN_CSRF_COOKIE_NAME)
 
 
 # -- Logout -------------------------------------------------------------------
@@ -696,6 +711,31 @@ def test_logout_removes_the_session_from_the_database_and_from_redis(
     with factory() as session:
         assert session.query(UserSession).filter_by(user_id=user_id).all() == []
     assert session_cache.get(session_id) is None
+
+
+def test_logout_redis_failure_rolls_back(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _seed_admin(client)
+    _login(client, "admin", "admin12345")
+
+    session_cache = installed_web_auth_config(client.app).session_cache
+    user_id = _get_user_id(client, "admin")
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        session_id = session.query(UserSession).filter_by(user_id=user_id).one().id
+
+    monkeypatch.setattr(
+        session_cache, "delete", MagicMock(side_effect=RuntimeError("redis down")),
+    )
+    resp = client.delete("/api/auth/session")
+
+    assert resp.status_code == 503
+    assert "degraded" in resp.json()["detail"]
+    with factory() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).one().id == session_id
+    assert client.get("/api/auth/me").status_code == 200
+    assert session_cache.get(session_id) is not None
 
 
 def test_password_change_clears_old_populates_new(client: TestClient) -> None:

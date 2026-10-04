@@ -21,7 +21,6 @@ from conftest import (
 )
 from fastapi.testclient import TestClient
 from sqlalchemy import event
-from webauth.cookies import sign_session_id
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
@@ -1607,9 +1606,7 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> Non
 
 
 def test_share_album_ownership_enforced(tmp_path: Path) -> None:
-    from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
-
-    from songmaker_cli.db.queries import create_album, create_session, create_user
+    from songmaker_cli.db.queries import create_album, create_user
 
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir(parents=True)
@@ -1624,13 +1621,10 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         owner = create_user(session, "owner", stored_hash("pass1234"))
-        other = create_user(session, "other_user", stored_hash("pass1234"))
+        create_user(session, "other_user", stored_hash("pass1234"))
         session.flush()
         create_album(session, "owners_album", "Owners Album", created_by=owner.id)
-        expires = datetime.now(timezone.utc) + timedelta(days=30)
-        other_session = create_session(session, other.id, expires)
         session.commit()
-        other_sid = other_session.id
 
     ctx = AppContext(
         db=factory,
@@ -1642,11 +1636,7 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     from songmaker_cli.server import create_app
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
     client = web_client(app, cookies={})
-    client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(other_sid, TEST_SECRET))
-
-    from conftest import apply_csrf_header
-    resp = client.post("/api/auth/login", json={"username": "other_user", "password": "pass1234"})
-    apply_csrf_header(client)
+    login_and_csrf(client, "other_user", "pass1234")
 
     resp = client.post("/api/albums/owners_album/share")
     assert resp.status_code == 404
