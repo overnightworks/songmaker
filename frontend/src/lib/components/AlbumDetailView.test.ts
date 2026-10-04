@@ -25,6 +25,7 @@ import {
 	collectionShuffleLabel
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
 import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
 import { findElementByRoleAndName, openCollectionMenu } from './shell/rail-test-fixtures';
@@ -315,20 +316,20 @@ describe('AlbumDetailView header', () => {
 		).not.toBeNull();
 	});
 
+	function playCircle(target: HTMLElement): HTMLButtonElement {
+		return requireElement<HTMLButtonElement>(target, '.collection-header .play-circle');
+	}
+
+	function circleFacts(circle: HTMLButtonElement) {
+		return {
+			label: circle.getAttribute('aria-label'),
+			busy: circle.getAttribute('aria-busy'),
+			face: shownTransportFace(circle)
+		};
+	}
+
 	describe('while a start of this album waits (#1330)', () => {
-		const readsBusyPause = { label: collectionPauseLabel('album'), busy: 'true', spinner: true };
-
-		function playCircle(target: HTMLElement): HTMLButtonElement {
-			return requireElement<HTMLButtonElement>(target, '.collection-header .play-circle');
-		}
-
-		function circleFacts(circle: HTMLButtonElement) {
-			return {
-				label: circle.getAttribute('aria-label'),
-				busy: circle.getAttribute('aria-busy'),
-				spinner: circle.querySelector('.spinner') !== null
-			};
-		}
+		const readsBusyPause = { label: collectionPauseLabel('album'), busy: 'true', face: 'spinner' };
 
 		it('a header start waiting for the network reads Pause with its spinner, and a tap withdraws it', async () => {
 			pendingStart.set({
@@ -349,7 +350,7 @@ describe('AlbumDetailView header', () => {
 				startedAgain: vi.mocked(playAlbum).mock.calls.length
 			}).toEqual({
 				whileWaiting: readsBusyPause,
-				afterTheTap: { label: collectionPlayLabel('album'), busy: 'false', spinner: false },
+				afterTheTap: { label: collectionPlayLabel('album'), busy: 'false', face: 'play' },
 				waiting: null,
 				startedAgain: 0
 			});
@@ -376,6 +377,23 @@ describe('AlbumDetailView header', () => {
 				status: audioPlayer.status,
 				startedAgain: vi.mocked(playAlbum).mock.calls.length
 			}).toEqual({ whileWaiting: readsBusyPause, status: 'paused', startedAgain: 0 });
+		});
+	});
+
+	it('shows the retry face the bar shows on a failed take of this album (#1330)', async () => {
+		queueContext.set({ type: 'album', albumId: 'a-local' });
+		audioPlayer.current = {
+			songId: 's-local',
+			generation: generation({ song_id: 's-local' })
+		} as unknown as typeof audioPlayer.current;
+		audioPlayer.status = 'error';
+
+		const target = await renderDetail();
+
+		expect(circleFacts(playCircle(target))).toEqual({
+			label: collectionPlayLabel('album'),
+			busy: 'false',
+			face: 'refresh-cw'
 		});
 	});
 

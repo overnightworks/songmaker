@@ -87,7 +87,7 @@ import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesListHarness from './tests/TakesListHarness.svelte';
-import Icon from '../Icon.svelte';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 
 function measuredTakeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { audio_duration: 195 }, audio_duration_sec: 195 };
@@ -962,26 +962,11 @@ describe('TakesList', () => {
 		);
 	});
 
-	// The face a transport button shows, read as the listener sees it.
-	function shownFace(button: Element | null): string | null {
-		if (button?.querySelector('.spinner')) return 'spinner';
-		const shown = button?.querySelector('svg')?.innerHTML;
-		return ['play', 'pause', 'refresh-cw'].find((face) => iconMarkup(face) === shown) ?? null;
-	}
-
-	function iconMarkup(name: string): string {
-		const host = document.createElement('div');
-		const icon = mount(Icon, { target: host, props: { name } });
-		const markup = host.querySelector('svg')?.innerHTML ?? '';
-		unmount(icon);
-		return markup;
-	}
-
 	it.each([
 		{ status: 'playing', label: 'Pause', busy: 'false', face: 'pause' },
 		{ status: 'paused', label: 'Play', busy: 'false', face: 'play' },
 		{ status: 'buffering', label: 'Pause', busy: 'true', face: 'spinner' },
-		{ status: 'error', label: 'Play', busy: 'false', face: 'refresh-cw' }
+		{ status: 'error', label: 'Retry', busy: 'false', face: 'refresh-cw' }
 	] as const)(
 		'names the transport action for a $status take and shows the face the bar shows (#1330)',
 		async ({ status, label, busy, face }) => {
@@ -997,10 +982,12 @@ describe('TakesList', () => {
 			audioPlayer.status = status;
 			const { target } = await render({ song: currentSong });
 			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
-			expect({ busy: button?.getAttribute('aria-busy'), face: shownFace(button) }).toEqual({
-				busy,
-				face
-			});
+			expect({ busy: button?.getAttribute('aria-busy'), face: shownTransportFace(button) }).toEqual(
+				{
+					busy,
+					face
+				}
+			);
 			button?.click();
 			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
 		}

@@ -19,8 +19,6 @@
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
 		TAKES_RETRY_LABEL,
-		TRANSPORT_PLAY_LABEL,
-		TRANSPORT_PAUSE_LABEL,
 		takesDraftBanner
 	} from '$lib/constants';
 	import {
@@ -41,8 +39,8 @@
 	import {
 		audioPlayer,
 		transportButtonFace,
-		transportIsBusy,
-		transportOffersPause
+		transportButtonLabel,
+		transportIsBusy
 	} from '$lib/services/audioPlayer.svelte';
 	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
@@ -365,7 +363,6 @@
 				</div>
 				{#each group.generations as gen (gen.id)}
 					{@const transport = isGenPlaying(gen) ? audioPlayer.transport : 'idle'}
-					{@const playing = transportOffersPause(transport)}
 					{@const duration = formatDuration(gen)}
 					{@const provenance = takeProvenance(gen)}
 					{@const headline = headlineScore(gen)}
@@ -394,7 +391,7 @@
 										onclick={(event) => handlePlayClick(gen, event)}
 										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
 										aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
-										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${takeName}`}
+										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : transportButtonLabel(transport)} ${takeName}`}
 									>
 										{#if $selectionMode}
 											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
