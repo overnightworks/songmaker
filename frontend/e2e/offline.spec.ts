@@ -446,6 +446,26 @@ test.describe('pressing the album header Play while the network is gone', () => 
 	// The takes must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
 
+	function headerStartControls(page: Page) {
+		const transport = page.getByRole('contentinfo');
+		return {
+			transport,
+			barPause: transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }),
+			play: workspace(page).getByRole('button', {
+				name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+				exact: true
+			}),
+			headerPause: workspace(page).getByRole('button', {
+				name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+				exact: true
+			}),
+			songTakesRefused: () =>
+				page.waitForEvent('requestfailed', (request) =>
+					SONG_TAKES_PATH.test(new URL(request.url()).pathname)
+				)
+		};
+	}
+
 	test('waits in the bar, the header and the lock screen with no toast, pauses and resumes from the lock screen, and plays the album by itself once the network is back (#1288, #1330)', async ({
 		page,
 		context
@@ -453,20 +473,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		const library = readSeededLibrary();
 		const [firstTrack] = library.albumTracks;
-		const transport = page.getByRole('contentinfo');
-		const barPause = transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-		const play = workspace(page).getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-			exact: true
-		});
-		const headerPause = workspace(page).getByRole('button', {
-			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
-			exact: true
-		});
-		const songTakesRefused = () =>
-			page.waitForEvent('requestfailed', (request) =>
-				SONG_TAKES_PATH.test(new URL(request.url()).pathname)
-			);
+		const { transport, barPause, play, headerPause, songTakesRefused } = headerStartControls(page);
 		const waitingOnTheLockScreen = { title: firstTrack.songTitle, state: 'playing' };
 		await watchTheLockScreen(page);
 
@@ -512,6 +519,62 @@ test.describe('pressing the album header Play while the network is gone', () => 
 						moment.state !== waitingOnTheLockScreen.state
 				)
 		).toEqual([]);
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		guard.assertClean();
+	});
+
+	// The most common daily state: a take of another album is loaded and
+	// paused, here restored by the reload that opens this album.
+	test('with a paused take of another album loaded, waits in its place in the header, the bar and the lock screen, and plays the album once the network is back (#1330)', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const [firstTrack] = library.albumTracks;
+		const loadedTitle = `${OFFLINE_SONG_TITLE} Loaded ${runMarker()}`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, loadedTitle, 1, 1);
+		const { transport, barPause, play, headerPause, songTakesRefused } = headerStartControls(page);
+		const waitingOnTheLockScreen = { title: firstTrack.songTitle, state: 'playing' };
+		await watchTheLockScreen(page);
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(loadedTitle) })
+			.click();
+		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
+		await workspace(page)
+			.locator('.take-row')
+			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
+			.click();
+		await expect(barPause.locator('.spinner')).toHaveCount(0);
+		await barPause.click();
+		await expect(
+			transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+		).toBeVisible();
+		await page.goto(`/album/${library.albumId}`);
+		await expect(transport.getByText(loadedTitle, { exact: true })).toBeVisible();
+		await expect(play).toBeVisible();
+		await loseNetwork(page, context);
+		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+		const refusal = songTakesRefused();
+		await play.click();
+		await refusal;
+
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(transport.getByText(loadedTitle, { exact: true })).toHaveCount(0);
+		await expect(barPause.locator('.spinner')).toBeVisible();
+		await expect(headerPause).toHaveAttribute('aria-busy', 'true');
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
+
+		await regainNetwork(page, context);
+
+		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(barPause.locator('.spinner')).toHaveCount(0);
+		await expect(headerPause).toBeVisible();
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
 		await expect(page.getByRole('alert')).toHaveCount(0);
 		guard.assertClean();
 	});
