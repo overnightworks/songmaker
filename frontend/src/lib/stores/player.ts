@@ -422,7 +422,7 @@ function retryOnceBackOnline(
 // it plays: the bar and the lock screen, the only surface with the screen
 // off, name the song it will play (#1312, #1330). A start paused from the
 // lock screen stays named there, paused, until its Play runs it again.
-export interface PendingStart {
+interface PendingStart {
 	albumId: string;
 	song: LockScreenTitle;
 }
