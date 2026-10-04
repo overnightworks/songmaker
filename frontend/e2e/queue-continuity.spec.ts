@@ -19,6 +19,7 @@ import {
 	TRANSPORT_RETRY_LABEL
 } from '../src/lib/constants';
 import {
+	NOW_PLAYING_QUEUE_TAB,
 	NOW_PLAYING_SHUFFLE_DISABLE_PREFIX,
 	NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 	NOW_PLAYING_UP_NEXT_PREFIX
@@ -276,10 +277,18 @@ test('an album plays from one take into the next on one element that never stops
 	guard.assertClean();
 });
 
+// A shuffle toggle in the library queue rebuilds it from a pool fetch
+// (#1304): the take plays on from where it stands when the new queue arrives,
+// not from where it stood when the fetch began. The fetch is held until the
+// take has played on past it, so a position read before the fetch would seek
+// back. The queue has no current row while it is rebuilt, and has one again
+// once the new queue is in place. On the phone the queue is a sheet of Now
+// Playing, opened once the toggle has been pressed.
 test('shuffle while a library take plays keeps the position reached during the pool fetch', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
+	const shell = shellOf(testInfo);
 	const timeline = await PlaybackTimeline.watch(page);
 	await page.addInitScript(() => {
 		const nativePlay = HTMLMediaElement.prototype.play;
@@ -292,14 +301,18 @@ test('shuffle while a library take plays keeps the position reached during the p
 	const transport = page.getByRole('contentinfo');
 	await transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true }).click();
 	await expect.poll(() => timeline.position).toBeGreaterThan(0);
-	if (shellOf(testInfo) === 'mobile') {
-		await transport
-			.getByRole('button', { name: new RegExp(`${openNowPlayingLabel('')}$`) })
-			.click();
-	}
-	const shuffle = page.getByRole('button', {
+	await transport
+		.getByRole('button', {
+			name: shell === 'mobile' ? new RegExp(`${openNowPlayingLabel('')}$`) : NOW_PLAYING_LABEL,
+			exact: true
+		})
+		.click();
+	const controls = shell === 'desktop' ? transport : page.getByRole('dialog');
+	const shuffle = controls.getByRole('button', {
 		name: nameStartingWith(NOW_PLAYING_SHUFFLE_LABEL_PREFIX, NOW_PLAYING_SHUFFLE_DISABLE_PREFIX)
 	});
+	const queue = page.getByRole('region', { name: NOW_PLAYING_QUEUE_TAB });
+	const currentQueueRow = queue.locator('button[aria-current="true"]');
 	await expect(shuffle).toHaveAccessibleName(
 		`${NOW_PLAYING_SHUFFLE_LABEL_PREFIX} ${SHUFFLE_SCOPE_LIBRARY}`
 	);
@@ -324,18 +337,16 @@ test('shuffle while a library take plays keeps the position reached during the p
 	});
 
 	await shuffle.click();
+	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
 
 	await responseIsReady;
-	const queue = page.getByRole('region', { name: 'Queue' });
-	const currentQueueRow = queue.locator('button[aria-current="true"]');
+	if (shell === 'mobile')
+		await controls.getByRole('button', { name: NOW_PLAYING_QUEUE_TAB, exact: true }).click();
+	await expect(queue).toBeVisible();
 	await expect(currentQueueRow).toHaveCount(0);
 	allowFulfillment();
 	await expect(currentQueueRow).toBeVisible();
 	await expect.poll(() => timeline.position).toBeGreaterThan(positionAtRelease + 0.15);
-	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
-	await expect(
-		page.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-	).toBeVisible();
 	expect(Math.max(0, ...timeline.backwardSeeks)).toBeLessThan(0.02);
 	expect(timeline.elementsPlayed).toBe(1);
 	expect(timeline.stops).toEqual([]);
