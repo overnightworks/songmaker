@@ -30,6 +30,7 @@ vi.mock('$app/navigation', async () =>
 import {
 	apiFetch,
 	sseFetch,
+	addCsrfToken,
 	ApiError,
 	NetworkError,
 	describeFailure,
@@ -119,6 +120,48 @@ describe('sseFetch', () => {
 		const call = mockFetch.mock.calls[mockFetch.mock.calls.length - 1];
 		const headers = call[1].headers as Record<string, string>;
 		expect(headers['X-CSRF-Token']).toBe('token-xyz');
+	});
+});
+
+describe('addCsrfToken', () => {
+	// jsdom's real cookie jar refuses a `__Host-` prefixed cookie on the
+	// insecure `http://localhost` test origin (the prefix requires a secure
+	// context), so the raw `document.cookie` string -- the one shape
+	// `getCsrfToken` actually parses -- is stubbed directly instead.
+	let cookieValue = '';
+	const originalCookieDescriptor = Object.getOwnPropertyDescriptor(Document.prototype, 'cookie');
+	if (!originalCookieDescriptor) throw new Error('jsdom dropped the document.cookie descriptor');
+
+	beforeEach(() => {
+		cookieValue = '';
+		Object.defineProperty(document, 'cookie', {
+			configurable: true,
+			get: () => cookieValue
+		});
+	});
+
+	afterEach(() => {
+		Object.defineProperty(document, 'cookie', originalCookieDescriptor);
+	});
+
+	it.each([
+		[
+			'the __Host- cookie set first',
+			'__Host-csrf_token=host-tok; csrf_token=plain-tok',
+			'host-tok'
+		],
+		['the plain cookie set first', 'csrf_token=plain-tok; __Host-csrf_token=host-tok', 'host-tok'],
+		['only the plain cookie present', 'csrf_token=plain-tok', 'plain-tok']
+	])('with %s, the token used is %s', (_label, rawCookie, expectedToken) => {
+		cookieValue = rawCookie;
+		const init = addCsrfToken({}, 'POST');
+		const headers = init.headers as Record<string, string>;
+		expect(headers['X-CSRF-Token']).toBe(expectedToken);
+	});
+
+	it('adds no header when neither cookie is present', () => {
+		const init = addCsrfToken({}, 'POST');
+		expect(init.headers).toBeUndefined();
 	});
 });
 
