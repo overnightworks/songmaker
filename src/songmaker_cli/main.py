@@ -2,14 +2,15 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import logging
 import sys
 from pathlib import Path
 from typing import Annotated, NoReturn, Optional
 
-from cyclopts import App, Parameter
-from webauth.passwords import MIN_PASSWORD_LENGTH
+from cyclopts import App, CycloptsError, CycloptsPanel, Parameter
+from cyclopts.core import _normalize_for_matching as _cyclopts_normalize_command_name
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -27,7 +28,56 @@ from songmaker_cli.logging_config import configure_cli_logging
 
 log = logging.getLogger(__name__)
 
-app = App(name="songmaker", help="AI-powered song generation platform.")
+
+
+_PASSWORD_COMMANDS = frozenset({"login", "reset-password"})
+_PASSWORD_COMMANDS_BY_NORMALIZED_NAME = {
+    _cyclopts_normalize_command_name(name): name for name in _PASSWORD_COMMANDS
+}
+
+
+def _implicated_password_command(error: CycloptsError) -> str | None:
+    """Return the password command this usage error concerns, if any.
+
+    Cyclopts resolves command names case- and separator-insensitively (the
+    same normalization as ``_cyclopts_normalize_command_name`` above), so a
+    resolved ``command_chain`` entry is matched the same way rather than by
+    exact string — otherwise an accepted alias like "LOGIN" or
+    "reset_password" slips past. When no command resolved at all (a password
+    typed before the command leaves ``command_chain`` empty), the full argv
+    is the only place left to find the intended command, so every token is
+    checked instead.
+    """
+    if error.command_chain:
+        normalized = _cyclopts_normalize_command_name(error.command_chain[-1])
+        return _PASSWORD_COMMANDS_BY_NORMALIZED_NAME.get(normalized)
+
+    for token in error.root_input_tokens or ():
+        normalized = _cyclopts_normalize_command_name(token)
+        match = _PASSWORD_COMMANDS_BY_NORMALIZED_NAME.get(normalized)
+        if match is not None:
+            return match
+    return None
+
+
+def _format_usage_error(error: CycloptsError) -> str | CycloptsPanel:
+    # Cyclopts error messages quote the offending token, and on a password
+    # command that token is typically a password typed out of habit (also as
+    # "--s3cret"); never print any of them back.
+    command = _implicated_password_command(error)
+    if command is not None:
+        return (
+            f"Error: usage is 'songmaker {command} USERNAME'; "
+            "the password is only read at the prompt"
+        )
+    return CycloptsPanel(error)
+
+
+app = App(
+    name="songmaker",
+    help="AI-powered song generation platform.",
+    error_formatter=_format_usage_error,
+)
 
 
 @app.meta.default
@@ -64,10 +114,9 @@ def _server() -> str:
 @app.command
 def login(
     username: Annotated[str, Parameter(help="Username")],
-    password: Annotated[str, Parameter(help="Password")],
 ) -> None:
-    """Authenticate with the songmaker server and save the session."""
-    user = cli_login(_server(), username, password)
+    """Authenticate with the songmaker server and save the session (asks for the password)."""
+    user = cli_login(_server(), username, _ask_password("Password: "))
     log.info("Logged in as '%s' (role=%s)", user["username"], user["role"])
 
 
@@ -102,9 +151,8 @@ def server(
 @app.command(name="reset-password")
 def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
-    password: Annotated[str, Parameter(help=f"New password (min {MIN_PASSWORD_LENGTH} chars)")],
 ) -> None:
-    """Reset a user's password and end all its sessions (requires local DB access)."""
+    """Reset a user's password (asked twice) and end all its sessions (needs local DB access)."""
     from redis.exceptions import RedisError
 
     from songmaker_cli.api_models.auth import chosen_rule_refusal
@@ -114,6 +162,9 @@ def reset_password(
     from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
+    password = _ask_password("Password: ")
+    if _ask_password("Repeat password: ") != password:
+        _exit_with_error("the passwords do not match")
     refusal = chosen_rule_refusal(password)
     if refusal is not None:
         _exit_with_error(refusal)
@@ -132,6 +183,13 @@ def reset_password(
             _exit_with_error("the session cache is unreachable, so nothing was changed")
         session.commit()
         print(f"Password reset for '{username}' (role={user.role}); {_sessions_ended(ended)}")
+
+
+def _ask_password(prompt: str) -> str:
+    try:
+        return getpass.getpass(prompt)
+    except EOFError:
+        _exit_with_error("no password given")
 
 
 def _exit_with_error(message: str) -> NoReturn:
