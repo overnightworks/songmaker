@@ -1,0 +1,8 @@
+claim_id = "57fb4387451a4745890702c6459d1556"
+agent = "claude-head"
+role = "builder"
+base = "50869720dc09b3a068482561d3a5ee02f1ff2788"
+branch = "claude-head/issue-1343-sonar-store-findings"
+scope = ["frontend/src/lib/stores/layers.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/playbackResume.test.ts"]
+opened_commit = "783820f7b6a0f65012417f4112131d95ca628017"
+whole_reason = "three SonarCloud findings in frontend stores"
