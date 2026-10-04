@@ -5,7 +5,6 @@ import { goto } from '$app/navigation';
 import {
 	allocateEntryId,
 	attachLandingHandler,
-	forgetLayerEntries,
 	historyStandsStill,
 	installHistoryController,
 	land,
@@ -20,6 +19,7 @@ import {
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
 	standingPageEntryId,
+	stepBackOrGoTo,
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
@@ -453,15 +453,39 @@ describe('history adapter', () => {
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
-	it('a layer opened after its entries were forgotten still gets an entry of its own', () => {
-		const page = pushEntry('/settings', {});
-		forgetLayerEntries();
+	it("a page's own Back steps back onto the page of the tab it was opened from", async () => {
+		const signIn = pushEntry('/login', {});
+		pushEntry('/legal', {});
+		vi.mocked(goto).mockClear();
 
-		holdLayer('rail-drawer', () => undefined);
+		await stepBackOrGoTo('/login');
 
-		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'rail-drawer' });
-		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+		expect(standingEntry()).toEqual(signIn);
+		expect(goto).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ opened: 'as the only entry of its tab', tabLength: 1 },
+		{ opened: 'by a tab that came from another site', tabLength: 3 }
+	])(
+		"a page's own Back on the page the app was entered on $opened goes to the fallback, written over it",
+		async ({ tabLength }) => {
+			seedForeignEntry('/legal');
+			const length = vi.spyOn(history, 'length', 'get').mockReturnValue(tabLength);
+			loadHistoryPageForTests();
+			startFakeRouter();
+			stampNavigatedEntry('enter');
+			length.mockRestore();
+			const back = vi.spyOn(history, 'back');
+			vi.mocked(goto).mockClear();
+
+			await stepBackOrGoTo('/login');
+
+			expect(back).not.toHaveBeenCalled();
+			expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+			expect(location.pathname).toBe('/login');
+		}
+	);
 
 	it('refuses a second install', () => {
 		expect(() => installHistoryController()).toThrow(/already installed/);

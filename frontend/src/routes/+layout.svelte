@@ -4,7 +4,7 @@
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
-	import { signInAddress } from '$lib/api/fetch';
+	import { SIGN_IN_PATH, signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
@@ -25,7 +25,6 @@
 	import {
 		backToCollection,
 		followShellLayers,
-		forgetLayerEntries,
 		initNavigation,
 		isLibraryWorkspacePath,
 		openLibraryWall
@@ -243,10 +242,13 @@
 		}
 	}
 
+	// Sign-in is pushed before the session ends: the shell unmounts on that
+	// push, so the overlays closing with it -- the open account menu -- move no
+	// history under the sign-in page.
 	async function handleLogout() {
-		forgetLayerEntries();
+		await historyStandsStill();
+		await goto(SIGN_IN_PATH);
 		await logout();
-		window.location.href = '/login';
 	}
 
 	function levelUp(): void {

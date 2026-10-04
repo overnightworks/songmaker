@@ -942,20 +942,36 @@ describe('a reload over the phone Now Playing', () => {
 	});
 });
 
+// Sign-in is pushed before the session ends, so the account menu closing as
+// the shell unmounts moves no history under the sign-in page (#1340).
 describe('signing out on the phone', () => {
-	it('from the account menu leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+	it('from the open account menu stands on sign-in before the session ends, and Back leaves it for the page before', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		replaceHistoryEntry('/');
-		const target = await renderLayout('/');
-		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		replaceHistoryEntry('/settings/voices');
+		const target = await renderLayout('/settings/voices');
 		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
+		let signedOutOn: string | undefined;
+		const stopWatching = currentUser.subscribe((user) => {
+			if (user === null) signedOutOn ??= location.pathname;
+		});
 
-		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
+		try {
+			getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
+			await vi.waitFor(() => expect(signedOutOn).toBeDefined());
+		} finally {
+			stopWatching();
+		}
+		expect(signedOutOn).toBe('/login');
+		expect(target.querySelector('.app-shell')).toBeNull();
 
-		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
-		expect(standingHistoryEntry()?.layer).toBe('account-menu');
+		await pressBack();
+
+		await vi.waitFor(() => {
+			expect(location.pathname).toBe('/settings/voices');
+			expect(standingHistoryEntry()?.layer).toBeUndefined();
+		});
 	});
 });
 
@@ -963,7 +979,7 @@ describe('signing out on the phone', () => {
 // queued as the drawer closes with the shell, used to land after the sign-in
 // navigation and put the page's address back over an empty shell (#1230).
 describe('a session lost behind the open phone drawer', () => {
-	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+	it('steps back nowhere, so nothing interrupts the way to the sign-in page', async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry('/');

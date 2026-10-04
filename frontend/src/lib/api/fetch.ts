@@ -163,7 +163,7 @@ function isSessionLostResponse(status: number, path: string): boolean {
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
-const SIGN_IN_PATH = '/login';
+export const SIGN_IN_PATH = '/login';
 
 // A path of this app starts with exactly one slash. A second slash or a
 // backslash makes it a foreign host; anything else -- an absolute URL even on
@@ -239,20 +239,27 @@ export function handleSessionLost(): Promise<void> {
 // so this leaves +layout.svelte's own /login-vs-/setup routing to decide
 // instead of forcing a redirect that could race it.
 //
-// The library history stops before the shell goes, as on a sign-out: an
-// overlay closing with the shell -- the phone drawer above all -- would
-// otherwise step back off its history entry after the sign-in navigation
-// below and land on the page the session was lost on (#1230).
+// The address standing when the session was lost is read before anything is
+// awaited, so a tap landing meanwhile -- an album opened from the drawer --
+// does not become the address the sign-in returns to. Sign-in is pushed once
+// history stands still, and before auth is cleared: the shell unmounts on
+// that push, so the overlays closing with it -- the phone drawer above all --
+// leave from an entry that no longer stands and move no history under the
+// sign-in page (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const [{ currentUser, clearAuth }, { forgetLayerEntries }] = await Promise.all([
+	const lostAt = window.location.pathname + window.location.search;
+	const [{ currentUser, clearAuth }, { historyStandsStill }, { goto }] = await Promise.all([
 		import('$lib/stores/auth'),
-		import('$lib/history/historyController')
+		import('$lib/history/historyController'),
+		import('$app/navigation')
 	]);
 	if (get(currentUser) === null) return;
-	forgetLayerEntries();
-	clearAuth('unauthorized');
-	const { goto } = await import('$app/navigation');
-	await goto(signInAddress(window.location.pathname + window.location.search));
+	await historyStandsStill();
+	try {
+		await goto(signInAddress(lostAt));
+	} finally {
+		clearAuth('unauthorized');
+	}
 }
 
 function abortOnCallerOrTimeout(

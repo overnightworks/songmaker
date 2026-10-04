@@ -285,12 +285,17 @@ function newEntry(layer?: string): HistoryEntry {
 	return layer === undefined ? { id } : { id, layer };
 }
 
-// The id an id-less entry on top gets; the tab's only entry is its first one,
-// below which nothing is left to step back to.
-function firstIdOnTop(): HistoryEntry | null {
+// The id an id-less entry on top gets. The tab's only entry is its first one,
+// below which nothing is left to step back to; so is the entry the app is
+// first entered on in a tab that came from another site, below which only
+// that site's pages stand.
+function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
 	const entry = newEntry();
-	if (history.length === 1) historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
+	const enteredFirst = entering && historyStorage.getItem(FIRST_ENTRY_KEY) === null;
+	if (history.length === 1 || enteredFirst) {
+		historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
+	}
 	return entry;
 }
 
@@ -330,7 +335,7 @@ export function pushEntry(url: string, state: App.PageState, layer?: string): Hi
 // the id and the layer mark. An id-less entry gets its first id here while it
 // is the top entry, and stays foreign below it.
 export function replaceEntry(url: string, state: App.PageState): HistoryEntry | null {
-	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop();
+	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop(false);
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	replaceState(url, stampedPageState(state, entry));
 	lastRouterIndex = routerIndexOf(history.state);
@@ -360,7 +365,7 @@ interface RouteMount {
 // the entry standing there, and history stays still meanwhile.
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
-		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
+		? (entryOfHistoryState(history.state) ?? firstIdOnTop(false))
 		: newEntry();
 	const mount =
 		options.replaceState && standsOnAddress(url) ? { address: location.href, options } : null;
@@ -506,7 +511,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	if (routerPushed) standsOnTop = true;
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
-	const entry = loaded ?? firstIdOnTop();
+	const entry = loaded ?? firstIdOnTop(type === 'enter');
 	if (entry !== null) {
 		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
@@ -539,6 +544,19 @@ export function stepBackTo(target: number): Promise<void> {
 function firstEntryOfTab(): number {
 	if (historyStorage.getItem(FIRST_ENTRY_KEY) === null) return FOREIGN_ENTRY_RANK;
 	return storedCount(historyStorage, FIRST_ENTRY_KEY, 'first history entry');
+}
+
+// A page's own Back control: one step back while an entry of the tab's own
+// stands below the one shown, `fallback` otherwise -- written over the page,
+// so the browser's Back from there does not return to it. An entry without
+// an id is never the tab's own.
+export function stepBackOrGoTo(fallback: string): Promise<void> {
+	const standing = standingEntry();
+	if (standing === null || standing.id <= firstEntryOfTab()) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
+		return goto(fallback, { replaceState: true });
+	}
+	return stepBackTo(standing.id - 1);
 }
 
 // From an entry with an id, any landing below it is the step's; from a
@@ -648,11 +666,10 @@ function stepOffUnownedLayerEntry(): void {
 	void stepBackTo(standing.id - 1);
 }
 
-// The open overlays keep their layers, which own no history entry any more,
-// and nothing waits for a landing that would settle them. Layers opened from
-// now on get entries again: a session lost in the app and signed in again
-// keeps Back closing overlays.
-export function forgetLayerEntries(): void {
+// The controller stops owning the open layers' entries -- as a reload leaves
+// it -- and settles every step-back still waiting for a landing that,
+// uninstalled, it no longer hears.
+function releaseLayerEntries(): void {
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 	ledger = { ...ledger, layers: [], stepBacks: [] };
@@ -661,6 +678,7 @@ export function forgetLayerEntries(): void {
 	}
 	settleStillness();
 }
+export { releaseLayerEntries as releaseLayerEntriesForTests };
 
 type LandingHandler = (landing: Landing, landedState: unknown) => void;
 
@@ -737,7 +755,7 @@ export function installHistoryController(): () => void {
 	const uninstallThis = (): void => {
 		window.removeEventListener('popstate', onPopstate);
 		keepLayerHistory(null);
-		forgetLayerEntries();
+		releaseLayerEntries();
 		uninstall = null;
 	};
 	uninstall = uninstallThis;

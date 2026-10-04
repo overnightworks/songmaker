@@ -556,6 +556,31 @@ describe('session lost (401)', () => {
 		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent('/album/a1/song-1')}`);
 	});
 
+	it('is on the sign-in page before auth is cleared', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		replaceHistoryEntry('/settings/voices');
+		let clearedOn: string | undefined;
+		vi.mocked(clearAuth).mockImplementation(() => {
+			clearedOn = location.pathname;
+			currentUser.set(null);
+		});
+
+		await handleSessionLost();
+
+		expect(clearedOn).toBe('/login');
+	});
+
+	it('returns to the address standing when the session was lost, not one a tap reached meanwhile', async () => {
+		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
+		replaceHistoryEntry('/album/a1');
+
+		const reaction = handleSessionLost();
+		replaceHistoryEntry('/album/b2');
+		await reaction;
+
+		expect(goto).toHaveBeenCalledWith(signInAddress('/album/a1'));
+	});
+
 	it('reacts the same way through sseFetch as through apiFetch', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
