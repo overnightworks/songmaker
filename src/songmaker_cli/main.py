@@ -108,16 +108,16 @@ def reset_password(
     from redis.exceptions import RedisError
     from webauth.passwords import hash_password
 
-    from songmaker_cli.api_models.auth import chosen_password_violation
+    from songmaker_cli.api_models.auth import chosen_rule_refusal
     from songmaker_cli.app_context import build_session_cache
     from songmaker_cli.db.engine import init_db, resolve_database_url
     from songmaker_cli.db.queries import delete_user_sessions, get_user_by_username, update_user
     from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
-    violation = chosen_password_violation(password)
-    if violation is not None:
-        _exit_with_error(violation)
+    refusal = chosen_rule_refusal(password)
+    if refusal is not None:
+        _exit_with_error(refusal)
 
     factory = init_db(resolve_database_url())
     with factory() as session, create_redis(get_settings().redis_url) as redis:

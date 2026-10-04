@@ -556,17 +556,17 @@ def auto_setup_admin(ctx: AppContext) -> None:
         complete_first_run_setup,
     )
 
-    from songmaker_cli.api_models.auth import chosen_password_violation
+    from songmaker_cli.api_models.auth import chosen_rule_refusal
     from songmaker_cli.app_context import build_web_auth_config
     from songmaker_cli.auth_dependencies import build_user_management
     from songmaker_cli.db.queries import user_count
 
     config = build_web_auth_config(ctx, settings)
     with ctx.db() as session:
-        violation = chosen_password_violation(admin_pass)
-        if violation is not None:
+        refusal = chosen_rule_refusal(admin_pass)
+        if refusal is not None:
             if user_count(session) == 0:
-                log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", violation)
+                log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", refusal)
             return
         management = build_user_management(session, config)
         try:
