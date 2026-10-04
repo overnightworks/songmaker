@@ -2120,11 +2120,12 @@ function restoredStart(resumeAtTrackTime: number): QueueStart {
 }
 
 // A saved take that cannot come back leaves the press to start what the
-// transport names, as it would have without a reload.
+// transport names, as it would have without a reload; a take the listener
+// started in the meantime has already answered it.
 function playWhatWasAskedForIfNothingWasRestored(): void {
 	if (get(playStartNotice) !== 'restoring') return;
 	playStartNotice.set('idle');
-	void playIdleStart();
+	if (audioPlayer.current === null) void playIdleStart();
 }
 
 // The device's library settings are what build, extend and save a library

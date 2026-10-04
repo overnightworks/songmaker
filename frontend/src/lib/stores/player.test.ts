@@ -4596,6 +4596,20 @@ describe('restoring the last playback after a reload', () => {
 		return vi.mocked(audioPlayer.load).mock.calls[0]?.[1];
 	}
 
+	// A reload whose saved song is still on its way, answered when the test says.
+	function restoreWaitingOnTheSavedSong(): {
+		restoring: Promise<void>;
+		answer: (reply: Promise<SongItem>) => void;
+	} {
+		let answer: (reply: Promise<SongItem>) => void = () => {};
+		vi.mocked(fetchSong).mockReturnValueOnce(
+			new Promise((resolve) => {
+				answer = resolve;
+			})
+		);
+		return { restoring: restoreLastPlayback(), answer };
+	}
+
 	async function playTheRestoredTake(): Promise<void> {
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 		await vi.waitFor(() =>
@@ -4622,17 +4636,11 @@ describe('restoring the last playback after a reload', () => {
 	])(
 		'Play pressed $presses time(s) before the saved take arrives reads $reads, and it plays on arrival: $playsOnArrival (#1330)',
 		async ({ presses, reads, playsOnArrival }) => {
-			let arrive: (song: SongItem) => void = () => {};
-			vi.mocked(fetchSong).mockReturnValueOnce(
-				new Promise((resolve) => {
-					arrive = resolve;
-				})
-			);
-			const restoring = restoreLastPlayback();
+			const { restoring, answer } = restoreWaitingOnTheSavedSong();
 			for (let press = 0; press < presses; press++) await playIdleStart();
 			const beforeItArrives = get(playStartNotice);
 
-			arrive(savedSong);
+			answer(Promise.resolve(savedSong));
 			await restoring;
 
 			expect({ beforeItArrives, load: restoredLoad(), after: get(playStartNotice) }).toEqual({
@@ -4643,6 +4651,33 @@ describe('restoring the last playback after a reload', () => {
 			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
 		}
 	);
+
+	it('Play pressed before the restore lands, then a take-row start: the tapped take stays current (#1330)', async () => {
+		selectedAlbumId.set(ALBUM_ID);
+		QUEUES.album.serve();
+		const { restoring, answer } = restoreWaitingOnTheSavedSong();
+		await playIdleStart();
+		await playTake(nextTake, nextSong);
+
+		answer(Promise.resolve(savedSong));
+		await restoring;
+
+		expect(audioPlayer.current?.generation.id).toBe(nextTake.id);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+	});
+
+	it('Play pressed before the restore lands, and the saved take cannot come back: the press starts what the transport names (#1330)', async () => {
+		QUEUES.library.serve();
+		const { restoring, answer } = restoreWaitingOnTheSavedSong();
+		await playIdleStart();
+
+		answer(Promise.reject(new ApiError(404, 'gone', '/x')));
+		await restoring;
+
+		await vi.waitFor(() => expect(audioPlayer.current?.generation.id).toBe(savedTake.id));
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
+	});
 
 	it.each([
 		{ saved: 'past its end', beforeEnd: -1, restoresAt: 'its start' },
