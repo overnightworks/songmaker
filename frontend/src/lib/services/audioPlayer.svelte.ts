@@ -56,7 +56,7 @@ export function transportWaitingNotice(transport: TransportState): string | null
 	return transport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : null;
 }
 
-type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
+export type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
 
 // The play button's face on every surface: a spinner while sound is asked for
 // and not there yet, otherwise the action its click takes.

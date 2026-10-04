@@ -7,6 +7,13 @@
 		type CollectionPlayKind
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
+	import TransportButtonIcon from './TransportButtonIcon.svelte';
+	import {
+		transportButtonFace,
+		transportIsBusy,
+		transportOffersPause,
+		type TransportState
+	} from '$lib/services/audioPlayer.svelte';
 
 	interface Props {
 		coverUrl: string | null;
@@ -16,10 +23,8 @@
 		initials: string;
 		artFill: string | null;
 		kind: CollectionPlayKind;
-		/** Whether the circle offers to pause this collection: it sounds, or a start of it waits. */
-		playing: boolean;
-		/** Whether sound was asked for and is not there yet, which the circle shows as the bar does. */
-		busy?: boolean;
+		/** The transport the circle acts on: this collection's queue or a waiting start of it, else idle. */
+		transport: TransportState;
 		/** The circle's action; null while the circle has nothing to act on, which dims it. */
 		onplay: (() => void) | null;
 		/**
@@ -47,8 +52,7 @@
 		initials,
 		artFill,
 		kind,
-		playing,
-		busy = false,
+		transport,
 		onplay,
 		onshuffle,
 		titleArea,
@@ -59,7 +63,9 @@
 	}: Props = $props();
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
-	const playLabel = $derived(playing ? collectionPauseLabel(kind) : collectionPlayLabel(kind));
+	const playLabel = $derived(
+		transportOffersPause(transport) ? collectionPauseLabel(kind) : collectionPlayLabel(kind)
+	);
 </script>
 
 {#snippet coverArt()}
@@ -106,13 +112,10 @@
 			disabled={!onplay}
 			onclick={() => onplay?.()}
 			aria-label={playLabel}
-			aria-busy={busy}
+			aria-busy={transportIsBusy(transport)}
 			title={playLabel}
 		>
-			{#if busy}<span class="spinner"></span>{:else}<Icon
-					name={playing ? 'pause' : 'play'}
-					size={22}
-				/>{/if}
+			<TransportButtonIcon face={transportButtonFace(transport)} size={22} />
 		</button>
 		{#if onshuffle !== undefined}
 			<button
@@ -254,22 +257,6 @@
 
 	.play-circle:hover:not(:disabled) {
 		box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 45%, transparent);
-	}
-
-	.play-circle .spinner {
-		display: inline-block;
-		width: 22px;
-		height: 22px;
-		border: 2px solid currentColor;
-		border-right-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	.shuffle-btn {

@@ -24,12 +24,7 @@
 		waitingStartOf,
 		type CollectionStart
 	} from '$lib/stores/player';
-	import {
-		audioPlayer,
-		transportIsBusy,
-		transportOffersPause,
-		type TransportState
-	} from '$lib/services/audioPlayer.svelte';
+	import { audioPlayer, type TransportState } from '$lib/services/audioPlayer.svelte';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -271,8 +266,7 @@
 	{initials}
 	{artFill}
 	{kind}
-	playing={transportOffersPause(circleTransport)}
-	busy={transportIsBusy(circleTransport)}
+	transport={circleTransport}
 	onplay={onplay || queueIsThisCollection || startWaitsHere ? onCircle : null}
 	onshuffle={onplay ? () => start('random') : null}
 	{titleArea}

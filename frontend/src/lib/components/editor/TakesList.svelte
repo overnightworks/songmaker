@@ -40,6 +40,7 @@
 	import { rescoringTakeIds } from '$lib/stores/takeActions';
 	import {
 		audioPlayer,
+		transportButtonFace,
 		transportIsBusy,
 		transportOffersPause
 	} from '$lib/services/audioPlayer.svelte';
@@ -58,6 +59,7 @@
 	import { describeFailure } from '$lib/api/fetch';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
+	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
@@ -364,7 +366,6 @@
 				{#each group.generations as gen (gen.id)}
 					{@const transport = isGenPlaying(gen) ? audioPlayer.transport : 'idle'}
 					{@const playing = transportOffersPause(transport)}
-					{@const waiting = transportIsBusy(transport)}
 					{@const duration = formatDuration(gen)}
 					{@const provenance = takeProvenance(gen)}
 					{@const headline = headlineScore(gen)}
@@ -392,15 +393,13 @@
 										data-hitbox-face
 										onclick={(event) => handlePlayClick(gen, event)}
 										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
-										aria-busy={$selectionMode ? undefined : waiting}
+										aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
 										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${takeName}`}
 									>
 										{#if $selectionMode}
 											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
-										{:else if waiting}
-											<span class="spinner"></span>
 										{:else}
-											<Icon name={playing ? 'pause' : 'play'} size={16} />
+											<TransportButtonIcon face={transportButtonFace(transport)} size={16} />
 										{/if}
 									</button>
 								{/if}
@@ -914,21 +913,6 @@
 		color: var(--text-muted);
 		cursor: pointer;
 		padding: 0;
-	}
-
-	.play-btn .spinner {
-		width: 16px;
-		height: 16px;
-		border: 2px solid currentColor;
-		border-right-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 
 	.pick-btn:hover,
