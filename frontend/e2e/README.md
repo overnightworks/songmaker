@@ -194,9 +194,12 @@ overridden" in `test.use` and silently leaves the project's signed-in admin
 state in place, which looks exactly like a passing flow until you notice the
 wall it is standing on. And a refusal it drives is reported twice: once as the
 response, and once as a console error Chromium writes for every failed fetch,
-so `FlowGuard` takes a `refusalsExpectedOn` list of paths where a 401, 403 or
-429 is the sentence under proof. Everywhere else, and for any 5xx, the guard is
-unchanged.
+so `FlowGuard` takes a `refusalsExpectedOn` list of paths, each with the
+statuses that are the sentence under proof there: a 401, 403 or 429 on the
+login, session and admin reads, and in the admin flow a 404 on a stale session
+revoke and a 409 on a taken username. A path ending in `/` covers the ids
+beneath it. Everywhere else, and for any 5xx, the guard is unchanged, and every
+flow, including each extra tab it opens, still asserts it clean.
 
 The absolute-age flow cannot wait its own limit out: `SESSION_ABSOLUTE_MAX_AGE`
 is 90 days, it is stack-wide, and lowering it would kill the one storage-state

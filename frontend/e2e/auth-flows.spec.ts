@@ -17,9 +17,8 @@
 // has thrown away and watch the server refuse it.
 //
 // No route interception anywhere: every refusal is the CI stack's own answer.
-// The admin flow's 404 and 409 are its point, and FlowGuard counts any 4xx
-// outside 401/403/429 as a failure, so that one flow is judged on its budget
-// and its own assertions only.
+// The admin flow's 404 and 409 are its point, so its guard forgives exactly
+// those two statuses on exactly the revoke and create paths.
 // The two numbers the lockout flow depends on are set in
 // `docker/docker-compose.ci.yml`, with the measurement written beside them --
 // the short-window budget counts failed logins per *IP* and the whole run comes
@@ -56,6 +55,8 @@ import {
 import {
 	DESKTOP_VIEWPORT,
 	FlowGuard,
+	SESSION_REFUSAL_STATUSES,
+	type ExpectedRefusal,
 	MOBILE_VIEWPORT,
 	openRailNav,
 	shellOf,
@@ -108,8 +109,12 @@ const REFUSED_PATHS = [
 const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
 const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
 // The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
-// sentences under proof.
+// sentences under proof. Only that flow forgives them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
+const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
+	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
+	{ path: ADMIN_USERS_PATH, statuses: [409] }
+];
 const ADMIN_PAGE_PATH = '/settings/users';
 const SESSION_COOKIE = 'session_id';
 
@@ -201,20 +206,13 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page, isMobile }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
-	// Every refusal this file drives is one of its six sentences: the login it
-	// locks out, the `/api/auth/me` a dead session answers, the admin calls a
-	// non-admin makes. A refusal anywhere else, and any 5xx at all, still fails
-	// the flow.
-	const refusalsExpectedOn = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
-		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
-		: REFUSED_PATHS;
-	guard = new FlowGuard(page, { refusalsExpectedOn });
+	guard = new FlowGuard(page, { refusalsExpectedOn: refusalsExpectedIn(testInfo) });
 });
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
 test.afterEach(({}, testInfo) => {
 	console.log(`Auth flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
-	if (!testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG)) guard.assertClean();
+	guard.assertClean();
 	guard.assertWithinBudget(AUTH_FLOW_API_REQUEST_BUDGET);
 });
 
@@ -303,6 +301,26 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
 	expect(response.status()).toBe(200);
 	await expect(page).toHaveURL(new RegExp(`${songAddress}$`));
 	await expect(page.getByRole('heading', { name: DEEP_LINK_SONG_TITLE })).toBeVisible();
+}
+
+/**
+ * Every refusal this file drives is one of its sentences: the login it locks
+ * out, the `/api/auth/me` a dead session answers, the admin calls a non-admin
+ * makes, and for the tagged flows the library lists a lost session refuses and
+ * the admin's stale revoke and taken username. A refusal anywhere else, and any
+ * 5xx at all, still fails the flow.
+ */
+function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
+	const refusedPaths = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
+		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
+		: REFUSED_PATHS;
+	const sessionRefusals = refusedPaths.map((path) => ({
+		path,
+		statuses: SESSION_REFUSAL_STATUSES
+	}));
+	return testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG)
+		? [...sessionRefusals, ...ADMIN_REFUSALS]
+		: sessionRefusals;
 }
 
 /**
@@ -420,12 +438,14 @@ test(
 			// A second tab of this device revokes the other device, so the first
 			// tab's row for it is stale and the server refuses its revoke.
 			const secondTab = await page.context().newPage();
+			const secondTabGuard = new FlowGuard(secondTab);
 			await secondTab.goto(ADMIN_PAGE_PATH);
 			await openSessionsTab(secondTab, shell);
 			const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
 			await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
 			await expect(secondTabRows).toHaveCount(1);
 			await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
+			secondTabGuard.assertClean();
 			await secondTab.close();
 
 			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
