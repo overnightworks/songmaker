@@ -12,6 +12,7 @@ moving that clock, never by sleeping.
 
 from __future__ import annotations
 
+import json
 import re
 import shlex
 import stat
@@ -917,21 +918,44 @@ def test_non_successful_github_actions_checks_are_skipped(
         ),
     ],
 )
+@pytest.mark.parametrize(
+    "through_github_api_filter", [False, True], ids=["projected", "raw-api-response"],
+)
 def test_a_failed_advisory_check_does_not_block_a_green_github_actions_candidate(
     tmp_path: Path,
     app_slug: str,
     name: str,
     advisory_log: str,
+    through_github_api_filter: bool,
 ) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
     expected_head = checkout.remote_main_sha()
-    checkout.set_check_runs(
-        ("github-actions", "completed", "success"),
-        (app_slug, name, "completed", "failure"),
-    )
+    if through_github_api_filter:
+        checkout.set_check_runs_raw_response(json.dumps({
+            "total_count": 2,
+            "check_runs": [
+                {
+                    "app": {"slug": "github-actions"},
+                    "name": REQUIRED_ACTIONS_JOB_NAME,
+                    "status": "completed",
+                    "conclusion": "success",
+                },
+                {
+                    "app": {"slug": app_slug},
+                    "name": name,
+                    "status": "completed",
+                    "conclusion": "failure",
+                },
+            ],
+        }))
+    else:
+        checkout.set_check_runs(
+            ("github-actions", "completed", "success"),
+            (app_slug, name, "completed", "failure"),
+        )
 
     result = checkout.tick()
 
