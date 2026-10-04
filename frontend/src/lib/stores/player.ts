@@ -240,9 +240,11 @@ export const playbackSource = derived(
 // 'awaiting-network': a start that could not read its takes offline waits
 // for the network, with nothing playing yet (#1288). 'gave-up-on-network':
 // it waited as long as a stalled take does and now waits calmly, as a given-up
-// take does, until the network's return runs it again (#1312).
+// take does, until the network's return runs it again (#1312). 'restoring':
+// Play was pressed while the take a reload restores is still on its way
+// (#1330).
 type PlayStartNotice =
-	'idle' | 'building' | 'awaiting-network' | 'gave-up-on-network' | 'empty' | 'error';
+	'idle' | 'building' | 'awaiting-network' | 'gave-up-on-network' | 'restoring' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -783,7 +785,7 @@ export function idlePlayTarget(input: {
 // The transport with no take: a start that waits for the network is what the
 // listener asked for, so a press stops it rather than starting another.
 export async function playIdleStart(): Promise<void> {
-	if (stopStartAwaitingNetwork()) return;
+	if (stopStartAwaitingNetwork() || askForTheRestoringTake()) return;
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -819,12 +821,15 @@ export function waitingStartOf(
 }
 
 // A start that waits for the network shows the transport a take waiting for
-// it shows: recovering at first, then given up after the same deadline (#1312).
+// it shows: recovering at first, then given up after the same deadline
+// (#1312). A Play pressed before a restored take arrived shows it loading,
+// as a press on the take itself would (#1330).
 export function transportOfTheStart(
 	current: PlaybackInfo | null,
 	notice: PlayStartNotice,
 	transport: TransportState
 ): TransportState {
+	if (!current && notice === 'restoring') return 'loading';
 	if (!startAwaitsNetwork(current, notice)) return transport;
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
@@ -2070,20 +2075,56 @@ followPlaybackForResume({
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
 	if (saved === null || audioPlayer.current !== null) return;
+	restoreUnderway = true;
+	try {
+		await restoreSavedPlayback(saved);
+	} finally {
+		restoreUnderway = false;
+		playWhatWasAskedForIfNothingWasRestored();
+	}
+}
+
+async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	const found = await playableSavedTake(saved);
 	if (found === null || audioPlayer.current !== null) return;
-	const start: QueueStart = {
-		resumeAtTrackTime: positionWithinTake(saved.position, found.take),
-		autoplay: false
-	};
+	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
 	if (source.type === 'album') {
-		restoreAlbumTake(found.song, found.take, start);
+		restoreAlbumTake(found.song, found.take, restoredStart(at));
 	} else if (source.type === 'library') {
-		await restoreLibraryTake(source, found.take, start);
+		await restoreLibraryTake(source, found.take, restoredStart(at));
 	} else {
-		await restorePlaylistQueue(source.playlistId, found.take, start);
+		await restorePlaylistQueue(source.playlistId, found.take, at);
 	}
+}
+
+// A Play pressed after a reload, before the saved take is back, keeps its
+// intent: the transport reads Pause with its spinner, a second press
+// withdraws it, and the take plays from its saved position once it is back
+// (#1330).
+let restoreUnderway = false;
+
+function askForTheRestoringTake(): boolean {
+	if (!restoreUnderway) return false;
+	playStartNotice.set(get(playStartNotice) === 'restoring' ? 'idle' : 'restoring');
+	return true;
+}
+
+// Where the restored take starts, and whether it plays: the press, if any,
+// is answered here, so a later one goes to the take itself.
+function restoredStart(resumeAtTrackTime: number): QueueStart {
+	const askedForSound = get(playStartNotice) === 'restoring';
+	restoreUnderway = false;
+	if (askedForSound) playStartNotice.set('idle');
+	return { resumeAtTrackTime, autoplay: askedForSound };
+}
+
+// A saved take that cannot come back leaves the press to start what the
+// transport names, as it would have without a reload.
+function playWhatWasAskedForIfNothingWasRestored(): void {
+	if (get(playStartNotice) !== 'restoring') return;
+	playStartNotice.set('idle');
+	void playIdleStart();
 }
 
 // The device's library settings are what build, extend and save a library
@@ -2151,13 +2192,16 @@ async function playableSavedTake(
 async function restorePlaylistQueue(
 	playlistId: string,
 	take: GenerationItem,
-	start: QueueStart
+	at: number
 ): Promise<void> {
 	const playlist = await quietly(() => fetchPlaylist(playlistId));
 	if (playlist === null || audioPlayer.current !== null) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
-	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, { restart: true, ...start });
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {
+		restart: true,
+		...restoredStart(at)
+	});
 }
 
 async function quietly<T>(request: () => Promise<T>): Promise<T | null> {

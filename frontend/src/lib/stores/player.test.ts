@@ -4617,6 +4617,34 @@ describe('restoring the last playback after a reload', () => {
 	});
 
 	it.each([
+		{ presses: 1, reads: 'restoring', playsOnArrival: true },
+		{ presses: 2, reads: 'idle', playsOnArrival: false }
+	])(
+		'Play pressed $presses time(s) before the saved take arrives reads $reads, and it plays on arrival: $playsOnArrival (#1330)',
+		async ({ presses, reads, playsOnArrival }) => {
+			let arrive: (song: SongItem) => void = () => {};
+			vi.mocked(fetchSong).mockReturnValueOnce(
+				new Promise((resolve) => {
+					arrive = resolve;
+				})
+			);
+			const restoring = restoreLastPlayback();
+			for (let press = 0; press < presses; press++) await playIdleStart();
+			const beforeItArrives = get(playStartNotice);
+
+			arrive(savedSong);
+			await restoring;
+
+			expect({ beforeItArrives, load: restoredLoad(), after: get(playStartNotice) }).toEqual({
+				beforeItArrives: reads,
+				load: expect.objectContaining({ autoplay: playsOnArrival, startAt: SAVED_POSITION }),
+				after: 'idle'
+			});
+			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+		}
+	);
+
+	it.each([
 		{ saved: 'past its end', beforeEnd: -1, restoresAt: 'its start' },
 		{ saved: 'at its end', beforeEnd: 0, restoresAt: 'its start' },
 		{ saved: 'within its last second', beforeEnd: 0.056, restoresAt: 'its start' },

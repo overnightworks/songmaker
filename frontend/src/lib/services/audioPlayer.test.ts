@@ -2332,6 +2332,23 @@ describe('seek()', () => {
 		expect(fakeAudio.currentTime).toBe(0);
 	});
 
+	it('moves where a take still loading starts, so it starts there once its data arrives (#1330)', () => {
+		const restored = makeGen({ id: 'g-restored', mp3_path: 'a1/restored.mp3' });
+		audioPlayer.load(makeInfo({ generation: { ...restored, audio_duration_sec: 180 } }), {
+			autoplay: false,
+			startAt: 13
+		});
+
+		audioPlayer.seek(40);
+		const whileLoading = audioPlayer.currentTime;
+		fakeAudio.fire('loadedmetadata');
+
+		expect({ whileLoading, startsAt: fakeAudio.currentTime }).toEqual({
+			whileLoading: 40,
+			startsAt: 40
+		});
+	});
+
 	it('seeks within the active stream track', () => {
 		audioPlayer.loadStream(makeStreamManifest(), 1, { autoplay: false });
 

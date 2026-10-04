@@ -317,6 +317,36 @@ describe('PlayerBar stream boundaries', () => {
 		const readsPlay = { label: TRANSPORT_PLAY_LABEL, busy: 'false', spinner: false };
 		const readsBusyPause = { label: TRANSPORT_PAUSE_LABEL, busy: 'true', spinner: true };
 
+		it('reads Pause with its spinner for a Play pressed before the saved take arrived (#1330)', async () => {
+			playStartNotice.set('restoring');
+			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+			component = mount(PlayerBar, { target });
+			await tick();
+			const whileItArrives = buttonFacts(playButton());
+
+			await clickAndSettle();
+
+			expect({ whileItArrives, pressGoesToTheStart: playIdleStart.mock.calls.length }).toEqual({
+				whileItArrives: readsBusyPause,
+				pressGoesToTheStart: 1
+			});
+		});
+
+		it('the timeline shows the restored position while the take still loads (#1330)', async () => {
+			useDesktopLayout();
+			const take = barTake();
+			audioPlayer.load(
+				{ ...take, generation: { ...take.generation, audio_duration_sec: 180 } },
+				{ autoplay: false, startAt: 73 }
+			);
+			component = mount(PlayerBar, { target });
+			await tick();
+
+			expect(
+				[...target.querySelectorAll('.timeline .time')].map((time) => time.textContent)
+			).toEqual(['1:13', '3:00']);
+		});
+
 		it('reads Play before any press, and Pause with its spinner after the first', async () => {
 			const transport = await mountRestoredTake();
 			const beforeAnyPress = buttonFacts(transport);

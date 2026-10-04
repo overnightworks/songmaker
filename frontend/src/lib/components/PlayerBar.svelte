@@ -214,7 +214,7 @@
 		{:else if waitingSong}
 			<span class="track-title">{waitingSong.songTitle}</span>
 			<span class="track-detail">{waitingSong.albumTitle}</span>
-		{:else if startNotice === 'building'}
+		{:else if startNotice === 'building' || startNotice === 'restoring'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}

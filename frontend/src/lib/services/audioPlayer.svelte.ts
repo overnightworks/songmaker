@@ -450,7 +450,9 @@ class AudioPlayer {
 
 	// A take that starts from nothing on the active element: whatever played or
 	// stood by before it is dropped. The source is attached before the take
-	// becomes current, so a preload the change asks for lands behind it.
+	// becomes current, so a preload the change asks for lands behind it. Until
+	// its data arrives, the timeline shows where it will start and how long it
+	// runs, so a restored take reads its saved position (#1330).
 	private startTake(
 		info: PlaybackInfo,
 		url: string,
@@ -460,6 +462,8 @@ class AudioPlayer {
 		this.clearStandby();
 		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
+		this.currentTime = opts.startAt ?? 0;
+		this.duration = info.generation.audio_duration_sec ?? 0;
 		this.autoplayPending = opts.autoplay ?? true;
 		this.waitForTheNetworkFromTheTap();
 		const el = this.ensureAudio();
@@ -784,11 +788,23 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
+		if (this.pendingRecoverySeek !== null) {
+			this.startLoadingTakeAt(Math.max(0, Math.min(seconds, this.duration)));
+			return;
+		}
 		const entry = this.deckSession?.playing;
 		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
 		const target = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 		if (this.deckSession) this.deckSession.deck.scrubTo(target);
 		else this.audio.currentTime = target;
+	}
+
+	// A take still waiting for the place it starts at is moved there, not its
+	// element: the element would take a seek before its data arrives and then
+	// drop it (#1330).
+	private startLoadingTakeAt(seconds: number): void {
+		this.pendingRecoverySeek = seconds;
+		this.currentTime = seconds;
 	}
 
 	// On the continuous deck the deck moves the playhead, so that a restore past
