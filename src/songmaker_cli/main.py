@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Annotated, NoReturn, Optional
 
 from cyclopts import App, CycloptsError, CycloptsPanel, Parameter
-from cyclopts.exceptions import UnusedCliTokensError
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -30,11 +29,19 @@ log = logging.getLogger(__name__)
 
 
 
+_PASSWORD_COMMANDS = frozenset({"login", "reset-password"})
+
+
 def _format_usage_error(error: CycloptsError) -> str | CycloptsPanel:
-    # Cyclopts would echo the leftover tokens, and a leftover token is typically
-    # a password typed on the command line out of habit; never print it back.
-    if isinstance(error, UnusedCliTokensError):
-        return "Error: unexpected extra argument; passwords are only read at the prompt"
+    # Cyclopts error messages quote the offending token, and on a password
+    # command that token is typically a password typed out of habit (also as
+    # "--s3cret"); never print any of them back.
+    command = (error.command_chain or ("",))[-1]
+    if command in _PASSWORD_COMMANDS:
+        return (
+            f"Error: usage is 'songmaker {command} USERNAME'; "
+            "the password is only read at the prompt"
+        )
     return CycloptsPanel(error)
 
 

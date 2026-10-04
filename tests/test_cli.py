@@ -275,19 +275,30 @@ def test_login_sends_the_password_typed_at_the_prompt(sent_logins) -> None:
     assert sent_logins == [(RESET_USERNAME, OLD_PASSWORD)]
 
 
+@pytest.mark.parametrize("typed_password", [NEW_PASSWORD, f"--{NEW_PASSWORD}"])
 @pytest.mark.parametrize("command", ["login", "reset-password"])
-def test_password_on_the_command_line_is_a_usage_error(
-    served_app, sent_logins, capsys, command: str,
+def test_password_on_the_command_line_is_a_usage_error_that_never_echoes_it(
+    served_app, sent_logins, capsys, command: str, typed_password: str,
 ) -> None:
     with (
         patch("getpass.getpass", return_value=NEW_PASSWORD),
         pytest.raises(SystemExit) as exit_info,
     ):
-        app([command, RESET_USERNAME, NEW_PASSWORD], result_action="return_value")
+        app([command, RESET_USERNAME, typed_password], result_action="return_value")
 
     printed = "".join(capsys.readouterr())
     assert exit_info.value.code == 1
-    assert "Error: unexpected extra argument; passwords are only read at the prompt" in printed
+    assert f"Error: usage is 'songmaker {command} USERNAME'" in printed
     assert NEW_PASSWORD not in printed
     assert sent_logins == []
     assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
+
+
+def test_an_extra_argument_to_another_command_keeps_the_detailed_error(capsys) -> None:
+    with pytest.raises(SystemExit) as exit_info:
+        app(["albums", "extra"], result_action="return_value")
+
+    printed = "".join(capsys.readouterr())
+    assert exit_info.value.code == 1
+    assert "extra" in printed
+    assert "password" not in printed
