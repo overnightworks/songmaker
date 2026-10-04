@@ -452,6 +452,15 @@ describe('the remembered playback across the session', () => {
 		localStorage.clear();
 	});
 
+	it('logout stops the take that was playing and leaves no take loaded', async () => {
+		mockApiLogout.mockResolvedValueOnce(undefined);
+
+		await logout(stayOnThePage);
+
+		expect(audioPlayer.current).toBeNull();
+		expect(audioPlayer.status).toBe('idle');
+	});
+
 	it('logout forgets the record', async () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });

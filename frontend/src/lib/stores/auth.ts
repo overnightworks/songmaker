@@ -2,6 +2,7 @@ import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
 import { NetworkError } from '$lib/api/fetch';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
 import { forgetPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import {
@@ -170,7 +171,9 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 // no signed-in user is left for a take still playing to save them under again.
 // `leaveForSignIn` runs once the server has ended the session and before auth
 // is cleared, so the sign-in page stands before the shell unmounts and the
-// overlays closing with it move no history (#1340).
+// overlays closing with it move no history (#1340). That leave stays inside
+// the app, so the player is unloaded here: no take of the signed-out user
+// plays on, or records into the next user's diagnostics (#1187).
 export async function logout(leaveForSignIn: () => Promise<void>): Promise<void> {
 	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
 	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
@@ -184,6 +187,7 @@ export async function logout(leaveForSignIn: () => Promise<void>): Promise<void>
 	try {
 		await leaveForSignIn();
 	} finally {
+		audioPlayer.unload();
 		clearAuth();
 		if (user) {
 			forgetPlaybackResume(user.id);
