@@ -152,6 +152,7 @@ def test_the_sync_loop_refuses_to_run_without_the_cache_it_reconciles(
     app.state.ctx = ctx
     config = replace(build_web_auth_config(ctx, get_settings()), session_cache=None)
     install_web_auth_config(app, config)
+    loop = session_sync_loop(app)
 
     with pytest.raises(RuntimeError, match="session cache"):
-        asyncio.run(session_sync_loop(app))
+        asyncio.run(loop)

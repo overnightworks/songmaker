@@ -182,10 +182,10 @@ def test_management_lock_rejects_pending_business_changes(users, session) -> Non
     user = users.create("nina", _PASSWORD_HASH, "user")
     session.commit()
     user.role = "admin"
+    lock = DatabaseWriteLock(session)
 
-    with pytest.raises(AssertionError, match="uncommitted mutations"):
-        with DatabaseWriteLock(session).hold():
-            pass
+    with pytest.raises(AssertionError, match="uncommitted mutations"), lock.hold():
+        pass
     session.rollback()
     assert users.get(user.id).role == "user"
 

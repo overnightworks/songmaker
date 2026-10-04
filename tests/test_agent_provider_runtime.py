@@ -68,9 +68,10 @@ def test_installing_the_same_deployment_facts_again_changes_nothing() -> None:
 
 def test_installing_differing_deployment_facts_over_a_live_one_is_refused() -> None:
     configure_agent_providers(Settings())
+    differing = Settings(claude_chat_model="a-different-model")
 
     with pytest.raises(ProviderRuntimeAlreadyConfiguredError):
-        configure_agent_providers(Settings(claude_chat_model="a-different-model"))
+        configure_agent_providers(differing)
 
 
 def test_a_configuration_is_immutable_once_installed() -> None:
