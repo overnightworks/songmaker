@@ -5,8 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app
-from webauth.passwords import hash_password
+from conftest import login_and_csrf, make_test_app, stored_hash
 
 from songmaker_cli.constants import REFERENCE_AUDIO_DIR
 from songmaker_cli.db.models import Album, Song, User
@@ -93,10 +92,10 @@ def test_rejects_missing_or_unsupported_owned_reference_audio(tmp_path: Path, na
 def _seed_users(session) -> None:
     session.add_all([
         User(
-            id="user-a", username="owner", password_hash=hash_password("pass1234"),
+            id="user-a", username="owner", password_hash=stored_hash("pass1234"),
         ),
         User(
-            id="user-b", username="other", password_hash=hash_password("pass1234"),
+            id="user-b", username="other", password_hash=stored_hash("pass1234"),
         ),
     ])
     session.flush()

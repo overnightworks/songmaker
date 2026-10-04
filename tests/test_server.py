@@ -15,11 +15,10 @@ from unittest.mock import MagicMock, patch
 
 import httpx
 import pytest
-from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app
+from conftest import TEST_SECRET, login_and_csrf, make_fake_redis, make_test_app, stored_hash
 from fastapi.testclient import TestClient
 from webauth.config import install_web_auth_config, installed_web_auth_config
 from webauth.cookies import sign_session_id
-from webauth.passwords import hash_password
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
@@ -37,7 +36,7 @@ _UNTRUSTED_PEER = "203.0.113.50"
 def _seed_server_data(session) -> None:
     admin = User(
         id=_ADMIN_ID, username="admin",
-        password_hash=hash_password("admin12345"), role="admin",
+        password_hash=stored_hash("admin12345"), role="admin",
     )
     session.add(admin)
     session.add(Album(id="test_album", title="Test", artist="Test"))
@@ -180,7 +179,7 @@ def test_get_audio_path_traversal_via_symlink(tmp_path: Path) -> None:
     with factory() as session:
         admin = User(
             id=admin_id, username="admin6",
-            password_hash=hash_password("admin12345"), role="admin",
+            password_hash=stored_hash("admin12345"), role="admin",
         )
         session.add(admin)
         session.commit()
@@ -219,8 +218,8 @@ def auth_server_app(tmp_path: Path):
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        owner = create_user(session, "owner", hash_password("pass1234"))
-        other = create_user(session, "other_user", hash_password("pass1234"))
+        owner = create_user(session, "owner", stored_hash("pass1234"))
+        other = create_user(session, "other_user", stored_hash("pass1234"))
         session.flush()
 
         owner_dir = audio_dir / owner.id
@@ -285,7 +284,7 @@ def test_startup_cleans_expired_sessions(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        user = User(username="tester", password_hash=hash_password("pass1234"))
+        user = User(username="tester", password_hash=stored_hash("pass1234"))
         session.add(user)
         session.flush()
         expired = datetime.now(timezone.utc) - timedelta(days=1)
@@ -499,7 +498,7 @@ def test_csrf_allows_configured_allowed_host(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin2", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin2", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         album = Album(id="a1", title="A", artist="A")
         session.add(album)
@@ -970,7 +969,7 @@ def test_wildcard_allowed_host_pattern(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin4", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin4", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         album = Album(id="a1", title="A", artist="A")
         session.add(album)
@@ -1131,7 +1130,7 @@ def test_get_audio_other_user_id_denied(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin5", password_hash=hash_password("admin12345"))
+        admin = User(username="admin5", password_hash=stored_hash("admin12345"))
         session.add(admin)
         session.commit()
 
@@ -1307,7 +1306,7 @@ def test_health_no_auth_required(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin6", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin6", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         session.commit()
 
@@ -1354,7 +1353,7 @@ def test_health_with_worker_running(tmp_path: Path, mock_arq_pool) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin7", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin7", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         session.commit()
 
@@ -1398,7 +1397,7 @@ def test_health_degraded_when_worker_stopped(tmp_path: Path, mock_arq_pool) -> N
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        admin = User(username="admin8", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin8", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         session.commit()
 
@@ -1438,7 +1437,7 @@ def test_health_queue_depth_cap_reached(tmp_path: Path, mock_arq_pool) -> None:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
-            username="admincap", password_hash=hash_password("admin12345"), role="admin",
+            username="admincap", password_hash=stored_hash("admin12345"), role="admin",
         )
         session.add(admin)
         for _ in range(3):
@@ -1483,7 +1482,7 @@ def _make_metrics_client(tmp_path: Path, mock_arq_pool=None) -> TestClient:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         admin = User(
-            username="metrics_admin", password_hash=hash_password("admin12345"), role="admin",
+            username="metrics_admin", password_hash=stored_hash("admin12345"), role="admin",
         )
         session.add(admin)
         session.commit()
@@ -1536,7 +1535,7 @@ def test_metrics_with_jobs(tmp_path: Path, mock_arq_pool) -> None:
     now = datetime.now(timezone.utc)
     with factory() as session:
         admin = User(
-            username="metrics_admin2", password_hash=hash_password("admin12345"), role="admin",
+            username="metrics_admin2", password_hash=stored_hash("admin12345"), role="admin",
         )
         session.add(admin)
         job = Job(type="generate", status="completed", started_at=now, completed_at=now)
@@ -1922,8 +1921,7 @@ def auto_setup_ctx(tmp_path: Path) -> AppContext:
 
 
 def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
-    from webauth.passwords import verify_password
-
+    from songmaker_cli.app_context import build_password_hasher
     from songmaker_cli.db.models import AuditLog, UserSession
     from songmaker_cli.db.queries import get_user_by_username
     from songmaker_cli.lifecycle import auto_setup_admin
@@ -1935,7 +1933,7 @@ def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
         user = get_user_by_username(session, "boss")
         assert user is not None
         assert user.role == "admin"
-        assert verify_password("Str0ng!Pass99", user.password_hash)
+        assert build_password_hasher().verify("Str0ng!Pass99", user.password_hash)
         assert session.query(AuditLog).count() == 0
         assert session.query(UserSession).count() == 0
 
@@ -1948,7 +1946,7 @@ def test_auto_setup_admin_leaves_an_existing_admin_untouched(
     from songmaker_cli.lifecycle import auto_setup_admin
 
     with auto_setup_ctx.db() as session:
-        create_user(session, "existing", hash_password("Test1234!"), role="admin")
+        create_user(session, "existing", stored_hash("Test1234!"), role="admin")
         session.commit()
 
     with (

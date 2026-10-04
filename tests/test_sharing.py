@@ -15,11 +15,11 @@ from conftest import (
     login_and_csrf,
     make_fake_redis,
     make_test_app,
+    stored_hash,
 )
 from fastapi.testclient import TestClient
 from sqlalchemy import event
 from webauth.cookies import sign_session_id
-from webauth.passwords import hash_password
 from webauth.proxies import TrustedProxies
 
 from songmaker_cli.app_context import AppContext
@@ -37,7 +37,7 @@ _TRUSTED_PEER = "172.18.0.1"
 
 
 def _seed_sharing_data(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -80,7 +80,7 @@ def test_share_album(sharing_app: TestClient) -> None:
 
 
 def _seed_mixed_playability_album(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -994,7 +994,7 @@ def _count_queries(
 
 
 def _seed_multi_track_album(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     for i in range(4):
@@ -1067,7 +1067,7 @@ def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path) -> None:
 
 
 def _seed_song_with_pick(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(
@@ -1099,7 +1099,7 @@ def test_shared_song_view_includes_pick_media(tmp_path: Path) -> None:
 
 def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> None:
     def _seed(session) -> None:
-        admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+        admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
         session.add(admin)
         session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
         session.add(
@@ -1304,7 +1304,7 @@ def test_shared_generation_reports_the_takes_measured_duration(
 
 
 def _seed_playlist_with_entries(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.add(Album(id="test_album", title="Test Album", artist="Test Artist"))
     session.add(Playlist(id="pl1", title="My Playlist"))
@@ -1621,8 +1621,8 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
 
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
-        owner = create_user(session, "owner", hash_password("pass1234"))
-        other = create_user(session, "other_user", hash_password("pass1234"))
+        owner = create_user(session, "owner", stored_hash("pass1234"))
+        other = create_user(session, "other_user", stored_hash("pass1234"))
         session.flush()
         create_album(session, "owners_album", "Owners Album", created_by=owner.id)
         expires = datetime.now(timezone.utc) + timedelta(days=30)
@@ -1746,7 +1746,7 @@ _SHARED_PLAYLIST_ENTRY_KEYS = {
 
 
 def _seed_song_with_two_takes(session) -> None:
-    admin = User(username="admin", password_hash=hash_password("admin12345"), role="admin")
+    admin = User(username="admin", password_hash=stored_hash("admin12345"), role="admin")
     session.add(admin)
     session.flush()
     session.add(
