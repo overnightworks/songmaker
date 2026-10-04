@@ -230,17 +230,32 @@ test('shuffle while a library take plays keeps the position reached during the p
 	);
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'false');
 	let positionAtRelease = 0;
+	let responseReady!: () => void;
+	const responseIsReady = new Promise<void>((resolve) => {
+		responseReady = resolve;
+	});
+	let allowFulfillment!: () => void;
+	const fulfillmentAllowed = new Promise<void>((resolve) => {
+		allowFulfillment = resolve;
+	});
 	await page.route('**/api/library/pool-queue?**', async (route) => {
 		const positionAtFetch = timeline.position;
 		const response = await route.fetch();
 		await expect.poll(() => timeline.position).toBeGreaterThan(positionAtFetch + 0.4);
 		positionAtRelease = timeline.position;
+		responseReady();
+		await fulfillmentAllowed;
 		await route.fulfill({ response });
 	});
 
 	await shuffle.click();
 
-	await expect.poll(() => positionAtRelease).toBeGreaterThan(0);
+	await responseIsReady;
+	const queue = page.getByRole('region', { name: 'Queue' });
+	const currentQueueRow = queue.locator('button[aria-current="true"]');
+	await expect(currentQueueRow).toHaveCount(0);
+	allowFulfillment();
+	await expect(currentQueueRow).toBeVisible();
 	await expect.poll(() => timeline.position).toBeGreaterThan(positionAtRelease + 0.15);
 	await expect(shuffle).toHaveAttribute('aria-pressed', 'true');
 	await expect(
