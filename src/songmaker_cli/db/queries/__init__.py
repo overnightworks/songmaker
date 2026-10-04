@@ -148,6 +148,7 @@ from songmaker_cli.db.queries.generations import (
 from songmaker_cli.db.queries.generations import unkeep_generation as unkeep_generation
 from songmaker_cli.db.queries.generations import unpick_generation as unpick_generation
 from songmaker_cli.db.queries.jobs import JobDurationStats as JobDurationStats
+from songmaker_cli.db.queries.jobs import JobStatusUpdate as JobStatusUpdate
 from songmaker_cli.db.queries.jobs import claim_next_cover_job as claim_next_cover_job
 from songmaker_cli.db.queries.jobs import count_cover_jobs_since as count_cover_jobs_since
 from songmaker_cli.db.queries.jobs import (
@@ -310,6 +311,7 @@ from songmaker_cli.db.queries.resource_events import (
     list_resource_events_after as list_resource_events_after,
 )
 from songmaker_cli.db.queries.sentinels import UNSET as UNSET
+from songmaker_cli.db.queries.sentinels import unset_if_none as unset_if_none
 from songmaker_cli.db.queries.settings import (
     CoverSettings as CoverSettings,
 )

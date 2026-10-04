@@ -59,6 +59,7 @@ from songmaker_cli.db.queries import (
     get_song,
     get_version,
     lock_active_job,
+    unset_if_none,
 )
 from songmaker_cli.generate import (
     _decode_audio,
@@ -186,7 +187,7 @@ class GenerationProgressTracker:
             self.job_id,
             JobStatus.RUNNING,
             progress=self.reached,
-            phase=self.phase,
+            phase=unset_if_none(self.phase),
             **fields,
         )
         self.last_write = self.clock()

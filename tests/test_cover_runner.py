@@ -27,7 +27,7 @@ from songmaker_cli.constants import JOB_ERROR_COVER_IMAGE_FAILED, JobStatus, Job
 from songmaker_cli.cowriter.routing import CoverImageDispatch
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, AlbumCoverSuggestion, Job, Song, User, Version
-from songmaker_cli.db.queries import update_job_status
+from songmaker_cli.db.queries import JobStatusUpdate, update_job_status
 from songmaker_cli.settings import CoverExecutor, Settings
 
 
@@ -84,7 +84,7 @@ def test_music_executor_neither_starts_a_cover_run_nor_claims_a_job(tmp_path: Pa
 def test_cancelled_queued_web_cover_job_is_never_claimed(tmp_path: Path, monkeypatch) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     with factory() as session:
-        assert update_job_status(session, job_id, JobStatus.CANCELLED)
+        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
         session.commit()
 
     def should_not_run(*_args, **_kwargs) -> bytes:
@@ -195,7 +195,7 @@ def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leav
     with factory() as session:
         running_job = session.get(Job, running_job_id)
         assert running_job is not None
-        assert update_job_status(session, running_job.id, JobStatus.RUNNING)
+        assert update_job_status(session, running_job.id, JobStatusUpdate(JobStatus.RUNNING))
         session.add(AlbumCoverSuggestion(
             id="interrupted",
             album_id="album",
@@ -234,7 +234,7 @@ def test_web_recovery_fails_interrupted_work_cleans_only_its_suggestion_and_leav
 def test_music_executor_does_not_recover_web_cover_jobs(tmp_path: Path) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     with factory() as session:
-        assert update_job_status(session, job_id, JobStatus.RUNNING)
+        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
 
     assert cover_runner.recover_web_cover_jobs(
@@ -250,7 +250,7 @@ def test_cover_job_passes_image_policy_and_reports_generator_abort(
 ) -> None:
     factory, audio_dir, job_id = _cover_job(tmp_path)
     with factory() as session:
-        assert update_job_status(session, job_id, JobStatus.RUNNING)
+        assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.RUNNING))
         session.commit()
     abort_signal = threading.Event() if aborted else None
     if abort_signal is not None:
@@ -483,7 +483,7 @@ def test_web_cancel_reaps_the_codex_process_and_keeps_the_job_cancelled(
         ))
         assert await asyncio.to_thread(spawned.wait, 1)
         with factory() as session:
-            assert update_job_status(session, job_id, JobStatus.CANCELLED)
+            assert update_job_status(session, job_id, JobStatusUpdate(JobStatus.CANCELLED))
             session.commit()
         assert registry.abort(job_id)
         assert await asyncio.to_thread(abort_requested.wait, 1)

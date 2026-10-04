@@ -63,6 +63,7 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Generation, Version
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     bulk_delete_generations,
     delete_generation,
     disable_generation_sharing,
@@ -758,7 +759,11 @@ def api_remaster_generation(
 def _fail_job(ctx: AppContext, job_id: str) -> None:
     try:
         with ctx.db() as session:
-            update_job_status(session, job_id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
+            update_job_status(
+                session,
+                job_id,
+                JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+            )
             session.commit()
     except Exception:
         log.exception(
