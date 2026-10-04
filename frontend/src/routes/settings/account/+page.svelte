@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { changePassword } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
+	import { PASSWORD_MIN_LENGTH } from '$lib/constants';
 	import { currentUser } from '$lib/stores/auth';
 
 	let current = $state('');
@@ -70,7 +71,7 @@
 				<input
 					type={showPassword ? 'text' : 'password'}
 					bind:value={newPass}
-					minlength={8}
+					minlength={PASSWORD_MIN_LENGTH}
 					required
 					autocomplete="new-password"
 					disabled={submitting}
@@ -81,7 +82,7 @@
 				<input
 					type={showPassword ? 'text' : 'password'}
 					bind:value={confirm}
-					minlength={8}
+					minlength={PASSWORD_MIN_LENGTH}
 					required
 					autocomplete="new-password"
 					disabled={submitting}

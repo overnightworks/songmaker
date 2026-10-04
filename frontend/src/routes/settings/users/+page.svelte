@@ -94,6 +94,8 @@
 		MODELS_TASK_COWRITER_LABEL,
 		MODELS_TASK_SCORING_LABEL,
 		modelsRouteNotAvailablePhrase,
+		PASSWORD_MIN_LENGTH,
+		PASSWORD_TOO_SHORT_MESSAGE,
 		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
 		PROVIDER_CLI_LOGIN_LABELS,
 		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
@@ -187,6 +189,7 @@
 
 	let newUsername = $state('');
 	let newPassword = $state('');
+	let createError = $state('');
 	let newRole = $state('user');
 	let creating = $state(false);
 
@@ -706,7 +709,7 @@
 	}
 
 	async function handleCreate() {
-		error = '';
+		createError = '';
 		creating = true;
 		try {
 			await createUser(newUsername, newPassword, newRole);
@@ -715,7 +718,7 @@
 			newRole = 'user';
 			users = await fetchUsers();
 		} catch (e) {
-			error = describeFailure(e, 'Failed to create user');
+			createError = describeFailure(e, 'Failed to create user');
 		} finally {
 			creating = false;
 		}
@@ -741,8 +744,8 @@
 	}
 
 	async function handleResetPassword(userId: string) {
-		if (!resetPasswordValue || resetPasswordValue.length < 8) {
-			error = 'Password must be at least 8 characters';
+		if (!resetPasswordValue || resetPasswordValue.length < PASSWORD_MIN_LENGTH) {
+			error = PASSWORD_TOO_SHORT_MESSAGE;
 			return;
 		}
 		resettingPassword = true;
@@ -873,8 +876,8 @@
 				<h2>Create User</h2>
 				<form
 					class="create-form"
-					oninput={() => (error = '')}
-					onchange={() => (error = '')}
+					oninput={() => (createError = '')}
+					onchange={() => (createError = '')}
 					onsubmit={(e) => {
 						e.preventDefault();
 						handleCreate();
@@ -892,7 +895,7 @@
 						type="password"
 						bind:value={newPassword}
 						placeholder="Password"
-						minlength={8}
+						minlength={PASSWORD_MIN_LENGTH}
 						required
 						autocomplete="new-password"
 					/>
@@ -904,6 +907,9 @@
 						{creating ? 'Creating...' : 'Create'}
 					</button>
 				</form>
+				{#if createError}
+					<p class="error">{createError}</p>
+				{/if}
 
 				<h2>Users</h2>
 				<table class="stack-table {compact ? COMPACT_STACK_CLASS : ''}">
@@ -979,8 +985,8 @@
 											<input
 												type="password"
 												bind:value={resetPasswordValue}
-												placeholder="New password (min 8 chars)"
-												minlength={8}
+												placeholder="New password (min {PASSWORD_MIN_LENGTH} chars)"
+												minlength={PASSWORD_MIN_LENGTH}
 												required
 												autocomplete="new-password"
 											/>
@@ -1121,13 +1127,17 @@
 									>{sess.expires_at ? new Date(sess.expires_at).toLocaleString() : ''}</td
 								>
 								<td class="actions">
-									<button
-										class="small danger"
-										data-hitbox="text"
-										onclick={() => handleForceLogout(sess.id)}
-									>
-										Revoke
-									</button>
+									{#if sess.is_current}
+										<span class="text-muted">This device</span>
+									{:else}
+										<button
+											class="small danger"
+											data-hitbox="text"
+											onclick={() => handleForceLogout(sess.id)}
+										>
+											Revoke
+										</button>
+									{/if}
 								</td>
 							</tr>
 						{/each}

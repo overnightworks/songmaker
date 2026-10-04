@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { setupAdmin } from '$lib/api/client';
 	import { describeFailure } from '$lib/api/fetch';
-	import { APP_NAME } from '$lib/constants';
+	import { APP_NAME, PASSWORD_MIN_LENGTH } from '$lib/constants';
 	import { currentUser } from '$lib/stores/auth';
 
 	let username = $state('');
@@ -57,7 +57,7 @@
 					<input
 						type={showPassword ? 'text' : 'password'}
 						bind:value={password}
-						minlength={8}
+						minlength={PASSWORD_MIN_LENGTH}
 						required
 						autocomplete="new-password"
 						disabled={submitting}
@@ -77,7 +77,7 @@
 				<input
 					type={showPassword ? 'text' : 'password'}
 					bind:value={confirmPassword}
-					minlength={8}
+					minlength={PASSWORD_MIN_LENGTH}
 					required
 					autocomplete="new-password"
 					disabled={submitting}
