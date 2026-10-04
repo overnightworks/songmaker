@@ -11,6 +11,7 @@ import {
 	landedEntry,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
+	navigateAway,
 	navigateTo,
 	pageStateOfHistoryState,
 	pushEntry,
@@ -739,6 +740,25 @@ describe('route convergence after a landing', () => {
 		await loading.abort();
 
 		expect(reportedNavigations).toHaveLength(navigated);
+	});
+
+	// Issue #1340: the session lost while a route mount loads; the router
+	// reports the way to sign-in only after the mount it aborts has failed.
+	it('an aborted navigation leaves the mount to a navigation away issued before the router reports it', async () => {
+		const loading = abortableNavigation();
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		const releaseRouteLoads = holdRouteLoads();
+		const leaving = navigateAway('/login');
+
+		await loading.abort();
+		releaseRouteLoads();
+		await leaving;
+
+		expect(location.pathname).toBe('/login');
 	});
 
 	it.each(['link', 'goto'] as const)(

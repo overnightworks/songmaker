@@ -433,8 +433,20 @@ function mountStandingAddress(): void {
 	});
 }
 
-// The router's navigation started last; a newer one aborts it.
+// The router's navigation started last; a newer one aborts it. Null while a
+// navigation is issued that the router has yet to report (`navigateAway`).
 let latestRouterNavigation: Promise<void> | null = null;
+
+// A navigation to another page -- sign-in after a lost session -- takes over
+// from a route mount still loading the moment it is issued. The router reports
+// it in `beforeNavigate` only once it has resolved its route, and the mount it
+// aborts meanwhile must not be issued again over it: that would abort this
+// navigation in turn and leave the page standing (#1340).
+export function navigateAway(url: string): Promise<void> {
+	latestRouterNavigation = null;
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
+	return goto(url);
+}
 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target

@@ -249,15 +249,13 @@ export function handleSessionLost(): Promise<void> {
 // sign-in page (#1230).
 async function reactToSessionLost(): Promise<void> {
 	const lostAt = window.location.pathname + window.location.search;
-	const [{ hasSessionToLose, clearAuth }, { historyStandsStill }, { goto }] = await Promise.all([
-		import('$lib/stores/auth'),
-		import('$lib/history/historyController'),
-		import('$app/navigation')
-	]);
+	const [{ hasSessionToLose, clearAuth }, { historyStandsStill, navigateAway }] = await Promise.all(
+		[import('$lib/stores/auth'), import('$lib/history/historyController')]
+	);
 	if (!hasSessionToLose()) return;
 	await historyStandsStill();
 	try {
-		await goto(signInAddress(lostAt));
+		await navigateAway(signInAddress(lostAt));
 	} finally {
 		clearAuth('unauthorized');
 	}
