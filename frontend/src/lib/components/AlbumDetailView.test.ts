@@ -118,7 +118,13 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 import AlbumDetailView from './AlbumDetailView.svelte';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import {
+	pendingStart,
+	playAlbum,
+	playStartNotice,
+	setShuffle,
+	shuffleEnabled
+} from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { addToast } from '$lib/stores/toast';
 
@@ -172,6 +178,8 @@ afterEach(async () => {
 	nowPlayingSurface.set('closed');
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
+	playStartNotice.set('idle');
+	pendingStart.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetConnectivityForTests();
@@ -305,6 +313,70 @@ describe('AlbumDetailView header', () => {
 		expect(
 			getByRoleButton(requireElement(target, '.collection-header'), collectionPauseLabel('album'))
 		).not.toBeNull();
+	});
+
+	describe('while a start of this album waits (#1330)', () => {
+		const readsBusyPause = { label: collectionPauseLabel('album'), busy: 'true', spinner: true };
+
+		function playCircle(target: HTMLElement): HTMLButtonElement {
+			return requireElement<HTMLButtonElement>(target, '.collection-header .play-circle');
+		}
+
+		function circleFacts(circle: HTMLButtonElement) {
+			return {
+				label: circle.getAttribute('aria-label'),
+				busy: circle.getAttribute('aria-busy'),
+				spinner: circle.querySelector('.spinner') !== null
+			};
+		}
+
+		it('a header start waiting for the network reads Pause with its spinner, and a tap withdraws it', async () => {
+			pendingStart.set({
+				albumId: 'a-local',
+				song: { songTitle: 'Song', artist: 'Artist', albumTitle: 'Night Drive' }
+			});
+			playStartNotice.set('awaiting-network');
+			const target = await renderDetail();
+			const whileWaiting = circleFacts(playCircle(target));
+
+			playCircle(target).click();
+			await tick();
+
+			expect({
+				whileWaiting,
+				afterTheTap: circleFacts(playCircle(target)),
+				waiting: get(pendingStart),
+				startedAgain: vi.mocked(playAlbum).mock.calls.length
+			}).toEqual({
+				whileWaiting: readsBusyPause,
+				afterTheTap: { label: collectionPlayLabel('album'), busy: 'false', spinner: false },
+				waiting: null,
+				startedAgain: 0
+			});
+		});
+
+		it('a take of it waiting for its bytes reads Pause with its spinner, and a tap pauses it', async () => {
+			queueContext.set({ type: 'album', albumId: 'a-local' });
+			audioPlayer.current = {
+				songId: 's-local',
+				generation: generation({ song_id: 's-local' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = 'buffering';
+			vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+			const target = await renderDetail();
+			const whileWaiting = circleFacts(playCircle(target));
+
+			playCircle(target).click();
+			await tick();
+
+			expect({
+				whileWaiting,
+				status: audioPlayer.status,
+				startedAgain: vi.mocked(playAlbum).mock.calls.length
+			}).toEqual({ whileWaiting: readsBusyPause, status: 'paused', startedAgain: 0 });
+		});
 	});
 
 	it.each([

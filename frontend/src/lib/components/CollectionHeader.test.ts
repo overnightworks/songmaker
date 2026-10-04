@@ -138,11 +138,10 @@ function queuePlays(kind: HeaderKind, collectionId: string, status: 'playing' | 
 		lyrics: null
 	};
 	audioPlayer.status = status;
-	vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
-		audioPlayer.status = 'paused';
-	});
-	vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
-		audioPlayer.status = 'playing';
+	// jsdom gives the player no media element, so the circle's press, the
+	// transport's own toggle, moves the status the way a real element does.
+	vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+		audioPlayer.status = audioPlayer.status === 'playing' ? 'paused' : 'playing';
 	});
 }
 

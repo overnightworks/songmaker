@@ -22,6 +22,7 @@ import type {
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
+	transportOffersPause,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type StreamFallbackState,
@@ -1298,8 +1299,10 @@ const PLAYBACK_FAILED_TOAST = 'Playback failed';
 // toggles pause if the row's take is already playing, otherwise starts a
 // queue from it (its album, else the library pool), reporting any failure as
 // a toast instead of throwing into the caller.
+// A press on the row of the take that offers Pause, a waiting one included,
+// is that Pause, as the bar's is (#1330).
 export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
-	if (audioPlayer.current?.generation.id === gen.id && audioPlayer.status === 'playing') {
+	if (isTakeCurrent(gen) && transportOffersPause(audioPlayer.transport)) {
 		audioPlayer.toggle();
 		return;
 	}

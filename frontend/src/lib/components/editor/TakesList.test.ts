@@ -962,25 +962,32 @@ describe('TakesList', () => {
 	});
 
 	it.each([
-		['playing', 'Pause'],
-		['paused', 'Play']
-	] as const)('names the transport action for a %s take', async (status, label) => {
-		const currentSong = song(versionedSongDefaults());
-		audioPlayer.current = {
-			generation: currentSong.generations[0],
-			songId: currentSong.id,
-			songTitle: currentSong.title,
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		audioPlayer.status = status;
-		const { target } = await render({ song: currentSong });
-		const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
-		expect(button).not.toBeNull();
-		button?.click();
-		expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
-	});
+		{ status: 'playing', label: 'Pause', busy: 'false', spinner: false },
+		{ status: 'paused', label: 'Play', busy: 'false', spinner: false },
+		{ status: 'buffering', label: 'Pause', busy: 'true', spinner: true }
+	] as const)(
+		'names the transport action for a $status take, as the bar does (#1330)',
+		async ({ status, label, busy, spinner }) => {
+			const currentSong = song(versionedSongDefaults());
+			audioPlayer.current = {
+				generation: currentSong.generations[0],
+				songId: currentSong.id,
+				songTitle: currentSong.title,
+				artist: '',
+				albumTitle: '',
+				lyrics: null
+			};
+			audioPlayer.status = status;
+			const { target } = await render({ song: currentSong });
+			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
+			expect({
+				busy: button?.getAttribute('aria-busy'),
+				spinner: button?.querySelector('.spinner') !== null
+			}).toEqual({ busy, spinner });
+			button?.click();
+			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
+		}
+	);
 
 	it.each(['ctrlKey', 'metaKey'])(
 		'selects through the play control with %s without playback',

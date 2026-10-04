@@ -14,8 +14,22 @@
 	} from '$lib/constants';
 	import { openLibraryWall } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
-	import { playbackSource, setShuffle, type CollectionStart } from '$lib/stores/player';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		pendingStart,
+		playbackSource,
+		playStartNotice,
+		setShuffle,
+		stopStartAwaitingNetwork,
+		transportOfTheStart,
+		waitingStartOf,
+		type CollectionStart
+	} from '$lib/stores/player';
+	import {
+		audioPlayer,
+		transportIsBusy,
+		transportOffersPause,
+		type TransportState
+	} from '$lib/services/audioPlayer.svelte';
 
 	interface Props {
 		kind: 'album' | 'playlist';
@@ -159,7 +173,16 @@
 			$playbackSource?.kind === kind &&
 			$playbackSource.id === collectionId
 	);
-	const sounding = $derived(queueIsThisCollection && audioPlayer.status === 'playing');
+	// A start of this album that waits for the network is the queue to come:
+	// the circle shows its wait as the bar does, and a tap withdraws it (#1330).
+	const startWaitsHere = $derived(
+		kind === 'album' &&
+			waitingStartOf(audioPlayer.current, $playStartNotice, $pendingStart)?.albumId === collectionId
+	);
+	const circleTransport: TransportState = $derived.by(() => {
+		if (startWaitsHere) return transportOfTheStart(null, $playStartNotice, 'idle');
+		return queueIsThisCollection ? audioPlayer.transport : 'idle';
+	});
 
 	// The header is where a collection's play order is chosen: the circle plays
 	// it in order from the top, the shuffle square beside it plays it shuffled
@@ -172,8 +195,8 @@
 	// and, unless this collection is the queue, the circle, so no tap there
 	// reaches the listener's shuffle setting.
 	function onCircle(): void {
-		if (sounding) audioPlayer.pause();
-		else if (queueIsThisCollection) audioPlayer.play();
+		if (startWaitsHere) stopStartAwaitingNetwork();
+		else if (queueIsThisCollection) audioPlayer.toggle();
 		else start('top');
 	}
 
@@ -248,8 +271,9 @@
 	{initials}
 	{artFill}
 	{kind}
-	playing={sounding}
-	onplay={onplay || queueIsThisCollection ? onCircle : null}
+	playing={transportOffersPause(circleTransport)}
+	busy={transportIsBusy(circleTransport)}
+	onplay={onplay || queueIsThisCollection || startWaitsHere ? onCircle : null}
 	onshuffle={onplay ? () => start('random') : null}
 	{titleArea}
 	{actions}

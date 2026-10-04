@@ -1639,6 +1639,29 @@ describe('starting library playback from a take', () => {
 		toasts.set([]);
 	});
 
+	it.each(['playing', 'buffering'] as const)(
+		'a press on the row of the take that is %s pauses it rather than starting it again (#1330)',
+		async (status) => {
+			const gen = makeGen(genDefaults);
+			const song = makeSong(queuedSongDefaults());
+			audioPlayer.current = makePlayback(gen, song);
+			audioPlayer.status = status;
+			vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+
+			await playTake(gen, song);
+
+			expect({
+				status: audioPlayer.status,
+				startsAgain: vi.mocked(fetchLibraryPoolQueue).mock.calls.length
+			}).toEqual({ status: 'paused', startsAgain: 0 });
+		}
+	);
+
 	it('does not call createLibraryQueueStreamSnapshot and loads the start take natively', async () => {
 		const gen = makeGen({ ...genDefaults, id: 'g2' });
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
