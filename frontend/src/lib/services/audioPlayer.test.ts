@@ -369,6 +369,19 @@ describe('load()', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
+	it('reads loading, never ready, between canplay and the play event of an autoplaying take (#1330)', async () => {
+		audioPlayer.load(makeInfo());
+
+		fakeAudio.fire('canplay');
+		const beforeItsPlayEvent = audioPlayer.status;
+		await Promise.resolve();
+
+		expect({ beforeItsPlayEvent, once: audioPlayer.status }).toEqual({
+			beforeItsPlayEvent: 'loading',
+			once: 'playing'
+		});
+	});
+
 	it('does not autoplay when opts.autoplay is false', () => {
 		audioPlayer.load(makeInfo(), { autoplay: false });
 		fakeAudio.fire('canplay');

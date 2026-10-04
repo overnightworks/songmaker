@@ -967,14 +967,14 @@ class AudioPlayer {
 			this.clearStallRecoveryTimer();
 			if (this.streamEngine.active) this.applyPendingStreamSeek(el);
 			else this.applyPendingRecoverySeek(el);
-			this.status = el.paused ? 'ready' : 'playing';
 			this.duration = this.streamEngine.active
 				? this.streamEngine.activeDuration
 				: (this.deckTakeDuration(el) ?? (el.duration || this.duration));
 			if (this.autoplayPending) {
-				this.autoplayPending = false;
-				el.play().catch((err) => this.handlePlayRejection(err));
+				this.playTheAskedForSound(el);
+				return;
 			}
+			this.status = el.paused ? 'ready' : 'playing';
 		});
 		on('timeupdate', () => {
 			if (this.streamEngine.active) {
@@ -996,6 +996,7 @@ class AudioPlayer {
 			this.currentTime = position;
 		});
 		on('play', () => {
+			this.autoplayPending = false;
 			this.streamEndSignaled = false;
 			if (this.status !== 'error') this.status = 'playing';
 			this.startProgressWatchdog(el);
@@ -1559,10 +1560,24 @@ class AudioPlayer {
 		}
 	}
 
+	// A paused element stays loading until its play event: read as ready in
+	// between, the lock screen would flash paused (#1330). An element already
+	// playing sends no play event, so it reads playing at once.
+	private playTheAskedForSound(el: HTMLAudioElement): void {
+		if (el.paused) {
+			this.status = 'loading';
+		} else {
+			this.autoplayPending = false;
+			this.status = 'playing';
+		}
+		el.play().catch((err) => this.handlePlayRejection(err));
+	}
+
 	private handlePlayRejection(err: unknown): void {
 		const name = err instanceof Error ? err.name : '';
 		this.note('play_rejected', name);
 		if (name === 'AbortError') return;
+		this.autoplayPending = false;
 		if (name === 'NotAllowedError') {
 			this.status = 'paused';
 			this.failure = {
