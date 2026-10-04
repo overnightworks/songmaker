@@ -273,10 +273,11 @@ jobs:
   sonar:
     name: SonarCloud scan
     needs: [backend, frontend]
-    # A fork's pull request receives no SONAR_TOKEN, so no analysis exists for
-    # it to read; the job shows as skipped there instead of failing on a
-    # missing credential.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # A fork's pull request and a Dependabot-triggered run receive no
+    # SONAR_TOKEN (Dependabot runs see only Dependabot secrets, and this
+    # repository defines none), so no analysis exists for them to read; the
+    # job shows as skipped there instead of failing on a missing credential.
+    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     # Checkout + artifact download + scan + findings query; no test suite runs here.
     timeout-minutes: 10
