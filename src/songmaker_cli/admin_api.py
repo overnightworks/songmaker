@@ -469,6 +469,7 @@ async def load_model_on_worker_endpoint(
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries import (
+        JobStatusUpdate,
         create_job,
         get_queue_position,
         update_job_status,
@@ -490,7 +491,9 @@ async def load_model_on_worker_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
+        update_job_status(
+            db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+        )
         db.commit()
         raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 
@@ -647,6 +650,7 @@ async def download_model_endpoint(
     from songmaker_cli.arq_pool import get_arq_pool
     from songmaker_cli.constants import ARQ_MUSIC_QUEUE_NAME
     from songmaker_cli.db.queries import (
+        JobStatusUpdate,
         create_job,
         get_queue_position,
         update_job_status,
@@ -687,7 +691,9 @@ async def download_model_endpoint(
             _queue_name=ARQ_MUSIC_QUEUE_NAME,
         )
     except ConnectionError:
-        update_job_status(db, job.id, JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL)
+        update_job_status(
+            db, job.id, JobStatusUpdate(JobStatus.FAILED, error=JOB_QUEUE_UNAVAILABLE_DETAIL),
+        )
         db.commit()
         raise HTTPException(503, JOB_QUEUE_UNAVAILABLE_DETAIL)
 

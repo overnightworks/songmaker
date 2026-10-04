@@ -8,10 +8,12 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
+from conftest import login_and_csrf, make_test_app
+from fastapi.testclient import TestClient
+from redis import Redis
 from webauth.passwords import hash_password, verify_password
 
-from songmaker_cli.db.engine import init_test_db
-from songmaker_cli.db.models import User
+from songmaker_cli.db.models import User, UserSession
 from songmaker_cli.errors import GenerationError, ValidationError
 from songmaker_cli.generate import (
     DecodedAudio,
@@ -99,51 +101,103 @@ def test_main_error_handling() -> None:
 # ── reset-password (local DB escape hatch) ──────────────────────────
 
 RESET_USERNAME = "alice"
-OLD_PASSWORD_HASH = hash_password("old-Passw0rd")
+OLD_PASSWORD = "old-Passw0rd"
+NEW_PASSWORD = "fresh-Passw0rd"
+OLD_PASSWORD_HASH = hash_password(OLD_PASSWORD)
+CLOSED_REDIS_URL = "redis://127.0.0.1:1/0"
 
 
 @pytest.fixture
-def local_db(tmp_path: Path, monkeypatch):
-    factory = init_test_db(tmp_path / "songmaker.db")
-    with factory() as session:
+def served_app(tmp_path: Path, monkeypatch) -> TestClient:
+    """A running app whose database and session cache the CLI reaches as well."""
+
+    def seed_alice(session) -> None:
         session.add(User(username=RESET_USERNAME, password_hash=OLD_PASSWORD_HASH, role="admin"))
-        session.commit()
+
+    client, factory = make_test_app(tmp_path, seed_db=seed_alice)
     monkeypatch.setattr("songmaker_cli.db.engine.resolve_database_url", lambda: "sqlite://")
     monkeypatch.setattr("songmaker_cli.db.engine.init_db", lambda _url: factory)
-    return factory
+    monkeypatch.setattr(
+        "songmaker_cli.redis_client.create_redis", lambda _url: client.app.state.ctx.redis,
+    )
+    return client
 
 
-def _stored_hash(factory) -> str:
-    with factory() as session:
+def _stored_hash(client: TestClient) -> str:
+    with client.app.state.ctx.db() as session:
         return session.query(User).filter_by(username=RESET_USERNAME).one().password_hash
 
 
-def test_reset_password_stores_the_new_password(local_db, capsys) -> None:
-    app(["reset-password", RESET_USERNAME, "fresh-Passw0rd"], result_action="return_value")
+def _session_count(client: TestClient) -> int:
+    with client.app.state.ctx.db() as session:
+        return session.query(UserSession).count()
 
-    assert verify_password("fresh-Passw0rd", _stored_hash(local_db))
-    assert capsys.readouterr().out == f"Password reset for '{RESET_USERNAME}' (role=admin)\n"
+
+def _reset_password(password: str) -> None:
+    app(["reset-password", RESET_USERNAME, password], result_action="return_value")
+
+
+def test_reset_password_stores_the_new_password(served_app, capsys) -> None:
+    _reset_password(NEW_PASSWORD)
+
+    assert verify_password(NEW_PASSWORD, _stored_hash(served_app))
+    assert capsys.readouterr().out == (
+        f"Password reset for '{RESET_USERNAME}' (role=admin); 0 sessions ended\n"
+    )
+
+
+def test_reset_password_ends_every_session_of_the_account(served_app, capsys) -> None:
+    login_and_csrf(served_app, RESET_USERNAME, OLD_PASSWORD)
+    assert served_app.get("/api/auth/me").status_code == 200
+
+    _reset_password(NEW_PASSWORD)
+
+    assert served_app.get("/api/auth/me").status_code == 401
+    assert _session_count(served_app) == 0
+    assert capsys.readouterr().out.endswith("; 1 session ended\n")
+    fresh_login = served_app.post(
+        "/api/auth/login", json={"username": RESET_USERNAME, "password": NEW_PASSWORD},
+    )
+    assert fresh_login.status_code == 200
+
+
+def test_reset_password_changes_nothing_when_the_session_cache_is_unreachable(
+    served_app, capsys, monkeypatch,
+) -> None:
+    login_and_csrf(served_app, RESET_USERNAME, OLD_PASSWORD)
+    monkeypatch.setattr(
+        "songmaker_cli.redis_client.create_redis", lambda _url: Redis.from_url(CLOSED_REDIS_URL),
+    )
+
+    with pytest.raises(SystemExit) as exit_info:
+        _reset_password(NEW_PASSWORD)
+
+    assert exit_info.value.code == 1
+    assert capsys.readouterr().out == (
+        "Error: the session cache is unreachable, so nothing was changed\n"
+    )
+    assert _stored_hash(served_app) == OLD_PASSWORD_HASH
+    assert _session_count(served_app) == 1
+    assert served_app.get("/api/auth/me").status_code == 200
 
 
 @pytest.mark.parametrize(
     "password, message",
     [
-        ("Ab1!xyz", "Error: String should have at least 8 characters"),
-        (
-            "password123",
-            "Error: Value error, Password is too common — choose something less predictable",
-        ),
-        ("aaaabbbb", "Error: Value error, Password must contain at least 4 unique characters"),
+        ("Ab1!xyz", "Error: Password must be at least 8 characters"),
+        ("Ab1!xyz" * 19, "Error: Password must be at most 128 characters"),
+        ("password123", "Error: Password is too common — choose something less predictable"),
+        ("aaaabbbb", "Error: Password must contain at least 4 unique characters"),
     ],
 )
-def test_reset_password_refuses_a_weak_password_without_echoing_it(
-    local_db, capsys, password: str, message: str,
+def test_reset_password_refuses_a_weak_password_in_plain_words_without_echoing_it(
+    served_app, capsys, password: str, message: str,
 ) -> None:
     with pytest.raises(SystemExit) as exit_info:
-        app(["reset-password", RESET_USERNAME, password], result_action="return_value")
+        _reset_password(password)
 
     output = capsys.readouterr().out
     assert exit_info.value.code == 1
     assert output == f"{message}\n"
     assert password not in output
-    assert _stored_hash(local_db) == OLD_PASSWORD_HASH
+    assert _stored_hash(served_app) == OLD_PASSWORD_HASH

@@ -8,7 +8,7 @@ import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass
 from time import monotonic
-from typing import Final
+from typing import Annotated, Final
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -441,7 +441,7 @@ async def _leased_resource_event_generator(
 )
 def api_stream_resource_events(
     request: Request,
-    last_event_id: str | None = Query(None),
+    last_event_id: Annotated[str | None, Query()] = None,
 ) -> StreamingResponse:
     """Stream the caller's resource events, resuming after its last seen event.
 

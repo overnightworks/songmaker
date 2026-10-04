@@ -353,14 +353,7 @@ def update_song(
     song.updated_at = datetime.now(timezone.utc)
 
     prev = song.latest_version
-
-    if isinstance(generation_params, _Unset):
-        new_gen_params = prev.generation_params if prev else None
-        prev_num = prev.version_number if prev else 0
-        log.debug("generation_params not provided, carrying forward from v%d", prev_num)
-    else:
-        new_gen_params = generation_params or None
-
+    new_gen_params = _version_generation_params(generation_params, prev)
     new_lyrics = _version_value(lyrics, prev, "lyrics", "")
     new_prompt = _version_value(prompt, prev, "prompt", "")
     new_bpm = _version_value(bpm, prev, "bpm", 0)
@@ -417,6 +410,17 @@ def _version_value(value, previous: Version | None, field: str, default):
     if previous is not None:
         return getattr(previous, field)
     return default
+
+
+def _version_generation_params(
+    generation_params: dict | None | _Unset,
+    previous: Version | None,
+) -> dict | None:
+    if not isinstance(generation_params, _Unset):
+        return generation_params or None
+    previous_number = previous.version_number if previous else 0
+    log.debug("generation_params not provided, carrying forward from v%d", previous_number)
+    return previous.generation_params if previous else None
 
 
 def delete_song(session: Session, song_id: str) -> list[str]:
