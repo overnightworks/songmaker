@@ -80,7 +80,11 @@ class FakeSourceBuffer extends EventTarget {
 		this.removals.push([start, end]);
 		this.dispatchEvent(new Event('updatestart'));
 		this.pending = () => {
-			if (this.span) this.span = [Math.max(this.span[0], end), this.span[1]];
+			if (!this.span) return;
+			this.span =
+				start <= this.span[0]
+					? [Math.max(this.span[0], end), this.span[1]]
+					: [this.span[0], Math.min(this.span[1], start)];
 		};
 		this.scheduleSettle();
 	}
@@ -872,6 +876,123 @@ describe('ContinuousDeck', () => {
 		const [firstEntry, secondEntry] = deck.manifest;
 		expect(deck.isPlayableFromStart(secondEntry)).toBe(true);
 		expect(deck.isPlayableFromStart(firstEntry)).toBe(false);
+	});
+
+	describe('a take put next behind the take under the playhead', () => {
+		const firstEnd = secondsOf(MEGABYTE / 4);
+		const repickBytes = MEGABYTE / 4;
+
+		it.each([
+			{
+				ahead: 'appended whole',
+				bytes: MEGABYTE / 4,
+				stallsAt: null,
+				arrived: (_rig: Rig, stale: Promise<void>) => stale,
+				stale: 'appended'
+			},
+			{
+				ahead: 'cut off by a request that stopped sending',
+				bytes: MEGABYTE / 2,
+				stallsAt: PIECE,
+				arrived: () => quiet(),
+				stale: 'replaced'
+			},
+			{
+				ahead: 'waiting for room ahead',
+				bytes: 2 * MEGABYTE,
+				stallsAt: null,
+				arrived: ({ audio }: Rig) => audio.untilDeckWaitsForPlayback(),
+				stale: 'replaced'
+			}
+		])(
+			'replaces the take held ahead when it is $ahead, from where the playing take ends',
+			async ({ bytes, stallsAt, arrived, stale }) => {
+				const rig = openDeck();
+				const { deck, audio, buffer, network } = rig;
+				network.serve('/audio/first.mp3', MEGABYTE / 4);
+				network.serve('/audio/second.mp3', bytes);
+				network.serve('/audio/repick.mp3', repickBytes);
+				if (stallsAt !== null) network.stallAt('/audio/second.mp3', stallsAt);
+				await deck.appendTake('first', '/audio/first.mp3');
+				audio.playTo(5);
+				const ahead = deck.appendTake('second', '/audio/second.mp3');
+				const aheadOutcome = ahead.then(
+					() => 'appended',
+					(error: TakeNotAppended<string>) => error.reason
+				);
+				await arrived(rig, ahead);
+
+				await deck.appendNext('repick', '/audio/repick.mp3');
+
+				expect(await aheadOutcome).toBe(stale);
+				expect(deck.manifest).toEqual([
+					{ take: 'first', start_offset: 0, duration: firstEnd },
+					{ take: 'repick', start_offset: firstEnd, duration: secondsOf(repickBytes) }
+				]);
+				expect(buffer.removals).toEqual([[firstEnd, Infinity]]);
+				expect(buffer.buffered.end()).toBe(firstEnd + secondsOf(repickBytes));
+				expect(network.requests.map((request) => request.url)).toEqual([
+					'/audio/first.mp3',
+					'/audio/second.mp3',
+					'/audio/repick.mp3'
+				]);
+				expect(audio.currentTime).toBe(5);
+			}
+		);
+
+		it('gives up a take still waiting behind the playing one without asking for it', async () => {
+			const { deck, audio, buffer, network } = openDeck();
+			network.serve('/audio/first.mp3', 2 * MEGABYTE);
+			network.serve('/audio/second.mp3', MEGABYTE / 4);
+			network.serve('/audio/repick.mp3', repickBytes);
+			const first = deck.appendTake('first', '/audio/first.mp3');
+			const ahead = deck.appendTake('second', '/audio/second.mp3');
+			await audio.untilDeckWaitsForPlayback();
+
+			const repick = deck.appendNext('repick', '/audio/repick.mp3');
+			audio.playTo(100);
+
+			await expect(ahead).rejects.toMatchObject({ take: 'second', reason: 'replaced' });
+			await Promise.all([first, repick]);
+			expect(network.requests.map((request) => request.url)).toEqual([
+				'/audio/first.mp3',
+				'/audio/repick.mp3'
+			]);
+			expect(deck.manifest.map((entry) => entry.take)).toEqual(['first', 'repick']);
+			expect(buffer.removals).toEqual([]);
+		});
+
+		it.each([
+			{
+				when: 'right after the deck opened',
+				arrange: async () => {}
+			},
+			{
+				when: 'once the playhead crossed into the last take',
+				arrange: async ({ deck, audio }: Rig) => {
+					await deck.appendTake('second', '/audio/second.mp3');
+					audio.playTo(firstEnd + 1);
+				}
+			}
+		])('appends behind the last take as before $when', async ({ arrange }) => {
+			const rig = openDeck();
+			const { deck, buffer, network } = rig;
+			network.serve('/audio/first.mp3', MEGABYTE / 4);
+			network.serve('/audio/second.mp3', MEGABYTE / 4);
+			network.serve('/audio/next.mp3', MEGABYTE / 4);
+			const first = deck.appendTake('first', '/audio/first.mp3');
+			await arrange(rig);
+
+			await Promise.all([first, deck.appendNext('next', '/audio/next.mp3')]);
+
+			const held = deck.manifest.map((entry) => entry.take);
+			expect(held.at(-1)).toBe('next');
+			expect(deck.manifest.at(-1)?.start_offset).toBe(
+				secondsOf(((held.length - 1) * MEGABYTE) / 4)
+			);
+			expect(buffer.removals.filter(([, end]) => end === Infinity)).toEqual([]);
+			expect(network.requests.map((request) => request.url).at(-1)).toBe('/audio/next.mp3');
+		});
 	});
 
 	describe('once closed', () => {
