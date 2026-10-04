@@ -38,6 +38,7 @@ from songmaker_cli.db.models import (
     Version,
 )
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     count_user_jobs_in_window,
     get_generation,
     get_job,
@@ -1411,7 +1412,7 @@ def test_generation_job_passes_target_model_to_dispatch(seeded_db, tmp_path: Pat
 
 def _cancel_job(factory, job_id: str) -> None:
     with factory() as session:
-        update_job_status(session, job_id, "cancelled")
+        update_job_status(session, job_id, JobStatusUpdate("cancelled"))
         session.commit()
 
 

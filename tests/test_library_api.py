@@ -39,7 +39,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
     Version,
 )
-from songmaker_cli.db.queries import SongWork, update_job_status
+from songmaker_cli.db.queries import JobStatusUpdate, SongWork, update_job_status
 from songmaker_cli.library_api import CONTINUE_MAX_OFFSET
 
 USER_A = "user-a"
@@ -266,7 +266,7 @@ def _run_generate_job(
     )
     session.add(job)
     session.flush()
-    assert update_job_status(session, job.id, status)
+    assert update_job_status(session, job.id, JobStatusUpdate(status))
     for stamp in ("heartbeat_at", "completed_at"):
         stamped_at = getattr(job, stamp)
         if stamped_at is not None and stamped_at > ended_at:

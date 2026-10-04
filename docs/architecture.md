@@ -1542,7 +1542,7 @@ never been observed; with a newer observation, it is `alive`.
   row exists.
 
   Every tracker write also carries the phase into `jobs.phase`
-  (`update_job_status(phase=)` keeps the stored value when a write omits it,
+  (a `JobStatusUpdate` whose phase is `UNSET` keeps the stored value,
   and the column keeps its last value after the job ends; a new RUNNING entry
   clears it, so a requeue never shows the previous run's phase; a return to
   QUEUED clears `take_index` and `take_count`, so a queued job never shows

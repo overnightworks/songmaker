@@ -46,6 +46,7 @@ from songmaker_cli.db.models import (
     UserSongWork,
 )
 from songmaker_cli.db.queries import (
+    JobStatusUpdate,
     SongWork,
     create_generation_created_event,
     create_job,
@@ -325,7 +326,7 @@ def test_stale_job_reaper_does_not_overwrite_fresh_heartbeat(pg_factory, monkeyp
     now = datetime.now(timezone.utc)
     with pg_factory() as session:
         job = create_job(session, JobType.GENERATE)
-        update_job_status(session, job.id, JobStatus.RUNNING)
+        update_job_status(session, job.id, JobStatusUpdate(JobStatus.RUNNING))
         job.heartbeat_at = now - timedelta(hours=1)
         session.commit()
         job_id = job.id
