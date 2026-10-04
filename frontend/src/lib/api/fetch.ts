@@ -103,9 +103,16 @@ function parseRetryAfterSeconds(resp: {
 	return Number.isFinite(seconds) && seconds >= 0 ? seconds : null;
 }
 
+// webauth sets the `__Host-` prefixed cookie when the connection is secure
+// and falls back to the plain name otherwise (COOKIE_SECURE=false in e2e),
+// so the reader checks the stronger name first and falls back to the plain
+// one -- never both set with different values in practice, but `__Host-`
+// wins if they ever are.
 function getCsrfToken(): string {
-	const match = /(?:^|;\s*)csrf_token=([^;]*)/.exec(document.cookie);
-	return match ? decodeURIComponent(match[1]) : '';
+	const hostPrefixed = /(?:^|;\s*)__Host-csrf_token=([^;]*)/.exec(document.cookie);
+	if (hostPrefixed) return decodeURIComponent(hostPrefixed[1]);
+	const plain = /(?:^|;\s*)csrf_token=([^;]*)/.exec(document.cookie);
+	return plain ? decodeURIComponent(plain[1]) : '';
 }
 
 // A 401 from these refuses the credentials the person just typed -- a wrong
