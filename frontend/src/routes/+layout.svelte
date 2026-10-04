@@ -250,13 +250,11 @@
 		}
 	}
 
-	// Sign-in is pushed before the session ends: the shell unmounts on that
-	// push, so the overlays closing with it -- the open account menu -- move no
-	// history under the sign-in page.
 	async function handleLogout() {
-		await historyStandsStill();
-		await goto(SIGN_IN_PATH);
-		await logout();
+		await logout(async () => {
+			await historyStandsStill();
+			await goto(SIGN_IN_PATH);
+		});
 	}
 
 	function levelUp(): void {

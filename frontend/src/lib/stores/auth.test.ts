@@ -352,7 +352,24 @@ describe('clearAuth', () => {
 	});
 });
 
+async function stayOnThePage(): Promise<void> {}
+
 describe('logout', () => {
+	it('ends the session on the server, then leaves for sign-in, and only then clears auth', async () => {
+		const order: string[] = [];
+		mockApiLogout.mockImplementation(async () => {
+			order.push('server');
+		});
+		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+
+		await logout(async () => {
+			order.push(get(currentUser) === null ? 'left signed out' : 'left signed in');
+		});
+
+		expect(order).toEqual(['server', 'left signed in']);
+		expect(get(currentUser)).toBeNull();
+	});
+
 	it('stops resource sync before the logout request', async () => {
 		const order: string[] = [];
 		mockStopLibraryResourceSync.mockImplementation(() => {
@@ -362,7 +379,7 @@ describe('logout', () => {
 			order.push('api');
 		});
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		await logout();
+		await logout(stayOnThePage);
 		expect(order).toEqual(['stop', 'api']);
 		expect(get(currentUser)).toBeNull();
 	});
@@ -370,7 +387,7 @@ describe('logout', () => {
 	it('clears currentUser', async () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		mockApiLogout.mockResolvedValueOnce(undefined);
-		await logout();
+		await logout(stayOnThePage);
 		expect(get(currentUser)).toBeNull();
 	});
 
@@ -382,7 +399,7 @@ describe('logout', () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		mockApiLogout.mockResolvedValueOnce(undefined);
 
-		await logout();
+		await logout(stayOnThePage);
 		stopRecording();
 
 		expect(recordedBefore).not.toBeNull();
@@ -392,7 +409,7 @@ describe('logout', () => {
 	it('clears user even if API fails', async () => {
 		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
 		mockApiLogout.mockRejectedValueOnce(new Error('fail'));
-		await logout();
+		await logout(stayOnThePage);
 		expect(get(currentUser)).toBeNull();
 	});
 });
@@ -439,7 +456,7 @@ describe('the remembered playback across the session', () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 
-		await logout();
+		await logout(stayOnThePage);
 
 		expect(storedRecord()).toBeNull();
 	});

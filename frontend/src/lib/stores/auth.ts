@@ -168,7 +168,10 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 // recorded; a session that merely ran out (401, clearAuth above) keeps both
 // for the same user's next sign-in. They are forgotten after clearAuth, once
 // no signed-in user is left for a take still playing to save them under again.
-export async function logout(): Promise<void> {
+// `leaveForSignIn` runs once the server has ended the session and before auth
+// is cleared, so the sign-in page stands before the shell unmounts and the
+// overlays closing with it move no history (#1340).
+export async function logout(leaveForSignIn: () => Promise<void>): Promise<void> {
 	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
 	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
 	const user = get(currentUser);
@@ -177,6 +180,9 @@ export async function logout(): Promise<void> {
 		await apiLogout();
 	} catch {
 		// swallow — always clear local state
+	}
+	try {
+		await leaveForSignIn();
 	} finally {
 		clearAuth();
 		if (user) {
