@@ -13,7 +13,12 @@
 // phone's backdrop dims all of it (issue #1286). Leaving an untouched load
 // asks nothing, a peek at the sheet keeps the Undo, the Undo toast keeps its
 // time while the sheet is open, and the delete confirm says what an untouched
-// load loses (issue #1296).
+// load loses (issue #1296). An untouched load is not called unsaved, the
+// delete confirm says a pending Undo goes too, an imported take is named as
+// one, Open on the current version answers, and Open in Now Playing after
+// arriving from the album keeps the take where it stood (issue #1300). The
+// page's clock is held still once the editor shows, so a load's Undo lasts
+// until a test moves the clock on.
 //
 // CI's e2e stack runs no ACE-Step worker, so the song's takes are seeded
 // directly against the database (scripts/seed_e2e_job_states.py), and
@@ -32,6 +37,7 @@ import {
 	NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS,
 	TOAST_UNDO_LABEL,
 	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
 	VERSION_DELETE_CONFIRM_LABEL,
 	VERSION_DELETE_DRAFT_GOES,
 	VERSION_DELETE_LOAD_UNDO_GOES,
@@ -48,10 +54,13 @@ import {
 	versionLoadedFromLabel,
 	versionLoadedToastLabel,
 	versionsChipAccessibleLabel,
+	openNowPlayingLabel,
 	takesDraftBanner
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_IMPORTED_TAKE_HEADING,
+	NOW_PLAYING_QUEUE_TAB,
+	NOW_PLAYING_RIGHT_PANEL_LABEL,
 	NOW_PLAYING_TAKE_TAB,
 	openVersionLabel,
 	takeGroupLabel,
@@ -60,7 +69,7 @@ import {
 	type TakeVersion
 } from '../src/lib/constants/now-playing';
 import type { SongItem, VersionItem } from '../src/lib/api/types';
-import { csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
+import { containing, csrfHeaders, nameStartingWith, shellOf, workspace } from './helpers';
 import {
 	completeGenerationJobWithoutEvent,
 	readSeededLibrary,
@@ -74,6 +83,11 @@ const SONG_TITLE = 'Song Versions';
 const FIRST_VERSION_LYRICS = 'Song Phone Takes seeded lyrics';
 const SECOND_VERSION_LYRICS = 'Rain on the window, the city asleep';
 const UNSAVED_LINE = 'a line nobody saved';
+// pauseAt only moves the page's clock forward; this lead keeps the hold ahead
+// of the time the page has already reached.
+const CLOCK_HOLD_LEAD_MS = 1000;
+/** Mid-take in the three-second fixture take. */
+const HELD_TAKE_SECONDS = 1.5;
 
 interface SeededVersions {
 	songId: string;
@@ -174,6 +188,14 @@ async function openSongEditor(page: Page, song: SeededVersions): Promise<void> {
 	const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true });
 	if (await editTab.isVisible()) await editTab.click();
 	await expect(lyricsField(page)).toHaveValue(SECOND_VERSION_LYRICS);
+	await holdTheClock(page);
+}
+
+// A load's Undo lasts a few seconds of the page's clock. Held still, it lasts
+// until a test moves the clock on with fastForward, so no step that follows a
+// load races the wall clock.
+async function holdTheClock(page: Page): Promise<void> {
+	await page.clock.pauseAt(Date.now() + CLOCK_HOLD_LEAD_MS);
 }
 
 async function readVersions(page: Page, songId: string): Promise<VersionItem[]> {
@@ -245,6 +267,78 @@ function pauseOfThePlayingTake(page: Page): Locator {
 	return page.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }).first();
 }
 
+interface DeckWindow {
+	audioDecks: Set<HTMLMediaElement>;
+	heldDeck?: HTMLMediaElement;
+}
+
+// The player's decks are detached Audio objects no locator reaches, so the
+// page collects each one as it is given a source, as playback-restore.spec.ts does.
+async function followTheAudioDecks(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const decks = new Set<HTMLMediaElement>();
+		(window as unknown as DeckWindow).audioDecks = decks;
+		const source = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'src');
+		if (!source?.set) throw new Error('HTMLMediaElement has no src setter');
+		const setSource = source.set;
+		Object.defineProperty(HTMLMediaElement.prototype, 'src', {
+			...source,
+			set(this: HTMLMediaElement, url: string) {
+				decks.add(this);
+				setSource.call(this, url);
+			}
+		});
+	});
+}
+
+// Pause before seeking so the three-second fixture cannot finish during the
+// navigation, and a restart at 0:00 cannot look like an unchanged position.
+async function holdThePlayingTakeAt(page: Page, seconds: number): Promise<number> {
+	await expect
+		.poll(() =>
+			page.evaluate((to) => {
+				const followed = window as unknown as DeckWindow;
+				const playing = [...followed.audioDecks].find((deck) => !deck.paused);
+				const { buffered } = playing ?? {};
+				if (!playing || !buffered?.length || buffered.end(buffered.length - 1) < to) return false;
+				followed.heldDeck = playing;
+				return true;
+			}, seconds)
+		)
+		.toBe(true);
+	await pauseOfThePlayingTake(page).click();
+	await page.evaluate((to) => {
+		const held = (window as unknown as DeckWindow).heldDeck;
+		if (!held) throw new Error('No take is held');
+		held.currentTime = to;
+	}, seconds);
+	return heldTakePosition(page);
+}
+
+async function heldTakePosition(page: Page): Promise<number> {
+	return page.evaluate(() => {
+		const held = (window as unknown as DeckWindow).heldDeck;
+		if (!held) throw new Error('No take is held');
+		return held.currentTime;
+	});
+}
+
+async function shownTakePosition(page: Page, mobile: boolean): Promise<number> {
+	const transport = page.getByRole('contentinfo');
+	if (!mobile) {
+		return Number(await transport.getByRole('slider', { name: 'Seek playback' }).inputValue());
+	}
+	const progress = await transport
+		.locator('.mobile-progress-fill')
+		.evaluate((line) => parseFloat((line as HTMLElement).style.width));
+	const duration = await page.evaluate(() => {
+		const held = (window as unknown as DeckWindow).heldDeck;
+		if (!held) throw new Error('No take is held');
+		return held.duration;
+	});
+	return (progress / 100) * duration;
+}
+
 async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 	await versionChip(page).click();
 	await expect(versionsSheet(page)).toBeVisible();
@@ -252,6 +346,10 @@ async function tapVersion(page: Page, versionNumber: number): Promise<void> {
 }
 
 test.describe('the versions of a song', () => {
+	test.beforeEach(async ({ page }) => {
+		await page.clock.install();
+	});
+
 	test.afterEach(async ({ page }) => {
 		for (const songId of songsSeededByThisTest.splice(0)) await deleteSeededSong(page, songId);
 	});
@@ -464,7 +562,6 @@ test.describe('the versions of a song', () => {
 	test('the Undo toast keeps its time while the sheet is open: a tap on the loaded version after 4 s brings it back with time left', async ({
 		page
 	}, testInfo) => {
-		await page.clock.install();
 		const song = await seedTwoVersions(page, testInfo);
 		await openSongEditor(page, song);
 		const editedLyrics = `${SECOND_VERSION_LYRICS}\n${UNSAVED_LINE}`;
@@ -595,6 +692,61 @@ test.describe('the versions of a song', () => {
 		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
 		await expect(workspace(page).getByText(versionLoadedFromLabel(1))).toBeVisible();
 		await expect(pauseOfThePlayingTake(page)).toBeVisible();
+	});
+
+	test('Open v1 in Now Playing after arriving from the album lands on Edit with v1 loaded and the take where it stood', async ({
+		page
+	}, testInfo) => {
+		await followTheAudioDecks(page);
+		const song = await seedTwoVersions(page, testInfo);
+		await openSongEditor(page, song);
+		await showTakes(page);
+		await takeGroup(page, song.v1, 1)
+			.getByRole('button', { name: nameStartingWith(takeRowLabel(1)) })
+			.click();
+		await expect(pauseOfThePlayingTake(page)).toBeVisible();
+
+		// Back closes one layer at a time: the phone's This take sheet, which
+		// covers the transport, and its Now Playing first, then the song, back
+		// to the album it came from.
+		const mobile = shellOf(testInfo) === 'mobile';
+		if (mobile) {
+			await page.goBack();
+			await expect(page.getByRole('dialog', { name: NOW_PLAYING_RIGHT_PANEL_LABEL })).toBeHidden();
+		}
+		const heldAt = await holdThePlayingTakeAt(page, HELD_TAKE_SECONDS);
+		expect(heldAt).toBeCloseTo(HELD_TAKE_SECONDS, 1);
+		if (mobile) {
+			await page.goBack();
+			await expect(page.getByRole('dialog', { name: song.title })).toBeHidden();
+		}
+		await page.goBack();
+		await expect(
+			workspace(page).getByRole('button', { name: containing(song.title) })
+		).toBeVisible();
+		await expect.poll(() => shownTakePosition(page, mobile)).toBeCloseTo(heldAt, 1);
+		const shownAt = await shownTakePosition(page, mobile);
+		if (mobile) {
+			await page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: openNowPlayingLabel(song.title), exact: true })
+				.click();
+			await page
+				.getByRole('dialog', { name: song.title })
+				.getByRole('button', { name: new RegExp(`${NOW_PLAYING_QUEUE_TAB}$`) })
+				.click();
+		}
+		await page.getByRole('tab', { name: NOW_PLAYING_TAKE_TAB }).click();
+
+		await page.getByRole('button', { name: openVersionLabel(1), exact: true }).click();
+
+		await expect(lyricsField(page)).toHaveValue(FIRST_VERSION_LYRICS);
+		await expect(versionChip(page)).toHaveText(versionChipLabel(2, true));
+		await expect(
+			page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
+		).toBeVisible();
+		expect(await heldTakePosition(page)).toBe(heldAt);
+		await expect.poll(() => shownTakePosition(page, mobile)).toBe(shownAt);
 	});
 
 	test('deleting v1 from its row asks with its take and the album pick, then v1 and its take are gone while v2 stays', async ({
