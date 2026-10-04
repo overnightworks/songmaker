@@ -29,6 +29,21 @@ class ServerError(Exception):
     pass
 
 
+# webauth sets the `__Host-` prefixed cookie when the connection is secure
+# and falls back to the plain name otherwise, so readers check the stronger
+# name first.
+_CSRF_COOKIE_NAMES: Final = ("__Host-csrf_token", "csrf_token")
+
+
+def _csrf_headers(client: httpx.Client) -> dict[str, str]:
+    """The `X-CSRF-Token` header webauth expects, from whichever cookie it set."""
+    for name in _CSRF_COOKIE_NAMES:
+        token = client.cookies.get(name)
+        if token:
+            return {"X-CSRF-Token": token}
+    return {}
+
+
 def _load_session(server: str) -> dict:
     """Load saved session cookies for a server, or return empty dict."""
     if not SESSION_FILE.exists():
@@ -112,8 +127,7 @@ def cli_logout(server: str) -> None:
     """Logout and clear the saved session."""
     try:
         with _build_client(server) as client:
-            csrf = client.cookies.get("csrf_token")
-            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            headers = _csrf_headers(client)
             client.delete(f"{server}/api/auth/session", headers=headers)
     except httpx.ConnectError:
         pass
@@ -140,8 +154,7 @@ def api_post(server: str, path: str, json: dict | None = None) -> dict:
     log.debug("POST %s %s", url, json)
     try:
         with _build_client(server) as client:
-            csrf = client.cookies.get("csrf_token")
-            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            headers = _csrf_headers(client)
             resp = client.post(url, json=json or {}, headers=headers)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
@@ -157,8 +170,7 @@ def api_put(server: str, path: str, json: dict) -> dict:
     log.debug("PUT %s %s", url, json)
     try:
         with _build_client(server) as client:
-            csrf = client.cookies.get("csrf_token")
-            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            headers = _csrf_headers(client)
             resp = client.put(url, json=json, headers=headers)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
@@ -176,8 +188,7 @@ def api_upload(
     log.debug("POST (upload) %s", url)
     try:
         with _build_client(server) as client:
-            csrf = client.cookies.get("csrf_token")
-            headers = {"X-CSRF-Token": csrf} if csrf else {}
+            headers = _csrf_headers(client)
             resp = client.post(url, files=files, headers=headers)
     except httpx.ConnectError:
         raise ServerError(f"Cannot connect to {server}. Is the server running?")
