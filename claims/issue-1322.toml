@@ -1,0 +1,8 @@
+claim_id = "c581b61a2add4b5191371f349e9a9b5d"
+agent = "claude-head"
+role = "builder"
+base = "e696115ba30e3247a3c17298bc6cb2c46fddc051"
+branch = "claude-head/issue-1322-admin-own-session"
+scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/login/+page.svelte", "frontend/src/routes/settings/account/+page.svelte", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts", "frontend/src/routes/setup/+page.svelte"]
+opened_commit = "6021c5fffbef6476501bbbd858b91a325fc48acb"
+whole_reason = "admin own-session protection, form errors, e2e budget row, password-minimum constant"
