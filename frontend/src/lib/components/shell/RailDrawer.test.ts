@@ -10,7 +10,8 @@ import { goto } from '$app/navigation';
 import { resolve } from '$app/paths';
 import { RAIL_DRAWER_LABEL } from '$lib/constants';
 import {
-	listenForLandings,
+	attachLandingHandler,
+	installHistoryController,
 	navigateTo,
 	pushEntry,
 	resetHistoryControllerForTests
@@ -172,7 +173,8 @@ describe('RailDrawer', () => {
 		history.replaceState(null, '', '/album/a1');
 		resetHistoryControllerForTests();
 		startFakeRouter();
-		onTestFinished(listenForLandings(() => undefined));
+		onTestFinished(installHistoryController());
+		onTestFinished(attachLandingHandler(() => undefined));
 		const songEntry = pushEntry('/album/a1/s1', {});
 		const routesLoaded = holdRouteLoads();
 		void navigateTo(location.href, {

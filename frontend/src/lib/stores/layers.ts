@@ -6,9 +6,9 @@ import { writable, type Writable } from 'svelte/store';
 // both close the topmost one. Only with nothing open does Escape move a page
 // level up (utils/escape-level-up.ts).
 //
-// On a library page a layer also owns one history entry, which Back closes it
-// through; the history controller keeps those entries while the library
-// history runs. The stack itself depends on nothing app-only, so a logged-out
+// On every page a layer also owns one history entry, which Back closes it
+// through; the history controller, installed once by the root layout, keeps
+// those entries. The stack itself depends on nothing app-only, so a logged-out
 // share page holds its overlays here too.
 export interface Layer {
 	readonly id: string;

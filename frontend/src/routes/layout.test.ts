@@ -1,11 +1,12 @@
 import {
 	historyEntry,
+	pressBack,
 	replaceHistoryEntry,
 	standingHistoryEntry,
 	watchBack
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
-import { pushEntry } from '$lib/history/historyController';
+import { historyStandsStill, pushEntry } from '$lib/history/historyController';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -215,6 +216,7 @@ async function unmountCurrentLayout(): Promise<void> {
 }
 
 beforeEach(() => {
+	replaceHistoryEntry('/');
 	stubMatchMedia(true);
 	document.documentElement.dataset.pointer = 'coarse';
 	Object.defineProperty(window, 'innerWidth', { configurable: true, value: VIEWPORT_PX });
@@ -872,13 +874,8 @@ describe('auth check failure', () => {
 				return null;
 			});
 			mountLayout(path);
-			await tick();
-			await Promise.resolve();
-			await tick();
-			await Promise.resolve();
-			await tick();
 
-			expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true });
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true }));
 		}
 	);
 });
@@ -907,8 +904,8 @@ describe('a reload on a library page', () => {
 });
 
 // A phone tab reloaded over the full Now Playing comes back onto that layer's
-// entry; the history listener steps off it once the library starts -- but
-// only while the page still stands there (issue #1002).
+// entry; the installed history controller steps off it once the router start
+// has run -- but only while the page still stands there (issue #1002).
 describe('a reload over the phone Now Playing', () => {
 	it('stays on the Library wall the sign-in redirect lands on', async () => {
 		resetLibraryContextForTests();
@@ -927,7 +924,11 @@ describe('a reload over the phone Now Playing', () => {
 		currentUser.set(null);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
 		mountLayout('/');
-		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith('/login', { replaceState: true }));
+		await vi.waitFor(() =>
+			expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
+		);
+		await historyStandsStill();
+		expect(location.pathname).toBe('/login');
 
 		vi.mocked(checkAuth).mockImplementation(async () => {
 			currentUser.set(USER);
@@ -983,6 +984,38 @@ describe('a session lost behind the open phone drawer', () => {
 
 		expect(goto).toHaveBeenCalledWith(signInAddress('/'));
 		expect(backPresses).toBe(0);
+	});
+});
+
+// The history controller runs on every page, not only in the library, so
+// Back closes an overlay on Settings before it leaves the page (#1331).
+describe('overlays on Settings', () => {
+	it('Back closes the account menu and the address stays', async () => {
+		replaceHistoryEntry('/settings/voices');
+		const target = await renderLayout('/settings/voices');
+		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
+		expect(target.querySelector('.menu-item.logout')).not.toBeNull();
+
+		await pressBack();
+
+		await vi.waitFor(() => expect(target.querySelector('.menu-item.logout')).toBeNull());
+		expect(standingHistoryEntry()?.layer).toBeUndefined();
+		expect(location.pathname).toBe('/settings/voices');
+	});
+
+	it('a drawer opened after a session lost in the app and signed in again owns an entry', async () => {
+		replaceHistoryEntry('/settings/voices');
+		await renderLayout('/settings/voices');
+		await handleSessionLost();
+		await vi.waitFor(() => expect(location.pathname).toBe('/login'));
+
+		currentUser.set(USER);
+		await goto(resolve('/settings/voices'));
+		await tick();
+		getByRoleButton(document.body, RAIL_DRAWER_OPEN_LABEL).click();
+
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('rail-drawer'));
 	});
 });
 
