@@ -27,7 +27,11 @@ import {
 	type StreamFallbackState,
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
-import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import {
+	type LockScreenTitle,
+	setupMediaSessionHandlers,
+	updateMediaSessionMetadata
+} from '$lib/services/mediaSession';
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import {
 	albumList,
@@ -372,12 +376,22 @@ interface PlayStart {
 	signal: AbortSignal;
 }
 
+// A new start replaces whatever start came before it, a waiting one included.
 function beginPlayStart(): PlayStart {
-	playStartAbort?.abort();
+	dropPendingStart();
+	return openPlayStart();
+}
+
+function openPlayStart(): PlayStart {
+	cancelPlayStart();
 	playStartAbort = new AbortController();
+	return { seq: playStartSeq, signal: playStartAbort.signal };
+}
+
+function cancelPlayStart(): void {
+	playStartAbort?.abort();
 	playStartSeq += 1;
 	retryPlayIntent = null;
-	return { seq: playStartSeq, signal: playStartAbort.signal };
 }
 
 function playStartIsCurrent(seq: number): boolean {
@@ -401,26 +415,51 @@ function retryOnceBackOnline(
 	return true;
 }
 
+// An album start that could not read its takes offline, held until a take of
+// it plays: the bar and the lock screen, the only surface with the screen
+// off, name the song it will play (#1312, #1330). A start paused from the
+// lock screen stays named there, paused, until its Play runs it again.
+export interface PendingStart {
+	albumId: string;
+	song: LockScreenTitle;
+}
+export const pendingStart = writable<PendingStart | null>(null);
+let runPendingStartAgain: ((playStart: PlayStart) => Promise<void>) | null = null;
+let pendingStartGiveUp: ReturnType<typeof setTimeout> | undefined;
+
 // The bar shows the start waiting until it runs again, a newer start
-// replaces it, or the listener stops it; the lock screen, the only surface
-// with the screen off, names the song it waits for (#1312).
-function noticeStartAwaitingNetwork(signal: AbortSignal, waitingFor: SongItem): void {
+// replaces it, or the listener stops it. Running again once the network is
+// back continues this same start, so nothing it shows lapses meanwhile.
+function noticeStartAwaitingNetwork(
+	start: PendingStart,
+	runAgain: (playStart: PlayStart) => Promise<void>
+): void {
+	pendingStart.set(start);
+	runPendingStartAgain = runAgain;
+	if (!audioPlayer.current) updateMediaSessionMetadata(start.song);
 	playStartNotice.set('awaiting-network');
-	updateMediaSessionMetadata({
-		songTitle: waitingFor.title,
-		artist: waitingFor.artist,
-		albumTitle: waitingFor.album_title
-	});
-	const giveUp = setTimeout(() => playStartNotice.set('gave-up-on-network'), RECOVERY_DEADLINE_MS);
-	signal.addEventListener(
-		'abort',
-		() => {
-			clearTimeout(giveUp);
-			playStartNotice.set('idle');
-			if (!audioPlayer.current) updateMediaSessionMetadata(null);
-		},
-		{ once: true }
+	clearTimeout(pendingStartGiveUp);
+	pendingStartGiveUp = setTimeout(
+		() => playStartNotice.set('gave-up-on-network'),
+		RECOVERY_DEADLINE_MS
 	);
+}
+
+function stopPendingStartWait(): void {
+	clearTimeout(pendingStartGiveUp);
+	if (startAwaitsNetwork(null, get(playStartNotice))) playStartNotice.set('idle');
+}
+
+function dropPendingStart(): void {
+	stopPendingStartWait();
+	if (get(pendingStart) === null) return;
+	pendingStart.set(null);
+	runPendingStartAgain = null;
+	if (!audioPlayer.current) updateMediaSessionMetadata(null);
+}
+
+function lockScreenTitleOf(song: SongItem): LockScreenTitle {
+	return { songTitle: song.title, artist: song.artist, albumTitle: song.album_title };
 }
 
 function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
@@ -768,6 +807,16 @@ function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotic
 	return !current && (notice === 'awaiting-network' || notice === 'gave-up-on-network');
 }
 
+// The start the bar and the album header show as waiting, naming its song and
+// its album, as the lock screen does (#1330).
+export function waitingStartOf(
+	current: PlaybackInfo | null,
+	notice: PlayStartNotice,
+	pending: PendingStart | null
+): PendingStart | null {
+	return startAwaitsNetwork(current, notice) ? pending : null;
+}
+
 // A start that waits for the network shows the transport a take waiting for
 // it shows: recovering at first, then given up after the same deadline (#1312).
 export function transportOfTheStart(
@@ -779,15 +828,40 @@ export function transportOfTheStart(
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
-function stopStartAwaitingNetwork(): boolean {
+// The bar's and the header's press withdraw a waiting start altogether.
+export function stopStartAwaitingNetwork(): boolean {
+	if (!pauseStartAwaitingNetwork()) return false;
+	dropPendingStart();
+	return true;
+}
+
+// The lock screen pauses a waiting start the way it pauses a take: it stops
+// waiting but stays named, and the lock screen's Play runs it again (#1330).
+function pauseStartAwaitingNetwork(): boolean {
 	if (!startAwaitsNetwork(audioPlayer.current, get(playStartNotice))) return false;
-	playStartAbort?.abort();
+	cancelPlayStart();
+	stopPendingStartWait();
+	return true;
+}
+
+function resumePausedStart(): boolean {
+	const runAgain = runPendingStartAgain;
+	if (runAgain === null || audioPlayer.current) return false;
+	if (startAwaitsNetwork(null, get(playStartNotice))) return true;
+	const playStart = openPlayStart();
+	playStartNotice.set('awaiting-network');
+	void runAgain(playStart).catch(toastAlbumSongsFailure);
 	return true;
 }
 
 function pauseFromLockScreen(): void {
-	if (stopStartAwaitingNetwork()) return;
+	if (pauseStartAwaitingNetwork()) return;
 	audioPlayer.pause();
+}
+
+function playFromLockScreen(): void {
+	if (resumePausedStart()) return;
+	audioPlayer.play();
 }
 
 // The playlist store owns loading and joins the fetch already in flight; a
@@ -1505,10 +1579,19 @@ async function firstPlayableAlbumTake(
 // that turns out to have nothing playable leaves the running queue, and the
 // place it names as its source, exactly as they were.
 export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
-	const { seq, signal } = beginPlayStart();
+	const playStart = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	playStartNotice.set('building');
+	await runAlbumStart(albumId, start, playStart);
+}
+
+async function runAlbumStart(
+	albumId: string,
+	start: CollectionStart,
+	playStart: PlayStart
+): Promise<void> {
+	const { seq, signal } = playStart;
 	if (albumSongsInOrder(albumId).length === 0) {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
@@ -1516,21 +1599,29 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 	const startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	if (!playStartIsCurrent(seq)) return;
 	if (startTake && 'unread' in startTake) {
-		if (retryOnceBackOnline(startTake.error, signal, () => playAlbum(albumId, start))) {
-			noticeStartAwaitingNetwork(signal, startTake.unread);
+		const runAgain = (again: PlayStart) => runAlbumStart(albumId, start, again);
+		const runAgainOnceBackOnline = () => {
+			playStartNotice.set('awaiting-network');
+			return runAgain(playStart);
+		};
+		if (retryOnceBackOnline(startTake.error, signal, runAgainOnceBackOnline)) {
+			noticeStartAwaitingNetwork({ albumId, song: lockScreenTitleOf(startTake.unread) }, runAgain);
 			return;
 		}
+		dropPendingStart();
 		playStartNotice.set('idle');
 		toastAlbumSongsFailure(startTake.error);
 		return;
 	}
 	if (!startTake) {
+		dropPendingStart();
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
 		return;
 	}
-	playStartNotice.set('idle');
 	playNativeAlbumTakes(albumId, [albumQueueTake(startTake.song, startTake.gen)], 0);
-	await gatherAlbumQueueAround(albumId, startTake.song, startTake.gen, { seq, signal });
+	playStartNotice.set('idle');
+	dropPendingStart();
+	await gatherAlbumQueueAround(albumId, startTake.song, startTake.gen, playStart);
 }
 
 async function playAlbumFromGeneration(
@@ -1730,7 +1821,7 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 }
 
 setupMediaSessionHandlers({
-	play: () => audioPlayer.play(),
+	play: playFromLockScreen,
 	pause: pauseFromLockScreen,
 	stop: pauseFromLockScreen,
 	next: () => {

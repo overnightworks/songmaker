@@ -40,13 +40,21 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 const lockScreen = vi.hoisted(() => ({
-	handlers: null as { pause: () => void } | null
+	handlers: null as { play: () => void; pause: () => void } | null
 }));
 // The store installs its lock-screen actions on import; a missing one is a
 // failure, not a silent no-op.
-function pressLockScreenPause(): void {
+function lockScreenActions(): { play: () => void; pause: () => void } {
 	if (!lockScreen.handlers) throw new Error('Expected the lock-screen actions to be installed');
-	lockScreen.handlers.pause();
+	return lockScreen.handlers;
+}
+
+function pressLockScreenPause(): void {
+	lockScreenActions().pause();
+}
+
+function pressLockScreenPlay(): void {
+	lockScreenActions().play();
 }
 
 vi.mock('$lib/services/mediaSession', async (importOriginal) => {
@@ -133,9 +141,15 @@ import {
 	shuffleLabel,
 	toggleShuffle,
 	transportOfTheStart,
+	pendingStart,
+	stopStartAwaitingNetwork,
 	windowEnded
 } from './player';
-import { audioPlayer, RECOVERY_DEADLINE_MS } from '$lib/services/audioPlayer.svelte';
+import {
+	audioPlayer,
+	RECOVERY_DEADLINE_MS,
+	transportOffersPause
+} from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
@@ -241,6 +255,27 @@ function watchLockScreenTitle(): { metadata: MediaMetadataInit | null } {
 		Reflect.deleteProperty(navigator, 'mediaSession');
 	});
 	return mediaSession;
+}
+
+// Every title the lock screen was handed, in order, so a moment it went blank
+// shows even when a later title replaced it.
+function recordLockScreenTitles(): (string | null)[] {
+	const titles: (string | null)[] = [];
+	const mediaSession = {};
+	Object.defineProperty(mediaSession, 'metadata', {
+		set: (metadata: MediaMetadataInit | null) => titles.push(metadata?.title ?? null)
+	});
+	Object.defineProperty(navigator, 'mediaSession', { value: mediaSession, configurable: true });
+	vi.stubGlobal(
+		'MediaMetadata',
+		vi.fn(function (init: MediaMetadataInit) {
+			return init;
+		})
+	);
+	onTestFinished(() => {
+		Reflect.deleteProperty(navigator, 'mediaSession');
+	});
+	return titles;
 }
 
 function albumQueueTakeIds(): string[] {
@@ -2721,6 +2756,7 @@ describe('playAlbum start track', () => {
 		});
 
 		afterEach(() => {
+			stopStartAwaitingNetwork();
 			vi.useRealTimers();
 		});
 
@@ -2734,6 +2770,68 @@ describe('playAlbum start track', () => {
 			expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
 				whileWaiting: expect.objectContaining({ title: 'Song', artist: 'Artist' }),
 				afterTheStop: null
+			});
+		});
+
+		it('once the network is back, the lock screen keeps the song and its Pause until the take plays (#1330)', async () => {
+			const lockScreenTitles = recordLockScreenTitles();
+			vi.mocked(fetchSong).mockResolvedValueOnce(makeSong(queuedSongDefaults()));
+			vi.mocked(audioPlayer.load).mockImplementation((info) => {
+				audioPlayer.current = info;
+				audioPlayer.status = 'playing';
+			});
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+			await playAlbum('a1');
+			const lockScreenOffersPause: boolean[] = [];
+			const stopWatching = playStartNotice.subscribe((notice) => {
+				const transport = transportOfTheStart(audioPlayer.current, notice, audioPlayer.transport);
+				lockScreenOffersPause.push(transportOffersPause(transport));
+			});
+
+			reportResourceStreamReachable(true);
+			await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+			stopWatching();
+
+			expect({
+				wentBlank: lockScreenTitles.includes(null),
+				droppedItsPause: lockScreenOffersPause.includes(false)
+			}).toEqual({ wentBlank: false, droppedItsPause: false });
+		});
+
+		it("a lock-screen pause keeps naming the song, and the lock screen's Play waits again (#1330)", async () => {
+			const lockScreenTitle = watchLockScreenTitle();
+			await playAlbum('a1');
+
+			pressLockScreenPause();
+			const afterThePause = {
+				title: lockScreenTitle.metadata?.title,
+				notice: get(playStartNotice),
+				named: get(pendingStart)?.song.songTitle
+			};
+			vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+			pressLockScreenPlay();
+			await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledTimes(2));
+
+			expect({ afterThePause, afterPlay: get(playStartNotice) }).toEqual({
+				afterThePause: { title: 'Song', notice: 'idle', named: 'Song' },
+				afterPlay: 'awaiting-network'
+			});
+		});
+
+		it("a lock-screen Play on the paused start plays the album once the songs' takes can be read (#1330)", async () => {
+			await playAlbum('a1');
+			pressLockScreenPause();
+			reportResourceStreamReachable(true);
+			vi.mocked(fetchSong).mockResolvedValueOnce(makeSong(queuedSongDefaults()));
+
+			pressLockScreenPlay();
+			await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+
+			expect({ notice: get(playStartNotice), named: get(pendingStart) }).toEqual({
+				notice: 'idle',
+				named: null
 			});
 		});
 

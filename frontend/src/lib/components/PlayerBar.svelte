@@ -7,6 +7,7 @@
 		nowPlayingOpen,
 		nowPlayingSurface,
 		openNowPlaying,
+		pendingStart,
 		playIdleStart,
 		playbackSource,
 		playNextSong,
@@ -20,7 +21,8 @@
 		shuffleEnabled,
 		shuffleLabel,
 		transportOfTheStart,
-		toggleShuffle
+		toggleShuffle,
+		waitingStartOf
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -71,6 +73,7 @@
 	// A start that waits for the network shows as the transport's own wait, here
 	// and on the lock screen, which is the only surface with the screen off.
 	const barTransport = $derived(transportOfTheStart(current, startNotice, transport));
+	const waitingSong = $derived(waitingStartOf(current, startNotice, $pendingStart)?.song ?? null);
 	const errorMsg = $derived(
 		barTransport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : audioPlayer.error
 	);
@@ -158,9 +161,10 @@
 		if (!current) closeNowPlaying();
 	});
 
+	// A start paused from the lock screen stays there, paused, as a take would.
 	$effect(() => {
 		updateMediaSessionPlaybackState(
-			transportOffersPause(barTransport) ? 'playing' : current ? 'paused' : 'none'
+			transportOffersPause(barTransport) ? 'playing' : current || $pendingStart ? 'paused' : 'none'
 		);
 		updateMediaSessionPositionState(currentTime, duration);
 	});
@@ -209,11 +213,12 @@
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
-		{:else if startNotice === 'building' || startNotice === 'awaiting-network'}
+		{:else if waitingSong}
+			<span class="track-title">{waitingSong.songTitle}</span>
+			<span class="track-detail">{waitingSong.albumTitle}</span>
+		{:else if startNotice === 'building'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
-		{:else if startNotice === 'gave-up-on-network'}
-			<span class="track-title">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
 			<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>

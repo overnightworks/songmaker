@@ -24,7 +24,7 @@ export function setupMediaSessionHandlers(handlers: MediaHandlers): () => void {
 
 // What the lock screen names: the take playing, or the song a waiting start
 // will play once its takes can be read.
-type LockScreenTitle = Pick<PlaybackInfo, 'songTitle' | 'artist' | 'albumTitle'>;
+export type LockScreenTitle = Pick<PlaybackInfo, 'songTitle' | 'artist' | 'albumTitle'>;
 
 export function updateMediaSessionMetadata(info: LockScreenTitle | null): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;

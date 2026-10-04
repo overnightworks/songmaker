@@ -31,6 +31,7 @@ import {
 	closeNowPlaying,
 	nowPlayingDockable,
 	nowPlayingSurface,
+	pendingStart,
 	playStartNotice,
 	queueContext,
 	selectedAlbumId,
@@ -167,6 +168,17 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 	return lockScreen;
 }
 
+const WAITING_SONG = { songTitle: 'Opening Move', artist: 'Artist', albumTitle: 'Nachtstrom' };
+
+// An album header start that could not read its takes offline, as the player
+// store holds it: the bar names its song, and the lock screen does too.
+function holdAlbumStart(notice: 'awaiting-network' | 'gave-up-on-network' | 'idle'): void {
+	openCollection.set({ kind: 'album', id: 'a1' });
+	albumList.set([albumItem({ share_slug: null, cover: null })]);
+	pendingStart.set({ albumId: 'a1', song: WAITING_SONG });
+	playStartNotice.set(notice);
+}
+
 const RESTORED_POSITION = 13;
 const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
 
@@ -205,6 +217,7 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
+	pendingStart.set(null);
 	nowPlayingSurface.set('closed');
 	nowPlayingDockable.set(false);
 	setShuffle(false);
@@ -237,29 +250,39 @@ describe('PlayerBar stream boundaries', () => {
 	});
 
 	it('a start that waits for the network shows the waiting transport, and a press goes to the start (#1288)', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
+		holdAlbumStart('awaiting-network');
 		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
 		component = mount(PlayerBar, { target });
 		await tick();
 
-		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_QUEUE_LOADING_TITLE);
 		const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
 		expect(transport?.querySelector('.spinner')).not.toBeNull();
 		transport?.click();
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
+	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
+		'while an album header start waits ($0), the bar names its song and album, as the lock screen does (#1330)',
+		async (notice) => {
+			holdAlbumStart(notice);
+			component = mount(PlayerBar, { target });
+			await tick();
+
+			expect({
+				title: target.querySelector('.track-title')?.textContent,
+				detail: target.querySelector('.track-detail')?.textContent
+			}).toEqual({ title: WAITING_SONG.songTitle, detail: WAITING_SONG.albumTitle });
+		}
+	);
+
 	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
 		useDesktopLayout();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
+		holdAlbumStart('awaiting-network');
 		component = mount(PlayerBar, { target });
 		await tick();
 
 		playStartNotice.set('idle');
+		pendingStart.set(null);
 		await tick();
 
 		expect({
@@ -362,16 +385,28 @@ describe('PlayerBar stream boundaries', () => {
 		);
 	});
 
-	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {
-		const lockScreen = installLockScreen();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
-		component = mount(PlayerBar, { target });
-		await tick();
+	it.each([
+		{
+			start: 'waits for the network, like the bar (#1288)',
+			notice: 'awaiting-network',
+			reads: 'playing'
+		},
+		{
+			start: 'was paused from the lock screen, like a paused take (#1330)',
+			notice: 'idle',
+			reads: 'paused'
+		}
+	] as const)(
+		'the lock screen reads $reads while an album start $start',
+		async ({ notice, reads }) => {
+			const lockScreen = installLockScreen();
+			holdAlbumStart(notice);
+			component = mount(PlayerBar, { target });
+			await tick();
 
-		expect(lockScreen.playbackState).toBe('playing');
-	});
+			expect(lockScreen.playbackState).toBe(reads);
+		}
+	);
 
 	it('idle Play copy follows an open album interior', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
@@ -1315,9 +1350,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		arrange: () => void = () => {}
 	): Promise<void> {
 		arrange();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set(notice);
+		holdAlbumStart(notice);
 		component = mount(PlayerBar, { target });
 		await tick();
 	}
