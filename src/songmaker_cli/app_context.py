@@ -51,6 +51,17 @@ def parse_trusted_proxies(settings: Settings) -> TrustedProxies:
         raise ValueError(f"TRUSTED_PROXIES is invalid: {exc}") from exc
 
 
+def build_session_cache(redis: Redis) -> RedisSessionCache:
+    """The Redis session cache the server reads and the reset-password CLI clears."""
+    return RedisSessionCache(
+        redis,
+        SessionKeyPrefixes(
+            session=REDIS_SESSION_PREFIX,
+            user_sessions=REDIS_USER_SESSIONS_PREFIX,
+        ),
+    )
+
+
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
     """The auth library's view of this deployment, assembled from songmaker's."""
     return WebAuthConfig(
@@ -58,13 +69,7 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
         password_hasher=BcryptPasswordHasher(),
         rate_limits=RedisRateLimitBackend(ctx.redis, key_prefix=REDIS_RL_IP_PREFIX),
         trusted_proxies=ctx.trusted_proxies,
-        session_cache=RedisSessionCache(
-            ctx.redis,
-            SessionKeyPrefixes(
-                session=REDIS_SESSION_PREFIX,
-                user_sessions=REDIS_USER_SESSIONS_PREFIX,
-            ),
-        ),
+        session_cache=build_session_cache(ctx.redis),
         allowed_hosts_exact=ctx.allowed_hosts_exact,
         allowed_hosts_patterns=tuple(ctx.allowed_hosts_patterns),
         session_max_age_seconds=settings.session_max_age_seconds,
