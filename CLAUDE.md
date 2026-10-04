@@ -143,14 +143,14 @@ These are conventions that aren't obvious from reading a single file:
 ## Key Rules
 
 1. **Database is source of truth** — all data in PostgreSQL, not files
-2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local DB escape hatches)
+2. **One code path** — CLI and web UI use the same REST API (exception: `reset-password` and `list-users` are local escape hatches that bypass the API; `list-users` needs only the DB, `reset-password` also needs a reachable Redis to end the account's sessions and changes nothing without one)
 3. **Pydantic models define the API contract** — `src/songmaker_cli/api_models/` → `types.ts` (generated via `python scripts/generate_types.py`)
 4. **Never commit secrets** — `.env` is gitignored
 5. **Commit messages**: conventional commits (`feat:`, `fix:`, `refactor:`, `test:`)
 
 ## Known Technical Debt
 
-- **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery.
+- **`main.py` escape hatches**: `reset-password` and `list-users` bypass the API. Intentional for emergency recovery. `reset-password` is not DB-only: it also deletes the account's sessions from Redis, so it needs a reachable Redis and refuses to change anything without one.
 - **Scoring modules excluded from CI coverage.** All seven scorers in `scoring/` are listed in `.github/workflows/coveragerc-ci` `omit`. Reason: the CI image doesn't ship faster-whisper / audiobox-aesthetics / librosa model weights, and adding them blows up image size and runtime for a single-developer project. Local coverage runs include them.
 - **Stale numba JIT cache in librosa segfaults scorer tests after `uv sync`.** librosa caches compiled gufuncs as `.nbc`/`.nbi` files inside `librosa/__pycache__/` (NOT `~/.numba_cache`). When `uv sync` upgrades numba, numpy, or librosa, the old cache files survive and the new numba runtime segfaults trying to load them. Symptom: `pytest tests/test_scorers.py` crashes with "Fatal Python error: Segmentation fault" deep inside `numba/np/ufunc/gufunc.py` called from `librosa.pyin`. Fix: `find .venv/lib/python*/site-packages/librosa \( -name "*.nbc" -o -name "*.nbi" \) -delete`. Numba rebuilds the cache on first call (~1s extra on the first scorer test). Run after any dependency upgrade that touches the librosa/numba/numpy stack.
 - **Claude CLI bind mounts in `docker-compose.yml`** never expose an operator profile. The web container and scoring worker each own a writable `.claude` profile and mount only the Claude CLI binary and redacted credential mirror read-only with `create_host_path: false`; Grok and Codex use their HTTP APIs and have no mount. Claude creates `~/.claude.json` in its own profile when needed. `ANTHROPIC_API_KEY` enables Claude's judge and catalog SDK path, but not the co-writer, which needs the CLI with Songmaker's MCP tools; retain the web Claude CLI mirror for co-writer turns. See `docs/security.md`, "Agent-CLI Mounts".
