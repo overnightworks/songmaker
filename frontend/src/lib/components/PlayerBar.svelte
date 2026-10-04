@@ -34,7 +34,8 @@
 	import {
 		audioPlayer,
 		transportIsBusy,
-		transportOffersPause
+		transportOffersPause,
+		transportWaitingNotice
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -45,7 +46,6 @@
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
 		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
 		MINI_PLAYER_WITHOUT_COVER_MEDIA,
-		PLAYER_WAITING_FOR_NETWORK,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
 	} from '$lib/constants';
@@ -74,9 +74,7 @@
 	// and on the lock screen, which is the only surface with the screen off.
 	const barTransport = $derived(transportOfTheStart(current, startNotice, transport));
 	const waitingSong = $derived(waitingStartOf(current, startNotice, $pendingStart)?.song ?? null);
-	const errorMsg = $derived(
-		barTransport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : audioPlayer.error
-	);
+	const errorMsg = $derived(transportWaitingNotice(barTransport) ?? audioPlayer.error);
 
 	const isPlaying = $derived(transport === 'playing');
 	const isLoading = $derived(transportIsBusy(transport));

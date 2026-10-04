@@ -50,6 +50,12 @@ export function transportButtonLabel(transport: TransportState): string {
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
+// The calm words every surface shows for a take, or a start, given up while
+// the network is gone (#1312, #1330).
+export function transportWaitingNotice(transport: TransportState): string | null {
+	return transport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : null;
+}
+
 type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
 
 // The play button's face on every surface: a spinner while sound is asked for

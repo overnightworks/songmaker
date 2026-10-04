@@ -6,7 +6,8 @@
 		audioPlayer,
 		transportButtonFace,
 		transportButtonLabel,
-		transportIsBusy
+		transportIsBusy,
+		transportWaitingNotice
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		HITBOX_FREQUENT_PX,
@@ -139,6 +140,7 @@
 	const duration = $derived(audioPlayer.duration);
 	const transport = $derived(audioPlayer.transport);
 	const buttonFace = $derived(transportButtonFace(transport));
+	const waitingNotice = $derived(transportWaitingNotice(transport));
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
@@ -340,6 +342,7 @@
 							></span>
 						</div>
 					</div>
+					{#if waitingNotice}<p class="waiting-notice" role="status">{waitingNotice}</p>{/if}
 				{/if}
 			</section>
 
@@ -605,6 +608,12 @@
 		border: 2px solid var(--bg);
 		background: var(--text);
 		margin-top: -5px;
+	}
+	.waiting-notice {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		text-align: center;
 	}
 	.transport {
 		align-self: stretch;
