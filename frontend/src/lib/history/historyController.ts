@@ -373,8 +373,7 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-		await goto(url, { ...options, state: stampedPageState(options.state, entry) });
+		await startNavigation(url, { ...options, state: stampedPageState(options.state, entry) });
 		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
 	} finally {
 		if (mount === null) navigationsUnderway -= 1;
@@ -433,19 +432,24 @@ function mountStandingAddress(): void {
 	});
 }
 
-// The router's navigation started last; a newer one aborts it. Null while a
-// navigation is issued that the router has yet to report (`navigateAway`).
-let latestRouterNavigation: Promise<void> | null = null;
+// Every navigation started since the page loaded: each one the controller
+// issues, the moment it issues it, and each one the router reports. The router
+// reports a navigation in `beforeNavigate` only once it has resolved its
+// route, and not at all while an aborted one still counts as loading, so a
+// navigation that aborts another is known to have started only here.
+let navigationsStarted = 0;
 
-// A navigation to another page -- sign-in after a lost session -- takes over
-// from a route mount still loading the moment it is issued. The router reports
-// it in `beforeNavigate` only once it has resolved its route, and the mount it
-// aborts meanwhile must not be issued again over it: that would abort this
-// navigation in turn and leave the page standing (#1340).
-export function navigateAway(url: string): Promise<void> {
-	latestRouterNavigation = null;
+function startNavigation(url: string, options?: Parameters<typeof goto>[1]): Promise<void> {
+	navigationsStarted += 1;
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-	return goto(url);
+	return goto(url, options);
+}
+
+// A navigation to another page -- sign-in after signing out or after a lost
+// session -- pushed over whatever page stands, taking over from a route mount
+// still loading the moment it is issued.
+export function navigateAway(url: string): Promise<void> {
+	return startNavigation(url);
 }
 
 // A Back or Forward that navigates mounts the address it lands on before the
@@ -458,15 +462,16 @@ export function navigateAway(url: string): Promise<void> {
 // lands on the album, the second on the wall shallow routing wrote it over --
 // is shallow routing to the router: it starts no navigation of its own, and
 // the page before stays on screen under the address (issue #1006, H5). Unless
-// a newer navigation took over, the route of the address history stands on is
-// mounted then.
+// a navigation started after it, the route of the address history stands on
+// is mounted then: a navigation started later is the one that aborted it, and
+// a mount issued over that one would abort it in turn (#1340).
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
-	const started = navigation.complete;
-	latestRouterNavigation = started;
-	started.catch(() => {
-		if (latestRouterNavigation === started) mountStandingAddress();
+	navigationsStarted += 1;
+	const startedAs = navigationsStarted;
+	navigation.complete.catch(() => {
+		if (navigationsStarted === startedAs) mountStandingAddress();
 	});
 	if (navigation.type === 'popstate' && navigation.to !== null) {
 		mountAddressOver(navigation.to.url.href);
@@ -565,8 +570,7 @@ function firstEntryOfTab(): number {
 export function stepBackOrGoTo(fallback: string): Promise<void> {
 	const standing = standingEntry();
 	if (standing === null || standing.id <= firstEntryOfTab()) {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-		return goto(fallback, { replaceState: true });
+		return startNavigation(fallback, { replaceState: true });
 	}
 	return stepBackTo(standing.id - 1);
 }
@@ -807,7 +811,7 @@ export function resetHistoryControllerForTests(): void {
 	routerStarting = false;
 	loadingMount = null;
 	addressMountedUnderKeptPage = null;
-	latestRouterNavigation = null;
+	navigationsStarted = 0;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 }
