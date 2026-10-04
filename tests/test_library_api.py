@@ -7,7 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from slugify import slugify
 from sqlalchemy import event
@@ -115,7 +115,7 @@ def _client_for(ctx: object, user_id: str, role: str = "user") -> TestClient:
     app = make_router_app(
         ctx, user=make_authenticated_user(user_id, role=role, username=f"test-{user_id}")
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def _make_client(

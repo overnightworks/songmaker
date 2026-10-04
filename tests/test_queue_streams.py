@@ -9,9 +9,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi import HTTPException
-from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
 from songmaker_cli.constants import QUEUE_STREAM_UNPLAYABLE_START_DETAIL
@@ -603,7 +602,7 @@ def test_shared_playlist_queue_stream_snapshot_and_audio(
     login_and_csrf(client, "owner", "pass1234")
     share = client.post("/api/playlists/pl1/share")
     slug = share.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
 
     get_resp = public.get(f"/shared/playlist/{slug}/stream")
     assert get_resp.status_code == 405
@@ -651,7 +650,7 @@ def test_shared_stream_manifests_only_playable_takes(
         session.commit()
 
     slug = client.post(share_endpoint).json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     response = public.post(stream_endpoint.format(slug=slug))
 
     assert response.status_code == 200
@@ -688,7 +687,7 @@ def test_shared_stream_manifests_skip_noncanonical_audio_paths(
         session.commit()
 
     slug = client.post(share_endpoint).json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     response = public.post(stream_endpoint.format(slug=slug))
 
     assert response.status_code == 200
@@ -713,7 +712,7 @@ def test_shared_queue_stream_skips_path_traversal_like_a_missing_take(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
     slug = client.post(share_endpoint).json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
 
     with factory() as session:
         session.query(Generation).filter_by(id="g1").update({
@@ -765,7 +764,7 @@ def test_shared_queue_stream_revalidates_tracks(
     login_and_csrf(client, "owner", "pass1234")
     share = client.post(share_endpoint)
     slug = share.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
 
     resp = public.post(stream_endpoint.format(slug=slug))
     assert resp.status_code == 200
@@ -804,7 +803,7 @@ def test_shared_playlist_queue_stream_revalidates_archived_takes(
     _write_audio_files(tmp_path)
     login_and_csrf(client, "owner", "pass1234")
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
 
     response = public.post(f"/shared/playlist/{slug}/stream")
     assert response.status_code == 200
@@ -1478,7 +1477,7 @@ def test_library_stream_cross_user_isolation(tmp_path: Path, monkeypatch) -> Non
     # User A's library contains only their own generations
     assert gen_ids_a == {"g1b", "g2"}
 
-    client_b = TestClient(client.app, cookies={})
+    client_b = web_client(client.app, cookies={})
     login_and_csrf(client_b, "userb", "pass1234")
 
     resp_b = client_b.post("/api/queue-streams/library", json={})
@@ -1717,13 +1716,13 @@ def test_queue_stream_pin_and_unpin_hide_foreign_and_shared_snapshots(
 
     if scope == "foreign":
         stream_resp = client.post("/api/queue-streams", json={"tracks": [{"generation_id": "g1"}]})
-        other_client = TestClient(client.app, cookies={})
+        other_client = web_client(client.app, cookies={})
         login_and_csrf(other_client, "other", "pass1234")
         request_client = other_client
     else:
         share = client.post("/api/playlists/pl1/share")
         slug = share.json()["share_slug"]
-        public = TestClient(client.app, cookies={})
+        public = web_client(client.app, cookies={})
         stream_resp = public.post(f"/shared/playlist/{slug}/stream")
         request_client = client
 

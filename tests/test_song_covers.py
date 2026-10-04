@@ -7,7 +7,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -282,7 +282,7 @@ def test_public_song_cover_404s_when_song_has_no_own_file(
     shared = client.post("/api/songs/alice-song/share")
     assert shared.status_code == 200, shared.text
     slug = shared.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     body = public.get(f"/shared/song/{slug}")
     assert body.status_code == 200
     assert body.json()["cover"] is None
@@ -317,7 +317,7 @@ def test_replace_404s_old_public_version(
     old_key = first.json()["cover"]["card"].rsplit("v=", 1)[-1]
     shared = client.post("/api/songs/alice-song/share")
     slug = shared.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     old_public = f"/shared/song/{slug}/cover?variant={COVER_VARIANT_CARD}&v={old_key}"
     assert public.get(old_public).status_code == 200
     song_dir = tmp_path / "audio" / SONG_COVER_DIRNAME / "alice-song"
