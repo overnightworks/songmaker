@@ -1063,9 +1063,9 @@ class AudioPlayer {
 	// A take that loads while nobody asked for its sound, a restored one or one
 	// whose ask a press withdrew, has no stall to recover: it waits for the
 	// listener, not for its bytes, and must not turn busy or start by itself
-	// (#1312).
+	// (#1312). The bar's Play decides that wait, so the stall watch follows it.
 	private get loadsUnasked(): boolean {
-		return this.status === 'loading' && !this.autoplayPending && this.recoveryStartedAt === null;
+		return this.status === 'loading' && this.loadingTransport === 'paused';
 	}
 
 	private recoverFromStall(reason: StallReason): void {
