@@ -15,6 +15,7 @@ from conftest import (
     make_router_ctx,
     make_test_app,
     stored_hash,
+    web_client,
 )
 from fastapi.testclient import TestClient
 from PIL import Image
@@ -140,7 +141,7 @@ def client(tmp_path: Path) -> TestClient:
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user(_DEFAULT_USER_ID, username="test"),
     )
-    yield TestClient(app)
+    yield web_client(app)
 
 
 # ── DB query tests ────────────────────────────────────────────────────
@@ -920,7 +921,7 @@ def test_shared_playlist_view(tmp_path: Path) -> None:
     assert resp.status_code == 200
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     resp = unauthed.get(f"/shared/playlist/{slug}")
     assert resp.status_code == 200
     data = resp.json()
@@ -942,14 +943,14 @@ def test_shared_playlist_audio(tmp_path: Path) -> None:
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     resp = unauthed.get(f"/shared/playlist/{slug}/audio/admin_user/g1.mp3")
     assert resp.status_code == 200
 
 
 def test_shared_playlist_not_found(tmp_path: Path) -> None:
     client, _ = make_test_app(tmp_path, seed_db=_seed_sharing_data)
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     resp = unauthed.get("/shared/playlist/nonexistent-slug")
     assert resp.status_code == 404
 
@@ -961,7 +962,7 @@ def test_shared_playlist_audio_wrong_file(tmp_path: Path) -> None:
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     resp = unauthed.get(f"/shared/playlist/{slug}/audio/wrong.mp3")
     assert resp.status_code == 404
 

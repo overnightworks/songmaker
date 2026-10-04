@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 
 from songmaker_cli.api_helpers import check_lora_ready_for_generation
 from songmaker_cli.api_models.generation_params import (
@@ -240,8 +240,6 @@ def test_apply_user_lora_path_noop_when_none(db_factory, tmp_path) -> None:
 
 
 def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
-    from fastapi.testclient import TestClient
-
     audio_dir = tmp_path / "audio"
     audio_dir.mkdir()
     factory = init_test_db(tmp_path / "test.db")
@@ -272,7 +270,7 @@ def test_generate_endpoint_rejects_foreign_lora_for_admin(tmp_path) -> None:
     app = make_router_app(
         make_router_ctx(tmp_path, db=factory), user=make_authenticated_user(USER_B, role="admin")
     )
-    client = TestClient(app)
+    client = web_client(app)
 
     resp = client.post("/api/songs/S1/generate", json={"count": 1, "model": "sft"})
     assert resp.status_code == 404

@@ -20,7 +20,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from webauth.dependencies import AuthenticatedUser
 
@@ -65,7 +65,7 @@ def _client_with_title(
         make_router_ctx(tmp_path, db=factory),
         user=searcher or make_authenticated_user(OWNER_ID, username="owner"),
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def _hit_types(items: list[dict]) -> set[str]:

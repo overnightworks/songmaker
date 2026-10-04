@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, web_client
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -54,7 +54,7 @@ def _client(tmp_path: Path, db: sessionmaker[Session], *, user_id: str, role: st
         make_router_ctx(tmp_path, db=db),
         user=make_authenticated_user(user_id, role=role),
     )
-    return TestClient(app)
+    return web_client(app)
 
 
 def _send(client: TestClient, request: tuple[str, str, dict | None]):

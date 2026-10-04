@@ -9,7 +9,7 @@ from io import BytesIO
 from pathlib import Path
 
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -330,7 +330,7 @@ def test_missing_cover_file_get_is_404_and_public_json_omits_cover(
     assert client.get(owned.json()["cover"]["detail"]).status_code == 404
     shared = client.post("/api/albums/alice-album/share")
     slug = shared.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     public_json = public.get(f"/shared/{slug}")
     assert public_json.status_code == 200
     assert public_json.json()["cover"] is None
@@ -346,7 +346,7 @@ def test_public_cover_follows_share_gate(alice_app: tuple[TestClient, object]) -
     assert uploaded.status_code == 200
     shared = client.post("/api/albums/alice-album/share")
     slug = shared.json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     body = public.get(f"/shared/{slug}")
     assert body.status_code == 200
     cover = body.json()["cover"]

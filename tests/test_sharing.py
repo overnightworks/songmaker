@@ -11,11 +11,13 @@ from pathlib import Path
 
 import pytest
 from conftest import (
+    TEST_ORIGIN,
     TEST_SECRET,
     login_and_csrf,
     make_fake_redis,
     make_test_app,
     stored_hash,
+    web_client,
 )
 from fastapi.testclient import TestClient
 from sqlalchemy import event
@@ -149,7 +151,7 @@ def test_share_warning_agrees_with_what_the_share_page_actually_plays(tmp_path: 
     slug = share_resp.json()["share_slug"]
     warned_ids = {item["id"] for item in share_resp.json()["songs_without_playable_take"]}
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     shared_songs = unauthed.get(f"/shared/{slug}").json()["songs"]
 
     for song in shared_songs:
@@ -197,7 +199,7 @@ def test_shared_album_view(sharing_app: TestClient) -> None:
     resp = sharing_app.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}")
     assert resp.status_code == 200
     data = resp.json()
@@ -210,7 +212,7 @@ def test_shared_album_view(sharing_app: TestClient) -> None:
 
 
 def test_shared_album_not_found(sharing_app: TestClient) -> None:
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/nonexistent-slug")
     assert resp.status_code == 404
 
@@ -308,7 +310,7 @@ def test_shared_album_after_revoke(sharing_app: TestClient) -> None:
     slug = resp.json()["share_slug"]
     sharing_app.delete("/api/albums/test_album/share")
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}")
     assert resp.status_code == 404
 
@@ -320,7 +322,7 @@ def test_shared_audio(sharing_app: TestClient) -> None:
     resp = sharing_app.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}/audio/admin_user/g1.mp3")
     assert resp.status_code == 200
 
@@ -394,7 +396,7 @@ def test_shared_audio_authorization_matches_presented_share_selection(
         slug = "private-share"
     else:
         slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
 
     shared_response = unauthed.get(f"/shared/{slug}")
     assert shared_response.status_code == expected_page_status
@@ -505,7 +507,7 @@ def test_shared_song_audio_authorization_matches_presented_share_selection(
         if configuration == "not_shared"
         else sharing_app.post("/api/songs/s1/share").json()["share_slug"]
     )
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     shared_response = unauthed.get(f"/shared/song/{slug}")
     candidates = {
         "admin_user/g1.mp3",
@@ -600,7 +602,7 @@ def test_shared_playlist_audio_authorization_matches_presented_share_selection(
         if configuration == "not_shared"
         else sharing_app.post("/api/playlists/pl1/share").json()["share_slug"]
     )
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     shared_response = unauthed.get(f"/shared/playlist/{slug}")
     candidates = {
         "admin_user/g1.mp3",
@@ -713,7 +715,7 @@ def test_shared_audio_lookups_run_off_the_event_loop(
         event_loop_thread = threading.get_ident()
         transport = httpx.ASGITransport(app=sharing_app.app)
         async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver",
+            transport=transport, base_url=TEST_ORIGIN,
         ) as client:
             response = await client.get(surface.audio_path.format(slug=slug))
         return response.status_code, event_loop_thread
@@ -744,7 +746,7 @@ def test_shared_audio_lookups_issue_one_scalar_filename_query(
 
     queries, handle = _count_queries(engine, "select")
     try:
-        unauthed = TestClient(sharing_app.app, cookies={})
+        unauthed = web_client(sharing_app.app, cookies={})
         response = unauthed.get(surface.audio_path.format(slug=slug))
     finally:
         event.remove(engine, "before_cursor_execute", handle)
@@ -790,7 +792,7 @@ def test_shared_audio_lookups_authorize_canonical_missing_names_before_file_chec
 
     monkeypatch.setattr(Path, "exists", record_exists)
     try:
-        unauthed = TestClient(sharing_app.app, cookies={})
+        unauthed = web_client(sharing_app.app, cookies={})
         response = unauthed.get(
             surface.audio_path.replace("g1.mp3", "missing.mp3").format(slug=slug),
         )
@@ -843,7 +845,7 @@ def _cache_directives(
     else:
         slug = sharing_app.post(share_path).json()["share_slug"]
         audio_path = audio_path.format(slug=slug)
-        client = TestClient(sharing_app.app, cookies={})
+        client = web_client(sharing_app.app, cookies={})
 
     response = client.get(resolve_audio_url(client, audio_path))
 
@@ -923,7 +925,7 @@ def test_shared_audio_not_found_wrong_file(sharing_app: TestClient) -> None:
     resp = sharing_app.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}/audio/nonexistent.mp3")
     assert resp.status_code == 404
 
@@ -934,7 +936,7 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
 ) -> None:
     slug = sharing_app.post("/api/albums/test_album/share").json()["share_slug"]
     factory = sharing_app.app.state.ctx.db
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
 
     with factory() as session:
         session.query(Generation).filter_by(id="g1").update({
@@ -969,7 +971,7 @@ def test_shared_audio_hides_path_traversal_as_a_missing_file(
 
 @pytest.mark.acceptance("ACC-SHARE-18")
 def test_shared_audio_not_found_bad_slug(sharing_app: TestClient) -> None:
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     resp = unauthed.get("/shared/bad-slug/audio/admin_user/g1.mp3")
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Not Found"
@@ -1026,7 +1028,7 @@ def test_shared_album_view_includes_pick_media(tmp_path: Path) -> None:
     resp = client.post("/api/albums/test_album/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     data = unauthed.get(f"/shared/{slug}").json()
 
     songs_by_id = {song["id"]: song for song in data["songs"]}
@@ -1054,7 +1056,7 @@ def test_shared_album_view_warms_versions_in_one_query(tmp_path: Path) -> None:
 
     queries, handle = _count_queries(engine, "versions")
     try:
-        unauthed = TestClient(client.app, cookies={})
+        unauthed = web_client(client.app, cookies={})
         resp = unauthed.get(f"/shared/{slug}")
     finally:
         event.remove(engine, "before_cursor_execute", handle)
@@ -1089,7 +1091,7 @@ def test_shared_song_view_includes_pick_media(tmp_path: Path) -> None:
     resp = client.post("/api/songs/s1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     data = unauthed.get(f"/shared/song/{slug}").json()
 
     assert data["generation_id"] == "g1"
@@ -1111,7 +1113,7 @@ def test_shared_song_view_without_pick_returns_null_media(tmp_path: Path) -> Non
     resp = client.post("/api/songs/s1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     data = unauthed.get(f"/shared/song/{slug}").json()
 
     assert data["audio_url"] is None
@@ -1124,7 +1126,7 @@ def test_shared_generation_view_includes_pick_media(sharing_app: TestClient) -> 
     resp = sharing_app.post("/api/generations/g1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     data = unauthed.get(f"/shared/gen/{slug}").json()
 
     assert data["generation_id"] == "g1"
@@ -1151,7 +1153,7 @@ def test_shared_song_and_generation_manifests_expose_their_album_cover(
 
     song_slug = sharing_app.post("/api/songs/s1/share").json()["share_slug"]
     generation_slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
 
     song = unauthed.get(f"/shared/song/{song_slug}").json()
     generation = unauthed.get(f"/shared/gen/{generation_slug}").json()
@@ -1184,7 +1186,7 @@ def test_shared_generation_hides_a_noncanonical_stored_audio_path(
         session.commit()
 
     slug = sharing_app.post("/api/generations/g1/share").json()["share_slug"]
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
 
     response = unauthed.get(f"/shared/gen/{slug}")
 
@@ -1203,7 +1205,7 @@ def test_shared_generation_manifest_uses_the_stored_canonical_path_without_resol
         raise AssertionError("share JSON must not resolve audio paths")
 
     monkeypatch.setattr(Path, "resolve", _fail_resolve)
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
 
     response = unauthed.get(f"/shared/gen/{slug}")
 
@@ -1238,7 +1240,7 @@ def test_shared_generation_audio_authorizes_canonical_missing_names_before_file_
 
         monkeypatch.setattr(Path, method_name, record_filesystem_call)
     try:
-        unauthed = TestClient(sharing_app.app, cookies={})
+        unauthed = web_client(sharing_app.app, cookies={})
         response = unauthed.get(f"/shared/gen/{slug}/audio/admin_user/missing.mp3")
     finally:
         event.remove(engine, "before_cursor_execute", handle)
@@ -1273,7 +1275,7 @@ def test_shared_generation_audio_lookup_runs_off_the_event_loop(
         event_loop_thread = threading.get_ident()
         transport = httpx.ASGITransport(app=sharing_app.app)
         async with httpx.AsyncClient(
-            transport=transport, base_url="http://testserver",
+            transport=transport, base_url=TEST_ORIGIN,
         ) as client:
             response = await client.get(f"/shared/gen/{slug}/audio/admin_user/g1.mp3")
         return response.status_code, event_loop_thread
@@ -1297,7 +1299,7 @@ def test_shared_generation_reports_the_takes_measured_duration(
     resp = sharing_app.post("/api/generations/g1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(sharing_app.app, cookies={})
+    unauthed = web_client(sharing_app.app, cookies={})
     data = unauthed.get(f"/shared/gen/{slug}").json()
 
     assert data["audio_duration"] == 188.0
@@ -1373,7 +1375,7 @@ def test_shared_playlist_view_includes_pick_media(tmp_path: Path) -> None:
     resp = client.post("/api/playlists/pl1/share")
     slug = resp.json()["share_slug"]
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     data = unauthed.get(f"/shared/playlist/{slug}").json()
 
     entries_by_id = {e["entry_id"]: e for e in data["entries"]}
@@ -1397,7 +1399,7 @@ def test_shared_playlist_page_manifest_exposes_its_own_cover_and_stream_stays_au
     _write_cover_variants(client.app.state.ctx.audio_dir, PLAYLIST_COVER_DIRNAME, "pl1")
 
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     page_manifest = public.get(f"/shared/playlist/{slug}").json()
 
     assert page_manifest["cover"] == {
@@ -1428,7 +1430,7 @@ def test_shared_playlist_page_manifest_exposes_at_most_four_share_bound_mosaic_c
         _write_cover_variants(client.app.state.ctx.audio_dir, "covers", album_id)
 
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     page_manifest = public.get(f"/shared/playlist/{slug}").json()
     mosaic_urls = [cover["card"] for cover in page_manifest["album_covers"]]
 
@@ -1460,7 +1462,7 @@ def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_pat
     _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "foreign-album")
 
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
-    public = TestClient(client.app, cookies={})
+    public = web_client(client.app, cookies={})
     page_manifest = public.get(f"/shared/playlist/{slug}").json()
     mosaic_cover = page_manifest["album_covers"][0]["detail"]
 
@@ -1484,7 +1486,7 @@ def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> Non
 
     queries, handle = _count_queries(engine, "versions")
     try:
-        unauthed = TestClient(client.app, cookies={})
+        unauthed = web_client(client.app, cookies={})
         resp = unauthed.get(f"/shared/playlist/{slug}")
     finally:
         event.remove(engine, "before_cursor_execute", handle)
@@ -1518,7 +1520,7 @@ def test_shared_rate_limit_fails_open_when_limiter_backend_errors(
         lambda _request: _BrokenLimiter(),
     )
 
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     resp = unauthed.get(f"/shared/{slug}")
     assert resp.status_code == 200
 
@@ -1565,7 +1567,7 @@ def test_shared_rate_limit(
     slug = _shared_album_slug(client)
     monkeypatch.setattr(consts, "SHARING_RATE_LIMIT", 100 if stream else 2)
     monkeypatch.setattr(consts, "SHARING_STREAM_RATE_LIMIT", 2)
-    unauthed = TestClient(client.app, cookies={})
+    unauthed = web_client(client.app, cookies={})
     for _ in range(3):
         resp = (
             unauthed.post("/shared/missing/stream")
@@ -1586,7 +1588,7 @@ def test_shared_rate_limit_is_per_listener_behind_a_proxy(tmp_path: Path) -> Non
     with _shared_app_with_small_budget(
         client, tmp_path, TrustedProxies.parse(_PROXY_NETWORK),
     ) as app:
-        listener = TestClient(app, cookies={}, client=(_TRUSTED_PEER, 55000))
+        listener = web_client(app, cookies={}, client=(_TRUSTED_PEER, 55000))
 
         def _listen(forwarded_for: str) -> int:
             return listener.get(
@@ -1639,7 +1641,7 @@ def test_share_album_ownership_enforced(tmp_path: Path) -> None:
     )
     from songmaker_cli.server import create_app
     app = create_app(audio_dir, data_dir, project_root, ctx=ctx)
-    client = TestClient(app, cookies={})
+    client = web_client(app, cookies={})
     client.cookies.set(DEFAULT_SESSION_COOKIE_NAME, sign_session_id(other_sid, TEST_SECRET))
 
     from conftest import apply_csrf_header
@@ -1825,7 +1827,7 @@ def test_share_payload_carries_only_the_shared_takes_cues(
 ) -> None:
     slug = _share_slug(two_take_app, share_path)
 
-    unauthed = TestClient(two_take_app.app, cookies={})
+    unauthed = web_client(two_take_app.app, cookies={})
     data = unauthed.get(shared_path_template.format(slug=slug)).json()
 
     assert data["whisper_cues"] == expected_cues
@@ -1834,7 +1836,7 @@ def test_share_payload_carries_only_the_shared_takes_cues(
 def test_shared_album_view_carries_the_picked_takes_cues(two_take_app: TestClient) -> None:
     slug = _share_slug(two_take_app, "/api/albums/test_album/share")
 
-    unauthed = TestClient(two_take_app.app, cookies={})
+    unauthed = web_client(two_take_app.app, cookies={})
     data = unauthed.get(f"/shared/{slug}").json()
 
     assert data["songs"][0]["whisper_cues"] == _SUNG_CUES
@@ -1843,7 +1845,7 @@ def test_shared_album_view_carries_the_picked_takes_cues(two_take_app: TestClien
 def test_shared_playlist_view_carries_the_entry_takes_cues(two_take_app: TestClient) -> None:
     slug = _share_slug(two_take_app, "/api/playlists/pl1/share")
 
-    unauthed = TestClient(two_take_app.app, cookies={})
+    unauthed = web_client(two_take_app.app, cookies={})
     data = unauthed.get(f"/shared/playlist/{slug}").json()
 
     assert data["entries"][0]["whisper_cues"] == _SUNG_CUES
@@ -1857,7 +1859,7 @@ def test_share_payloads_expose_only_the_contract_fields(two_take_app: TestClient
     gen_slug = _share_slug(two_take_app, "/api/generations/g1/share")
     playlist_slug = _share_slug(two_take_app, "/api/playlists/pl1/share")
 
-    unauthed = TestClient(two_take_app.app, cookies={})
+    unauthed = web_client(two_take_app.app, cookies={})
     album = unauthed.get(f"/shared/{album_slug}").json()
     song = unauthed.get(f"/shared/song/{song_slug}").json()
     generation = unauthed.get(f"/shared/gen/{gen_slug}").json()
@@ -1904,7 +1906,7 @@ def test_shared_cover_endpoints_hide_missing_media(
 ) -> None:
     """A live share link never turns a missing cover file into a server error."""
     slug = _share_slug(two_take_app, share_path)
-    public = TestClient(two_take_app.app, cookies={})
+    public = web_client(two_take_app.app, cookies={})
 
     response = public.get(cover_path.format(slug=slug))
 

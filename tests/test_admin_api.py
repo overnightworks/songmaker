@@ -8,7 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_test_app, stored_hash
+from conftest import make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from webauth.config import installed_web_auth_config
 from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
@@ -70,7 +70,7 @@ def managed_account(admin_client: TestClient) -> _ManagedAccount:
     )
     assert response.status_code == 200
     # Keep the fixture's fake Redis without starting the real app lifespan.
-    with closing(TestClient(admin_client.app, cookies={})) as musician:
+    with closing(web_client(admin_client.app, cookies={})) as musician:
         response_login = musician.post(
             "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
         )
@@ -189,7 +189,7 @@ def test_a_later_failure_rolls_back_every_field_in_a_combined_update(
     before = _audit_entries(admin_client)
     users_before = admin_client.get("/api/admin/users").json()
     cache = installed_web_auth_config(admin_client.app).session_cache
-    with closing(TestClient(admin_client.app, raise_server_exceptions=False)) as failing_client:
+    with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
         with patch.object(
@@ -252,7 +252,7 @@ def test_cache_failure_rolls_back_account_changes_and_session_deletion(
         f"/api/admin/sessions/{managed_account.session_reference}" if single_session
         else f"/api/admin/users/{managed_account.user_id}"
     )
-    with closing(TestClient(admin_client.app, raise_server_exceptions=False)) as failing_client:
+    with closing(web_client(admin_client.app, raise_server_exceptions=False)) as failing_client:
         failing_client.cookies.update(admin_client.cookies)
         failing_client.headers.update(admin_client.headers)
         with patch.object(cache, cache_method, side_effect=RuntimeError("cache unavailable")):
@@ -262,7 +262,7 @@ def test_cache_failure_rolls_back_account_changes_and_session_deletion(
     assert admin_client.get("/api/admin/users").json() == users_before
     assert _audit_entries(admin_client) == audit_before
     assert managed_account.client.get("/api/auth/me").status_code == 200
-    with closing(TestClient(admin_client.app, cookies={})) as password_client:
+    with closing(web_client(admin_client.app, cookies={})) as password_client:
         login = password_client.post(
             "/api/auth/login", json={"username": "musician", "password": "t3stP@ssw0rd"},
         )
@@ -604,7 +604,7 @@ def test_force_logout(client: TestClient) -> None:
         create_user(session, "victim", stored_hash("t3stP@ssw0rd"))
         session.commit()
 
-    other_client = TestClient(client.app, cookies={})
+    other_client = web_client(client.app, cookies={})
     other_client.post("/api/auth/login", json={"username": "victim", "password": "t3stP@ssw0rd"})
     victim_cookie = other_client.cookies.get(DEFAULT_SESSION_COOKIE_NAME)
 
@@ -654,7 +654,7 @@ def test_deactivate_user_clears_redis_sessions(client: TestClient) -> None:
     )
     victim_id = _get_user_id(client, "victim")
 
-    victim_client = TestClient(client.app, cookies={})
+    victim_client = web_client(client.app, cookies={})
     login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
 
     session_cache: SessionCache = installed_web_auth_config(client.app).session_cache
@@ -681,7 +681,7 @@ def test_force_logout_clears_redis(client: TestClient) -> None:
         create_user(session, "victim2", stored_hash("t3stP@ssw0rd"))
         session.commit()
 
-    victim_client = TestClient(client.app, cookies={})
+    victim_client = web_client(client.app, cookies={})
     victim_client.post(
         "/api/auth/login",
         json={"username": "victim2", "password": "t3stP@ssw0rd"},
@@ -716,7 +716,7 @@ def test_update_user_role_clears_redis(client: TestClient) -> None:
     )
     bob_id = resp.json()["id"]
 
-    bob_client = TestClient(client.app, cookies={})
+    bob_client = web_client(client.app, cookies={})
     login_and_csrf(bob_client, "bob", "t3stP@ssw0rd")
 
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX

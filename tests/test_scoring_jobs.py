@@ -22,8 +22,8 @@ from conftest import (
     make_router_ctx,
     override_provider_runtime,
     refresh_provider_snapshots,
+    web_client,
 )
-from fastapi.testclient import TestClient
 
 from songmaker_cli.api_models.whisper import WhisperCue
 from songmaker_cli.constants import (
@@ -185,7 +185,7 @@ def admin_client(tmp_path: Path, monkeypatch):
         make_router_ctx(tmp_path, db=factory),
         user=make_authenticated_user("u-test", role="admin", username="u-u-test"),
     )
-    yield TestClient(app), factory
+    yield web_client(app), factory
 
 
 def test_unknown_judge_provider_rejected_at_the_settings_boundary(admin_client) -> None:
