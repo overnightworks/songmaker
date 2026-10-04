@@ -6,7 +6,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import Annotated, Optional
+from typing import Annotated, NoReturn, Optional
 
 from cyclopts import App, Parameter
 from webauth.passwords import MIN_PASSWORD_LENGTH
@@ -104,31 +104,45 @@ def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
     password: Annotated[str, Parameter(help=f"New password (min {MIN_PASSWORD_LENGTH} chars)")],
 ) -> None:
-    """Reset a user's password (requires local DB access)."""
-    from pydantic import ValidationError
+    """Reset a user's password and end all its sessions (requires local DB access)."""
+    from redis.exceptions import RedisError
     from webauth.passwords import hash_password
 
-    from songmaker_cli.api_models.auth import chosen_password_rule
+    from songmaker_cli.api_models.auth import chosen_password_violation
+    from songmaker_cli.app_context import build_session_cache
     from songmaker_cli.db.engine import init_db, resolve_database_url
+    from songmaker_cli.db.queries import delete_user_sessions, get_user_by_username, update_user
+    from songmaker_cli.redis_client import create_redis
+    from songmaker_cli.settings import get_settings
 
-    try:
-        chosen_password_rule.validate_python(password)
-    except ValidationError as exc:
-        print(f"Error: {exc.errors()[0]['msg']}")
-        sys.exit(1)
+    violation = chosen_password_violation(password)
+    if violation is not None:
+        _exit_with_error(violation)
 
-    db_url = resolve_database_url()
-
-    factory = init_db(db_url)
-    with factory() as session:
-        from songmaker_cli.db.queries import get_user_by_username
+    factory = init_db(resolve_database_url())
+    with factory() as session, create_redis(get_settings().redis_url) as redis:
         user = get_user_by_username(session, username)
         if not user:
-            print(f"Error: user '{username}' not found")
-            sys.exit(1)
-        user.password_hash = hash_password(password)
+            _exit_with_error(f"user '{username}' not found")
+        update_user(session, user.id, password_hash=hash_password(password))
+        ended = delete_user_sessions(session, user.id)
+        try:
+            build_session_cache(redis).delete_user_sessions(user.id)
+        except RedisError:
+            session.rollback()
+            _exit_with_error("the session cache is unreachable, so nothing was changed")
         session.commit()
-        print(f"Password reset for '{username}' (role={user.role})")
+        print(f"Password reset for '{username}' (role={user.role}); {_sessions_ended(ended)}")
+
+
+def _exit_with_error(message: str) -> NoReturn:
+    print(f"Error: {message}")
+    sys.exit(1)
+
+
+def _sessions_ended(count: int) -> str:
+    noun = "session" if count == 1 else "sessions"
+    return f"{count} {noun} ended"
 
 
 @app.command(name="list-users")
