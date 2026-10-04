@@ -1216,12 +1216,6 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await giveUpWhileOfflineAfterStall();
 	}
 
-	function waitingRetry(): HTMLButtonElement {
-		const button = target.querySelector<HTMLButtonElement>('.waiting-retry');
-		if (!button) throw new Error('Expected a small Retry beside the waiting words');
-		return button;
-	}
-
 	it.each([
 		{ moment: 'while it buffers', wait: 0 },
 		{ moment: 'while a recovery reload runs', wait: STALL_LOOK_MS }
@@ -1252,21 +1246,24 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 	it.each([
 		{ layout: 'phone', arrange: () => {} },
 		{ layout: 'desktop', arrange: useDesktopLayout }
-	])('given up offline, the $layout bar waits calmly with a small Retry', async ({ arrange }) => {
-		await giveUpWhileOffline(arrange);
+	])(
+		'given up offline, the $layout bar waits calmly with no Retry to press (#1312)',
+		async ({ arrange }) => {
+			await giveUpWhileOffline(arrange);
 
-		expect({
-			words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
-			redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
-			main: playButton().getAttribute('aria-label'),
-			smallRetry: waitingRetry().textContent?.trim()
-		}).toEqual({
-			words: PLAYER_WAITING_FOR_NETWORK,
-			redFailure: false,
-			main: TRANSPORT_PAUSE_LABEL,
-			smallRetry: TRANSPORT_RETRY_LABEL
-		});
-	});
+			expect({
+				words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),
+				redFailure: target.querySelector('.error-text, .phone-failure, .play-btn.errored') !== null,
+				main: playButton().getAttribute('aria-label'),
+				retryOffered: target.textContent?.includes(TRANSPORT_RETRY_LABEL)
+			}).toEqual({
+				words: PLAYER_WAITING_FOR_NETWORK,
+				redFailure: false,
+				main: TRANSPORT_PAUSE_LABEL,
+				retryOffered: false
+			});
+		}
+	);
 
 	it.each([
 		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },
@@ -1288,15 +1285,6 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 			whileWaiting: 'playing',
 			afterPause: 'paused'
 		});
-	});
-
-	it('the small Retry fetches the take again at once', async () => {
-		await giveUpWhileOffline();
-		const load = vi.spyOn(audio, 'load');
-
-		await clickAndSettle(waitingRetry());
-
-		expect(load).toHaveBeenCalledOnce();
 	});
 
 	it.each([

@@ -181,7 +181,6 @@
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
-		onRetry={() => audioPlayer.play()}
 		currentTime={audioPlayer.currentTime}
 		duration={audioPlayer.duration}
 		{formatTime}
