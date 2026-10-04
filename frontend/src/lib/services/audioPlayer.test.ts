@@ -4,6 +4,7 @@ import type { QueueStreamManifest } from '$lib/api/types';
 import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
 import {
 	audioPlayer,
+	STALL_RECOVERY_MS,
 	transportButtonLabel,
 	transportIsBusy,
 	type AudioPlayerCallbacks,
@@ -567,7 +568,7 @@ describe('event handling', () => {
 		fakeAudio.fire('stalled');
 		expect(audioPlayer.status).toBe('buffering');
 
-		vi.advanceTimersByTime(5000);
+		vi.advanceTimersByTime(STALL_RECOVERY_MS);
 
 		expect(audioPlayer.status).toBe('loading');
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
@@ -585,7 +586,7 @@ describe('event handling', () => {
 		fakeAudio.currentTime = 40;
 		fakeAudio.fire('timeupdate');
 		fakeAudio.fire('stalled');
-		vi.advanceTimersByTime(5000);
+		vi.advanceTimersByTime(STALL_RECOVERY_MS);
 
 		fakeAudio.restartClockAsLoadDoes();
 		expect(audioPlayer.currentTime).toBe(39.25);
@@ -604,14 +605,14 @@ describe('event handling', () => {
 
 		for (let tick = 0; tick < 3; tick += 1) {
 			fakeAudio.bufferedUntil += 0.25;
-			vi.advanceTimersByTime(5000);
+			vi.advanceTimersByTime(STALL_RECOVERY_MS);
 		}
 		expect({ src: fakeAudio.src, status: audioPlayer.status }).toEqual({
 			src: '/audio/a1/song_v1.mp3',
 			status: 'buffering'
 		});
 
-		vi.advanceTimersByTime(5000);
+		vi.advanceTimersByTime(STALL_RECOVERY_MS);
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/audio/a1/song_v1.mp3'));
 	});
 
@@ -625,7 +626,7 @@ describe('event handling', () => {
 
 		fakeAudio.currentTime = 41;
 		fakeAudio.fire('timeupdate');
-		vi.advanceTimersByTime(5000);
+		vi.advanceTimersByTime(STALL_RECOVERY_MS);
 
 		expect(fakeAudio.src).toBe('/audio/a1/song_v1.mp3');
 		expect(audioPlayer.status).toBe('playing');
@@ -1656,7 +1657,7 @@ describe('stream playback', () => {
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		await vi.advanceTimersByTimeAsync(5000);
+		await vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS);
 		await Promise.resolve();
 		await Promise.resolve();
 
@@ -1730,7 +1731,7 @@ describe('stream playback', () => {
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		await vi.advanceTimersByTimeAsync(5000);
+		await vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS);
 		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
@@ -1754,7 +1755,7 @@ describe('stream playback', () => {
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		await vi.advanceTimersByTimeAsync(5000);
+		await vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS);
 		await Promise.resolve();
 
 		expect(onStreamRebuild).toHaveBeenCalledOnce();
@@ -1794,7 +1795,7 @@ describe('stream playback', () => {
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		await vi.advanceTimersByTimeAsync(5000);
+		await vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS);
 		await Promise.resolve();
 		await Promise.resolve();
 		await Promise.resolve();
@@ -2446,7 +2447,7 @@ describe('loadUrl()', () => {
 		fakeAudio.fire('timeupdate');
 
 		fakeAudio.fire('stalled');
-		vi.advanceTimersByTime(5000);
+		vi.advanceTimersByTime(STALL_RECOVERY_MS);
 
 		expect(fakeAudio.src).toMatch(recoveryUrlOf('/shared/slug/audio/first.mp3'));
 	});

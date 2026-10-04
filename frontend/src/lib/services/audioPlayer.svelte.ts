@@ -148,7 +148,7 @@ const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const END_OF_DECK_SLACK_SECONDS = 0.5;
 // How often a stalled take is looked at again and, unless the owner reports
 // the network gone, reloaded.
-const STALL_RECOVERY_MS = 5000;
+export const STALL_RECOVERY_MS = 5000;
 // How long a stalled take is tried before the player gives up and asks for
 // Retry: long enough to ride out a dropout with the screen off (#1187 P3). A
 // start that waits for the network gives up after the same time (#1312).
@@ -1205,10 +1205,10 @@ class AudioPlayer {
 	}
 
 	// Loading a source drops the 'pause' event an app pause just queued, so the
-	// app's pause marker is settled here instead of by that event. A source
-	// the listener asked to hear whose data never arrives — not even its first
-	// byte — is watched like a buffering stall, so it ends in Retry instead of
-	// loading forever.
+	// app's pause marker is settled here instead of by that event. The stall
+	// watch covers only a source the listener asked to hear: one whose data
+	// never arrives — not even its first byte — ends in Retry like a buffering
+	// stall instead of loading forever, while an unasked one waits for Play.
 	private loadSource(el: HTMLAudioElement, url: string): void {
 		this.pauseRequestedByApp = false;
 		el.src = url;

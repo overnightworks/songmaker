@@ -20,7 +20,11 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
+import {
+	audioPlayer,
+	STALL_RECOVERY_MS,
+	type PlaybackInfo
+} from '$lib/services/audioPlayer.svelte';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
@@ -164,7 +168,7 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 }
 
 const RESTORED_POSITION = 13;
-const PAST_THE_STALL_CHECK_MS = 5001;
+const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -1273,7 +1277,6 @@ describe('PlayerBar while typing on the phone', () => {
 });
 
 describe('PlayerBar while a take stalls (#1234)', () => {
-	const STALL_LOOK_MS = 5000;
 	const PAST_THE_RECOVERY_DEADLINE_MS = 3 * 60 * 1000;
 
 	afterEach(() => {
@@ -1364,7 +1367,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 
 	it.each([
 		{ moment: 'while it buffers', wait: 0 },
-		{ moment: 'while a recovery reload runs', wait: STALL_LOOK_MS }
+		{ moment: 'while a recovery reload runs', wait: STALL_RECOVERY_MS }
 	])('offers Pause $moment, and Pause stops the recovery', async ({ wait }) => {
 		await stallWhilePlaying();
 		await vi.advanceTimersByTimeAsync(wait);
@@ -1426,7 +1429,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },
 		{
 			moment: 'while a recovery reload runs',
-			reach: () => vi.advanceTimersByTimeAsync(STALL_LOOK_MS)
+			reach: () => vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS)
 		},
 		{ moment: 'while it waits for the network', reach: () => giveUpWhileOfflineAfterStall() }
 	])('the lock screen offers Pause $moment, like the bar', async ({ reach }) => {
