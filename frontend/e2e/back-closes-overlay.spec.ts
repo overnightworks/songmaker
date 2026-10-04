@@ -1223,7 +1223,10 @@ test.describe('Back closes the open overlay outside the library', () => {
 			await expect(sharePage.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 			const shareAddress = sharePage.url();
 			await sharePage
-				.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
+				.getByRole('button', {
+					name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+					exact: true
+				})
 				.click();
 			const openNowPlaying = sharePage.getByRole('button', {
 				name: NOW_PLAYING_LABEL,
