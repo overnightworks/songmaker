@@ -4,9 +4,11 @@
 // refused the admin page, and returning to a session that has outlived its
 // absolute maximum age -- and, since #1215, a logged-out deep link that signs
 // in onto the address it asked for. Since #1230 the phone also loses its
-// session behind an open song page and is sent to the door from there. Since
-// #1322 an admin with two sessions finds its own marked as this device, and the
-// admin page keeps a create refusal in the form while a revoke refusal stays.
+// session behind an open song page and is sent to the door from there, and
+// since #1340 a drawer tap after the loss returns there to the tapped album.
+// Since #1322 an admin with two sessions finds its own marked as this device,
+// and the admin page keeps a create refusal in the form while a revoke refusal
+// stays.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
@@ -50,6 +52,8 @@ import {
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
 	RAIL_DRAWER_OPEN_LABEL,
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
 	SESSION_LOST_REDIRECT_PARAM
 } from '../src/lib/constants';
 import {
@@ -59,6 +63,8 @@ import {
 	type ExpectedRefusal,
 	MOBILE_VIEWPORT,
 	openRailNav,
+	containing,
+	nameStartingWith,
 	shellOf,
 	workspace,
 	type Shell
@@ -77,8 +83,9 @@ import {
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
  * page, 13/12 for the expired session, 11/11 for the lockout, 23/26 for the
- * deep-link sign-in, and 28 at 375px for the phone's session lost behind its
- * menu, which runs on the phone only. The admin flows were measured at 1440 /
+ * deep-link sign-in, 28 at 375px for the phone's session lost behind its
+ * menu, and 20 at 390px for the album tapped in its drawer after the session
+ * was lost; both run on the phone only. The admin flows were measured at 1440 /
  * 390 instead: 23/21 for the own session and the two refusals, and 8 at 390px
  * for the row-action hitboxes (the admin page plus opening a tab), which runs
  * on the phone only. One ceiling for the file, the same way
@@ -108,6 +115,11 @@ const REFUSED_PATHS = [
 // every other flow it still fails the guard.
 const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
 const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
+// What a drawer album tap reads as it opens the album -- its songs, the album
+// the page resolves, and the active models the generation presets offer --
+// which a session lost before the tap refuses.
+const ALBUM_OPENING_REFUSED_TAG = '@album-opening-refused';
+const ALBUM_OPENING_PATHS = ['/api/songs', '/api/albums/', '/api/settings/models'];
 // The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
 // sentences under proof. Only that flow forgives them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
@@ -290,6 +302,19 @@ async function seedOwnSong(): Promise<string> {
 	}
 }
 
+/** The album page a song address sits under: `/album/<album>/<song>`. */
+function albumAddressOf(songAddress: string): string {
+	return songAddress.slice(0, songAddress.lastIndexOf('/'));
+}
+
+/**
+ * The run marker the seeded album's title and address share
+ * (`seedOwnSongAddress`), which names its row in the rail.
+ */
+function albumMarkerOf(albumAddress: string): string {
+	return albumAddress.slice(albumAddress.lastIndexOf('-') + 1);
+}
+
 /**
  * Opens the account's own song the way a logged-out tab does: through the
  * door, which says nothing about a session the tab never had.
@@ -313,9 +338,11 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
  * 5xx at all, still fails the flow.
  */
 function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
-	const refusedPaths = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
-		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
-		: REFUSED_PATHS;
+	const refusedPaths = [
+		...REFUSED_PATHS,
+		...(testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG) ? LIBRARY_LIST_PATHS : []),
+		...(testInfo.tags.includes(ALBUM_OPENING_REFUSED_TAG) ? ALBUM_OPENING_PATHS : [])
+	];
 	const sessionRefusals = refusedPaths.map((path) => ({
 		path,
 		statuses: SESSION_REFUSAL_STATUSES
@@ -632,6 +659,40 @@ test(
 		);
 		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
 		await attachShot(page, testInfo, 'auth-phone-session-lost');
+	}
+);
+
+// Issue #1340, head ruling: a navigation the person already started counts as
+// where they meant to be. Which of the tap's requests the server refuses first
+// varies from run to run, and the address sign-in returns to must not.
+test(
+	'a session lost behind the drawer on the phone returns to the album tapped in it',
+	{ tag: ALBUM_OPENING_REFUSED_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		test.skip(!isMobile, 'The drawer is the phone shell.');
+		await page.setViewportSize(MOBILE_VIEWPORT);
+		const albumAddress = albumAddressOf(await seedOwnSong());
+		await signIn(page);
+		await page.goto(VOICES_PAGE_PATH);
+		await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
+		const rail = await openRailNav(page, 'mobile');
+		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+		const album = rail
+			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+			.getByRole('button', { name: containing(albumMarkerOf(albumAddress)) });
+		await expect(album).toBeVisible();
+
+		await ageSessionPastAbsoluteLimit(sessionIdOf((await sessionCookie(page.context())) as Cookie));
+		await album.click();
+
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' &&
+				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === albumAddress
+		);
+		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
+		await attachShot(page, testInfo, 'auth-phone-session-lost-album-tap');
 	}
 );
 
