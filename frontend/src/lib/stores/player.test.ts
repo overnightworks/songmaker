@@ -2949,12 +2949,23 @@ describe('shuffle rebuilds the playing queue', () => {
 		toasts.set([]);
 	});
 
-	it.each([
+	const rebuildsOfThePlayingQueue = [
 		{ change: 'shuffle', rebuild: () => toggleShuffle() },
 		{ change: 'pool', rebuild: () => chooseLibraryTakePool('all') }
-	])(
-		'$change keeps the take and position reached by automatic advancement while the library fetch was pending',
-		async ({ rebuild }) => {
+	];
+
+	it.each(
+		rebuildsOfThePlayingQueue.flatMap((rebuildCase) => [
+			{ ...rebuildCase, answer: 'holds the advanced take', firstAnswerHoldsAdvancedTake: true },
+			{
+				...rebuildCase,
+				answer: 'leaves the advanced take out',
+				firstAnswerHoldsAdvancedTake: false
+			}
+		])
+	)(
+		'$change keeps the take and position reached by automatic advancement while the library fetch was pending, when the answer $answer',
+		async ({ rebuild, firstAnswerHoldsAdvancedTake }) => {
 			const first = makeGen({ ...genDefaults, id: 'g-first' });
 			const second = makeGen({
 				...genDefaults,
@@ -2984,25 +2995,32 @@ describe('shuffle rebuilds the playing queue', () => {
 			);
 			audioPlayer.current = advanced;
 			audioPlayer.currentCallbacks.onCurrentChange?.(advanced);
+			const secondPoolTake = makePoolTake({
+				generation_id: second.id,
+				song_id: 's2',
+				song_title: 'Second',
+				mp3_path: second.mp3_path
+			});
+			const firstPoolTake = makePoolTake({ generation_id: first.id });
+			if (!firstAnswerHoldsAdvancedTake) {
+				vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
+					makePoolQueue({ takes: [makePoolTake({ generation_id: 'g-other' }), secondPoolTake] })
+				);
+			}
 			finishFetch(
 				makePoolQueue({
-					takes: [
-						makePoolTake({ generation_id: first.id }),
-						makePoolTake({
-							generation_id: second.id,
-							song_id: 's2',
-							song_title: 'Second',
-							mp3_path: second.mp3_path
-						})
-					]
+					takes: firstAnswerHoldsAdvancedTake ? [firstPoolTake, secondPoolTake] : [firstPoolTake]
 				})
 			);
 			await rebuilding;
 
+			expect(get(toasts).map((toast) => toast.message)).not.toContain(QUEUE_TAKE_MISSING_TOAST);
 			expect(audioPlayer.load).toHaveBeenLastCalledWith(
 				expect.objectContaining({ generation: expect.objectContaining({ id: second.id }) }),
 				expect.objectContaining({ startAt: 72.125 })
 			);
+			const ctx = get(queueContext);
+			expect(ctx.type === 'library' && ctx.takes?.[ctx.index ?? -1]?.generation.id).toBe(second.id);
 		}
 	);
 

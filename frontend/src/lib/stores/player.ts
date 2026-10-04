@@ -591,44 +591,55 @@ async function playLibraryFromGeneration(
 	playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
-	let queue;
-	try {
-		queue = await fetchLibraryPoolQueue({
-			startGenerationId: gen.id,
-			...librarySnapshotOpts(),
-			signal
-		});
-	} catch (err) {
+	let requested = gen;
+	for (;;) {
+		let queue;
+		try {
+			queue = await fetchLibraryPoolQueue({
+				startGenerationId: requested.id,
+				...librarySnapshotOpts(),
+				signal
+			});
+		} catch (err) {
+			if (!playStartIsCurrent(seq)) return;
+			reportLibraryTakeStartFailure(
+				requested,
+				opts,
+				isEmptyPoolError(err) ? 'empty' : 'error',
+				libraryStreamFailureToast(err)
+			);
+			return;
+		}
 		if (!playStartIsCurrent(seq)) return;
-		reportLibraryTakeStartFailure(
-			gen,
-			opts,
-			isEmptyPoolError(err) ? 'empty' : 'error',
-			libraryStreamFailureToast(err)
+		const takes = queue.takes.map(poolTakeToPlaybackInfo);
+		const continuation = opts.keepPlaying ? currentTakeAtPosition() : null;
+		const startGeneration = continuation?.generation ?? requested;
+		const startIndex = takes.findIndex((take) => take.generation.id === startGeneration.id);
+		// The pool only guarantees the take it was asked to start from; a take
+		// the deck advanced to during the fetch may lie outside it, so the queue
+		// is asked again from the take that is playing now.
+		if (startIndex < 0 && startGeneration.id !== requested.id) {
+			requested = startGeneration;
+			continue;
+		}
+		if (startIndex < 0) {
+			reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
+			return;
+		}
+		playStartNotice.set('idle');
+		if (takes.length === 1 && opts.tappedRowSong) {
+			await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
+			return;
+		}
+		libraryQueueSkipped.set(queue.skipped ?? []);
+		libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
+		playNativeLibraryTakes(
+			takes,
+			startIndex,
+			opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts
 		);
 		return;
 	}
-	if (!playStartIsCurrent(seq)) return;
-	const takes = queue.takes.map(poolTakeToPlaybackInfo);
-	const continuation = opts.keepPlaying ? currentTakeAtPosition() : null;
-	const startGeneration = continuation?.generation ?? gen;
-	const startIndex = takes.findIndex((take) => take.generation.id === startGeneration.id);
-	if (startIndex < 0) {
-		reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
-		return;
-	}
-	playStartNotice.set('idle');
-	if (takes.length === 1 && opts.tappedRowSong) {
-		await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
-		return;
-	}
-	libraryQueueSkipped.set(queue.skipped ?? []);
-	libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-	playNativeLibraryTakes(
-		takes,
-		startIndex,
-		opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts
-	);
 }
 
 async function playLibrary(opts: QueueStart = {}): Promise<void> {
