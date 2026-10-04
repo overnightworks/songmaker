@@ -4,6 +4,7 @@ import { PLAYING_MARK_LABEL, collectionPauseLabel, collectionPlayLabel } from '$
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { SharedTrack } from '$lib/share/sharedCollection';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { findElementByRoleAndName } from '../shell/rail-test-fixtures';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
@@ -198,6 +199,34 @@ describe('SharedCollection track rows', () => {
 
 		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
 	});
+
+	it.each([
+		{ status: 'playing', busy: 'false', face: 'pause' },
+		{ status: 'buffering', busy: 'true', face: 'spinner' },
+		{ status: 'error', busy: 'false', face: 'refresh-cw' }
+	] as const)(
+		'shows on the header circle of a $status share take the face the bar shows (#1330)',
+		async ({ status, busy, face }) => {
+			vi.stubGlobal(
+				'matchMedia',
+				vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+			);
+			const target = await renderShare(null, [], 'playlist', [sharedTrack('e1', 'Tide')]);
+			target.querySelector<HTMLButtonElement>('.track-row')?.click();
+			await tick();
+
+			audioPlayer.status = status;
+			await tick();
+			const circle = target.querySelector('.collection-header .play-circle');
+
+			expect({ busy: circle?.getAttribute('aria-busy'), face: shownTransportFace(circle) }).toEqual(
+				{
+					busy,
+					face
+				}
+			);
+		}
+	);
 
 	it('dims the header play circle of a share without audio', async () => {
 		const target = await renderShare(null);
