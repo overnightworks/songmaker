@@ -849,6 +849,7 @@ def test_hard_delete_user_rolls_back_when_session_cache_fails(
     from conftest import login_and_csrf
 
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
 
     _login_as_admin(client)
     user_id = _create_user_with_data(client, "victim")
@@ -859,6 +860,12 @@ def test_hard_delete_user_rolls_back_when_session_cache_fails(
     redis = client.app.state.ctx.redis
     sids_before = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
     assert len(sids_before) == 1
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        old_session_ids = {
+            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
+        }
+    assert old_session_ids
     monkeypatch.setattr(
         session_cache, "delete_user_sessions", MagicMock(side_effect=RuntimeError("redis down")),
     )
@@ -868,9 +875,12 @@ def test_hard_delete_user_rolls_back_when_session_cache_fails(
 
     from songmaker_cli.db.queries import get_user
 
-    factory = client.app.state.ctx.db
     with factory() as session:
         assert get_user(session, user_id) is not None
+        remaining_session_ids = {
+            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
+        }
+    assert remaining_session_ids == old_session_ids
 
     assert victim_client.get("/api/auth/me").status_code == 200
     assert redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}") == sids_before
@@ -882,6 +892,7 @@ def test_hard_delete_user_ends_victim_session(client: TestClient) -> None:
     from conftest import login_and_csrf
 
     from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
 
     _login_as_admin(client)
     user_id = _create_user_with_data(client, "victim")
@@ -900,6 +911,10 @@ def test_hard_delete_user_ends_victim_session(client: TestClient) -> None:
     assert victim_client.get("/api/auth/me").status_code == 401
     for sid in sids:
         assert session_cache.get(sid) is None
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).all() == []
 
 
 def test_hard_delete_user_no_data(client: TestClient) -> None:
