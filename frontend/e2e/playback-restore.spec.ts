@@ -2,11 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import {
-	TRANSPORT_LOADING_LABEL,
-	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
-} from '../src/lib/constants';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
 import {
 	csrfHeaders,
 	FlowGuard,
@@ -341,7 +337,7 @@ test.describe('a slow network holds the restored take back', () => {
 	// The take must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
 
-	test('a double Play while the restored take still loads reads Loading and plays from the saved position (#1312)', async ({
+	test('while the restored take still loads, Play reads Pause with its spinner, Pause withdraws, and Play again plays from the saved position (#1312)', async ({
 		page
 	}, testInfo) => {
 		const guard = new FlowGuard(page);
@@ -349,8 +345,7 @@ test.describe('a slow network holds the restored take back', () => {
 		const marker = `${shell} ${runMarker()}`;
 		const songTitle = `Restore Wait ${marker}`;
 		await followTheAudioDecks(page);
-		const { transport, pause } = transportOf(page);
-		const loading = transport.getByRole('button', { name: TRANSPORT_LOADING_LABEL, exact: true });
+		const { transport, play, pause } = transportOf(page);
 		let releaseTheTake: () => void = () => {};
 
 		await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
@@ -359,13 +354,16 @@ test.describe('a slow network holds the restored take back', () => {
 			});
 
 			await expect(transport).toContainText(songTitle);
-			await expect(loading).toHaveAttribute('aria-busy', 'true');
-			await loading.click();
-			await loading.click();
-			await expect(loading).toBeVisible();
+			await expect(play).toHaveAttribute('aria-busy', 'false');
+			await play.click();
+			await expect(pause).toHaveAttribute('aria-busy', 'true');
+			await pause.click();
+			await expect(play).toHaveAttribute('aria-busy', 'false');
+			await play.click();
+			await expect(pause).toHaveAttribute('aria-busy', 'true');
 			releaseTheTake();
 
-			await expect(pause).toBeVisible();
+			await expect(pause).toHaveAttribute('aria-busy', 'false');
 			expect(await loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
 			await pause.click();
 		});

@@ -234,6 +234,7 @@
 	<TransportBarFrame
 		transport={barTransport}
 		{errorMsg}
+		takeIsCurrent={current !== null}
 		{currentTime}
 		{duration}
 		{formatTime}

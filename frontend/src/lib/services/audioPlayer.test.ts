@@ -1,7 +1,7 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { TRANSPORT_LOADING_LABEL } from '$lib/constants';
+import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
 import {
 	audioPlayer,
 	transportButtonLabel,
@@ -1352,7 +1352,7 @@ describe('patient recovery while the screen is off', () => {
 				interruption: 'another take loads',
 				interrupt: () =>
 					audioPlayer.load(makeInfo({ songTitle: 'Next take' }), { autoplay: false }),
-				afterwards: { song: 'Next take', transport: 'loading' }
+				afterwards: { song: 'Next take', transport: 'paused' }
 			}
 		])(
 			'a snapshot rebuild that answers after $interruption leaves the player alone',
@@ -2109,19 +2109,28 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
-	it('a second press while loading keeps the play intent (#1312)', () => {
+	it('a second press while loading withdraws the queued play (#1312)', () => {
 		audioPlayer.toggle();
 		audioPlayer.toggle();
 		fakeAudio.fire('canplay');
-		expect(fakeAudio.playMock).toHaveBeenCalled();
+		expect(fakeAudio.playMock).not.toHaveBeenCalled();
 	});
 
-	it('names a loading take Loading and busy, never Play (#1312)', () => {
-		expect({
-			label: transportButtonLabel(audioPlayer.transport),
-			busy: transportIsBusy(audioPlayer.transport)
-		}).toEqual({ label: TRANSPORT_LOADING_LABEL, busy: true });
-	});
+	it.each([
+		{ moment: 'nobody pressed yet', presses: 0, label: TRANSPORT_PLAY_LABEL, busy: false },
+		{ moment: 'a press asked for sound', presses: 1, label: TRANSPORT_PAUSE_LABEL, busy: true },
+		{ moment: 'a second press withdrew it', presses: 2, label: TRANSPORT_PLAY_LABEL, busy: false }
+	])(
+		'names a loading take $label, busy $busy, once $moment (#1312)',
+		({ presses, label, busy }) => {
+			for (let press = 0; press < presses; press++) audioPlayer.toggle();
+
+			expect({
+				label: transportButtonLabel(audioPlayer.transport),
+				busy: transportIsBusy(audioPlayer.transport)
+			}).toEqual({ label, busy });
+		}
+	);
 
 	it('play while loading queues until canplay and does not throw', () => {
 		expect(audioPlayer.status).toBe('loading');

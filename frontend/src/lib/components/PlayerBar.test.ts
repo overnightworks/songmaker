@@ -16,7 +16,6 @@ import {
 	PLAYER_WAITING_FOR_NETWORK,
 	RAIL_LIBRARY_LABEL,
 	REDUCED_MOTION_MEDIA,
-	TRANSPORT_LOADING_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -247,28 +246,89 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
-	it('a double Play during the restore wait stays busy and plays from the restored position once the data arrives (#1312)', async () => {
-		audioPlayer.load(takeInfo(), { autoplay: false, startAt: RESTORED_POSITION });
+	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
+		useDesktopLayout();
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set('awaiting-network');
 		component = mount(PlayerBar, { target });
 		await tick();
-		const transport = target.querySelector<HTMLButtonElement>('.play-btn');
-		transport?.click();
-		await tick();
-		transport?.click();
-		await tick();
-		const whileWaiting = {
-			label: transport?.getAttribute('aria-label'),
-			busy: transport?.getAttribute('aria-busy')
-		};
 
-		audio.fire('loadedmetadata');
-		audio.fire('canplay');
+		playStartNotice.set('idle');
 		await tick();
 
-		expect({ whileWaiting, playing: !audio.paused, position: audio.currentTime }).toEqual({
-			whileWaiting: { label: TRANSPORT_LOADING_LABEL, busy: 'true' },
-			playing: true,
-			position: RESTORED_POSITION
+		expect({
+			title: target.querySelector('.track-title')?.textContent,
+			main: playButton().getAttribute('aria-label'),
+			timeReadouts: target.querySelectorAll('.timeline .time').length
+		}).toEqual({ title: 'Nachtstrom', main: TRANSPORT_PLAY_LABEL, timeReadouts: 0 });
+	});
+
+	describe('during the restore wait (#1312)', () => {
+		async function mountRestoredTake(): Promise<HTMLButtonElement> {
+			audioPlayer.load(takeInfo(), { autoplay: false, startAt: RESTORED_POSITION });
+			component = mount(PlayerBar, { target });
+			await tick();
+			return playButton();
+		}
+
+		function buttonFacts(button: HTMLButtonElement) {
+			return {
+				label: button.getAttribute('aria-label'),
+				busy: button.getAttribute('aria-busy'),
+				spinner: button.querySelector('.spinner') !== null
+			};
+		}
+
+		async function dataArrives(): Promise<void> {
+			audio.fire('loadedmetadata');
+			audio.fire('canplay');
+			await tick();
+		}
+
+		const readsPlay = { label: TRANSPORT_PLAY_LABEL, busy: 'false', spinner: false };
+		const readsBusyPause = { label: TRANSPORT_PAUSE_LABEL, busy: 'true', spinner: true };
+
+		it('reads Play before any press, and Pause with its spinner after the first', async () => {
+			const transport = await mountRestoredTake();
+			const beforeAnyPress = buttonFacts(transport);
+			await clickAndSettle(transport);
+
+			expect({ beforeAnyPress, afterThePress: buttonFacts(transport) }).toEqual({
+				beforeAnyPress: readsPlay,
+				afterThePress: readsBusyPause
+			});
+		});
+
+		it('a press on that Pause withdraws the ask, and the take stays paused at the restored position', async () => {
+			const transport = await mountRestoredTake();
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			const afterTheWithdrawal = buttonFacts(transport);
+
+			await dataArrives();
+
+			expect({ afterTheWithdrawal, playing: !audio.paused, position: audio.currentTime }).toEqual({
+				afterTheWithdrawal: readsPlay,
+				playing: false,
+				position: RESTORED_POSITION
+			});
+		});
+
+		it('Play again after the withdrawal plays from the restored position once the data arrives', async () => {
+			const transport = await mountRestoredTake();
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			await clickAndSettle(transport);
+			const whileWaiting = buttonFacts(transport);
+
+			await dataArrives();
+
+			expect({ whileWaiting, playing: !audio.paused, position: audio.currentTime }).toEqual({
+				whileWaiting: readsBusyPause,
+				playing: true,
+				position: RESTORED_POSITION
+			});
 		});
 	});
 
@@ -463,7 +523,7 @@ describe('PlayerBar transport labels', () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
 		await tick();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_LOADING_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		await clickAndSettle();
@@ -733,7 +793,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		const transport = Array.from(
 			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
 		).map((button) => button.getAttribute('aria-label'));
-		expect(transport).toEqual(['Previous', TRANSPORT_LOADING_LABEL, 'Next']);
+		expect(transport).toEqual(['Previous', TRANSPORT_PLAY_LABEL, 'Next']);
 		expect(target.querySelector('.shuffle-btn')).toBeNull();
 		expect(target.querySelector('.now-playing-btn')).toBeNull();
 	});
@@ -845,7 +905,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		},
 		{
 			gesture: 'a swipe up from play',
-			start: swipeStarts.control(TRANSPORT_LOADING_LABEL),
+			start: swipeStarts.control(TRANSPORT_PLAY_LABEL),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		},
 		{

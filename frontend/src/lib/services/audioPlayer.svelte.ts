@@ -1,7 +1,6 @@
 import type { QueueStreamManifest } from '$lib/api/types';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
-	TRANSPORT_LOADING_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -21,14 +20,18 @@ export type { StreamFallbackState } from './queueStreamEngine';
 
 type PlayerStatus = 'idle' | 'loading' | 'ready' | 'playing' | 'paused' | 'buffering' | 'error';
 
-// What every surface that draws the transport shows. A stalled take that is
-// being brought back is 'recovering' and one given up while the offline strip
-// names the cause is 'waiting-for-network': the listener asked for sound in
-// both, so both offer Pause. A given-up take the listener paused is 'paused'.
+// What every surface that draws the transport shows. A take loading after
+// the listener asked for sound is 'loading', a stalled take that is being
+// brought back is 'recovering' and one given up while the offline strip names
+// the cause is 'waiting-for-network': the listener asked for sound in all
+// three, so all three offer Pause. A take loading that nobody asked to play,
+// like one restored after a reload, and a given-up take the listener paused
+// are 'paused'.
 export type TransportState =
 	'idle' | 'loading' | 'playing' | 'recovering' | 'paused' | 'waiting-for-network' | 'failed';
 
 const TRANSPORT_OFFERING_PAUSE: ReadonlySet<TransportState> = new Set([
+	'loading',
 	'playing',
 	'recovering',
 	'waiting-for-network'
@@ -44,8 +47,17 @@ export function transportIsBusy(transport: TransportState): boolean {
 
 export function transportButtonLabel(transport: TransportState): string {
 	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
-	if (transport === 'loading') return TRANSPORT_LOADING_LABEL;
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
+}
+
+export type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
+
+// The play button's face on every surface: a spinner while sound is asked for
+// and not there yet, otherwise the action its click takes.
+export function transportButtonFace(transport: TransportState): TransportButtonFace {
+	if (transportIsBusy(transport)) return 'spinner';
+	if (transport === 'failed') return 'refresh-cw';
+	return transportOffersPause(transport) ? 'pause' : 'play';
 }
 
 const TRANSPORT_OF_SETTLED_STATUS: Readonly<
@@ -202,10 +214,14 @@ class AudioPlayer {
 	}
 
 	get transport(): TransportState {
-		if (this.status === 'loading')
-			return this.recoveryStartedAt === null ? 'loading' : 'recovering';
+		if (this.status === 'loading') return this.loadingTransport;
 		if (this.status === 'error') return this.failedTransport;
 		return TRANSPORT_OF_SETTLED_STATUS[this.status];
+	}
+
+	private get loadingTransport(): TransportState {
+		if (this.recoveryStartedAt !== null) return 'recovering';
+		return this.autoplayPending ? 'loading' : 'paused';
 	}
 
 	private get failedTransport(): TransportState {
@@ -735,19 +751,19 @@ class AudioPlayer {
 
 	toggle(): void {
 		if (!this.audio || !this.current) return;
+		if (this.status === 'loading' && this.recoveryStartedAt === null) {
+			// The take keeps loading either way: a press only asks for its sound
+			// or withdraws the ask, so the element plays once it is ready only if
+			// the last press asked (#1312).
+			this.autoplayPending = !this.autoplayPending;
+			return;
+		}
 		if (transportOffersPause(this.transport)) {
 			this.pause();
 			return;
 		}
 		if (this.status === 'error') {
 			this.play();
-			return;
-		}
-		if (this.status === 'loading') {
-			// A loading take offers no Pause, so every press there asks for
-			// sound: a second press on a slow restore must not cancel the first
-			// (#1312). The element plays once it is ready.
-			this.autoplayPending = true;
 			return;
 		}
 		this.play();

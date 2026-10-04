@@ -3,9 +3,9 @@
 	import Icon from './Icon.svelte';
 	import {
 		audioPlayer,
+		transportButtonFace,
 		transportButtonLabel,
 		transportIsBusy,
-		transportOffersPause,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
 	import { NOW_PLAYING_LABEL, NOW_PLAYING_SWIPE_RISE_PX } from '$lib/constants';
@@ -22,6 +22,9 @@
 	interface Props {
 		transport: TransportState;
 		errorMsg?: string | null;
+		// Without a current take there is no position to read, so the bar
+		// shows no 0:00/0:00 (#1312).
+		takeIsCurrent: boolean;
 		currentTime: number;
 		duration: number;
 		formatTime: (seconds: number) => string;
@@ -55,6 +58,7 @@
 	let {
 		transport,
 		errorMsg = null,
+		takeIsCurrent,
 		currentTime,
 		duration,
 		formatTime,
@@ -98,7 +102,7 @@
 	const isLoading = $derived(transportIsBusy(transport));
 	const isError = $derived(transport === 'failed');
 	const waitingForNetwork = $derived(transport === 'waiting-for-network');
-	const offersPause = $derived(transportOffersPause(transport));
+	const buttonFace = $derived(transportButtonFace(transport));
 
 	const phoneNoticeId = $props.id();
 	const playbackFailure = $derived(isError ? errorMsg : null);
@@ -252,10 +256,10 @@
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>
-			{#if isLoading}<span class="spinner"></span>{:else if isError}<Icon
-					name="refresh-cw"
-					size={24}
-				/>{:else}<Icon name={offersPause ? 'pause' : 'play'} size={26} />{/if}
+			{#if buttonFace === 'spinner'}<span class="spinner"></span>{:else}<Icon
+					name={buttonFace}
+					size={buttonFace === 'refresh-cw' ? 24 : 26}
+				/>{/if}
 		</span>
 	</button>
 	<button
@@ -360,21 +364,23 @@
 			</div>
 			<div class="timeline">
 				{#if waitingForNetwork}{@render waitingNotice()}{/if}
-				<span class="time">{formatTime(currentTime)}</span>
-				<input
-					class="timeline-range"
-					style={`--progress: ${progressPercent}%`}
-					type="range"
-					min="0"
-					max={duration || 0}
-					step="0.1"
-					value={duration > 0 ? currentTime : 0}
-					oninput={seekFromRange}
-					onclick={(e) => seekFromClick(e)}
-					disabled={duration <= 0}
-					aria-label="Seek playback"
-				/>
-				<span class="time">{formatTime(duration)}</span>
+				{#if takeIsCurrent}
+					<span class="time">{formatTime(currentTime)}</span>
+					<input
+						class="timeline-range"
+						style={`--progress: ${progressPercent}%`}
+						type="range"
+						min="0"
+						max={duration || 0}
+						step="0.1"
+						value={duration > 0 ? currentTime : 0}
+						oninput={seekFromRange}
+						onclick={(e) => seekFromClick(e)}
+						disabled={duration <= 0}
+						aria-label="Seek playback"
+					/>
+					<span class="time">{formatTime(duration)}</span>
+				{/if}
 			</div>
 			<button
 				bind:this={nowPlayingTrigger}
