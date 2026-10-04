@@ -4,6 +4,7 @@
 	import {
 		audioPlayer,
 		transportButtonLabel,
+		transportIsBusy,
 		transportOffersPause,
 		type TransportState
 	} from '$lib/services/audioPlayer.svelte';
@@ -101,7 +102,7 @@
 	const phoneHitbox = $derived(mobileTransport ? 'frequent' : undefined);
 
 	const isPlaying = $derived(transport === 'playing');
-	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
+	const isLoading = $derived(transportIsBusy(transport));
 	const isError = $derived(transport === 'failed');
 	const waitingForNetwork = $derived(transport === 'waiting-for-network');
 	const offersPause = $derived(transportOffersPause(transport));
@@ -254,6 +255,7 @@
 		class:errored={isError}
 		onclick={onTogglePlay}
 		aria-label={transportButtonLabel(transport)}
+		aria-busy={isLoading}
 		title={isError && errorMsg ? errorMsg : ''}
 	>
 		<span class="play-btn-face" style={playFaceStyle}>

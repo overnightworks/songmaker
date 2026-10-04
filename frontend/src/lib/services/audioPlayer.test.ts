@@ -1,7 +1,14 @@
 import { makeGeneration as makeGen } from '$lib/test-utils/factories';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest } from '$lib/api/types';
-import { audioPlayer, type AudioPlayerCallbacks, type PlaybackInfo } from './audioPlayer.svelte';
+import { TRANSPORT_LOADING_LABEL } from '$lib/constants';
+import {
+	audioPlayer,
+	transportButtonLabel,
+	transportIsBusy,
+	type AudioPlayerCallbacks,
+	type PlaybackInfo
+} from './audioPlayer.svelte';
 import { TakeNotAppended } from './continuousDeck';
 import { readThePlayingTakeFrom, recordPlaybackEvent } from './playbackDiagnostics';
 
@@ -2069,11 +2076,18 @@ describe('toggle / play / pause', () => {
 		expect(fakeAudio.playMock).toHaveBeenCalled();
 	});
 
-	it('second toggle while loading cancels queued play', () => {
+	it('a second press while loading keeps the play intent (#1312)', () => {
 		audioPlayer.toggle();
 		audioPlayer.toggle();
 		fakeAudio.fire('canplay');
-		expect(fakeAudio.playMock).not.toHaveBeenCalled();
+		expect(fakeAudio.playMock).toHaveBeenCalled();
+	});
+
+	it('names a loading take Loading and busy, never Play (#1312)', () => {
+		expect({
+			label: transportButtonLabel(audioPlayer.transport),
+			busy: transportIsBusy(audioPlayer.transport)
+		}).toEqual({ label: TRANSPORT_LOADING_LABEL, busy: true });
 	});
 
 	it('play while loading queues until canplay and does not throw', () => {

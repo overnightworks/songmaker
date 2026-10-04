@@ -1,6 +1,7 @@
 import type { QueueStreamManifest } from '$lib/api/types';
 import {
 	PLAYER_WAITING_FOR_NETWORK,
+	TRANSPORT_LOADING_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -37,8 +38,13 @@ export function transportOffersPause(transport: TransportState): boolean {
 	return TRANSPORT_OFFERING_PAUSE.has(transport);
 }
 
+export function transportIsBusy(transport: TransportState): boolean {
+	return transport === 'loading' || transport === 'recovering';
+}
+
 export function transportButtonLabel(transport: TransportState): string {
 	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
+	if (transport === 'loading') return TRANSPORT_LOADING_LABEL;
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
@@ -727,10 +733,10 @@ class AudioPlayer {
 			return;
 		}
 		if (this.status === 'loading') {
-			// A press while loading must not be dropped: flip the queued intent
-			// (second press cancels), delivered by the existing autoplayPending
-			// machinery once the element is ready.
-			this.autoplayPending = !this.autoplayPending;
+			// A loading take offers no Pause, so every press there asks for
+			// sound: a second press on a slow restore must not cancel the first
+			// (#1312). The element plays once it is ready.
+			this.autoplayPending = true;
 			return;
 		}
 		this.play();

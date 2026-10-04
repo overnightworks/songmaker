@@ -29,7 +29,11 @@
 		selectedPlaylistDetail
 	} from '$lib/stores/playlists';
 	import { transportBarHidden } from '$lib/stores/transportBar';
-	import { audioPlayer, transportOffersPause } from '$lib/services/audioPlayer.svelte';
+	import {
+		audioPlayer,
+		transportIsBusy,
+		transportOffersPause
+	} from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
 		LIBRARY_QUEUE_LOADING_TITLE,
@@ -70,7 +74,7 @@
 	);
 
 	const isPlaying = $derived(transport === 'playing');
-	const isLoading = $derived(transport === 'loading' || transport === 'recovering');
+	const isLoading = $derived(transportIsBusy(transport));
 
 	const songs = $derived($songList);
 	const docked = $derived($nowPlayingSurface === 'docked');

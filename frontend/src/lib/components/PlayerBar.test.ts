@@ -16,6 +16,7 @@ import {
 	PLAYER_WAITING_FOR_NETWORK,
 	RAIL_LIBRARY_LABEL,
 	REDUCED_MOTION_MEDIA,
+	TRANSPORT_LOADING_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
@@ -243,6 +244,29 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
+	it('a double Play during the restore wait stays busy and plays once the data arrives (#1312)', async () => {
+		loadTake();
+		component = mount(PlayerBar, { target });
+		await tick();
+		const transport = target.querySelector<HTMLButtonElement>('.play-btn');
+		transport?.click();
+		await tick();
+		transport?.click();
+		await tick();
+		const whileWaiting = {
+			label: transport?.getAttribute('aria-label'),
+			busy: transport?.getAttribute('aria-busy')
+		};
+
+		audio.fire('canplay');
+		await tick();
+
+		expect({ whileWaiting, playing: !audio.paused }).toEqual({
+			whileWaiting: { label: TRANSPORT_LOADING_LABEL, busy: 'true' },
+			playing: true
+		});
+	});
+
 	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {
 		const lockScreen = installLockScreen();
 		openCollection.set({ kind: 'album', id: 'a1' });
@@ -355,25 +379,6 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playSpy).toHaveBeenCalledOnce();
 		expect(audioContextConstructor).not.toHaveBeenCalled();
 	});
-
-	it('cancels a queued loading play on a second tap', async () => {
-		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
-		component = mount(PlayerBar, { target });
-		await tick();
-		const play = target.querySelector<HTMLButtonElement>('.play-btn');
-		if (!play) throw new Error('Expected player Play button');
-		const playSpy = vi.spyOn(audio, 'play');
-
-		play.click();
-		play.click();
-		await tick();
-		await Promise.resolve();
-		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
-		audio.fire('canplay');
-		await tick();
-
-		expect(playSpy).not.toHaveBeenCalled();
-	});
 });
 
 describe('PlayerBar take identifier', () => {
@@ -453,7 +458,7 @@ describe('PlayerBar transport labels', () => {
 		audioPlayer.loadStream(manifest([track(0)]), 0, { autoplay: false });
 		component = mount(PlayerBar, { target });
 		await tick();
-		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_PLAY_LABEL);
+		expect(playButton().getAttribute('aria-label')).toBe(TRANSPORT_LOADING_LABEL);
 
 		audio.readyState = HTMLMediaElement.HAVE_FUTURE_DATA;
 		await clickAndSettle();
@@ -723,7 +728,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		const transport = Array.from(
 			bar().querySelectorAll<HTMLButtonElement>('.transport-controls button')
 		).map((button) => button.getAttribute('aria-label'));
-		expect(transport).toEqual(['Previous', TRANSPORT_PLAY_LABEL, 'Next']);
+		expect(transport).toEqual(['Previous', TRANSPORT_LOADING_LABEL, 'Next']);
 		expect(target.querySelector('.shuffle-btn')).toBeNull();
 		expect(target.querySelector('.now-playing-btn')).toBeNull();
 	});
@@ -835,7 +840,7 @@ describe('PlayerBar mini player on the phone (#1058)', () => {
 		},
 		{
 			gesture: 'a swipe up from play',
-			start: swipeStarts.control(TRANSPORT_PLAY_LABEL),
+			start: swipeStarts.control(TRANSPORT_LOADING_LABEL),
 			rise: NOW_PLAYING_SWIPE_RISE_PX
 		},
 		{
