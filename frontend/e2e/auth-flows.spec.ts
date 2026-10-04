@@ -116,6 +116,8 @@ const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
 ];
 const ADMIN_PAGE_PATH = '/settings/users';
+const VOICES_PAGE_PATH = '/settings/voices';
+const VOICES_HEADING = 'My Voices';
 const SESSION_COOKIE = 'session_id';
 
 // The song the deep-link flows ask for: the account's own, so the sign-in
@@ -526,6 +528,30 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
 	await attachShot(page, testInfo, 'auth-signed-out-cookie-refused');
+});
+
+test('signing out from the open account menu on Voices, Back returns to Voices, which asks for sign-in again', async ({
+	page,
+	isMobile
+}, testInfo) => {
+	test.skip(!isMobile, 'The account menu belongs to the phone shell.');
+	await signIn(page);
+	await page.goto(VOICES_PAGE_PATH);
+	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
+
+	await signOut(page, 'mobile');
+	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await page.goBack();
+
+	// Not an empty page on the Voices address, and not the account menu's
+	// entry stepped through: the door, asked to bring the person back to Voices.
+	await expect(page).toHaveURL(
+		(url) =>
+			url.pathname === '/login' &&
+			url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === VOICES_PAGE_PATH
+	);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	await attachShot(page, testInfo, 'auth-signed-out-back');
 });
 
 test('the admin page is refused for a non-admin, with nothing of it rendered', async ({
