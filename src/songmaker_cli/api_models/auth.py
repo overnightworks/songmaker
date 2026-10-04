@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Annotated, Final, Literal
 
-from pydantic import AfterValidator, BaseModel, Field, TypeAdapter
+from pydantic import AfterValidator, BaseModel, Field, TypeAdapter, ValidationError
 from webauth.passwords import MIN_PASSWORD_LENGTH, check_password_strength
 from webauth.users import session_reference
 
 if TYPE_CHECKING:
+    from pydantic_core import ErrorDetails
+
     from songmaker_cli.db.models import LoginAttempt, User, UserSession
 
 MAX_PASSWORD_LENGTH: Final = 128
@@ -17,6 +19,26 @@ PasswordText = Annotated[str, Field(min_length=MIN_PASSWORD_LENGTH, max_length=M
 ChosenPassword = Annotated[PasswordText, AfterValidator(check_password_strength)]
 
 chosen_password_rule: Final = TypeAdapter(ChosenPassword)
+
+_PASSWORD_LENGTH_SENTENCES: Final = {
+    "string_too_short": f"Password must be at least {MIN_PASSWORD_LENGTH} characters",
+    "string_too_long": f"Password must be at most {MAX_PASSWORD_LENGTH} characters",
+}
+
+
+def chosen_password_violation(password: str) -> str | None:
+    """The rule's own sentence for why ``password`` is refused, or None when it passes."""
+    try:
+        chosen_password_rule.validate_python(password)
+    except ValidationError as error:
+        return _plain_rule_sentence(error.errors()[0])
+    return None
+
+
+def _plain_rule_sentence(problem: ErrorDetails) -> str:
+    if problem["type"] == "value_error":
+        return str(problem["ctx"]["error"])
+    return _PASSWORD_LENGTH_SENTENCES[problem["type"]]
 
 
 class LoginRequest(BaseModel):

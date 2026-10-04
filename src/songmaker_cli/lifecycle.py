@@ -553,24 +553,26 @@ def auto_setup_admin(ctx: AppContext) -> None:
     from webauth.users import (
         SetupAlreadyDoneError,
         SetupRacedError,
-        WeakPasswordError,
         complete_first_run_setup,
     )
 
+    from songmaker_cli.api_models.auth import chosen_password_violation
     from songmaker_cli.app_context import build_web_auth_config
     from songmaker_cli.auth_dependencies import build_user_management
+    from songmaker_cli.db.queries import user_count
 
     config = build_web_auth_config(ctx, settings)
     with ctx.db() as session:
+        violation = chosen_password_violation(admin_pass)
+        if violation is not None:
+            if user_count(session) == 0:
+                log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", violation)
+            return
         management = build_user_management(session, config)
         try:
             complete_first_run_setup(management, admin_user, admin_pass)
         except SetupAlreadyDoneError:
             session.rollback()
-            return
-        except WeakPasswordError:
-            session.rollback()
-            log.error("ADMIN_PASSWORD does not meet strength requirements -- skipping auto-setup")
             return
         except (SetupRacedError, UsernameTakenError):
             session.rollback()

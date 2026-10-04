@@ -1940,8 +1940,9 @@ def test_auto_setup_admin_creates_user(auto_setup_ctx: AppContext) -> None:
         assert session.query(UserSession).count() == 0
 
 
-def test_auto_setup_admin_skips_when_users_exist(
-    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
+@pytest.mark.parametrize("admin_password", ["Str0ng!Pass99", "Zq7!pw"])
+def test_auto_setup_admin_leaves_an_existing_admin_untouched(
+    auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture, admin_password: str,
 ) -> None:
     from songmaker_cli.db.queries import create_user, list_users
     from songmaker_cli.lifecycle import auto_setup_admin
@@ -1951,7 +1952,7 @@ def test_auto_setup_admin_skips_when_users_exist(
         session.commit()
 
     with (
-        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "Str0ng!Pass99"}),
+        patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": admin_password}),
         caplog.at_level(logging.INFO, logger="songmaker_cli.lifecycle"),
     ):
         auto_setup_admin(auto_setup_ctx)
@@ -1975,18 +1976,29 @@ def test_auto_setup_admin_skips_without_env_vars(
         assert user_count(session) == 0
 
 
-def test_auto_setup_admin_rejects_weak_password(
+@pytest.mark.parametrize(
+    "admin_password, reason",
+    [
+        ("Zq7!pw", "Password must be at least 8 characters"),
+        ("password123", "Password is too common — choose something less predictable"),
+    ],
+)
+def test_auto_setup_admin_refuses_a_password_the_rule_rejects(
     auto_setup_ctx: AppContext, caplog: pytest.LogCaptureFixture,
+    admin_password: str, reason: str,
 ) -> None:
     from songmaker_cli.db.queries import user_count
     from songmaker_cli.lifecycle import auto_setup_admin
 
-    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": "aaa"}):
+    with patch.dict("os.environ", {"ADMIN_USERNAME": "boss", "ADMIN_PASSWORD": admin_password}):
         auto_setup_admin(auto_setup_ctx)
 
     with auto_setup_ctx.db() as session:
         assert user_count(session) == 0
-    assert any(record.levelno == logging.ERROR for record in caplog.records)
+    errors = [record.getMessage() for record in caplog.records if record.levelno == logging.ERROR]
+    assert len(errors) == 1
+    assert reason in errors[0]
+    assert admin_password not in caplog.text
 
 
 @pytest.mark.parametrize("store_method", ["count", "create"])
