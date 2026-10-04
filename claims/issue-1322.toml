@@ -1,8 +1,0 @@
-claim_id = "c581b61a2add4b5191371f349e9a9b5d"
-agent = "claude-head"
-role = "builder"
-base = "e696115ba30e3247a3c17298bc6cb2c46fddc051"
-branch = "claude-head/issue-1322-admin-own-session"
-scope = ["docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/e2e/helpers.ts", "frontend/src/lib/api/client.test.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/login/+page.svelte", "frontend/src/routes/settings/account/+page.svelte", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts", "frontend/src/routes/setup/+page.svelte", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_models/auth.py", "tests/test_admin_api.py"]
-opened_commit = "6021c5fffbef6476501bbbd858b91a325fc48acb"
-whole_reason = "admin own-session protection, form errors, e2e budget row and guard, password-minimum constant"
