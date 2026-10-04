@@ -676,18 +676,18 @@ def test_add_sample_happy_path(
     client, ctx = client_and_ctx
     lora_id = _make_lora(ctx)
 
+    audio = b"RIFFxxxxWAVE" + b"\0" * 200
     resp = client.post(
         f"/api/loras/{lora_id}/samples",
         data={"caption": "chill verse", "lyrics": "oh yeah"},
-        files={"audio": ("clip.wav", b"RIFFxxxxWAVE" + b"\0" * 200, "audio/wav")},
+        files={"audio": ("clip.wav", audio, "audio/wav")},
     )
     assert resp.status_code == 200, resp.text
     payload = resp.json()
     assert payload["caption"] == "chill verse"
     assert payload["lyrics"] == "oh yeah"
     assert payload["audio_path"].endswith(".wav")
-    on_disk = ctx.audio_dir / payload["audio_path"]
-    assert on_disk.exists()
+    assert (ctx.audio_dir / payload["audio_path"]).read_bytes() == audio
 
 
 def test_add_sample_rejects_wrong_extension(
@@ -838,7 +838,7 @@ def test_add_sample_rollback_on_write_failure(
     lora_id = _make_lora(ctx)
 
     with (
-        patch("pathlib.Path.write_bytes", side_effect=OSError("disk full")),
+        patch("shutil.copyfileobj", side_effect=OSError("disk full")),
         pytest.raises(OSError, match="disk full"),
     ):
         client.post(
@@ -849,6 +849,7 @@ def test_add_sample_rollback_on_write_failure(
     with ctx.db() as session:
         count = session.query(UserLoraSample).filter_by(user_lora_id=lora_id).count()
     assert count == 0
+    assert [path for path in ctx.audio_dir.rglob("*") if path.is_file()] == []
 
 
 def test_add_sample_missing_lora_404(client_a: TestClient) -> None:

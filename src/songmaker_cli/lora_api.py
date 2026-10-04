@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import shutil
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -101,6 +102,13 @@ def _sample_relative_path(user_id: str, lora_id: str, sample_id: str, suffix: st
         / USER_LORA_SAMPLES_DIRNAME
         / f"{sample_id}{suffix}"
     ).as_posix()
+
+
+def _upload_size(upload: UploadFile) -> int:
+    upload.file.seek(0, os.SEEK_END)
+    size = upload.file.tell()
+    upload.file.seek(0)
+    return size
 
 
 def _reject_if_active_or_deleted(lora) -> None:
@@ -279,7 +287,7 @@ def api_add_sample_from_generation(
         422: {"description": "Sample upload is invalid"},
     },
 )
-async def api_add_sample(
+def api_add_sample(
     lora_id: str,
     caption: str = Form(...),
     lyrics: str = Form(...),
@@ -308,11 +316,11 @@ async def api_add_sample(
             422, f"Unsupported audio format '{ext}'. Accepted: {accepted}",
         )
 
-    content = await audio.read()
-    if len(content) > USER_LORA_SAMPLE_MAX_BYTES:
+    size = _upload_size(audio)
+    if size > USER_LORA_SAMPLE_MAX_BYTES:
         max_mb = USER_LORA_SAMPLE_MAX_BYTES // 1024 // 1024
         raise HTTPException(413, f"Audio file too large (max {max_mb}MB)")
-    if len(content) == 0:
+    if size == 0:
         raise HTTPException(422, "Audio file is empty")
 
     if count_user_lora_samples(session, lora_id) >= USER_LORA_MAX_SAMPLES:
@@ -321,6 +329,7 @@ async def api_add_sample(
         )
 
     pending_path = ""
+    dest: Path | None = None
     try:
         sample = add_user_lora_sample(
             session, lora_id, pending_path,
@@ -332,11 +341,14 @@ async def api_add_sample(
 
         dest = canonical_audio_path(ctx.audio_dir, rel_path)
         dest.parent.mkdir(parents=True, exist_ok=True)
-        dest.write_bytes(content)
+        with dest.open("wb") as target:
+            shutil.copyfileobj(audio.file, target)
 
         session.commit()
     except Exception:
         session.rollback()
+        if dest is not None:
+            dest.unlink(missing_ok=True)
         raise
 
     return UserLoraSampleResponse.from_orm(sample)
