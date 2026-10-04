@@ -21,7 +21,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
@@ -133,22 +133,23 @@ function useDesktopLayout(): void {
 	);
 }
 
-function loadTake(songTitle = 'Opening Move'): void {
-	audioPlayer.load(
-		{
-			generation: makeGeneration({
-				version_number: 7,
-				generation_number: 2,
-				mp3_path: 'take.mp3'
-			}),
-			songId: 's1',
-			songTitle,
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		},
-		{ autoplay: false }
-	);
+function takeInfo(songTitle = 'Opening Move'): PlaybackInfo {
+	return {
+		generation: makeGeneration({
+			version_number: 7,
+			generation_number: 2,
+			mp3_path: 'take.mp3'
+		}),
+		songId: 's1',
+		songTitle,
+		artist: 'Artist',
+		albumTitle: 'Album',
+		lyrics: null
+	};
+}
+
+function loadTake(songTitle?: string): void {
+	audioPlayer.load(takeInfo(songTitle), { autoplay: false });
 }
 
 function installLockScreen(): Pick<MediaSession, 'playbackState'> {
@@ -162,6 +163,8 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 	});
 	return lockScreen;
 }
+
+const RESTORED_POSITION = 13;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -244,8 +247,8 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
-	it('a double Play during the restore wait stays busy and plays once the data arrives (#1312)', async () => {
-		loadTake();
+	it('a double Play during the restore wait stays busy and plays from the restored position once the data arrives (#1312)', async () => {
+		audioPlayer.load(takeInfo(), { autoplay: false, startAt: RESTORED_POSITION });
 		component = mount(PlayerBar, { target });
 		await tick();
 		const transport = target.querySelector<HTMLButtonElement>('.play-btn');
@@ -258,12 +261,14 @@ describe('PlayerBar stream boundaries', () => {
 			busy: transport?.getAttribute('aria-busy')
 		};
 
+		audio.fire('loadedmetadata');
 		audio.fire('canplay');
 		await tick();
 
-		expect({ whileWaiting, playing: !audio.paused }).toEqual({
+		expect({ whileWaiting, playing: !audio.paused, position: audio.currentTime }).toEqual({
 			whileWaiting: { label: TRANSPORT_LOADING_LABEL, busy: 'true' },
-			playing: true
+			playing: true,
+			position: RESTORED_POSITION
 		});
 	});
 
