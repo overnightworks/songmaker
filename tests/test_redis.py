@@ -7,9 +7,8 @@ from unittest.mock import MagicMock, patch
 
 import fakeredis
 import pytest
-from conftest import TEST_SECRET
+from conftest import TEST_SECRET, stored_hash
 from fastapi.testclient import TestClient
-from webauth.passwords import hash_password
 
 from songmaker_cli.app_context import AppContext
 from songmaker_cli.db.engine import init_test_db as init_db
@@ -87,7 +86,7 @@ def _make_redis_ctx(tmp_path: Path, fake_redis) -> tuple[AppContext, Path, Path,
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(User(
-            username="admin", password_hash=hash_password("admin12345"), role="admin",
+            username="admin", password_hash=stored_hash("admin12345"), role="admin",
         ))
         session.commit()
     ctx = AppContext(
@@ -146,7 +145,7 @@ def test_redis_rate_limit_fail_closed(tmp_path: Path, mock_arq_pool) -> None:
     factory = init_db(data_dir / "songmaker.db")
     with factory() as session:
         session.add(User(
-            username="admin", password_hash=hash_password("admin12345"), role="admin",
+            username="admin", password_hash=stored_hash("admin12345"), role="admin",
         ))
         session.commit()
     ctx = AppContext(

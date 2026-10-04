@@ -6,10 +6,9 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from conftest import make_authenticated_user, make_router_app, make_router_ctx
+from conftest import make_authenticated_user, make_router_app, make_router_ctx, stored_hash
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from webauth.passwords import hash_password
 
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import Album, Generation, ResourceEvent, Song, User, Version
@@ -23,7 +22,7 @@ PASSWORD = "Test1234!"
 
 def _seed_db(session: Session) -> None:
     session.add(User(
-        id=USER_ID, username="reimporter", password_hash=hash_password(PASSWORD), role="admin",
+        id=USER_ID, username="reimporter", password_hash=stored_hash(PASSWORD), role="admin",
     ))
     session.flush()
     album = Album(id="a-reimport", title="Reimport Album", artist="Test", created_by=USER_ID)
