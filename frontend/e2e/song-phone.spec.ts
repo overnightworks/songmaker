@@ -28,6 +28,7 @@
 // failed generation's own persistent UI is what's on screen instead.
 
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import type { VersionItem } from '../src/lib/api/types';
 import {
 	DIALOG_CANCEL_LABEL,
 	EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL,
@@ -49,7 +50,9 @@ import {
 	nowPlayingOpenSourceLabel,
 	nowPlayingTakeLabel,
 	takeGroupLabel,
-	takeRowLabel
+	takeRowLabel,
+	takeVersion,
+	type TakeVersion
 } from '../src/lib/constants/now-playing';
 import {
 	boundingBoxes,
@@ -102,6 +105,17 @@ const RUNNING_JOB_TAKE_COUNTER = EDITOR_GENERATE_TAKE_TEMPLATE.replace(
 const REMAINING_TIME_PATTERN = /~\d+:\d{2}/;
 const FAILED_GENERATION_SENTENCE = 'ACE-Step worker: CUDA out of memory on device 0';
 const UNSAVED_DRAFT_LINE = 'a line nobody saved';
+
+// The seeded take's version as the app reads it, so a group label names it
+// through the one predicate that decides whether a take has a version.
+async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersion> {
+	const response = await page.request.get(`/api/songs/${songId}/versions`);
+	expect(response.ok()).toBeTruthy();
+	const [seeded] = (await response.json()) as VersionItem[];
+	const version = seeded ? takeVersion(seeded.id, seeded.version_number) : null;
+	if (!version) throw new Error('Expected the seeded song to have a version');
+	return version;
+}
 
 interface SongWithAnUnsavedDraft {
 	songHeading: Locator;
@@ -188,7 +202,7 @@ test.describe('song page at phone width', () => {
 
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(
-			panel.getByText(takeGroupLabel(SONG_PHONE_VERSION_NUMBER, SONG_PHONE_TAKE_COUNT))
+			panel.getByText(takeGroupLabel(await seededTakeVersion(page, songId), SONG_PHONE_TAKE_COUNT))
 		).toBeVisible();
 
 		const playButtons = panel.getByRole('button', {

@@ -239,10 +239,21 @@ interface OfferedVersionLoad {
 	load: symbol;
 	setAside: boolean;
 	/** Whether the editor still shows exactly what the load left: same song, saved version and draft. */
-	stands: () => boolean;
+	stands: (currentSongId: string | null, s: EditorState) => boolean;
 }
 
 const offeredVersionLoad = writable<OfferedVersionLoad | null>(null);
+
+/**
+ * Whether a version load still has its Undo to give, offered in its toast or
+ * set aside by the opened Versions list; whatever puts another version into
+ * the editor takes it away.
+ */
+export const versionLoadUndoOutstanding = derived(
+	[offeredVersionLoad, selectedSongId, editorState],
+	([$offered, $selectedSongId, $editorState]) =>
+		$offered !== null && $offered.stands($selectedSongId, $editorState)
+);
 
 /**
  * Loads a version into the draft only: the latest version stays saved, so a
@@ -291,11 +302,7 @@ export function loadVersionAsDraft(version: VersionItem): VersionLoadUndo | null
 		expire: () =>
 			offeredVersionLoad.update((offered) => (offered?.load === thisLoad ? null : offered))
 	};
-	offeredVersionLoad.set({
-		load: thisLoad,
-		setAside: false,
-		stands: () => standsIn(get(selectedSongId), get(editorState))
-	});
+	offeredVersionLoad.set({ load: thisLoad, setAside: false, stands: standsIn });
 	return undo;
 }
 
@@ -316,7 +323,9 @@ export function setAsideVersionLoadUndo(): void {
 export function offerSetAsideVersionLoadUndoAgain(): void {
 	offeredVersionLoad.update((offered) => {
 		if (!offered?.setAside) return offered;
-		return offered.stands() ? { ...offered, setAside: false } : null;
+		return offered.stands(get(selectedSongId), get(editorState))
+			? { ...offered, setAside: false }
+			: null;
 	});
 }
 
@@ -410,7 +419,11 @@ export function versionDeleteEditorLoss(version: VersionItem): VersionDeleteEdit
 	return null;
 }
 
-/** Deletes a version and its takes. Fails loud — see {@link handleSave}. */
+/**
+ * Deletes a version and its takes, then puts the latest version left into the
+ * editor: a load, so it retires the Undo of an earlier one. Fails loud — see
+ * {@link handleSave}.
+ */
 export async function handleDeleteVersion(
 	songId: string,
 	versionId: string,
@@ -422,6 +435,7 @@ export async function handleDeleteVersion(
 	if (get(selectedSongId) !== songId) return;
 	await loadVersions(songId);
 	if (get(selectedSongId) !== songId) return;
+	retireVersionLoadUndo();
 	const latest = get(versions)[0];
 	if (latest) resetToVersion(latest);
 	else loadSongData(updated);
