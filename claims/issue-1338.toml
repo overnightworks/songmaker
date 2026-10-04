@@ -1,0 +1,8 @@
+claim_id = "025c8013412a4c408c221f199c217d14"
+agent = "Claude 255c9087-94fa-477f-af88-8eb64e5acd39"
+role = "builder"
+base = "2f5a2a0c62087b8bf1eef470dddd1b67644c83bd"
+branch = "claude/issue-1338-s5-webauth-0-11"
+scope = ["CLAUDE.md", "README.md", "docker", "docker-compose.yml", "docs", "frontend/src/lib/components/LegalContent.svelte", "prompts/prompt-security-review.md", "pyproject.toml", "src/songmaker_cli", "tests", "uv.lock"]
+opened_commit = "2caeb2cdc75b3823462d9de93ac81fa9632e1613"
+whole_reason = "Der Pin-Wechsel bricht alle Stellen gleichzeitig; Konfiguration, Aufrufer, Tests und Doku müssen in einem Schritt mit."
