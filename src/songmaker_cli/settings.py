@@ -203,6 +203,7 @@ class Settings(BaseSettings):
     max_concurrent_sessions_per_user: int = Field(
         default=10, alias="MAX_CONCURRENT_SESSIONS_PER_USER", ge=1,
     )
+    cookie_secure: bool = Field(default=True, alias="COOKIE_SECURE")
 
     # ── Rate limits ───────────────────────────────────────────────────
     generation_rate_limit_user: int = 3

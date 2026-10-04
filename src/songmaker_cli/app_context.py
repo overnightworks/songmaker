@@ -12,7 +12,7 @@ from pydantic import SecretStr
 from sqlalchemy.orm import Session, sessionmaker
 from webauth.config import WebAuthConfig
 from webauth.liveness import ExpiryColumnLiveness
-from webauth.passwords import BcryptPasswordHasher
+from webauth.passwords import Argon2idPasswordHasher
 from webauth.ports import PasswordHasher
 from webauth.proxies import TrustedProxies
 from webauth.rate_limit import RedisRateLimitBackend
@@ -65,7 +65,7 @@ def build_session_cache(redis: Redis) -> RedisSessionCache:
 
 def build_password_hasher() -> PasswordHasher:
     """The one password hasher every stored hash in this deployment comes from."""
-    return BcryptPasswordHasher()
+    return Argon2idPasswordHasher()
 
 
 def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
@@ -85,6 +85,7 @@ def build_web_auth_config(ctx: AppContext, settings: Settings) -> WebAuthConfig:
         login_lockout_threshold=settings.login_lockout_threshold,
         login_lockout_window_seconds=settings.login_lockout_window_seconds,
         admin_role=ROLE_ADMIN,
+        cookie_secure=settings.cookie_secure,
     )
 
 

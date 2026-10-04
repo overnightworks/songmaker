@@ -8,9 +8,10 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from conftest import login_and_csrf, make_test_app, stored_hash
+from conftest import login_and_csrf, make_test_app, stored_hash, web_client
 from fastapi.testclient import TestClient
 from redis import Redis
+from webauth.cookies import DEFAULT_SESSION_COOKIE_NAME
 
 from songmaker_cli.app_context import build_password_hasher
 from songmaker_cli.db.models import User, UserSession
@@ -186,6 +187,25 @@ def test_reset_password_ends_every_session_of_the_account(served_app, capsys) ->
         "/api/auth/login", json={"username": RESET_USERNAME, "password": NEW_PASSWORD},
     )
     assert fresh_login.status_code == 200
+
+
+def test_reset_password_invalidates_a_replayed_host_session_cookie(served_app) -> None:
+    """A fresh client replaying the exact raw __Host-session_id value gets 200
+    before the reset and 401 after it — the cookie, not just the test client's
+    jar, is what stopped working."""
+    login_and_csrf(served_app, RESET_USERNAME, OLD_PASSWORD)
+    old_cookie = served_app.cookies.get(DEFAULT_SESSION_COOKIE_NAME)
+    assert old_cookie is not None
+
+    replay_before = web_client(served_app.app, cookies={})
+    replay_before.cookies.set(DEFAULT_SESSION_COOKIE_NAME, old_cookie)
+    assert replay_before.get("/api/auth/me").status_code == 200
+
+    _reset_password(NEW_PASSWORD)
+
+    replay_after = web_client(served_app.app, cookies={})
+    replay_after.cookies.set(DEFAULT_SESSION_COOKIE_NAME, old_cookie)
+    assert replay_after.get("/api/auth/me").status_code == 401
 
 
 def test_reset_password_changes_nothing_when_the_session_cache_is_unreachable(

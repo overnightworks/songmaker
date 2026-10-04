@@ -34,6 +34,7 @@ import structlog  # noqa: E402
 from fastapi import FastAPI  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy.orm import Session, sessionmaker  # noqa: E402
+from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME  # noqa: E402
 from webauth.dependencies import AuthenticatedUser  # noqa: E402
 
 from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa: E402
@@ -338,7 +339,7 @@ def apply_csrf_header(client) -> None:
 
     Call after login/setup to enable CSRF-protected mutating requests in tests.
     """
-    token = client.cookies.get("csrf_token")
+    token = client.cookies.get(DEFAULT_CSRF_COOKIE_NAME)
     if token:
         client.headers["X-CSRF-Token"] = token
 
