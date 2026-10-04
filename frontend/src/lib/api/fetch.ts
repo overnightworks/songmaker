@@ -241,7 +241,7 @@ export function handleSessionLost(): Promise<void> {
 // instead of forcing a redirect that could race it.
 //
 // A navigation the person already started counts as where they meant to be:
-// sign-in waits until every step of it has landed (`libraryHistoryStepsLanded`)
+// sign-in waits until history has come to rest (`historyComesToRest`)
 // and returns to the address history stands on then -- the album a tap in the
 // drawer opened, whichever of its requests the server refused first. Sign-in
 // is pushed before auth is cleared: the shell unmounts on that push, so the
@@ -249,14 +249,11 @@ export function handleSessionLost(): Promise<void> {
 // entry that no longer stands and move no history under the sign-in page
 // (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const [{ hasSessionToLose, clearAuth }, { libraryHistoryStepsLanded }, { navigateAway }] =
-		await Promise.all([
-			import('$lib/stores/auth'),
-			import('$lib/stores/libraryContext'),
-			import('$lib/history/historyController')
-		]);
+	const [{ hasSessionToLose, clearAuth }, { historyComesToRest, navigateAway }] = await Promise.all(
+		[import('$lib/stores/auth'), import('$lib/history/historyController')]
+	);
 	if (!hasSessionToLose()) return;
-	await libraryHistoryStepsLanded();
+	await historyComesToRest();
 	try {
 		await navigateAway(signInAddress(window.location.pathname + window.location.search));
 	} finally {

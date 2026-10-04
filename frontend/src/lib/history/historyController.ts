@@ -609,6 +609,13 @@ export function historyStandsStill(): Promise<void> {
 	return new Promise((resolve) => stillnessWaiters.push(resolve));
 }
 
+// Resolves once history has come to rest: a write released when history
+// stands still may navigate and move it again, so the wait starts over until
+// nothing is left to land.
+export async function historyComesToRest(): Promise<void> {
+	while (historyMoves()) await historyStandsStill();
+}
+
 // Once history stands still the layers held meanwhile get their entries
 // first, then the held writes are written over the entry that then stands:
 // each waiter resolves a promise whose callback runs only after this
