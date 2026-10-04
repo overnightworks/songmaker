@@ -563,10 +563,11 @@ def auto_setup_admin(ctx: AppContext) -> None:
 
     config = build_web_auth_config(ctx, settings)
     with ctx.db() as session:
+        if user_count(session) > 0:
+            return
         refusal = chosen_rule_refusal(admin_pass)
         if refusal is not None:
-            if user_count(session) == 0:
-                log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", refusal)
+            log.error("ADMIN_PASSWORD refused: %s -- skipping auto-setup", refusal)
             return
         management = build_user_management(session, config)
         try:
