@@ -511,6 +511,36 @@ def test_build_client_no_cookies(tmp_path) -> None:
     client.close()
 
 
+# ── _csrf_headers ─────────────────────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    ("cookies", "expected_token"),
+    [
+        ({"__Host-csrf_token": "host-tok", "csrf_token": "plain-tok"}, "host-tok"),
+        ({"csrf_token": "plain-tok", "__Host-csrf_token": "host-tok"}, "host-tok"),
+        ({"csrf_token": "plain-tok"}, "plain-tok"),
+    ],
+    ids=["host-cookie-set-first", "plain-cookie-set-first", "only-plain-cookie"],
+)
+def test_csrf_headers_prefers_the_host_prefixed_cookie(cookies, expected_token) -> None:
+    from types import SimpleNamespace
+
+    from songmaker_cli.cli_client import _csrf_headers
+
+    client = SimpleNamespace(cookies=cookies)
+    assert _csrf_headers(client) == {"X-CSRF-Token": expected_token}
+
+
+def test_csrf_headers_empty_when_neither_cookie_is_set() -> None:
+    from types import SimpleNamespace
+
+    from songmaker_cli.cli_client import _csrf_headers
+
+    client = SimpleNamespace(cookies={})
+    assert _csrf_headers(client) == {}
+
+
 # ── cli_logout ─────────────────────────────────────────────────────
 
 
