@@ -6,6 +6,7 @@ import {
 	allocateEntryId,
 	attachLandingHandler,
 	forgetLayerEntries,
+	historyStandsStill,
 	installHistoryController,
 	land,
 	landedEntry,
@@ -539,6 +540,30 @@ describe('history adapter', () => {
 
 		expect(standingEntry()).toEqual(loaded);
 		expect(location.pathname).toBe('/album/a');
+	});
+
+	// The router starts listening for popstate only after the page it started on
+	// is mounted, and its handling would abort a navigation the controller's
+	// part of a landing released before it.
+	it('hears a landing after the router once the router start has run to its end', async () => {
+		pushEntry('/album/a', {});
+		pushEntry('/album/b', {});
+		const heard: string[] = [];
+		const routerHears = (): number => heard.push('router');
+		stampNavigatedEntry('enter');
+		window.addEventListener('popstate', routerHears);
+		await historyStandsStill();
+		detachLandingHandler();
+		detachLandingHandler = attachLandingHandler(() => heard.push('controller'));
+
+		const landed = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landed;
+		window.removeEventListener('popstate', routerHears);
+
+		expect(heard).toEqual(['router', 'controller']);
 	});
 
 	it('the router start steps off a layer entry a reload came back onto', async () => {

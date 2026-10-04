@@ -874,13 +874,8 @@ describe('auth check failure', () => {
 				return null;
 			});
 			mountLayout(path);
-			await tick();
-			await Promise.resolve();
-			await tick();
-			await Promise.resolve();
-			await tick();
 
-			expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true });
+			await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(signIn, { replaceState: true }));
 		}
 	);
 });

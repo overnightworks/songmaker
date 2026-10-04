@@ -255,6 +255,7 @@ let loadingMount: RouteMount | null = null;
 let addressMountedUnderKeptPage: string | null = null;
 const entryOfLayer = new Map<Layer, number>();
 let layersAwaitingEntry: Layer[] = [];
+let routerStarting = false;
 
 function readStateOnLoad(): unknown {
 	countEntryMet(historyStorage, entryOfHistoryState(history.state));
@@ -485,13 +486,15 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // start dropped gets back the id it was loaded with, and any other gets a
 // first id on top. The start drops the layer mark too, so only once it has
 // the mark back can the installed controller step off a layer entry a reload
-// came back onto. A Back or Forward is the landing listener's.
+// came back onto (`followRouterStart`). A Back or Forward is the landing
+// listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
 	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
 		lastRouterIndex = routerIndexOf(history.state);
 		return;
 	}
+	if (type === 'enter' && uninstall !== null) followRouterStart();
 	const routerPushed = isRouterPush();
 	lastRouterIndex = routerIndexOf(history.state);
 	const carried = entryOfHistoryState(history.state);
@@ -511,7 +514,6 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	if (routerPushed && entry !== null) pushedPage(entry);
 	else settleOnPage(entry);
-	if (type === 'enter' && uninstall !== null) stepOffUnownedLayerEntry();
 }
 
 // A router push -- a link, or a `goto` from anywhere -- stands one place above
@@ -563,7 +565,7 @@ export { ownStepBacksUnderway as ownStepBacksUnderwayForTests };
 // meanwhile would land under the step's landing, or be superseded along with
 // the navigation's own entry.
 export function historyMoves(): boolean {
-	return ownStepBacksUnderway() || navigationsUnderway > 0;
+	return ownStepBacksUnderway() || navigationsUnderway > 0 || routerStarting;
 }
 
 // Resolves once history stands still, so a write issued while it moves stands
@@ -702,6 +704,27 @@ function onPopstate(event: PopStateEvent): void {
 	landingHandler?.(landing, event.state);
 }
 
+// The router starts listening for popstate only once the page it started on
+// is mounted, after the root layout has installed the controller. The
+// controller's part of a landing must follow the router's: a write it releases
+// while the router still holds the entry before would carry the router's old
+// place, and the router's own handling would abort a navigation it released.
+// So once the start has run to its end the controller listens again, behind
+// the router, and only then steps off a layer entry a reload came back onto;
+// history moves until then.
+function followRouterStart(): void {
+	routerStarting = true;
+	setTimeout(() => {
+		routerStarting = false;
+		if (uninstall !== null) {
+			window.removeEventListener('popstate', onPopstate);
+			window.addEventListener('popstate', onPopstate);
+			stepOffUnownedLayerEntry();
+		}
+		settleStillness();
+	});
+}
+
 // The root layout installs the controller once for the whole app: from then
 // on every landing is heard and every layer opened owns an entry. The
 // returned function uninstalls it.
@@ -750,6 +773,7 @@ export function resetHistoryControllerForTests(): void {
 	stepBackWaiters.clear();
 	stillnessWaiters = [];
 	navigationsUnderway = 0;
+	routerStarting = false;
 	loadingMount = null;
 	addressMountedUnderKeptPage = null;
 	latestRouterNavigation = null;
