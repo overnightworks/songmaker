@@ -19,7 +19,7 @@
 		retryLastPlayIntent,
 		shuffleEnabled,
 		shuffleLabel,
-		startAwaitsNetwork,
+		transportOfTheStart,
 		toggleShuffle
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
@@ -43,6 +43,7 @@
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
 		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
 		MINI_PLAYER_WITHOUT_COVER_MEDIA,
+		PLAYER_WAITING_FOR_NETWORK,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
 	} from '$lib/constants';
@@ -64,14 +65,14 @@
 
 	const current = $derived(audioPlayer.current);
 	const transport = $derived(audioPlayer.transport);
-	const errorMsg = $derived(audioPlayer.error);
 	const currentTime = $derived(audioPlayer.currentTime);
 	const duration = $derived(audioPlayer.duration);
 	const startNotice = $derived($playStartNotice);
 	// A start that waits for the network shows as the transport's own wait, here
 	// and on the lock screen, which is the only surface with the screen off.
-	const barTransport = $derived(
-		startAwaitsNetwork(current, startNotice) ? 'recovering' : transport
+	const barTransport = $derived(transportOfTheStart(current, startNotice, transport));
+	const errorMsg = $derived(
+		barTransport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : audioPlayer.error
 	);
 
 	const isPlaying = $derived(transport === 'playing');
@@ -211,6 +212,8 @@
 		{:else if startNotice === 'building' || startNotice === 'awaiting-network'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
+		{:else if startNotice === 'gave-up-on-network'}
+			<span class="track-title">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
 			<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>

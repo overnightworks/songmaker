@@ -1221,6 +1221,61 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		await giveUpWhileOfflineAfterStall();
 	}
 
+	async function mountWithAlbumStartNotice(
+		notice: 'awaiting-network' | 'gave-up-on-network',
+		arrange: () => void = () => {}
+	): Promise<void> {
+		arrange();
+		openCollection.set({ kind: 'album', id: 'a1' });
+		albumList.set([albumItem({ share_slug: null, cover: null })]);
+		playStartNotice.set(notice);
+		component = mount(PlayerBar, { target });
+		await tick();
+	}
+
+	async function tapATakeRowOffline(): Promise<void> {
+		reportResourceStreamReachable(false);
+		audioPlayer.load(takeInfo());
+		component = mount(PlayerBar, { target });
+		await tick();
+	}
+
+	function transportFacts(lockScreen: Pick<MediaSession, 'playbackState'>) {
+		return {
+			main: playButton().getAttribute('aria-label'),
+			spinner: playButton().querySelector('.spinner') !== null,
+			lockScreen: lockScreen.playbackState
+		};
+	}
+
+	it.each([
+		{ start: 'album header', tap: () => mountWithAlbumStartNotice('awaiting-network') },
+		{ start: 'take row', tap: tapATakeRowOffline }
+	])(
+		'an offline $start shows the waiting transport from the tap: Pause with its spinner (#1312)',
+		async ({ tap }) => {
+			const lockScreen = installLockScreen();
+			await tap();
+
+			expect(transportFacts(lockScreen)).toEqual({
+				main: TRANSPORT_PAUSE_LABEL,
+				spinner: true,
+				lockScreen: 'playing'
+			});
+		}
+	);
+
+	it('pausing an offline take row start leaves a bar that names the take Play would start (#1312)', async () => {
+		await tapATakeRowOffline();
+
+		await clickAndSettle();
+
+		expect({
+			title: target.querySelector('.track-title')?.textContent,
+			main: playButton().getAttribute('aria-label')
+		}).toEqual({ title: 'Opening Move', main: TRANSPORT_PLAY_LABEL });
+	});
+
 	it.each([
 		{ moment: 'while it buffers', wait: 0 },
 		{ moment: 'while a recovery reload runs', wait: STALL_LOOK_MS }
@@ -1248,13 +1303,24 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		});
 	});
 
+	const giveUpTake = giveUpWhileOffline;
+	const giveUpAlbumStart = (arrange: () => void) =>
+		mountWithAlbumStartNotice('gave-up-on-network', arrange);
+
 	it.each([
-		{ layout: 'phone', arrange: () => {} },
-		{ layout: 'desktop', arrange: useDesktopLayout }
+		{ waiting: 'take', layout: 'phone', arrange: () => {}, giveUp: giveUpTake },
+		{ waiting: 'take', layout: 'desktop', arrange: useDesktopLayout, giveUp: giveUpTake },
+		{ waiting: 'album start', layout: 'phone', arrange: () => {}, giveUp: giveUpAlbumStart },
+		{
+			waiting: 'album start',
+			layout: 'desktop',
+			arrange: useDesktopLayout,
+			giveUp: giveUpAlbumStart
+		}
 	])(
-		'given up offline, the $layout bar waits calmly with no Retry to press (#1312)',
-		async ({ arrange }) => {
-			await giveUpWhileOffline(arrange);
+		'given up offline, the $layout bar of a $waiting waits calmly with no Retry to press (#1312)',
+		async ({ arrange, giveUp }) => {
+			await giveUp(arrange);
 
 			expect({
 				words: target.querySelector('.waiting-notice [role="status"]')?.textContent?.trim(),

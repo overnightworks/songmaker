@@ -5,7 +5,7 @@ import {
 	makePlaylistEntry,
 	makeSong
 } from '$lib/test-utils/factories';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { flushSync } from 'svelte';
 import { get } from 'svelte/store';
 import { sidebarOpen, toggleSidebar } from '$lib/stores/ui';
@@ -132,9 +132,10 @@ import {
 	shuffleEnabled,
 	shuffleLabel,
 	toggleShuffle,
+	transportOfTheStart,
 	windowEnded
 } from './player';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { audioPlayer, RECOVERY_DEADLINE_MS } from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
@@ -225,6 +226,21 @@ function makePoolQueue(overrides: Partial<LibraryPoolQueue> = {}): LibraryPoolQu
 
 function networkLost(path: string): NetworkError {
 	return new NetworkError(path, new TypeError('Failed to fetch'));
+}
+
+function watchLockScreenTitle(): { metadata: MediaMetadataInit | null } {
+	const mediaSession = { metadata: null as MediaMetadataInit | null };
+	Object.defineProperty(navigator, 'mediaSession', { value: mediaSession, configurable: true });
+	vi.stubGlobal(
+		'MediaMetadata',
+		vi.fn(function (init: MediaMetadataInit) {
+			return init;
+		})
+	);
+	onTestFinished(() => {
+		Reflect.deleteProperty(navigator, 'mediaSession');
+	});
+	return mediaSession;
 }
 
 function albumQueueTakeIds(): string[] {
@@ -2230,21 +2246,7 @@ describe('the queue names its next take', () => {
 		let mediaSession: { metadata: MediaMetadataInit | null };
 
 		beforeEach(() => {
-			mediaSession = { metadata: null };
-			Object.defineProperty(navigator, 'mediaSession', {
-				value: mediaSession,
-				configurable: true
-			});
-			vi.stubGlobal(
-				'MediaMetadata',
-				vi.fn(function (init: MediaMetadataInit) {
-					return init;
-				})
-			);
-		});
-
-		afterEach(() => {
-			Reflect.deleteProperty(navigator, 'mediaSession');
+			mediaSession = watchLockScreenTitle();
 		});
 
 		it.each([
@@ -2709,6 +2711,51 @@ describe('playAlbum start track', () => {
 		expect(get(playStartNotice)).toBe('idle');
 		expect(fetchSong).toHaveBeenCalledOnce();
 		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	describe('offline, while the start waits (#1312)', () => {
+		beforeEach(() => {
+			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+			reportResourceStreamReachable(false);
+			vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('the lock screen names the song it waits for, and goes blank once the wait is stopped', async () => {
+			const lockScreen = watchLockScreenTitle();
+			await playAlbum('a1');
+			const whileWaiting = lockScreen.metadata;
+
+			await playIdleStart();
+
+			expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
+				whileWaiting: expect.objectContaining({ title: 'Song', artist: 'Artist' }),
+				afterTheStop: null
+			});
+		});
+
+		it('gives up after the stalled take deadline and still starts once the network is back', async () => {
+			vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+			vi.mocked(fetchSong).mockResolvedValueOnce(makeSong(queuedSongDefaults()));
+			await playAlbum('a1');
+			const transport = () =>
+				transportOfTheStart(audioPlayer.current, get(playStartNotice), audioPlayer.transport);
+			await vi.advanceTimersByTimeAsync(RECOVERY_DEADLINE_MS - 1);
+			const beforeTheDeadline = transport();
+			await vi.advanceTimersByTimeAsync(1);
+			const afterIt = transport();
+
+			reportResourceStreamReachable(true);
+			await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+
+			expect({ beforeTheDeadline, afterIt }).toEqual({
+				beforeTheDeadline: 'recovering',
+				afterIt: 'waiting-for-network'
+			});
+		});
 	});
 
 	it('offline, a start the listener replaced while it waited stays put once the network is back', async () => {
