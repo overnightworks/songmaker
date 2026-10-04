@@ -123,7 +123,7 @@ def served_app(tmp_path: Path, monkeypatch) -> TestClient:
     return client
 
 
-def _stored_hash(client: TestClient) -> str:
+def _hash_in_db(client: TestClient) -> str:
     with client.app.state.ctx.db() as session:
         return session.query(User).filter_by(username=RESET_USERNAME).one().password_hash
 
@@ -133,14 +133,29 @@ def _session_count(client: TestClient) -> int:
         return session.query(UserSession).count()
 
 
-def _reset_password(password: str) -> None:
-    app(["reset-password", RESET_USERNAME, password], result_action="return_value")
+def _reset_password(password: str, repeated: str | None = None) -> None:
+    typed = [password, password if repeated is None else repeated]
+    with patch("getpass.getpass", side_effect=typed):
+        app(["reset-password", RESET_USERNAME], result_action="return_value")
+
+
+@pytest.fixture
+def sent_logins(monkeypatch) -> list[tuple[str, str]]:
+    """The (username, password) pairs the login command sends to the server."""
+    sent: list[tuple[str, str]] = []
+
+    def record_login(_server: str, username: str, password: str) -> dict:
+        sent.append((username, password))
+        return {"username": username, "role": "admin"}
+
+    monkeypatch.setattr("songmaker_cli.main.cli_login", record_login)
+    return sent
 
 
 def test_reset_password_stores_the_new_password(served_app, capsys) -> None:
     _reset_password(NEW_PASSWORD)
 
-    assert build_password_hasher().verify(NEW_PASSWORD, _stored_hash(served_app))
+    assert build_password_hasher().verify(NEW_PASSWORD, _hash_in_db(served_app))
     assert capsys.readouterr().out == (
         f"Password reset for '{RESET_USERNAME}' (role=admin); 0 sessions ended\n"
     )
@@ -176,7 +191,7 @@ def test_reset_password_changes_nothing_when_the_session_cache_is_unreachable(
     assert capsys.readouterr().out == (
         "Error: the session cache is unreachable, so nothing was changed\n"
     )
-    assert _stored_hash(served_app) == OLD_PASSWORD_HASH
+    assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
     assert _session_count(served_app) == 1
     assert served_app.get("/api/auth/me").status_code == 200
 
@@ -200,4 +215,42 @@ def test_reset_password_refuses_a_weak_password_in_plain_words_without_echoing_i
     assert exit_info.value.code == 1
     assert output == f"{message}\n"
     assert password not in output
-    assert _stored_hash(served_app) == OLD_PASSWORD_HASH
+    assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
+
+
+def test_reset_password_refuses_mismatched_passwords_without_changing_anything(
+    served_app, capsys,
+) -> None:
+    login_and_csrf(served_app, RESET_USERNAME, OLD_PASSWORD)
+
+    with pytest.raises(SystemExit) as exit_info:
+        _reset_password(NEW_PASSWORD, repeated=NEW_PASSWORD + "x")
+
+    assert exit_info.value.code == 1
+    assert capsys.readouterr().out == "Error: the passwords do not match\n"
+    assert _hash_in_db(served_app) == OLD_PASSWORD_HASH
+    assert _session_count(served_app) == 1
+
+
+def test_login_sends_the_password_typed_at_the_prompt(sent_logins) -> None:
+    with patch("getpass.getpass", return_value=OLD_PASSWORD):
+        app(["login", RESET_USERNAME], result_action="return_value")
+
+    assert sent_logins == [(RESET_USERNAME, OLD_PASSWORD)]
+
+
+@pytest.mark.parametrize("command", ["login", "reset-password"])
+def test_password_on_the_command_line_is_a_usage_error(
+    served_app, sent_logins, capsys, command: str,
+) -> None:
+    with (
+        patch("getpass.getpass", return_value=NEW_PASSWORD),
+        pytest.raises(SystemExit) as exit_info,
+    ):
+        app([command, RESET_USERNAME, NEW_PASSWORD], result_action="return_value")
+
+    captured = capsys.readouterr()
+    assert exit_info.value.code == 1
+    assert "Unused Tokens" in captured.out + captured.err
+    assert sent_logins == []
+    assert _hash_in_db(served_app) == OLD_PASSWORD_HASH

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import getpass
 import json
 import logging
 import sys
@@ -9,7 +10,6 @@ from pathlib import Path
 from typing import Annotated, NoReturn, Optional
 
 from cyclopts import App, Parameter
-from webauth.passwords import MIN_PASSWORD_LENGTH
 
 from songmaker_cli.cli_client import (
     DEFAULT_SERVER,
@@ -64,10 +64,9 @@ def _server() -> str:
 @app.command
 def login(
     username: Annotated[str, Parameter(help="Username")],
-    password: Annotated[str, Parameter(help="Password")],
 ) -> None:
-    """Authenticate with the songmaker server and save the session."""
-    user = cli_login(_server(), username, password)
+    """Authenticate with the songmaker server and save the session (asks for the password)."""
+    user = cli_login(_server(), username, getpass.getpass("Password: "))
     log.info("Logged in as '%s' (role=%s)", user["username"], user["role"])
 
 
@@ -102,9 +101,8 @@ def server(
 @app.command(name="reset-password")
 def reset_password(
     username: Annotated[str, Parameter(help="Username to reset")],
-    password: Annotated[str, Parameter(help=f"New password (min {MIN_PASSWORD_LENGTH} chars)")],
 ) -> None:
-    """Reset a user's password and end all its sessions (requires local DB access)."""
+    """Reset a user's password (asked twice) and end all its sessions (needs local DB access)."""
     from redis.exceptions import RedisError
 
     from songmaker_cli.api_models.auth import chosen_rule_refusal
@@ -114,6 +112,9 @@ def reset_password(
     from songmaker_cli.redis_client import create_redis
     from songmaker_cli.settings import get_settings
 
+    password = getpass.getpass("Password: ")
+    if getpass.getpass("Repeat password: ") != password:
+        _exit_with_error("the passwords do not match")
     refusal = chosen_rule_refusal(password)
     if refusal is not None:
         _exit_with_error(refusal)
