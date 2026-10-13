@@ -886,12 +886,13 @@ def test_a_failed_build_s_children_do_not_see_the_overnightworks_token(
     checkout.write_alert_config()
     checkout.adopt_current_head_as_deployed()
     checkout.move_main_forward()
-    checkout.set_compose_build_exit_code(1)
+    checkout.set_compose_build_exit_code(7)
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "docker compose build failed" in checkout.journal
+    assert "docker compose build failed in" in checkout.journal
+    assert "exit 7" in checkout.journal
     assert checkout.failure_count_file.read_text() == "1"
     assert "compose up" not in checkout.docker_calls
     non_build_calls = checkout.non_build_token_env_calls

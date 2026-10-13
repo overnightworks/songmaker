@@ -1194,7 +1194,9 @@ if [[ ! -s "$OVERNIGHTWORKS_READ_TOKEN_FILE" ]]; then
     fail_tick "overnightworks read token file is empty"
 fi
 
-if ! build_with_overnightworks_token "$OVERNIGHTWORKS_READ_TOKEN_FILE"; then
+if build_with_overnightworks_token "$OVERNIGHTWORKS_READ_TOKEN_FILE"; then
+    :
+else
     BUILD_EXIT_CODE=$?
     log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
     fail_tick "compose build failed"
