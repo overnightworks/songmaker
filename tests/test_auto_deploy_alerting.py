@@ -17,6 +17,7 @@ import re
 import shlex
 import stat
 import subprocess
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -104,8 +105,22 @@ def _git(cwd: Path, *args: str) -> None:
     )
 
 
+# Every stub stands in for a real compiled binary (docker, logger, curl,
+# date) that would never process an inherited BASH_ENV/SHELLOPTS the way a
+# bash script does; clearing any inherited trap/functrace/xtrace state the
+# instant a stub starts keeps that stand-in honest under the inherited-tracing
+# test below, without changing anything the other tests observe since none of
+# them leave a trap or functrace active in the first place (#1349).
+_STUB_TRACING_GUARD = (
+    "trap - DEBUG RETURN ERR 2>/dev/null\n"
+    "set +o functrace +o errtrace 2>/dev/null\n"
+    "{ set +x; } 2>/dev/null\n"
+)
+
+
 def _write_executable(path: Path, body: str) -> None:
-    path.write_text(body)
+    shebang, _, rest = body.partition("\n")
+    path.write_text(f"{shebang}\n{_STUB_TRACING_GUARD}{rest}")
     path.chmod(path.stat().st_mode | stat.S_IEXEC)
 
 
@@ -130,6 +145,9 @@ class Checkout:
         self._bin.mkdir()
         self._system_bin_without_jq: Path | None = None
         self._jq_path_filter: Path | None = None
+        self._debug_trap_file: Path | None = None
+        self._shellopts = ""
+        self._xtrace_log_file = tmp_path / "xtrace.log"
         self._clock_file = tmp_path / "clock.txt"
         self._clock_file.write_text(str(CLOCK_START_EPOCH))
         self._commits_pushed = 0
@@ -534,6 +552,40 @@ class Checkout:
             'command() { [[ "$1" == "-v" && "$2" == "jq" ]] && return 1; builtin command "$@"; }\n',
         )
 
+    def inject_debug_trap(self) -> None:
+        """Simulate a DEBUG trap + functrace left behind by an ancestor shell.
+
+        `BASH_ENV` is sourced into the script's own top-level shell before
+        anything else runs (the same mechanism `remove_jq_from_path` uses
+        above), so this reproduces an inherited `trap 'set -x' DEBUG` honestly
+        rather than faking the trap from inside the test (#1349 review). Trace
+        output is redirected to its own fd/file first (`BASH_XTRACEFD`) purely
+        so a genuinely full-script trace doesn't corrupt the `$(cmd 2>&1)`
+        captures the rest of the (unrelated, untouched) script relies on;
+        `xtrace_log` is what a caller asserts the token absent from.
+        """
+        self._debug_trap_file = self.root.parent / "debug-trap-bash-env"
+        self._debug_trap_file.write_text(
+            f"exec 9>>{self._xtrace_log_file}\n"
+            "export BASH_XTRACEFD=9\n"
+            "set -o functrace\n"
+            "trap 'set -x' DEBUG\n",
+        )
+
+    def enable_inherited_xtrace(self) -> None:
+        """Simulate an ancestor shell's `bash -x` carrying in via `SHELLOPTS`.
+
+        Bash activates every option named in `SHELLOPTS` at startup, so this
+        reproduces inherited xtrace without invoking the script under
+        `bash -x` itself (#1349 review). See `inject_debug_trap` above for why
+        trace output is redirected to `xtrace_log` rather than left on stderr.
+        """
+        self._shellopts = "xtrace"
+        self._debug_trap_file = self.root.parent / "xtrace-bash-env"
+        self._debug_trap_file.write_text(
+            f"exec 9>>{self._xtrace_log_file}\nexport BASH_XTRACEFD=9\n",
+        )
+
     def tick(self) -> subprocess.CompletedProcess[str]:
         system_bin = self._system_bin_without_jq or Path("/usr/bin")
         return subprocess.run(
@@ -543,7 +595,8 @@ class Checkout:
             timeout=60,
             env={
                 "PATH": f"{self._bin}:{system_bin}:/bin",
-                "BASH_ENV": str(self._jq_path_filter) if self._jq_path_filter else "",
+                "BASH_ENV": str(self._jq_path_filter or self._debug_trap_file or ""),
+                "SHELLOPTS": self._shellopts,
                 "HOME": str(self.root.parent),
                 "LOG_CAPTURE_FILE": str(self.log_file),
                 "DOCKER_CALLS_FILE": str(self.docker_calls_file),
@@ -602,6 +655,29 @@ class Checkout:
         reached, and — just as importantly — which ones never saw it.
         """
         return self.token_env_calls_file.read_text() if self.token_env_calls_file.exists() else ""
+
+    @property
+    def non_build_token_env_calls(self) -> list[str]:
+        """Every recorded call except the one `compose build` call itself.
+
+        `compose build` is the only process the token may legitimately
+        reach (#1349); every other recorded call — `compose up`/`ps`,
+        `logger`, etc. — must never carry it, so a caller asserts the token
+        absent from every line this returns, not just one hand-picked line.
+        """
+        return [
+            line
+            for line in self.token_env_calls.splitlines()
+            if not line.startswith("compose build=")
+        ]
+
+    @property
+    def xtrace_log(self) -> str:
+        """Captured `set -x` output when `inject_debug_trap`/
+        `enable_inherited_xtrace` redirected it here instead of stderr."""
+        return (
+            self._xtrace_log_file.read_text() if self._xtrace_log_file.exists() else ""
+        )
 
     def alert_lines(self) -> list[str]:
         return [line for line in self.journal.splitlines() if "ALERT:" in line]
@@ -817,8 +893,42 @@ def test_a_failed_build_s_children_do_not_see_the_overnightworks_token(
     assert result.returncode == 0
     assert "docker compose build failed" in checkout.journal
     assert checkout.failure_count_file.read_text() == "1"
-    assert "logger=<unset>" in checkout.token_env_calls
     assert "compose up" not in checkout.docker_calls
+    non_build_calls = checkout.non_build_token_env_calls
+    assert non_build_calls
+    assert all(DEFAULT_OVERNIGHTWORKS_TOKEN not in call for call in non_build_calls)
+
+
+@pytest.mark.parametrize(
+    "contaminate",
+    [
+        pytest.param(Checkout.enable_inherited_xtrace, id="inherited-shellopts-xtrace"),
+        pytest.param(Checkout.inject_debug_trap, id="inherited-functrace-debug-trap"),
+    ],
+)
+def test_the_overnightworks_token_never_reaches_output_under_inherited_tracing(
+    tmp_path: Path, contaminate: Callable[[Checkout], None],
+) -> None:
+    """Neither an inherited `bash -x`/xtrace nor an inherited DEBUG trap with
+    functrace may ever print the token (#1349 review): both carry into the
+    build subshell like any other shell option or trap unless the subshell
+    itself clears them before the token is read.
+    """
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    contaminate(checkout)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.xtrace_log, "inherited tracing never actually activated"
+    assert f"compose build={DEFAULT_OVERNIGHTWORKS_TOKEN}" in checkout.token_env_calls
+    assert DEFAULT_OVERNIGHTWORKS_TOKEN not in result.stdout
+    assert DEFAULT_OVERNIGHTWORKS_TOKEN not in result.stderr
+    assert DEFAULT_OVERNIGHTWORKS_TOKEN not in checkout.journal
+    assert DEFAULT_OVERNIGHTWORKS_TOKEN not in checkout.xtrace_log
 
 
 def test_a_missing_base_image_is_built_before_compose(tmp_path: Path) -> None:

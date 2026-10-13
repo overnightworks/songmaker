@@ -281,33 +281,24 @@ compose() {
     (cd "$REPO_ROOT" && docker compose "$@")
 }
 
-# Named exit codes `build_with_overnightworks_token` uses to tell the caller
-# apart from an ordinary `compose build` failure, without ever passing the
-# token itself back out.
-OVERNIGHTWORKS_TOKEN_UNREADABLE_EXIT_CODE=64
-OVERNIGHTWORKS_TOKEN_EMPTY_EXIT_CODE=65
-
 # Reads the overnightworks read token and runs `compose build` with it
-# exported, entirely inside a subshell (#1349 review): `set +x` is the
-# subshell's first action, before the token file is ever read, so neither an
-# inherited `bash -x` nor `SHELLOPTS` xtrace can trace the token into this
-# process's stderr — xtrace is a shell option and would otherwise carry into
-# the subshell like every other option. The token variable is local to this
-# subshell and is exported only inside it, so it never exists in the caller's
-# environment at all, before or after the call. The caller tells a missing or
-# empty token file apart from a build failure by this function's exit code
-# and reports it via `fail_tick` itself, so no caller ever logs the token.
+# exported, entirely inside a subshell (#1349 review). The caller already
+# validated the token file (readable, non-empty) without expanding its
+# value, so this function's exit code is an ordinary `compose build` status
+# and no caller ever logs the token.
 build_with_overnightworks_token() {
     local token_file="$1"
     (
+        # Clear any inherited DEBUG/RETURN/ERR trap and the functrace/errtrace
+        # options that would make it fire inside this subshell before xtrace
+        # is off: a trap such as `trap 'set -x' DEBUG`, left active by
+        # functrace, would otherwise re-enable tracing right before the token
+        # is expanded below (#1349 review).
+        trap - DEBUG RETURN ERR
+        set +o functrace +o errtrace
         { set +x; } 2>/dev/null
         local token
-        if ! token="$(cat "$token_file" 2>/dev/null)"; then
-            exit "$OVERNIGHTWORKS_TOKEN_UNREADABLE_EXIT_CODE"
-        fi
-        if [[ -z "$token" ]]; then
-            exit "$OVERNIGHTWORKS_TOKEN_EMPTY_EXIT_CODE"
-        fi
+        token="$(cat "$token_file" 2>/dev/null)" || exit 1
         export OVERNIGHTWORKS_READ_TOKEN="$token"
         compose build
     )
@@ -1187,28 +1178,26 @@ else
 fi
 
 # The `overnightworks_read_token` Compose secret reads this value from the
-# environment, not a file path (#1349). The token is read and exported only
-# inside build_with_overnightworks_token's own subshell (see its definition
-# above) — it never exists in this script's own environment, so there is
-# nothing here to unset or to protect from `bash -x`/xtrace.
-if build_with_overnightworks_token "$OVERNIGHTWORKS_READ_TOKEN_FILE"; then
-    :
-else
+# environment, not a file path (#1349). Validated here without expanding the
+# token's value — `-r`/`-s` need only the file's metadata (#1349 review) —
+# so a missing or empty file is never mistaken for a `compose build` failure.
+# The token itself is read and exported only inside
+# build_with_overnightworks_token's own subshell (see its definition above)
+# — it never exists in this script's own environment, so there is nothing
+# here to unset or to protect from `bash -x`/xtrace.
+if [[ ! -r "$OVERNIGHTWORKS_READ_TOKEN_FILE" ]]; then
+    log_err "cannot read overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE — set SONGMAKER_AUTODEPLOY_OVERNIGHTWORKS_READ_TOKEN_FILE or restore it (#1349)"
+    fail_tick "overnightworks read token file missing or unreadable"
+fi
+if [[ ! -s "$OVERNIGHTWORKS_READ_TOKEN_FILE" ]]; then
+    log_err "overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE is empty (#1349)"
+    fail_tick "overnightworks read token file is empty"
+fi
+
+if ! build_with_overnightworks_token "$OVERNIGHTWORKS_READ_TOKEN_FILE"; then
     BUILD_EXIT_CODE=$?
-    case "$BUILD_EXIT_CODE" in
-        "$OVERNIGHTWORKS_TOKEN_UNREADABLE_EXIT_CODE")
-            log_err "cannot read overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE — set SONGMAKER_AUTODEPLOY_OVERNIGHTWORKS_READ_TOKEN_FILE or restore it (#1349)"
-            fail_tick "overnightworks read token file missing or unreadable"
-            ;;
-        "$OVERNIGHTWORKS_TOKEN_EMPTY_EXIT_CODE")
-            log_err "overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE is empty (#1349)"
-            fail_tick "overnightworks read token file is empty"
-            ;;
-        *)
-            log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
-            fail_tick "compose build failed"
-            ;;
-    esac
+    log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
+    fail_tick "compose build failed"
 fi
 
 # --- 11. Recheck immediately before the recreate — the only step that can
