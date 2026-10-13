@@ -1,8 +1,0 @@
-claim_id = "1ff8effacf4044aeb3390efe08b33c0a"
-agent = "claude-head"
-role = "builder"
-base = "50869720dc09b3a068482561d3a5ee02f1ff2788"
-branch = "claude-head/issue-1349-private-libs"
-scope = [".github/workflows/ci.yml", ".github/workflows/e2e.yml", ".github/workflows/security.yml", "CLAUDE.md", "Dockerfile", "README.md", "docker-compose.yml", "docker/docker-compose.ci.yml", "docker/docker-entrypoint.sh", "docker/music-worker.Dockerfile", "docker/scoring-worker.Dockerfile", "docs/architecture.md", "docs/security.md", "docs/testing.md", "pyproject.toml", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py", "tests/test_packaging_boundary.py", "uv.lock"]
-opened_commit = "c7c0c35b401ee415b6262aac34504045715f9cdc"
-whole_reason = "one cause (private libs) touches start, build, CI and their docs together"
