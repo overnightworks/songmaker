@@ -213,6 +213,13 @@ def _service_command(service_block: str) -> tuple[str, ...] | None:
     return tuple(re.findall(r'"([^"]+)"', match.group(1)))
 
 
+def _service_entrypoint(service_block: str) -> tuple[str, ...] | None:
+    match = re.search(r"^    entrypoint: \[(.+)\]$", service_block, re.MULTILINE)
+    if match is None:
+        return None
+    return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+
+
 def _import_startup_modules(
     spec: ContainerSpec, blocked_roots: frozenset[str],
 ) -> subprocess.CompletedProcess[str]:
@@ -304,10 +311,29 @@ def test_container_entrypoints_match_runtime_configuration() -> None:
 
     assert pyproject["project"]["scripts"]["songmaker"] == "songmaker_cli.main:main"
     assert 'ENTRYPOINT ["/app/docker-entrypoint.sh"]' in web_dockerfile
-    assert "exec uv run songmaker server" in web_entrypoint
+    assert "exec uv run --no-sync --frozen --no-build songmaker server" in web_entrypoint
     assert CONTAINERS["web"].startup_modules == (
         "songmaker_cli.main", "songmaker_cli.server",
     )
+
+    # Every container start uses the image's installed environment rather
+    # than re-resolving dependencies from the network (#1349): migrate's own
+    # uv-run entrypoint is frozen and unsynced, and the two worker images
+    # bypass uv at startup entirely by exec'ing their venv binary directly.
+    migrate_entrypoint = _service_entrypoint(_compose_service_block("migrate"))
+    assert migrate_entrypoint == (
+        "uv", "run", "--no-sync", "--frozen", "--no-build", "alembic", "upgrade", "head",
+    )
+    acestep_dockerfile = (
+        REPOSITORY_ROOT / "docker" / "acestep-worker.Dockerfile"
+    ).read_text()
+    assert (
+        'ENTRYPOINT ["uv", "run", "--no-sync", "--frozen", "--no-build", '
+        '"python", "-m", "acestep_worker"]'
+    ) in acestep_dockerfile
+    for spec in (CONTAINERS["music-worker"], CONTAINERS["scoring-worker"]):
+        worker_dockerfile = (REPOSITORY_ROOT / spec.dockerfile).read_text()
+        assert 'ENTRYPOINT ["/app/.venv/bin/arq"]' in worker_dockerfile
 
 
 def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() -> None:
