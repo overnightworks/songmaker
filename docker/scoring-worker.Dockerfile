@@ -1,10 +1,13 @@
 # songmaker-scoring-worker — arq worker with scoring + whisper extras
 FROM python:3.12-slim
 
+# git is build-time only: the server extra below resolves two private
+# overnightworks libraries by tag (#1349), never a runtime dependency.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
     libc6-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -18,8 +21,16 @@ USER songmaker
 COPY --chown=songmaker pyproject.toml uv.lock ./
 # The lockfile's nvidia-ml-py3==7.352.0 entry has only a hashed source
 # distribution, so this locked sync alone may build it. Every dependency
-# remains resolved from uv.lock.
-RUN uv sync --frozen --no-dev --no-install-project \
+# remains resolved from uv.lock. The server extra also pulls in
+# overnightworks-webauth and overnightworks-agent-providers, both private
+# git+https sources (#1349); the read-only token reaches only this RUN's
+# git config through a BuildKit secret, readable (mode=0444) because this
+# stage already runs as the non-root songmaker user here.
+RUN --mount=type=secret,id=overnightworks_read_token,required=true,mode=0444 \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=url.https://x-access-token:$(cat /run/secrets/overnightworks_read_token)@github.com/overnightworks/.insteadOf \
+    GIT_CONFIG_VALUE_0=https://github.com/overnightworks/ \
+    uv sync --frozen --no-dev --no-install-project \
     --extra server --extra scoring --extra whisper --extra api # NOSONAR
 
 ARG MODEL_WARMUP_TIMEOUT_SECONDS=1800

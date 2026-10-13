@@ -50,12 +50,14 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - overnightworks_read_token
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
-    entrypoint: ["uv", "run", "alembic", "upgrade", "head"]
+    entrypoint: ["uv", "run", "--no-sync", "--frozen", "--no-build", "alembic", "upgrade", "head"]
     restart: "no"
     logging: *service-logging
     cap_drop:
@@ -65,6 +67,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+      secrets:
+        - overnightworks_read_token
     restart: unless-stopped
     # uv run as PID 1 never reaps exited children (bwrap zombies); tini does.
     init: true
@@ -180,6 +184,8 @@ services:
     build:
       context: .
       dockerfile: docker/music-worker.Dockerfile
+      secrets:
+        - overnightworks_read_token
     command: ["songmaker_cli.music_worker.MusicWorkerSettings"]
     restart: unless-stopped
     logging: *service-logging
@@ -279,6 +285,7 @@ services:
       dockerfile: docker/scoring-worker.Dockerfile
       secrets:
         - hf_token
+        - overnightworks_read_token
     command: ["songmaker_cli.scoring_worker.ScoringWorkerSettings"]
     restart: unless-stopped
     logging: *service-logging
@@ -426,6 +433,12 @@ services:
 secrets:
   hf_token:
     environment: HF_TOKEN
+  # File-based: BuildKit reads this path directly as a build secret (never an
+  # environment variable at runtime). Host default matches the operator's
+  # ruled location; override OVERNIGHTWORKS_READ_TOKEN_FILE for a different
+  # checkout or CI sandbox. Missing file fails the build loud (issue #1349).
+  overnightworks_read_token:
+    file: ${OVERNIGHTWORKS_READ_TOKEN_FILE:-$HOME/.secrets/github/overnightworks-read-token}
   # Mounted into the alertmanager container at /run/secrets/smtp_password
   # instead of being passed as an environment variable: a secret in
   # `environment:` is visible in `docker inspect` and `docker compose

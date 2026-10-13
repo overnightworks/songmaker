@@ -794,11 +794,16 @@ events.
 
 The auth layer left this repository with #879. It ships as the distribution
 `overnightworks-webauth` from
-[overnightworks/webauth](https://github.com/overnightworks/webauth) and is
-pinned in the `server` extra to the release wheel of tag `v0.11.0`; `uv.lock`
-records that wheel's hash, so every image installs the same bytes and no image
-needs `git`. The import package is still `webauth`, so nothing in
-`songmaker_cli` changed when the source moved. Its own tests moved with it.
+[overnightworks/webauth](https://github.com/overnightworks/webauth), private
+since 09.10.2026, and is pinned in the `server` extra to the `git+https`
+source of tag `v0.11.0`; `uv.lock` records the resolved commit, so every
+image installs the same code. Every image that resolves the `server` extra
+now needs `git` and a read-only GitHub token scoped to this repository and
+`agent-providers`: the Docker build reads it as the `overnightworks_read_token`
+BuildKit secret, CI as the repository secret `OVERNIGHTWORKS_READ_TOKEN`,
+both only for the `uv sync`/`uv lock` step that resolves it (#1349). The
+import package is still `webauth`, so nothing in `songmaker_cli` changed when
+the source moved. Its own tests moved with it.
 
 Inside the library, `config.py` owns the `WebAuthConfig` the host installs,
 `passwords.py`/`cookies.py`/`proxies.py` own the crypto and the client-identity
@@ -868,10 +873,12 @@ no middleware reads songmaker's settings.
 
 The provider layer left this repository with #886. It ships as the distribution
 `overnightworks-agent-providers` from
-[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers)
-and is pinned in the `server` extra to the release wheel of tag `v0.1.2`;
-`uv.lock` records that wheel's hash, so every image installs the same bytes and
-no image needs `git`. The pin is bare — not `[api,image]` in its brackets — so
+[overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
+private since 09.10.2026, and is pinned in the `server` extra to the
+`git+https` source of tag `v0.1.2`; `uv.lock` records the resolved commit, so
+every image installs the same code. Resolving it needs `git` and the same
+read-only `overnightworks_read_token` / `OVERNIGHTWORKS_READ_TOKEN` as
+`webauth` above (#1349). The pin is bare — not `[api,image]` in its brackets — so
 the library's own optional capabilities never leak `anthropic` into the music
 worker or Pillow into the scoring worker. The import package is still
 `agent_providers`, so nothing in `songmaker_cli` changed when the source moved.

@@ -1129,60 +1129,27 @@ wheels = [
 [[package]]
 name = "overnightworks-agent-providers"
 version = "0.1.2"
-source = { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.2/overnightworks_agent_providers-0.1.2-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/agent-providers.git?rev=v0.1.2#66b4e42873626e2279160900e7c89927f4f56d59" }
 dependencies = [
     { name = "anyio" },
     { name = "httpx" },
     { name = "pydantic" },
 ]
-wheels = [
-    { url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.2/overnightworks_agent_providers-0.1.2-py3-none-any.whl", hash = "sha256:23418830b64377655406c80f53674c707a2e86dc034ff685e3904a0dbef21710" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "anthropic", marker = "extra == 'api'", specifier = ">=0.26,<2" },
-    { name = "anyio", specifier = ">=4,<5" },
-    { name = "httpx", specifier = ">=0.27,<1" },
-    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2,<3" },
-    { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
-    { name = "pydantic", specifier = ">=2,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<10" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
-]
-provides-extras = ["api", "image", "dev"]
 
 [[package]]
 name = "overnightworks-webauth"
 version = "0.11.0"
-source = { url = "https://github.com/overnightworks/webauth/releases/download/v0.11.0/overnightworks_webauth-0.11.0-py3-none-any.whl" }
+source = { git = "https://github.com/overnightworks/webauth.git?rev=v0.11.0#8b2701b5bed4347a955536cf784e8db268d5f7b9" }
 dependencies = [
     { name = "argon2-cffi" },
     { name = "fastapi" },
     { name = "pydantic" },
-]
-wheels = [
-    { url = "https://github.com/overnightworks/webauth/releases/download/v0.11.0/overnightworks_webauth-0.11.0-py3-none-any.whl", hash = "sha256:f56fd8ba5f67dea468be3e8760059acfbe5e6bf6de8a2d237a86d5b545dc3512" },
 ]
 
 [package.optional-dependencies]
 redis = [
     { name = "redis" },
 ]
-
-[package.metadata]
-requires-dist = [
-    { name = "argon2-cffi", specifier = ">=23.1,<26" },
-    { name = "fakeredis", extras = ["lua"], marker = "extra == 'dev'", specifier = ">=2,<3" },
-    { name = "fastapi", specifier = ">=0.100,<1" },
-    { name = "httpx", marker = "extra == 'dev'", specifier = ">=0.27,<1" },
-    { name = "import-linter", marker = "extra == 'dev'", specifier = ">=2,<3" },
-    { name = "pydantic", specifier = ">=2,<3" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=7,<10" },
-    { name = "redis", marker = "extra == 'redis'", specifier = ">=5.0,<9" },
-    { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4,<1" },
-]
-provides-extras = ["redis", "dev"]
 
 [[package]]
 name = "packaging"
@@ -1824,8 +1791,8 @@ requires-dist = [
     { name = "numpy", specifier = ">=1.26,<3" },
     { name = "nvidia-ml-py3", marker = "extra == 'acestep-worker'", specifier = ">=7.352,<8" },
     { name = "nvidia-ml-py3", marker = "extra == 'scoring'", specifier = ">=7.352,<8" },
-    { name = "overnightworks-agent-providers", marker = "extra == 'server'", url = "https://github.com/overnightworks/agent-providers/releases/download/v0.1.2/overnightworks_agent_providers-0.1.2-py3-none-any.whl" },
-    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", url = "https://github.com/overnightworks/webauth/releases/download/v0.11.0/overnightworks_webauth-0.11.0-py3-none-any.whl" },
+    { name = "overnightworks-agent-providers", marker = "extra == 'server'", git = "https://github.com/overnightworks/agent-providers.git?rev=v0.1.2" },
+    { name = "overnightworks-webauth", extras = ["redis"], marker = "extra == 'server'", git = "https://github.com/overnightworks/webauth.git?rev=v0.11.0" },
     { name = "pillow", marker = "extra == 'image'", specifier = ">=12.3,<13" },
     { name = "psycopg2-binary", marker = "extra == 'server'", specifier = ">=2.9,<3" },
     { name = "pydantic", specifier = ">=2.0,<3" },

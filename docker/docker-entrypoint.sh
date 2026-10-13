@@ -2,4 +2,4 @@
 set -e
 
 echo "Starting songmaker server..."
-exec uv run songmaker server --port 8080
+exec uv run --no-sync --frozen --no-build songmaker server --port 8080

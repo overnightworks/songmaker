@@ -13,9 +13,12 @@ RUN pnpm build
 # Stage 2: Python backend
 FROM python:3.12-slim AS backend
 
+# git is build-time only: it resolves the two private overnightworks
+# libraries below by tag (#1349), never a runtime dependency.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bubblewrap \
     ffmpeg \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/local/bin/
@@ -24,7 +27,17 @@ WORKDIR /app
 
 # Install dependencies first (cached unless pyproject.toml/uv.lock change)
 COPY pyproject.toml uv.lock ./
-RUN mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
+# overnightworks-webauth and overnightworks-agent-providers resolve from
+# their private repositories by tag (#1349). The token reaches only this
+# RUN's git config, read from the BuildKit secret mount (an ephemeral file
+# outside any layer) via command substitution so a trailing newline in the
+# secret file never corrupts the config value — never an ARG, never
+# `docker history`.
+RUN --mount=type=secret,id=overnightworks_read_token,required=true \
+    mkdir -p src/songmaker_cli && touch src/songmaker_cli/__init__.py && \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=url.https://x-access-token:$(cat /run/secrets/overnightworks_read_token)@github.com/overnightworks/.insteadOf \
+    GIT_CONFIG_VALUE_0=https://github.com/overnightworks/ \
     uv sync --frozen --no-dev --extra server --extra mcp --extra api --extra image && \
     rm -rf src/songmaker_cli/__init__.py
 
@@ -38,7 +51,11 @@ COPY alembic.ini ./
 # context, and a hand-picked list would silently miss the next operational
 # script someone adds.
 COPY scripts/ scripts/
-RUN uv sync --frozen --no-dev --extra server --extra mcp --extra api --extra image
+RUN --mount=type=secret,id=overnightworks_read_token,required=true \
+    GIT_CONFIG_COUNT=1 \
+    GIT_CONFIG_KEY_0=url.https://x-access-token:$(cat /run/secrets/overnightworks_read_token)@github.com/overnightworks/.insteadOf \
+    GIT_CONFIG_VALUE_0=https://github.com/overnightworks/ \
+    uv sync --frozen --no-dev --extra server --extra mcp --extra api --extra image
 
 COPY --from=frontend-builder /app/frontend/build frontend/build
 

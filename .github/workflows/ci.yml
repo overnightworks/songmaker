@@ -33,6 +33,10 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Check uv.lock is in sync with pyproject.toml
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: "url.https://x-access-token:${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}@github.com/overnightworks/.insteadOf"
+          GIT_CONFIG_VALUE_0: "https://github.com/overnightworks/"
         run: uv lock --check
 
       - name: Cache uv packages
@@ -46,6 +50,10 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y ffmpeg
 
       - name: Install dependencies
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: "url.https://x-access-token:${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}@github.com/overnightworks/.insteadOf"
+          GIT_CONFIG_VALUE_0: "https://github.com/overnightworks/"
         run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
@@ -111,6 +119,10 @@ jobs:
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
 
       - name: Install dependencies
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: "url.https://x-access-token:${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}@github.com/overnightworks/.insteadOf"
+          GIT_CONFIG_VALUE_0: "https://github.com/overnightworks/"
         run: uv sync --frozen --extra server --extra dev --extra mcp --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
 
       - name: Show installed FastAPI version
@@ -193,6 +205,10 @@ jobs:
           python-version: "3.12"
       - uses: astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d # v10.0.1
       - name: Install dependencies
+        env:
+          GIT_CONFIG_COUNT: "1"
+          GIT_CONFIG_KEY_0: "url.https://x-access-token:${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}@github.com/overnightworks/.insteadOf"
+          GIT_CONFIG_VALUE_0: "https://github.com/overnightworks/"
         run: uv sync --frozen --extra server --extra dev --extra image # NOSONAR: songmaker is a first-party source project, so --no-build cannot install its editable distribution.
       - name: Show installed FastAPI version
         run: uv run --no-sync --frozen --no-build python -c "import fastapi; print(f'FastAPI {fastapi.__version__}')"
