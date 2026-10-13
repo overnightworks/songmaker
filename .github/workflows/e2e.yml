@@ -40,6 +40,20 @@ jobs:
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
 
+      - name: Write overnightworks read token
+        # migrate and songmaker-web both build from Dockerfiles that resolve
+        # the two private overnightworks libraries by tag (#1349) through
+        # the `overnightworks_read_token` BuildKit secret; docker-compose.yml
+        # reads that secret from $OVERNIGHTWORKS_READ_TOKEN_FILE (falling
+        # back to the operator's host path), so CI points it at a
+        # runner-local file instead. The token value itself never goes in a
+        # log, prompt, or committed file.
+        run: |
+          set -euo pipefail
+          token_file="$RUNNER_TEMP/overnightworks-read-token"
+          (umask 077 && printf '%s' "${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}" > "$token_file")
+          echo "OVERNIGHTWORKS_READ_TOKEN_FILE=$token_file" >> "$GITHUB_ENV"
+
       - name: Boot stack
         env:
           # Share links (album/song/generation/playlist) need a configured

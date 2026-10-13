@@ -13,8 +13,9 @@ RUN pnpm build
 # Stage 2: Python backend
 FROM python:3.12-slim AS backend
 
-# git is build-time only: it resolves the two private overnightworks
-# libraries below by tag (#1349), never a runtime dependency.
+# git resolves the two private overnightworks libraries below by tag
+# (#1349). This is a single-stage image, so the apt package ships in the
+# final image too, even though no runtime code path invokes it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bubblewrap \
     ffmpeg \

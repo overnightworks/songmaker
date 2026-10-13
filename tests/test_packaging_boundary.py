@@ -546,3 +546,50 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             bind_options = mount.get("bind")
             assert isinstance(bind_options, dict)
             assert bind_options.get("create_host_path") is False
+
+
+def test_music_worker_sync_stays_wheel_only_except_the_two_private_libraries() -> None:
+    """--no-build must keep rejecting any other source-only dependency (#1349)."""
+    dockerfile = (REPOSITORY_ROOT / CONTAINERS["music-worker"].dockerfile).read_text()
+    sync_block_match = re.search(r"uv sync --frozen.*?--extra image", dockerfile, re.DOTALL)
+    assert sync_block_match, "music-worker has no uv sync RUN block"
+    sync_block = sync_block_match.group()
+    assert "--no-build" in sync_block
+    assert "--no-install-package overnightworks-webauth" in sync_block
+    assert "--no-install-package overnightworks-agent-providers" in sync_block
+    # The excluded packages are installed only from a wheel this same RUN built
+    # locally from their pinned git tag, never from a bare source build.
+    install_block_match = re.search(
+        r"uv pip install --python \.venv/bin/python --no-deps"
+        r".*?overnightworks_agent_providers-\*\.whl",
+        dockerfile,
+        re.DOTALL,
+    )
+    assert install_block_match, "music-worker has no prebuilt-wheel install for the two libraries"
+
+
+def test_e2e_workflow_supplies_the_overnightworks_read_token_before_building() -> None:
+    workflow = yaml.safe_load(
+        (REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml").read_text()
+    )
+    steps = workflow["jobs"]["smoke"]["steps"]
+
+    def _run(step: dict[str, object]) -> str:
+        run = step.get("run", "")
+        assert isinstance(run, str)
+        return run
+
+    token_step_index = next(
+        index for index, step in enumerate(steps)
+        if "OVERNIGHTWORKS_READ_TOKEN_FILE" in _run(step) and "GITHUB_ENV" in _run(step)
+    )
+    build_step_index = next(
+        index for index, step in enumerate(steps)
+        if "docker compose" in _run(step) and "--build" in _run(step)
+    )
+    assert token_step_index < build_step_index, (
+        "the token file must be written before the first build that needs it"
+    )
+    token_step_run = _run(steps[token_step_index])
+    assert "secrets.OVERNIGHTWORKS_READ_TOKEN" in token_step_run
+    assert "RUNNER_TEMP" in token_step_run

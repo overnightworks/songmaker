@@ -3,16 +3,21 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.11.0` and hash-locked in
-`uv.lock` (#879). Module names below such as `webauth.dependencies` are its
-import paths; which of songmaker's paths each policy applies to remains
-songmaker's decision, built in `request_policies.py`.
+the `server` extra to the `git+https` source of tag `v0.11.0`, with that
+tag's exact commit pinned in `uv.lock` (#879). Resolving it needs a read-only
+GitHub token (the `overnightworks_read_token` BuildKit secret in Docker
+builds, the `OVERNIGHTWORKS_READ_TOKEN` repository secret in CI; the value
+itself never goes in a prompt, log, or this file) (#1349). Module names below
+such as `webauth.dependencies` are its import paths; which of songmaker's
+paths each policy applies to remains songmaker's decision, built in
+`request_policies.py`.
 
 The provider layer is likewise not in this repository. `agent_providers` ships
 as the distribution `overnightworks-agent-providers` from
 [overnightworks/agent-providers](https://github.com/overnightworks/agent-providers),
-pinned bare in the `server` extra to the release wheel of tag `v0.1.2` and
-hash-locked in `uv.lock` (#886). Module names below such as
+pinned bare in the `server` extra to the `git+https` source of tag `v0.1.2`,
+with that tag's exact commit pinned in `uv.lock` (#886), resolved through the
+same read-only token as `webauth` above (#1349). Module names below such as
 `agent_providers.claude.provider` are its import paths; the runtime values it
 runs on — binaries, credential mirrors, secret-scrub list, the sandbox
 directory names — remain songmaker's decision, installed through

@@ -1,8 +1,9 @@
 # songmaker-scoring-worker — arq worker with scoring + whisper extras
 FROM python:3.12-slim
 
-# git is build-time only: the server extra below resolves two private
-# overnightworks libraries by tag (#1349), never a runtime dependency.
+# git resolves two private overnightworks libraries by tag (#1349) in the
+# server extra below. This is a single-stage image, so the apt package
+# ships in the final image too, even though no runtime code path invokes it.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     gcc \
