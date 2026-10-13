@@ -566,6 +566,30 @@ def test_music_worker_sync_stays_wheel_only_except_the_two_private_libraries() -
         re.DOTALL,
     )
     assert install_block_match, "music-worker has no prebuilt-wheel install for the two libraries"
+    # A tag is a mutable ref: the clone of each pinned tag must be checked
+    # against the commit uv.lock actually resolved before it is ever built
+    # into a wheel, and that locked commit must come from uv.lock itself
+    # rather than a hand-copied literal that could drift from it (#1349).
+    clone_to_sync_block = dockerfile[sync_block_match.start() - 2000 : sync_block_match.start()]
+    assert "grep" in clone_to_sync_block and "uv.lock" in clone_to_sync_block, (
+        "music-worker must read the locked commit SHAs from uv.lock, not hardcode them"
+    )
+    assert "rev-parse HEAD" in clone_to_sync_block
+    assert clone_to_sync_block.count("rev-parse HEAD") == 2, (
+        "both webauth and agent-providers clones must be checked against uv.lock"
+    )
+    assert "exit 1" in clone_to_sync_block
+
+
+def test_overnightworks_read_token_secret_is_environment_sourced() -> None:
+    """A Compose `file:` secret outside the project dir trips buildx bake's
+    fs.read privilege check; the token must come from the environment
+    instead, in both the Docker build and CI (#1349)."""
+    secrets = _raw_compose()["secrets"]
+    assert isinstance(secrets, dict)
+    overnightworks_secret = secrets["overnightworks_read_token"]
+    assert isinstance(overnightworks_secret, dict)
+    assert overnightworks_secret == {"environment": "OVERNIGHTWORKS_READ_TOKEN"}
 
 
 def test_e2e_workflow_supplies_the_overnightworks_read_token_before_building() -> None:
@@ -579,17 +603,26 @@ def test_e2e_workflow_supplies_the_overnightworks_read_token_before_building() -
         assert isinstance(run, str)
         return run
 
-    token_step_index = next(
-        index for index, step in enumerate(steps)
-        if "OVERNIGHTWORKS_READ_TOKEN_FILE" in _run(step) and "GITHUB_ENV" in _run(step)
-    )
+    def _env(step: dict[str, object]) -> dict[str, object]:
+        env = step.get("env", {})
+        assert isinstance(env, dict)
+        return env
+
     build_step_index = next(
         index for index, step in enumerate(steps)
         if "docker compose" in _run(step) and "--build" in _run(step)
     )
-    assert token_step_index < build_step_index, (
-        "the token file must be written before the first build that needs it"
+    build_step = steps[build_step_index]
+    token_env_value = _env(build_step).get("OVERNIGHTWORKS_READ_TOKEN")
+    assert token_env_value == "${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}", (
+        "the build step must receive the token through its own step-scoped "
+        "env:, not a file written by an earlier step"
     )
-    token_step_run = _run(steps[token_step_index])
-    assert "secrets.OVERNIGHTWORKS_READ_TOKEN" in token_step_run
-    assert "RUNNER_TEMP" in token_step_run
+
+    # The secret must never be interpolated into a run: script body (GitHub
+    # embeds that text verbatim into the runner-generated shell script) and
+    # never persisted to $GITHUB_ENV, which would leak it to every later
+    # same-user step, including the frontend install and Playwright steps.
+    for step in steps:
+        assert "secrets.OVERNIGHTWORKS_READ_TOKEN" not in _run(step)
+        assert "OVERNIGHTWORKS_READ_TOKEN" not in _run(step) or "GITHUB_ENV" not in _run(step)

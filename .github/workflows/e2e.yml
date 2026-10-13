@@ -40,27 +40,24 @@ jobs:
       - name: Reset stack
         run: docker compose $COMPOSE_FILES down -v
 
-      - name: Write overnightworks read token
+      - name: Boot stack
         # migrate and songmaker-web both build from Dockerfiles that resolve
         # the two private overnightworks libraries by tag (#1349) through
         # the `overnightworks_read_token` BuildKit secret; docker-compose.yml
-        # reads that secret from $OVERNIGHTWORKS_READ_TOKEN_FILE (falling
-        # back to the operator's host path), so CI points it at a
-        # runner-local file instead. The token value itself never goes in a
-        # log, prompt, or committed file.
-        run: |
-          set -euo pipefail
-          token_file="$RUNNER_TEMP/overnightworks-read-token"
-          (umask 077 && printf '%s' "${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}" > "$token_file")
-          echo "OVERNIGHTWORKS_READ_TOKEN_FILE=$token_file" >> "$GITHUB_ENV"
-
-      - name: Boot stack
+        # reads that secret from the OVERNIGHTWORKS_READ_TOKEN environment
+        # variable (never a file path — a Compose `file:` secret outside the
+        # project directory trips buildx bake's fs.read privilege check), so
+        # it only has to be set in this step's own env. It never reaches a
+        # `run:` script body (GitHub interpolates `${{ }}` straight into the
+        # generated script, which this step's `env:` mapping avoids) and is
+        # never written to $GITHUB_ENV, so no later step inherits it.
         env:
           # Share links (album/song/generation/playlist) need a configured
           # public address (#339) — this stack has no proxy in front of it,
           # so the address it's really reachable at is the same host:port
           # the smoke test and Playwright drive it through below.
           PUBLIC_BASE_URL: http://localhost:${{ env.WEB_PORT }}
+          OVERNIGHTWORKS_READ_TOKEN: ${{ secrets.OVERNIGHTWORKS_READ_TOKEN }}
         run: docker compose $COMPOSE_FILES up -d --build --wait postgres redis migrate songmaker-web
 
       - name: Smoke test

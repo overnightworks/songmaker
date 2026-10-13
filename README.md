@@ -100,9 +100,12 @@ Both are in the `server` extra, installed by tag through `git+https` and
 pinned to a commit in `uv.lock`, so `uv sync` installs them like any other
 dependency and their own tests run in those repositories. Resolving them
 needs a GitHub token with read access to both repositories: a build reads it
-from the `overnightworks_read_token` Docker secret (host file
-`~/.secrets/github/overnightworks-read-token` by default, see
-`docker-compose.yml`); CI reads it from the repository secret
+from the `overnightworks_read_token` Docker secret, sourced from the
+`OVERNIGHTWORKS_READ_TOKEN` environment variable (see `docker-compose.yml`) —
+never a file path, so a build never needs filesystem-read privileges outside
+the project directory. `scripts/auto-deploy.sh` exports it from the host file
+`~/.secrets/github/overnightworks-read-token` by default, just for the build;
+CI sets it as a step-scoped env var from the repository secret
 `OVERNIGHTWORKS_READ_TOKEN`. Locally, `uv lock`/`uv sync` authenticate through
 your own `git` credential helper (e.g. `gh auth setup-git`).
 

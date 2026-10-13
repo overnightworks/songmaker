@@ -233,6 +233,13 @@ CHECK_RUN_LOOKBACK_COMMITS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS:-1
 # Once TERM has had this long to be honoured, kill a wedged gh child so it
 # cannot keep the deploy lock forever.
 CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS="${SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKUP_KILL_GRACE_SECONDS:-5}"
+# Host file holding the read-only token for the two private overnightworks
+# libraries (#1349); the operator's ruled location. `docker-compose.yml`'s
+# `overnightworks_read_token` secret reads it from the `OVERNIGHTWORKS_READ_TOKEN`
+# environment variable (never a file path — a Compose `file:` secret outside
+# the project directory trips buildx bake's fs.read privilege check), so this
+# script exports it only around the build call below and never logs it.
+OVERNIGHTWORKS_READ_TOKEN_FILE="${SONGMAKER_AUTODEPLOY_OVERNIGHTWORKS_READ_TOKEN_FILE:-$HOME/.secrets/github/overnightworks-read-token}"
 if ! [[ "$PRUNE_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]]; then
     log_err "SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS must be a positive integer, got '$PRUNE_TIMEOUT_SECONDS'"
     exit 1
@@ -1147,6 +1154,19 @@ else
     fi
 fi
 
+# The `overnightworks_read_token` Compose secret reads this value from the
+# environment, not a file path (#1349): exported only for this build call,
+# never logged, never echoed, unset again immediately after.
+if ! OVERNIGHTWORKS_READ_TOKEN="$(cat "$OVERNIGHTWORKS_READ_TOKEN_FILE" 2>/dev/null)"; then
+    log_err "cannot read overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE — set SONGMAKER_AUTODEPLOY_OVERNIGHTWORKS_READ_TOKEN_FILE or restore it (#1349)"
+    fail_tick "overnightworks read token file missing or unreadable"
+fi
+if [[ -z "$OVERNIGHTWORKS_READ_TOKEN" ]]; then
+    log_err "overnightworks read token file $OVERNIGHTWORKS_READ_TOKEN_FILE is empty (#1349)"
+    fail_tick "overnightworks read token file is empty"
+fi
+export OVERNIGHTWORKS_READ_TOKEN
+
 if compose build; then
     :
 else
@@ -1154,6 +1174,7 @@ else
     log_err "docker compose build failed in $REPO_ROOT (exit $BUILD_EXIT_CODE)"
     fail_tick "compose build failed"
 fi
+unset OVERNIGHTWORKS_READ_TOKEN
 
 # --- 11. Recheck immediately before the recreate — the only step that can
 # kill an in-flight job. This shrinks the unsafe window from the build's

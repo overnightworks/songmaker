@@ -433,12 +433,16 @@ services:
 secrets:
   hf_token:
     environment: HF_TOKEN
-  # File-based: BuildKit reads this path directly as a build secret (never an
-  # environment variable at runtime). Host default matches the operator's
-  # ruled location; override OVERNIGHTWORKS_READ_TOKEN_FILE for a different
-  # checkout or CI sandbox. Missing file fails the build loud (issue #1349).
+  # Environment-sourced, not a file path: a Compose `file:` secret outside
+  # the project directory trips buildx bake's fs.read privilege check
+  # ("additional privileges requested"), which newer Compose/buildx use by
+  # default (issue #1349). CI sets OVERNIGHTWORKS_READ_TOKEN as a
+  # step-scoped env var; `scripts/auto-deploy.sh` exports it from the
+  # operator's host token file (`~/.secrets/github/overnightworks-read-token`)
+  # just for the build. BuildKit's own `required=true` secret mount in each
+  # Dockerfile fails the build loud if the variable is unset or empty.
   overnightworks_read_token:
-    file: ${OVERNIGHTWORKS_READ_TOKEN_FILE:-$HOME/.secrets/github/overnightworks-read-token}
+    environment: OVERNIGHTWORKS_READ_TOKEN
   # Mounted into the alertmanager container at /run/secrets/smtp_password
   # instead of being passed as an environment variable: a secret in
   # `environment:` is visible in `docker inspect` and `docker compose
