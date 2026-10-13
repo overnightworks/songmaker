@@ -1,0 +1,7 @@
+claim_id = "c840d95f197346cf9992662580c985e4"
+agent = "claude-head"
+role = "builder"
+base = "50869720dc09b3a068482561d3a5ee02f1ff2788"
+branch = "claude-head/issue-1349-start-no-sync"
+scope = ["docker-compose.yml", "docker/docker-entrypoint.sh", "tests/test_packaging_boundary.py"]
+opened_commit = "88d562cc12ba2b19f9a2e33601dd2ddac066843d"
