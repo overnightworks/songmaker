@@ -439,8 +439,11 @@ secrets:
   # default (issue #1349). CI sets OVERNIGHTWORKS_READ_TOKEN as a
   # step-scoped env var; `scripts/auto-deploy.sh` exports it from the
   # operator's host token file (`~/.secrets/github/overnightworks-read-token`)
-  # just for the build. BuildKit's own `required=true` secret mount in each
-  # Dockerfile fails the build loud if the variable is unset or empty.
+  # just for the build, only after its own guard confirms the file is
+  # readable and non-empty: BuildKit's `required=true` secret mount in each
+  # Dockerfile only rejects an unset/missing secret, not an empty value — a
+  # zero-byte mount is accepted and would otherwise clone as an unauthenticated
+  # anonymous request, failing far from its real cause.
   overnightworks_read_token:
     environment: OVERNIGHTWORKS_READ_TOKEN
   # Mounted into the alertmanager container at /run/secrets/smtp_password

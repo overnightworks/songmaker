@@ -52,6 +52,11 @@ CHECK_RUN_FIELD_SEPARATOR = "\x1f"
 REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
 ADVISORY_ACTIONS_JOB_NAME = "SonarCloud scan"
 
+# A synthetic stand-in for the real overnightworks read token (#1349) — every
+# Checkout gets one by default so the build step the rest of this file drives
+# through can succeed; the dedicated token tests below override or remove it.
+DEFAULT_OVERNIGHTWORKS_TOKEN = "test-overnightworks-token-value"
+
 VALID_ALERT_ENV = """\
 ALERT_EMAIL_TO='operator@example.com'
 SMTP_HOST='smtp.example.com'
@@ -113,6 +118,8 @@ class Checkout:
         self.log_file = tmp_path / "journal.txt"
         self.docker_calls_file = tmp_path / "docker-calls.txt"
         self.curl_calls_file = tmp_path / "curl-calls.txt"
+        self.token_env_calls_file = tmp_path / "token-env-calls.txt"
+        self.overnightworks_token_file = tmp_path / "overnightworks-read-token"
         self.check_runs_file = tmp_path / "check-runs.txt"
         self.check_runs_raw_response_file = tmp_path / "check-runs-response.json"
         self.check_runs_directory = tmp_path / "check-runs"
@@ -130,6 +137,7 @@ class Checkout:
         self._base_images_present = True
         self._prune_exit_code = 0
         self._prune_sleep_seconds = 0
+        self._compose_build_exit_code = 0
         self._compose_up_exit_code = 0
         self._compose_project_name = "songmaker"
         self._prometheus_ready_exit_code = 0
@@ -174,7 +182,9 @@ class Checkout:
 
         _write_executable(
             self._bin / "logger",
-            '#!/bin/bash\nprintf "%s\\n" "$*" >> "$LOG_CAPTURE_FILE"\n',
+            '#!/bin/bash\nprintf "%s\\n" "$*" >> "$LOG_CAPTURE_FILE"\n'
+            'printf "logger=%s\\n" "${OVERNIGHTWORKS_READ_TOKEN:-<unset>}" '
+            '>> "$TOKEN_ENV_CALLS_FILE"\n',
         )
         _write_executable(
             self._bin / "date",
@@ -188,6 +198,22 @@ class Checkout:
         self._write_curl_stub()
         self.set_check_runs(("completed", "success"))
         self.set_active_jobs(0)
+        self.set_overnightworks_token(DEFAULT_OVERNIGHTWORKS_TOKEN)
+
+    def set_overnightworks_token(self, token: str | None) -> None:
+        """Point the script's token-file override at `token`, or remove it.
+
+        `None` stands in for the file being missing entirely (unreadable);
+        an empty string for a restored-but-empty file.
+        """
+        if token is None:
+            self.overnightworks_token_file.unlink(missing_ok=True)
+        else:
+            self.overnightworks_token_file.write_text(token)
+
+    def set_compose_build_exit_code(self, exit_code: int) -> None:
+        self._compose_build_exit_code = exit_code
+        self._write_docker_stub()
 
     def set_active_jobs(self, count: int) -> None:
         """Stand in for `docker compose exec postgres psql …`."""
@@ -271,6 +297,11 @@ class Checkout:
             self._bin / "docker",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
+            'printf "%s %s=%s\\n" "$1" "$2" "${OVERNIGHTWORKS_READ_TOKEN:-<unset>}" '
+            '>> "$TOKEN_ENV_CALLS_FILE"\n'
+            'if [[ "$1" == "compose" && "$2" == "build" ]]; then\n'
+            f"    exit {self._compose_build_exit_code}\n"
+            "fi\n"
             'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" '
             '&& "$4" == "json" ]]; then\n'
             '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
@@ -517,6 +548,10 @@ class Checkout:
                 "LOG_CAPTURE_FILE": str(self.log_file),
                 "DOCKER_CALLS_FILE": str(self.docker_calls_file),
                 "CURL_CALLS_FILE": str(self.curl_calls_file),
+                "TOKEN_ENV_CALLS_FILE": str(self.token_env_calls_file),
+                "SONGMAKER_AUTODEPLOY_OVERNIGHTWORKS_READ_TOKEN_FILE": str(
+                    self.overnightworks_token_file,
+                ),
                 "GH_CHECK_RUNS_FILE": str(self.check_runs_file),
                 "GH_CHECK_RUNS_DIRECTORY": str(self.check_runs_directory),
                 "GH_CHECK_RUNS_RAW_RESPONSE_FILE": str(self.check_runs_raw_response_file),
@@ -558,6 +593,15 @@ class Checkout:
     @property
     def curl_calls(self) -> str:
         return self.curl_calls_file.read_text() if self.curl_calls_file.exists() else ""
+
+    @property
+    def token_env_calls(self) -> str:
+        """`<binary args>=<token-or-<unset>>` for every stubbed-process call.
+
+        Proves which processes the real overnightworks read token (#1349)
+        reached, and — just as importantly — which ones never saw it.
+        """
+        return self.token_env_calls_file.read_text() if self.token_env_calls_file.exists() else ""
 
     def alert_lines(self) -> list[str]:
         return [line for line in self.journal.splitlines() if "ALERT:" in line]
@@ -710,6 +754,71 @@ def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_pa
         "builder prune --all --force --filter until=48h",
     ]
     assert "pruned unreferenced Docker images and build cache older than 48h" in checkout.journal
+
+
+def test_a_successful_build_exports_the_overnightworks_token_only_to_the_build_call(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert f"compose build={DEFAULT_OVERNIGHTWORKS_TOKEN}" in checkout.token_env_calls
+    assert "compose up=<unset>" in checkout.token_env_calls
+
+
+@pytest.mark.parametrize(
+    ("token_content", "expected_journal_substring"),
+    [
+        pytest.param(
+            None,
+            "cannot read overnightworks read token file",
+            id="missing-token-file",
+        ),
+        pytest.param(
+            "",
+            "is empty (#1349)",
+            id="empty-token-file",
+        ),
+    ],
+)
+def test_a_bad_overnightworks_token_file_fails_the_tick_before_compose_build(
+    tmp_path: Path, token_content: str | None, expected_journal_substring: str,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    checkout.set_overnightworks_token(token_content)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert expected_journal_substring in checkout.journal
+    assert checkout.failure_count_file.read_text() == "1"
+    assert "compose build" not in checkout.docker_calls
+
+
+def test_a_failed_build_s_children_do_not_see_the_overnightworks_token(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    checkout.set_compose_build_exit_code(1)
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert "docker compose build failed" in checkout.journal
+    assert checkout.failure_count_file.read_text() == "1"
+    assert "logger=<unset>" in checkout.token_env_calls
+    assert "compose up" not in checkout.docker_calls
 
 
 def test_a_missing_base_image_is_built_before_compose(tmp_path: Path) -> None:
