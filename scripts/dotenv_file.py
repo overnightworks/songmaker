@@ -6,7 +6,8 @@ interpolation), and — for UNQUOTED values only — a trailing ``#`` comment th
 must be preceded by whitespace. ``/srv/creds#blue`` is therefore a value, not a
 truncation.
 
-This reads a deliberate SUBSET of that: no escapes, no interpolation. Anything
+This reads a deliberate SUBSET of that: no escapes, no interpolation (a ``$``
+in a single-quoted value is literal, as in Compose, and kept). Anything
 outside the subset is refused by key name rather than guessed at, because
 guessing differently from Compose is precisely how a script acts on a value the
 stack never sees. Refusals name the file and the key, never the value: some of
@@ -40,15 +41,21 @@ def effective_assignment(text: str, key: str, source: Path) -> Assignment | None
     ``line_index`` counts lines as ``text.splitlines(keepends=True)`` does, so a
     caller can replace exactly that line and leave every other byte alone.
     """
-    effective = None
+    last = None
     for index, line in enumerate(text.splitlines(keepends=True)):
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
         assigned_key, separator, raw = _split_assignment(stripped)
         if separator and assigned_key == key:
-            effective = Assignment(index, _dotenv_value(raw, key, source))
-    return effective
+            # Compose refuses a whole file with an unclosed quote, so even a
+            # shadowed one is refused; anything else only matters if it wins.
+            _closing_quote(raw.strip(), key, source)
+            last = (index, raw)
+    if last is None:
+        return None
+    index, raw = last
+    return Assignment(index, _dotenv_value(raw, key, source))
 
 
 def _split_assignment(line: str) -> tuple[str, str, str]:
@@ -65,39 +72,48 @@ def _split_assignment(line: str) -> tuple[str, str, str]:
     return key.strip(), separator, raw
 
 
+def _closing_quote(raw: str, key: str, source: Path) -> int | None:
+    """Where an opening quote closes, ``None`` for an unquoted value."""
+    if not raw.startswith(('"', "'")):
+        return None
+    closing = raw.find(raw[0], 1)
+    if closing == -1:
+        raise DotenvError(f"{source}: {key} has an unclosed quote")
+    return closing
+
+
 def _dotenv_value(raw: str, key: str, source: Path) -> str:
     """One assignment's value: quotes honoured, comments only where Compose has them."""
     raw = raw.strip()
-    for quote in ('"', "'"):
-        if raw.startswith(quote):
-            closing = raw.find(quote, 1)
-            if closing == -1:
-                raise DotenvError(f"{source}: {key} has an unclosed quote")
-            inner = raw[1:closing]
-            if quote == '"' and "\\" in inner:
-                raise DotenvError(
-                    f"{source}: {key} uses a backslash escape. This reader does "
-                    f"not process escapes, and guessing differently from Compose "
-                    f"would act on a value the stack never sees — write it "
-                    f"without escapes",
-                )
-            if "$" in inner:
-                raise DotenvError(
-                    f"{source}: {key} uses interpolation. This reader does not "
-                    f"interpolate — write the value out in full",
-                )
-            trailing = raw[closing + 1:].strip()
-            if trailing and not trailing.startswith("#"):
-                raise DotenvError(f"{source}: {key} has text after its closing quote")
+    closing = _closing_quote(raw, key, source)
+    if closing is not None:
+        trailing = raw[closing + 1:].strip()
+        if trailing and not trailing.startswith("#"):
+            raise DotenvError(f"{source}: {key} has text after its closing quote")
+        inner = raw[1:closing]
+        if raw.startswith("'"):
             return inner
+        if "\\" in inner:
+            raise DotenvError(
+                f"{source}: {key} uses a backslash escape. This reader does "
+                f"not process escapes, and guessing differently from Compose "
+                f"would act on a value the stack never sees — write it "
+                f"without escapes",
+            )
+        return _uninterpolated(inner, key, source)
     # Unquoted: a '#' only starts a comment when whitespace precedes it, which
     # is what keeps '/srv/creds#blue' a value.
     comment = re.search(r"\s#", raw)
     if comment:
         raw = raw[: comment.start()]
-    if "$" in raw:
+    return _uninterpolated(raw.strip(), key, source)
+
+
+def _uninterpolated(value: str, key: str, source: Path) -> str:
+    """Refuse ``$``, which Compose interpolates in unquoted and double-quoted values."""
+    if "$" in value:
         raise DotenvError(
             f"{source}: {key} uses interpolation. This reader does not "
             f"interpolate — write the value out in full",
         )
-    return raw.strip()
+    return value

@@ -249,10 +249,11 @@ def resolve_mirror_directory(project_root: Path, home: Path) -> Path:
     answer and the directory compose mounts cannot be different ones.
 
     The configuration is deliberately narrow rather than a half-imitation of
-    dotenv: an absolute path or ``~/…``, with no whitespace and no ``%``. The
-    autodeploy installer rejects the same two characters for the same reason —
-    systemd splits directive values on whitespace and expands ``%`` as a
-    specifier, so a path containing either cannot be embedded in a unit at all.
+    dotenv: an absolute path or ``~/…``, with no whitespace, no ``%`` and no
+    ``$``. The autodeploy installer rejects whitespace and ``%`` for the same
+    reason — systemd splits directive values on whitespace, expands ``%`` as a
+    specifier and, in the ExecStart this path is written into, ``$`` as a
+    variable, so a path containing any of them cannot be embedded there at all.
     A value we cannot honour exactly is refused loudly instead of being
     silently mangled.
     """
@@ -281,11 +282,12 @@ def _mirror_dir_from_env_file(env_file: Path) -> str:
 
 
 def _validated_mirror_directory(configured: str, home: Path) -> Path:
-    if any(character.isspace() for character in configured) or "%" in configured:
+    if any(character.isspace() or character in "%$" for character in configured):
         raise MirrorError(
-            f"{MIRROR_DIR_KEY} must not contain whitespace or '%', got "
-            f"{configured!r}: systemd splits unit directives on whitespace and "
-            f"expands '%' as a specifier, so such a path cannot be installed",
+            f"{MIRROR_DIR_KEY} must not contain whitespace, '%' or '$', got "
+            f"{configured!r}: systemd splits unit directives on whitespace, "
+            f"expands '%' as a specifier and '$' as a variable, so such a path "
+            f"cannot be installed",
         )
     if configured.startswith("~/"):
         return home / configured[2:]

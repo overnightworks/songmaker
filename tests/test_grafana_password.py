@@ -33,7 +33,7 @@ from pathlib import Path
 import pytest
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
-COMMAND_FILES = ("grafana-password", "dotenv_file.py")
+COMMAND_FILES = ("grafana-password", "dotenv_file.py", "main_checkout.py")
 
 ADMIN_USER = "grafana-admin"
 INITIAL_GRAFANA_PASSWORD = "admin"
@@ -66,9 +66,12 @@ if [[ "$*" == "compose port grafana 3000" ]]; then
 fi
 cat > "$FAKE_DOCKER_DIR/stdin"
 given="$(cat "$FAKE_DOCKER_DIR/stdin")"
-confirm() { printf '\nAdmin password changed successfully \xe2\x9c\x94\n\n'; }
+confirm() { printf '\nAdmin password changed successfully \xe2\x9c\x94\n\n\n\n'; }
 case "$FAKE_APPLY" in
     applies) printf '%s' "$given" > "$FAKE_DOCKER_DIR/grafana-password"; confirm ;;
+    confirms-something-else)
+        printf '%s' "$given" > "$FAKE_DOCKER_DIR/grafana-password"
+        printf 'Admin password changed successfully \xe2\x9c\x94 for another user\n' ;;
     exits-zero-unconfirmed) echo "Error: failed to update user: $given" ;;
     confirms-without-applying) confirm ;;
     fails) echo "Error: could not reset password: $given" >&2; exit 1 ;;
@@ -82,6 +85,7 @@ class Apply(Enum):
     APPLIES = "applies"
     EXITS_ZERO_UNCONFIRMED = "exits-zero-unconfirmed"
     CONFIRMS_WITHOUT_APPLYING = "confirms-without-applying"
+    CONFIRMS_SOMETHING_ELSE = "confirms-something-else"
     FAILS = "fails"
 
 
@@ -270,14 +274,27 @@ def test_a_missing_or_publicly_known_password_is_replaced_proven_and_kept_unseen
 
 
 @pytest.mark.parametrize(
-    "grafana_line",
+    ("grafana_line", "kept"),
     [
-        pytest.param(f"GRAFANA_PASSWORD={STRONG_VALUE}\n", id="unquoted"),
-        pytest.param(f"GRAFANA_PASSWORD='{STRONG_VALUE}'  # rotated\n", id="single-quoted"),
+        pytest.param(f"GRAFANA_PASSWORD={STRONG_VALUE}\n", STRONG_VALUE, id="unquoted"),
+        pytest.param(
+            f"GRAFANA_PASSWORD='{STRONG_VALUE}'  # rotated\n", STRONG_VALUE, id="single-quoted",
+        ),
+        # Compose keeps a single-quoted value literally, '$' included.
+        pytest.param(
+            f"GRAFANA_PASSWORD='{STRONG_VALUE}$x'\n", f"{STRONG_VALUE}$x",
+            id="single-quoted-dollar",
+        ),
+        # Compose reads only the last assignment, so what it shadows may lie
+        # outside the subset this command reads.
+        pytest.param(
+            f'GRAFANA_PASSWORD="Zq9$x"\nGRAFANA_PASSWORD={STRONG_VALUE}\n', STRONG_VALUE,
+            id="shadowed-interpolation",
+        ),
     ],
 )
 def test_a_strong_password_is_kept_applied_and_proven_unseen(
-    sandbox: Sandbox, grafana_line: str,
+    sandbox: Sandbox, grafana_line: str, kept: str,
 ) -> None:
     original = sandbox.write_env(grafana_line)
 
@@ -285,9 +302,9 @@ def test_a_strong_password_is_kept_applied_and_proven_unseen(
 
     assert (run.returncode, run.stdout, run.stderr) == (0, "already set\n", "")
     assert sandbox.env_text() == original
-    assert run.docker_stdin == STRONG_VALUE + "\n"
+    assert run.docker_stdin == kept + "\n"
     assert run.accepted_logins == 1
-    assert not run.reveals(STRONG_VALUE)
+    assert not run.reveals(kept)
 
 
 def test_a_second_run_keeps_the_value_the_first_run_set_and_grafana_still_accepts_it(
@@ -316,6 +333,9 @@ def test_a_second_run_keeps_the_value_the_first_run_set_and_grafana_still_accept
         ),
         pytest.param(
             Apply.CONFIRMS_WITHOUT_APPLYING, "API rejected", id="confirmed-but-not-applied",
+        ),
+        pytest.param(
+            Apply.CONFIRMS_SOMETHING_ELSE, "did not confirm", id="confirmation-with-a-suffix",
         ),
     ],
 )
@@ -377,6 +397,11 @@ def test_a_linked_worktree_is_refused_and_its_env_left_untouched(
     [
         pytest.param('GRAFANA_PASSWORD="Zq9$x"\n', id="interpolation"),
         pytest.param("GRAFANA_PASSWORD='Zq9-x\n", id="unclosed-quote"),
+        # Compose refuses the whole file over an unclosed quote, shadowed or not.
+        pytest.param(
+            f"GRAFANA_PASSWORD='Zq9-x\nGRAFANA_PASSWORD={STRONG_VALUE}\n",
+            id="shadowed-unclosed-quote",
+        ),
     ],
 )
 def test_a_value_compose_would_read_differently_is_refused_untouched(

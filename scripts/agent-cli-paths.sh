@@ -6,13 +6,16 @@
 #
 #   resolve_mirror_dir      where the agent-CLI login mirror lives. Delegates
 #                           to scripts/mirror_agent_cli_credentials.py, which
-#                           owns the grammar — the environment, then .env,
-#                           exactly as compose reads them. Shelling out keeps
-#                           one parser rather than a bash imitation of dotenv
-#                           that disagrees about quotes and comments.
+#                           decides it — the environment, then .env as read by
+#                           scripts/dotenv_file.py, the one reader of the
+#                           grammar compose uses. Shelling out keeps one parser
+#                           rather than a bash imitation of dotenv that
+#                           disagrees about quotes and comments.
 #
 #   require_main_checkout   permanent units may only be installed from the
-#                           checkout that is not disposable.
+#                           checkout that is not disposable. Delegates to
+#                           scripts/main_checkout.py, which answers that for
+#                           every caller; only the refusal is worded here.
 #   refuse_silent_takeover  and may not silently replace a unit that runs
 #                           something else.
 #
@@ -33,21 +36,13 @@ resolve_mirror_dir() {
         --print-mirror-dir --project-root "$project_root" --home "$install_home"
 }
 
-# A linked worktree's admin directory lives inside the main checkout's .git,
-# so the common dir names the one checkout that is not disposable. Installing
-# from a throwaway worktree would point ExecStart there forever; the day the
-# worktree is removed, the unit stops — and for the mirror unit that takes the
-# co-writer with it.
+# Installing from a throwaway worktree would point ExecStart there forever; the
+# day the worktree is removed, the unit stops — and for the mirror unit that
+# takes the co-writer with it.
 require_main_checkout() {
-    local project_root="$1" installer="$2" git_common_dir main_checkout
-    git_common_dir="$(git -C "$project_root" rev-parse --path-format=absolute \
-        --git-common-dir 2>/dev/null || true)"
-    if [[ -z "$git_common_dir" ]]; then
-        echo "ERROR: $project_root is not a git checkout." >&2
-        return 1
-    fi
-    main_checkout="$(dirname "$git_common_dir")"
-    if [[ "$main_checkout" != "$project_root" ]]; then
+    local project_root="$1" installer="$2" main_checkout
+    main_checkout="$("$project_root/scripts/main_checkout.py" "$project_root")" || return 1
+    if [[ -n "$main_checkout" ]]; then
         echo "ERROR: refusing to install permanent units from a linked worktree." >&2
         echo "  this checkout: $project_root" >&2
         echo "  main checkout: $main_checkout" >&2
