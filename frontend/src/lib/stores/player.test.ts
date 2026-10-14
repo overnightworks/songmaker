@@ -4711,25 +4711,65 @@ describe('restoring the last playback after a reload', () => {
 		expect(audioPlayer.current?.generation.id).toBe(savedTake.id);
 	});
 
-	it.each([
-		{ presses: 1, reads: 'restoring', playsOnArrival: true },
-		{ presses: 2, reads: 'idle', playsOnArrival: false }
-	])(
-		'Play pressed $presses time(s) before the saved take arrives reads $reads, and it plays on arrival: $playsOnArrival (#1330)',
-		async ({ presses, reads, playsOnArrival }) => {
+	// A reload whose library take is still on its way: its song is back, the
+	// queue around it is not, until the test answers.
+	async function restoreWaitingOnTheLibraryQueue(): Promise<{
+		restoring: Promise<void>;
+		arrive: () => void;
+	}> {
+		saveRecord({ source: QUEUES.library.source });
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+		let arrive: () => void = () => {};
+		vi.mocked(fetchLibraryPoolQueue).mockReturnValueOnce(
+			new Promise((resolve) => {
+				arrive = () =>
+					resolve(
+						makePoolQueue({
+							takes: [poolTakeOf(savedSong, savedTake), poolTakeOf(nextSong, nextTake)]
+						})
+					);
+			})
+		);
+		const restoring = restoreLastPlayback();
+		await vi.waitFor(() => expect(fetchLibraryPoolQueue).toHaveBeenCalled());
+		return { restoring, arrive };
+	}
+
+	// The last request a restore of each queue waits on before its take is back.
+	const SAVED_TAKE_ON_ITS_WAY = {
+		album: async () => {
 			const { restoring, answer } = restoreWaitingOnTheSavedSong();
+			return { restoring, arrive: () => answer(Promise.resolve(savedSong)) };
+		},
+		library: restoreWaitingOnTheLibraryQueue
+	};
+
+	it.each([
+		{ queue: 'album', presses: 1, reads: 'restoring', playsOnArrival: true, poolRequests: 0 },
+		{ queue: 'album', presses: 2, reads: 'idle', playsOnArrival: false, poolRequests: 0 },
+		{ queue: 'library', presses: 1, reads: 'restoring', playsOnArrival: true, poolRequests: 1 },
+		{ queue: 'library', presses: 2, reads: 'idle', playsOnArrival: false, poolRequests: 1 }
+	] as const)(
+		'Play pressed $presses time(s) before the saved $queue take arrives reads $reads, and it plays from the saved position on arrival: $playsOnArrival (#1330)',
+		async ({ queue, presses, reads, playsOnArrival, poolRequests }) => {
+			const { restoring, arrive } = await SAVED_TAKE_ON_ITS_WAY[queue]();
 			for (let press = 0; press < presses; press++) await playIdleStart();
 			const beforeItArrives = get(playStartNotice);
 
-			answer(Promise.resolve(savedSong));
+			arrive();
 			await restoring;
 
-			expect({ beforeItArrives, load: restoredLoad(), after: get(playStartNotice) }).toEqual({
+			expect({
+				beforeItArrives,
+				load: restoredLoad(),
+				after: get(playStartNotice),
+				poolRequests: vi.mocked(fetchLibraryPoolQueue).mock.calls.length
+			}).toEqual({
 				beforeItArrives: reads,
 				load: expect.objectContaining({ autoplay: playsOnArrival, startAt: SAVED_POSITION }),
-				after: 'idle'
+				after: 'idle',
+				poolRequests
 			});
-			expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
 		}
 	);
 

@@ -59,6 +59,17 @@ export function updateMediaSessionPositionState(position: number, duration: numb
 	}
 }
 
+// Without a take to scrub, as while a start waits for its takes, the lock
+// screen shows no position rather than that of a take no longer named there.
+export function clearMediaSessionPositionState(): void {
+	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
+	try {
+		navigator.mediaSession.setPositionState();
+	} catch {
+		// Browser does not support position state.
+	}
+}
+
 function applyMediaSessionHandlers(handlers: MediaHandlers): void {
 	if (typeof navigator === 'undefined' || !('mediaSession' in navigator)) return;
 	const mediaSession = navigator.mediaSession;

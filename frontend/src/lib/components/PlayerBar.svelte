@@ -52,6 +52,7 @@
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
 	import {
+		clearMediaSessionPositionState,
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
 	} from '$lib/services/mediaSession';
@@ -77,6 +78,10 @@
 	// While a start waits, the bar names it in place of any take still loaded,
 	// so the take it shows, and a press acts on, is none (#1330).
 	const shownTake = $derived(waitingSong ? null : current);
+	// A waiting start has no position yet, so the timeline shows none rather
+	// than where the take it replaced was paused.
+	const shownTime = $derived(shownTake ? currentTime : 0);
+	const shownDuration = $derived(shownTake ? duration : 0);
 	const errorMsg = $derived(transportWaitingNotice(barTransport) ?? audioPlayer.error);
 
 	const isPlaying = $derived(transport === 'playing');
@@ -167,7 +172,11 @@
 		updateMediaSessionPlaybackState(
 			transportOffersPause(barTransport) ? 'playing' : current || $pendingStart ? 'paused' : 'none'
 		);
-		updateMediaSessionPositionState(currentTime, duration);
+	});
+
+	$effect(() => {
+		if (shownTake) updateMediaSessionPositionState(currentTime, duration);
+		else clearMediaSessionPositionState();
 	});
 
 	$effect(() => {
@@ -241,8 +250,8 @@
 		transport={barTransport}
 		{errorMsg}
 		takeIsCurrent={shownTake !== null}
-		{currentTime}
-		{duration}
+		currentTime={shownTime}
+		duration={shownDuration}
 		{formatTime}
 		canPrev={Boolean(prevSong)}
 		canNext={Boolean(nextSong)}

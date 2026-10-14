@@ -31,11 +31,11 @@ import {
 	closeNowPlaying,
 	nowPlayingDockable,
 	nowPlayingSurface,
-	pendingStart,
 	playStartNotice,
 	queueContext,
 	selectedAlbumId,
 	selectedSongId,
+	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
 } from '$lib/stores/player';
@@ -156,10 +156,20 @@ function loadTake(songTitle?: string): void {
 	audioPlayer.load(barTake(songTitle), { autoplay: false });
 }
 
-function installLockScreen(): Pick<MediaSession, 'playbackState'> {
-	const lockScreen = {
-		playbackState: 'none' as MediaSessionPlaybackState,
-		setPositionState() {}
+interface FakeLockScreen {
+	playbackState: MediaSessionPlaybackState;
+	// Every position state the lock screen was given; null clears it.
+	positions: (MediaPositionState | null)[];
+	setPositionState: (state?: MediaPositionState) => void;
+}
+
+function installLockScreen(): FakeLockScreen {
+	const lockScreen: FakeLockScreen = {
+		playbackState: 'none',
+		positions: [],
+		setPositionState(state) {
+			this.positions.push(state ?? null);
+		}
 	};
 	Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: lockScreen });
 	onTestFinished(() => {
@@ -175,7 +185,7 @@ const WAITING_SONG = { songTitle: 'Opening Move', artist: 'Artist', albumTitle: 
 function holdAlbumStart(notice: 'awaiting-network' | 'gave-up-on-network' | 'idle'): void {
 	openCollection.set({ kind: 'album', id: 'a1' });
 	albumList.set([albumItem({ share_slug: null, cover: null })]);
-	pendingStart.set({ albumId: 'a1', song: WAITING_SONG });
+	setPendingStartForTests({ albumId: 'a1', song: WAITING_SONG });
 	playStartNotice.set(notice);
 }
 
@@ -223,7 +233,7 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
-	pendingStart.set(null);
+	setPendingStartForTests(null);
 	nowPlayingSurface.set('closed');
 	nowPlayingDockable.set(false);
 	setShuffle(false);
@@ -301,6 +311,32 @@ describe('PlayerBar stream boundaries', () => {
 		}
 	);
 
+	it("a start waiting over a take paused partway shows none of that take's position, on the phone's progress line or the lock screen (#1330)", async () => {
+		const lockScreen = installLockScreen();
+		loadPausedTake();
+		component = mount(PlayerBar, { target });
+		audio.currentTime = 5;
+		audio.fire('loadedmetadata');
+		audio.fire('timeupdate');
+		await tick();
+		const positionShown = () => ({
+			progressLine: target.querySelector<HTMLElement>('.mobile-progress-fill')?.style.width,
+			lockScreen: lockScreen.positions.at(-1)
+		});
+		const overThePausedTake = positionShown();
+
+		holdAlbumStart('awaiting-network');
+		await tick();
+
+		expect({ overThePausedTake, whileTheStartWaits: positionShown() }).toEqual({
+			overThePausedTake: {
+				progressLine: '25%',
+				lockScreen: { duration: 20, playbackRate: 1, position: 5 }
+			},
+			whileTheStartWaits: { progressLine: '0%', lockScreen: null }
+		});
+	});
+
 	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
 		useDesktopLayout();
 		holdAlbumStart('awaiting-network');
@@ -308,7 +344,7 @@ describe('PlayerBar stream boundaries', () => {
 		await tick();
 
 		playStartNotice.set('idle');
-		pendingStart.set(null);
+		setPendingStartForTests(null);
 		await tick();
 
 		expect({

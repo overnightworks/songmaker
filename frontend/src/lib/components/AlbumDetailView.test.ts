@@ -125,6 +125,7 @@ import {
 	pendingStart,
 	playAlbum,
 	playStartNotice,
+	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
 } from '$lib/stores/player';
@@ -182,7 +183,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
 	playStartNotice.set('idle');
-	pendingStart.set(null);
+	setPendingStartForTests(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetConnectivityForTests();
@@ -344,7 +345,7 @@ describe('AlbumDetailView header', () => {
 			'with $loaded loaded, a header start waiting for the network reads Pause with its spinner, and a tap withdraws it',
 			async ({ load }) => {
 				load();
-				pendingStart.set({
+				setPendingStartForTests({
 					albumId: 'a-local',
 					song: { songTitle: 'Song', artist: 'Artist', albumTitle: 'Night Drive' }
 				});

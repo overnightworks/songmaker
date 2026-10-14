@@ -426,7 +426,13 @@ interface PendingStart {
 	albumId: string;
 	song: LockScreenTitle;
 }
-export const pendingStart = writable<PendingStart | null>(null);
+const pendingStartState = writable<PendingStart | null>(null);
+export const pendingStart = readonly(pendingStartState);
+
+// Component tests hold a waiting start as this store would (#1330).
+export function setPendingStartForTests(start: PendingStart | null): void {
+	pendingStartState.set(start);
+}
 let runPendingStartAgain: ((playStart: PlayStart) => Promise<void>) | null = null;
 let pendingStartGiveUp: ReturnType<typeof setTimeout> | undefined;
 
@@ -439,7 +445,7 @@ function noticeStartAwaitingNetwork(
 	start: PendingStart,
 	runAgain: (playStart: PlayStart) => Promise<void>
 ): void {
-	pendingStart.set(start);
+	pendingStartState.set(start);
 	runPendingStartAgain = runAgain;
 	if (audioPlayer.current) audioPlayer.pause();
 	updateMediaSessionMetadata(start.song);
@@ -459,7 +465,7 @@ function stopPendingStartWait(): void {
 function dropPendingStart(): void {
 	stopPendingStartWait();
 	if (get(pendingStart) === null) return;
-	pendingStart.set(null);
+	pendingStartState.set(null);
 	runPendingStartAgain = null;
 	updateMediaSessionMetadata(audioPlayer.current);
 }
@@ -622,9 +628,11 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 interface LibraryTakeStart extends QueueStart {
 	keepPlaying?: boolean;
 	tappedRowSong?: SongItem;
-	// A restore reports nothing it cannot rebuild (#1187 P2), so the listener
-	// who reopens the page is never asked to retry a play they did not start.
-	quiet?: boolean;
+	// A restore starts the queue at the saved position and reports nothing it
+	// cannot rebuild (#1187 P2), so the listener who reopens the page is never
+	// asked to retry a play they did not start. Whether it plays is decided
+	// once its take is back, so a Play pressed meanwhile keeps its intent (#1330).
+	restoredAt?: number;
 }
 
 function reportLibraryTakeStartFailure(
@@ -634,10 +642,7 @@ function reportLibraryTakeStartFailure(
 	toast: string
 ): void {
 	clearLibraryQueueSkipFeedback();
-	if (opts.quiet) {
-		playStartNotice.set('idle');
-		return;
-	}
+	if (opts.restoredAt !== undefined) return;
 	retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 	playStartNotice.set(notice);
 	addToast(toast, 'error');
@@ -652,6 +657,18 @@ function currentTakeAtPosition(): { generation: GenerationItem; position: number
 	};
 }
 
+// Where a library queue whose takes are back starts: a restore answers a
+// Play pressed while they were on their way, and a continuation goes on from
+// where the take that plays now stands.
+function libraryQueueStart(
+	opts: LibraryTakeStart,
+	continuation: { position: number } | null
+): QueueStart {
+	if (opts.restoredAt !== undefined) return restoredStart(opts.restoredAt);
+	playStartNotice.set('idle');
+	return opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts;
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
@@ -661,7 +678,9 @@ async function playLibraryFromGeneration(
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
-	playStartNotice.set('building');
+	// A restore waits as album and playlist restores do, with the transport
+	// free to take a Play for the take it brings back.
+	if (opts.restoredAt === undefined) playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
 	let requested = gen;
@@ -699,18 +718,14 @@ async function playLibraryFromGeneration(
 			reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
 			return;
 		}
-		playStartNotice.set('idle');
+		const start = libraryQueueStart(opts, continuation);
 		if (takes.length === 1 && opts.tappedRowSong) {
 			await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
 			return;
 		}
 		libraryQueueSkipped.set(queue.skipped ?? []);
 		libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-		playNativeLibraryTakes(
-			takes,
-			startIndex,
-			opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts
-		);
+		playNativeLibraryTakes(takes, startIndex, start);
 		return;
 	}
 }
@@ -2104,7 +2119,7 @@ async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	if (source.type === 'album') {
 		restoreAlbumTake(found.song, found.take, restoredStart(at));
 	} else if (source.type === 'library') {
-		await restoreLibraryTake(source, found.take, restoredStart(at));
+		await restoreLibraryTake(source, found.take, at);
 	} else {
 		await restorePlaylistQueue(source.playlistId, found.take, at);
 	}
@@ -2146,11 +2161,11 @@ function playWhatWasAskedForIfNothingWasRestored(): void {
 async function restoreLibraryTake(
 	source: Extract<ResumeQueueSource, { type: 'library' }>,
 	take: GenerationItem,
-	start: QueueStart
+	at: number
 ): Promise<void> {
 	setLibraryTakePool(source.pool);
 	setShuffle(source.shuffle);
-	await playLibraryFromGeneration(take, { ...start, quiet: true });
+	await playLibraryFromGeneration(take, { restoredAt: at });
 }
 
 // Gathering an album's takes costs a request per song, so a restored album
