@@ -48,7 +48,6 @@ import errno
 import fcntl
 import json
 import os
-import re
 import stat
 import sys
 import time
@@ -56,6 +55,8 @@ from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
+
+from dotenv_file import DotenvError, effective_assignment
 
 MIRROR_DIR_MODE = 0o700
 MIRROR_FILE_MODE = 0o600
@@ -267,88 +268,16 @@ def resolve_mirror_directory(project_root: Path, home: Path) -> Path:
 
 
 def _mirror_dir_from_env_file(env_file: Path) -> str:
-    """The key's value from ``.env``, read as Compose reads it — or refused.
-
-    Compose's dotenv accepts ``KEY=value`` and ``KEY: value``, an optional
-    ``export`` prefix, single quotes (literal), double quotes (with escapes and
-    interpolation), and — for UNQUOTED values only — a trailing ``#`` comment
-    that must be preceded by whitespace. ``/srv/creds#blue`` is therefore a
-    path, not a truncation.
-
-    This reads a deliberate SUBSET of that: no escapes, no interpolation.
-    Anything outside the subset is refused by name rather than guessed at,
-    because guessing differently from Compose is precisely how a check passes
-    for a directory nobody mounts.
-    """
+    """The key's value from ``.env``, read as Compose reads it — or refused."""
     try:
-        lines = env_file.read_text().splitlines()
+        text = env_file.read_text()
     except OSError:
         return ""
-    value = ""
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-        key, separator, raw = _split_assignment(stripped)
-        if not separator or key != MIRROR_DIR_KEY:
-            continue
-        value = _dotenv_value(raw, env_file)
-    return value
-
-
-def _split_assignment(line: str) -> tuple[str, str, str]:
-    """``KEY=v``, ``KEY: v`` and an optional ``export`` prefix, as Compose does."""
-    if line.startswith("export "):
-        line = line[len("export "):].lstrip()
-    equals, colon = line.find("="), line.find(":")
-    if equals == -1 and colon == -1:
-        return "", "", ""
-    if equals != -1 and (colon == -1 or equals < colon):
-        key, separator, raw = line.partition("=")
-    else:
-        key, separator, raw = line.partition(":")
-    return key.strip(), separator, raw
-
-
-def _dotenv_value(raw: str, env_file: Path) -> str:
-    """One assignment's value: quotes honoured, comments only where Compose has them."""
-    raw = raw.strip()
-    for quote in ('"', "'"):
-        if raw.startswith(quote):
-            closing = raw.find(quote, 1)
-            if closing == -1:
-                raise MirrorError(f"{env_file}: {MIRROR_DIR_KEY} has an unclosed quote")
-            inner = raw[1:closing]
-            if quote == '"' and "\\" in inner:
-                raise MirrorError(
-                    f"{env_file}: {MIRROR_DIR_KEY} uses a backslash escape. This "
-                    f"reader does not process escapes, and guessing differently "
-                    f"from Compose would point the mirror somewhere else — write "
-                    f"the path without escapes",
-                )
-            if "$" in inner:
-                raise MirrorError(
-                    f"{env_file}: {MIRROR_DIR_KEY} uses interpolation. This "
-                    f"reader does not interpolate — write the path out in full",
-                )
-            trailing = raw[closing + 1:].strip()
-            if trailing and not trailing.startswith("#"):
-                raise MirrorError(
-                    f"{env_file}: {MIRROR_DIR_KEY} has trailing text after its "
-                    f"quoted value: {trailing!r}",
-                )
-            return inner
-    # Unquoted: a '#' only starts a comment when whitespace precedes it, which
-    # is what keeps '/srv/creds#blue' a path.
-    comment = re.search(r"\s#", raw)
-    if comment:
-        raw = raw[: comment.start()]
-    if "$" in raw:
-        raise MirrorError(
-            f"{env_file}: {MIRROR_DIR_KEY} uses interpolation. This reader does "
-            f"not interpolate — write the path out in full",
-        )
-    return raw.strip()
+    try:
+        assignment = effective_assignment(text, MIRROR_DIR_KEY, env_file)
+    except DotenvError as exc:
+        raise MirrorError(str(exc)) from exc
+    return assignment.value if assignment else ""
 
 
 def _validated_mirror_directory(configured: str, home: Path) -> Path:

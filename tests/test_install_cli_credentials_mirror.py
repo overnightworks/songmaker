@@ -23,6 +23,7 @@ INSTALLER = REPO_ROOT / "scripts" / "install-cli-credentials-mirror.sh"
 COPIED_SCRIPTS = (
     "install-cli-credentials-mirror.sh",
     "mirror_agent_cli_credentials.py",
+    "dotenv_file.py",
     "check_agent_cli_mounts.sh",
     "agent-cli-paths.sh",
     "alert.sh",
