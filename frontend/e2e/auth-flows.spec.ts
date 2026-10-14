@@ -8,7 +8,8 @@
 // since #1340 a drawer tap after the loss returns there to the tapped album.
 // Since #1322 an admin with two sessions finds its own marked as this device,
 // and the admin page keeps a create refusal in the form while a revoke refusal
-// stays.
+// stays. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
+// page, and one the server never received leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
@@ -40,6 +41,7 @@ import {
 	type APIRequestContext,
 	type BrowserContext,
 	type Cookie,
+	type Locator,
 	type Page,
 	type Response,
 	type TestInfo
@@ -54,7 +56,10 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
-	SESSION_LOST_REDIRECT_PARAM
+	SESSION_LOST_REDIRECT_PARAM,
+	SIGN_OUT_FAILED_MESSAGE,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	DESKTOP_VIEWPORT,
@@ -64,7 +69,9 @@ import {
 	MOBILE_VIEWPORT,
 	openRailNav,
 	containing,
+	loseNetwork,
 	nameStartingWith,
+	regainNetwork,
 	shellOf,
 	workspace,
 	type Shell
@@ -75,7 +82,8 @@ import {
 	ageSessionPastAbsoluteLimit,
 	createAccount,
 	deleteAccount,
-	seedOwnSongAddress
+	seedOwnSongAddress,
+	seedOwnTakeAddress
 } from './seed';
 
 /**
@@ -123,6 +131,9 @@ const ALBUM_OPENING_PATHS = ['/api/songs', '/api/albums/', '/api/settings/models
 // The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
 // sentences under proof. Only that flow forgives them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
+// The sign-out whose request never reaches the server: only that flow forgives
+// the requests the lost network fails.
+const LOSES_NETWORK_TAG = '@loses-network';
 const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
@@ -132,6 +143,9 @@ const VOICES_PAGE_PATH = '/settings/voices';
 const VOICES_HEADING = 'My Voices';
 const SESSION_COOKIE = 'session_id';
 const APP_HISTORY_STEPS_KEY = 'e2e:app-history-steps';
+// Set on the signed-in document only: a page that still carries it was not
+// loaded afresh.
+const SIGNED_IN_DOCUMENT_MARK = 'e2eSignedInDocument';
 
 // The song the deep-link flows ask for: the account's own, so the sign-in
 // that follows may open it.
@@ -221,7 +235,10 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page, isMobile }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
-	guard = new FlowGuard(page, { refusalsExpectedOn: refusalsExpectedIn(testInfo) });
+	guard = new FlowGuard(page, {
+		refusalsExpectedOn: refusalsExpectedIn(testInfo),
+		losesNetworkOnPurpose: testInfo.tags.includes(LOSES_NETWORK_TAG)
+	});
 });
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
@@ -277,6 +294,32 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 	await rail.getByRole('button', { name: LOGOUT_LABEL }).click();
 }
 
+/** Plays the open song's one take and waits until it sounds. */
+async function playTheTake(page: Page, shell: Shell): Promise<void> {
+	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	await workspace(page)
+		.locator('.take-row')
+		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) })
+		.click();
+	await expect(
+		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+	).toHaveAttribute('aria-busy', 'false');
+}
+
+function transportControls(page: Page): Locator {
+	return page.getByRole('button', {
+		name: nameStartingWith(TRANSPORT_PLAY_LABEL, TRANSPORT_PAUSE_LABEL)
+	});
+}
+
+async function markSignedInDocument(page: Page): Promise<void> {
+	await page.evaluate((mark) => Object.assign(window, { [mark]: true }), SIGNED_IN_DOCUMENT_MARK);
+}
+
+async function isSignedInDocument(page: Page): Promise<boolean> {
+	return page.evaluate((mark) => mark in window, SIGNED_IN_DOCUMENT_MARK);
+}
+
 async function sessionCookie(context: BrowserContext): Promise<Cookie | undefined> {
 	const cookies = await context.cookies();
 	return cookies.find((cookie) => cookie.name === SESSION_COOKIE);
@@ -329,10 +372,10 @@ async function expectAccountLocked(refusal: Response): Promise<void> {
 }
 
 /** The account's own song, seeded through a session of its own outside the browser. */
-async function seedOwnSong(): Promise<string> {
+async function seedOwnSong(seedAddress = seedOwnSongAddress): Promise<string> {
 	const api = await request.newContext({ baseURL: BASE_URL });
 	try {
-		return await seedOwnSongAddress(api, account, DEEP_LINK_SONG_TITLE);
+		return await seedAddress(api, account, DEEP_LINK_SONG_TITLE);
 	} finally {
 		await api.dispose();
 	}
@@ -619,6 +662,63 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 	expect(await appHistorySteps(page)).toEqual([]);
 	await attachShot(page, testInfo, 'auth-signed-out-back');
 });
+
+// The phone signs out from its account menu, the wide window from its rail.
+test('signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again', async ({
+	page,
+	isMobile
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+	const songAddress = await seedOwnSong(seedOwnTakeAddress);
+	await signInOnto(page, songAddress);
+	await playTheTake(page, shell);
+	await markSignedInDocument(page);
+
+	await signOut(page, shell);
+
+	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	expect(await isSignedInDocument(page)).toBe(false);
+	await expect(transportControls(page)).toHaveCount(0);
+
+	await page.goBack();
+
+	await expect(page).toHaveURL(
+		(url) =>
+			url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === songAddress
+	);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	await expect(transportControls(page)).toHaveCount(0);
+	await attachShot(page, testInfo, 'auth-signed-out-while-playing');
+});
+
+test(
+	'a sign-out the server never receives leaves the person signed in, and says so',
+	{ tag: LOSES_NETWORK_TAG },
+	async ({ page, context, isMobile }, testInfo) => {
+		const shell = shellOf(testInfo);
+		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+		await signIn(page);
+		const signedIn = await sessionCookie(context);
+
+		await loseNetwork(page, context);
+		await signOut(page, shell);
+
+		await expect(
+			page.getByRole('alert').filter({ hasText: SIGN_OUT_FAILED_MESSAGE })
+		).toBeVisible();
+		await expect(page).toHaveURL(WALL_URL);
+		await attachShot(page, testInfo, 'auth-sign-out-offline');
+		await regainNetwork(page, context);
+		expect((await sessionCookie(context))?.value).toBe(signedIn?.value);
+
+		await page.reload();
+
+		await expect(workspace(page)).toBeVisible();
+		await expectSignedInAs(page, testInfo);
+	}
+);
 
 test('the admin page is refused for a non-admin, with nothing of it rendered', async ({
 	page
