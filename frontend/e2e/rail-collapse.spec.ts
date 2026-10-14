@@ -74,3 +74,8 @@ test('the desktop rail remembers its 52-px icon column while the 375 px drawer s
 	await expect(rail).toHaveCSS('width', '330px');
 	await expect(rail.getByRole('slider', { name: 'Resize rail' })).toBeVisible();
 });
+
+test('TEMPORARY #1362 proof: fails on its first attempt only', async ({ page }, testInfo) => {
+	await page.goto('/');
+	expect(testInfo.retry, 'the first attempt fails on purpose').toBeGreaterThan(0);
+});
