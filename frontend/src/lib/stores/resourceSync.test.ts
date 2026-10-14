@@ -31,7 +31,11 @@ vi.mock('$app/navigation', async () =>
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import { currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
-import { standInForDocumentLoadsForTests } from '$lib/history/historyController';
+import {
+	reloadAfresh,
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
 	EVENT_SOURCE_CLOSED,
@@ -269,6 +273,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetResourceSyncForTests();
+	resetHistoryControllerForTests();
 	selectedSongId.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
@@ -1892,6 +1897,44 @@ describe('resource sync owner', () => {
 
 		expect(get(store)).toMatchObject({ status: 'error', error });
 	});
+
+	// Issue #1340: the server holds no session for a page leaving for a fresh
+	// document, so a stream it opened would only come back refused.
+	it.each([
+		{
+			when: 'starting the sync',
+			beforeTheLeave: async () => undefined,
+			afterTheLeave: async (controller: ResourceSyncController) => controller.start()
+		},
+		{
+			when: 'losing its live stream',
+			beforeTheLeave: async (controller: ResourceSyncController, sources: MockEventSource[]) => {
+				controller.start();
+				latestSource(sources).emit('hello', { high_water_mark: '0' });
+				await flush();
+				await controller.waitForReady();
+			},
+			afterTheLeave: async (_controller: ResourceSyncController, sources: MockEventSource[]) => {
+				latestSource(sources).error();
+				await flush();
+			}
+		}
+	])(
+		'opens no stream when $when after the page began leaving for a fresh document',
+		async ({ beforeTheLeave, afterTheLeave }) => {
+			vi.useFakeTimers();
+			standInForDocumentLoadsForTests({ assign: vi.fn(), replace: vi.fn(), reload: vi.fn() });
+			const { controller, sources } = setup();
+			await beforeTheLeave(controller, sources);
+			const streamsBeforeTheLeave = sources.length;
+
+			await reloadAfresh();
+			await afterTheLeave(controller, sources);
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+
+			expect(sources).toHaveLength(streamsBeforeTheLeave);
+		}
+	);
 });
 
 describe('library resource sync wiring', () => {
