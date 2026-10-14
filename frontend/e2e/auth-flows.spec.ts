@@ -99,15 +99,18 @@ import {
  * on the phone only. The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
- * sign-out the lost network keeps from the server; the take flow is what
- * raised the ceiling from 30 (14.10.2026). One ceiling for the file, the same way
- * `admin-models.spec.ts` carries one for its four. The budget is a ceiling,
- * not a knob: a flow that suddenly needs several more round trips is a
- * regression, so find the extra requests instead of raising this number --
- * see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full
- * reasoning.
+ * sign-out the lost network keeps from the server. One ceiling for the file,
+ * the same way `admin-models.spec.ts` carries one for its four; only the
+ * sign-out while a take plays carries its own, since it opens a song and plays
+ * before the sign-out it is about (14.10.2026). The budget is a ceiling, not a
+ * knob: a flow that suddenly needs several more round trips is a regression,
+ * so find the extra requests instead of raising this number -- see
+ * `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full reasoning.
  */
-const AUTH_FLOW_API_REQUEST_BUDGET = 40;
+const AUTH_FLOW_API_REQUEST_BUDGET = 30;
+// The sign-out while a take plays: 29 at 1440, 32 to 35 at 390.
+const PLAYS_A_TAKE_TAG = '@plays-a-take';
+const TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET = 40;
 
 const AUTH_LOGIN_PATH = '/api/auth/login';
 const AUTH_ME_PATH = '/api/auth/me';
@@ -249,7 +252,7 @@ test.beforeEach(async ({ page, isMobile }, testInfo) => {
 test.afterEach(({}, testInfo) => {
 	console.log(`Auth flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
 	guard.assertClean();
-	guard.assertWithinBudget(AUTH_FLOW_API_REQUEST_BUDGET);
+	guard.assertWithinBudget(apiRequestBudgetOf(testInfo));
 });
 
 /** Types one set of credentials and waits for the server's own answer. */
@@ -443,6 +446,12 @@ function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	return testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG)
 		? [...sessionRefusals, ...ADMIN_REFUSALS]
 		: sessionRefusals;
+}
+
+function apiRequestBudgetOf(testInfo: TestInfo): number {
+	return testInfo.tags.includes(PLAYS_A_TAKE_TAG)
+		? TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET
+		: AUTH_FLOW_API_REQUEST_BUDGET;
 }
 
 /**
@@ -680,40 +689,41 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 // The wide window signs out from its rail beside the song; the phone's song
 // page has no account circle, so the phone walks on to the album through its
 // drawer, the take still playing, and signs out from its account menu there.
-test('signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again', async ({
-	page,
-	isMobile
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
-	const songAddress = await seedOwnSong(seedOwnTakeAddress);
-	await signInOnto(page, songAddress);
-	await playTheTake(page, shell);
-	let leftFrom = songAddress;
-	if (shell === 'mobile') {
-		leftFrom = albumAddressOf(songAddress);
-		await (await albumInRail(page, shell, leftFrom)).click();
-		await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+test(
+	'signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again',
+	{ tag: PLAYS_A_TAKE_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		const shell = shellOf(testInfo);
+		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+		const songAddress = await seedOwnSong(seedOwnTakeAddress);
+		await signInOnto(page, songAddress);
+		await playTheTake(page, shell);
+		let leftFrom = songAddress;
+		if (shell === 'mobile') {
+			leftFrom = albumAddressOf(songAddress);
+			await (await albumInRail(page, shell, leftFrom)).click();
+			await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+		}
+		await markSignedInDocument(page);
+
+		await signOut(page, shell);
+
+		await expect(page).toHaveURL(LOGIN_PAGE_URL);
+		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+		expect(await isSignedInDocument(page)).toBe(false);
+		await expect(transportControls(page)).toHaveCount(0);
+
+		await page.goBack();
+
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
+		);
+		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+		await expect(transportControls(page)).toHaveCount(0);
+		await attachShot(page, testInfo, 'auth-signed-out-while-playing');
 	}
-	await markSignedInDocument(page);
-
-	await signOut(page, shell);
-
-	await expect(page).toHaveURL(LOGIN_PAGE_URL);
-	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
-	expect(await isSignedInDocument(page)).toBe(false);
-	await expect(transportControls(page)).toHaveCount(0);
-
-	await page.goBack();
-
-	await expect(page).toHaveURL(
-		(url) =>
-			url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
-	);
-	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
-	await expect(transportControls(page)).toHaveCount(0);
-	await attachShot(page, testInfo, 'auth-signed-out-while-playing');
-});
+);
 
 test(
 	'a sign-out the server never receives leaves the person signed in, and says so',
