@@ -1,7 +1,0 @@
-claim_id = "c96bb495974b41e2b5b4de1c04c3b8f1"
-agent = "claude-head"
-role = "builder"
-base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
-branch = "claude-head/issue-1361-cowriter-return-flakes"
-scope = ["frontend/e2e/cowriter-return.spec.ts"]
-opened_commit = "65f85abed3818752cfa80b7ef9be414ca89bb54c"
