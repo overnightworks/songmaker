@@ -553,12 +553,19 @@ denies the write on its own and the check would still pass with
 `deny /proc/sys{,/,/**} w` removed. It stands only as a regression guard against
 the mask section disappearing entirely, never as evidence for the write rule.
 
-An operator loads the AppArmor policy for the current host boot with
+An operator installs the AppArmor policy with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
-`docker compose up -d songmaker-web`. The script does not install the profile
-under `/etc/apparmor.d/`, so the operator must load it again after a host reboot.
-Loading changes the host kernel policy, so the script deliberately requires
-root. The profile derives
+`docker compose up -d songmaker-web`. The script checks that the profile
+parses (`apparmor_parser -QK`), copies it to `/etc/apparmor.d/songmaker-web`
+(mode 0644), loads that copy (`apparmor_parser -r`), and confirms it with
+`aa-status`. A profile that does not parse is never copied, so a broken copy
+cannot reach the next boot. `apparmor.service` loads every profile under
+`/etc/apparmor.d/` before `sysinit.target`, and `docker.service` starts after
+it, so both Docker's own `unless-stopped` restarts and `songmaker.service`
+find the profile after a reboot without a manual step. Run the script once
+per change to the profile in the repository; running it twice gives the same
+result. Installing changes the host kernel policy, so the script deliberately
+requires root. The profile derives
 Docker Engine 29.1.3's `docker-default` template (Moby
 `profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
 adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
@@ -589,10 +596,13 @@ embeds `agent_providers` takes those prefixes and derives its own profile from
 them. The profile *name* is a parameter wherever it is used —
 `sudo scripts/apparmor/install.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
-`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`, and one
-test holds those three defaults and the profile file's own declaration to that
-one name. The installer refuses a name that is not a profile file beside it,
-so a typo never reaches `apparmor_parser`.
+`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
+`tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
+defaults and the profile file's own declaration to that one name, and
+`tests/test_apparmor_install.py` drives the installer without an argument and
+requires it to install the profile of that name. The installer refuses a name
+that is not a profile file beside it, so a typo never reaches
+`apparmor_parser`.
 
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
@@ -668,6 +678,36 @@ An operator runs the rollout and proof in this exact order:
 sudo scripts/apparmor/install.sh
 docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
+```
+
+That the profile survives a reboot is proven by unloading it from the kernel
+and letting `apparmor.service` load it again from the installed copy; a
+missing copy fails the second `aa-status` check. A real reboot followed by the
+same checks counts as well:
+
+```sh
+docker compose stop songmaker-web
+sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
+aa-status | grep songmaker-web        # absent
+sudo systemctl reload apparmor.service
+systemctl is-failed apparmor.service  # active
+aa-status | grep songmaker-web        # present
+docker compose up -d songmaker-web && python scripts/prove_codex_image_sandbox.py
+```
+
+The installed copy does not follow later edits to the profile in the
+repository: until the installer runs again, every boot loads the rules it last
+installed.
+
+To remove the profile from the host, stop the service that requires it,
+unload the profile, then delete the installed copy. `apparmor_parser -R` reads
+the profile file to learn which profile to unload, so it runs before the copy
+is gone:
+
+```sh
+docker compose stop songmaker-web
+sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
+sudo rm /etc/apparmor.d/songmaker-web
 ```
 
 The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv

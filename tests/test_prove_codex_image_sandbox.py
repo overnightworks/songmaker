@@ -19,7 +19,6 @@ sys.modules[_SPEC.name] = proof
 _SPEC.loader.exec_module(proof)
 
 _PROFILE_PATH = _REPOSITORY_ROOT / "scripts" / "apparmor" / proof.DEFAULT_WEB_PROFILE
-_INSTALL_SCRIPT = _REPOSITORY_ROOT / "scripts" / "apparmor" / "install.sh"
 AN_EMBEDDING_PROFILE = "another-host-web"
 
 
@@ -255,19 +254,17 @@ def test_prove_rejects_a_non_namespace_docker_default_failure() -> None:
 
 
 def test_the_profile_name_defaults_agree_across_the_deployment() -> None:
-    """Compose, the installer and this proof name the same profile by default.
+    """Compose and this proof name the same profile by default.
 
-    Three interfaces in three languages carry that default, and the file the
-    installer loads carries it twice — as its file name and as the profile it
-    declares. A rename that reaches only some of them either leaves the
-    service unconfined-by-typo or makes the installer load a profile the
-    service never asks for.
+    The profile file carries that name twice — as its file name and as the
+    profile it declares. A rename that reaches only some of them either leaves
+    the service unconfined-by-typo or makes the installer load a profile the
+    service never asks for. That the installer installs this same profile
+    when given no name is driven in tests/test_apparmor_install.py.
     """
     compose = (_REPOSITORY_ROOT / "docker-compose.yml").read_text()
-    installer = _INSTALL_SCRIPT.read_text()
 
     assert f"apparmor=${{SONGMAKER_APPARMOR_PROFILE:-{proof.DEFAULT_WEB_PROFILE}}}" in compose
-    assert f'profile_name="${{1:-{proof.DEFAULT_WEB_PROFILE}}}"' in installer
     assert _PROFILE_PATH.is_file()
     assert f'profile "{proof.DEFAULT_WEB_PROFILE}"' in _PROFILE_PATH.read_text()
 
@@ -293,27 +290,3 @@ def test_the_proof_runs_against_the_named_profile_and_defaults_to_songmakers(
         in capsys.readouterr().out
     )
 
-
-def _run_installer(*arguments: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        ["bash", str(_INSTALL_SCRIPT), *arguments], capture_output=True, text=True
-    )
-
-
-@pytest.mark.parametrize("name", ["no-such-profile", "../songmaker-web"])
-def test_the_installer_refuses_a_name_that_is_not_a_profile_beside_it(name: str) -> None:
-    """The argument names a profile in this directory, never an arbitrary path."""
-    result = _run_installer(name)
-
-    assert result.returncode == 1
-    assert f"{name} is not the name of a profile file" in result.stderr
-
-
-def test_the_installer_accepts_its_default_profile_and_then_requires_root() -> None:
-    if os.geteuid() == 0:
-        pytest.skip("root would load the profile into the host kernel")
-
-    result = _run_installer()
-
-    assert result.returncode == 1
-    assert "Run this script as root" in result.stderr
