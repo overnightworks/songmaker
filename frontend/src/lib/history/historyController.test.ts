@@ -633,26 +633,43 @@ describe('leaving for a fresh document', () => {
 		vi.restoreAllMocks();
 	});
 
+	const origin = window.location.origin;
+
+	// A `#` part reaches the address through a take's provenance link or a
+	// bookmark; a load to an address that differs only in it would scroll to
+	// the anchor and load nothing.
 	it.each([
 		{
 			leave: 'sign-in',
 			over: 'a page entry',
+			standing: '/settings/voices',
 			openLayer: false,
 			go: () => loadAfresh('/login'),
 			load: 'assign',
-			args: ['/login']
+			args: [`${origin}/login`]
 		},
 		{
 			leave: 'sign-in',
 			over: "an open layer's entry",
+			standing: '/settings/voices',
 			openLayer: true,
 			go: () => loadAfresh('/login'),
 			load: 'replace',
-			args: ['/login']
+			args: [`${origin}/login`]
+		},
+		{
+			leave: 'an address that differs from the standing one only in its `#` part',
+			over: 'a page entry',
+			standing: '/album/a1/song-1#take-12',
+			openLayer: false,
+			go: () => loadAfresh('/album/a1/song-1#take-3'),
+			load: 'assign',
+			args: [`${origin}/album/a1/song-1`]
 		},
 		{
 			leave: 'the standing address',
 			over: 'a page entry',
+			standing: '/settings/voices',
 			openLayer: false,
 			go: reloadAfresh,
 			load: 'reload',
@@ -661,15 +678,34 @@ describe('leaving for a fresh document', () => {
 		{
 			leave: 'the standing address',
 			over: "an open layer's entry",
+			standing: '/settings/voices',
 			openLayer: true,
 			go: reloadAfresh,
 			load: 'replace',
-			args: [`${window.location.origin}/settings/voices`]
+			args: [`${origin}/settings/voices`]
+		},
+		{
+			leave: 'the standing address with a `#` part',
+			over: 'a page entry',
+			standing: '/album/a1/song-1#take-12',
+			openLayer: false,
+			go: reloadAfresh,
+			load: 'reload',
+			args: []
+		},
+		{
+			leave: 'the standing address with a `#` part',
+			over: "an open layer's entry",
+			standing: '/album/a1/song-1#take-12',
+			openLayer: true,
+			go: reloadAfresh,
+			load: 'replace',
+			args: [`${origin}/album/a1/song-1`]
 		}
 	] as const)(
 		'loads $leave afresh over $over by $load, and steps back nowhere',
-		async ({ openLayer, go, load, args }) => {
-			pushEntry('/settings/voices', {});
+		async ({ standing, openLayer, go, load, args }) => {
+			pushEntry(standing, {});
 			if (openLayer) holdLayer('account-menu', () => undefined);
 			const backs = vi.spyOn(history, 'back');
 

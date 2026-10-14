@@ -14,7 +14,6 @@ import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	ACCOUNT_MENU_SIGNED_IN_PREFIX,
 	RAIL_SETTINGS_LABEL,
-	SIGN_OUT_FAILED_MESSAGE,
 	THEME_SWITCH_TO_DARK_LABEL,
 	THEME_SWITCH_TO_LIGHT_LABEL
 } from '$lib/constants';
@@ -142,7 +141,7 @@ describe('AccountMenu', () => {
 
 		expect(target.querySelector('[role="dialog"]')).toBe(panel);
 		expect(panel.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
-			SIGN_OUT_FAILED_MESSAGE
+			"Couldn't sign out. Check your connection and try again."
 		);
 	});
 

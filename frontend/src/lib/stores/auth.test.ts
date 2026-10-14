@@ -380,7 +380,7 @@ describe('logout', () => {
 
 		await logout();
 
-		expect(order).toEqual(['server', 'load /login']);
+		expect(order).toEqual(['server', `load ${window.location.origin}/login`]);
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
@@ -415,7 +415,7 @@ describe('logout', () => {
 		refused.mockRestore();
 		stopWatching();
 
-		expect(documentLoads.assign.mock.calls).toEqual([['/login']]);
+		expect(documentLoads.assign.mock.calls).toEqual([[`${window.location.origin}/login`]]);
 		expect(documentLoads.reload).not.toHaveBeenCalled();
 		expect(documentLoads.replace).not.toHaveBeenCalled();
 		expect(noticesShown).not.toContain('unauthorized');

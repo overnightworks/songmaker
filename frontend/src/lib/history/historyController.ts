@@ -468,6 +468,11 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 // navigation: the next Back of the same task aborts that mount as well, and
 // then nothing else is left to mount the address it lands on (#1340, the
 // song's entry written over the album's page, two Backs from Settings).
+// That mount itself aborts the router's Back navigation -- the router takes
+// it as its current navigation at once and reports nothing of it while the
+// Back still counts as loading -- so a landing that remounts mounts its
+// address a second time. That is harmless: both mounts target the one address
+// history stands on, and the second only supersedes the first (#1006).
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
@@ -735,21 +740,34 @@ export function leavesForFreshDocument(): boolean {
 	return leftForFreshDocument;
 }
 
+// Loading an address with a `#` part over an address that differs from it in
+// nothing else only scrolls to that anchor and loads no document: the page
+// would stay, signed in, while it counts as gone (#1340). The standing address
+// can carry one -- a take's provenance link, a bookmark -- so a fresh document
+// is loaded at the address without it.
+function documentAddress(url: string): string {
+	const address = new URL(url, location.href);
+	address.hash = '';
+	return address.href;
+}
+
 export async function loadAfresh(url: string): Promise<void> {
 	if (leftForFreshDocument) return;
 	leftForFreshDocument = true;
 	await historyComesToRest();
-	if (standsOnLayerEntry()) documentLoads.replace(url);
-	else documentLoads.assign(url);
+	const address = documentAddress(url);
+	if (standsOnLayerEntry()) documentLoads.replace(address);
+	else documentLoads.assign(address);
 }
 
 // The address history stands on, loaded afresh. Over a page entry this is a
-// reload: the entry keeps the id the controller stamped into it.
+// reload: the entry keeps the id the controller stamped into it, and a reload
+// loads the document whatever `#` part the address has.
 export async function reloadAfresh(): Promise<void> {
 	if (leftForFreshDocument) return;
 	leftForFreshDocument = true;
 	await historyComesToRest();
-	if (standsOnLayerEntry()) documentLoads.replace(location.href);
+	if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
 	else documentLoads.reload();
 }
 

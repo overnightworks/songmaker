@@ -3,7 +3,6 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
-import { SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
 import { signOutFailed } from '$lib/stores/auth';
 import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
@@ -105,7 +104,9 @@ describe('UserRow', () => {
 		logoutButton(target).click();
 
 		await vi.waitFor(() =>
-			expect(target.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE)
+			expect(target.querySelector('[role="alert"]')?.textContent).toBe(
+				"Couldn't sign out. Check your connection and try again."
+			)
 		);
 	});
 

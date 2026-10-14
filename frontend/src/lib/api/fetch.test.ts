@@ -638,17 +638,29 @@ describe('session lost (401)', () => {
 
 	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		// The session stays to lose throughout, so only the join keeps the
-		// second caller from loading the page a second time. Firing it from
-		// inside the load lands it while the first reaction is still in flight.
-		let second: Promise<void> | undefined;
+		// A navigation under way holds the one load back until it lands. Joined,
+		// the second caller's wait ends with that load; a reaction of its own
+		// would find the leave already counted and end before anything loaded.
+		let loaded = false;
 		documentLoads.reload.mockImplementation(() => {
-			second ??= handleSessionLost();
+			loaded = true;
+		});
+		const releaseRouteLoads = holdRouteLoads();
+		const albumOpened = navigateTo('/album/b2', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
 		});
 
-		await handleSessionLost();
-		await second;
+		const loadedWhenDone = [handleSessionLost(), handleSessionLost()].map((reaction) =>
+			reaction.then(() => loaded)
+		);
+		await vi.dynamicImportSettled();
+		releaseRouteLoads();
+		await albumOpened;
 
+		expect(await Promise.all(loadedWhenDone)).toEqual([true, true]);
 		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });

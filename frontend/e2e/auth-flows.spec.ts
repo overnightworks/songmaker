@@ -57,7 +57,6 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	SESSION_LOST_REDIRECT_PARAM,
-	SIGN_OUT_FAILED_MESSAGE,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
@@ -745,7 +744,9 @@ test(
 		await signOut(page, shell);
 
 		await expect(
-			page.getByRole('alert').filter({ hasText: SIGN_OUT_FAILED_MESSAGE })
+			page
+				.getByRole('alert')
+				.filter({ hasText: "Couldn't sign out. Check your connection and try again." })
 		).toBeVisible();
 		await expect(page).toHaveURL(WALL_URL);
 		await attachShot(page, testInfo, 'auth-sign-out-offline');

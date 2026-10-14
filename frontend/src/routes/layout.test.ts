@@ -969,7 +969,9 @@ describe('signing out on the phone', () => {
 
 		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
-		await vi.waitFor(() => expect(documentLoads.replace).toHaveBeenCalledWith('/login'));
+		await vi.waitFor(() =>
+			expect(documentLoads.replace).toHaveBeenCalledWith(`${window.location.origin}/login`)
+		);
 		expect(replacedLayer).toBe('account-menu');
 		expect(documentLoads.assign).not.toHaveBeenCalled();
 		expect(backs).not.toHaveBeenCalled();
