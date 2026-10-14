@@ -22,7 +22,6 @@ vi.mock('$lib/stores/auth', () => {
 		}
 	};
 	return {
-		clearAuth: vi.fn(() => currentUser.set(null)),
 		currentUser,
 		hasSessionToLose: () => user !== null
 	};
@@ -45,9 +44,8 @@ import {
 import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
-import { clearAuth, currentUser } from '$lib/stores/auth';
-import { goto } from '$app/navigation';
-import { navigateTo } from '$lib/history/historyController';
+import { currentUser } from '$lib/stores/auth';
+import { navigateTo, standInForDocumentLoadsForTests } from '$lib/history/historyController';
 import { holdRouteLoads } from '$lib/test-utils/app-navigation';
 import type { AuthUser } from '$lib/api/types';
 
@@ -532,6 +530,8 @@ describe('apiFetch abort signal', () => {
 });
 
 describe('session lost (401)', () => {
+	const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
 	function unauthorizedResponse() {
 		return {
 			ok: false,
@@ -541,44 +541,34 @@ describe('session lost (401)', () => {
 		};
 	}
 
+	function expectNoDocumentLoad(): void {
+		for (const load of Object.values(documentLoads)) expect(load).not.toHaveBeenCalled();
+	}
+
 	beforeEach(() => {
-		vi.mocked(clearAuth).mockReset();
-		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
-		vi.mocked(goto).mockClear();
+		standInForDocumentLoadsForTests(documentLoads);
+		for (const load of Object.values(documentLoads)) load.mockReset();
 		currentUser.set(null);
 		replaceHistoryEntry('/');
 	});
 
-	it('clears auth and redirects to /login, carrying the current page, when a session existed', async () => {
+	it('loads the page afresh, which asks the server for the session again, when a session existed', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		replaceHistoryEntry('/album/a1/song-1');
 		mockFetch.mockResolvedValueOnce(unauthorizedResponse());
 
 		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
 
-		expect(clearAuth).toHaveBeenCalledOnce();
-		expect(clearAuth).toHaveBeenCalledWith('unauthorized');
-		expect(goto).toHaveBeenCalledOnce();
-		expect(goto).toHaveBeenCalledWith(`/login?redirect=${encodeURIComponent('/album/a1/song-1')}`);
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
+		expect(documentLoads.assign).not.toHaveBeenCalled();
+		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
-	it('is on the sign-in page before auth is cleared', async () => {
+	it('loads afresh the page a navigation started before the session was lost lands on', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		replaceHistoryEntry('/settings/voices');
-		let clearedOn: string | undefined;
-		vi.mocked(clearAuth).mockImplementation(() => {
-			clearedOn = location.pathname;
-			currentUser.set(null);
-		});
-
-		await handleSessionLost();
-
-		expect(clearedOn).toBe('/login');
-	});
-
-	it('returns to the page a navigation started before the session was lost lands on', async () => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		replaceHistoryEntry('/settings/voices');
+		let reloadedOn: string | undefined;
+		documentLoads.reload.mockImplementation(() => (reloadedOn = location.pathname));
 		const releaseRouteLoads = holdRouteLoads();
 		const albumOpened = navigateTo('/album/b2', {
 			replaceState: false,
@@ -589,12 +579,11 @@ describe('session lost (401)', () => {
 
 		const reaction = handleSessionLost();
 		await vi.dynamicImportSettled();
-		expect(location.pathname).toBe('/settings/voices');
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 		releaseRouteLoads();
 		await Promise.all([albumOpened, reaction]);
 
-		expect(goto).toHaveBeenLastCalledWith(signInAddress('/album/b2'));
-		expect(location.pathname).toBe('/login');
+		expect(reloadedOn).toBe('/album/b2');
 	});
 
 	it('reacts the same way through sseFetch as through apiFetch', async () => {
@@ -604,8 +593,7 @@ describe('session lost (401)', () => {
 		const gen = sseFetch('/api/chat/turn', { method: 'POST' });
 		await gen.next().catch((e: unknown) => e);
 
-		expect(clearAuth).toHaveBeenCalledOnce();
-		expect(goto).toHaveBeenCalledOnce();
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 
 	it('still rejects with an ApiError so the caller can show its own message', async () => {
@@ -624,8 +612,7 @@ describe('session lost (401)', () => {
 
 		await apiFetch('/api/songs/s1').catch((e: unknown) => e);
 
-		expect(clearAuth).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
+		expectNoDocumentLoad();
 	});
 
 	it.each([
@@ -640,56 +627,24 @@ describe('session lost (401)', () => {
 			const err = await apiFetch(path, { method: 'POST' }).catch((e: unknown) => e);
 
 			expect(err).toBeInstanceOf(ApiError);
-			expect(clearAuth).not.toHaveBeenCalled();
-			expect(goto).not.toHaveBeenCalled();
+			expectNoDocumentLoad();
 		}
 	);
 
 	it('a second caller that arrives while the reaction is in flight joins it instead of starting a new one', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		// clearAuth stays a no-op here so a removed guard can't look deduped
-		// by accident (second call seeing hadSession false only because
-		// clearAuth already ran). Firing the second call from inside clearAuth
-		// lands it while the first reaction is genuinely still in flight.
-		let retriggered = false;
+		// The session stays to lose throughout, so only the join keeps the
+		// second caller from loading the page a second time. Firing it from
+		// inside the load lands it while the first reaction is still in flight.
 		let second: Promise<void> | undefined;
-		vi.mocked(clearAuth).mockImplementation(() => {
-			if (retriggered) return;
-			retriggered = true;
-			second = handleSessionLost();
+		documentLoads.reload.mockImplementation(() => {
+			second ??= handleSessionLost();
 		});
 
 		await handleSessionLost();
 		await second;
 
-		expect(clearAuth).toHaveBeenCalledOnce();
-		expect(goto).toHaveBeenCalledOnce();
-	});
-});
-
-describe('session-lost redirect target', () => {
-	afterEach(() => {
-		replaceHistoryEntry('/');
-	});
-
-	it.each([
-		[
-			'/album/a1/song-1?tab=lyrics#top',
-			`/login?redirect=${encodeURIComponent('/album/a1/song-1?tab=lyrics')}`
-		],
-		['//attacker.example/x', '/login'],
-		['///attacker.example/x', '/login'],
-		['/%2F%2Fattacker.example/x', '/login']
-	])('returns from %s only to a same-origin path', async (path, expected) => {
-		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
-		vi.mocked(clearAuth).mockImplementation(() => currentUser.set(null));
-		vi.mocked(goto).mockClear();
-		replaceHistoryEntry(`${window.location.origin}${path}`);
-
-		await handleSessionLost();
-
-		expect(get(currentUser)).toBeNull();
-		expect(goto).toHaveBeenCalledWith(expected);
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });
 
@@ -703,7 +658,9 @@ describe('sign-in address', () => {
 		['/', '/login'],
 		['/login', '/login'],
 		['/login?redirect=%2Fx', '/login'],
-		['//attacker.example/x', '/login']
+		['//attacker.example/x', '/login'],
+		['///attacker.example/x', '/login'],
+		['/%2F%2Fattacker.example/x', '/login']
 	])('asks to return from %s as %s', (returnTo, expected) => {
 		expect(signInAddress(returnTo)).toBe(expected);
 	});

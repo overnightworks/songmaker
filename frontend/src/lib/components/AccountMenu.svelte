@@ -5,10 +5,12 @@
 		ACCOUNT_MENU_LOGOUT_LABEL,
 		ACCOUNT_MENU_SIGNED_IN_PREFIX,
 		RAIL_SETTINGS_LABEL,
+		SIGN_OUT_FAILED_MESSAGE,
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { page } from '$app/state';
+	import { signOutFailed } from '$lib/stores/auth';
 	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
@@ -53,6 +55,9 @@
 		<button class="menu-item logout" onclick={onlogout}>
 			<Icon name="log-out" class="menu-item-icon" />{ACCOUNT_MENU_LOGOUT_LABEL}
 		</button>
+		{#if $signOutFailed}
+			<p class="sign-out-failed" role="alert">{SIGN_OUT_FAILED_MESSAGE}</p>
+		{/if}
 	</MenuPopover>
 </div>
 
@@ -135,6 +140,13 @@
 	}
 
 	.menu-item.logout :global(.menu-item-icon) {
+		color: var(--score-bad);
+	}
+
+	.sign-out-failed {
+		margin: 0;
+		padding: 0.3rem 0.6rem 0.4rem;
+		font-size: 0.8rem;
 		color: var(--score-bad);
 	}
 </style>

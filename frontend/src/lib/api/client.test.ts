@@ -4,8 +4,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-const mockClearAuth = vi.fn();
-
 vi.mock('$lib/stores/auth', () => {
 	let user: { id: string } | null = null;
 	const subscribers = new Set<(value: typeof user) => void>();
@@ -21,10 +19,6 @@ vi.mock('$lib/stores/auth', () => {
 		}
 	};
 	return {
-		clearAuth: (...args: unknown[]) => {
-			currentUser.set(null);
-			return mockClearAuth(...args);
-		},
 		currentUser,
 		hasSessionToLose: () => user !== null
 	};
@@ -33,7 +27,7 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 
-import { goto } from '$app/navigation';
+import { standInForDocumentLoadsForTests } from '$lib/history/historyController';
 import { currentUser } from '$lib/stores/auth';
 import type { AuthUser } from './types';
 import {
@@ -92,10 +86,12 @@ function mockError(status: number, detail: string = '') {
 	});
 }
 
+const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
 beforeEach(() => {
 	mockFetch.mockReset();
-	mockClearAuth.mockReset();
-	vi.mocked(goto).mockClear();
+	documentLoads.reload.mockReset();
+	standInForDocumentLoadsForTests(documentLoads);
 	currentUser.set(null);
 });
 
@@ -359,32 +355,28 @@ describe('401 session expiry handler', () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Session expired');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
-		expect(mockClearAuth).toHaveBeenCalledOnce();
-		expect(goto).toHaveBeenCalledOnce();
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 
 	it('does not redirect on 401 from login endpoint', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Invalid credentials');
 		await expect(login('alice', 'wrong')).rejects.toThrow(ApiError);
-		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 	});
 
 	it('does not redirect on 401 from setup endpoint', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(401, 'Bad request');
 		await expect(setupAdmin('admin', 'pass')).rejects.toThrow(ApiError);
-		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 	});
 
 	it('does not redirect on non-401 errors', async () => {
 		currentUser.set({ id: 'u1', username: 'felix', role: 'user' } as AuthUser);
 		mockError(500, 'Internal error');
 		await expect(fetchAlbums()).rejects.toThrow(ApiError);
-		expect(mockClearAuth).not.toHaveBeenCalled();
-		expect(goto).not.toHaveBeenCalled();
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 	});
 });
 

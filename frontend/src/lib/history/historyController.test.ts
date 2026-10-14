@@ -9,16 +9,18 @@ import {
 	installHistoryController,
 	land,
 	landedEntry,
+	loadAfresh,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
-	navigateAway,
 	navigateTo,
 	pageStateOfHistoryState,
 	pushEntry,
+	reloadAfresh,
 	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
+	standInForDocumentLoadsForTests,
 	standingPageEntryId,
 	stepBackOrGoTo,
 	stepBackTo,
@@ -609,6 +611,104 @@ describe('history adapter', () => {
 	});
 });
 
+// Issue #1340, ruling A: a sign-out or a lost session leaves by a fresh
+// document load. Over a layer's entry the load replaces it, so Back finds no
+// copy of the page to step off and nothing steps back meanwhile; over a page
+// entry it keeps the page, so Back loads it afresh.
+describe('leaving for a fresh document', () => {
+	const loads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
+	beforeEach(() => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/settings/voices');
+		resetHistoryControllerForTests();
+		installHistoryController();
+		standInForDocumentLoadsForTests(loads);
+		for (const load of Object.values(loads)) load.mockClear();
+	});
+
+	afterEach(() => {
+		resetHistoryControllerForTests();
+		resetLayersForTests();
+		vi.restoreAllMocks();
+	});
+
+	it.each([
+		{
+			leave: 'sign-in',
+			over: 'a page entry',
+			openLayer: false,
+			go: () => loadAfresh('/login'),
+			load: 'assign',
+			args: ['/login']
+		},
+		{
+			leave: 'sign-in',
+			over: "an open layer's entry",
+			openLayer: true,
+			go: () => loadAfresh('/login'),
+			load: 'replace',
+			args: ['/login']
+		},
+		{
+			leave: 'the standing address',
+			over: 'a page entry',
+			openLayer: false,
+			go: reloadAfresh,
+			load: 'reload',
+			args: []
+		},
+		{
+			leave: 'the standing address',
+			over: "an open layer's entry",
+			openLayer: true,
+			go: reloadAfresh,
+			load: 'replace',
+			args: [`${window.location.origin}/settings/voices`]
+		}
+	] as const)(
+		'loads $leave afresh over $over by $load, and steps back nowhere',
+		async ({ openLayer, go, load, args }) => {
+			pushEntry('/settings/voices', {});
+			if (openLayer) holdLayer('account-menu', () => undefined);
+			const backs = vi.spyOn(history, 'back');
+
+			await go();
+
+			expect(loads[load]).toHaveBeenCalledExactlyOnceWith(...args);
+			const others = Object.entries(loads).filter(([name]) => name !== load);
+			for (const [, other] of others) expect(other).not.toHaveBeenCalled();
+			expect(backs).not.toHaveBeenCalled();
+		}
+	);
+
+	// Playwright runs without the back-forward cache, so this row is the guard's
+	// only proof: Back onto the page a sign-out left would otherwise show it
+	// again with the signed-in state still in memory.
+	it.each([
+		{
+			shown: 'restored from the back-forward cache after leaving',
+			left: true,
+			persisted: true,
+			reloads: 1
+		},
+		{
+			shown: 'restored from the back-forward cache without leaving',
+			left: false,
+			persisted: true,
+			reloads: 0
+		},
+		{ shown: 'loaded anew after leaving', left: true, persisted: false, reloads: 0 }
+	])('a page $shown is loaded afresh $reloads time(s)', async ({ left, persisted, reloads }) => {
+		pushEntry('/settings/voices', {});
+		if (left) await loadAfresh('/login');
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted }));
+
+		expect(loads.reload).toHaveBeenCalledTimes(reloads);
+	});
+});
+
 describe('route convergence after a landing', () => {
 	let stopConverging: () => void;
 
@@ -743,35 +843,29 @@ describe('route convergence after a landing', () => {
 	});
 
 	// Issue #1340: the router reports a navigation only after the mount it
-	// aborts has failed -- the way to sign-in after a lost session, or the
-	// album a tap in the drawer opens -- and not at all while another one loads.
-	it.each([
-		{ issued: 'a navigation away', start: () => navigateAway('/login'), lands: '/login' },
-		{
-			issued: 'a page navigation',
-			start: () =>
-				navigateTo('/album/b', { replaceState: false, noScroll: true, keepFocus: true, state: {} }),
-			lands: '/album/b'
-		}
-	])(
-		'an aborted navigation leaves the mount to $issued issued before the router reports it',
-		async ({ start, lands }) => {
-			const loading = abortableNavigation();
-			mountRouteOfLandedAddress({
-				type: 'popstate',
-				to: navigationTo('/album/a'),
-				complete: loading.complete
-			});
-			const releaseRouteLoads = holdRouteLoads();
-			const navigated = start();
+	// aborts has failed -- the album a tap in the drawer opens -- and not at all
+	// while another one loads.
+	it('an aborted navigation leaves the mount to a page navigation issued before the router reports it', async () => {
+		const loading = abortableNavigation();
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		const releaseRouteLoads = holdRouteLoads();
+		const navigated = navigateTo('/album/b', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
 
-			await loading.abort();
-			releaseRouteLoads();
-			await navigated;
+		await loading.abort();
+		releaseRouteLoads();
+		await navigated;
 
-			expect(location.pathname).toBe(lands);
-		}
-	);
+		expect(location.pathname).toBe('/album/b');
+	});
 
 	it.each(['link', 'goto'] as const)(
 		'a %s navigation to another address is left to the router',

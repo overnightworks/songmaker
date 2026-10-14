@@ -4,7 +4,7 @@
 	import { afterNavigate, beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { checkSetupRequired, fetchCapabilities } from '$lib/api/client';
-	import { SIGN_IN_PATH, signInAddress } from '$lib/api/fetch';
+	import { signInAddress } from '$lib/api/fetch';
 	import PhoneAppBar from '$lib/components/PhoneAppBar.svelte';
 	import Rail from '$lib/components/shell/Rail.svelte';
 	import RailDrawer from '$lib/components/shell/RailDrawer.svelte';
@@ -32,11 +32,9 @@
 	import { closeTopLayer } from '$lib/stores/layers';
 	import { holdLibraryHistoryUntilRouterStarts } from '$lib/stores/libraryContext';
 	import {
-		historyComesToRest,
 		historyStandsStill,
 		installHistoryController,
 		mountRouteOfLandedAddress,
-		navigateAway,
 		stampNavigatedEntry
 	} from '$lib/history/historyController';
 	import {
@@ -177,15 +175,7 @@
 	afterNavigate((navigation) => {
 		stampNavigatedEntry(navigation.type);
 		reportRouterStarted();
-		if (navigation.type !== 'enter' && signedOutOnAppPage()) void initAuth();
 	});
-
-	// Back from sign-in onto the app page a sign-out left is a router
-	// navigation, not a page load: nobody is signed in there, so the page asks
-	// for the session again as a load would, rather than standing empty.
-	function signedOutOnAppPage(): boolean {
-		return !isPublicRoute && get(currentUser) === null && !get(authLoading);
-	}
 	beforeNavigate(mountRouteOfLandedAddress);
 
 	// The live-sync stream and the library's landing handler outlive a route swap
@@ -252,19 +242,6 @@
 		}
 	}
 
-	// The overlay a sign-out is chosen in -- the phone's account menu -- closes
-	// first and steps off its entry, and sign-in is pushed once that step has
-	// landed, the way an app page opened from it is (`openAppPage`): pushed
-	// over the menu's entry instead, sign-in would leave it for Back to land
-	// on and step off again (#1340).
-	async function handleLogout() {
-		closeTopLayer();
-		await logout(async () => {
-			await historyComesToRest();
-			await navigateAway(SIGN_IN_PATH);
-		});
-	}
-
 	function levelUp(): void {
 		const target = escapeLevelUpTarget(
 			$nowPlayingOpen,
@@ -313,7 +290,7 @@
 	</div>
 {:else if me}
 	{#if compact}
-		<PhoneAppBar username={me.username} onlogout={handleLogout} />
+		<PhoneAppBar username={me.username} onlogout={logout} />
 		<RailDrawer>
 			<Rail showCollapseControl={false} showResizeHandle={false} />
 		</RailDrawer>
@@ -328,10 +305,7 @@
 			class:rail-collapsed={$railCollapsed}
 			style:--rail-expanded-width={`${$railWidth}px`}
 		>
-			<Rail
-				account={{ username: me.username, onlogout: handleLogout }}
-				collapsed={$railCollapsed}
-			/>
+			<Rail account={{ username: me.username, onlogout: logout }} collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>

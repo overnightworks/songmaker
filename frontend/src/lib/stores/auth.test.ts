@@ -5,7 +5,6 @@ import { get } from 'svelte/store';
 const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
-const mockStopLibraryResourceSync = vi.fn();
 const mockFetchLibraryContinue = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
@@ -20,10 +19,6 @@ vi.mock('$lib/api/client', async () => {
 
 vi.mock('$lib/api/library', () => ({
 	fetchLibraryContinue: (...args: unknown[]) => mockFetchLibraryContinue(...args)
-}));
-
-vi.mock('$lib/stores/resourceSync', () => ({
-	stopLibraryResourceSync: (...args: unknown[]) => mockStopLibraryResourceSync(...args)
 }));
 
 vi.mock('$app/navigation', async () =>
@@ -43,7 +38,9 @@ import {
 	login,
 	logout,
 	clearAuth,
-	resetAuthForTests
+	hasSessionToLose,
+	resetAuthForTests,
+	signOutFailed
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
 import {
@@ -52,8 +49,10 @@ import {
 } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
 import { NetworkError, apiFetch } from '$lib/api/fetch';
-import { resolve } from '$app/paths';
-import { goto } from '$app/navigation';
+import {
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
@@ -64,12 +63,12 @@ import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
+const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
 	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
-	mockStopLibraryResourceSync.mockReset();
 	mockFetchLibraryContinue.mockReset();
 	resetLibraryOrder();
 	currentUser.set(null);
@@ -77,6 +76,9 @@ beforeEach(() => {
 	authError.set('');
 	authCheckError.set(null);
 	authNotice.set(null);
+	resetHistoryControllerForTests();
+	standInForDocumentLoadsForTests(documentLoads);
+	for (const load of Object.values(documentLoads)) load.mockClear();
 });
 
 afterEach(() => {
@@ -358,43 +360,19 @@ describe('clearAuth', () => {
 	});
 });
 
-async function stayOnThePage(): Promise<void> {}
-
 describe('logout', () => {
-	it('ends the session on the server, then leaves for sign-in, and only then clears auth', async () => {
+	it('ends the session on the server before it loads sign-in afresh', async () => {
 		const order: string[] = [];
 		mockApiLogout.mockImplementation(async () => {
 			order.push('server');
 		});
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		documentLoads.assign.mockImplementation((url: string) => order.push(`load ${url}`));
+		currentUser.set(KNOWN_USER);
 
-		await logout(async () => {
-			order.push(get(currentUser) === null ? 'left signed out' : 'left signed in');
-		});
+		await logout();
 
-		expect(order).toEqual(['server', 'left signed in']);
-		expect(get(currentUser)).toBeNull();
-	});
-
-	it('stops resource sync before the logout request', async () => {
-		const order: string[] = [];
-		mockStopLibraryResourceSync.mockImplementation(() => {
-			order.push('stop');
-		});
-		mockApiLogout.mockImplementation(async () => {
-			order.push('api');
-		});
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		await logout(stayOnThePage);
-		expect(order).toEqual(['stop', 'api']);
-		expect(get(currentUser)).toBeNull();
-	});
-
-	it('clears currentUser', async () => {
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		mockApiLogout.mockResolvedValueOnce(undefined);
-		await logout(stayOnThePage);
-		expect(get(currentUser)).toBeNull();
+		expect(order).toEqual(['server', 'load /login']);
+		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
 	it('forgets the playback diagnostics recorded for the user', async () => {
@@ -402,19 +380,18 @@ describe('logout', () => {
 		const stopRecording = startPlaybackDiagnostics('u1');
 		recordPlaybackEvent({ kind: 'freeze', detail: '', take: null });
 		const recordedBefore = localStorage.getItem(diagnosticsKey);
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		currentUser.set(KNOWN_USER);
 		mockApiLogout.mockResolvedValueOnce(undefined);
 
-		await logout(stayOnThePage);
+		await logout();
 		stopRecording();
 
 		expect(recordedBefore).not.toBeNull();
 		expect(localStorage.getItem(diagnosticsKey)).toBeNull();
 	});
 
-	it('stays a sign-out when a request is refused while it leaves for sign-in', async () => {
+	it('stays a sign-out when a request is refused while it ends the session, or after', async () => {
 		currentUser.set(KNOWN_USER);
-		vi.mocked(goto).mockClear();
 		const noticesShown: Array<string | null> = [];
 		const stopWatching = authNotice.subscribe((notice) => noticesShown.push(notice));
 		const refused = vi
@@ -422,23 +399,60 @@ describe('logout', () => {
 			.mockResolvedValue(
 				new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
 			);
+		mockApiLogout.mockImplementation(() => apiFetch('/api/songs/s1').catch(() => undefined));
 
-		await logout(async () => {
-			await apiFetch('/api/songs/s1').catch(() => undefined);
-			await goto(resolve('/login'));
-		});
+		await logout();
+		await apiFetch('/api/songs/s2').catch(() => undefined);
 		refused.mockRestore();
 		stopWatching();
 
-		expect(vi.mocked(goto).mock.calls).toEqual([['/login']]);
+		expect(documentLoads.assign.mock.calls).toEqual([['/login']]);
+		expect(documentLoads.reload).not.toHaveBeenCalled();
+		expect(documentLoads.replace).not.toHaveBeenCalled();
 		expect(noticesShown).not.toContain('unauthorized');
 	});
 
-	it('clears user even if API fails', async () => {
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		mockApiLogout.mockRejectedValueOnce(new Error('fail'));
-		await logout(stayOnThePage);
-		expect(get(currentUser)).toBeNull();
+	// Only the server's word ends the session: a 2xx, or a 401 for a session it
+	// already no longer held. Any other answer leaves the person signed in, and
+	// says so (#1340, ruling A).
+	it.each([
+		{ answer: 'a 2xx', reply: () => Promise.resolve(), leaves: true },
+		{
+			answer: 'a 401',
+			reply: () => Promise.reject(new ApiError(401, 'Not authenticated', '/api/auth/logout')),
+			leaves: true
+		},
+		{
+			answer: 'no answer',
+			reply: () =>
+				Promise.reject(new NetworkError('/api/auth/logout', new TypeError('Failed to fetch'))),
+			leaves: false
+		},
+		{
+			answer: 'a 403',
+			reply: () => Promise.reject(new ApiError(403, 'CSRF check failed', '/api/auth/logout')),
+			leaves: false
+		},
+		{
+			answer: 'a 503',
+			reply: () => Promise.reject(new ApiError(503, 'Unavailable', '/api/auth/logout')),
+			leaves: false
+		},
+		{
+			answer: 'a 429',
+			reply: () => Promise.reject(new ApiError(429, 'Too many requests', '/api/auth/logout')),
+			leaves: false
+		}
+	])('after $answer to the sign-out, leaves for sign-in: $leaves', async ({ reply, leaves }) => {
+		currentUser.set(KNOWN_USER);
+		mockApiLogout.mockImplementationOnce(reply);
+
+		await logout();
+
+		expect(documentLoads.assign).toHaveBeenCalledTimes(leaves ? 1 : 0);
+		expect(get(signOutFailed)).toBe(!leaves);
+		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(hasSessionToLose()).toBe(!leaves);
 	});
 });
 
@@ -483,7 +497,7 @@ describe('the remembered playback across the session', () => {
 	it('logout stops the take that was playing and leaves no take loaded', async () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 
-		await logout(stayOnThePage);
+		await logout();
 
 		expect(audioPlayer.current).toBeNull();
 		expect(audioPlayer.status).toBe('idle');
@@ -493,7 +507,7 @@ describe('the remembered playback across the session', () => {
 		mockApiLogout.mockResolvedValueOnce(undefined);
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 
-		await logout(stayOnThePage);
+		await logout();
 
 		expect(storedRecord()).toBeNull();
 	});

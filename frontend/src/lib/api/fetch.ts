@@ -240,25 +240,20 @@ export function handleSessionLost(): Promise<void> {
 // +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
 // instead of forcing a redirect that could race it.
 //
-// A navigation the person already started counts as where they meant to be:
-// sign-in waits until history has come to rest (`historyComesToRest`)
-// and returns to the address history stands on then -- the album a tap in the
-// drawer opened, whichever of its requests the server refused first. Sign-in
-// is pushed before auth is cleared: the shell unmounts on that push, so the
-// overlays closing with it -- the phone drawer above all -- leave from an
-// entry that no longer stands and move no history under the sign-in page
-// (#1230).
+// A lost session loads the address history stands on afresh once history has
+// come to rest -- the album a tap in the drawer opened, whichever of its
+// requests the server refused first -- so nothing of the signed-in page stays
+// in memory (#1340, ruling A). That load asks for the session as every load
+// does: the server's answer sends it to sign-in, carrying the address back,
+// and says whether the session expired (#1215). Over an open overlay's entry
+// the load replaces it, so nothing steps back on the way (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const [{ hasSessionToLose, clearAuth }, { historyComesToRest, navigateAway }] = await Promise.all(
-		[import('$lib/stores/auth'), import('$lib/history/historyController')]
-	);
+	const [{ hasSessionToLose }, { reloadAfresh }] = await Promise.all([
+		import('$lib/stores/auth'),
+		import('$lib/history/historyController')
+	]);
 	if (!hasSessionToLose()) return;
-	await historyComesToRest();
-	try {
-		await navigateAway(signInAddress(window.location.pathname + window.location.search));
-	} finally {
-		clearAuth('unauthorized');
-	}
+	await reloadAfresh();
 }
 
 function abortOnCallerOrTimeout(

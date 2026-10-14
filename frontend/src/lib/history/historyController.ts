@@ -445,13 +445,6 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 	return goto(...navigation);
 }
 
-// A navigation to another page -- sign-in after signing out or after a lost
-// session -- pushed over whatever page stands, taking over from a route mount
-// still loading the moment it is issued.
-export function navigateAway(url: string): Promise<void> {
-	return startNavigation(url);
-}
-
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
 // is an address history has yet to move to.
@@ -704,6 +697,48 @@ function releaseLayerEntries(): void {
 }
 export { releaseLayerEntries as releaseLayerEntriesForTests };
 
+// Leaving the app's state behind -- a sign-out the server confirmed, a session
+// the server no longer holds -- loads a fresh document rather than routing
+// inside this one, so nothing the signed-in page held survives in memory
+// (#1340, ruling A of 14.10.2026). The load waits until history has come to
+// rest, so it leaves from the entry a navigation already under way lands on.
+// Over a layer's entry it replaces that entry: Back finds no copy of the page
+// to step off again, and nothing steps back meanwhile (#1230). Over a page
+// entry it is pushed, keeping the page, so Back loads it afresh and asks for
+// the session again. With two or more layers open, the lower layers' entries
+// stay (accepted residual of the ruling).
+type DocumentLoads = Pick<Location, 'assign' | 'replace' | 'reload'>;
+
+let documentLoads: DocumentLoads = window.location;
+let leftForFreshDocument = false;
+
+function standsOnLayerEntry(): boolean {
+	return standingEntry()?.layer !== undefined;
+}
+
+export async function loadAfresh(url: string): Promise<void> {
+	await historyComesToRest();
+	leftForFreshDocument = true;
+	if (standsOnLayerEntry()) documentLoads.replace(url);
+	else documentLoads.assign(url);
+}
+
+// The address history stands on, loaded afresh. Over a page entry this is a
+// reload: the entry keeps the id the controller stamped into it.
+export async function reloadAfresh(): Promise<void> {
+	await historyComesToRest();
+	leftForFreshDocument = true;
+	if (standsOnLayerEntry()) documentLoads.replace(location.href);
+	else documentLoads.reload();
+}
+
+// A browser that kept the page left for a fresh document in its back-forward
+// cache shows it again, with the signed-in state in memory, on Back; it is
+// loaded afresh instead.
+function loadAfreshWhenRestored(event: PageTransitionEvent): void {
+	if (event.persisted && leftForFreshDocument) documentLoads.reload();
+}
+
 type LandingHandler = (landing: Landing, landedState: unknown) => void;
 
 let landingHandler: LandingHandler | null = null;
@@ -774,10 +809,12 @@ function followRouterStart(): void {
 export function installHistoryController(): () => void {
 	if (uninstall !== null) throw new Error('The history controller is already installed');
 	window.addEventListener('popstate', onPopstate);
+	window.addEventListener('pageshow', loadAfreshWhenRestored);
 	keepLayerHistory(layerEntries);
 	stepOffUnownedLayerEntry();
 	const uninstallThis = (): void => {
 		window.removeEventListener('popstate', onPopstate);
+		window.removeEventListener('pageshow', loadAfreshWhenRestored);
 		keepLayerHistory(null);
 		releaseLayerEntries();
 		uninstall = null;
@@ -822,4 +859,10 @@ export function resetHistoryControllerForTests(): void {
 	navigationsStarted = 0;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
+	documentLoads = window.location;
+	leftForFreshDocument = false;
+}
+
+export function standInForDocumentLoadsForTests(standIn: DocumentLoads): void {
+	documentLoads = standIn;
 }

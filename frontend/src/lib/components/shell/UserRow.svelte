@@ -1,5 +1,7 @@
 <script lang="ts">
 	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
+	import { SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
+	import { signOutFailed } from '$lib/stores/auth';
 	import { followAppPageLink, leaveForLogout } from '$lib/stores/navigation';
 	import ThemeToggle from '../ThemeToggle.svelte';
 
@@ -15,6 +17,9 @@
 	<ThemeToggle />
 	<button class="logout" onclick={() => void leaveForLogout(onlogout)}>Logout</button>
 </div>
+{#if $signOutFailed}
+	<p class="sign-out-failed" role="alert">{SIGN_OUT_FAILED_MESSAGE}</p>
+{/if}
 
 <style>
 	.user-row {
@@ -52,6 +57,13 @@
 	}
 
 	.logout:hover {
+		color: var(--score-bad);
+	}
+
+	.sign-out-failed {
+		margin: 0;
+		padding: 0 16px 8px;
+		font-size: 0.75rem;
 		color: var(--score-bad);
 	}
 </style>

@@ -14,9 +14,11 @@ import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
 	ACCOUNT_MENU_SIGNED_IN_PREFIX,
 	RAIL_SETTINGS_LABEL,
+	SIGN_OUT_FAILED_MESSAGE,
 	THEME_SWITCH_TO_DARK_LABEL,
 	THEME_SWITCH_TO_LIGHT_LABEL
 } from '$lib/constants';
+import { signOutFailed } from '$lib/stores/auth';
 import { theme } from '$lib/stores/ui';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
 import { startFakeRouter } from '$lib/test-utils/app-navigation';
@@ -41,6 +43,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	vi.mocked(goto).mockReset();
+	signOutFailed.set(false);
 	document.body.replaceChildren();
 });
 
@@ -128,6 +131,17 @@ describe('AccountMenu', () => {
 		getByRoleButton(panel, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
 		expect(onlogout).toHaveBeenCalledOnce();
+	});
+
+	it('stays open and says so when the server did not confirm the sign-out', async () => {
+		const target = await renderAccountMenu(vi.fn(() => signOutFailed.set(true)));
+		const panel = await openMenu(target);
+
+		getByRoleButton(panel, ACCOUNT_MENU_LOGOUT_LABEL).click();
+		await tick();
+
+		expect(target.querySelector('[role="dialog"]')).toBe(panel);
+		expect(panel.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
 	});
 });
 

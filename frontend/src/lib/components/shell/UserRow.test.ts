@@ -3,6 +3,8 @@ import { get } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { goto } from '$app/navigation';
+import { SIGN_OUT_FAILED_MESSAGE } from '$lib/constants';
+import { signOutFailed } from '$lib/stores/auth';
 import { discardDraft, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
 import UserRow from './UserRow.svelte';
@@ -34,6 +36,7 @@ afterEach(async () => {
 	mounted = undefined;
 	document.body.replaceChildren();
 	onlogout.mockReset();
+	signOutFailed.set(false);
 	discardDraft();
 	pendingDirtyNavigation.set(null);
 	vi.mocked(goto).mockClear();
@@ -92,6 +95,18 @@ describe('UserRow', () => {
 		const target = await renderRow();
 		logoutButton(target).click();
 		expect(onlogout).toHaveBeenCalledTimes(1);
+	});
+
+	it('says under the row that a sign-out the server did not confirm left the person signed in', async () => {
+		onlogout.mockImplementation(() => signOutFailed.set(true));
+		const target = await renderRow();
+		expect(target.querySelector('[role="alert"]')).toBeNull();
+
+		logoutButton(target).click();
+
+		await vi.waitFor(() =>
+			expect(target.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE)
+		);
 	});
 
 	describe('while the open song has a dirty draft (issue #1143)', () => {
