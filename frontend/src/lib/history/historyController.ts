@@ -712,7 +712,10 @@ export { releaseLayerEntries as releaseLayerEntriesForTests };
 // to step off again, and nothing steps back meanwhile (#1230). Over a page
 // entry it is pushed, keeping the page, so Back loads it afresh and asks for
 // the session again. With two or more layers open, the lower layers' entries
-// stay (accepted residual of the ruling).
+// stay (accepted residual of the ruling). A page leaves once: the leave counts
+// from its first call, so a second refusal arriving meanwhile -- two library
+// requests refused together -- loads nothing more, where each further load
+// would abort the one before it.
 type DocumentLoads = Pick<Location, 'assign' | 'replace' | 'reload'>;
 
 let documentLoads: DocumentLoads = window.location;
@@ -722,9 +725,16 @@ function standsOnLayerEntry(): boolean {
 	return standingEntry()?.layer !== undefined;
 }
 
+// Whether this page is on its way to a fresh document: the server holds no
+// session for it any more, so nothing it sends on the way out is answered.
+export function leavesForFreshDocument(): boolean {
+	return leftForFreshDocument;
+}
+
 export async function loadAfresh(url: string): Promise<void> {
-	await historyComesToRest();
+	if (leftForFreshDocument) return;
 	leftForFreshDocument = true;
+	await historyComesToRest();
 	if (standsOnLayerEntry()) documentLoads.replace(url);
 	else documentLoads.assign(url);
 }
@@ -732,8 +742,9 @@ export async function loadAfresh(url: string): Promise<void> {
 // The address history stands on, loaded afresh. Over a page entry this is a
 // reload: the entry keeps the id the controller stamped into it.
 export async function reloadAfresh(): Promise<void> {
-	await historyComesToRest();
+	if (leftForFreshDocument) return;
 	leftForFreshDocument = true;
+	await historyComesToRest();
 	if (standsOnLayerEntry()) documentLoads.replace(location.href);
 	else documentLoads.reload();
 }

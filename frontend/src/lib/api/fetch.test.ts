@@ -45,7 +45,11 @@ import { UserFacingError } from './userFacingError';
 import { API_ERROR_GENERIC_MESSAGE, RATE_LIMITED_TOAST_MESSAGE } from '$lib/constants';
 import { dismissToast, toasts } from '$lib/stores/toast';
 import { currentUser } from '$lib/stores/auth';
-import { navigateTo, standInForDocumentLoadsForTests } from '$lib/history/historyController';
+import {
+	navigateTo,
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import { holdRouteLoads } from '$lib/test-utils/app-navigation';
 import type { AuthUser } from '$lib/api/types';
 
@@ -546,6 +550,7 @@ describe('session lost (401)', () => {
 	}
 
 	beforeEach(() => {
+		resetHistoryControllerForTests();
 		standInForDocumentLoadsForTests(documentLoads);
 		for (const load of Object.values(documentLoads)) load.mockReset();
 		currentUser.set(null);

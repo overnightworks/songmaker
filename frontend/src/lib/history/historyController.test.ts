@@ -682,6 +682,38 @@ describe('leaving for a fresh document', () => {
 		}
 	);
 
+	// Two library requests refused together each react to the lost session;
+	// every further load would abort the one before it (CI run 38602720334).
+	it.each([
+		{
+			first: 'the standing address',
+			then: 'the standing address',
+			go: [reloadAfresh, reloadAfresh],
+			load: 'reload'
+		},
+		{
+			first: 'sign-in',
+			then: 'the standing address',
+			go: [() => loadAfresh('/login'), reloadAfresh],
+			load: 'assign'
+		},
+		{
+			first: 'the standing address',
+			then: 'sign-in',
+			go: [reloadAfresh, () => loadAfresh('/login')],
+			load: 'reload'
+		}
+	] as const)('leaves once when $first and $then are asked for together', async ({ go, load }) => {
+		pushEntry('/settings/voices', {});
+
+		await Promise.all(go.map((leave) => leave()));
+		await reloadAfresh();
+
+		expect(loads[load]).toHaveBeenCalledOnce();
+		const others = Object.entries(loads).filter(([name]) => name !== load);
+		for (const [, other] of others) expect(other).not.toHaveBeenCalled();
+	});
+
 	// Playwright runs without the back-forward cache, so this row is the guard's
 	// only proof: Back onto the page a sign-out left would otherwise show it
 	// again with the signed-in state still in memory.
