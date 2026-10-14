@@ -132,9 +132,16 @@ const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
 const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
 // What a drawer album tap reads as it opens the album -- its songs, the album
 // the page resolves, and the active models the generation presets offer --
-// which a session lost before the tap refuses.
+// which a session lost before the tap refuses. The live-sync stream opens with
+// the album route before the first refusal is processed; every later start or
+// reconnect waits on the leave in resourceSync (#1340 C5).
 const ALBUM_OPENING_REFUSED_TAG = '@album-opening-refused';
-const ALBUM_OPENING_PATHS = ['/api/songs', '/api/albums/', '/api/settings/models'];
+const ALBUM_OPENING_PATHS = [
+	'/api/songs',
+	'/api/albums/',
+	'/api/settings/models',
+	'/api/resource-events/stream'
+];
 // The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
 // sentences under proof. Only that flow forgives them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
