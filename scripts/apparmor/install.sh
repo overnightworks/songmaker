@@ -7,8 +7,9 @@
 # docker.service starts anything. Run this once per profile change, as root.
 #
 # The boot-loaded pathname only ever holds a complete profile that parsed: the
-# profile is copied to a dotfile beside it, those staged bytes are validated,
-# and a rename puts them in place. apparmor_parser skips dotfiles when it loads
+# profile is copied to a dotfile beside it, those staged bytes are validated
+# and must declare the requested profile and no other, and a rename puts them
+# in place. apparmor_parser skips dotfiles when it loads
 # a directory, so a staged copy never reaches the boot load. If the kernel does
 # not load or report the new copy, the previous one goes back. The copy is made
 # without preserving timestamps, so its fresh mtime invalidates any cached
@@ -60,6 +61,18 @@ keep_previous_copy() {
   [[ -e "${installed_path}" ]] || return 0
   previous_copy_path="$(stage_in_installed_dir)"
   cp -p -- "${installed_path}" "${previous_copy_path}"
+}
+
+# A file that declares another profile, or one more, would load that under
+# its own name while an older requested profile stays loaded and still answers
+# aa-status; at the next boot only what the file declares would come up.
+refuse_unless_only_the_requested_profile_is_declared() {
+  local declared_profiles
+  declared_profiles="$(apparmor_parser -QK -N "${staged_path}")" \
+    || fail "The ${profile_name} profile does not parse; nothing was installed."
+  if [[ "${declared_profiles}" != "${profile_name}" ]]; then
+    fail "${profile_path} must declare the ${profile_name} profile and nothing else; it declares: ${declared_profiles//$'\n'/ }. Nothing was installed."
+  fi
 }
 
 # Every whole line is one record; a profile is listed alone on its line, a
@@ -117,6 +130,7 @@ stage_profile
 if ! apparmor_parser -QK "${staged_path}"; then
   fail "The ${profile_name} profile does not parse; nothing was installed."
 fi
+refuse_unless_only_the_requested_profile_is_declared
 
 keep_previous_copy
 mv -f -- "${staged_path}" "${installed_path}"

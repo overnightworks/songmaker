@@ -557,7 +557,8 @@ An operator installs the AppArmor policy with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
 `docker compose up -d songmaker-web`. The script stages a copy of the profile
 as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
-(`apparmor_parser -QK`), and renames them over
+(`apparmor_parser -QK`) and declare the `songmaker-web` profile and no other
+(`apparmor_parser -QK -N`), and renames them over
 `/etc/apparmor.d/songmaker-web` (mode 0644, fresh mtime), so the boot-loaded
 pathname never holds a partial or unvalidated file and a source edited
 mid-run cannot slip past the check. It then loads that copy
@@ -689,16 +690,17 @@ python scripts/prove_codex_image_sandbox.py
 
 That the profile survives a reboot is proven by unloading it from the kernel
 and letting `apparmor.service` load it again from the installed copy; a
-missing copy fails the second `aa-status` check. A real reboot followed by the
-same checks counts as well:
+missing copy fails the second `aa-status` check. Each check matches the whole
+profile name, so a profile whose name merely contains `songmaker-web` never
+counts. A real reboot followed by the same checks counts as well:
 
 ```sh
 docker compose stop songmaker-web
 sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
-sudo aa-status | grep songmaker-web   # absent
+sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints absent
 sudo systemctl reload apparmor.service
 systemctl is-active --quiet apparmor.service && echo active
-sudo aa-status | grep songmaker-web   # present
+sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints present
 docker compose up -d songmaker-web && python scripts/prove_codex_image_sandbox.py
 ```
 

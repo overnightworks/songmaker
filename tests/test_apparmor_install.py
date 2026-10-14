@@ -31,10 +31,11 @@ A_STALE_COPY = b"profile songmaker-web { # rules from an older checkout\n}\n"
 A_LONG_AGO_NS = 1_600_000_000 * 10**9
 
 # The kernel's table of loaded profiles is a directory under the sandbox: a
-# load stores the file's bytes under the profile name the file declares, and
-# `aa-status` lists those names back. Each fault in FAKE_APPARMOR_FAILS breaks
-# exactly one step of the installer; a load fault strikes the first load only,
-# so the installer's reload of the previous copy goes through.
+# load stores the file's bytes under every profile name the file declares,
+# `apparmor_parser -N` reports those names, and `aa-status` lists the loaded
+# names back. Each fault in FAKE_APPARMOR_FAILS breaks exactly one step of the
+# installer; a load fault strikes the first load only, so the installer's
+# reload of the previous copy goes through.
 KERNEL_TABLE = """
 KERNEL="$SANDBOX_ROOT/apparmor-kernel"
 FAULT_SPENT="$SANDBOX_ROOT/apparmor-fault-spent"
@@ -47,15 +48,13 @@ copy_lines() {
     done < "$1" > "$2"
 }
 
-declared_profile() {
+declared_profiles() {
     local line pattern='^[[:space:]]*profile[[:space:]]+"?([^"[:space:]]+)'
     while IFS= read -r line || [ -n "$line" ]; do
         if [[ $line =~ $pattern ]]; then
-            printf '%s' "${BASH_REMATCH[1]}"
-            return 0
+            printf '%s\\n' "${BASH_REMATCH[1]}"
         fi
     done < "$1"
-    return 1
 }
 
 first_load_fault() {
@@ -73,6 +72,10 @@ printf '%s\\n' "${FAKE_UID:-0}"
 FAKE_APPARMOR_PARSER = (
     '#!/bin/bash\nFAKE_NAME=apparmor_parser\n' + RECORDER + KERNEL_TABLE + """
 record "apparmor_parser $*"
+if [ $# -eq 3 ] && [ "$1 $2" = "-QK -N" ]; then
+    declared_profiles "$3"
+    exit 0
+fi
 [ $# -eq 2 ] || refuse "an argument count the installer never uses"
 case "$1" in
     -QK)
@@ -86,11 +89,15 @@ case "$1" in
         exit $? ;;
     -r)
         first_load_fault load && exit 1
-        name="$(declared_profile "$2")" || refuse "a file that declares no profile"
-        first_load_fault report || copy_lines "$2" "$KERNEL/$name"
+        names="$(declared_profiles "$2")"
+        [ -n "$names" ] || refuse "a file that declares no profile"
+        first_load_fault report && exit 0
+        while IFS= read -r name; do
+            copy_lines "$2" "$KERNEL/$name"
+        done <<< "$names"
         exit 0 ;;
 esac
-refuse "option '$1' — this fake models -QK and -r only"
+refuse "option '$1' — this fake models -QK, -QK -N and -r only"
 """
 )
 
@@ -193,13 +200,14 @@ def test_installs_a_byte_identical_world_readable_fresh_copy_and_loads_that_copy
     }
     assert stat.S_IMODE(installed.stat().st_mode) == 0o644
     assert installed.stat().st_mtime_ns > run_installer.source.stat().st_mtime_ns
-    enabled, validate, load, listing = run_installer.recording.read_text().splitlines()
+    enabled, validate, names, load, listing = run_installer.recording.read_text().splitlines()
     assert (enabled, load, listing) == (
         "aa-status --enabled", f"apparmor_parser -r {installed}", "aa-status ",
     )
     assert validate.startswith(
         f"apparmor_parser -QK {run_installer.installed_dir}/.{proof.DEFAULT_WEB_PROFILE}.",
     )
+    assert names == validate.replace("-QK", "-QK -N", 1)
     assert _directory_contents(run_installer.kernel) == {
         proof.DEFAULT_WEB_PROFILE: PROFILE.read_bytes(),
     }
@@ -248,8 +256,10 @@ def test_each_failing_step_fails_loud_and_leaves_the_previous_copy_installed_and
     existing_copy: bytes | None,
 ) -> None:
     """A failure leaves the target directory as it was, without a staged dotfile."""
+    installed = run_installer.installed_dir / proof.DEFAULT_WEB_PROFILE
     if existing_copy is not None:
-        (run_installer.installed_dir / proof.DEFAULT_WEB_PROFILE).write_bytes(existing_copy)
+        installed.write_bytes(existing_copy)
+        installed.chmod(0o640)
     before = _directory_contents(run_installer.installed_dir)
 
     result = run_installer(fault=fault)
@@ -264,19 +274,37 @@ def test_each_failing_step_fails_loud_and_leaves_the_previous_copy_installed_and
         else {}
     )
     assert _directory_contents(run_installer.kernel) == expected_kernel
+    if existing_copy is not None:
+        assert stat.S_IMODE(installed.stat().st_mode) == 0o640
 
 
-@pytest.mark.parametrize("declared_name", ["songmaker-web-staging", "old-songmaker-web"])
-def test_a_profile_declaring_another_name_is_not_taken_for_the_requested_one(
-    run_installer, declared_name: str,
+@pytest.mark.parametrize("already_installed", [False, True], ids=["first-install", "update"])
+@pytest.mark.parametrize(
+    "declared",
+    [
+        "profile songmaker-web-staging {\n}\n",
+        "profile old-songmaker-web {\n}\n",
+        "profile songmaker-web {\n}\nprofile songmaker-web-helper {\n}\n",
+    ],
+    ids=["another-name", "a-name-containing-it", "an-extra-profile"],
+)
+def test_a_file_declaring_anything_but_the_requested_profile_is_refused_before_replacement(
+    run_installer, declared: str, already_installed: bool,
 ) -> None:
-    run_installer.source.write_text(f"profile {declared_name} {{\n}}\n")
+    """An older requested profile still loaded would answer aa-status for it."""
+    run_installer.source.write_text(declared)
+    if already_installed:
+        for directory in (run_installer.installed_dir, run_installer.kernel):
+            (directory / proof.DEFAULT_WEB_PROFILE).write_bytes(A_STALE_COPY)
+    installed_before = _directory_contents(run_installer.installed_dir)
+    loaded_before = _directory_contents(run_installer.kernel)
 
     result = run_installer()
 
     assert result.returncode == 1
-    assert "AppArmor did not report the songmaker-web profile after loading it." in result.stderr
-    assert not any(run_installer.installed_dir.iterdir())
+    assert "must declare the songmaker-web profile and nothing else" in result.stderr
+    assert _directory_contents(run_installer.installed_dir) == installed_before
+    assert _directory_contents(run_installer.kernel) == loaded_before
 
 
 def test_a_directory_that_cannot_be_written_fails_loud_before_any_load(
