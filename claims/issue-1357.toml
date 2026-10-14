@@ -1,0 +1,8 @@
+claim_id = "c91225b76c6441ea8638c0557d48a163"
+agent = "claude-head"
+role = "builder"
+base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
+branch = "claude-head/issue-1357-grafana-fail-closed"
+scope = [".github/workflows/e2e.yml", "docker-compose.yml", "docker/.env.docker.example", "docs/security.md", "docs/testing.md", "frontend/e2e/README.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py", "tests/test_compose_required_env.py"]
+opened_commit = "23a9ad9f9c971cc42f70e85a58a208708704d767"
+whole_reason = "Grafana fails closed without its password: compose, the auto-deploy preflight, CI value, docs and tests"
