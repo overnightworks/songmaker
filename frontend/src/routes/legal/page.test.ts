@@ -54,6 +54,7 @@ afterEach(() => {
 	component = undefined;
 	document.body.replaceChildren();
 	resetHistoryControllerForTests();
+	vi.restoreAllMocks();
 });
 
 describe('the legal page Back', () => {
@@ -81,4 +82,24 @@ describe('the legal page Back', () => {
 		await vi.waitFor(() => expect(location.pathname).toBe('/login'));
 		expect(back).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ arrivedFrom: 'another site', referrer: 'https://elsewhere.example/', stepsBack: false },
+		{ arrivedFrom: 'a typed address', referrer: '', stepsBack: false },
+		{ arrivedFrom: 'an app page', referrer: `${location.origin}/login`, stepsBack: true }
+	])(
+		'on a later visit in the same tab, from $arrivedFrom, returns to sign-in by history only from the app',
+		async ({ referrer, stepsBack }) => {
+			startAppOn('/login', 1);
+			history.pushState(null, '', '/legal');
+			vi.spyOn(document, 'referrer', 'get').mockReturnValue(referrer);
+			startAppOn('/legal', 2);
+			const back = vi.spyOn(history, 'back');
+
+			pressLegalBack();
+
+			await vi.waitFor(() => expect(location.pathname).toBe('/login'));
+			expect(back).toHaveBeenCalledTimes(stepsBack ? 1 : 0);
+		}
+	);
 });

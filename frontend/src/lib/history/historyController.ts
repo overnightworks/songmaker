@@ -286,17 +286,23 @@ function newEntry(layer?: string): HistoryEntry {
 }
 
 // The id an id-less entry on top gets. The tab's only entry is its first one,
-// below which nothing is left to step back to; so is the entry the app is
-// first entered on in a tab that came from another site, below which only
-// that site's pages stand.
+// below which nothing is left to step back to; so is every entry the app is
+// entered on from another site or a typed address, below which that site's
+// pages or the tab's older visits stand -- not the page the person just left.
 function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
 	const entry = newEntry();
-	const enteredFirst = entering && historyStorage.getItem(FIRST_ENTRY_KEY) === null;
-	if (history.length === 1 || enteredFirst) {
+	if (history.length === 1 || (entering && !loadedFromThisApp())) {
 		historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
 	}
 	return entry;
+}
+
+// The server sends `strict-origin-when-cross-origin`, so a page of the app's
+// own origin names itself as the referrer, and another site or a typed
+// address leaves either a foreign origin or nothing.
+function loadedFromThisApp(): boolean {
+	return document.referrer !== '' && new URL(document.referrer).origin === location.origin;
 }
 
 function stampedPageState(state: App.PageState, entry: HistoryEntry | null): App.PageState {
