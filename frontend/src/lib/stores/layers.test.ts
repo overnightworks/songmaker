@@ -200,7 +200,7 @@ describe('layers as history entries', () => {
 		await vi.waitFor(() => expect(standingHistoryEntry()).toEqual(editing));
 
 		expect(stackedIds()).toEqual(['details-editing', 'details-saving']);
-		expect(history.length).toBe(lengthWithBoth);
+		expect(history).toHaveLength(lengthWithBoth);
 		expect(closeTopLayer()).toBe(true);
 		expect(editorOpen).toBe(true);
 		await pressBack();

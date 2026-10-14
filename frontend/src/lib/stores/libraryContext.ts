@@ -468,9 +468,9 @@ async function resolveMountedAddress<Verdict extends string>(
 	let resolved: ResolvedAddress | Verdict;
 	try {
 		resolved = await resolveParams();
-	} catch (failure) {
+	} catch (error_) {
 		if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
-		throw failure;
+		throw error_;
 	}
 	if (mountAddressOver(mountedUrl) !== 'stands') return 'found';
 	if (typeof resolved === 'string') return resolved;
