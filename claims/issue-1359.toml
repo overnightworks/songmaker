@@ -3,6 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
 branch = "claude-head/issue-1359-grafana-one-command"
-scope = ["docs/security.md", "scripts/agent-cli-paths.sh", "scripts/dotenv_file.py", "scripts/grafana-password", "scripts/grafana-password.sh", "scripts/mirror_agent_cli_credentials.py", "tests/test_dotenv_file.py", "tests/test_grafana_password.py", "tests/test_install_cli_credentials_mirror.py", "tests/test_mirror_agent_cli_credentials.py"]
+scope = ["docs/security.md", "scripts/agent-cli-paths.sh", "scripts/dotenv_file.py", "scripts/grafana-password", "scripts/grafana-password.sh", "scripts/install-autostart.sh", "scripts/install-cli-credentials-mirror.sh", "scripts/mirror_agent_cli_credentials.py", "tests/test_dotenv_file.py", "tests/test_grafana_password.py", "tests/test_install_autostart.py", "tests/test_install_cli_credentials_mirror.py", "tests/test_mirror_agent_cli_credentials.py"]
 opened_commit = "d9b1db47976a1ef2035ea6574a95cf481341f1ec"
 whole_reason = "one .env reader and one main-checkout check shared by the installers, the credentials mirror and the Grafana one-command; the command itself, its tests and the docs pointer"
