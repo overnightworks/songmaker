@@ -139,6 +139,7 @@ export async function login(username: string, password: string): Promise<AuthUse
 	try {
 		const user = await apiLogin(username, password);
 		currentUser.set(user);
+		signOutFailed.set(false);
 		return user;
 	} catch (err) {
 		if (err instanceof ApiError) {

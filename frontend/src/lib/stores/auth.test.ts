@@ -248,6 +248,15 @@ describe('login', () => {
 		expect(get(authError)).toBe('');
 	});
 
+	it('no longer tells a sign-out that failed before', async () => {
+		signOutFailed.set(true);
+		mockApiLogin.mockResolvedValueOnce({ id: 'u1', username: 'alice', role: 'user' });
+
+		await login('alice', 'password');
+
+		expect(get(signOutFailed)).toBe(false);
+	});
+
 	it('sets authError on 401', async () => {
 		authNotice.set('disabled');
 		mockApiLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', '/api/auth/login'));

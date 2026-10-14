@@ -141,7 +141,21 @@ describe('AccountMenu', () => {
 		await tick();
 
 		expect(target.querySelector('[role="dialog"]')).toBe(panel);
-		expect(panel.querySelector('[role="alert"]')?.textContent).toBe(SIGN_OUT_FAILED_MESSAGE);
+		expect(panel.querySelector('[role="alert"]')?.textContent?.trim()).toBe(
+			SIGN_OUT_FAILED_MESSAGE
+		);
+	});
+
+	it('no longer tells a failed sign-out once the menu has closed', async () => {
+		const target = await renderAccountMenu(vi.fn(() => signOutFailed.set(true)));
+		getByRoleButton(await openMenu(target), ACCOUNT_MENU_LOGOUT_LABEL).click();
+		await tick();
+
+		getByRoleButton(target, TRIGGER_NAME).click();
+		await tick();
+		const reopened = await openMenu(target);
+
+		expect(reopened.querySelector('[role="alert"]')).toBeNull();
 	});
 });
 

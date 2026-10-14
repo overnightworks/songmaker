@@ -26,6 +26,12 @@
 
 	const SETTINGS_HREF = '/settings';
 
+	// A failed sign-out is told while the menu that tried it stays open; a
+	// later opening shows the menu as it stands, not an old failure.
+	function forgetFailureOnClose(): () => void {
+		return () => signOutFailed.set(false);
+	}
+
 	function openSettings(): void {
 		popover?.close();
 		if (page.url.pathname === SETTINGS_HREF) return;
@@ -56,7 +62,9 @@
 			<Icon name="log-out" class="menu-item-icon" />{ACCOUNT_MENU_LOGOUT_LABEL}
 		</button>
 		{#if $signOutFailed}
-			<p class="sign-out-failed" role="alert">{SIGN_OUT_FAILED_MESSAGE}</p>
+			<p class="sign-out-failed" role="alert" {@attach forgetFailureOnClose}>
+				{SIGN_OUT_FAILED_MESSAGE}
+			</p>
 		{/if}
 	</MenuPopover>
 </div>
