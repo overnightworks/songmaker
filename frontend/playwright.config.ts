@@ -16,7 +16,9 @@ export default defineConfig({
 	use: {
 		baseURL: BASE_URL,
 		storageState: STORAGE_STATE_FILE,
-		trace: 'on-first-retry',
+		// A flake's cause lives in the failing first attempt, not in the retry
+		// that passes (#1362); local runs record a trace only when asked (--trace).
+		trace: process.env.CI ? 'retain-on-first-failure' : 'off',
 		screenshot: 'only-on-failure',
 		video: 'off'
 	},

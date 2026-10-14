@@ -107,8 +107,11 @@ jobs:
           E2E_BASE_URL: http://localhost:${{ env.WEB_PORT }}
         run: pnpm test:e2e
 
+      # A trace.zip exists only where a test's first attempt failed
+      # (retain-on-first-failure), so a flake whose retry passed still
+      # keeps its evidence while an all-green run uploads nothing (#1362).
       - name: Upload Playwright report
-        if: failure()
+        if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
         with:
           name: e2e-playwright-report-${{ github.run_id }}-${{ github.run_attempt }}
@@ -118,11 +121,11 @@ jobs:
           retention-days: 14
 
       - name: Dump compose logs
-        if: failure()
+        if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         run: docker compose $COMPOSE_FILES logs --no-color > compose-logs.txt
 
       - name: Upload compose logs
-        if: failure()
+        if: failure() || hashFiles('frontend/test-results/**/trace.zip') != ''
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.x
         with:
           name: e2e-compose-logs-${{ github.run_id }}-${{ github.run_attempt }}
