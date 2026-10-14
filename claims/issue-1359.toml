@@ -1,0 +1,7 @@
+claim_id = "0f685095401d4780b68864ad4c348692"
+agent = "claude-head"
+role = "builder"
+base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
+branch = "claude-head/issue-1359-grafana-one-command"
+scope = ["docs/security.md", "scripts/grafana-password.sh", "tests/test_grafana_password.py"]
+opened_commit = "d9b1db47976a1ef2035ea6574a95cf481341f1ec"
