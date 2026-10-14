@@ -855,6 +855,32 @@ describe('route convergence after a landing', () => {
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/a' });
 	});
 
+	// Issue #1340: the first of two Backs from Settings lands on a song's entry
+	// written over the album's page, so the router heads to the album and the
+	// landing mounts the song over it; the second Back, onto the album, aborts
+	// both and starts nothing of its own.
+	it('a Back that aborts the mount its landing issued mounts the route of the address it landed on', async () => {
+		pushEntry('/album/a/song', {});
+		const loading = abortableNavigation();
+		vi.mocked(goto).mockImplementationOnce(() => Promise.resolve());
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		const landedOnAlbum = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landedOnAlbum;
+		fakePage.url = new URL('/settings', location.href);
+
+		await loading.abort();
+
+		await vi.waitFor(() => expect(fakePage.url.pathname).toBe('/album/a'));
+		expect(location.pathname).toBe('/album/a');
+	});
+
 	it('an aborted navigation leaves the mount to the navigation that took over', async () => {
 		const loading = abortableNavigation();
 		mountRouteOfLandedAddress({

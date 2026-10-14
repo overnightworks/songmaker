@@ -463,18 +463,22 @@ function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> 
 // the page before stays on screen under the address (issue #1006, H5). Unless
 // a navigation started after it, the route of the address history stands on
 // is mounted then: a navigation started later is the one that aborted it, and
-// a mount issued over that one would abort it in turn (#1340).
+// a mount issued over that one would abort it in turn (#1340). The mount the
+// landing issues over its own address belongs to its start, not to a later
+// navigation: the next Back of the same task aborts that mount as well, and
+// then nothing else is left to mount the address it lands on (#1340, the
+// song's entry written over the album's page, two Backs from Settings).
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
 	navigationsStarted += 1;
+	if (navigation.type === 'popstate' && navigation.to !== null) {
+		mountAddressOver(navigation.to.url.href);
+	}
 	const startedAs = navigationsStarted;
 	navigation.complete.catch(() => {
 		if (navigationsStarted === startedAs) mountStandingAddress();
 	});
-	if (navigation.type === 'popstate' && navigation.to !== null) {
-		mountAddressOver(navigation.to.url.href);
-	}
 }
 
 // A shallow write while a route mounts issues the mount again over the entry
