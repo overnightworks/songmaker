@@ -5,7 +5,7 @@ from __future__ import annotations
 from contextlib import closing
 from dataclasses import dataclass
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 from conftest import make_test_app, stored_hash, web_client
@@ -599,7 +599,7 @@ def test_list_sessions(client: TestClient) -> None:
 def test_each_admin_device_sees_only_its_own_session_as_current(admin_client: TestClient) -> None:
     from conftest import login_and_csrf
 
-    with closing(TestClient(admin_client.app, cookies={})) as second_device:
+    with closing(web_client(admin_client.app, cookies={})) as second_device:
         login_and_csrf(second_device, "admin", "admin12345")
 
         current_on_first = [
@@ -841,6 +841,80 @@ def test_hard_delete_user_keeps_playlist_cover_when_commit_fails(client: TestCli
             client.delete(f"/api/admin/users/{user_id}/permanent")
 
     assert cover_dir.is_dir()
+
+
+def test_hard_delete_user_rolls_back_when_session_cache_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from conftest import login_and_csrf
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
+
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+    victim_client = web_client(client.app, cookies={})
+    login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
+
+    session_cache = installed_web_auth_config(client.app).session_cache
+    redis = client.app.state.ctx.redis
+    sids_before = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(sids_before) == 1
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        old_session_ids = {
+            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
+        }
+    assert old_session_ids
+    monkeypatch.setattr(
+        session_cache, "delete_user_sessions", MagicMock(side_effect=RuntimeError("redis down")),
+    )
+
+    with pytest.raises(RuntimeError, match="redis down"):
+        client.delete(f"/api/admin/users/{user_id}/permanent")
+
+    from songmaker_cli.db.queries import get_user
+
+    with factory() as session:
+        assert get_user(session, user_id) is not None
+        remaining_session_ids = {
+            record.id for record in session.query(UserSession).filter_by(user_id=user_id).all()
+        }
+    assert remaining_session_ids == old_session_ids
+
+    assert victim_client.get("/api/auth/me").status_code == 200
+    assert redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}") == sids_before
+    for sid in sids_before:
+        assert session_cache.get(sid) is not None
+
+
+def test_hard_delete_user_ends_victim_session(client: TestClient) -> None:
+    from conftest import login_and_csrf
+
+    from songmaker_cli.constants import REDIS_USER_SESSIONS_PREFIX
+    from songmaker_cli.db.models import UserSession
+
+    _login_as_admin(client)
+    user_id = _create_user_with_data(client, "victim")
+    victim_client = web_client(client.app, cookies={})
+    login_and_csrf(victim_client, "victim", "t3stP@ssw0rd")
+    assert victim_client.get("/api/auth/me").status_code == 200
+
+    session_cache = installed_web_auth_config(client.app).session_cache
+    redis = client.app.state.ctx.redis
+    sids = redis.smembers(f"{REDIS_USER_SESSIONS_PREFIX}:{user_id}")
+    assert len(sids) == 1
+
+    resp = client.delete(f"/api/admin/users/{user_id}/permanent")
+    assert resp.status_code == 200
+
+    assert victim_client.get("/api/auth/me").status_code == 401
+    for sid in sids:
+        assert session_cache.get(sid) is None
+
+    factory = client.app.state.ctx.db
+    with factory() as session:
+        assert session.query(UserSession).filter_by(user_id=user_id).all() == []
 
 
 def test_hard_delete_user_no_data(client: TestClient) -> None:

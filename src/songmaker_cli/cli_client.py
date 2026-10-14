@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Final
 
 import httpx
+from webauth.cookies import DEFAULT_CSRF_COOKIE_NAME, PLAIN_CSRF_COOKIE_NAME
 
 from songmaker_cli.constants import JobStatus
 
@@ -29,10 +30,9 @@ class ServerError(Exception):
     pass
 
 
-# webauth sets the `__Host-` prefixed cookie when the connection is secure
-# and falls back to the plain name otherwise, so readers check the stronger
-# name first.
-_CSRF_COOKIE_NAMES: Final = ("__Host-csrf_token", "csrf_token")
+# webauth names the cookie with the `__Host-` prefix when COOKIE_SECURE is
+# true and the plain name otherwise, so readers check the stronger name first.
+_CSRF_COOKIE_NAMES: Final = (DEFAULT_CSRF_COOKIE_NAME, PLAIN_CSRF_COOKIE_NAME)
 
 
 def _csrf_headers(client: httpx.Client) -> dict[str, str]:

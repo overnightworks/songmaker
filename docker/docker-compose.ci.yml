@@ -54,6 +54,9 @@ services:
       LOGIN_RATE_LIMIT: "40"
       LOGIN_LOCKOUT_THRESHOLD: "3"
       LOGIN_LOCKOUT_WINDOW: "60"
+      # The runner reaches songmaker-web over plain http, not through a TLS
+      # terminator, so a Secure/__Host- cookie would never come back.
+      COOKIE_SECURE: "false"
     ports: !override
       - "${WEB_PORT:-8080}:8080"
     # The isolated CI stack does not load the host profile; the cover-proof

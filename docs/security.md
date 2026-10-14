@@ -3,7 +3,7 @@
 The auth layer itself is not in this repository. `webauth` ships as the
 distribution `overnightworks-webauth` from
 [overnightworks/webauth](https://github.com/overnightworks/webauth), pinned in
-the `server` extra to the release wheel of tag `v0.4.0` and hash-locked in
+the `server` extra to the release wheel of tag `v0.11.0` and hash-locked in
 `uv.lock` (#879). Module names below such as `webauth.dependencies` are its
 import paths; which of songmaker's paths each policy applies to remains
 songmaker's decision, built in `request_policies.py`.
@@ -20,12 +20,12 @@ directory names — remain songmaker's decision, installed through
 
 ## Authentication
 
-Session-based auth with bcrypt password hashing (12 rounds).
+Session-based auth with Argon2id password hashing (OWASP profile: 19 MiB memory, 2 iterations, 1 degree of parallelism).
 
 - **Session tokens**: `secrets.token_urlsafe(32)` — 256-bit entropy, stored in both DB and Redis
 - **Redis session cache**: Session validation reads from Redis first (no DB hit on cache hit). DB is the durable store, synced every 5 minutes via a background task. Redis failure degrades gracefully to DB-only mode. Session TTL in Redis replaces per-request DB writes for sliding window renewal. Login writes the new session to Redis before the DB transaction commits (and deletes that key if commit fails) so a concurrent prune cannot be overwritten by a late cache `SET`.
 - **HMAC-signed cookies**: Session cookies are `{session_id}.{hmac_sha256}` signed with a server-side secret. A DB or Redis leak does not yield usable cookies. The secret comes from the `SESSION_SECRET` env var (min 32 chars) and is required at startup — Settings raises `ValidationError` if missing. There is no auto-generation fallback (was removed in the W1 no-silent-fallbacks cleanup; the old fallback masked deployment misconfigurations).
-- **Cookie flags**: `HttpOnly`, `SameSite=Strict`, `Secure` (auto-detected; `X-Forwarded-Proto` only honored when the direct peer's address falls inside a `TRUSTED_PROXIES` network — see "Proxy trust")
+- **Cookie flags and names**: `HttpOnly`, `SameSite=Strict`, `Secure` when `COOKIE_SECURE` is true (the default). The session and CSRF cookies are then also named with the `__Host-` prefix (`__Host-session_id`, `__Host-csrf_token`), which a browser accepts only on a `Secure` cookie carrying no `Domain` — a sibling subdomain cannot plant one. `COOKIE_SECURE=false` drops `Secure` and the `__Host-` prefix together, for local plain-http development; production never sets it false. Unlike the IP and proxy facts below, `COOKIE_SECURE` is one fixed deployment setting, not something a request's scheme or `X-Forwarded-Proto` can change.
 - **Session lifetime**: 30-day sliding window (via Redis TTL), 90-day absolute max (checked from cached `created_at`)
 - **Session fixation**: Login adds an independent session and prunes only the oldest overflow once the per-user cap (`MAX_CONCURRENT_SESSIONS_PER_USER`, default 10) is exceeded. Expired sessions do not consume the cap. Password change, admin password reset, and the local `songmaker reset-password` CLI delete all sessions from both DB and Redis; the CLI changes nothing when Redis is unreachable
 - **Logout**: `DELETE /session` invalidates the session in both DB and Redis (not just the cookie). The session it deletes is named by the `verified_session_id` dependency, which resolves `get_current_user` first — see "Authorization" below.
@@ -33,7 +33,7 @@ Session-based auth with bcrypt password hashing (12 rounds).
 - **User deactivation**: All sessions immediately deleted from both DB and Redis. A `user_sessions:{user_id}` Redis set tracks all active session IDs per user for efficient bulk deletion.
 - **Brute-force protection**: 5 failed attempts per 5 minutes, per IP + per username. Also applies to password change endpoint.
 - **Account lockout**: After 15 failed attempts per username within 1 hour, the account is temporarily locked (returns 429 with Retry-After). This catches patient attackers who stay under the per-window rate limit. Configurable via `LOGIN_LOCKOUT_THRESHOLD` and `LOGIN_LOCKOUT_WINDOW`.
-- **Constant-time verification**: bcrypt always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration
+- **Constant-time verification**: Argon2id always runs against a dummy hash when the user doesn't exist (login) or on password change, preventing timing-based enumeration. A stored hash that is not this host's Argon2id (wrong algorithm, wrong cost) raises loudly instead of being read as a wrong password.
 - **Login attempt cleanup**: Records older than 90 days are pruned at startup
 - **Password strength**: Common passwords (~200 entries including seasonal/year variants) and low-entropy passwords (< 4 unique chars) are rejected on setup, user creation, and password change
 - **Frontend auth-check classification**: The SPA's startup `GET /api/auth/me` (`checkAuth()` in `frontend/src/lib/stores/auth.ts`) treats a 401 or 403 as "not logged in" and redirects to `/login` — 403 covers `get_current_user` returning "Account disabled" for a deactivated account, which is a permanent revocation, not a transient failure. A 429 (e.g. from the per-IP rate limiter below), a 5xx, or a network error is transient: the known session state is kept and the layout shows a retry-able error instead of forcing a logout. This prevents a fast-reloading browser or test harness from being logged out purely because it tripped the IP rate limit. Matches `probeResourceAuth` in `frontend/src/lib/stores/resourceSync.ts`, which already treats 401/403 alike.
@@ -78,16 +78,15 @@ entry carrying an interface zone (`fe80::1%eth0`) is rejected too: a zone is
 local to one host and is dropped when an address is matched against a network,
 so the entry would silently widen to every interface.
 
-Three behaviours hang off that decision, and all three are off when the peer
-is not trusted:
-
-- `X-Forwarded-For` is read for the real client IP (rightmost untrusted
-  entry). Every per-IP budget, the login/lockout counters, the access log,
-  and the session's bound IP key on that address; from an untrusted peer the
-  header is ignored and the direct peer address is used.
-- `X-Forwarded-Proto: https` marks the request as HTTPS, which is what sets
-  `Secure` on the session and CSRF cookies.
-- The same signal emits `Strict-Transport-Security`.
+That decision governs `X-Forwarded-For`: it is read for the real client IP
+(rightmost untrusted entry) — every per-IP budget, the login/lockout counters,
+the access log, and the session's bound IP key use that address; from an
+untrusted peer the header is ignored and the direct peer address is used.
+`X-Forwarded-Proto` is read the same way for `request_is_https()` (used by
+share-link scheme resolution, see #339 below), but since webauth v0.11.0 it no
+longer decides the cookie `Secure` flag or `Strict-Transport-Security`: both
+follow the deployment's static `COOKIE_SECURE` setting instead — see
+"Authentication" above.
 
 `webauth.proxies.resolve_client_ip()` and `webauth.proxies.request_is_https()`
 own both decisions and read the trusted networks from the installed
@@ -162,16 +161,22 @@ Deployment" below.
 Five-layer defense:
 
 1. **`SameSite=Strict` cookies**: Prevents cross-site cookie transmission in modern browsers
-2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
+2. **Session-bound CSRF token**: Login and setup set a `csrf_token` cookie (`__Host-csrf_token` when `COOKIE_SECURE` is true, non-HttpOnly, `SameSite=Strict`) whose value is `HMAC-SHA256(session_secret, "csrf:" + session_id)`. All mutating `/api/` requests (except login/setup and internal worker routes) must include an `X-CSRF-Token` header. The server verifies the token by recomputing the HMAC from the current session — it does not trust the cookie value. This prevents subdomain cookie injection attacks (where a sibling subdomain sets a forged cookie).
 3. **Origin verification**: When `Sec-Fetch-Site` is absent or `same-site`, mutating requests to `/api/` with an `Origin`/`Referer` header that doesn't match `ALLOWED_HOSTS` (or localhost by default) are rejected (403). Uses a server-side allowlist instead of the request's `Host` header to prevent header-spoofing bypasses.
 4. **Form-submit blocking**: On that same fallback path, mutating requests without `Origin`/`Referer` are rejected if their `Content-Type` is a form type (`application/x-www-form-urlencoded`, `multipart/form-data`, `text/plain`). This blocks HTML form CSRF in browsers that don't enforce SameSite, while allowing JSON API clients (CLI, fetch).
 5. **Fetch metadata**: `Sec-Fetch-Site` is checked before the Origin allowlist. `same-origin` passes the origin check; `cross-site` and `none` are rejected (403), even with an allowed Origin. `same-site` and a missing header follow the Origin/Referer allowlist and form-submit rules above. The session-bound token is still required. The internal worker routes remain token-exempt but still follow this origin check. [Server tests](../tests/test_server.py) prove the accepted and rejected header cases.
 
-### Deliberate changes with webauth v0.4.0 (#905)
+### Deliberate changes with the webauth migration (#905)
 
 - The per-IP middleware starts fresh budgets once at deployment because its Redis keys change to the class-qualified names documented below. Session keys, stored data and rights are unchanged.
 - The fetch-metadata check above hardens mutating `/api/` requests. Songmaker's frontend is same-origin; CLI and workers omit `Sec-Fetch-Site` and keep their existing behavior. A cross-site browser client cannot make these mutations, even when its Origin is configured.
 - Logout clears both cookies with `SameSite=Strict`, previously Starlette's `lax`. The header text changes; deletion still matches the same cookie name, domain and path. The logout behavior remains covered by [auth API tests](../tests/test_auth_api.py); no test pins this deletion attribute.
+
+### Deliberate changes with webauth v0.11.0 (#1320)
+
+- Password hashing moved to Argon2id (OWASP profile) from the prior library's algorithm. **Every hash stored under the old algorithm is now unreadable** — `verify()` raises `UnknownHashFormatError` instead of returning "wrong password", so an account with a pre-upgrade hash fails login loudly (500) rather than silently. This is why S5 lands together with S6 at an operator-named moment, immediately followed by `songmaker reset-password` for every account.
+- The session and CSRF cookie names are no longer request-scheme-dependent: they are fixed at startup from the static `COOKIE_SECURE` setting (`__Host-session_id` / `__Host-csrf_token` when true, `session_id` / `csrf_token` when false). `X-Forwarded-Proto` and `TRUSTED_PROXIES` no longer influence the `Secure` flag or `Strict-Transport-Security`; see "Authentication" and "Proxy trust" above. Every existing cookie becomes invalid at the same moment the names change, ending every session.
+- `issue_session_cookies()` no longer takes a `Request` argument — it reads `cookie_secure` from the installed `WebAuthConfig` only.
 
 ## Rate Limiting
 
@@ -335,7 +340,7 @@ All responses include:
 - `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; font-src 'self' https://fonts.gstatic.com; frame-ancestors 'none'`
 - `Referrer-Policy: strict-origin-when-cross-origin`
 - `Permissions-Policy: camera=(), microphone=(), geolocation=()`
-- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (HTTPS only; `X-Forwarded-Proto` only honored from a peer inside a `TRUSTED_PROXIES` network)
+- `Strict-Transport-Security: max-age=31536000; includeSubDomains` (present whenever `COOKIE_SECURE` is true, the default; absent when it is false — see "Authentication")
 - `Cache-Control: no-store` (API responses only — prevents caching of authenticated data). The exact resource-event SSE path uses `no-cache, no-store` so intermediaries do not cache or transform its reconnect stream; other API and SSE paths retain `no-store`.
 - `Cache-Control: private, max-age=31536000, immutable` on generation audio: `/audio/*` and every `/shared/**/audio/*` route (`sharing_api.py`). A generation file never changes under its name, so the listener's browser keeps it for a year, while `private` forbids any shared cache (CDN, proxy) from holding it. Consequence: a revoked share stays playable from that listener's own browser cache. Queue-stream snapshot audio is not a generation file — it expires within hours — so both `/api/queue-streams/{id}/audio` and `/shared/queue-streams/{id}/audio` send `no-store`.
 
@@ -932,7 +937,7 @@ The scorer's two Hugging Face models (`faster-whisper`'s `large-v3`, `audiobox-a
 ## Admin Session Management
 
 The admin sessions endpoint (`GET /api/admin/sessions`) returns the public
-reference from `webauth.users.session_reference`, a SHA256 hash of the session
+reference from `webauth.cookies.session_reference`, a SHA256 hash of the session
 token. This prevents session hijacking via the admin panel. Songmaker supplies
 the list's timestamps and pagination from its own records. Force-logout
 (`DELETE /api/admin/sessions/{hash}`) calls `UserManagement.revoke_session` and
@@ -1095,10 +1100,10 @@ and session-revocation exceptions described under
 
 | Setting | How |
 |---------|-----|
-| HTTPS termination | Songmaker does not terminate TLS. An operator-provided TLS terminator must set `X-Forwarded-Proto: https`; Songmaker honors it only when the direct peer matches `TRUSTED_PROXIES`, which activates the `Secure` cookie flag and HSTS. No terminator configuration is shipped here. |
+| HTTPS termination | Songmaker does not terminate TLS. Leave `COOKIE_SECURE` at its default `true` so the session and CSRF cookies carry `Secure` and the `__Host-` prefix, and responses carry HSTS; set `COOKIE_SECURE=false` only for local plain-http development (CI and the e2e Compose overrides do this). No terminator configuration is shipped here. |
 | Session secret | Set `SESSION_SECRET` env var (min 32 chars). Required — startup fails with `ValidationError` if missing. Stable across restarts. Generate with `python3 -c "import secrets; print(secrets.token_hex(32))"`. |
 | CORS origin | Leave unset when the interface and API share an origin. For a separate trusted browser client, set one exact origin, for example `CORS_ORIGIN=https://client.yourdomain.com`. Cross-site browser mutations to `/api/` remain rejected by `Sec-Fetch-Site`, even with this permission. Startup rejects `*`, subdomain wildcards, and comma-separated lists; `SameSite=Strict` does not make sibling subdomains separate sites. |
-| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting and no forwarded HTTPS signal is honored — see "Proxy trust". |
+| Trusted proxies | Set `TRUSTED_PROXIES=10.0.0.1,172.16.0.0/12` (comma-separated addresses and/or CIDR networks). Only peers inside these networks are trusted for `X-Forwarded-For` and `X-Forwarded-Proto`; the rightmost untrusted `X-Forwarded-For` entry is used to prevent spoofing. An unparsable or zone-scoped entry fails startup, and a malformed forwarded chain falls back to the direct peer. Without this, the client's direct IP is always used for rate limiting — see "Proxy trust". Cookie `Secure`/HSTS are unaffected either way; they follow `COOKIE_SECURE` alone. |
 | Public base URL | Set `PUBLIC_BASE_URL=https://yourdomain.com` (scheme + host, no trailing path). The one owner of "what address am I reachable at from outside" for share links (album/song/generation/playlist — issue #339); `api_helpers.resolve_public_base_url()` is the only caller site. Not derived from the request: `request.base_url` reflects the literal ASGI transport's scheme, which is always `http` behind a TLS-terminating proxy since `proxy_headers=False` (see "Proxy trust") leaves nothing to rewrite it. Unset or malformed fails the share call with `500` rather than building a link with a guessed scheme. |
 | Allowed hosts | Set `ALLOWED_HOSTS=yourdomain.com,yourdomain.com:443` (comma-separated). Used by CSRF origin verification. Defaults to `localhost`/`127.0.0.1` regex for dev. |
 | Host binding | Default is `127.0.0.1` (localhost only). Set `HOST=0.0.0.0` only when the deployment's network policy keeps the service private. The Docker deployment does set `HOST=0.0.0.0` — that binding is *inside* the container, where the Compose network needs it. |
