@@ -1,0 +1,8 @@
+claim_id = "bf3c49b36ae1401686d48e876cac1ad2"
+agent = "claude-head"
+role = "builder"
+base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
+branch = "claude-head/issue-1351-apparmor-persist"
+scope = ["README.md", "docs/security.md", "scripts/apparmor/install.sh", "tests/test_apparmor_install.py", "tests/test_prove_codex_image_sandbox.py"]
+opened_commit = "8da172917d8f718e79a4727e725c4c90830afb91"
+whole_reason = "persistent AppArmor install with its test, the moved installer tests, rollout and removal docs"
