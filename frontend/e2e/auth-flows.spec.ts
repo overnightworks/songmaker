@@ -394,6 +394,16 @@ function albumMarkerOf(albumAddress: string): string {
 	return albumAddress.slice(albumAddress.lastIndexOf('-') + 1);
 }
 
+/** The account's own album in the rail's LIBRARY group, opened to show it. */
+async function albumInRail(page: Page, shell: Shell, albumAddress: string): Promise<Locator> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	return rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('button', { name: containing(albumMarkerOf(albumAddress)) });
+}
+
 /**
  * Opens the account's own song the way a logged-out tab does: through the
  * door, which says nothing about a session the tab never had.
@@ -663,7 +673,9 @@ test('signing out from the open account menu on Voices, Back returns to Voices, 
 	await attachShot(page, testInfo, 'auth-signed-out-back');
 });
 
-// The phone signs out from its account menu, the wide window from its rail.
+// The wide window signs out from its rail beside the song; the phone's song
+// page has no account circle, so the phone walks on to the album through its
+// drawer, the take still playing, and signs out from its account menu there.
 test('signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again', async ({
 	page,
 	isMobile
@@ -673,6 +685,12 @@ test('signing out while a take plays leaves on a fresh sign-in page without the 
 	const songAddress = await seedOwnSong(seedOwnTakeAddress);
 	await signInOnto(page, songAddress);
 	await playTheTake(page, shell);
+	let leftFrom = songAddress;
+	if (shell === 'mobile') {
+		leftFrom = albumAddressOf(songAddress);
+		await (await albumInRail(page, shell, leftFrom)).click();
+		await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+	}
 	await markSignedInDocument(page);
 
 	await signOut(page, shell);
@@ -686,7 +704,7 @@ test('signing out while a take plays leaves on a fresh sign-in page without the 
 
 	await expect(page).toHaveURL(
 		(url) =>
-			url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === songAddress
+			url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
 	);
 	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 	await expect(transportControls(page)).toHaveCount(0);
@@ -814,12 +832,7 @@ test(
 		await signIn(page);
 		await page.goto(VOICES_PAGE_PATH);
 		await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
-		const rail = await openRailNav(page, 'mobile');
-		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-		const album = rail
-			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-			.getByRole('button', { name: containing(albumMarkerOf(albumAddress)) });
+		const album = await albumInRail(page, 'mobile', albumAddress);
 		await expect(album).toBeVisible();
 
 		await ageSessionPastAbsoluteLimit(sessionIdOf((await sessionCookie(page.context())) as Cookie));
