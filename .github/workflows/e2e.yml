@@ -26,6 +26,9 @@ env:
   ADMIN_USERNAME: e2e-ci-admin
   # Must pass check_password_strength (src/songmaker_cli/auth.py).
   ADMIN_PASSWORD: "E2eCiSmoke#2026!"
+  # Compose refuses to load docker-compose.yml without it (#1357), so the
+  # down, up, and logs steps below need it even though no step starts Grafana.
+  GRAFANA_PASSWORD: e2e-ci-grafana-password
 
 jobs:
   smoke:

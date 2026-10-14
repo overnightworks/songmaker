@@ -303,6 +303,7 @@ flock /tmp/songmaker-probe.lock env \
   SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token \
   ADMIN_USERNAME=e2e-ci-admin \
   ADMIN_PASSWORD='E2eCiSmoke#2026!' \
+  GRAFANA_PASSWORD=e2e-ci-grafana-password \
   PUBLIC_BASE_URL=http://localhost:18080 \
   E2E_BASE_URL=http://localhost:18080 \
   docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
