@@ -555,11 +555,18 @@ the mask section disappearing entirely, never as evidence for the write rule.
 
 An operator installs the AppArmor policy with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
-`docker compose up -d songmaker-web`. The script checks that the profile
-parses (`apparmor_parser -QK`), copies it to `/etc/apparmor.d/songmaker-web`
-(mode 0644), loads that copy (`apparmor_parser -r`), and confirms it with
-`aa-status`. A profile that does not parse is never copied, so a broken copy
-cannot reach the next boot. `apparmor.service` loads every profile under
+`docker compose up -d songmaker-web`. The script stages a copy of the profile
+as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
+(`apparmor_parser -QK`), and renames them over
+`/etc/apparmor.d/songmaker-web` (mode 0644, fresh mtime), so the boot-loaded
+pathname never holds a partial or unvalidated file and a source edited
+mid-run cannot slip past the check. It then loads that copy
+(`apparmor_parser -r`) and requires `aa-status` to list a profile of exactly
+that name. If the load or that check fails, the previous copy goes back and is
+reloaded (on a first install the new copy is removed), and the script fails.
+`apparmor_parser` skips dotfiles when it loads a directory, so a staged copy
+never reaches the boot load, and the script removes it on every exit.
+`apparmor.service` loads every profile under
 `/etc/apparmor.d/` before `sysinit.target`, and `docker.service` starts after
 it, so both Docker's own `unless-stopped` restarts and `songmaker.service`
 find the profile after a reboot without a manual step. Run the script once
@@ -601,8 +608,8 @@ them. The profile *name* is a parameter wherever it is used —
 defaults and the profile file's own declaration to that one name, and
 `tests/test_apparmor_install.py` drives the installer without an argument and
 requires it to install the profile of that name. The installer refuses a name
-that is not a profile file beside it, so a typo never reaches
-`apparmor_parser`.
+that is not a regular profile file beside it, a symlink included, so a typo or
+a link to another host file never reaches `apparmor_parser`.
 
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
@@ -688,10 +695,10 @@ same checks counts as well:
 ```sh
 docker compose stop songmaker-web
 sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
-aa-status | grep songmaker-web        # absent
+sudo aa-status | grep songmaker-web   # absent
 sudo systemctl reload apparmor.service
-systemctl is-failed apparmor.service  # active
-aa-status | grep songmaker-web        # present
+systemctl is-active --quiet apparmor.service && echo active
+sudo aa-status | grep songmaker-web   # present
 docker compose up -d songmaker-web && python scripts/prove_codex_image_sandbox.py
 ```
 
