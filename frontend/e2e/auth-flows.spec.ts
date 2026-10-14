@@ -96,14 +96,18 @@ import {
  * was lost; both run on the phone only. The admin flows were measured at 1440 /
  * 390 instead: 23/21 for the own session and the two refusals, and 8 at 390px
  * for the row-action hitboxes (the admin page plus opening a tab), which runs
- * on the phone only. One ceiling for the file, the same way
+ * on the phone only. The #1340 sign-outs were measured at 1440 / 390: 29 and
+ * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
+ * on the phone the walk through the drawer to the album -- and 23/23 for the
+ * sign-out the lost network keeps from the server; the take flow is what
+ * raised the ceiling from 30 (14.10.2026). One ceiling for the file, the same way
  * `admin-models.spec.ts` carries one for its four. The budget is a ceiling,
  * not a knob: a flow that suddenly needs several more round trips is a
  * regression, so find the extra requests instead of raising this number --
  * see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full
  * reasoning.
  */
-const AUTH_FLOW_API_REQUEST_BUDGET = 30;
+const AUTH_FLOW_API_REQUEST_BUDGET = 40;
 
 const AUTH_LOGIN_PATH = '/api/auth/login';
 const AUTH_ME_PATH = '/api/auth/me';
