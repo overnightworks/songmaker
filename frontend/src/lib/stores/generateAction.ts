@@ -185,6 +185,55 @@ export function offersCancel(state: GenerateState): state is CancellableJobState
 	return isGenerateJobActive(state) && !(state.kind === 'generating' && state.ended);
 }
 
+function disabledReasonFor(input: {
+	lyrics: string;
+	prompt: string;
+	model: string | null;
+	models: unknown[];
+	gpuOffline: boolean;
+}): string {
+	if (!input.lyrics || !input.prompt) return EDITOR_MISSING_CONTENT_TITLE;
+	if (input.model === null) {
+		return input.models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
+	}
+	return input.gpuOffline ? EDITOR_GPU_OFFLINE_TITLE : '';
+}
+
+type JobView = ActiveJob['job'];
+
+function queuedState(
+	job: JobView,
+	reconnecting: boolean,
+	offline: boolean
+): Extract<GenerateState, { kind: 'queued' }> {
+	return {
+		kind: 'queued',
+		jobId: job.id,
+		label: queuedLabel(job.queue_position ?? null),
+		reason: job.queue_reason ?? null,
+		reconnecting,
+		offline
+	};
+}
+
+function generatingState(
+	job: JobView | null,
+	reconnecting: boolean,
+	offline: boolean
+): Extract<GenerateState, { kind: 'generating' }> {
+	return {
+		kind: 'generating',
+		jobId: job?.id ?? null,
+		phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
+		takeCounter: takeCounterLabel(job),
+		progress: progressPercent(job),
+		readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
+		reconnecting,
+		offline,
+		ended: job !== null && !isStillWorking(job)
+	};
+}
+
 export const generateAction = derived(
 	[
 		selectedSong,
@@ -219,38 +268,13 @@ export const generateAction = derived(
 		const reconnecting = isOffline || tracked?.streamStale === true;
 		const pending = inFlight || job !== null;
 		const gpuOffline = health?.acestep_workers_online === 0;
-		let disabledReason = '';
-		if (!lyrics || !prompt) disabledReason = EDITOR_MISSING_CONTENT_TITLE;
-		else if (model === null) {
-			disabledReason = models.length === 0 ? EDITOR_NO_MODELS_WARNING : EDITOR_SELECT_MODEL_TITLE;
-		} else if (gpuOffline) disabledReason = EDITOR_GPU_OFFLINE_TITLE;
+		const disabledReason = disabledReasonFor({ lyrics, prompt, model, models, gpuOffline });
 
 		const disabled = pending || isOffline || !lyrics || !prompt || model === null || gpuOffline;
 		const actionMode: GenerateMode = source ? mode : 'generate';
 		const cause = song ? failures[song.id] : undefined;
-		if (job?.status === 'queued') {
-			return {
-				kind: 'queued',
-				jobId: job.id,
-				label: queuedLabel(job.queue_position ?? null),
-				reason: job.queue_reason ?? null,
-				reconnecting,
-				offline: isOffline
-			};
-		}
-		if (pending) {
-			return {
-				kind: 'generating',
-				jobId: job?.id ?? null,
-				phase: reconnecting ? EDITOR_GENERATE_RECONNECTING_LABEL : phaseLabel(job),
-				takeCounter: takeCounterLabel(job),
-				progress: progressPercent(job),
-				readout: reconnecting ? lastSeenReadout(job) : progressReadout(job),
-				reconnecting,
-				offline: isOffline,
-				ended: job !== null && !isStillWorking(job)
-			};
-		}
+		if (job?.status === 'queued') return queuedState(job, reconnecting, isOffline);
+		if (pending) return generatingState(job, reconnecting, isOffline);
 		// Offline, Generate has no words of its own: the one offline strip says it.
 		if (disabled) {
 			return { kind: 'disabled', mode: actionMode, reason: isOffline ? null : disabledReason };

@@ -105,7 +105,7 @@ function lyricWords(rawLines: string[]): LyricWord[] {
 function joinHyphenPieces(words: WhisperWordCue[]): WhisperWordCue[] {
 	const joined: WhisperWordCue[] = [];
 	for (const word of words) {
-		const previous = joined[joined.length - 1];
+		const previous = joined.at(-1);
 		if (previous && word.text.trimStart().startsWith('-')) {
 			joined[joined.length - 1] = {
 				start: previous.start,
@@ -195,6 +195,22 @@ class AlignmentTable {
 	}
 }
 
+function fillHeardGapCell(table: AlignmentTable, cell: number, openGap: number, extendGap: number) {
+	const left = cell - 1;
+	const opened = table.best(left) + openGap;
+	const extended = table.scoreOf(Ending.HeardGap, left) + extendGap;
+	if (extended >= opened) table.set(Ending.HeardGap, cell, extended, Ending.HeardGap);
+	else table.set(Ending.HeardGap, cell, opened, table.bestEnding(left));
+}
+
+function fillPairCell(table: AlignmentTable, cell: number, pairScore: number) {
+	const diagonal = cell - table.width - 1;
+	const continued = table.scoreOf(Ending.Pair, diagonal);
+	const broken = table.best(diagonal) + BREAK_PAIR_RUN;
+	if (continued >= broken) table.set(Ending.Pair, cell, continued + pairScore, Ending.Pair);
+	else table.set(Ending.Pair, cell, broken + pairScore, table.bestEnding(diagonal));
+}
+
 function fillAlignmentTable(
 	lyricCount: number,
 	heardCount: number,
@@ -222,19 +238,8 @@ function fillAlignmentTable(
 				table.bestEnding(above)
 			);
 			if (heardIndex === 0) continue;
-
-			const left = cell - 1;
-			const opened = table.best(left) + openGap;
-			const extended = table.scoreOf(Ending.HeardGap, left) + extendGap;
-			if (extended >= opened) table.set(Ending.HeardGap, cell, extended, Ending.HeardGap);
-			else table.set(Ending.HeardGap, cell, opened, table.bestEnding(left));
-
-			const diagonal = above - 1;
-			const pairScore = 2 * similarity(lyricIndex - 1, heardIndex - 1) - 1;
-			const continued = table.scoreOf(Ending.Pair, diagonal);
-			const broken = table.best(diagonal) + BREAK_PAIR_RUN;
-			if (continued >= broken) table.set(Ending.Pair, cell, continued + pairScore, Ending.Pair);
-			else table.set(Ending.Pair, cell, broken + pairScore, table.bestEnding(diagonal));
+			fillHeardGapCell(table, cell, openGap, extendGap);
+			fillPairCell(table, cell, 2 * similarity(lyricIndex - 1, heardIndex - 1) - 1);
 		}
 	}
 	return table;
@@ -287,7 +292,8 @@ function lineInterval(
 	const sung = lineAnchors
 		.filter((anchor) => anchor !== null)
 		.map((anchor) => heard[anchor.heardIndex]);
-	return { start: sung[0].start, end: sung[sung.length - 1].end };
+	const [first] = sung;
+	return { start: first.start, end: (sung.at(-1) ?? first).end };
 }
 
 // Maps whisper_cues onto the display lines of `lyrics` (split with the same

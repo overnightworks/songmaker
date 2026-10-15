@@ -167,6 +167,49 @@ function mergeFetchedPlaylists(server: PlaylistItem[], local: PlaylistItem[]): P
 	return [...server, ...createdWhileLoading];
 }
 
+function showPlaylistDetail(detail: PlaylistDetailItem): void {
+	playlistDetailReloads.stop();
+	selectedPlaylistDetail.set(detail);
+	playlistDetailLoad.set({ status: 'ready', error: null });
+}
+
+function showFreshPlaylistDetail(id: string): boolean {
+	const fresh = freshPlaylistDetail(id);
+	if (fresh) showPlaylistDetail(fresh);
+	return fresh !== null;
+}
+
+function isSupersededDetailLoad(request: number, id: string): boolean {
+	return request !== playlistDetailRequest || get(selectedPlaylistId) !== id;
+}
+
+// The playlist is gone -- this is a permanent condition, not a transient
+// error. Close the collection instead of showing a retry that can never
+// succeed (matches hydrateCollection's former not-found handling, now owned
+// here).
+function closeVanishedPlaylist(): void {
+	playlistDetailReloads.stop();
+	selectedPlaylistDetail.set(null);
+	playlistDetailLoad.set({ status: 'idle', error: null });
+	setOpenCollection(null);
+}
+
+function failPlaylistDetailLoad(err: unknown): void {
+	if (isNotFound(err)) {
+		closeVanishedPlaylist();
+		return;
+	}
+	if (err instanceof NetworkError) {
+		if (reloadAfterNetworkFailure()) return;
+	} else {
+		playlistDetailReloads.stop();
+	}
+	const message = describeFailure(err, LIBRARY_PLAYLISTS_ERROR);
+	selectedPlaylistDetail.set(null);
+	playlistDetailLoad.set({ status: 'error', error: message });
+	addToast(message, 'error');
+}
+
 export async function loadPlaylistDetail(
 	id: string,
 	options: { forceRefresh?: boolean } = {}
@@ -175,44 +218,17 @@ export async function loadPlaylistDetail(
 	setOpenCollection({ kind: 'playlist', id });
 	if (options.forceRefresh) {
 		invalidatePlaylistDetailCache(id);
-	} else {
-		const fresh = freshPlaylistDetail(id);
-		if (fresh) {
-			playlistDetailReloads.stop();
-			selectedPlaylistDetail.set(fresh);
-			playlistDetailLoad.set({ status: 'ready', error: null });
-			return;
-		}
+	} else if (showFreshPlaylistDetail(id)) {
+		return;
 	}
 	playlistDetailLoad.set({ status: 'loading', error: null });
 	try {
 		const detail = await fetchPlaylistDetailDeduped(id, { force: options.forceRefresh });
-		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
-		playlistDetailReloads.stop();
-		selectedPlaylistDetail.set(detail);
-		playlistDetailLoad.set({ status: 'ready', error: null });
+		if (isSupersededDetailLoad(request, id)) return;
+		showPlaylistDetail(detail);
 	} catch (err) {
-		if (request !== playlistDetailRequest || get(selectedPlaylistId) !== id) return;
-		if (isNotFound(err)) {
-			// The playlist is gone -- this is a permanent condition, not a
-			// transient error. Close the collection instead of showing a
-			// retry that can never succeed (matches hydrateCollection's
-			// former not-found handling, now owned here).
-			playlistDetailReloads.stop();
-			selectedPlaylistDetail.set(null);
-			playlistDetailLoad.set({ status: 'idle', error: null });
-			setOpenCollection(null);
-			return;
-		}
-		if (err instanceof NetworkError) {
-			if (reloadAfterNetworkFailure()) return;
-		} else {
-			playlistDetailReloads.stop();
-		}
-		const message = describeFailure(err, LIBRARY_PLAYLISTS_ERROR);
-		selectedPlaylistDetail.set(null);
-		playlistDetailLoad.set({ status: 'error', error: message });
-		addToast(message, 'error');
+		if (isSupersededDetailLoad(request, id)) return;
+		failPlaylistDetailLoad(err);
 	}
 }
 
