@@ -1,8 +1,0 @@
-claim_id = "9b79e1890fd54b9c992e2a24a3bd2d9e"
-agent = "claude-head"
-role = "builder"
-base = "ea78af312ac5eb55dc670ea538374d837a2001cc"
-branch = "claude-head/issue-1384-delete-dead-clearauth"
-scope = ["frontend/src"]
-opened_commit = "64e5d2d697ad08eb9f2491e57aba56ee875a4c74"
-whole_reason = "one rename sweep: four names and every file that pins them, mostly tests"
