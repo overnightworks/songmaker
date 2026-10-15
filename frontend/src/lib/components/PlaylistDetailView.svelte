@@ -41,7 +41,6 @@
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
-		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
 	} from '$lib/constants';
@@ -407,15 +406,6 @@
 												onclick={(e) => e.stopPropagation()}
 												onkeydown={(e) => e.stopPropagation()}
 											>
-												<button
-													type="button"
-													role="menuitem"
-													class="entry-overflow-item"
-													data-hitbox="frequent"
-													onclick={() => openSongInEditor(entry.song_id)}
-												>
-													{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
-												</button>
 												{#if i > 0}
 													<button
 														type="button"

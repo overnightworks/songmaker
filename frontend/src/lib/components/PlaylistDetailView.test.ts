@@ -384,38 +384,6 @@ describe('PlaylistDetailView row take traits', () => {
 	});
 });
 
-describe('PlaylistDetailView row overflow menu', () => {
-	it('offers Open song in editor for a take', async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
-
-		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
-		await tick();
-
-		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
-		expect(
-			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
-		).toContain('Open song in editor');
-	});
-
-	it("opens the take's song in the editor and closes the menu", async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
-
-		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
-		await tick();
-		requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click();
-		await tick();
-
-		expect(selectSong).toHaveBeenCalledWith('s1');
-		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
-	});
-});
-
 let openSongSawHistoryAt: number | undefined;
 
 describeBackClosesOverlay({
@@ -443,8 +411,8 @@ describeBackClosesOverlay({
 				)
 		},
 		{
-			way: 'choosing Open song in editor',
-			close: (target) => requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click(),
+			way: "tapping the entry's ✎",
+			close: (target) => requireElement<HTMLButtonElement>(target, '.song-row-edit').click(),
 			actionSawHistoryAt: () => openSongSawHistoryAt
 		}
 	]
@@ -662,7 +630,7 @@ describe('PlaylistDetailView row actions', () => {
 		const items = Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+		expect(items).toEqual(['Move up', 'Remove from playlist']);
 	});
 
 	it('carries no play glyph: the row plays, and its ✎ and … menu are named after the song', async () => {
@@ -730,7 +698,7 @@ describe('PlaylistDetailView row actions', () => {
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
 		expect(
 			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
-		).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+		).toEqual(['Move up', 'Remove from playlist']);
 	});
 });
 

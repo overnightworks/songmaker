@@ -3843,19 +3843,33 @@ describe('playAlbum', () => {
 		);
 	}
 
-	it('starts on the tapped song, not on track 1, with the album queued around it', async () => {
-		seedThreePickedSongs();
+	it.each([
+		{ shuffle: false, order: 'album order', queue: ['s1', 's2', 's3'] },
+		{ shuffle: true, order: "the player's shuffle", queue: ['s2', 's3', 's1'] }
+	])(
+		'plays a tapped song, not track 1, and Next continues in $order with the whole album queued',
+		async ({ shuffle, queue }) => {
+			vi.spyOn(Math, 'random').mockReturnValue(0);
+			setShuffle(shuffle);
+			seedThreePickedSongs();
 
-		await playAlbum('a1', { songId: 's2' });
+			await playAlbumSong('a1', 's2');
 
-		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
-			restart: true
-		});
-		const ctx = get(queueContext);
-		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
-		expect(ctx.takes.map((take) => take.songId)).toEqual(['s1', 's2', 's3']);
-		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
-	});
+			expect(audioPlayer.load).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ songId: 's2' }),
+				{ restart: true }
+			);
+			const ctx = get(queueContext);
+			if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
+			expect(ctx.takes.map((take) => take.songId)).toEqual(queue);
+			expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
+
+			await playNextSong();
+
+			expect(audioPlayer.load).toHaveBeenLastCalledWith(expect.objectContaining({ songId: 's3' }));
+		}
+	);
 
 	it.each(['playing', 'paused'] as const)(
 		'keeps a %s song going from where it stands when its box is tapped again',
