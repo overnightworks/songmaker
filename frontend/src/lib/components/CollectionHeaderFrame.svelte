@@ -1,12 +1,18 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import {
-		collectionPauseLabel,
-		collectionPlayLabel,
-		collectionShuffleLabel,
+		COLLECTION_SHUFFLE_ACTION,
+		collectionActionLabel,
 		type CollectionPlayKind
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
+	import TransportButtonIcon from './TransportButtonIcon.svelte';
+	import {
+		transportButtonFace,
+		transportButtonLabel,
+		transportIsBusy,
+		type TransportState
+	} from '$lib/services/audioPlayer.svelte';
 
 	interface Props {
 		coverUrl: string | null;
@@ -16,8 +22,8 @@
 		initials: string;
 		artFill: string | null;
 		kind: CollectionPlayKind;
-		/** Whether this collection is sounding, so the circle offers to pause it. */
-		playing: boolean;
+		/** The transport the circle acts on: this collection's queue or a waiting start of it, else idle. */
+		transport: TransportState;
 		/** The circle's action; null while the circle has nothing to act on, which dims it. */
 		onplay: (() => void) | null;
 		/**
@@ -45,7 +51,7 @@
 		initials,
 		artFill,
 		kind,
-		playing,
+		transport,
 		onplay,
 		onshuffle,
 		titleArea,
@@ -56,7 +62,8 @@
 	}: Props = $props();
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
-	const playLabel = $derived(playing ? collectionPauseLabel(kind) : collectionPlayLabel(kind));
+	const playLabel = $derived(collectionActionLabel(transportButtonLabel(transport), kind));
+	const shuffleLabel = $derived(collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind));
 </script>
 
 {#snippet coverArt()}
@@ -103,9 +110,10 @@
 			disabled={!onplay}
 			onclick={() => onplay?.()}
 			aria-label={playLabel}
+			aria-busy={transportIsBusy(transport)}
 			title={playLabel}
 		>
-			<Icon name={playing ? 'pause' : 'play'} size={22} />
+			<TransportButtonIcon face={transportButtonFace(transport)} size={22} />
 		</button>
 		{#if onshuffle !== undefined}
 			<button
@@ -114,8 +122,8 @@
 				data-hitbox="frequent"
 				disabled={!onshuffle}
 				onclick={() => onshuffle?.()}
-				aria-label={collectionShuffleLabel(kind)}
-				title={collectionShuffleLabel(kind)}
+				aria-label={shuffleLabel}
+				title={shuffleLabel}
 			>
 				<Icon name="shuffle" size={20} />
 			</button>

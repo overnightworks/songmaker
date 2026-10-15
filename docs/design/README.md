@@ -22,6 +22,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   schaltbarem Detailgrad und ziehbarer Breite; die Reihe aus #545 ist als
   eigene Fläche abgelöst. Seit 20.09.2026 überschreibt `song-page-phone.html`
   Zustand (f) für die Songseite: keine Albumzeile mit Prev/Next mehr.
+  Erweitert am 15.10.2026 für #1354 (#1373) um Zustand (i), freigegeben am
+  15.10.2026 (Operator: „feels good! happy now!“, die 41 Regeln „yes all
+  good“): Home zeigt Listen und Write, Library nur Alben und Playlists nur
+  Playlists, auf dem Telefon drei Tabs unten statt des Drawers, ‹ auf jeder
+  geöffneten Seite, die Player-Karte über den Tabs. Wo ältere Zustände etwas
+  anderes zeigen, gilt (i).
 - `admin-models.html` — der Admin-Tab „Models" (#317). Fassung 1 wurde am
   01.09.2026 freigegeben; Fassung 2 wurde am 06.09.2026 freigegeben: eine
   Aufgaben-Tabelle für Co-Writer, Cover und Scoring, mit Gründen direkt an
@@ -35,7 +41,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   bedienbaren Prototyps: die Kachelwand bleibt bestehen und schrumpft beim
   Öffnen eines Albums zu einer kinetisch durchblätterbaren Reihe. Mini-Cover
   in der Leiste links hängen an #229; die Mobilbreite ist als offene Frage
-  markiert, nicht gelöst.
+  markiert, nicht gelöst. Seit 15.10.2026 (#1354) ist Zustand (g) die eine
+  Sortierung — A–Z oder Last played — für Library, Playlists und die Liste
+  links; „Added“ und die gemischte Wand sind weg, das Bild dazu steht in
+  `navigation.html` (i). Wo ihre Rahmen einen Brotkrumenpfad, einen
+  Shuffle-Knopf auf Album- oder Playlistseite oder eine Zeile „All albums“
+  zeigen, gilt ebenfalls `navigation.html` (i).
 - `song-editor-take.html` — Repaint/Cover am Take im Song-Editor (#230).
   Erste Fassung freigegeben am 03.09.2026. Seit 20.09.2026 überschreibt
   `song-page-phone.html` die Take-Zeile auf beiden Breiten: sechs-zeiliges

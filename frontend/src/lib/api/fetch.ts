@@ -163,7 +163,7 @@ function isSessionLostResponse(status: number, path: string): boolean {
 }
 
 const SAFE_INTERNAL_PATH_FALLBACK = '/';
-const SIGN_IN_PATH = '/login';
+export const SIGN_IN_PATH = '/login';
 
 // A path of this app starts with exactly one slash. A second slash or a
 // backslash makes it a foreign host; anything else -- an absolute URL even on
@@ -234,25 +234,26 @@ export function handleSessionLost(): Promise<void> {
 	return sessionLostRun;
 }
 
-// No-ops when `currentUser` is already null: that caller has no session to
-// lose (first load, or a second caller that lost the in-flight race above),
-// so this leaves +layout.svelte's own /login-vs-/setup routing to decide
+// No-ops when there is no session to lose (`hasSessionToLose`): the first
+// load, a second caller that lost the in-flight race above, or a deliberate
+// sign-out under way, which leaves for sign-in itself. This leaves
+// +layout.svelte's own /login-vs-/setup routing, or the sign-out, to decide
 // instead of forcing a redirect that could race it.
 //
-// The library history stops before the shell goes, as on a sign-out: an
-// overlay closing with the shell -- the phone drawer above all -- would
-// otherwise step back off its history entry after the sign-in navigation
-// below and land on the page the session was lost on (#1230).
+// A lost session loads the address history stands on afresh once history has
+// come to rest -- the album a tap in the drawer opened, whichever of its
+// requests the server refused first -- so nothing of the signed-in page stays
+// in memory (#1340, ruling A). That load asks for the session as every load
+// does: the server's answer sends it to sign-in, carrying the address back,
+// and says whether the session expired (#1215). Over an open overlay's entry
+// the load replaces it, so nothing steps back on the way (#1230).
 async function reactToSessionLost(): Promise<void> {
-	const [{ currentUser, clearAuth }, { forgetLayerEntries }] = await Promise.all([
+	const [{ hasSessionToLose }, { reloadAfresh }] = await Promise.all([
 		import('$lib/stores/auth'),
 		import('$lib/history/historyController')
 	]);
-	if (get(currentUser) === null) return;
-	forgetLayerEntries();
-	clearAuth('unauthorized');
-	const { goto } = await import('$app/navigation');
-	await goto(signInAddress(window.location.pathname + window.location.search));
+	if (!hasSessionToLose()) return;
+	await reloadAfresh();
 }
 
 function abortOnCallerOrTimeout(

@@ -3,7 +3,8 @@ import {
 	PLAYER_WAITING_FOR_NETWORK,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
+	TRANSPORT_RETRY_LABEL,
+	type TransportLabel
 } from '$lib/constants';
 import { ContinuousDeck, TakeNotAppended, type DeckEntry } from './continuousDeck';
 import {
@@ -45,12 +46,18 @@ export function transportIsBusy(transport: TransportState): boolean {
 	return transport === 'loading' || transport === 'recovering';
 }
 
-export function transportButtonLabel(transport: TransportState): string {
+export function transportButtonLabel(transport: TransportState): TransportLabel {
 	if (transport === 'failed') return TRANSPORT_RETRY_LABEL;
 	return transportOffersPause(transport) ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL;
 }
 
-type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
+// The calm words every surface shows for a take, or a start, given up while
+// the network is gone (#1312, #1330).
+export function transportWaitingNotice(transport: TransportState): string | null {
+	return transport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : null;
+}
+
+export type TransportButtonFace = 'spinner' | 'refresh-cw' | 'pause' | 'play';
 
 // The play button's face on every surface: a spinner while sound is asked for
 // and not there yet, otherwise the action its click takes.
@@ -148,7 +155,7 @@ const ERROR_MSG_STALLED = 'Playback stalled. Press Retry.';
 const END_OF_DECK_SLACK_SECONDS = 0.5;
 // How often a stalled take is looked at again and, unless the owner reports
 // the network gone, reloaded.
-const STALL_RECOVERY_MS = 5000;
+export const STALL_RECOVERY_MS = 5000;
 // How long a stalled take is tried before the player gives up and asks for
 // Retry: long enough to ride out a dropout with the screen off (#1187 P3). A
 // start that waits for the network gives up after the same time (#1312).
@@ -444,7 +451,9 @@ class AudioPlayer {
 
 	// A take that starts from nothing on the active element: whatever played or
 	// stood by before it is dropped. The source is attached before the take
-	// becomes current, so a preload the change asks for lands behind it.
+	// becomes current, so a preload the change asks for lands behind it. Until
+	// its data arrives, the timeline shows where it will start and how long it
+	// runs, so a restored take reads its saved position (#1330).
 	private startTake(
 		info: PlaybackInfo,
 		url: string,
@@ -454,6 +463,8 @@ class AudioPlayer {
 		this.clearStandby();
 		this.resetTakeState();
 		this.pendingRecoverySeek = opts.startAt ?? null;
+		this.currentTime = opts.startAt ?? 0;
+		this.duration = info.generation.audio_duration_sec ?? 0;
 		this.autoplayPending = opts.autoplay ?? true;
 		this.waitForTheNetworkFromTheTap();
 		const el = this.ensureAudio();
@@ -778,11 +789,23 @@ class AudioPlayer {
 			this.streamEngine.seekLocal(this.audio, seconds);
 			return;
 		}
+		if (this.pendingRecoverySeek !== null) {
+			this.startLoadingTakeAt(Math.max(0, Math.min(seconds, this.duration)));
+			return;
+		}
 		const entry = this.deckSession?.playing;
 		const reachable = entry ? Math.min(this.duration, entry.duration) : this.duration;
 		const target = (entry?.start_offset ?? 0) + Math.max(0, Math.min(seconds, reachable));
 		if (this.deckSession) this.deckSession.deck.scrubTo(target);
 		else this.audio.currentTime = target;
+	}
+
+	// A take still waiting for the place it starts at is moved there, not its
+	// element: the element would take a seek before its data arrives and then
+	// drop it (#1330).
+	private startLoadingTakeAt(seconds: number): void {
+		this.pendingRecoverySeek = seconds;
+		this.currentTime = seconds;
 	}
 
 	// On the continuous deck the deck moves the playhead, so that a restore past
@@ -945,14 +968,14 @@ class AudioPlayer {
 			this.clearStallRecoveryTimer();
 			if (this.streamEngine.active) this.applyPendingStreamSeek(el);
 			else this.applyPendingRecoverySeek(el);
-			this.status = el.paused ? 'ready' : 'playing';
 			this.duration = this.streamEngine.active
 				? this.streamEngine.activeDuration
 				: (this.deckTakeDuration(el) ?? (el.duration || this.duration));
 			if (this.autoplayPending) {
-				this.autoplayPending = false;
-				el.play().catch((err) => this.handlePlayRejection(err));
+				this.playTheAskedForSound(el);
+				return;
 			}
+			this.status = el.paused ? 'ready' : 'playing';
 		});
 		on('timeupdate', () => {
 			if (this.streamEngine.active) {
@@ -974,6 +997,7 @@ class AudioPlayer {
 			this.currentTime = position;
 		});
 		on('play', () => {
+			this.autoplayPending = false;
 			this.streamEndSignaled = false;
 			if (this.status !== 'error') this.status = 'playing';
 			this.startProgressWatchdog(el);
@@ -1205,10 +1229,10 @@ class AudioPlayer {
 	}
 
 	// Loading a source drops the 'pause' event an app pause just queued, so the
-	// app's pause marker is settled here instead of by that event. A source
-	// the listener asked to hear whose data never arrives — not even its first
-	// byte — is watched like a buffering stall, so it ends in Retry instead of
-	// loading forever.
+	// app's pause marker is settled here instead of by that event. The stall
+	// watch covers only a source the listener asked to hear: one whose data
+	// never arrives — not even its first byte — ends in Retry like a buffering
+	// stall instead of loading forever, while an unasked one waits for Play.
 	private loadSource(el: HTMLAudioElement, url: string): void {
 		this.pauseRequestedByApp = false;
 		el.src = url;
@@ -1537,10 +1561,24 @@ class AudioPlayer {
 		}
 	}
 
+	// A paused element stays loading until its play event: read as ready in
+	// between, the lock screen would flash paused (#1330). An element already
+	// playing sends no play event, so it reads playing at once.
+	private playTheAskedForSound(el: HTMLAudioElement): void {
+		if (el.paused) {
+			this.status = 'loading';
+		} else {
+			this.autoplayPending = false;
+			this.status = 'playing';
+		}
+		el.play().catch((err) => this.handlePlayRejection(err));
+	}
+
 	private handlePlayRejection(err: unknown): void {
 		const name = err instanceof Error ? err.name : '';
 		this.note('play_rejected', name);
 		if (name === 'AbortError') return;
+		this.autoplayPending = false;
 		if (name === 'NotAllowedError') {
 			this.status = 'paused';
 			this.failure = {

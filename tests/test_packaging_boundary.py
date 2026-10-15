@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import functools
+import ipaddress
+import itertools
+import json
 import os
 import re
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -11,10 +16,22 @@ from dataclasses import dataclass
 from importlib.metadata import distributions, packages_distributions
 from pathlib import Path
 
+import pytest
 import yaml
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
+DOCKER_ROOT = REPOSITORY_ROOT / "docker"
+UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
+IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
+WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
+E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
+VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
+TEST_STACK_ENVIRONMENT = {
+    "WEB_PORT": "18791",
+    "SONGMAKER_INTERNAL_TOKEN": "compose-config-check",
+}
+DOCKER_DEFAULT_RESTART_POLICY = "no"
 
 
 @dataclass(frozen=True)
@@ -25,6 +42,12 @@ class ContainerSpec:
     entrypoint: str
     startup_modules: tuple[str, ...]
     command: tuple[str, ...] | None
+
+
+@dataclass(frozen=True)
+class ContainerStart:
+    declared_at: str
+    command: tuple[str, ...]
 
 
 CONTAINERS = {
@@ -140,19 +163,23 @@ def _root_owning_extras() -> dict[str, frozenset[str]]:
     return {root: frozenset(extras) for root, extras in result.items()}
 
 
-def _sync_extras(dockerfile: Path) -> list[frozenset[str]]:
-    logical_lines: list[str] = []
-    current_line = ""
+def _dockerfile_instructions(dockerfile: Path) -> list[str]:
+    instructions: list[str] = []
+    current_instruction = ""
     for line in dockerfile.read_text().splitlines():
-        current_line += line.rstrip().removesuffix("\\") + " "
+        current_instruction += line.rstrip().removesuffix("\\") + " "
         if line.rstrip().endswith("\\"):
             continue
-        logical_lines.append(current_line)
-        current_line = ""
+        instructions.append(current_instruction.strip())
+        current_instruction = ""
+    return instructions
+
+
+def _sync_extras(dockerfile: Path) -> list[frozenset[str]]:
     return [
-        frozenset(re.findall(r"--extra\s+([A-Za-z0-9-]+)", line))
-        for line in logical_lines
-        if "uv sync" in line
+        frozenset(re.findall(r"--extra\s+([A-Za-z0-9-]+)", instruction))
+        for instruction in _dockerfile_instructions(dockerfile)
+        if "uv sync" in instruction
     ]
 
 
@@ -181,10 +208,30 @@ def _compose_service_block(service: str) -> str:
     return "\n".join(block)
 
 
-def _raw_compose() -> dict[str, object]:
-    compose = yaml.safe_load((REPOSITORY_ROOT / "docker-compose.yml").read_text())
+class _ComposeLoader(yaml.SafeLoader):
+    """Reads compose's merge tags (``!reset``, ``!override``) as their plain values."""
+
+
+def _construct_compose_merge_tag(loader: yaml.SafeLoader, node: yaml.Node) -> object:
+    if isinstance(node, yaml.MappingNode):
+        return loader.construct_mapping(node, deep=True)
+    if isinstance(node, yaml.SequenceNode):
+        return loader.construct_sequence(node, deep=True)
+    return loader.construct_scalar(node)
+
+
+for _compose_merge_tag in ("!reset", "!override"):
+    _ComposeLoader.add_constructor(_compose_merge_tag, _construct_compose_merge_tag)
+
+
+def _compose_file(path: Path) -> dict[str, object]:
+    compose = yaml.load(path.read_text(), Loader=_ComposeLoader)
     assert isinstance(compose, dict)
     return compose
+
+
+def _raw_compose() -> dict[str, object]:
+    return _compose_file(REPOSITORY_ROOT / "docker-compose.yml")
 
 
 def _raw_compose_services() -> dict[str, object]:
@@ -200,6 +247,47 @@ def _declared_named_volumes() -> frozenset[str]:
     return frozenset(volumes)
 
 
+def _e2e_workflow_compose_files() -> tuple[str, ...]:
+    workflow = yaml.safe_load(E2E_WORKFLOW.read_text())
+    return tuple(shlex.split(workflow["env"]["COMPOSE_FILES"]))
+
+
+def _test_stacks() -> dict[str, tuple[str, ...]]:
+    workflow_files = _e2e_workflow_compose_files()
+    return {
+        "e2e-workflow": workflow_files,
+        "voices-e2e": (*workflow_files, *VOICES_E2E_OVERLAY),
+    }
+
+
+TEST_STACKS = _test_stacks()
+
+
+@functools.cache
+def _rendered_test_stack_services(compose_files: tuple[str, ...]) -> dict[str, dict]:
+    """The test stack as Compose itself merges it, with every profile active.
+
+    ``--env-file`` keeps a checkout's own ``.env`` out of the rendering.
+    """
+    rendered = subprocess.run(
+        [
+            "docker", "compose", "--env-file", os.devnull, *compose_files,
+            "--profile", "*", "config", "--format", "json",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env={**os.environ, **TEST_STACK_ENVIRONMENT},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    return json.loads(rendered.stdout)["services"]
+
+
+def _binds_loopback_only(host_ip: str) -> bool:
+    return bool(host_ip) and ipaddress.ip_address(host_ip).is_loopback
+
+
 def _service_dockerfile(service_block: str) -> Path:
     match = re.search(r"^      dockerfile: (.+)$", service_block, re.MULTILINE)
     assert match, "service has no build dockerfile"
@@ -211,6 +299,70 @@ def _service_command(service_block: str) -> tuple[str, ...] | None:
     if match is None:
         return None
     return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+
+
+def _command_words(declaration: str | list[str]) -> tuple[str, ...]:
+    if isinstance(declaration, list):
+        return tuple(declaration)
+    if declaration.startswith("["):
+        return tuple(json.loads(declaration))
+    return tuple(shlex.split(declaration))
+
+
+def _relative(path: Path) -> str:
+    return str(path.relative_to(REPOSITORY_ROOT))
+
+
+def _compose_entrypoint_starts() -> list[ContainerStart]:
+    compose_files = [
+        REPOSITORY_ROOT / "docker-compose.yml",
+        *sorted(DOCKER_ROOT.glob("docker-compose*.yml")),
+    ]
+    services_by_file = {path: _compose_file(path)["services"] for path in compose_files}
+    repo_built_services = {
+        name
+        for services in services_by_file.values()
+        for name, service in services.items()
+        if "build" in service
+    }
+    return [
+        ContainerStart(f"{_relative(path)}::{name}", _command_words(service["entrypoint"]))
+        for path, services in services_by_file.items()
+        for name, service in services.items()
+        if name in repo_built_services and "entrypoint" in service
+    ]
+
+
+def _dockerfile_entrypoint_starts() -> list[ContainerStart]:
+    dockerfiles = [REPOSITORY_ROOT / "Dockerfile", *sorted(DOCKER_ROOT.rglob("*Dockerfile"))]
+    return [
+        ContainerStart(
+            f"{_relative(dockerfile)}::ENTRYPOINT",
+            _command_words(instruction.removeprefix("ENTRYPOINT").strip()),
+        )
+        for dockerfile in dockerfiles
+        for instruction in _dockerfile_instructions(dockerfile)
+        if instruction.startswith("ENTRYPOINT ")
+    ]
+
+
+def _entrypoint_script_starts() -> list[ContainerStart]:
+    return [
+        ContainerStart(f"{_relative(script)}::exec", tuple(shlex.split(line)[1:]))
+        for script in sorted(DOCKER_ROOT.glob("*.sh"))
+        for line in script.read_text().splitlines()
+        if line.strip().startswith("exec ")
+    ]
+
+
+def _repo_built_container_starts() -> list[ContainerStart]:
+    starts = [
+        *_compose_entrypoint_starts(),
+        *_dockerfile_entrypoint_starts(),
+        *_entrypoint_script_starts(),
+    ]
+    assert starts, "found no container start to check"
+    return starts
 
 
 def _import_startup_modules(
@@ -304,10 +456,31 @@ def test_container_entrypoints_match_runtime_configuration() -> None:
 
     assert pyproject["project"]["scripts"]["songmaker"] == "songmaker_cli.main:main"
     assert 'ENTRYPOINT ["/app/docker-entrypoint.sh"]' in web_dockerfile
-    assert "exec uv run songmaker server" in web_entrypoint
+    assert "exec uv run --no-sync --frozen --no-build songmaker server" in web_entrypoint
     assert CONTAINERS["web"].startup_modules == (
         "songmaker_cli.main", "songmaker_cli.server",
     )
+
+
+@pytest.mark.parametrize(
+    "start", _repo_built_container_starts(), ids=lambda start: start.declared_at,
+)
+def test_every_repo_built_container_start_uses_the_installed_environment(
+    start: ContainerStart,
+) -> None:
+    """A start that lets uv sync or build would need GitHub to boot (#1349)."""
+    launcher, *arguments = start.command
+    if launcher == "uv":
+        assert arguments[:1] == ["run"], f"{start.declared_at} runs uv {arguments[:1]}"
+        uv_options = frozenset(
+            itertools.takewhile(lambda word: word.startswith("-"), arguments[1:]),
+        )
+        missing_flags = UV_INSTALLED_ENVIRONMENT_FLAGS - uv_options
+        assert not missing_flags, f"{start.declared_at} lacks {sorted(missing_flags)}"
+    else:
+        assert launcher.startswith(IMAGE_VIRTUALENV_BIN) or launcher == WEB_ENTRYPOINT_SCRIPT, (
+            f"{start.declared_at} starts through {launcher!r}"
+        )
 
 
 def test_optional_dependency_root_mapping_is_complete_and_metadata_verified() -> None:
@@ -520,3 +693,35 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             bind_options = mount.get("bind")
             assert isinstance(bind_options, dict)
             assert bind_options.get("create_host_path") is False
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_a_test_stack_publishes_its_ports_on_loopback_only(
+    compose_files: tuple[str, ...],
+) -> None:
+    """Docker-published ports bypass ufw, so any other host IP reaches the LAN (#1355)."""
+    published_ports = [
+        (service_name, port)
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+        for port in service.get("ports", [])
+    ]
+    assert published_ports, "the test stack publishes no port"
+    reachable_from_outside = [
+        f"{service_name} publishes {port.get('host_ip') or '<every interface>'}"
+        f":{port['published']}"
+        for service_name, port in published_ports
+        if not _binds_loopback_only(port.get("host_ip", ""))
+    ]
+    assert not reachable_from_outside
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_no_test_stack_service_comes_back_after_a_reboot(
+    compose_files: tuple[str, ...],
+) -> None:
+    """A test stack nobody tore down must not restart with the machine (#1355)."""
+    restart_policies = {
+        service_name: service.get("restart", DOCKER_DEFAULT_RESTART_POLICY)
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+    }
+    assert restart_policies == dict.fromkeys(restart_policies, "no")

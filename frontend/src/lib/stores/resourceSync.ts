@@ -25,6 +25,7 @@ import {
 	SERVER_ERROR_STATUS_FLOOR
 } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE } from '$lib/constants/auth';
+import { leavesForFreshDocument } from '$lib/history/historyController';
 import { cancelLibraryHistoryApply, hydrateLibraryFromHistory } from '$lib/stores/libraryContext';
 import {
 	applySyncedSong,
@@ -257,7 +258,10 @@ export class ResourceSyncController {
 		this.openSource();
 	}
 
+	// Every (re)connect opens here. A page on its way to a fresh document holds
+	// no session the server would open a stream for, so it opens none (#1340).
 	private openSource(): void {
+		if (leavesForFreshDocument()) return;
 		this.streamGreeted = false;
 		const source = this.deps.createEventSource(this.streamUrl());
 		this.source = source;

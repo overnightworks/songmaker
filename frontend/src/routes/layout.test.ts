@@ -6,12 +6,16 @@ import {
 	watchBack
 } from '$lib/test-utils/library-history';
 import { fakePage, reportFakeRouterEnter, startFakeRouter } from '$lib/test-utils/app-navigation';
-import { historyStandsStill, pushEntry } from '$lib/history/historyController';
+import {
+	historyStandsStill,
+	pushEntry,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { createRawSnippet, flushSync, mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import {
@@ -23,7 +27,7 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
-import { handleSessionLost, signInAddress } from '$lib/api/fetch';
+import { handleSessionLost } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
 	checkAuth,
@@ -942,32 +946,50 @@ describe('a reload over the phone Now Playing', () => {
 	});
 });
 
+// A sign-out the server confirmed loads sign-in afresh over the account
+// menu's entry, replacing it: Back from there finds no menu entry to step off,
+// and nothing steps back on the way (#1340, ruling A).
 describe('signing out on the phone', () => {
-	it('from the account menu leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+	it("from the open account menu loads sign-in afresh over the menu's entry, and steps back nowhere", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		replaceHistoryEntry('/');
-		const target = await renderLayout('/');
-		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
+		replaceHistoryEntry('/settings/voices');
+		const target = await renderLayout('/settings/voices');
+		let replacedLayer: string | undefined;
+		const documentLoads = {
+			assign: vi.fn(),
+			replace: vi.fn(() => (replacedLayer = standingHistoryEntry()?.layer)),
+			reload: vi.fn()
+		};
+		standInForDocumentLoadsForTests(documentLoads);
 		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
+		const backs = vi.spyOn(history, 'back');
+		onTestFinished(() => backs.mockRestore());
 
 		getByRoleButton(target, ACCOUNT_MENU_LOGOUT_LABEL).click();
 
-		await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
-		expect(standingHistoryEntry()?.layer).toBe('account-menu');
+		await vi.waitFor(() =>
+			expect(documentLoads.replace).toHaveBeenCalledWith(`${window.location.origin}/login`)
+		);
+		expect(replacedLayer).toBe('account-menu');
+		expect(documentLoads.assign).not.toHaveBeenCalled();
+		expect(backs).not.toHaveBeenCalled();
 	});
 });
 
 // The phone drawer holds a history entry of its own; a step back off it,
-// queued as the drawer closes with the shell, used to land after the sign-in
-// navigation and put the page's address back over an empty shell (#1230).
+// queued as the drawer closed with the shell, used to land after the sign-in
+// navigation and put the page's address back over an empty shell (#1230). A
+// lost session now loads the page afresh over the drawer's entry instead.
 describe('a session lost behind the open phone drawer', () => {
-	it('leaves history where it stands, so nothing interrupts the way to the sign-in page', async () => {
+	it("steps back nowhere, and loads the page afresh over the drawer's entry", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
 		replaceHistoryEntry('/');
 		const target = await renderLayout('/');
+		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+		standInForDocumentLoadsForTests(documentLoads);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		getByRoleButton(target, RAIL_DRAWER_OPEN_LABEL).click();
 		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('rail-drawer'));
@@ -976,13 +998,13 @@ describe('a session lost behind the open phone drawer', () => {
 		let backPresses: number;
 		try {
 			await handleSessionLost();
-			await vi.waitFor(() => expect(target.querySelector('.app-shell')).toBeNull());
 			backPresses = back.presses();
 		} finally {
 			back.stop();
 		}
 
-		expect(goto).toHaveBeenCalledWith(signInAddress('/'));
+		expect(documentLoads.replace).toHaveBeenCalledWith(`${window.location.origin}/`);
+		expect(documentLoads.reload).not.toHaveBeenCalled();
 		expect(backPresses).toBe(0);
 	});
 });
@@ -1002,20 +1024,6 @@ describe('overlays on Settings', () => {
 		await vi.waitFor(() => expect(target.querySelector('.menu-item.logout')).toBeNull());
 		expect(standingHistoryEntry()?.layer).toBeUndefined();
 		expect(location.pathname).toBe('/settings/voices');
-	});
-
-	it('a drawer opened after a session lost in the app and signed in again owns an entry', async () => {
-		replaceHistoryEntry('/settings/voices');
-		await renderLayout('/settings/voices');
-		await handleSessionLost();
-		await vi.waitFor(() => expect(location.pathname).toBe('/login'));
-
-		currentUser.set(USER);
-		await goto(resolve('/settings/voices'));
-		await tick();
-		getByRoleButton(document.body, RAIL_DRAWER_OPEN_LABEL).click();
-
-		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('rail-drawer'));
 	});
 });
 
