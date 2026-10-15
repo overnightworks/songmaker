@@ -871,9 +871,9 @@
 
 	/* The page a share link opens (#1391): the frame flows in the page's own
 	   scroll instead of covering the viewport. Wide, the cover stands beside
-	   the song, Play, the slider and the words; stacked, all of it is one
-	   centred column. The page around it is a column of the screen's height,
-	   and the frame keeps its own height in it. */
+	   the song, Play, the slider and the words; on a phone, the frame fills
+	   the screen (below). The page around it is a column of the screen's
+	   height. */
 	.now-playing.page {
 		--page-play-size: 76px;
 		position: static;
@@ -931,43 +931,74 @@
 		align-self: stretch;
 		width: auto;
 	}
-	/* A phone holds the player and the sung line in one screen: the frame
-	   fills the height the page shows, and the words take what the player
-	   leaves, so the line they follow stays on screen. A screen too short
-	   for even the words' floor scrolls to them, and they fit it whole. */
+	/* A phone shows the player and the sung line in one screen, at whatever
+	   height its browser leaves: the frame is exactly the height the page
+	   shows, and the words take what the player leaves, so the line they
+	   follow and their Follow stay on screen. Upright, the cover gives way
+	   first -- down to nothing -- before the words go under their floor; on
+	   its side, the cover stands beside the player as tall as the screen
+	   allows. Only a title too long for the screen scrolls the frame. */
 	.now-playing.page.stacked {
-		min-height: 100%;
+		--page-lyrics-floor: 10rem;
+		height: 100%;
+		container-type: size;
 	}
 	.now-playing.page.stacked .np-body {
-		grid-template-columns: minmax(0, 1fr);
-		grid-template-rows: auto minmax(0, 1fr);
-		gap: 1.6rem;
+		height: 100%;
+		overflow-y: auto;
 	}
 	.now-playing.page.stacked .np-player-col {
 		align-self: stretch;
+		min-height: 0;
 	}
 	.now-playing.page.stacked .np-page-lyrics {
 		flex: 1 1 0;
-		min-height: 10rem;
+		min-height: var(--page-lyrics-floor);
 		display: grid;
 		grid-template-rows: minmax(0, 1fr);
-	}
-	.now-playing.page.stacked .cover-art {
-		justify-self: center;
-		width: min(320px, 80%);
-	}
-	.now-playing.page.stacked .np-player-col,
-	.now-playing.page.stacked .cover-meta {
-		align-items: center;
-		text-align: center;
+		text-align: left;
 	}
 	.now-playing.page.stacked .cover-title {
 		font-size: 1.75rem;
 	}
-	.now-playing.page.stacked .transport.solo {
-		justify-content: center;
+	@media (orientation: portrait) {
+		.now-playing.page.stacked .np-body {
+			grid-template-columns: minmax(0, 1fr);
+			grid-template-rows: minmax(0, min(320px, 80cqi)) minmax(min-content, 1fr);
+			gap: 1.6rem;
+		}
+		.now-playing.page.stacked .cover-art {
+			justify-self: center;
+			width: auto;
+			height: 100%;
+		}
+		.now-playing.page.stacked .np-player-col,
+		.now-playing.page.stacked .cover-meta {
+			align-items: center;
+			text-align: center;
+		}
+		.now-playing.page.stacked .transport.solo {
+			justify-content: center;
+		}
 	}
-	.now-playing.page.stacked .np-page-lyrics {
-		text-align: left;
+	@media (orientation: landscape) {
+		.now-playing.page.stacked {
+			--page-play-size: 56px;
+			--page-lyrics-floor: 6rem;
+		}
+		.now-playing.page.stacked .np-body {
+			grid-template-columns: min(320px, 100cqh, 45cqi) minmax(0, 1fr);
+			grid-template-rows: minmax(0, 1fr);
+			gap: 2rem;
+		}
+		.now-playing.page.stacked .cover-art {
+			align-self: center;
+		}
+		.now-playing.page.stacked .np-player-col {
+			gap: 0.8rem;
+		}
+		.now-playing.page.stacked .cover-title {
+			font-size: 1.4rem;
+		}
 	}
 </style>

@@ -457,4 +457,11 @@
 			font-size: 1.2rem;
 		}
 	}
+
+	/* A phone on its side has no height to spare above the player. */
+	@media (max-height: 600px) {
+		.shared-page.player-page {
+			padding: 0.8rem 1.2rem;
+		}
+	}
 </style>

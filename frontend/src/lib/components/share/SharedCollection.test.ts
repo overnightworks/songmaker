@@ -112,14 +112,15 @@ describe('SharedCollection page root', () => {
 	});
 
 	// A phone keeps the sung line on screen (#1391): the page is a column of
-	// the screen's height, the stacked player fills it and its words take what
-	// the player leaves; Play again keeps Play's row height at the end.
+	// the screen's height, the stacked player is exactly that height and its
+	// words take what the player leaves; Play again keeps Play's row height at
+	// the end. The e2e share spec measures it at every phone height.
 	it.each([
 		{ source: sharedCollectionSource, selector: '.shared-page.player-page', rule: 'display: flex' },
 		{
 			source: nowPlayingFrameSource,
 			selector: '.now-playing.page.stacked',
-			rule: 'min-height: 100%'
+			rule: 'container-type: size'
 		},
 		{
 			source: nowPlayingFrameSource,
