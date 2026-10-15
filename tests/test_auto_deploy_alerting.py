@@ -993,18 +993,75 @@ def test_origin_advance_after_check_lookup_cannot_change_the_deployed_commit(
     assert "compose build" in checkout.docker_calls
 
 
+# GitHub's CodeQL default setup reports this job as skipped on every main commit.
+UNJUDGED_ACTIONS_JOB_NAME = "Adjust Configuration"
+UNSUCCESSFUL_CHECKS_VERDICT = "failed (one or more GitHub Actions check runs did not succeed)"
+NOTHING_VERIFIED_VERDICT = "failed (no required GitHub Actions check run succeeded)"
+RUNNING_CHECKS_VERDICT = "waiting (one or more GitHub Actions check runs are still running)"
+
+
+@pytest.mark.parametrize("conclusion", ["skipped", "neutral"])
+def test_a_skipped_or_neutral_actions_job_does_not_block_a_green_candidate(
+    tmp_path: Path,
+    conclusion: str,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    checkout.move_main_forward()
+    expected_head = checkout.remote_main_sha()
+    checkout.set_check_runs(
+        ("completed", "success"),
+        ("github-actions", UNJUDGED_ACTIONS_JOB_NAME, "completed", conclusion),
+    )
+
+    result = checkout.tick()
+
+    assert result.returncode == 0
+    assert checkout.deployed_sha_file.read_text() == expected_head
+    assert "compose build" in checkout.docker_calls
+
+
 @pytest.mark.parametrize(
-    ("job_name", "conclusion"),
+    ("runs", "verdict"),
     [
-        (REQUIRED_ACTIONS_JOB_NAME, "failure"),
-        (REQUIRED_ACTIONS_JOB_NAME, "cancelled"),
-        ("Sonarcloud scan", "failure"),
+        *(
+            pytest.param(
+                [("completed", "success"), ("completed", conclusion)],
+                UNSUCCESSFUL_CHECKS_VERDICT,
+                id=conclusion,
+            )
+            for conclusion in ("failure", "cancelled", "timed_out")
+        ),
+        pytest.param(
+            [
+                ("completed", "success"),
+                ("github-actions", "Sonarcloud scan", "completed", "failure"),
+            ],
+            UNSUCCESSFUL_CHECKS_VERDICT,
+            id="failure-of-a-near-advisory-name",
+        ),
+        pytest.param([("completed", "skipped")], NOTHING_VERIFIED_VERDICT, id="skipped-only"),
+        pytest.param(
+            [("completed", "skipped"), ("completed", "neutral")],
+            NOTHING_VERIFIED_VERDICT,
+            id="skipped-and-neutral-only",
+        ),
+        pytest.param([("in_progress", "")], RUNNING_CHECKS_VERDICT, id="running"),
+        pytest.param(
+            [
+                ("github-actions", UNJUDGED_ACTIONS_JOB_NAME, "completed", "skipped"),
+                ("in_progress", ""),
+            ],
+            RUNNING_CHECKS_VERDICT,
+            id="skipped-while-another-job-runs",
+        ),
     ],
 )
-def test_non_successful_github_actions_checks_are_skipped(
+def test_a_candidate_is_passed_over_unless_its_actions_checks_prove_it_green(
     tmp_path: Path,
-    job_name: str,
-    conclusion: str,
+    runs: list[tuple[str, ...]],
+    verdict: str,
 ) -> None:
     checkout = Checkout(tmp_path)
     checkout.write_alert_config()
@@ -1013,15 +1070,14 @@ def test_non_successful_github_actions_checks_are_skipped(
     local_head_before = subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip()
-    checkout.set_check_runs(
-        ("completed", "success"),
-        ("github-actions", job_name, "completed", conclusion),
-    )
+    checkout.set_check_runs(*runs)
 
     result = checkout.tick()
 
     assert result.returncode == 0
-    assert "skipping deploy candidate" in checkout.journal
+    assert (
+        f"skipping deploy candidate {checkout.remote_main_sha()}: {verdict}" in checkout.journal
+    )
     assert "no fully green deploy candidate" in checkout.journal
     assert "failure count now" not in checkout.journal
     assert subprocess.check_output(
@@ -1622,28 +1678,6 @@ def test_unavailable_check_status_refuses_to_pull_with_a_named_failure(tmp_path:
     assert "cannot determine GitHub check status" in checkout.journal
     assert "GitHub API unavailable" in checkout.journal
     assert "failure count now 1" in checkout.journal
-    assert subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip() == local_head_before
-    assert "compose build" not in checkout.docker_calls
-
-
-def test_running_checks_wait_without_incrementing_the_failure_streak(tmp_path: Path) -> None:
-    checkout = Checkout(tmp_path)
-    checkout.write_alert_config()
-    checkout.adopt_current_head_as_deployed()
-    checkout.move_main_forward()
-    local_head_before = subprocess.check_output(
-        ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
-    ).strip()
-    checkout.set_check_runs(("in_progress", ""))
-
-    result = checkout.tick()
-
-    assert result.returncode == 0
-    assert "skipping deploy candidate" in checkout.journal
-    assert "no fully green deploy candidate" in checkout.journal
-    assert "failure count now" not in checkout.journal
     assert subprocess.check_output(
         ["git", "rev-parse", "HEAD"], cwd=checkout.root, text=True,
     ).strip() == local_head_before

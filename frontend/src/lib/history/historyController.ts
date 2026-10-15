@@ -285,13 +285,24 @@ function newEntry(layer?: string): HistoryEntry {
 	return layer === undefined ? { id } : { id, layer };
 }
 
-// The id an id-less entry on top gets; the tab's only entry is its first one,
-// below which nothing is left to step back to.
-function firstIdOnTop(): HistoryEntry | null {
+// The id an id-less entry on top gets. The tab's only entry is its first one,
+// below which nothing is left to step back to; so is every entry the app is
+// entered on from another site or a typed address, below which that site's
+// pages or the tab's older visits stand -- not the page the person just left.
+function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
 	const entry = newEntry();
-	if (history.length === 1) historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
+	if (history.length === 1 || (entering && !loadedFromThisApp())) {
+		historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
+	}
 	return entry;
+}
+
+// The server sends `strict-origin-when-cross-origin`, so a page of the app's
+// own origin names itself as the referrer, and another site or a typed
+// address leaves either a foreign origin or nothing.
+function loadedFromThisApp(): boolean {
+	return document.referrer !== '' && new URL(document.referrer).origin === location.origin;
 }
 
 function stampedPageState(state: App.PageState, entry: HistoryEntry | null): App.PageState {
@@ -330,7 +341,7 @@ export function pushEntry(url: string, state: App.PageState, layer?: string): Hi
 // the id and the layer mark. An id-less entry gets its first id here while it
 // is the top entry, and stays foreign below it.
 export function replaceEntry(url: string, state: App.PageState): HistoryEntry | null {
-	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop();
+	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop(false);
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	replaceState(url, stampedPageState(state, entry));
 	lastRouterIndex = routerIndexOf(history.state);
@@ -360,7 +371,7 @@ interface RouteMount {
 // the entry standing there, and history stays still meanwhile.
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
-		? (entryOfHistoryState(history.state) ?? firstIdOnTop())
+		? (entryOfHistoryState(history.state) ?? firstIdOnTop(false))
 		: newEntry();
 	const mount =
 		options.replaceState && standsOnAddress(url) ? { address: location.href, options } : null;
@@ -368,8 +379,7 @@ export async function navigateTo(url: string, options: NavigateOptions): Promise
 	if (mount === null) navigationsUnderway += 1;
 	else loadingMount = mount;
 	try {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
-		await goto(url, { ...options, state: stampedPageState(options.state, entry) });
+		await startNavigation(url, { ...options, state: stampedPageState(options.state, entry) });
 		if (entry !== null && standingEntry()?.id === entry.id) navigatedOnto(entry, options);
 	} finally {
 		if (mount === null) navigationsUnderway -= 1;
@@ -428,8 +438,18 @@ function mountStandingAddress(): void {
 	});
 }
 
-// The router's navigation started last; a newer one aborts it.
-let latestRouterNavigation: Promise<void> | null = null;
+// Every navigation started since the page loaded: each one the controller
+// issues, the moment it issues it, and each one the router reports. The router
+// reports a navigation in `beforeNavigate` only once it has resolved its
+// route, and not at all while an aborted one still counts as loading, so a
+// navigation that aborts another is known to have started only here.
+let navigationsStarted = 0;
+
+function startNavigation(...navigation: Parameters<typeof goto>): Promise<void> {
+	navigationsStarted += 1;
+	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
+	return goto(...navigation);
+}
 
 // A Back or Forward that navigates mounts the address it lands on before the
 // router loads anything of the page under it. Every other navigation's target
@@ -441,19 +461,29 @@ let latestRouterNavigation: Promise<void> | null = null;
 // lands on the album, the second on the wall shallow routing wrote it over --
 // is shallow routing to the router: it starts no navigation of its own, and
 // the page before stays on screen under the address (issue #1006, H5). Unless
-// a newer navigation took over, the route of the address history stands on is
-// mounted then.
+// a navigation started after it, the route of the address history stands on
+// is mounted then: a navigation started later is the one that aborted it, and
+// a mount issued over that one would abort it in turn (#1340). The mount the
+// landing issues over its own address belongs to its start, not to a later
+// navigation: the next Back of the same task aborts that mount as well, and
+// then nothing else is left to mount the address it lands on (#1340, the
+// song's entry written over the album's page, two Backs from Settings).
+// That mount itself aborts the router's Back navigation -- the router takes
+// it as its current navigation at once and reports nothing of it while the
+// Back still counts as loading -- so a landing that remounts mounts its
+// address a second time. That is harmless: both mounts target the one address
+// history stands on, and the second only supersedes the first (#1006).
 export function mountRouteOfLandedAddress(
 	navigation: Pick<BeforeNavigate, 'type' | 'to' | 'complete'>
 ): void {
-	const started = navigation.complete;
-	latestRouterNavigation = started;
-	started.catch(() => {
-		if (latestRouterNavigation === started) mountStandingAddress();
-	});
+	navigationsStarted += 1;
 	if (navigation.type === 'popstate' && navigation.to !== null) {
 		mountAddressOver(navigation.to.url.href);
 	}
+	const startedAs = navigationsStarted;
+	navigation.complete.catch(() => {
+		if (navigationsStarted === startedAs) mountStandingAddress();
+	});
 }
 
 // A shallow write while a route mounts issues the mount again over the entry
@@ -506,7 +536,7 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	if (routerPushed) standsOnTop = true;
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
-	const entry = loaded ?? firstIdOnTop();
+	const entry = loaded ?? firstIdOnTop(type === 'enter');
 	if (entry !== null) {
 		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
@@ -541,6 +571,18 @@ function firstEntryOfTab(): number {
 	return storedCount(historyStorage, FIRST_ENTRY_KEY, 'first history entry');
 }
 
+// A page's own Back control: one step back while an entry of the tab's own
+// stands below the one shown, `fallback` otherwise -- written over the page,
+// so the browser's Back from there does not return to it. An entry without
+// an id is never the tab's own.
+export function stepBackOrGoTo(fallback: string): Promise<void> {
+	const standing = standingEntry();
+	if (standing === null || standing.id <= firstEntryOfTab()) {
+		return startNavigation(fallback, { replaceState: true });
+	}
+	return stepBackTo(standing.id - 1);
+}
+
 // From an entry with an id, any landing below it is the step's; from a
 // foreign one nothing tells the step's landing apart, so the next landing is.
 export function stepBackOffStandingEntry(): Promise<void> {
@@ -573,6 +615,14 @@ export function historyMoves(): boolean {
 export function historyStandsStill(): Promise<void> {
 	if (!historyMoves()) return Promise.resolve();
 	return new Promise((resolve) => stillnessWaiters.push(resolve));
+}
+
+// Resolves once history has come to rest: a write released when history
+// stands still may navigate and move it again, so the wait starts over until
+// nothing is left to land.
+export function historyComesToRest(): Promise<void> {
+	if (!historyMoves()) return Promise.resolve();
+	return historyStandsStill().then(historyComesToRest);
 }
 
 // Once history stands still the layers held meanwhile get their entries
@@ -648,11 +698,10 @@ function stepOffUnownedLayerEntry(): void {
 	void stepBackTo(standing.id - 1);
 }
 
-// The open overlays keep their layers, which own no history entry any more,
-// and nothing waits for a landing that would settle them. Layers opened from
-// now on get entries again: a session lost in the app and signed in again
-// keeps Back closing overlays.
-export function forgetLayerEntries(): void {
+// The controller stops owning the open layers' entries -- as a reload leaves
+// it -- and settles every step-back still waiting for a landing that,
+// uninstalled, it no longer hears.
+function releaseLayerEntries(): void {
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
 	ledger = { ...ledger, layers: [], stepBacks: [] };
@@ -660,6 +709,73 @@ export function forgetLayerEntries(): void {
 		while (stepBackWaiters.has(target)) settleStepBack(target);
 	}
 	settleStillness();
+}
+export { releaseLayerEntries as releaseLayerEntriesForTests };
+
+// Leaving the app's state behind -- a sign-out the server confirmed, a session
+// the server no longer holds -- loads a fresh document rather than routing
+// inside this one, so nothing the signed-in page held survives in memory
+// (#1340, ruling A of 14.10.2026). The load waits until history has come to
+// rest, so it leaves from the entry a navigation already under way lands on.
+// Over a layer's entry it replaces that entry: Back finds no copy of the page
+// to step off again, and nothing steps back meanwhile (#1230). Over a page
+// entry it is pushed, keeping the page, so Back loads it afresh and asks for
+// the session again. With two or more layers open, the lower layers' entries
+// stay (accepted residual of the ruling). A page leaves once: the leave counts
+// from its first call, so a second refusal arriving meanwhile -- two library
+// requests refused together -- loads nothing more, where each further load
+// would abort the one before it.
+type DocumentLoads = Pick<Location, 'assign' | 'replace' | 'reload'>;
+
+let documentLoads: DocumentLoads = window.location;
+let leftForFreshDocument = false;
+
+function standsOnLayerEntry(): boolean {
+	return standingEntry()?.layer !== undefined;
+}
+
+// Whether this page is on its way to a fresh document: the server holds no
+// session for it any more, so nothing it sends on the way out is answered.
+export function leavesForFreshDocument(): boolean {
+	return leftForFreshDocument;
+}
+
+// Loading an address with a `#` part over an address that differs from it in
+// nothing else only scrolls to that anchor and loads no document: the page
+// would stay, signed in, while it counts as gone (#1340). The standing address
+// can carry one -- a take's provenance link, a bookmark -- so a fresh document
+// is loaded at the address without it.
+function documentAddress(url: string): string {
+	const address = new URL(url, location.href);
+	address.hash = '';
+	return address.href;
+}
+
+export async function loadAfresh(url: string): Promise<void> {
+	if (leftForFreshDocument) return;
+	leftForFreshDocument = true;
+	await historyComesToRest();
+	const address = documentAddress(url);
+	if (standsOnLayerEntry()) documentLoads.replace(address);
+	else documentLoads.assign(address);
+}
+
+// The address history stands on, loaded afresh. Over a page entry this is a
+// reload: the entry keeps the id the controller stamped into it, and a reload
+// loads the document whatever `#` part the address has.
+export async function reloadAfresh(): Promise<void> {
+	if (leftForFreshDocument) return;
+	leftForFreshDocument = true;
+	await historyComesToRest();
+	if (standsOnLayerEntry()) documentLoads.replace(documentAddress(location.href));
+	else documentLoads.reload();
+}
+
+// A browser that kept the page left for a fresh document in its back-forward
+// cache shows it again, with the signed-in state in memory, on Back; it is
+// loaded afresh instead.
+function loadAfreshWhenRestored(event: PageTransitionEvent): void {
+	if (event.persisted && leftForFreshDocument) documentLoads.reload();
 }
 
 type LandingHandler = (landing: Landing, landedState: unknown) => void;
@@ -732,12 +848,14 @@ function followRouterStart(): void {
 export function installHistoryController(): () => void {
 	if (uninstall !== null) throw new Error('The history controller is already installed');
 	window.addEventListener('popstate', onPopstate);
+	window.addEventListener('pageshow', loadAfreshWhenRestored);
 	keepLayerHistory(layerEntries);
 	stepOffUnownedLayerEntry();
 	const uninstallThis = (): void => {
 		window.removeEventListener('popstate', onPopstate);
+		window.removeEventListener('pageshow', loadAfreshWhenRestored);
 		keepLayerHistory(null);
-		forgetLayerEntries();
+		releaseLayerEntries();
 		uninstall = null;
 	};
 	uninstall = uninstallThis;
@@ -777,7 +895,13 @@ export function resetHistoryControllerForTests(): void {
 	routerStarting = false;
 	loadingMount = null;
 	addressMountedUnderKeptPage = null;
-	latestRouterNavigation = null;
+	navigationsStarted = 0;
 	entryOfLayer.clear();
 	layersAwaitingEntry = [];
+	documentLoads = window.location;
+	leftForFreshDocument = false;
+}
+
+export function standInForDocumentLoadsForTests(standIn: DocumentLoads): void {
+	documentLoads = standIn;
 }

@@ -553,12 +553,27 @@ denies the write on its own and the check would still pass with
 `deny /proc/sys{,/,/**} w` removed. It stands only as a regression guard against
 the mask section disappearing entirely, never as evidence for the write rule.
 
-An operator loads the AppArmor policy for the current host boot with
+An operator installs the AppArmor policy with
 `sudo scripts/apparmor/install.sh` and then recreates the service with
-`docker compose up -d songmaker-web`. The script does not install the profile
-under `/etc/apparmor.d/`, so the operator must load it again after a host reboot.
-Loading changes the host kernel policy, so the script deliberately requires
-root. The profile derives
+`docker compose up -d songmaker-web`. The script stages a copy of the profile
+as a dotfile in `/etc/apparmor.d/`, checks that those staged bytes parse
+(`apparmor_parser -QK`) and declare the `songmaker-web` profile and no other
+(`apparmor_parser -QK -N`), and renames them over
+`/etc/apparmor.d/songmaker-web` (mode 0644, fresh mtime), so the boot-loaded
+pathname never holds a partial or unvalidated file and a source edited
+mid-run cannot slip past the check. It then loads that copy
+(`apparmor_parser -r`) and requires `aa-status` to list a profile of exactly
+that name. If the load or that check fails, the previous copy goes back and is
+reloaded (on a first install the new copy is removed), and the script fails.
+`apparmor_parser` skips dotfiles when it loads a directory, so a staged copy
+never reaches the boot load, and the script removes it on every exit.
+`apparmor.service` loads every profile under
+`/etc/apparmor.d/` before `sysinit.target`, and `docker.service` starts after
+it, so both Docker's own `unless-stopped` restarts and `songmaker.service`
+find the profile after a reboot without a manual step. Run the script once
+per change to the profile in the repository; running it twice gives the same
+result. Installing changes the host kernel policy, so the script deliberately
+requires root. The profile derives
 Docker Engine 29.1.3's `docker-default` template (Moby
 `profiles/apparmor`, ABI 3.0) and retains its `/proc` and `/sys` denials. It
 adds `userns` for Ubuntu's restricted unprivileged user namespaces, plus only
@@ -589,10 +604,13 @@ embeds `agent_providers` takes those prefixes and derives its own profile from
 them. The profile *name* is a parameter wherever it is used —
 `sudo scripts/apparmor/install.sh [profile]`,
 `python scripts/prove_codex_image_sandbox.py [profile]`, and Compose's
-`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`, and one
-test holds those three defaults and the profile file's own declaration to that
-one name. The installer refuses a name that is not a profile file beside it,
-so a typo never reaches `apparmor_parser`.
+`SONGMAKER_APPARMOR_PROFILE` — each defaulting to `songmaker-web`.
+`tests/test_prove_codex_image_sandbox.py` holds Compose's and the proof's
+defaults and the profile file's own declaration to that one name, and
+`tests/test_apparmor_install.py` drives the installer without an argument and
+requires it to install the profile of that name. The installer refuses a name
+that is not a regular profile file beside it, a symlink included, so a typo or
+a link to another host file never reaches `apparmor_parser`.
 
 Docker's default seccomp profile keeps `clone3` at `ENOSYS` without
 `CAP_SYS_ADMIN`, so Bubblewrap and libc use their `clone` fallback.
@@ -668,6 +686,37 @@ An operator runs the rollout and proof in this exact order:
 sudo scripts/apparmor/install.sh
 docker compose up -d songmaker-web
 python scripts/prove_codex_image_sandbox.py
+```
+
+That the profile survives a reboot is proven by unloading it from the kernel
+and letting `apparmor.service` load it again from the installed copy; a
+missing copy fails the second `aa-status` check. Each check matches the whole
+profile name, so a profile whose name merely contains `songmaker-web` never
+counts. A real reboot followed by the same checks counts as well:
+
+```sh
+docker compose stop songmaker-web
+sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
+sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints absent
+sudo systemctl reload apparmor.service
+systemctl is-active --quiet apparmor.service && echo active
+sudo aa-status | awk 'NF == 1 && $1 == "songmaker-web" { found = 1 } END { print (found ? "present" : "absent"); exit !found }'   # prints present
+docker compose up -d songmaker-web && python scripts/prove_codex_image_sandbox.py
+```
+
+The installed copy does not follow later edits to the profile in the
+repository: until the installer runs again, every boot loads the rules it last
+installed.
+
+To remove the profile from the host, stop the service that requires it,
+unload the profile, then delete the installed copy. `apparmor_parser -R` reads
+the profile file to learn which profile to unload, so it runs before the copy
+is gone:
+
+```sh
+docker compose stop songmaker-web
+sudo apparmor_parser -R /etc/apparmor.d/songmaker-web
+sudo rm /etc/apparmor.d/songmaker-web
 ```
 
 The proof script imports `songmaker_cli.lifecycle` for the startup-probe argv
@@ -1115,7 +1164,7 @@ and session-revocation exceptions described under
 | Request timeout | `REQUEST_TIMEOUT` (default 30s) limits idle keep-alive connections, not full requests. The two SSE routes have their own 60-second walls; Songmaker has no general application request deadline. |
 | Auto-deploy cleanup timeout | `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (default 600). Bounds each post-deploy Docker cleanup command. |
 
-The two-minute auto-deploy tick first runs `docker compose config --quiet` on the checked-out configuration, then checks the active-job queue and required alert-channel configuration before it pulls or builds. Compose owns the list of required variables (every `${VAR:?…}` in `docker-compose.yml`), so a missing one such as `GRAFANA_PASSWORD` is a named deploy refusal quoting compose's own message before anything is pulled — the job guard's `docker compose exec` would not notice it, and the build would fail only after the fast-forward. The refusal uses the same counter and alert escalation. The tick asks again right after the fast-forward, before any base-image or Compose build, so a variable that the newly selected commit requires is named before anything is built or recreated. `--quiet` is mandatory there: without it, compose prints the fully interpolated configuration, every `.env` secret included, into the journal. The tick also runs `scripts/check_agent_cli_mounts.sh` before those steps when that verifier is installed; a verifier failure is a named deploy refusal, so it increments the tick's existing consecutive-failure counter and follows its alert escalation. A checkout that predates the verifier logs `mount preflight not installed, skipping` and continues with its installed guards, making the temporary compatibility state visible rather than silently bypassing it. After fetching `origin/main`, the tick asks GitHub about the newest ten first-parent commits (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`) and fast-forwards only to the newest commit whose GitHub Actions (`app.slug == github-actions`) runs have all completed successfully; other apps' runs and the one Actions job named `SonarCloud scan` are logged as advisory and ignored, and a check run without a job name is a malformed answer. Running, cancelled, and failed Actions candidates are named in the log and skipped; no Actions runs stay neutral only for the 30-minute grace period measured from the local host clock when the HEAD SHA was first seen; a commit timestamp supplied by Git cannot postpone that alarm. An unavailable or malformed GitHub answer, or a 60-second check-run lookup timeout, is a named deploy refusal that uses the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment.
+The two-minute auto-deploy tick first runs `docker compose config --quiet` on the checked-out configuration, then checks the active-job queue and required alert-channel configuration before it pulls or builds. Compose owns the list of required variables (every `${VAR:?…}` in `docker-compose.yml`), so a missing one such as `GRAFANA_PASSWORD` is a named deploy refusal quoting compose's own message before anything is pulled — the job guard's `docker compose exec` would not notice it, and the build would fail only after the fast-forward. The refusal uses the same counter and alert escalation. The tick asks again right after the fast-forward, before any base-image or Compose build, so a variable that the newly selected commit requires is named before anything is built or recreated. `--quiet` is mandatory there: without it, compose prints the fully interpolated configuration, every `.env` secret included, into the journal. The tick also runs `scripts/check_agent_cli_mounts.sh` before those steps when that verifier is installed; a verifier failure is a named deploy refusal, so it increments the tick's existing consecutive-failure counter and follows its alert escalation. A checkout that predates the verifier logs `mount preflight not installed, skipping` and continues with its installed guards, making the temporary compatibility state visible rather than silently bypassing it. After fetching `origin/main`, the tick asks GitHub about the newest ten first-parent commits (configurable with `SONGMAKER_AUTODEPLOY_CHECK_RUN_LOOKBACK_COMMITS`) and fast-forwards only to the newest commit whose GitHub Actions (`app.slug == github-actions`) runs have all completed, at least one of them successfully and every other one successfully, skipped, or neutral (a skipped or neutral run neither blocks nor passes a commit); other apps' runs and the one Actions job named `SonarCloud scan` are logged as advisory and ignored, and a check run without a job name is a malformed answer. Running, cancelled, and failed Actions candidates are named in the log and skipped; no Actions runs stay neutral only for the 30-minute grace period measured from the local host clock when the HEAD SHA was first seen; a commit timestamp supplied by Git cannot postpone that alarm. An unavailable or malformed GitHub answer, or a 60-second check-run lookup timeout, is a named deploy refusal that uses the same counter and alert escalation. Every Git command in the tick disables repository hooks and the filesystem monitor and runs with a minimal Git environment.
 
 Before its Compose build, the tick inspects the two local-only base images. It runs `scripts/build_images.sh bases` without a timeout when either image is missing, when `docker/base/**` changed between the deployed revision and the selected candidate, or when the deployed revision cannot be compared. Its output streams directly into the service journal. After a successful recreate, the tick runs `docker image prune --force --filter until=48h --filter label!=songmaker.base-image=true`: Docker accepts this negated label filter, and `scripts/build_images.sh` applies that label to both base images so the cleanup never selects them. Before recreating, it tags only running Compose services with a `build:` section as `<project>-<service>:previous`; `<project>` comes from `docker compose config --format json --no-interpolate | jq -r '.name'`, so the tag follows the actual Compose project without materializing `.env` secrets. To roll back a built service, run `project="$(docker compose config --format json --no-interpolate | jq -r '.name')"; docker tag "${project}-<service>:previous" "${project}-<service>:latest" && docker compose up -d --force-recreate <service>`. Both cleanup commands are bounded by `SONGMAKER_AUTODEPLOY_PRUNE_TIMEOUT_SECONDS` (600 seconds by default); an error or timeout is logged at `err` with its command and exit code, while the completed deployment remains successful and the tick does not change either counter. The builder cleanup deliberately uses `docker builder prune --all --force --filter until=48h`, preserving cache used in the last 48 hours but allowing a quiet host's next rebuild to take its normal cold-cache 8–15 minutes.
 

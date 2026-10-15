@@ -4,9 +4,12 @@
 // refused the admin page, and returning to a session that has outlived its
 // absolute maximum age -- and, since #1215, a logged-out deep link that signs
 // in onto the address it asked for. Since #1230 the phone also loses its
-// session behind an open song page and is sent to the door from there. Since
-// #1322 an admin with two sessions finds its own marked as this device, and the
-// admin page keeps a create refusal in the form while a revoke refusal stays.
+// session behind an open song page and is sent to the door from there, and
+// since #1340 a drawer tap after the loss returns there to the tapped album.
+// Since #1322 an admin with two sessions finds its own marked as this device,
+// and the admin page keeps a create refusal in the form while a revoke refusal
+// stays. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
+// page, and one the server never received leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
@@ -38,6 +41,7 @@ import {
 	type APIRequestContext,
 	type BrowserContext,
 	type Cookie,
+	type Locator,
 	type Page,
 	type Response,
 	type TestInfo
@@ -50,7 +54,11 @@ import {
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
 	RAIL_DRAWER_OPEN_LABEL,
-	SESSION_LOST_REDIRECT_PARAM
+	RAIL_LIBRARY_LABEL,
+	RAIL_LIBRARY_NAV_LABEL,
+	SESSION_LOST_REDIRECT_PARAM,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	DESKTOP_VIEWPORT,
@@ -59,6 +67,10 @@ import {
 	type ExpectedRefusal,
 	MOBILE_VIEWPORT,
 	openRailNav,
+	containing,
+	loseNetwork,
+	nameStartingWith,
+	regainNetwork,
 	shellOf,
 	workspace,
 	type Shell
@@ -69,7 +81,8 @@ import {
 	ageSessionPastAbsoluteLimit,
 	createAccount,
 	deleteAccount,
-	seedOwnSongAddress
+	seedOwnSongAddress,
+	seedOwnTakeAddress
 } from './seed';
 
 /**
@@ -77,18 +90,26 @@ import {
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
  * page, 13/12 for the expired session, 11/11 for the lockout, 23/26 for the
- * deep-link sign-in, and 28 at 375px for the phone's session lost behind its
- * menu, which runs on the phone only. The admin flows were measured at 1440 /
+ * deep-link sign-in, 28 at 375px for the phone's session lost behind its
+ * menu, and 20 at 390px for the album tapped in its drawer after the session
+ * was lost; both run on the phone only. The admin flows were measured at 1440 /
  * 390 instead: 23/21 for the own session and the two refusals, and 8 at 390px
  * for the row-action hitboxes (the admin page plus opening a tab), which runs
- * on the phone only. One ceiling for the file, the same way
- * `admin-models.spec.ts` carries one for its four. The budget is a ceiling,
- * not a knob: a flow that suddenly needs several more round trips is a
- * regression, so find the extra requests instead of raising this number --
- * see `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full
- * reasoning.
+ * on the phone only. The #1340 sign-outs were measured at 1440 / 390: 29 and
+ * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
+ * on the phone the walk through the drawer to the album -- and 23/23 for the
+ * sign-out the lost network keeps from the server. One ceiling for the file,
+ * the same way `admin-models.spec.ts` carries one for its four; only the
+ * sign-out while a take plays carries its own, since it opens a song and plays
+ * before the sign-out it is about (14.10.2026). The budget is a ceiling, not a
+ * knob: a flow that suddenly needs several more round trips is a regression,
+ * so find the extra requests instead of raising this number -- see
+ * `LIBRARY_FLOW_API_REQUEST_BUDGET` in `helpers.ts` for the full reasoning.
  */
 const AUTH_FLOW_API_REQUEST_BUDGET = 30;
+// The sign-out while a take plays: 29 at 1440, 32 to 35 at 390.
+const PLAYS_A_TAKE_TAG = '@plays-a-take';
+const TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET = 40;
 
 const AUTH_LOGIN_PATH = '/api/auth/login';
 const AUTH_ME_PATH = '/api/auth/me';
@@ -108,15 +129,36 @@ const REFUSED_PATHS = [
 // every other flow it still fails the guard.
 const LIBRARY_LISTS_REFUSED_TAG = '@library-lists-refused';
 const LIBRARY_LIST_PATHS = ['/api/albums', '/api/playlists'];
+// What a drawer album tap reads as it opens the album -- its songs, the album
+// the page resolves, and the active models the generation presets offer --
+// which a session lost before the tap refuses. The live-sync stream opens with
+// the album route before the first refusal is processed; every later start or
+// reconnect waits on the leave in resourceSync (#1340 C5).
+const ALBUM_OPENING_REFUSED_TAG = '@album-opening-refused';
+const ALBUM_OPENING_PATHS = [
+	'/api/songs',
+	'/api/albums/',
+	'/api/settings/models',
+	'/api/resource-events/stream'
+];
 // The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
 // sentences under proof. Only that flow forgives them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
+// The sign-out whose request never reaches the server: only that flow forgives
+// the requests the lost network fails.
+const LOSES_NETWORK_TAG = '@loses-network';
 const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
 ];
 const ADMIN_PAGE_PATH = '/settings/users';
+const VOICES_PAGE_PATH = '/settings/voices';
+const VOICES_HEADING = 'My Voices';
 const SESSION_COOKIE = 'session_id';
+const APP_HISTORY_STEPS_KEY = 'e2e:app-history-steps';
+// Set on the signed-in document only: a page that still carries it was not
+// loaded afresh.
+const SIGNED_IN_DOCUMENT_MARK = 'e2eSignedInDocument';
 
 // The song the deep-link flows ask for: the account's own, so the sign-in
 // that follows may open it.
@@ -206,14 +248,17 @@ test.afterAll(async () => {
 
 test.beforeEach(async ({ page, isMobile }, testInfo) => {
 	if (isMobile) await page.setViewportSize(PHONE_VIEWPORT);
-	guard = new FlowGuard(page, { refusalsExpectedOn: refusalsExpectedIn(testInfo) });
+	guard = new FlowGuard(page, {
+		refusalsExpectedOn: refusalsExpectedIn(testInfo),
+		losesNetworkOnPurpose: testInfo.tags.includes(LOSES_NETWORK_TAG)
+	});
 });
 
 // eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
 test.afterEach(({}, testInfo) => {
 	console.log(`Auth flow /api requests (${testInfo.title}): ${guard.apiRequestCount}`);
 	guard.assertClean();
-	guard.assertWithinBudget(AUTH_FLOW_API_REQUEST_BUDGET);
+	guard.assertWithinBudget(apiRequestBudgetOf(testInfo));
 });
 
 /** Types one set of credentials and waits for the server's own answer. */
@@ -262,6 +307,32 @@ async function signOut(page: Page, shell: Shell): Promise<void> {
 	await rail.getByRole('button', { name: LOGOUT_LABEL }).click();
 }
 
+/** Plays the open song's one take and waits until it sounds. */
+async function playTheTake(page: Page, shell: Shell): Promise<void> {
+	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
+	await workspace(page)
+		.locator('.take-row')
+		.getByRole('button', { name: nameStartingWith(TRANSPORT_PLAY_LABEL) })
+		.click();
+	await expect(
+		page.getByRole('contentinfo').getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+	).toHaveAttribute('aria-busy', 'false');
+}
+
+function transportControls(page: Page): Locator {
+	return page.getByRole('button', {
+		name: nameStartingWith(TRANSPORT_PLAY_LABEL, TRANSPORT_PAUSE_LABEL)
+	});
+}
+
+async function markSignedInDocument(page: Page): Promise<void> {
+	await page.evaluate((mark) => Object.assign(window, { [mark]: true }), SIGNED_IN_DOCUMENT_MARK);
+}
+
+async function isSignedInDocument(page: Page): Promise<boolean> {
+	return page.evaluate((mark) => mark in window, SIGNED_IN_DOCUMENT_MARK);
+}
+
 async function sessionCookie(context: BrowserContext): Promise<Cookie | undefined> {
 	const cookies = await context.cookies();
 	return cookies.find((cookie) => cookie.name === SESSION_COOKIE);
@@ -272,6 +343,41 @@ function sessionIdOf(cookie: Cookie): string {
 	return cookie.value.slice(0, cookie.value.lastIndexOf('.'));
 }
 
+/**
+ * Records every Back or jump the app issues itself -- the browser's own Back
+ * goes around it -- in session storage, which survives a document load.
+ */
+function recordAppHistorySteps(storageKey: string): void {
+	const record = (step: string): void => {
+		const steps = JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[];
+		sessionStorage.setItem(storageKey, JSON.stringify([...steps, `${step}@${location.pathname}`]));
+	};
+	const back = history.back.bind(history);
+	const go = history.go.bind(history);
+	history.back = () => {
+		record('back()');
+		back();
+	};
+	history.go = (delta?: number) => {
+		record(`go(${delta})`);
+		go(delta);
+	};
+}
+
+function appHistorySteps(page: Page): Promise<string[]> {
+	return page.evaluate(
+		(storageKey) => JSON.parse(sessionStorage.getItem(storageKey) ?? '[]') as string[],
+		APP_HISTORY_STEPS_KEY
+	);
+}
+
+function forgetAppHistorySteps(page: Page): Promise<void> {
+	return page.evaluate(
+		(storageKey) => sessionStorage.removeItem(storageKey),
+		APP_HISTORY_STEPS_KEY
+	);
+}
+
 /** The refusal the lockout flow is about, named by the server itself. */
 async function expectAccountLocked(refusal: Response): Promise<void> {
 	expect(refusal.status()).toBe(429);
@@ -279,13 +385,36 @@ async function expectAccountLocked(refusal: Response): Promise<void> {
 }
 
 /** The account's own song, seeded through a session of its own outside the browser. */
-async function seedOwnSong(): Promise<string> {
+async function seedOwnSong(seedAddress = seedOwnSongAddress): Promise<string> {
 	const api = await request.newContext({ baseURL: BASE_URL });
 	try {
-		return await seedOwnSongAddress(api, account, DEEP_LINK_SONG_TITLE);
+		return await seedAddress(api, account, DEEP_LINK_SONG_TITLE);
 	} finally {
 		await api.dispose();
 	}
+}
+
+/** The album page a song address sits under: `/album/<album>/<song>`. */
+function albumAddressOf(songAddress: string): string {
+	return songAddress.slice(0, songAddress.lastIndexOf('/'));
+}
+
+/**
+ * The run marker the seeded album's title and address share
+ * (`seedOwnSongAddress`), which names its row in the rail.
+ */
+function albumMarkerOf(albumAddress: string): string {
+	return albumAddress.slice(albumAddress.lastIndexOf('-') + 1);
+}
+
+/** The account's own album in the rail's LIBRARY group, opened to show it. */
+async function albumInRail(page: Page, shell: Shell, albumAddress: string): Promise<Locator> {
+	const rail = await openRailNav(page, shell);
+	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+	return rail
+		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+		.getByRole('button', { name: containing(albumMarkerOf(albumAddress)) });
 }
 
 /**
@@ -311,9 +440,11 @@ async function signInOnto(page: Page, songAddress: string): Promise<void> {
  * 5xx at all, still fails the flow.
  */
 function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
-	const refusedPaths = testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG)
-		? [...REFUSED_PATHS, ...LIBRARY_LIST_PATHS]
-		: REFUSED_PATHS;
+	const refusedPaths = [
+		...REFUSED_PATHS,
+		...(testInfo.tags.includes(LIBRARY_LISTS_REFUSED_TAG) ? LIBRARY_LIST_PATHS : []),
+		...(testInfo.tags.includes(ALBUM_OPENING_REFUSED_TAG) ? ALBUM_OPENING_PATHS : [])
+	];
 	const sessionRefusals = refusedPaths.map((path) => ({
 		path,
 		statuses: SESSION_REFUSAL_STATUSES
@@ -321,6 +452,12 @@ function refusalsExpectedIn(testInfo: TestInfo): ExpectedRefusal[] {
 	return testInfo.tags.includes(ADMIN_REFUSALS_ARE_THE_POINT_TAG)
 		? [...sessionRefusals, ...ADMIN_REFUSALS]
 		: sessionRefusals;
+}
+
+function apiRequestBudgetOf(testInfo: TestInfo): number {
+	return testInfo.tags.includes(PLAYS_A_TAKE_TAG)
+		? TAKE_SIGN_OUT_FLOW_API_REQUEST_BUDGET
+		: AUTH_FLOW_API_REQUEST_BUDGET;
 }
 
 /**
@@ -528,6 +665,101 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	await attachShot(page, testInfo, 'auth-signed-out-cookie-refused');
 });
 
+test('signing out from the open account menu on Voices, Back returns to Voices, which asks for sign-in again', async ({
+	page,
+	isMobile
+}, testInfo) => {
+	test.skip(!isMobile, 'The account menu belongs to the phone shell.'); // NOSONAR S1607: the account menu exists only in the phone shell.
+	await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
+	await signIn(page);
+	await page.goto(VOICES_PAGE_PATH);
+	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
+
+	await signOut(page, 'mobile');
+	await expect(page).toHaveURL(LOGIN_PAGE_URL);
+	await forgetAppHistorySteps(page);
+	await page.goBack();
+
+	// Not an empty page on the Voices address, and not the account menu's
+	// entry stepped through: the door, asked to bring the person back to Voices.
+	await expect(page).toHaveURL(
+		(url) =>
+			url.pathname === '/login' &&
+			url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === VOICES_PAGE_PATH
+	);
+	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+	expect(await appHistorySteps(page)).toEqual([]);
+	await attachShot(page, testInfo, 'auth-signed-out-back');
+});
+
+// The wide window signs out from its rail beside the song; the phone's song
+// page has no account circle, so the phone walks on to the album through its
+// drawer, the take still playing, and signs out from its account menu there.
+test(
+	'signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again',
+	{ tag: PLAYS_A_TAKE_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		const shell = shellOf(testInfo);
+		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+		const songAddress = await seedOwnSong(seedOwnTakeAddress);
+		await signInOnto(page, songAddress);
+		await playTheTake(page, shell);
+		let leftFrom = songAddress;
+		if (shell === 'mobile') {
+			leftFrom = albumAddressOf(songAddress);
+			await (await albumInRail(page, shell, leftFrom)).click();
+			await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+		}
+		await markSignedInDocument(page);
+
+		await signOut(page, shell);
+
+		await expect(page).toHaveURL(LOGIN_PAGE_URL);
+		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+		expect(await isSignedInDocument(page)).toBe(false);
+		await expect(transportControls(page)).toHaveCount(0);
+
+		await page.goBack();
+
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
+		);
+		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+		await expect(transportControls(page)).toHaveCount(0);
+		await attachShot(page, testInfo, 'auth-signed-out-while-playing');
+	}
+);
+
+test(
+	'a sign-out the server never receives leaves the person signed in, and says so',
+	{ tag: LOSES_NETWORK_TAG },
+	async ({ page, context, isMobile }, testInfo) => {
+		const shell = shellOf(testInfo);
+		if (isMobile) await page.setViewportSize(MOBILE_VIEWPORT);
+		await signIn(page);
+		const signedIn = await sessionCookie(context);
+
+		await loseNetwork(page, context);
+		await signOut(page, shell);
+
+		await expect(
+			page
+				.getByRole('alert')
+				.filter({ hasText: "Couldn't sign out. Check your connection and try again." })
+		).toBeVisible();
+		await expect(page).toHaveURL(WALL_URL);
+		await attachShot(page, testInfo, 'auth-sign-out-offline');
+		await regainNetwork(page, context);
+		expect((await sessionCookie(context))?.value).toBe(signedIn?.value);
+
+		await page.reload();
+
+		await expect(workspace(page)).toBeVisible();
+		await expectSignedInAs(page, testInfo);
+	}
+);
+
 test('the admin page is refused for a non-admin, with nothing of it rendered', async ({
 	page
 }, testInfo) => {
@@ -606,6 +838,35 @@ test(
 		);
 		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
 		await attachShot(page, testInfo, 'auth-phone-session-lost');
+	}
+);
+
+// Issue #1340, head ruling: a navigation the person already started counts as
+// where they meant to be. Which of the tap's requests the server refuses first
+// varies from run to run, and the address sign-in returns to must not.
+test(
+	'a session lost behind the drawer on the phone returns to the album tapped in it',
+	{ tag: ALBUM_OPENING_REFUSED_TAG },
+	async ({ page, isMobile }, testInfo) => {
+		test.skip(!isMobile, 'The drawer is the phone shell.'); // NOSONAR S1607: the drawer exists only in the phone shell.
+		await page.setViewportSize(MOBILE_VIEWPORT);
+		const albumAddress = albumAddressOf(await seedOwnSong());
+		await signIn(page);
+		await page.goto(VOICES_PAGE_PATH);
+		await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
+		const album = await albumInRail(page, 'mobile', albumAddress);
+		await expect(album).toBeVisible();
+
+		await ageSessionPastAbsoluteLimit(sessionIdOf((await sessionCookie(page.context())) as Cookie));
+		await album.click();
+
+		await expect(page).toHaveURL(
+			(url) =>
+				url.pathname === '/login' &&
+				url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === albumAddress
+		);
+		await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
+		await attachShot(page, testInfo, 'auth-phone-session-lost-album-tap');
 	}
 );
 

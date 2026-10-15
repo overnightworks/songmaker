@@ -151,6 +151,25 @@ REQUIRED_CHECK_RUN_APP_SLUG="github-actions"
 # The one Actions job whose verdict is advisory: SonarCloud findings turn CI
 # red so they are seen, but they never hold back a rollout (#623, #1318).
 ADVISORY_ACTIONS_JOB_NAME="SonarCloud scan"
+# The one conclusion that proves a required Actions job ran and passed. A
+# deploy needs at least one such job.
+PASSED_CHECK_RUN_CONCLUSION="success"
+# Conclusions of a required Actions job that judged nothing, such as the
+# "Adjust Configuration" job that CodeQL default setup skips on every commit:
+# they neither block a deploy nor count as its passed job (#1377). Every other
+# conclusion blocks.
+UNJUDGED_CHECK_RUN_CONCLUSIONS=(skipped neutral)
+is_unjudged_check_run_conclusion() {
+    local conclusion="$1"
+    local unjudged_conclusion
+    for unjudged_conclusion in "${UNJUDGED_CHECK_RUN_CONCLUSIONS[@]}"; do
+        if [[ "$conclusion" == "$unjudged_conclusion" ]]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
 # A non-whitespace separator preserves empty fields in Bash `read`; a tab
 # would collapse a missing app slug into the status field before validation.
 CHECK_RUN_FIELD_SEPARATOR=$'\x1f'
@@ -817,6 +836,7 @@ remote_check_status() {
     local has_envelope=false
     local has_running_check=false
     local has_failed_check=false
+    local has_passed_check=false
     while IFS="$CHECK_RUN_FIELD_SEPARATOR" read -r record app_slug name status conclusion; do
         case "$record" in
             envelope)
@@ -855,7 +875,9 @@ remote_check_status() {
                             printf 'GitHub returned an incomplete check-run status'
                             return 1
                         fi
-                        if [[ "$conclusion" != "success" ]]; then
+                        if [[ "$conclusion" == "$PASSED_CHECK_RUN_CONCLUSION" ]]; then
+                            has_passed_check=true
+                        elif ! is_unjudged_check_run_conclusion "$conclusion"; then
                             has_failed_check=true
                         fi
                         ;;
@@ -897,6 +919,8 @@ remote_check_status() {
         printf 'waiting (one or more GitHub Actions check runs are still running)'
     elif [[ "$has_failed_check" == true ]]; then
         printf 'failed (one or more GitHub Actions check runs did not succeed)'
+    elif [[ "$has_passed_check" != true ]]; then
+        printf 'failed (no required GitHub Actions check run succeeded)'
     else
         printf 'green'
     fi

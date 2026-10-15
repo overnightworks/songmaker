@@ -1,6 +1,7 @@
 import { addCsrfToken } from '$lib/api/fetch';
 import type { PlaybackDiagnosticEvent, PlaybackDiagnosticsReport } from '$lib/api/types';
 import { PLAYBACK_DIAGNOSTICS_PATH } from '$lib/constants';
+import { leavesForFreshDocument } from '$lib/history/historyController';
 
 // A transient recorder for #1187: what the player and the page did on the
 // listener's phone, written down per user on this device so that it survives
@@ -177,9 +178,12 @@ function recordPageEvent(kind: PlaybackDiagnosticKind, detail = ''): void {
 // so only these last sends ask the browser to finish them on its own. Without
 // a network the browser refuses such a send at once, and a refusal the page
 // cannot tell from a delivery would lose the events; they wait for the next
-// start instead.
+// start instead. So do they once the page leaves for a fresh document: the
+// server holds no session for it any more -- a confirmed sign-out or a lost
+// session -- and would refuse the send (#1340).
 function sendBeforeThePageGoes(): void {
-	if (recording !== null && navigator.onLine) sendWaitingEvents(recording, { keepalive: true });
+	if (recording === null || !navigator.onLine || leavesForFreshDocument()) return;
+	sendWaitingEvents(recording, { keepalive: true });
 }
 
 function watchThePage(): () => void {

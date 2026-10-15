@@ -25,7 +25,6 @@
 	import {
 		backToCollection,
 		followShellLayers,
-		forgetLayerEntries,
 		initNavigation,
 		isLibraryWorkspacePath,
 		openLibraryWall
@@ -243,12 +242,6 @@
 		}
 	}
 
-	async function handleLogout() {
-		forgetLayerEntries();
-		await logout();
-		window.location.href = '/login';
-	}
-
 	function levelUp(): void {
 		const target = escapeLevelUpTarget(
 			$nowPlayingOpen,
@@ -297,7 +290,7 @@
 	</div>
 {:else if me}
 	{#if compact}
-		<PhoneAppBar username={me.username} onlogout={handleLogout} />
+		<PhoneAppBar username={me.username} onlogout={logout} />
 		<RailDrawer>
 			<Rail showCollapseControl={false} showResizeHandle={false} />
 		</RailDrawer>
@@ -312,10 +305,7 @@
 			class:rail-collapsed={$railCollapsed}
 			style:--rail-expanded-width={`${$railWidth}px`}
 		>
-			<Rail
-				account={{ username: me.username, onlogout: handleLogout }}
-				collapsed={$railCollapsed}
-			/>
+			<Rail account={{ username: me.username, onlogout: logout }} collapsed={$railCollapsed} />
 			<div class="app-shell desktop">
 				{@render children()}
 			</div>

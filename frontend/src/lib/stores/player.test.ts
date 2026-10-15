@@ -40,13 +40,21 @@ vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
 const lockScreen = vi.hoisted(() => ({
-	handlers: null as { pause: () => void } | null
+	handlers: null as { play: () => void; pause: () => void } | null
 }));
 // The store installs its lock-screen actions on import; a missing one is a
 // failure, not a silent no-op.
-function pressLockScreenPause(): void {
+function lockScreenActions(): { play: () => void; pause: () => void } {
 	if (!lockScreen.handlers) throw new Error('Expected the lock-screen actions to be installed');
-	lockScreen.handlers.pause();
+	return lockScreen.handlers;
+}
+
+function pressLockScreenPause(): void {
+	lockScreenActions().pause();
+}
+
+function pressLockScreenPlay(): void {
+	lockScreenActions().play();
 }
 
 vi.mock('$lib/services/mediaSession', async (importOriginal) => {
@@ -133,9 +141,16 @@ import {
 	shuffleLabel,
 	toggleShuffle,
 	transportOfTheStart,
+	waitingStartOf,
+	pendingStart,
+	stopStartAwaitingNetwork,
 	windowEnded
 } from './player';
-import { audioPlayer, RECOVERY_DEADLINE_MS } from '$lib/services/audioPlayer.svelte';
+import {
+	audioPlayer,
+	RECOVERY_DEADLINE_MS,
+	transportOffersPause
+} from '$lib/services/audioPlayer.svelte';
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
@@ -241,6 +256,27 @@ function watchLockScreenTitle(): { metadata: MediaMetadataInit | null } {
 		Reflect.deleteProperty(navigator, 'mediaSession');
 	});
 	return mediaSession;
+}
+
+// Every title the lock screen was handed, in order, so a moment it went blank
+// shows even when a later title replaced it.
+function recordLockScreenTitles(): (string | null)[] {
+	const titles: (string | null)[] = [];
+	const mediaSession = {};
+	Object.defineProperty(mediaSession, 'metadata', {
+		set: (metadata: MediaMetadataInit | null) => titles.push(metadata?.title ?? null)
+	});
+	Object.defineProperty(navigator, 'mediaSession', { value: mediaSession, configurable: true });
+	vi.stubGlobal(
+		'MediaMetadata',
+		vi.fn(function (init: MediaMetadataInit) {
+			return init;
+		})
+	);
+	onTestFinished(() => {
+		Reflect.deleteProperty(navigator, 'mediaSession');
+	});
+	return titles;
 }
 
 function albumQueueTakeIds(): string[] {
@@ -1604,6 +1640,29 @@ describe('starting library playback from a take', () => {
 		toasts.set([]);
 	});
 
+	it.each(['playing', 'buffering'] as const)(
+		'a press on the row of the take that is %s pauses it rather than starting it again (#1330)',
+		async (status) => {
+			const gen = makeGen(genDefaults);
+			const song = makeSong(queuedSongDefaults());
+			audioPlayer.current = makePlayback(gen, song);
+			audioPlayer.status = status;
+			vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+
+			await playTake(gen, song);
+
+			expect({
+				status: audioPlayer.status,
+				startsAgain: vi.mocked(fetchLibraryPoolQueue).mock.calls.length
+			}).toEqual({ status: 'paused', startsAgain: 0 });
+		}
+	);
+
 	it('does not call createLibraryQueueStreamSnapshot and loads the start take natively', async () => {
 		const gen = makeGen({ ...genDefaults, id: 'g2' });
 		vi.mocked(fetchLibraryPoolQueue).mockResolvedValueOnce(
@@ -2714,6 +2773,27 @@ describe('playAlbum start track', () => {
 	});
 
 	describe('offline, while the start waits (#1312)', () => {
+		const LOADED_TAKE_TITLE = 'Earlier Song';
+
+		// A take of another album, loaded and paused, as after a reload or a
+		// pause before the listener opened this album.
+		function loadPausedTake(): void {
+			const song = makeSong({
+				...queuedSongDefaults(),
+				id: 's9',
+				album_id: 'a9',
+				title: LOADED_TAKE_TITLE
+			});
+			audioPlayer.current = makePlayback(
+				makeGen({ ...genDefaults, id: 'g9', song_id: 's9' }),
+				song
+			);
+			audioPlayer.status = 'paused';
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+		}
+
 		beforeEach(() => {
 			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
 			reportResourceStreamReachable(false);
@@ -2721,19 +2801,141 @@ describe('playAlbum start track', () => {
 		});
 
 		afterEach(() => {
+			stopStartAwaitingNetwork();
 			vi.useRealTimers();
 		});
 
-		it('the lock screen names the song it waits for, and goes blank once the wait is stopped', async () => {
+		it.each([
+			{ loaded: 'no take', load: () => {}, afterTheStop: null },
+			{
+				loaded: 'a paused take',
+				load: loadPausedTake,
+				afterTheStop: expect.objectContaining({ title: LOADED_TAKE_TITLE })
+			}
+		])(
+			'with $loaded loaded, the transport waits and the lock screen names the song, until the wait is stopped (#1330)',
+			async ({ load, afterTheStop }) => {
+				load();
+				const lockScreen = watchLockScreenTitle();
+				await playAlbum('a1');
+				const whileWaiting = {
+					transport: transportOfTheStart(
+						audioPlayer.current,
+						get(playStartNotice),
+						audioPlayer.transport
+					),
+					bar: waitingStartOf(get(playStartNotice), get(pendingStart))?.song.songTitle,
+					lockScreen: lockScreen.metadata
+				};
+
+				stopStartAwaitingNetwork();
+
+				expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
+					whileWaiting: {
+						transport: 'recovering',
+						bar: 'Song',
+						lockScreen: expect.objectContaining({ title: 'Song', artist: 'Artist' })
+					},
+					afterTheStop
+				});
+			}
+		);
+
+		it('a take still playing falls silent under the start that took its place (#1330)', async () => {
+			loadPausedTake();
+			audioPlayer.status = 'playing';
+			vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+
+			await playAlbum('a1');
+
+			expect(audioPlayer.transport).toBe('paused');
+		});
+
+		it('a take that plays ends the start, so the lock screen names it and the network starts nothing (#1330)', async () => {
+			loadPausedTake();
 			const lockScreen = watchLockScreenTitle();
 			await playAlbum('a1');
-			const whileWaiting = lockScreen.metadata;
 
-			await playIdleStart();
+			audioPlayer.currentCallbacks.onPlaybackStarted?.();
+			reportResourceStreamReachable(true);
+			await Promise.resolve();
 
-			expect({ whileWaiting, afterTheStop: lockScreen.metadata }).toEqual({
-				whileWaiting: expect.objectContaining({ title: 'Song', artist: 'Artist' }),
-				afterTheStop: null
+			expect({
+				notice: get(playStartNotice),
+				waiting: get(pendingStart),
+				lockScreen: lockScreen.metadata?.title,
+				loads: vi.mocked(audioPlayer.load).mock.calls.length
+			}).toEqual({ notice: 'idle', waiting: null, lockScreen: LOADED_TAKE_TITLE, loads: 0 });
+		});
+
+		it('once the network is back, the lock screen keeps the song and its Pause until the take plays (#1330)', async () => {
+			const lockScreenTitles = recordLockScreenTitles();
+			vi.mocked(fetchSong).mockResolvedValueOnce(makeSong(queuedSongDefaults()));
+			vi.mocked(audioPlayer.load).mockImplementation((info) => {
+				audioPlayer.current = info;
+				audioPlayer.status = 'playing';
+			});
+			onTestFinished(() => {
+				audioPlayer.status = 'idle';
+			});
+			await playAlbum('a1');
+			const lockScreenOffersPause: boolean[] = [];
+			const stopWatching = playStartNotice.subscribe((notice) => {
+				const transport = transportOfTheStart(audioPlayer.current, notice, audioPlayer.transport);
+				lockScreenOffersPause.push(transportOffersPause(transport));
+			});
+
+			reportResourceStreamReachable(true);
+			await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+			stopWatching();
+
+			expect({
+				wentBlank: lockScreenTitles.includes(null),
+				droppedItsPause: lockScreenOffersPause.includes(false)
+			}).toEqual({ wentBlank: false, droppedItsPause: false });
+		});
+
+		it.each([
+			{ loaded: 'no take', load: () => {} },
+			{ loaded: 'a paused take', load: loadPausedTake }
+		])(
+			"with $loaded loaded, a lock-screen pause keeps naming the song, and the lock screen's Play waits again (#1330)",
+			async ({ load }) => {
+				load();
+				const lockScreenTitle = watchLockScreenTitle();
+				await playAlbum('a1');
+
+				pressLockScreenPause();
+				const afterThePause = {
+					title: lockScreenTitle.metadata?.title,
+					notice: get(playStartNotice),
+					named: get(pendingStart)?.song.songTitle
+				};
+				vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+				pressLockScreenPlay();
+				await vi.waitFor(() => expect(fetchSong).toHaveBeenCalledTimes(2));
+
+				expect({ afterThePause, afterPlay: get(playStartNotice) }).toEqual({
+					afterThePause: { title: 'Song', notice: 'idle', named: 'Song' },
+					afterPlay: 'awaiting-network'
+				});
+			}
+		);
+
+		it("a lock-screen Play on the paused start plays the album once the songs' takes can be read (#1330)", async () => {
+			await playAlbum('a1');
+			pressLockScreenPause();
+			reportResourceStreamReachable(true);
+			vi.mocked(fetchSong).mockResolvedValueOnce(makeSong(queuedSongDefaults()));
+
+			pressLockScreenPlay();
+			await vi.waitFor(() => expect(audioPlayer.load).toHaveBeenCalledOnce());
+
+			expect({ notice: get(playStartNotice), named: get(pendingStart) }).toEqual({
+				notice: 'idle',
+				named: null
 			});
 		});
 
@@ -4475,6 +4677,20 @@ describe('restoring the last playback after a reload', () => {
 		return vi.mocked(audioPlayer.load).mock.calls[0]?.[1];
 	}
 
+	// A reload whose saved song is still on its way, answered when the test says.
+	function restoreWaitingOnTheSavedSong(): {
+		restoring: Promise<void>;
+		answer: (reply: Promise<SongItem>) => void;
+	} {
+		let answer: (reply: Promise<SongItem>) => void = () => {};
+		vi.mocked(fetchSong).mockReturnValueOnce(
+			new Promise((resolve) => {
+				answer = resolve;
+			})
+		);
+		return { restoring: restoreLastPlayback(), answer };
+	}
+
 	async function playTheRestoredTake(): Promise<void> {
 		audioPlayer.currentCallbacks.onPlaybackStarted?.();
 		await vi.waitFor(() =>
@@ -4493,6 +4709,95 @@ describe('restoring the last playback after a reload', () => {
 			startAt: SAVED_POSITION
 		});
 		expect(audioPlayer.current?.generation.id).toBe(savedTake.id);
+	});
+
+	// A reload whose library take is still on its way: its song is back, the
+	// queue around it is not, until the test answers.
+	async function restoreWaitingOnTheLibraryQueue(): Promise<{
+		restoring: Promise<void>;
+		arrive: () => void;
+	}> {
+		saveRecord({ source: QUEUES.library.source });
+		vi.mocked(fetchSong).mockResolvedValueOnce(savedSong);
+		let arrive: () => void = () => {};
+		vi.mocked(fetchLibraryPoolQueue).mockReturnValueOnce(
+			new Promise((resolve) => {
+				arrive = () =>
+					resolve(
+						makePoolQueue({
+							takes: [poolTakeOf(savedSong, savedTake), poolTakeOf(nextSong, nextTake)]
+						})
+					);
+			})
+		);
+		const restoring = restoreLastPlayback();
+		await vi.waitFor(() => expect(fetchLibraryPoolQueue).toHaveBeenCalled());
+		return { restoring, arrive };
+	}
+
+	// The last request a restore of each queue waits on before its take is back.
+	const SAVED_TAKE_ON_ITS_WAY = {
+		album: async () => {
+			const { restoring, answer } = restoreWaitingOnTheSavedSong();
+			return { restoring, arrive: () => answer(Promise.resolve(savedSong)) };
+		},
+		library: restoreWaitingOnTheLibraryQueue
+	};
+
+	it.each([
+		{ queue: 'album', presses: 1, reads: 'restoring', playsOnArrival: true, poolRequests: 0 },
+		{ queue: 'album', presses: 2, reads: 'idle', playsOnArrival: false, poolRequests: 0 },
+		{ queue: 'library', presses: 1, reads: 'restoring', playsOnArrival: true, poolRequests: 1 },
+		{ queue: 'library', presses: 2, reads: 'idle', playsOnArrival: false, poolRequests: 1 }
+	] as const)(
+		'Play pressed $presses time(s) before the saved $queue take arrives reads $reads, and it plays from the saved position on arrival: $playsOnArrival (#1330)',
+		async ({ queue, presses, reads, playsOnArrival, poolRequests }) => {
+			const { restoring, arrive } = await SAVED_TAKE_ON_ITS_WAY[queue]();
+			for (let press = 0; press < presses; press++) await playIdleStart();
+			const beforeItArrives = get(playStartNotice);
+
+			arrive();
+			await restoring;
+
+			expect({
+				beforeItArrives,
+				load: restoredLoad(),
+				after: get(playStartNotice),
+				poolRequests: vi.mocked(fetchLibraryPoolQueue).mock.calls.length
+			}).toEqual({
+				beforeItArrives: reads,
+				load: expect.objectContaining({ autoplay: playsOnArrival, startAt: SAVED_POSITION }),
+				after: 'idle',
+				poolRequests
+			});
+		}
+	);
+
+	it('Play pressed before the restore lands, then a take-row start: the tapped take stays current (#1330)', async () => {
+		selectedAlbumId.set(ALBUM_ID);
+		QUEUES.album.serve();
+		const { restoring, answer } = restoreWaitingOnTheSavedSong();
+		await playIdleStart();
+		await playTake(nextTake, nextSong);
+
+		answer(Promise.resolve(savedSong));
+		await restoring;
+
+		expect(audioPlayer.current?.generation.id).toBe(nextTake.id);
+		expect(get(playStartNotice)).toBe('idle');
+		expect(fetchLibraryPoolQueue).not.toHaveBeenCalled();
+	});
+
+	it('Play pressed before the restore lands, and the saved take cannot come back: the press starts what the transport names (#1330)', async () => {
+		QUEUES.library.serve();
+		const { restoring, answer } = restoreWaitingOnTheSavedSong();
+		await playIdleStart();
+
+		answer(Promise.reject(new ApiError(404, 'gone', '/x')));
+		await restoring;
+
+		await vi.waitFor(() => expect(audioPlayer.current?.generation.id).toBe(savedTake.id));
+		expect(fetchLibraryPoolQueue).toHaveBeenCalled();
 	});
 
 	it.each([

@@ -16,15 +16,18 @@ import {
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_NO_SONGS,
 	HITBOX_FREQUENT_PX,
-	collectionPauseLabel,
-	collectionPlayLabel,
+	collectionActionLabel,
 	NEW_SONG_CLOSE_LABEL,
 	NEW_SONG_ROW_LABEL,
 	newSongCardLabel,
 	PLAYING_MARK_LABEL,
-	collectionShuffleLabel
+	TRANSPORT_PLAY_LABEL,
+	COLLECTION_SHUFFLE_ACTION,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
 import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
 import { findElementByRoleAndName, openCollectionMenu } from './shell/rail-test-fixtures';
@@ -118,7 +121,14 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 import AlbumDetailView from './AlbumDetailView.svelte';
 import albumDetailViewSource from './AlbumDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
-import { playAlbum, setShuffle, shuffleEnabled } from '$lib/stores/player';
+import {
+	pendingStart,
+	playAlbum,
+	playStartNotice,
+	setPendingStartForTests,
+	setShuffle,
+	shuffleEnabled
+} from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { addToast } from '$lib/stores/toast';
 
@@ -172,6 +182,8 @@ afterEach(async () => {
 	nowPlayingSurface.set('closed');
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
+	playStartNotice.set('idle');
+	setPendingStartForTests(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
 	resetConnectivityForTests();
@@ -262,8 +274,12 @@ describe('AlbumDetailView header', () => {
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.header-cover')).not.toBeNull();
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		expect(getByRoleButton(header, collectionPlayLabel('album'))).not.toBeNull();
-		expect(getByRoleButton(header, collectionShuffleLabel('album'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'))
+		).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'))
+		).not.toBeNull();
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 	});
 
@@ -273,7 +289,7 @@ describe('AlbumDetailView header', () => {
 
 		getByRoleButton(
 			requireElement(target, '.collection-header'),
-			collectionPlayLabel('album')
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
 		).click();
 
 		expect(playAlbum).toHaveBeenCalledWith('a-local', 'top');
@@ -285,27 +301,129 @@ describe('AlbumDetailView header', () => {
 
 		getByRoleButton(
 			requireElement(target, '.collection-header'),
-			collectionShuffleLabel('album')
+			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
 		).click();
 
 		expect(playAlbum).toHaveBeenCalledWith('a-local', 'random');
 		expect(get(shuffleEnabled)).toBe(true);
 	});
 
-	it('offers to pause this album while it plays', async () => {
-		queueContext.set({ type: 'album', albumId: 'a-local' });
-		audioPlayer.current = {
-			songId: 's-local',
-			generation: generation({ song_id: 's-local' })
-		} as unknown as typeof audioPlayer.current;
-		audioPlayer.status = 'playing';
+	function playCircle(target: HTMLElement): HTMLButtonElement {
+		return requireElement<HTMLButtonElement>(target, '.collection-header .play-circle');
+	}
 
-		const target = await renderDetail();
+	function circleFacts(circle: HTMLButtonElement) {
+		return {
+			label: circle.getAttribute('aria-label'),
+			busy: circle.getAttribute('aria-busy'),
+			face: shownTransportFace(circle)
+		};
+	}
 
-		expect(
-			getByRoleButton(requireElement(target, '.collection-header'), collectionPauseLabel('album'))
-		).not.toBeNull();
+	describe('while a start of this album waits (#1330)', () => {
+		const readsBusyPause = {
+			label: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			busy: 'true',
+			face: 'spinner'
+		};
+
+		// A take of another album, loaded and paused, as after a reload or a
+		// pause before the listener opened this album.
+		function loadPausedTakeOfAnotherAlbum(): void {
+			queueContext.set({ type: 'album', albumId: 'a-other' });
+			audioPlayer.current = {
+				songId: 's-other',
+				generation: generation({ song_id: 's-other' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = 'paused';
+		}
+
+		it.each([
+			{ loaded: 'no take', load: () => {} },
+			{ loaded: 'a paused take of another album', load: loadPausedTakeOfAnotherAlbum }
+		])(
+			'with $loaded loaded, a header start waiting for the network reads Pause with its spinner, and a tap withdraws it',
+			async ({ load }) => {
+				load();
+				setPendingStartForTests({
+					albumId: 'a-local',
+					song: { songTitle: 'Song', artist: 'Artist', albumTitle: 'Night Drive' }
+				});
+				playStartNotice.set('awaiting-network');
+				const target = await renderDetail();
+				const whileWaiting = circleFacts(playCircle(target));
+
+				playCircle(target).click();
+				await tick();
+
+				expect({
+					whileWaiting,
+					afterTheTap: circleFacts(playCircle(target)),
+					waiting: get(pendingStart),
+					startedAgain: vi.mocked(playAlbum).mock.calls.length
+				}).toEqual({
+					whileWaiting: readsBusyPause,
+					afterTheTap: {
+						label: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+						busy: 'false',
+						face: 'play'
+					},
+					waiting: null,
+					startedAgain: 0
+				});
+			}
+		);
+
+		it('a take of it waiting for its bytes reads Pause with its spinner, and a tap pauses it', async () => {
+			queueContext.set({ type: 'album', albumId: 'a-local' });
+			audioPlayer.current = {
+				songId: 's-local',
+				generation: generation({ song_id: 's-local' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = 'buffering';
+			vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+				audioPlayer.status = 'paused';
+			});
+			const target = await renderDetail();
+			const whileWaiting = circleFacts(playCircle(target));
+
+			playCircle(target).click();
+			await tick();
+
+			expect({
+				whileWaiting,
+				status: audioPlayer.status,
+				startedAgain: vi.mocked(playAlbum).mock.calls.length
+			}).toEqual({ whileWaiting: readsBusyPause, status: 'paused', startedAgain: 0 });
+		});
 	});
+
+	it.each([
+		{
+			status: 'playing',
+			label: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			face: 'pause'
+		},
+		{
+			status: 'error',
+			label: collectionActionLabel(TRANSPORT_RETRY_LABEL, 'album'),
+			face: 'refresh-cw'
+		}
+	] as const)(
+		'names and draws the circle as the bar does while a take of this album is $status (#1330)',
+		async ({ status, label, face }) => {
+			queueContext.set({ type: 'album', albumId: 'a-local' });
+			audioPlayer.current = {
+				songId: 's-local',
+				generation: generation({ song_id: 's-local' })
+			} as unknown as typeof audioPlayer.current;
+			audioPlayer.status = status;
+
+			const target = await renderDetail();
+
+			expect(circleFacts(playCircle(target))).toEqual({ label, busy: 'false', face });
+		}
+	);
 
 	it.each([
 		['without songs', []],
@@ -329,9 +447,10 @@ describe('AlbumDetailView header', () => {
 			queueContext.set(running);
 			const target = await renderDetail();
 			const header = requireElement(target, '.collection-header');
-			const buttons = [collectionPlayLabel('album'), collectionShuffleLabel('album')].map((label) =>
-				getByRoleButton(header, label)
-			);
+			const buttons = [
+				collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
+			].map((label) => getByRoleButton(header, label));
 
 			for (const button of buttons) button.click();
 			await tick();
@@ -356,23 +475,27 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
 
-		expect(getByRoleButton(header, collectionPauseLabel('album')).disabled).toBe(false);
-		expect(getByRoleButton(header, collectionShuffleLabel('album')).disabled).toBe(true);
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album')).disabled
+		).toBe(false);
+		expect(
+			getByRoleButton(header, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')).disabled
+		).toBe(true);
 	});
 
-	it.each([collectionPlayLabel('album'), collectionShuffleLabel('album')])(
-		'sizes "%s" to the frequent hitbox on a coarse pointer',
-		async (label) => {
-			// #163/6: the album header's play is the shortest path to hearing the
-			// album, and on a phone it has to be reachable with a thumb.
-			injectHitboxStyles();
-			const target = await renderDetail();
-			const button = getByRoleButton(requireElement(target, '.collection-header'), label);
-			setPointer('coarse');
+	it.each([
+		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+		collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
+	])('sizes "%s" to the frequent hitbox on a coarse pointer', async (label) => {
+		// #163/6: the album header's play is the shortest path to hearing the
+		// album, and on a phone it has to be reachable with a thumb.
+		injectHitboxStyles();
+		const target = await renderDetail();
+		const button = getByRoleButton(requireElement(target, '.collection-header'), label);
+		setPointer('coarse');
 
-			expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
-		}
-	);
+		expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
+	});
 
 	it('names the album and lists Edit details, Cover, Curate, Add to playlist, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
