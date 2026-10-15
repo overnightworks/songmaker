@@ -1,8 +1,0 @@
-claim_id = "52c284a8625345c8acc9a967abc45861"
-agent = "claude-head"
-role = "builder"
-base = "464c612ddc7c44e9978da3d8adbd89f3f610f5f0"
-branch = "claude-head/issue-1388-library-listen-and-write-api"
-scope = ["docs/architecture.md", "frontend/e2e/library-continue.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library.spec.ts", "frontend/src/lib/api/library.test.ts", "frontend/src/lib/api/library.ts", "frontend/src/lib/api/types.ts", "frontend/src/lib/components/LibraryContinue.svelte", "frontend/src/lib/components/LibraryContinue.test.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/components/shell/rail-test-fixtures.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryOrder.test.ts", "frontend/src/lib/stores/libraryOrder.ts", "frontend/src/lib/stores/ui.ts", "scripts/dead-symbols.allow", "src/songmaker_cli/api_helpers.py", "src/songmaker_cli/api_models/__init__.py", "src/songmaker_cli/api_models/library.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/activity.py", "src/songmaker_cli/db/queries/library.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/library_api.py", "src/songmaker_cli/song_api.py", "tests/test_api.py", "tests/test_db.py", "tests/test_library_api.py", "tests/test_postgresql.py", "tests/test_song_work.py"]
-opened_commit = "0f6ebe37c329e483825d1c63bf24ddc3d307b415"
-whole_reason = "one atomic API switch: the endpoints, the data owners they read, every caller and every test or doc pinning the old shape"
