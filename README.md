@@ -11,18 +11,26 @@ Songmaker is Docker-only — there is no native local-dev path. The Docker stack
 Requires: Docker (with Compose v2), NVIDIA Container Toolkit (for GPU generation), and a Hugging Face token (for downloading ACE-Step model weights).
 
 ```bash
-# 1. First-time setup
+# 1. Install songmaker-web's AppArmor profile (once per profile change, needs sudo;
+#    it survives reboots, and songmaker-web does not start without it)
+sudo ./scripts/apparmor/install.sh
+
+# 2. First-time setup
 cp docker/.env.docker.example .env     # edit with your secrets — see file for required fields
 docker compose up -d --build --wait
 # Cold-cache rebuild takes 8-15 min the first time. Never wrap in `timeout`
 # (see CLAUDE.md "Docker" section for the full reasoning).
 
-# 2. Install the agent-CLI login mirror (one-time, needs sudo)
+# 3. Install the agent-CLI login mirror (one-time, needs sudo)
 sudo ./scripts/install-cli-credentials-mirror.sh
 
-# 3. Install the boot autostart unit (one-time, needs sudo)
+# 4. Install the boot autostart unit (one-time, needs sudo)
 sudo ./scripts/install-autostart.sh
 ```
+
+The AppArmor profile is installed under `/etc/apparmor.d/`, so the host loads
+it at every boot before Docker starts — see
+[docs/security.md](docs/security.md) for rollout, proof and removal.
 
 `restart: unless-stopped` alone does not survive every reboot: a container that
 was created but never started (e.g. a mid-boot GPU driver mismatch) is never
