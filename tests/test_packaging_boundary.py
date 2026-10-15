@@ -18,8 +18,8 @@ from pathlib import Path
 
 import pytest
 import yaml
+from conftest import REPOSITORY_ROOT, run_compose_config
 
-REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = REPOSITORY_ROOT / "src"
 DOCKER_ROOT = REPOSITORY_ROOT / "docker"
 UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
@@ -27,10 +27,6 @@ IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
 WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
 E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
 VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
-TEST_STACK_ENVIRONMENT = {
-    "WEB_PORT": "18791",
-    "SONGMAKER_INTERNAL_TOKEN": "compose-config-check",
-}
 DOCKER_DEFAULT_RESTART_POLICY = "no"
 
 
@@ -247,9 +243,14 @@ def _declared_named_volumes() -> frozenset[str]:
     return frozenset(volumes)
 
 
-def _e2e_workflow_compose_files() -> tuple[str, ...]:
+@functools.cache
+def _e2e_workflow_environment() -> dict[str, str]:
     workflow = yaml.safe_load(E2E_WORKFLOW.read_text())
-    return tuple(shlex.split(workflow["env"]["COMPOSE_FILES"]))
+    return {name: str(value) for name, value in workflow["env"].items()}
+
+
+def _e2e_workflow_compose_files() -> tuple[str, ...]:
+    return tuple(shlex.split(_e2e_workflow_environment()["COMPOSE_FILES"]))
 
 
 def _test_stacks() -> dict[str, tuple[str, ...]]:
@@ -265,20 +266,12 @@ TEST_STACKS = _test_stacks()
 
 @functools.cache
 def _rendered_test_stack_services(compose_files: tuple[str, ...]) -> dict[str, dict]:
-    """The test stack as Compose itself merges it, with every profile active.
-
-    ``--env-file`` keeps a checkout's own ``.env`` out of the rendering.
-    """
-    rendered = subprocess.run(
-        [
-            "docker", "compose", "--env-file", os.devnull, *compose_files,
-            "--profile", "*", "config", "--format", "json",
-        ],
-        cwd=REPOSITORY_ROOT,
-        env={**os.environ, **TEST_STACK_ENVIRONMENT},
-        capture_output=True,
-        text=True,
-        check=False,
+    """The test stack as Compose itself merges it, every profile active, under e2e.yml's env."""
+    rendered = run_compose_config(
+        (*compose_files, "--profile", "*"),
+        ("--format", "json"),
+        env_file=Path(os.devnull),
+        environment=_e2e_workflow_environment(),
     )
     assert rendered.returncode == 0, rendered.stderr
     return json.loads(rendered.stdout)["services"]

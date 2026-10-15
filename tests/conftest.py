@@ -18,9 +18,12 @@ os.environ.setdefault("SONGMAKER_INTERNAL_TOKEN", "test-internal-token")
 os.environ.setdefault("WORKER_ID", "test-worker")
 os.environ.setdefault("PUBLIC_BASE_URL", "https://songmaker.test")
 
+import functools  # noqa: E402
+import shutil  # noqa: E402
 import struct  # noqa: E402
+import subprocess  # noqa: E402
 import wave  # noqa: E402
-from collections.abc import Callable  # noqa: E402
+from collections.abc import Callable, Mapping, Sequence  # noqa: E402
 from http.client import HTTPResponse  # noqa: E402
 from io import BytesIO  # noqa: E402
 from pathlib import Path  # noqa: E402
@@ -41,6 +44,8 @@ from songmaker_cli.app_context import AppContext, build_password_hasher  # noqa:
 
 TEST_SECRET = b"a" * 64
 TEST_ORIGIN: Final = "https://testserver"
+REPOSITORY_ROOT: Final = Path(__file__).resolve().parents[1]
+COMPOSE_CONFIG_TIMEOUT_SECONDS: Final = 60
 
 
 def web_client(app, **kwargs) -> TestClient:
@@ -584,3 +589,44 @@ def every_provider_is_configured(monkeypatch):
         lambda: True,
     )
     refresh_provider_snapshots()
+
+
+@functools.cache
+def _require_docker_compose() -> None:
+    if shutil.which("docker") is None:
+        pytest.fail("docker is not on PATH; this test drives the real `docker compose config`")
+    version = subprocess.run(
+        ["docker", "compose", "version"],
+        capture_output=True,
+        text=True,
+        timeout=COMPOSE_CONFIG_TIMEOUT_SECONDS,
+        check=False,
+    )
+    if version.returncode != 0:
+        pytest.fail(f"`docker compose` is unavailable: {version.stderr.strip()}")
+
+
+def run_compose_config(
+    compose_args: Sequence[str],
+    config_args: Sequence[str],
+    *,
+    env_file: Path,
+    environment: Mapping[str, str],
+) -> subprocess.CompletedProcess[str]:
+    """Run the real ``docker compose config`` from the repository root.
+
+    ``--env-file`` replaces the project's ``.env`` and the process environment is
+    cleared down to PATH and HOME plus ``environment``, so neither the operator's
+    file nor the test session's own environment reaches the rendering. ``config``
+    needs only the Docker CLI's compose plugin, not a daemon.
+    """
+    _require_docker_compose()
+    return subprocess.run(
+        ["docker", "compose", "--env-file", str(env_file), *compose_args, "config", *config_args],
+        cwd=REPOSITORY_ROOT,
+        env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], **environment},
+        capture_output=True,
+        text=True,
+        timeout=COMPOSE_CONFIG_TIMEOUT_SECONDS,
+        check=False,
+    )

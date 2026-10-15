@@ -2,40 +2,22 @@
 
 Each case runs the repository's docker-compose.yml through the real
 ``docker compose config --quiet`` — the same command the auto-deploy guard
-runs — with a scratch ``--env-file``, an environment cleared down to PATH and
-HOME, and a scratch project name. ``--env-file`` replaces the project's
-``.env``, so the operator's file and live project are never read.
-``config`` needs only the Docker CLI's compose plugin, not a daemon.
+runs — with a scratch ``--env-file`` and a scratch project name, so the
+operator's ``.env`` and live project are never read.
 """
 
 from __future__ import annotations
 
-import os
-import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+from conftest import run_compose_config
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-COMPOSE_FILE = REPO_ROOT / "docker-compose.yml"
-SCRATCH_PROJECT = "songmaker-compose-required-env-test"
+SCRATCH_PROJECT_COMPOSE_ARGS = (
+    "-f", "docker-compose.yml", "-p", "songmaker-compose-required-env-test",
+)
 SCRATCH_PASSWORD = "scratch-grafana-password-not-a-secret"
-COMPOSE_TIMEOUT_SECONDS = 60
-
-
-@pytest.fixture(scope="module", autouse=True)
-def _require_docker_compose() -> None:
-    if shutil.which("docker") is None:
-        pytest.fail("docker is not on PATH; this module drives the real `docker compose config`")
-    version = subprocess.run(
-        ["docker", "compose", "version"],
-        capture_output=True,
-        text=True,
-        timeout=COMPOSE_TIMEOUT_SECONDS,
-    )
-    if version.returncode != 0:
-        pytest.fail(f"`docker compose` is unavailable: {version.stderr.strip()}")
 
 
 def _compose_config_quiet(
@@ -43,19 +25,11 @@ def _compose_config_quiet(
 ) -> subprocess.CompletedProcess[str]:
     scratch_env_file = tmp_path / "scratch.env"
     scratch_env_file.write_text(env_file)
-    return subprocess.run(
-        [
-            "docker", "compose",
-            "-f", str(COMPOSE_FILE),
-            "-p", SCRATCH_PROJECT,
-            "--env-file", str(scratch_env_file),
-            "config", "--quiet",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=COMPOSE_TIMEOUT_SECONDS,
-        cwd=tmp_path,
-        env={"PATH": os.environ["PATH"], "HOME": os.environ["HOME"], **process_env},
+    return run_compose_config(
+        SCRATCH_PROJECT_COMPOSE_ARGS,
+        ("--quiet",),
+        env_file=scratch_env_file,
+        environment=process_env,
     )
 
 
