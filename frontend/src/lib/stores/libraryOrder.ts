@@ -1,10 +1,10 @@
 import { derived, writable, type Readable } from 'svelte/store';
-import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
+import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 import { LIBRARY_WALL_RECENT_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
-type LibraryPlaceType = LibraryContinueItem['type'];
+type LibraryPlaceType = LibraryListenItem['type'];
 type OrderedItem = { id: string; title: string; created_at?: string | null };
 type LibraryPlace = { type: LibraryPlaceType; item: OrderedItem };
 type LastWork = { rank: number; at: string };
@@ -37,10 +37,9 @@ function compareAdded(a: LibraryPlace, b: LibraryPlace): number {
 	return compareByCreatedAt(a.item, b.item, 'newest');
 }
 
-// A place without a rank waits at the end in title order: one newer than
-// the last read of Recent until the next read ranks it, and an album of
-// someone else's the viewer never worked in (only an admin sees one), which
-// Recent never ranks.
+// A place without a rank waits at the end in title order: one the viewer
+// has never listened in, which Listen never ranks, and one newer than the
+// last read of Listen until the next read ranks it.
 function compareByLastWork(lastWork: ReadonlyMap<string, LastWork>): LibraryPlaceComparator {
 	return (a, b) => {
 		const aRank = lastWorkOf(lastWork, a)?.rank ?? Number.POSITIVE_INFINITY;
@@ -72,11 +71,11 @@ export function inLibraryOrder<T extends OrderedItem>(
 	return items.toSorted((a, b) => compare({ type, item: a }, { type, item: b }));
 }
 
-async function readEveryRecentPlace(): Promise<LibraryContinueItem[] | null> {
-	const places: LibraryContinueItem[] = [];
+async function readEveryRecentPlace(): Promise<LibraryListenItem[] | null> {
+	const places: LibraryListenItem[] = [];
 	try {
 		for (;;) {
-			const page = await fetchLibraryContinue({
+			const page = await fetchLibraryListen({
 				offset: places.length,
 				limit: LIBRARY_WALL_RECENT_PAGE_SIZE
 			});
@@ -96,7 +95,7 @@ export async function readRecentWork(): Promise<boolean> {
 	if (places === null || request !== recentWorkRequest) return false;
 	recentWork.set(
 		new Map(
-			places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.activity_at }])
+			places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.played_at }])
 		)
 	);
 	return true;

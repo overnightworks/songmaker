@@ -577,7 +577,7 @@ export const ALBUM_NO_SONGS = 'No songs yet.';
 export function newSongCardLabel(albumTitle: string): string {
 	return `New song in ${albumTitle}`;
 }
-// The continue endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
+// The listen endpoint's own ceiling (PAGE_MAX_LIMIT): Recent reads its places in pages this size.
 export const LIBRARY_WALL_RECENT_PAGE_SIZE = 200;
 export const ALBUM_ART_EMPTY_INITIALS = '?';
 export const ALBUM_ART_INITIAL_COUNT = 2;

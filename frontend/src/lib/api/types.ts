@@ -444,7 +444,7 @@ export interface LibraryAlbumHit {
 	album: AlbumItem;
 }
 
-export interface LibraryContinueItem {
+export interface LibraryListenItem {
 	type: 'album' | 'playlist';
 	id: string;
 	title: string;
@@ -452,11 +452,12 @@ export interface LibraryContinueItem {
 	album_covers: AlbumCoverUrls[];
 	song_id?: string | null;
 	song_title?: string | null;
-	activity_at: string;
+	song_number?: number | null;
+	played_at: string;
 }
 
-export interface LibraryContinueResponse {
-	items: LibraryContinueItem[];
+export interface LibraryListenResponse {
+	items: LibraryListenItem[];
 }
 
 export interface LibraryPoolQueue {
@@ -498,6 +499,21 @@ export interface LibrarySongHit {
 	song: SongSummaryResponse;
 	album_id: string;
 	album_title: string;
+}
+
+export interface LibraryWriteItem {
+	song_id: string;
+	song_title: string;
+	album_id: string;
+	album_title: string;
+	cover?: AlbumCoverUrls | null;
+	album_cover?: AlbumCoverUrls | null;
+	work: 'created' | 'lyrics' | 'style' | 'renamed' | 'take' | 'cowriter' | 'edited';
+	worked_at: string;
+}
+
+export interface LibraryWriteResponse {
+	items: LibraryWriteItem[];
 }
 
 export interface LoadModelOnWorkerRequest {

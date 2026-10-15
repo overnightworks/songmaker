@@ -482,11 +482,6 @@ def check_song_access(
     return song
 
 
-def is_song_owner(song: Song, user: AuthenticatedUser) -> bool:
-    """Whether the song lies in an album the user created (an admin's reach aside)."""
-    return can_access_album(song.album, user, require_owner=True)
-
-
 def check_song_access_including_deleted(
     session: Session, song_id: str, user: AuthenticatedUser,
 ) -> Song:

@@ -21,7 +21,7 @@ import {
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
-import { fetchLibraryContinue } from '$lib/api/library';
+import { fetchLibraryListen } from '$lib/api/library';
 import { closeNowPlaying, selectedSongId, setShuffle } from '$lib/stores/player';
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
@@ -154,7 +154,7 @@ describe('RailLibraryGroup', () => {
 			album({ id: 'filler-2', title: 'Filler 2', created_at: '2026-07-01T10:00:00Z' }),
 			album({ id: 'afterglow', title: 'Afterglow', created_at: '2026-08-01T10:00:00Z' })
 		]);
-		vi.mocked(fetchLibraryContinue).mockResolvedValue(
+		vi.mocked(fetchLibraryListen).mockResolvedValue(
 			recentWorkPage('album', ['vernissage', 'filler-2'])
 		);
 		const target = await render();

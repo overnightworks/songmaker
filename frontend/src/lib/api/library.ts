@@ -1,4 +1,4 @@
-import type { LibrarySearchResponse, LibraryContinueResponse, LibraryPoolQueue } from './types';
+import type { LibrarySearchResponse, LibraryListenResponse, LibraryPoolQueue } from './types';
 import { apiFetch } from './fetch';
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
 import type { CreatedSort } from '$lib/utils/recency';
@@ -10,7 +10,7 @@ export type LibrarySort = CreatedSort;
 
 export type { LibrarySearchResponse } from './types';
 export type LibrarySearchHit = LibrarySearchResponse['items'][number];
-export type LibraryContinueItem = LibraryContinueResponse['items'][number];
+export type LibraryListenItem = LibraryListenResponse['items'][number];
 
 export interface LibraryListOptions {
 	q?: string;
@@ -37,15 +37,12 @@ export async function searchLibrary(options: {
 	return apiFetch<LibrarySearchResponse>(`/api/library/search?${params}`);
 }
 
-export async function fetchLibraryContinue(page?: {
+export async function fetchLibraryListen(page: {
 	offset: number;
 	limit: number;
-}): Promise<LibraryContinueResponse> {
-	const query =
-		page === undefined
-			? ''
-			: `?${new URLSearchParams({ offset: String(page.offset), limit: String(page.limit) })}`;
-	return apiFetch<LibraryContinueResponse>(`/api/library/continue${query}`);
+}): Promise<LibraryListenResponse> {
+	const query = new URLSearchParams({ offset: String(page.offset), limit: String(page.limit) });
+	return apiFetch<LibraryListenResponse>(`/api/library/listen?${query}`);
 }
 
 export async function fetchLibraryPoolQueue(options?: {

@@ -25,7 +25,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
-import { fetchLibraryContinue } from '$lib/api/library';
+import { fetchLibraryListen } from '$lib/api/library';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
@@ -146,7 +146,7 @@ describe('RailPlaylistsGroup', () => {
 			playlist({ id: 'mix-2', title: 'Mix 2', created_at: '2026-07-01T10:00:00Z' })
 		]);
 		fetchPlaylists.mockResolvedValue(get(playlistList));
-		vi.mocked(fetchLibraryContinue).mockResolvedValue(
+		vi.mocked(fetchLibraryListen).mockResolvedValue(
 			recentWorkPage('playlist', ['night', 'mix-10'])
 		);
 		const target = await render();
