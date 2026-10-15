@@ -209,7 +209,9 @@ def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
 HOME_LIST_STATEMENT_BUDGET_MS = 100.0
 
 
-def _seed_busy_library(session: Session, *, musicians: int, albums: int, songs: int) -> None:
+def _seed_libraries_of_many_musicians(
+    session: Session, *, musicians: int, albums: int, songs: int,
+) -> None:
     """Every musician owns ``albums`` albums of ``songs`` songs and has worked on and
     listened to each song; playlist ``p<a>`` holds album ``a``'s takes, played from its first.
     """
@@ -224,12 +226,6 @@ def _seed_busy_library(session: Session, *, musicians: int, albums: int, songs: 
         {"id": f"{owner}-a{a}", "title": f"{owner}-a{a}", "artist": "A", "created_by": owner}
         for owner in owners for a in range(albums)
     ])
-    session.execute(insert(Playlist), [
-        {"id": f"{owner}-p{a}", "title": f"{owner}-p{a}", "slug": f"{owner}-p{a}",
-         "created_by": owner, "last_played_at": start + timedelta(seconds=a),
-         "last_played_song_id": f"{owner}-a{a}-s0"}
-        for owner in owners for a in range(albums)
-    ])
     song_rows = [
         (owner, a, s, start + timedelta(seconds=index))
         for index, (owner, a, s) in enumerate(
@@ -240,6 +236,12 @@ def _seed_busy_library(session: Session, *, musicians: int, albums: int, songs: 
         {"id": f"{owner}-a{a}-s{s}", "title": f"s{s}", "album_id": f"{owner}-a{a}",
          "slug": f"s{s}", "track_number": s}
         for owner, a, s, _at in song_rows
+    ])
+    session.execute(insert(Playlist), [
+        {"id": f"{owner}-p{a}", "title": f"{owner}-p{a}", "slug": f"{owner}-p{a}",
+         "created_by": owner, "last_played_at": start + timedelta(seconds=a),
+         "last_played_song_id": f"{owner}-a{a}-s0"}
+        for owner in owners for a in range(albums)
     ])
     session.execute(insert(Generation), [
         {"id": f"{owner}-a{a}-s{s}-g", "song_id": f"{owner}-a{a}-s{s}", "generation_number": 1,
@@ -265,7 +267,7 @@ def _seed_busy_library(session: Session, *, musicians: int, albums: int, songs: 
 @SKIP_NO_PG
 def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory) -> None:
     with pg_factory() as session:
-        _seed_busy_library(session, musicians=5, albums=20, songs=10)
+        _seed_libraries_of_many_musicians(session, musicians=5, albums=20, songs=10)
         session.commit()
         session.execute(text("ANALYZE"))
 
