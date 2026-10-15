@@ -853,9 +853,10 @@ environment-selected CLI binaries.
 Where the mirror lives has one answer, owned by that same module: an exported
 `SONGMAKER_CLI_CREDENTIALS_DIR` wins, then the same key in `.env`, then the
 default under the stack owner's home — compose's own order. The value must be
-an absolute path or `~/…` with no whitespace and no `%`, because systemd
-splits directive values on whitespace and expands `%` as a specifier; anything
-else is refused loudly rather than mangled into a unit.
+an absolute path or `~/…` with no whitespace, no `%` and no `$`, because
+systemd splits directive values on whitespace, expands `%` as a specifier and
+`$` as a variable in the ExecStart that carries the path; anything else is
+refused loudly rather than mangled into a unit.
 
 **Installing.** `scripts/install-cli-credentials-mirror.sh` refuses to run
 from a linked worktree — these units outlive the shell that installed them,
