@@ -16,10 +16,14 @@ import {
 } from '$lib/stores/player';
 import { discardDraft, loadSongData, setDraftLyrics } from '$lib/stores/editor';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	playlistList,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
-import { resetLibraryOrder } from '$lib/stores/libraryOrder';
+import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
 import { fetchLibraryContinue } from '$lib/api/library';
 import {
@@ -59,7 +63,7 @@ const { render, cleanup } = createComponentMount(RailPlaylistsGroup);
 beforeEach(() => {
 	localStorage.clear();
 	chooseLibraryWallOrder('title');
-	resetLibraryOrder();
+	resetLibraryOrderForTests();
 	resetLibraryContextForTests();
 	fetchPlaylists.mockClear().mockResolvedValue([]);
 	fetchPlaylist.mockReset();
@@ -83,7 +87,7 @@ afterEach(async () => {
 	discardDraft();
 	pendingDirtyNavigation.set(null);
 	selectedSongId.set(null);
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetLibraryContextForTests();
 	resetConnectivityForTests();
 	railTreeQuery.set('');

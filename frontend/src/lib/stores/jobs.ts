@@ -64,11 +64,11 @@ export function dismissGenerationFailure(songId: string): void {
 	);
 }
 
-// Wipes the per-song failure causes -- called both by tests and, in
-// production, by clearAuth() on logout/401 so the next session never
-// sees another user's failure. Also forgets which songs have had a live
-// resolution, so the next session's hydration fetches are unblocked too.
-export function resetGenerationFailures(): void {
+// Wipes the per-song failure causes and which songs have had a live
+// resolution, so each test starts clean. A session needs no reset: it ends
+// with a fresh page load (#1340, ruling A), so the next session never sees
+// another user's failure.
+export function resetGenerationFailuresForTests(): void {
 	generationFailures.set({});
 	hydrationEpoch.clear();
 }

@@ -36,7 +36,7 @@ import {
 	playlistLoad,
 	renamePlaylist,
 	removePlaylistEntry,
-	resetPlaylists,
+	resetPlaylistsForTests,
 	selectedPlaylistDetail,
 	selectedPlaylistId,
 	uploadPlaylistCover
@@ -60,12 +60,12 @@ vi.mock('$lib/api/client', () => ({
 const albumMutationResult: AddAlbumToPlaylistResult = { added_count: 2, skipped: [] };
 
 beforeEach(() => {
-	resetPlaylists();
+	resetPlaylistsForTests();
 	toasts.set([]);
 });
 
 afterEach(() => {
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetConnectivityForTests();
 	toasts.set([]);
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies now; the
