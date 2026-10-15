@@ -1529,12 +1529,12 @@ function playContextInDirection(ctx: QueueContext, direction: QueueDirection): v
 	if (ctx.takes && ctx.takes.length > 0) playNativeTakesInDirection(ctx, direction);
 }
 
-export async function playNextSong(): Promise<void> {
+export function playNextSong(): void {
 	if (playStreamInDirection(1)) return;
 	playContextInDirection(get(queueContext), 1);
 }
 
-export async function playPrevSong(): Promise<void> {
+export function playPrevSong(): void {
 	if (playStreamInDirection(-1)) return;
 	playContextInDirection(get(queueContext), -1);
 }
@@ -1823,10 +1823,10 @@ setupMediaSessionHandlers({
 	pause: pauseFromLockScreen,
 	stop: pauseFromLockScreen,
 	next: () => {
-		void playNextSong();
+		playNextSong();
 	},
 	prev: () => {
-		void playPrevSong();
+		playPrevSong();
 	},
 	seekTo: (seconds) => audioPlayer.seek(seconds)
 });
@@ -1908,7 +1908,7 @@ async function playNextSongOnceRestoredAlbumIsGathered(): Promise<void> {
 		await gathering;
 		if (audioPlayer.current !== ended || audioPlayer.status !== 'idle') return;
 	}
-	await playNextSong();
+	playNextSong();
 }
 
 const recordedListens = new Set<string>();

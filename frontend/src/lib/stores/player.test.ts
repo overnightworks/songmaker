@@ -550,7 +550,7 @@ describe('playback dispatch', () => {
 		songList.set([firstSong, secondSong]);
 		await playAlbum('a1', from);
 
-		await move();
+		move();
 
 		expect(vi.mocked(audioPlayer.load).mock.lastCall?.[0].songTitle).toBe(to);
 	});
@@ -839,7 +839,7 @@ describe('playback dispatch', () => {
 			0
 		);
 
-		await playNextSong();
+		playNextSong();
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
@@ -905,7 +905,7 @@ describe('playback dispatch', () => {
 			1
 		);
 
-		await playNextSong();
+		playNextSong();
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 0));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
@@ -930,7 +930,7 @@ describe('playback dispatch', () => {
 			0
 		);
 
-		await playPrevSong();
+		playPrevSong();
 
 		expect(get(queueContext)).toEqual(playlistQueue(entries, 1));
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
@@ -1744,9 +1744,9 @@ describe('starting library playback from a take', () => {
 			})
 		);
 		await playIdleStart();
-		await playNextSong();
+		playNextSong();
 		const lastLoad = vi.mocked(audioPlayer.load).mock.calls.at(-1);
-		await playNextSong();
+		playNextSong();
 		expect(get(windowEnded)).toBe(true);
 		expect(vi.mocked(audioPlayer.load).mock.calls.at(-1)).toBe(lastLoad);
 		expect(canPlayNextSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
@@ -1763,8 +1763,8 @@ describe('starting library playback from a take', () => {
 			})
 		);
 		await playIdleStart();
-		await playNextSong();
-		await playNextSong();
+		playNextSong();
+		playNextSong();
 		expect(get(windowEnded)).toBe(false);
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({ generation: expect.objectContaining({ id: 'g1' }) })
@@ -1798,7 +1798,7 @@ describe('starting library playback from a take', () => {
 			})
 		]);
 		await playTake(makeGen({ ...genDefaults, id: 'g-pick' }), makeSong(queuedSongDefaults()));
-		await playNextSong();
+		playNextSong();
 		expect(audioPlayer.load).toHaveBeenLastCalledWith(
 			expect.objectContaining({
 				generation: expect.objectContaining({ id: 'g-keep' }),
@@ -2146,10 +2146,10 @@ describe('the queue names its next take', () => {
 	it.each([
 		['skip or pick advance', () => playNextSong()],
 		['queue row jump', () => jumpToQueueIndex(1)]
-	])('a pick or skip mid-queue re-aims the preload (%s)', async (_move, go) => {
+	])('a pick or skip mid-queue re-aims the preload (%s)', (_move, go) => {
 		queueContext.set(nativeQueue(3, 0));
 
-		await go();
+		go();
 
 		expect(audioPlayer.current?.generation.id).toBe('g2');
 		expect(preloadedGenerationId()).toBe('g3');
@@ -2234,7 +2234,7 @@ describe('the queue names its next take', () => {
 			buildQueueViewModel(ctx, audioPlayer.current).items.map((row) => row.generationId)
 		).toEqual(['g1', 'g2-repicked', 'g3']);
 		expect(preloadedGenerationId()).toBe('g2-repicked');
-		await playNextSong();
+		playNextSong();
 		expect(audioPlayer.current?.generation.id).toBe('g2-repicked');
 	});
 
@@ -2310,7 +2310,7 @@ describe('the queue names its next take', () => {
 			async ({ from, to, press }) => {
 				await playPlaylistEntryAndShowNowPlaying(playlistHolding(1, 1, 3), from);
 
-				await press();
+				press();
 
 				expect(vi.mocked(audioPlayer.load).mock.lastCall?.[1]).toEqual({ restart: true });
 				const rows = [currentRowAndTake().row];
@@ -2397,7 +2397,7 @@ describe('the queue names its next take', () => {
 			async ({ start }) => {
 				await startAndSkipTheSecondTake(start);
 
-				await playNextSong();
+				playNextSong();
 
 				expect(vi.mocked(audioPlayer.load).mock.lastCall?.[0].generation.id).toBe('g3');
 			}
@@ -2410,7 +2410,7 @@ describe('the queue names its next take', () => {
 				moveOnAsTheDeckDoes();
 
 				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(true);
-				await playPrevSong();
+				playPrevSong();
 
 				expect(audioPlayer.current?.generation.id).toBe('g1');
 			}
@@ -2496,7 +2496,7 @@ describe('the queue names its next take', () => {
 				await startAndSkipTheSecondTake(start);
 
 				expect(canPlayPrevSong(audioPlayer.current, get(songList), get(queueContext))).toBe(false);
-				await playPrevSong();
+				playPrevSong();
 
 				expect(audioPlayer.current?.generation.id).toBe('g1');
 			}
@@ -2548,7 +2548,7 @@ describe('the queue names its next take', () => {
 
 			expect(upNextGenerationId()).toBeUndefined();
 			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
-			await playNextSong();
+			playNextSong();
 			expect(get(windowEnded)).toBe(true);
 			expect(audioPlayer.current?.generation.id).toBe('g2');
 			expect(get(toasts)).toEqual([skippedToast('Song 3')]);
@@ -3129,7 +3129,7 @@ describe('curateAlbum', () => {
 		await curateAlbum('a1');
 		expect(get(curationActive)).toBe(true);
 
-		await playNextSong();
+		playNextSong();
 
 		expect(get(curationActive)).toBe(true);
 		const ctx = get(queueContext);
@@ -3801,7 +3801,7 @@ describe('playAlbum', () => {
 			expect(ctx.takes.map((take) => take.songId)).toEqual(queue);
 			expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
 
-			await playNextSong();
+			playNextSong();
 
 			expect(audioPlayer.load).toHaveBeenLastCalledWith(expect.objectContaining({ songId: 's3' }));
 		}
@@ -3989,7 +3989,7 @@ describe('stream transport direction', () => {
 	it.each([
 		['next', () => playNextSong(), 'next'],
 		['previous', () => playPrevSong(), 'previous']
-	])('moves to the %s stream track', async (_caseName, move, expectedSongId) => {
+	])('moves to the %s stream track', (_caseName, move, expectedSongId) => {
 		audioPlayer.mode = 'stream';
 		audioPlayer.current = makePlayback(
 			makeGen({ ...genDefaults, id: 'g-current' }),
@@ -4010,7 +4010,7 @@ describe('stream transport direction', () => {
 			return true;
 		});
 
-		await move();
+		move();
 
 		expect(audioPlayer.current?.songId).toBe(expectedSongId);
 	});
@@ -5252,13 +5252,13 @@ describe('a share link that takes the player (#1391)', () => {
 	});
 
 	// The lock screen's Next runs the app's, on a share page too.
-	it("the app's Next, pressed on a share page, plays nothing of the app's", async () => {
+	it("the app's Next, pressed on a share page, plays nothing of the app's", () => {
 		songList.set([privateSong]);
 		queueContext.set({ type: 'album', albumId: PRIVATE_ALBUM_ID });
 		share.start(sharedSong(), null);
 		share.play();
 
-		await playNextSong();
+		playNextSong();
 
 		expect(audioPlayer.load).not.toHaveBeenCalled();
 		expect(audioPlayer.current?.songTitle).toBe('Shared Song');
