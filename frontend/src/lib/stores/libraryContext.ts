@@ -674,12 +674,14 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 // state; the route still resolves through the frame every address route
 // shares, which decides whether history moved on meanwhile.
 export function openPlaylistsAddress(): Promise<'found'> {
-	return resolveMountedAddress<never>(async () => ({
-		routePath: PLAYLISTS_ROUTE_PATH,
-		historyOpens: historyAlreadyOpensPlaylists,
-		addressState: () => ({ ...libraryRootState(), surface: 'playlists' }),
-		shown: () => playlistsWallShows(get(librarySurface), get(selectedSongId))
-	}));
+	return resolveMountedAddress<never>(() =>
+		Promise.resolve({
+			routePath: PLAYLISTS_ROUTE_PATH,
+			historyOpens: historyAlreadyOpensPlaylists,
+			addressState: () => ({ ...libraryRootState(), surface: 'playlists' }),
+			shown: () => playlistsWallShows(get(librarySurface), get(selectedSongId))
+		})
+	);
 }
 
 function historyAlreadyOpensPlaylists(): boolean {
