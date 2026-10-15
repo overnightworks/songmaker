@@ -1,4 +1,8 @@
-import { makeAlbum as album, makeSong as song } from '$lib/test-utils/factories';
+import {
+	makeAlbum as album,
+	makePlaylist as playlist,
+	makeSong as song
+} from '$lib/test-utils/factories';
 import { browserReportsOnline } from '$lib/test-utils/network';
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -6,7 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LIBRARY_RETRY_LABEL, RESOURCE_SYNC_ERROR } from '$lib/constants';
 import { albumList, songList } from '$lib/stores/libraryData';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { librarySurface, resetLibraryContextForTests } from '$lib/stores/libraryContext';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, resourceSync } from '$lib/stores/resourceSync';
 import { resetConnectivityForTests } from '$lib/stores/connectivity';
@@ -67,6 +72,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	for (const app of mounted.splice(0)) void unmount(app);
+	resetPlaylistsForTests();
 	document.body.innerHTML = '';
 	resetResourceSyncForTests();
 	resetConnectivityForTests();
@@ -131,6 +137,23 @@ describe('the library workspace', () => {
 
 		expect(second.textContent).not.toContain('Loading...');
 		expect(second.textContent).toContain(ALBUM_TITLE);
+	});
+
+	// #1402: the Playlists page's own surface.
+	it('shows the wall of playlists alone on the Playlists surface', async () => {
+		streamLive();
+		playlistList.set([playlist({ id: 'p1', title: 'Night Drive', share_slug: null })]);
+		playlistLoad.set({ status: 'ready', error: null });
+		librarySurface.set('playlists');
+
+		const target = renderWorkspace();
+		await tick();
+
+		const titles = [...target.querySelectorAll('.wall-tile .tile-title')];
+		expect(titles.map((title) => title.textContent)).toEqual(['Night Drive']);
+		expect(target.querySelector('.library-wall h1')?.getAttribute('aria-label')).toBe(
+			'Playlists · 1'
+		);
 	});
 
 	it('keeps showing the library when the stream errors after it was live', async () => {

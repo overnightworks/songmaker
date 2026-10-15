@@ -1,6 +1,7 @@
 const ALBUM_ROUTE_PREFIX = '/album/';
 const TAKE_ROUTE_SEGMENT = '/take/';
 const PLAYLIST_ROUTE_PREFIX = '/playlist/';
+export const PLAYLISTS_ROUTE_PATH = '/playlists';
 
 export function albumRoutePath(albumId: string): string {
 	return `${ALBUM_ROUTE_PREFIX}${encodeURIComponent(albumId)}`;
@@ -18,7 +19,7 @@ export function playlistRoutePath(slug: string): string {
 	return `${PLAYLIST_ROUTE_PREFIX}${encodeURIComponent(slug)}`;
 }
 
-export function isAlbumRoutePath(pathname: string): boolean {
+function isAlbumRoutePath(pathname: string): boolean {
 	return pathname.startsWith(ALBUM_ROUTE_PREFIX) && pathname.length > ALBUM_ROUTE_PREFIX.length;
 }
 
@@ -42,9 +43,10 @@ export function isPlaylistRoutePath(pathname: string): boolean {
 }
 
 type LibraryRouteShape =
-	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlist' | 'external';
+	'root' | 'album' | 'album-song' | 'album-song-take' | 'playlists' | 'playlist' | 'external';
 
 export function libraryRouteShape(pathname: string): LibraryRouteShape {
+	if (pathname === PLAYLISTS_ROUTE_PATH) return 'playlists';
 	if (isPlaylistRoutePath(pathname)) return 'playlist';
 	if (isAlbumRoutePath(pathname)) {
 		if (!isSongRoutePath(pathname)) return 'album';

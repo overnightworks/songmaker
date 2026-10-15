@@ -117,6 +117,7 @@ import {
 	librarySurface,
 	openAlbumAddress,
 	openPlaylistAddress,
+	openPlaylistsAddress,
 	openSongAddress,
 	openTakeAddress,
 	resolveLegacySongQueryAddress,
@@ -783,6 +784,22 @@ describe('libraryHistoryUrl', () => {
 				collection: { kind: 'playlist', id: 'p1' }
 			})
 		).toBe('/');
+	});
+
+	// #1402: the Playlists page keeps the playlist open last as the rail
+	// context, as the wall does, yet addresses only itself.
+	it('addresses the Playlists page by its own path, whichever playlist stays the rail context', () => {
+		playlistList.set([
+			playlistItem({ title: 'P', share_slug: null, id: 'p1', slug: 'friday-night' })
+		]);
+
+		expect(
+			libraryHistoryUrl({
+				...libraryRootState(),
+				surface: 'playlists',
+				collection: { kind: 'playlist', id: 'p1' }
+			})
+		).toBe('/playlists');
 	});
 });
 
@@ -1667,6 +1684,40 @@ describe('openPlaylistAddress', () => {
 	});
 });
 
+describe('openPlaylistsAddress', () => {
+	const playlistsPage: LibraryHistoryState = { ...libraryRootState(), surface: 'playlists' };
+
+	it('makes the library show the Playlists page on a tab that knows nothing else', async () => {
+		mountAddressRoute('/playlists');
+
+		await expect(openPlaylistsAddress()).resolves.toBe('found');
+
+		expect(historyEntry()).toEqual(playlistsPage);
+		expect(location.pathname).toBe('/playlists');
+		expect(get(librarySurface)).toBe('playlists');
+	});
+
+	it('shows the Playlists page a reload comes back onto with what its entry carried', async () => {
+		const left = { ...playlistsPage, sort: 'title' as const, scrollAnchor: 320 };
+		mountAddressRoute('/playlists', left);
+		await reloadLibraryPage();
+
+		await expect(openPlaylistsAddress()).resolves.toBe('found');
+
+		expect(historyEntry()).toEqual(left);
+		expect(get(librarySurface)).toBe('playlists');
+	});
+
+	it('lets the address overrule a restore state that shows another page', async () => {
+		mountAddressRoute('/playlists', { ...libraryRootState(), scrollAnchor: 320 });
+
+		await expect(openPlaylistsAddress()).resolves.toBe('found');
+
+		expect(historyEntry()).toEqual(playlistsPage);
+		expect(get(librarySurface)).toBe('playlists');
+	});
+});
+
 // Issue #1263, from H3's review: history may move on before an address route
 // resolves its params, or while it does. The params then name an address
 // history has left, and the route of the address it stands on is mounted
@@ -1759,6 +1810,17 @@ describe('an address route whose history moves on', () => {
 			expect(historyEntry()).toEqual(albumLeftFor);
 		}
 	);
+
+	it('mounts the route of the address history moved on to before the Playlists page resolved', async () => {
+		mountAddressRoute('/playlists');
+		moveHistoryOn();
+
+		await expect(openPlaylistsAddress()).resolves.toBe('found');
+
+		expect(fakePage.url.pathname).toBe(albumRoutePath('a2'));
+		expect(get(librarySurface)).not.toBe('playlists');
+		expect(historyEntry()).toEqual(albumLeftFor);
+	});
 
 	it.each(resolvers)(
 		'resolves nothing for the $route route mounted over its address under the page the router kept',

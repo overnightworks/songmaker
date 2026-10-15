@@ -1063,13 +1063,19 @@ describe('‹ on the page a phone tab was entered on', () => {
 	}
 
 	it.each([
-		{ page: 'an album', address: '/album/a1', collection: { kind: 'album' as const, id: 'a1' } },
+		{
+			page: 'an album',
+			address: '/album/a1',
+			collection: { kind: 'album' as const, id: 'a1' },
+			list: { name: 'Library', address: '/', surface: 'browse' }
+		},
 		{
 			page: 'a playlist',
 			address: '/playlist/friday-night',
-			collection: { kind: 'playlist' as const, id: 'p1' }
+			collection: { kind: 'playlist' as const, id: 'p1' },
+			list: { name: 'Playlists', address: '/playlists', surface: 'playlists' }
 		}
-	])('on $page shows the Library wall in its place', async ({ address, collection }) => {
+	])('on $page shows the $list.name list in its place', async ({ address, collection, list }) => {
 		const opened = { ...libraryRootState(), surface: 'detail' as const, collection };
 		enterTabOn(address, opened);
 		openCollection.set(collection);
@@ -1078,12 +1084,12 @@ describe('‹ on the page a phone tab was entered on', () => {
 		await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
 		await historyStandsStill();
 		const tabLength = history.length;
-		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel(list.name));
 
-		await pressBarBack(target, '/');
+		await pressBarBack(target, list.address);
 
-		expect(get(librarySurface)).toBe('browse');
-		expect(historyEntry()).toMatchObject({ surface: 'browse', collection });
+		expect(get(librarySurface)).toBe(list.surface);
+		expect(historyEntry()).toMatchObject({ surface: list.surface, collection });
 		expect(history).toHaveLength(tabLength);
 		expect(barBack(target)).toBeNull();
 	});
@@ -1119,7 +1125,8 @@ describe('the live library stream', () => {
 		['the library route', '/'],
 		['an album address', '/album/anfield'],
 		['a song address', '/album/anfield/stadion-lauf-a'],
-		['a playlist address', '/playlist/friday-night']
+		['a playlist address', '/playlist/friday-night'],
+		['the Playlists page', '/playlists']
 	])('runs on %s', async (_name, path) => {
 		await renderLayout(path);
 		expect(liveStream.start).toHaveBeenCalled();
@@ -1158,7 +1165,8 @@ describe('the live library stream', () => {
 // The single-mount fix (issue #276) lives in a route group, not in this
 // layout: `(library)/+layout.svelte` owns the one LibraryWorkspace mount, and
 // every library address sits inside it -- the root, an album (and its song
-// and take, one and two segments deeper) and, since issue #286, a playlist.
+// and take, one and two segments deeper), since issue #286 a playlist, and
+// since #1402 the Playlists page.
 // SvelteKit resolves a route group at build time, invisible to a mounted-
 // component test, so this reads the routes tree directly instead -- the same
 // way this file already reads app.css from disk.
@@ -1177,7 +1185,8 @@ describe('the library route group', () => {
 			// own harness.svelte/page.test.ts one level down.
 			'harness.svelte',
 			'page.test.ts',
-			'playlist'
+			'playlist',
+			'playlists'
 		]);
 		expect(readFileSync(join(libraryGroupDir, '+layout.svelte'), 'utf8')).toContain(
 			'LibraryWorkspace'
@@ -1185,6 +1194,7 @@ describe('the library route group', () => {
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'album/[slug]/[song]'))).toContain('+page.svelte');
 		expect(readdirSync(join(libraryGroupDir, 'playlist/[slug]'))).toContain('+page.svelte');
+		expect(readdirSync(join(libraryGroupDir, 'playlists'))).toContain('+page.svelte');
 	});
 
 	it('leaves settings, auth, share and legal pages outside the group', () => {
@@ -1197,5 +1207,6 @@ describe('the library route group', () => {
 		);
 		expect(topLevelDirs).not.toContain('album');
 		expect(topLevelDirs).not.toContain('playlist');
+		expect(topLevelDirs).not.toContain('playlists');
 	});
 });

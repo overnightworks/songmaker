@@ -35,10 +35,16 @@ import { closeSidebar, sidebarOpen } from '$lib/stores/ui';
 import type { PlaylistItem, SongItem } from '$lib/api/types';
 import type { RailSearchTarget } from '$lib/stores/railSearch';
 import { API_ERROR_GENERIC_MESSAGE, SONG_LINK_NOT_FOUND_TOAST } from '$lib/constants';
-import { isAlbumRoutePath, isPlaylistRoutePath, isSongRoutePath } from '$lib/routes/addresses';
+import {
+	isPlaylistRoutePath,
+	isSongRoutePath,
+	libraryRouteShape,
+	PLAYLISTS_ROUTE_PATH
+} from '$lib/routes/addresses';
 import {
 	applyLibraryHistory,
 	cancelLibraryHistoryApply,
+	captureLibraryScroll,
 	currentLibraryHistoryState,
 	detailTab,
 	enterAlbumOfSong,
@@ -49,6 +55,7 @@ import {
 	libraryHistoryStepsLanded,
 	libraryHistoryUrl,
 	libraryRootState,
+	librarySurface,
 	rememberedSongTab,
 	setLibrarySurface,
 	showSongTab,
@@ -81,9 +88,13 @@ function replaceLibraryHistory(): Promise<void> {
 	return writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
-function pushLibraryHistory(): Promise<void> {
+// `enterPage` runs once the page being left has been kept and before the new
+// entry is snapshotted, so a reset only the new entry should see cannot reach
+// the entry left behind.
+function pushLibraryHistory(enterPage: () => void = () => {}): Promise<void> {
 	cancelLibraryHistoryApply();
 	void keepLibraryPageAsLeft();
+	enterPage();
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	return writeLibraryHistory(next, urlFromState(next), 'push');
 }
@@ -92,22 +103,17 @@ export function persistLibraryHistory(): void {
 	void replaceLibraryHistory();
 }
 
-// The routes that mount the library workspace: the home path, an album
-// address (issue #269) and, since issue #286, a playlist address. All three
-// render the same workspace, so nothing has to be pushed off /album/<slug>
-// or /playlist/<slug> to make a song, a playlist or the wall visible — the
-// address a surface owns is written by libraryHistoryUrl. Used only by
-// routes/+layout.svelte now (to decide whether to start the live event
-// stream) — every entry point below used to route a stale-route precondition
-// through this first (issue #264's ensureLibraryWorkspaceRoute), but since
-// #269 gave every write its own address, writeLibraryHistory's own crossing
-// check (libraryRouteShape in libraryContext.ts) already reaches the router
-// for a write landing on any of these three paths from anywhere else,
-// including a non-library one; a second, separate guard here would only ever
-// duplicate that check, never catch something it misses (#265's S7 proved
-// this per entry point rather than assuming it — see navigation.test.ts).
+// The routes that mount the library workspace: every address
+// `libraryRouteShape` gives a library shape -- the home path, the Playlists
+// page (#1402), and each album, song, take and playlist address. All render
+// the same workspace, and the address a surface owns is written by
+// libraryHistoryUrl. Used only by routes/+layout.svelte (to decide whether to
+// start the live event stream): writeLibraryHistory's own crossing check
+// reaches the router for a write landing on any of these addresses from
+// anywhere else, so no entry point below asks this first (#265's S7 proved
+// that per entry point -- see navigation.test.ts).
 export function isLibraryWorkspacePath(pathname: string): boolean {
-	return pathname === '/' || isAlbumRoutePath(pathname) || isPlaylistRoutePath(pathname);
+	return libraryRouteShape(pathname) !== 'external';
 }
 
 // A draft with changes no version holds blocks a song switch or leave (rail
@@ -260,6 +266,10 @@ export async function openRailSearchTarget(target: RailSearchTarget): Promise<vo
 		await openLibraryWall();
 		return;
 	}
+	if (target.href === PLAYLISTS_ROUTE_PATH) {
+		await openPlaylistsWall();
+		return;
+	}
 	await openAppPage(target.href);
 }
 
@@ -344,21 +354,49 @@ export async function openLibraryWall(): Promise<void> {
 	});
 }
 
+// The Playlists page (#1402) in place of the open song or collection, which
+// stays the rail context as it does behind the Library wall. Coming from
+// another page it starts at its top: the one scroll the library keeps is the
+// other wall's.
+function showPlaylistsWall(): () => void {
+	const cameFromAnotherPage = get(librarySurface) !== 'playlists';
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	setLibrarySurface('playlists');
+	return () => {
+		if (cameFromAnotherPage) captureLibraryScroll(0);
+	};
+}
+
+// Like the Library, a fresh history entry, so Back returns to what was open.
+async function openPlaylistsWall(): Promise<void> {
+	await guardDirtyNavigation(async () => {
+		closeSidebar();
+		await pushLibraryHistory(showPlaylistsWall());
+	});
+}
+
 // The lists a page's ‹ opens when no page of the tab's own lies below it
-// (#1354 rule 25): until the phone tabs arrive, the Library, which lists
-// albums and playlists alike, and the Settings list.
-export type PageList = '/' | '/settings';
+// (#1354 rule 25): until the phone tabs arrive, the Library, which still lists
+// albums and playlists alike, the Playlists page, which a playlist belongs to,
+// and the Settings list.
+export type PageList = '/' | typeof PLAYLISTS_ROUTE_PATH | '/settings';
 
 // A page's list, written over the page rather than pushed, so the list's own
-// ‹ goes on rather than back to the page it replaced. The Library is the wall,
-// which the library shows from its own stores and so writes as its own entry:
-// a route written over an album would leave the album on screen under the new
-// address. Nothing asks about a draft here yet, since the song, the one page
-// with a draft, carries its own bar without ‹; a way out of a song that comes
-// to open a list asks here, as every other way out of a song does.
+// ‹ goes on rather than back to the page it replaced. The Library and the
+// Playlists page are walls, which the library shows from its own stores and so
+// writes as its own entry: a route written over an album would leave the album
+// on screen under the new address. Nothing asks about a draft here yet, since
+// the song, the one page with a draft, carries its own bar without ‹; a way
+// out of a song that comes to open a list asks here, as every other way out
+// of a song does.
 export function openListOverPage(list: PageList): Promise<void> {
 	if (list === '/') {
 		showLibraryWall();
+		return replaceLibraryHistory();
+	}
+	if (list === PLAYLISTS_ROUTE_PATH) {
+		showPlaylistsWall()();
 		return replaceLibraryHistory();
 	}
 	return goto(resolve(list), { replaceState: true });
@@ -622,8 +660,8 @@ export function followShellLayers(): () => void {
 // writes one -- this seeds a fresh root entry for that case, but only on a
 // plain `/` visit, which is the one library workspace path with no address
 // route of its own to resolve one instead. Every other library path
-// (`/album/<slug>` and every segment deeper, `/playlist/<slug>`) is owned by
-// its own leaf page, whose `$effect` calls the matching openXAddress and
+// (`/playlists`, `/album/<slug>` and every segment deeper, `/playlist/<slug>`)
+// is owned by its own leaf page, which calls the matching openXAddress and
 // writes the real entry once resolution lands -- found or, honestly, not.
 // Racing this seed against that resolution used to cost more than a redundant
 // write: found and not-yet-written are indistinguishable to

@@ -246,6 +246,24 @@ describe('PhoneAppBar', () => {
 		expectFrequentHitbox(getByRoleButton(target, SEARCH_OPEN_LABEL), SEARCH_OPEN_LABEL);
 	});
 
+	// #1402: the Playlists page is a list the app opens on, as the Library is.
+	it.each<{ entered: string; from?: Pathname }>([
+		{ entered: 'fresh' },
+		{ entered: 'from an album', from: '/album/a1' }
+	])(
+		'carries the brand, search and the account circle without ‹ on the Playlists page entered $entered',
+		async ({ from }) => {
+			await standOn('/playlists', from);
+			const target = renderBar();
+			await tick();
+
+			expect(backName(target)).toBeNull();
+			expect(target.querySelector('.brand')?.textContent).toBe(APP_NAME);
+			expect(queryButton(target, SEARCH_OPEN_LABEL)).not.toBeNull();
+			expect(queryButton(target, ACCOUNT_CIRCLE_NAME)).not.toBeNull();
+		}
+	);
+
 	it('keeps Log out off the bar and one tap away in the account menu', async () => {
 		const onlogout = vi.fn();
 		const target = renderBar(onlogout);
@@ -290,7 +308,18 @@ describe('PhoneAppBar', () => {
 			from: '/settings',
 			name: 'Settings'
 		},
+		{
+			page: 'a playlist opened from the Playlists page',
+			opened: '/playlist/night-drive',
+			from: '/playlists',
+			name: 'Playlists'
+		},
 		{ page: 'an album with nothing before it', opened: '/album/a1', name: 'Library' },
+		{
+			page: 'a playlist with nothing before it',
+			opened: '/playlist/night-drive',
+			name: 'Playlists'
+		},
 		{
 			page: 'a Settings section with nothing before it',
 			opened: '/settings/voices',

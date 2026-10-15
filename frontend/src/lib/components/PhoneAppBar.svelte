@@ -3,8 +3,10 @@
 	import { RAIL_SETTINGS_LABEL } from '$lib/constants';
 	import {
 		albumRoutePath,
+		isPlaylistRoutePath,
 		libraryRouteShape,
 		playlistRoutePath,
+		PLAYLISTS_ROUTE_PATH,
 		songRoutePath
 	} from '$lib/routes/addresses';
 	import type { PageList } from '$lib/stores/navigation';
@@ -15,7 +17,11 @@
 	export const SEARCH_CLOSE_LABEL = 'Close search';
 
 	const LIBRARY_HREF: PageList = '/';
+	const PLAYLISTS_HREF: PageList = PLAYLISTS_ROUTE_PATH;
 	const SETTINGS_HREF: PageList = '/settings';
+	// The lists the app opens on, which carry the brand and the account circle
+	// instead of ‹ wherever they were opened from.
+	const PLACE_LISTS: ReadonlySet<string> = new Set([LIBRARY_HREF, PLAYLISTS_HREF]);
 	const ALBUM_NAME = 'Album';
 	const PLAYLIST_NAME = 'Playlist';
 	const SONG_NAME = 'Song';
@@ -33,9 +39,11 @@
 
 	// The list a page belongs to, which its ‹ opens when no page of the tab's
 	// own lies below it (#1354 rule 25): a Settings section belongs to the
-	// Settings list, every other page to the Library.
+	// Settings list, a playlist to the Playlists page, every other page to the
+	// Library.
 	export function listOfPage(pathname: string): PageList {
-		return pathname.startsWith(`${SETTINGS_HREF}/`) ? SETTINGS_HREF : LIBRARY_HREF;
+		if (pathname.startsWith(`${SETTINGS_HREF}/`)) return SETTINGS_HREF;
+		return isPlaylistRoutePath(pathname) ? PLAYLISTS_HREF : LIBRARY_HREF;
 	}
 
 	// What ‹ calls the page it goes back to: an app page by the name the app
@@ -107,7 +115,7 @@
 
 	const standing = $derived(standingPage(page.state));
 	const backTargetName = $derived.by((): string | null => {
-		if (standing.pathname === LIBRARY_HREF) return null;
+		if (PLACE_LISTS.has(standing.pathname)) return null;
 		const target =
 			standing.below === null ? listOfPage(standing.pathname) : new URL(standing.below).pathname;
 		return pageName(target, { albums: $albumList, playlists: $playlistList, songs: $songList });

@@ -53,16 +53,19 @@ import {
 	libraryRouteShape,
 	pendingTakeRoutePath,
 	playlistRoutePath,
+	PLAYLISTS_ROUTE_PATH,
 	songRoutePath,
 	takeRoutePath
 } from '$lib/routes/addresses';
 import { CREATED_SORTS } from '$lib/utils/recency';
 
-// 'browse' shows the library wall (the LibraryWall component); 'detail' shows
-// whichever collection is currently open. Song detail always wins over both
-// (see LibraryWorkspace.svelte). An entry still carrying the removed create
-// surface is no library entry any more, so Back onto it lands on the wall.
-type LibrarySurface = 'browse' | 'detail';
+// 'browse' shows the library wall (the LibraryWall component), 'playlists'
+// the Playlists page's wall of playlists alone (#1402); 'detail' shows
+// whichever collection is currently open. Song detail always wins over all
+// three (see LibraryWorkspace.svelte). An entry still carrying the removed
+// create surface is no library entry any more, so Back onto it lands on the
+// wall.
+type LibrarySurface = 'browse' | 'playlists' | 'detail';
 // Song tabs (#1016): 'edit' hosts recipe, style, lyrics and Generate;
 // 'cowriter' hosts the conversation; 'takes' lists generations.
 // LEGACY_DETAIL_TAB_MAP below keeps history entries written under the older
@@ -97,7 +100,7 @@ export const librarySurface = writable<LibrarySurface>('browse');
 export const detailTab = writable<DetailTab>(DEFAULT_DETAIL_TAB);
 export const libraryScrollAnchor = writable(0);
 
-const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'detail']);
+const SURFACES: ReadonlySet<LibrarySurface> = new Set(['browse', 'playlists', 'detail']);
 const LEGACY_DETAIL_TAB_MAP: Record<string, DetailTab> = {
 	write: 'edit',
 	generations: 'takes',
@@ -200,9 +203,9 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 		}
 		return legacySongRoutePath(state.songId, state.generationId);
 	}
-	if (state.surface === 'detail' && state.collection?.kind === 'album') {
-		return albumRoutePath(state.collection.id);
-	}
+	if (state.surface === 'playlists') return PLAYLISTS_ROUTE_PATH;
+	const shownAlbum = albumWhoseSongsShow(state.surface, state.collection);
+	if (shownAlbum) return albumRoutePath(shownAlbum);
 	// A playlist is named by its slug (issue #286), matching every other
 	// library address; playlistList carries it once ensurePlaylistsLoaded()
 	// or openPlaylistAddress's own resolution has run, which every entry
@@ -211,8 +214,9 @@ export function libraryHistoryUrl(state: LibraryHistoryState): string {
 	// from a stale history entry whose playlist has since vanished) falls
 	// back to '/' rather than a broken address -- the wall is always a safe
 	// landing, unlike a guessed path that names no playlist.
-	if (state.surface === 'detail' && state.collection?.kind === 'playlist') {
-		const playlist = get(playlistList).find((item) => item.id === state.collection?.id);
+	const shownPlaylist = playlistWhoseDetailShows(state.surface, state.collection);
+	if (shownPlaylist) {
+		const playlist = get(playlistList).find((item) => item.id === shownPlaylist);
 		if (playlist) return playlistRoutePath(playlist.slug);
 	}
 	return '/';
@@ -233,13 +237,13 @@ type HistoryWriteMode = 'push' | 'replace';
 // therefore shallow routing (`pushState`/`replaceState`), synchronous and
 // without a route resolution. When it changes which route file the address
 // names (`/`, `/album/<slug>`, `/album/<slug>/<song>`,
-// `/album/<slug>/<song>/take/<n>`, `/playlist/<slug>`; `libraryRouteShape`
-// names which), a `goto` then mounts the route of that address over the entry
-// already standing, carrying the library as its page state. A mount moves no
-// entry: a newer one supersedes it and a Back aborts it, and a write that
-// keeps the route while a mount is loading re-issues the mount over the entry
-// now standing, or the older mount would land on it with the library it
-// started with. Such an entry keeps the navigation index of the library entry
+// `/album/<slug>/<song>/take/<n>`, `/playlists`, `/playlist/<slug>`;
+// `libraryRouteShape` names which), a `goto` then mounts the route of that
+// address over the entry already standing, carrying the library as its page
+// state. A mount moves no entry: a newer one supersedes it and a Back aborts
+// it, and a write that keeps the route while a mount is loading re-issues the
+// mount over the entry now standing, or the older mount would land on it with
+// the library it started with. Such an entry keeps the navigation index of the library entry
 // under it, so Back or Forward between the two is shallow: the library applies
 // the entry and the mounted route stays, as it does for same-shape churn --
 // filter, sort, scroll, search cursor, another song of the open album, another
@@ -663,6 +667,31 @@ function playlistAddressState(playlistId: string): LibraryHistoryState {
 		surface: 'detail',
 		collection: { kind: 'playlist', id: playlistId }
 	};
+}
+
+// The entry point of the /playlists route (#1402). The address names no
+// resource of its own, so there is nothing to look up and no verdict to
+// state; the route still resolves through the frame every address route
+// shares, which decides whether history moved on meanwhile.
+export function openPlaylistsAddress(): Promise<'found'> {
+	return resolveMountedAddress<never>(() =>
+		Promise.resolve({
+			routePath: PLAYLISTS_ROUTE_PATH,
+			historyOpens: historyAlreadyOpensPlaylists,
+			addressState: () => ({ ...libraryRootState(), surface: 'playlists' }),
+			shown: () => playlistsWallShows(get(librarySurface), get(selectedSongId))
+		})
+	);
+}
+
+function historyAlreadyOpensPlaylists(): boolean {
+	const state = currentLibraryHistoryState();
+	return isLibraryHistoryState(state) && playlistsWallShows(state.surface, state.songId);
+}
+
+// An open song stands in front of every surface, the Playlists wall included.
+function playlistsWallShows(surface: LibrarySurface, songId: string | null): boolean {
+	return surface === 'playlists' && songId === null;
 }
 
 type LegacySongQueryAddress =

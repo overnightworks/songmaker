@@ -150,14 +150,14 @@ inline, no popup menu; `shell/UserRow.svelte`). The phone drawer is
 navigation only — brand, search, LIBRARY and PLAYLISTS (#1174, frame H3 of
 `docs/design/navigation.html`). The phone app bar (`PhoneAppBar.svelte`,
 frames I2–I4) keeps ☰ at its left until the phone tabs replace the drawer
-(#1354 slice 9). Beside it every page but the Library and the song carries
+(#1354 slice 9). Beside it every page but the Library, the Playlists page and the song carries
 ‹, named after where it goes: the page below it in the tab's history, or,
 with nothing of the tab's own below, the page's list (`/settings` for a
-Settings section, the Library otherwise), written over the page; the Library's
-wall the library writes as its own entry, so the wall shows in the page's
+Settings section, the Playlists page for a playlist, the Library otherwise), written over the page; the Library's
+and the Playlists page's walls the library writes as its own entry, so the wall shows in the page's
 place (`openListOverPage`). The history controller answers both with one
 question (`pageBelowStandingPage`, `stepBackOr`, #1389). 🔍 on every page
-opens the one search, `RailSearch`, in a sheet. The Library carries the brand
+opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
 and a 44px account circle at the right edge, whose menu (`AccountMenu.svelte`)
 holds Settings, the theme switch and Log out, so the drawer repeats none of
 them; the song carries its title, share and song menu instead. `Rail`
@@ -226,12 +226,16 @@ chain): a sibling of `/`, not a segment under `/album/<slug>`, since a
 playlist has no album to nest inside — its `slug` follows the album
 precedent (a globally unique column, reserved via `unique_playlist_slug` in
 `api_helpers.py` under its own advisory lock, `_PLAYLIST_SLUG_LOCK_ID`) rather
-than a song's per-album one. All five of `/`, `/album/<slug>`,
-`/album/<slug>/<song-slug>`, `/album/<slug>/<song-slug>/take/<n>` and
-`/playlist/<slug>` sit inside the `routes/(library)` route group, whose own
+than a song's per-album one. The Playlists page has an address of its own as
+well, `/playlists` (#1402): the wall of playlists alone, which the library
+shows as its `playlists` surface beside the wall's `browse`; it names no
+resource, so its route resolves nothing and states no verdict. All six of
+`/`, `/playlists`, `/album/<slug>`, `/album/<slug>/<song-slug>`,
+`/album/<slug>/<song-slug>/take/<n>` and `/playlist/<slug>` sit inside the
+`routes/(library)` route group, whose own
 `+layout.svelte` mounts `components/LibraryWorkspace.svelte` — the bootstrap
 gate and the surface switch — exactly once for as long as the browser stays
-on any of the five (issue #276); the route files underneath are thin, each
+on any of the six (issue #276); the route files underneath are thin, each
 resolving its own address and rendering only an overlay (loading / unknown /
 unreachable) stacked over the standing workspace while it does. Before #276
 each mounted the workspace itself, so a crossing between any two swapped the
@@ -240,7 +244,7 @@ survived (`routes/+layout.svelte`, next paragraph) but the workspace, and
 everything under it (`SongDetailView` included), did not; measuring the cost
 (issue #275, then #276) is what forced the route group. The outer
 `routes/+layout.svelte` still owns the live event stream and the history
-listener, so swapping between any of the five addresses neither rebuilds the
+listener, so swapping between any of the six addresses neither rebuilds the
 workspace nor re-runs its bootstrap, and it starts the stream only for a
 signed-in browser on a library route — the reach the workspace page had when
 it owned this; Settings, login, setup and the share pages leave it off. The
@@ -248,7 +252,7 @@ workspace itself gates on `resourceSync.ready` rather than on a promise
 resolved once per mount, so a mount that finds the stream already live
 (returning to the library after leaving it) shows the library on its first
 frame. `libraryHistoryUrl` in `stores/libraryContext.ts` maps library state to
-one of the five: an open song addresses `/album/<slug>/<song-slug>` once the
+one of the six: an open song addresses `/album/<slug>/<song-slug>` once the
 song's slug is known from `songList`, a selected take addresses one segment
 deeper still, `/album/<slug>/<song-slug>/take/<n>`, once that take's
 `generation_number` is known among the song's loaded generations — a take
@@ -262,8 +266,9 @@ is known from `playlistList` (`openPlaylist` in `navigation.ts` awaits
 true by then; a playlist opened before its slug is known — the same rare
 in-flight gap a song's legacy `?song=` form covers — falls back to `/` rather
 than a broken address, since a playlist never had a legacy form of its own to
-fall back to), and an album or playlist that is only the rail context behind
-the wall stays on `/`. The legacy `/?song=<id>[&gen=…]` form a pre-#275/#281 bookmark
+fall back to), the Playlists page addresses `/playlists` whichever collection
+stays the rail context behind it, and an album or playlist that is only the
+rail context behind the wall stays on `/`. The legacy `/?song=<id>[&gen=…]` form a pre-#275/#281 bookmark
 or shared link still carries is no longer read as its own entry point:
 `(library)/+page.svelte` resolves it (`resolveLegacySongQueryAddress` in
 `stores/libraryContext.ts` — one `fetchSong` call gets both the slug and,
@@ -289,18 +294,18 @@ than re-resolving the same address in parallel (issue #265's S7 closed the
 double-resolve this way, once removing the hand-built router guard below
 made writing this check the smaller fix — no other read of the entry
 here needed it, so it stayed a known, self-healing race until then).
-`isLibraryWorkspacePath` still counts all five by pathname (it leans on
-`isAlbumRoutePath`, true for `/album/<slug>` and every segment deeper, plus
-`isPlaylistRoutePath`) rather than by the route group, since
-`routes/+layout.svelte` sits outside `(library)` and needs the same five
-addresses for its own, separate reach decision (starting the live event
+`isLibraryWorkspacePath` still counts all six by pathname (every address
+`libraryRouteShape` in `routes/addresses.ts` gives a library shape) rather
+than by the route group, since `routes/+layout.svelte` sits outside
+`(library)` and needs the same six addresses for its own, separate reach
+decision (starting the live event
 stream) — the only remaining reader of it: #264's own guard,
 `ensureLibraryWorkspaceRoute`, forced every collection/song open onto one of
 these five paths before writing its history entry, which S7 proved
 redundant and removed once `writeLibraryHistory`'s own crossing check
 (`libraryRouteShape`, below) covered leaving *any* non-library route,
-Settings included, not just crossing between two of the five — see the note
-on `LibraryRouteShape`'s `'external'` shape in `stores/libraryContext.ts` for
+Settings included, not just crossing between two library addresses — see the note
+on `LibraryRouteShape`'s `'external'` shape in `routes/addresses.ts` for
 why that shape has to exist for the guard's removal to be safe, and
 `navigation.test.ts`'s "opening a collection from off the library route"
 suite for the per-entry-point proof. A cold tab opened on an album, song,
@@ -318,7 +323,10 @@ album/song listing carried along, so `openTakeAddress` runs
 `ensureGenerationsLoaded` (`stores/player.ts`) before it looks for the number;
 `openPlaylistAddress` has no such second lookup — playlists carry no
 pagination, so resolving the slug against the one list call either finds it
-or the address is unknown. `writeLibraryHistory` in
+or the address is unknown. A cold tab on `/playlists` looks nothing up:
+`openPlaylistsAddress` only writes the `playlists` surface into the restore
+state, unless the entry a reload came back onto already shows it.
+`writeLibraryHistory` in
 `stores/libraryContext.ts` is the single owner of every library history
 write, and every write goes through SvelteKit's router (issue #1165), so each
 entry carries the router's own place in history and Back or Forward between
@@ -349,11 +357,11 @@ scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from
 `$app/navigation`): synchronous, no route resolution. `libraryRouteShape`
-(root / album / album-song / album-song-take / playlist / external) is what
+(root / playlists / album / album-song / album-song-take / playlist / external) is what
 the crossing check compares — only the route-file depth decides a crossing,
 never which resource the address names, and `/playlist/[slug]` is one route
-file whichever playlist it names. The sixth shape, `external`, is everything
-outside the five library addresses, so leaving Settings, login or a share
+file whichever playlist it names. The seventh shape, `external`, is everything
+outside the six library addresses, so leaving Settings, login or a share
 page always crosses; it is what let issue #265's S7 delete
 `ensureLibraryWorkspaceRoute` (#264's separate guard). Shallow routing keeps
 the page's route and `page.url` where the last navigation left them, and an
