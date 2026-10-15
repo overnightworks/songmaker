@@ -96,9 +96,10 @@ import {
  * deep-link sign-in, 28 at 375px for the phone's session lost behind its
  * menu, and 20 at 390px for the album tapped in its drawer after the session
  * was lost; both run on the phone only. The admin flows were measured at 1440 /
- * 390 instead: 23/21 for the own session and the two refusals, and 8 at 390px
- * for the row-action hitboxes (the admin page plus opening a tab), which runs
- * on the phone only. The #1340 sign-outs were measured at 1440 / 390: 29 and
+ * 390 instead: 28/25 for the own session, its two stale revokes, the revoke
+ * that works and the create refusal (#1397), and 8 at 390px for the row-action
+ * hitboxes (the admin page plus opening a tab), which runs on the phone only.
+ * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
  * sign-out the lost network keeps from the server. One ceiling for the file,
