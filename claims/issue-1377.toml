@@ -3,5 +3,6 @@ agent = "claude-head"
 role = "builder"
 base = "87fd8c9c5802fb386d5d5a2084e20efbccf86e61"
 branch = "claude-head/issue-1377-deploy-skipped-check-run"
-scope = ["docs/architecture.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
+scope = ["docs/architecture.md", "docs/security.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
 opened_commit = "ea837eb55d950b38f56f29501ed5ed57d2665efe"
+whole_reason = "one deploy-gate rule: the script, its test, and the two documents that state the gate"
