@@ -17,6 +17,9 @@
 	// by a few seconds, a page key by about a verse.
 	const KEY_STEP_SECONDS = 5;
 	const PAGE_STEP_SECONDS = 30;
+	// The range's own step only sets how finely its value holds the position;
+	// a coarser one would round the position it reports to that grid.
+	const POSITION_STEP_SECONDS = 0.1;
 
 	let band: HTMLDivElement | undefined = $state();
 	// The pointer that holds the line, and where it would land. The song
@@ -96,7 +99,7 @@
 		onSeek(Math.max(0, Math.min(duration, landing)));
 	}
 
-	// A screen reader's swipe steps the range itself, by the same arrow step.
+	// A screen reader that moves the range itself seeks wherever it set it.
 	function seekFromInput(e: Event): void {
 		onSeek(Number((e.currentTarget as HTMLInputElement).value));
 	}
@@ -119,7 +122,7 @@
 		type="range"
 		min="0"
 		max={duration || 0}
-		step={KEY_STEP_SECONDS}
+		step={POSITION_STEP_SECONDS}
 		value={seekable ? currentTime : 0}
 		onkeydown={seekFromKey}
 		oninput={seekFromInput}
