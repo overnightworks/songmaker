@@ -4,7 +4,8 @@ from songmaker_cli.db.queries.activity import CONTINUE_MAX_PLACES as CONTINUE_MA
 from songmaker_cli.db.queries.activity import PlaceActivity as PlaceActivity
 from songmaker_cli.db.queries.activity import SongWork as SongWork
 from songmaker_cli.db.queries.activity import list_place_activity as list_place_activity
-from songmaker_cli.db.queries.activity import record_song_work as record_song_work
+from songmaker_cli.db.queries.activity import record_song_edit as record_song_edit
+from songmaker_cli.db.queries.activity import record_song_played as record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
 from songmaker_cli.db.queries.albums import archive_album as archive_album
 from songmaker_cli.db.queries.albums import cleanup_album as cleanup_album
