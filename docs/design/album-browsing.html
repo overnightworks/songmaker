@@ -936,30 +936,11 @@
 	.pp-trigger-label { display: inline-flex; align-items: center; gap: .3rem; font-family: var(--font-display); font-size: .8rem; text-transform: uppercase; letter-spacing: .5px; color: var(--text); }
 
 	.pp-tail { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: flex-end; gap: .5rem; padding: .75rem .8rem; overflow: hidden; }
-	/* ── #1071 albums wall on the phone with the sort switch; scoped to .as- inside .play-phone ── */
-	.as-page { flex: 1; min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-	.as-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 12px 6px; background: var(--bg); border-bottom: 1px solid var(--border); }
-	.as-label { font-family: var(--font-display); font-size: .9rem; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap; }
-	.as-label .as-n { color: var(--text-subtle); font-weight: 400; letter-spacing: .04em; margin-left: .3rem; }
-	.as-sort { display: inline-flex; align-items: center; height: 44px; }
-	.as-sort-inner { display: inline-flex; height: 30px; border: 1px solid var(--border); border-radius: var(--btn-radius-sm); overflow: hidden; }
-	.as-sort button { height: 100%; padding: 0 .6rem; background: none; border: none; color: var(--text-muted); font-family: var(--font-display); font-size: .74rem; letter-spacing: .5px; text-transform: uppercase; white-space: nowrap; }
-	.as-sort button + button { border-left: 1px solid var(--border); }
-	.as-sort button.as-on { background: color-mix(in srgb, var(--action) 16%, var(--surface)); color: var(--action); }
-	.as-wall { flex: 1; min-height: 0; overflow: hidden; padding: 10px 12px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-rows: max-content; gap: 12px; align-content: start; }
-	.as-tile { border: 1px solid var(--border); border-radius: var(--card-radius); background: var(--surface); overflow: hidden; }
-	.as-art { width: 100%; aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 2rem; letter-spacing: .06em; color: #fff; }
-	.as-art.as-mosaic { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; align-items: stretch; justify-items: stretch; }
-	.as-art.as-mosaic span { display: block; }
-	.as-meta { padding: 7px 8px 8px; display: flex; flex-direction: column; gap: 1px; }
-	.as-t { font-family: var(--font-display); font-size: .9rem; letter-spacing: .3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.as-s { font-size: .7rem; color: var(--text-subtle); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.as-s .as-kind { color: #ccc; }
+	/* ── cover colours of the test albums ── */
 	.as-c-vern { background: linear-gradient(135deg, #c9a227, #5b1a1a); }
 	.as-c-whoe { background: linear-gradient(135deg, #2c5d8f, #111b2e); }
 	.as-c-sign { background: linear-gradient(135deg, #1d6b5a, #0a0f14); }
 	.as-c-sonn { background: linear-gradient(135deg, #f08a24, #8a1d3b); }
-	.as-c-lauf { background: linear-gradient(135deg, #f3c623, #b8461b); }
 	.as-c-nach { background: linear-gradient(135deg, #3b1d5e, #0e0b18); }
 	.as-c-open { background: linear-gradient(135deg, #7aa6b8, #2a3b44); }
 	/* ── #915 / #1124 frames, blessed 30.09.2026: + New song row, one menu form, cover edited in place, inline create; scoped to .x915 inside .play-phone ── */
@@ -979,7 +960,6 @@
 	.x915 .x-desk .x-cont-items { grid-template-columns: repeat(3, minmax(0,1fr)); max-width: 980px; }
 	.x915 .x-mosaic { display: grid !important; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; align-items: stretch !important; justify-content: stretch !important; gap: 1px; background: var(--surface-hover); }
 	.x915 .x-mosaic span { display: block; }
-	.x915 .as-page { flex: 0 1 auto; }
 	/* the one popover: sentence case, one icon each, delete red last, clamped 8 px inside */
 	.x915 .x-pop { position: absolute; z-index: 5; width: 238px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--card-radius); box-shadow: var(--shadow-overlay); overflow: hidden; }
 	.x915 .x-pop .x-phead { font-size: 13px; color: var(--text-subtle); padding: 9px 12px 7px; border-bottom: 1px solid var(--border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -1037,9 +1017,6 @@
 	.x915 .x-desk .pp-player { grid-column: 1 / -1; }
 	.x915 .x-desk .x-libhead { padding: 18px 24px 8px; }
 	.x915 .x-desk .x-cont { padding: 0 24px 12px; }
-	.x915 .x-desk .as-head { padding: 0 24px; }
-	.x915 .x-desk .as-sort { height: 44px; }
-	.x915 .x-desk .as-wall { grid-template-columns: repeat(6, 172px); gap: 18px; padding: 16px 24px; }
 	.x915 .x-desk .pp-chead { padding: 1.2rem 1.5rem .8rem; flex-wrap: nowrap; }
 	.x915 .x-desk .pp-chead .pp-actions { flex: none; gap: .6rem; }
 	.x915 .x-desk .pp-chead .pp-circle { --circle: 48px; }
@@ -1097,6 +1074,8 @@
 	Ergänzt am 27.09.2026 für #1104 um Zustand (h), die Albumseite offline: eine Karte, die nicht laden
 	kann, fehlt einfach; wieder online lädt sie von selbst (aus ~/songmaker-mockups/v9-offline/, Bild 4,
 	freigegeben am 27.09.2026).
+	Zustand (g) am 15.10.2026 für #1354 neu gefasst: ein Schalter, A–Z oder Last played, ordnet Library,
+	Playlists und die Liste links; „Added“ und die gemischte Wand sind weg, das Bild steht in navigation.html (i).
 	Änderungen an dieser Datei brauchen eine neue Freigabe.
 </p>
 <div class="wrap">
@@ -1902,89 +1881,25 @@ so the quiet never turns to storm</div>
 
 	<section class="play-phone" id="albums-sort" lang="en">
 		<div class="state-head">
-			<h2>(g) Albums &amp; playlists on the phone — the sort switch</h2>
-			<span class="tag tag-next">Blessed 27.09.2026 · #1071</span>
+			<h2>(g) The sort switch — one order for Library, Playlists and the desktop list</h2>
+			<span class="tag tag-next">Ruled 15.10.2026 · #1354</span>
 		</div>
 		<p class="state-note">
-			The wall of albums and playlists below Library’s Continue row, 390&nbsp;px wide, in the live dark theme with the
-			vocabulary’s action colour. Frozen from the operator-blessed picture <code>~/songmaker-mockups/v10-home/home.html</code>
-			(frames 3 and 4) with the operator’s one change: the switch opens on <b>A–Z</b>. Continue and the drawer search of the
-			same picture live in <code>docs/design/navigation.html</code> (b), (d) and (d2).
+			Until 15.10.2026 this state drew one phone wall of albums and playlists together under Continue, with three
+			orders, A–Z · Recent · Added (blessed 27.09.2026, #1071). #1354 splits that wall: Library shows only albums and
+			Playlists only playlists — a list with ▶ on the phone, covers on the desktop — and Home carries no wall. The
+			switch is drawn on those pages in <code>docs/design/navigation.html</code> (i), frames I2 (phone), D1 and D3
+			(desktop); this state keeps its rules.
 		</p>
-		<div class="pp-board">
-			<figure class="pp-figure">
-				<figcaption class="state-note"><b>G1 · A–Z, the default</b> — the switch sits on the section’s own head line and stays under the app bar while the wall scrolls. Albums and playlists sort together by title, ignoring case and accents (“für” sorts like “fur”); each tile’s second line gives the size, a playlist says so first.<span class="pp-m">measured in px: switch 30 high inside a 44 high target row · tiles in two columns, 12 apart</span></figcaption>
-				<div class="pp-device" id="as-g1">
-					<header class="pp-appbar">
-						<button class="pp-icon-btn pp-ink" aria-label="Open navigation"><svg class="pp-ic"><use href="#pp-i-menu"/></svg></button>
-						<h1>Songmaker</h1>
-					</header>
-					<div class="as-page">
-						<div class="as-head"><span class="as-label">Albums &amp; playlists<span class="as-n">8</span></span><span class="as-sort" role="group" aria-label="Sort albums and playlists"><span class="as-sort-inner"><button class="as-on" aria-pressed="true">A–Z</button><button class="" aria-pressed="false">Recent</button><button class="" aria-pressed="false">Added</button></span></span></div>
-						<div class="as-wall">
-						<div class="as-tile"><span class="as-art as-c-nach" aria-hidden="true">NA</span><div class="as-meta"><span class="as-t">Nachtstrom</span><span class="as-s">4 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-mosaic" aria-hidden="true"><span class="as-c-vern"></span><span class="as-c-sign"></span><span class="as-c-nach"></span><span class="as-c-whoe"></span></span><div class="as-meta"><span class="as-t">Night drive</span><span class="as-s"><span class="as-kind">Playlist</span> · 14 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-open" aria-hidden="true">OW</span><div class="as-meta"><span class="as-t">Open Windows</span><span class="as-s">8 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-sign" aria-hidden="true">SD</span><div class="as-meta"><span class="as-t">Signals in the Dark</span><span class="as-s">11 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-sonn" aria-hidden="true">SA</span><div class="as-meta"><span class="as-t">Sonne für Andrea</span><span class="as-s">5 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-lauf" aria-hidden="true">SO</span><div class="as-meta"><span class="as-t">Sonnenlauf</span><span class="as-s">7 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-vern" aria-hidden="true">VE</span><div class="as-meta"><span class="as-t">Vernissage</span><span class="as-s">6 songs</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-whoe" aria-hidden="true">WY</span><div class="as-meta"><span class="as-t">Whoever You Are</span><span class="as-s">9 songs</span></div></div>
-						</div>
-					</div>
-					<div class="pp-player">
-						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Kuratorenherz</span><span class="pp-track-detail">from Vernissage</span></span></button>
-						<span class="pp-transport">
-							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
-							<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
-							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
-						</span>
-						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
-						<span class="pp-line"><span></span></span>
-					</div>
-				</div>
-			</figure>
-			<figure class="pp-figure">
-				<figcaption class="state-note"><b>G2 · Recent, one tap away</b> — the same order as Continue: the place with the newest work first (listening, lyric edits, generating takes, co-writer turns). The second line says why the tile stands there: when you last worked in it.<span class="pp-m">time reads today 05:47 · yesterday 23:40 · Thu 20:31 · 21 Sep</span></figcaption>
-				<div class="pp-device" id="as-g2">
-					<header class="pp-appbar">
-						<button class="pp-icon-btn pp-ink" aria-label="Open navigation"><svg class="pp-ic"><use href="#pp-i-menu"/></svg></button>
-						<h1>Songmaker</h1>
-					</header>
-					<div class="as-page">
-						<div class="as-head"><span class="as-label">Albums &amp; playlists<span class="as-n">8</span></span><span class="as-sort" role="group" aria-label="Sort albums and playlists"><span class="as-sort-inner"><button class="" aria-pressed="false">A–Z</button><button class="as-on" aria-pressed="true">Recent</button><button class="" aria-pressed="false">Added</button></span></span></div>
-						<div class="as-wall">
-						<div class="as-tile"><span class="as-art as-c-vern" aria-hidden="true">VE</span><div class="as-meta"><span class="as-t">Vernissage</span><span class="as-s">today 05:47</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-whoe" aria-hidden="true">WY</span><div class="as-meta"><span class="as-t">Whoever You Are</span><span class="as-s">today 01:12</span></div></div>
-						<div class="as-tile"><span class="as-art as-mosaic" aria-hidden="true"><span class="as-c-vern"></span><span class="as-c-sign"></span><span class="as-c-nach"></span><span class="as-c-whoe"></span></span><div class="as-meta"><span class="as-t">Night drive</span><span class="as-s"><span class="as-kind">Playlist</span> · yesterday 23:40</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-sign" aria-hidden="true">SD</span><div class="as-meta"><span class="as-t">Signals in the Dark</span><span class="as-s">yesterday 18:05</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-sonn" aria-hidden="true">SA</span><div class="as-meta"><span class="as-t">Sonne für Andrea</span><span class="as-s">Thu 20:31</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-lauf" aria-hidden="true">SO</span><div class="as-meta"><span class="as-t">Sonnenlauf</span><span class="as-s">21 Sep</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-nach" aria-hidden="true">NA</span><div class="as-meta"><span class="as-t">Nachtstrom</span><span class="as-s">2 Aug</span></div></div>
-						<div class="as-tile"><span class="as-art as-c-open" aria-hidden="true">OW</span><div class="as-meta"><span class="as-t">Open Windows</span><span class="as-s">28 Jul</span></div></div>
-						</div>
-					</div>
-					<div class="pp-player">
-						<button class="pp-open-np" aria-label="Open Now Playing"><span class="pp-cover" aria-hidden="true"></span><span class="pp-track"><span class="pp-track-title">Kuratorenherz</span><span class="pp-track-detail">from Vernissage</span></span></button>
-						<span class="pp-transport">
-							<button class="pp-icon-btn pp-ink" aria-label="Previous"><svg class="pp-ic"><use href="#pp-i-prev"/></svg></button>
-							<button class="pp-circle" aria-label="Pause"><svg class="pp-ic pp-g22"><use href="#pp-i-pause"/></svg></button>
-							<button class="pp-icon-btn pp-ink" aria-label="Next"><svg class="pp-ic"><use href="#pp-i-next"/></svg></button>
-						</span>
-						<button class="pp-open-np pp-right" aria-label="Open Now Playing"></button>
-						<span class="pp-line"><span></span></span>
-					</div>
-				</div>
-			</figure>
-		</div>
 		<section class="decisions">
 			<div class="decision">
-				<h3>The rules</h3>
+				<h3>The rules (operator, 15.10.2026, #1354)</h3>
 				<ol class="findings">
-					<li><b>Three orders, one switch:</b> A–Z · Recent · Added. A first visit opens in A–Z.</li>
-					<li><b>Remembered on this device:</b> the order you last chose stays until you change it; another phone or browser starts at A–Z.</li>
-					<li><b>The tile’s second line follows the order:</b> A–Z shows the size (“6 songs”), Recent the last work (“today 05:47”), Added the day it was made (“added 3 Aug”, today’s newest-first order). A playlist’s line starts with “Playlist ·”.</li>
-					<li><b>Continue is never re-sorted by the switch:</b> it always means “where I was”.</li>
+					<li><b>One switch, two orders:</b> A–Z · Last played. It sorts Library, Playlists and the desktop list on the left the same way. “Added” is gone. A first visit opens in A–Z.</li>
+					<li><b>Remembered on this device:</b> the order you last chose stays until you change it, also tomorrow; another phone or browser starts at A–Z.</li>
+					<li><b>Last played means your own listening</b>, the same as in Home’s Listen: creating or editing an album does not move it, and nobody else’s listening does.</li>
+					<li><b>A–Z compares titles ignoring case and accents:</b> “für” sorts like “fur”.</li>
+					<li><b>Home is never re-sorted by the switch:</b> Listen and Write always mean “what I did last”.</li>
 				</ol>
 			</div>
 		</section>

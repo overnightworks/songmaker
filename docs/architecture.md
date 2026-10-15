@@ -132,6 +132,23 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
+**Ruled, not yet built (#1354, rules 25 and 28–33).** On 15.10.2026 the
+operator ruled that the phone loses the drawer this section describes; the
+picture is state (i) of `docs/design/navigation.html`. Home, Library and
+Playlists become tabs at the bottom with the desktop sidebar's names, icons
+and order, at `/`, `/library` and `/playlists` (album and playlist addresses
+stay), and a reload keeps the tab and page. Each tab keeps its own page and
+scroll; tapping the tab you are on returns to its list, and Settings shows
+the tabs and the player card with no tab lit. Every phone page opened from
+another one has ‹ at the top left, named after where it goes back to, or
+that kind's list when nothing came before it. The phone's Back first closes
+whatever is open, then goes back one page within the tab; on the Library or
+Playlists list it goes to Home, on Home it leaves the app, and switching tabs
+never adds to Back. On the song editor the tabs step aside, and ‹ asks
+before dropping unsaved changes exactly as Back does; with the keyboard open
+the tabs and the player card step aside. Until those slices land, the shell
+below and "Back closes the open layer first" describe what runs.
+
 The app shell is one navigation, not modes. A left `Rail` (264px, inline on
 wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
 coarse pointer) holds: the brand (the rail's Library shortcut, `openLibraryWall`)
