@@ -236,11 +236,13 @@
 		color: var(--text);
 		font-weight: 600;
 	}
+	/* Over the faded strip's right end, where left-aligned lines leave room.
+	   Placed without a transform: the app's press feedback scales buttons
+	   with one, and a centring translate would jump away from the finger. */
 	.lyrics-follow {
 		position: absolute;
-		bottom: 0;
-		left: 50%;
-		transform: translateX(-50%);
+		right: 0.5rem;
+		bottom: 0.25rem;
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3rem;
