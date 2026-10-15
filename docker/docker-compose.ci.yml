@@ -8,23 +8,41 @@ x-gha-cache: &gha_cache
   cache_to:
     - type=gha,mode=max
 
+# A test stack nobody tore down must stay down after a reboot, while the live
+# stack keeps `unless-stopped`; every service below merges this (#1355).
+x-test-stack-service: &test_stack_service
+  restart: "no"
+
 services:
+  postgres:
+    <<: *test_stack_service
+  redis:
+    <<: *test_stack_service
+  alertmanager:
+    <<: *test_stack_service
   prometheus:
+    <<: *test_stack_service
     profiles: ["gpu"]
   grafana:
+    <<: *test_stack_service
     profiles: ["gpu"]
   songmaker-acestep-worker-0:
+    <<: *test_stack_service
     profiles: ["gpu"]
   songmaker-music-worker:
+    <<: *test_stack_service
     profiles: ["gpu"]
   songmaker-scoring-worker:
+    <<: *test_stack_service
     profiles: ["gpu"]
 
   migrate:
+    <<: *test_stack_service
     build:
       <<: *gha_cache
 
   songmaker-web:
+    <<: *test_stack_service
     build:
       <<: *gha_cache
     # The full desktop + mobile suite measured 449 API requests in one run
@@ -57,8 +75,10 @@ services:
       # The runner reaches songmaker-web over plain http, not through a TLS
       # terminator, so a Secure/__Host- cookie would never come back.
       COOKIE_SECURE: "false"
+    # Loopback only, like the live stack (#328): Docker-published ports bypass
+    # ufw, so an all-interface binding would expose a test stack to the LAN.
     ports: !override
-      - "${WEB_PORT:-8080}:8080"
+      - "127.0.0.1:${WEB_PORT:-8080}:8080"
     # The isolated CI stack does not load the host profile; the cover-proof
     # path ends here explicitly, while production keeps songmaker-web.
     security_opt: !override
