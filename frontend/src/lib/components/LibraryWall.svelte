@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
-	import { albumList, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
+	import { albumList, allAlbumsLoad, ensureAllAlbumsLoaded } from '$lib/stores/libraryData';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
@@ -22,7 +22,7 @@
 		readLastPlayed
 	} from '$lib/stores/libraryOrder';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { activityTimeLabel, placeLine, songCountLabel } from '$lib/utils/format';
+	import { activityTimeLabel, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
@@ -33,15 +33,15 @@
 		LIBRARY_NEW_PLAYLIST_LABEL,
 		LIBRARY_PLAYLISTS_ERROR,
 		LIBRARY_PLAYLISTS_LOADING,
+		LIBRARY_PAGE_LABEL,
 		LIBRARY_WALL_EMPTY,
-		LIBRARY_WALL_HEADING,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
 		PLAYLISTS_PAGE_LABEL,
 		PLAYLISTS_WALL_EMPTY,
 		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-		playlistsHeadingLabel,
+		wallHeadingLabel,
 		type LibraryWallOrder
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -53,19 +53,27 @@
 
 	type NewPlaceKind = 'album' | 'playlist';
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
-	// The Library wall, which still lists albums and playlists together, or the
-	// Playlists page's wall of playlists alone (#1402, frame D3).
+	// The Library wall of albums alone, or the Playlists page's wall of
+	// playlists alone (#1354 rule 7; frames D1 and D3).
 	type WallKind = 'library' | 'playlists';
-	type WallCopy = { orderGroup: string; loading: string; failed: string; empty: string };
+	type WallCopy = {
+		pageLabel: string;
+		orderGroup: string;
+		loading: string;
+		failed: string;
+		empty: string;
+	};
 
 	const WALL_COPY: Record<WallKind, WallCopy> = {
 		library: {
+			pageLabel: LIBRARY_PAGE_LABEL,
 			orderGroup: LIBRARY_WALL_ORDER_GROUP_LABEL,
 			loading: 'Loading library…',
 			failed: 'Could not load library.',
 			empty: LIBRARY_WALL_EMPTY
 		},
 		playlists: {
+			pageLabel: PLAYLISTS_PAGE_LABEL,
 			orderGroup: PLAYLISTS_WALL_ORDER_GROUP_LABEL,
 			loading: LIBRARY_PLAYLISTS_LOADING,
 			failed: LIBRARY_PLAYLISTS_ERROR,
@@ -87,19 +95,22 @@
 	let labelledAt = $state(new Date());
 
 	const wallItems = $derived.by(() => {
-		const items: WallItem[] = [
-			...(kind === 'library' ? albums.map((item) => ({ type: 'album' as const, item })) : []),
-			...playlists.map((item) => ({ type: 'playlist' as const, item }))
-		];
+		const items: WallItem[] =
+			kind === 'library'
+				? albums.map((item) => ({ type: 'album' as const, item }))
+				: playlists.map((item) => ({ type: 'playlist' as const, item }));
 		return items.sort($libraryPlaceOrder);
 	});
 	const loadStatuses = $derived(
-		kind === 'library' ? [browseState.status, playlistStatus.status] : [playlistStatus.status]
+		kind === 'library' ? [browseState.status] : [playlistStatus.status]
 	);
-	// The Playlists head states how many there are, which only the loaded list
-	// knows: until it has loaded, the library holds none yet after a reload, or
-	// only the playlist an address opened.
-	const playlistCount = $derived(playlistStatus.status === 'ready' ? playlists.length : undefined);
+	// The head states how many there are, which only the loaded list knows:
+	// until it has loaded, the library holds none yet after a reload, or only
+	// the album or playlist an address opened.
+	const kindLoaded = $derived(
+		kind === 'library' ? $allAlbumsLoad.status === 'ready' : playlistStatus.status === 'ready'
+	);
+	const headCount = $derived(kindLoaded ? wallItems.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
 	let newMenu: MenuPopover | undefined = $state();
@@ -141,18 +152,12 @@
 		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(wallItem);
 	}
 
-	// The Playlists page lists nothing else, so its tiles need no kind word.
-	function tileLine(wallItem: WallItem): string {
-		const detail = tileDetail(wallItem);
-		return kind === 'playlists' ? detail : placeLine(wallItem.type, detail);
-	}
-
 	// A failed read keeps what is on screen, and only an empty wall names it
 	// (#1039 O4): the offline strip owns a lost network, and the wall reads
 	// again when the page returns to the foreground or the network comes back.
 	function catchUpWall(): void {
 		if (kind === 'library') void ensureAllAlbumsLoaded();
-		void ensurePlaylistsLoaded();
+		else void ensurePlaylistsLoaded();
 		if ($libraryWallOrder === 'played') void readLastPlayed();
 	}
 
@@ -188,7 +193,7 @@
 
 	function retryLoad(): void {
 		if (kind === 'library') void loadLibraryBrowse({ reset: true });
-		void loadPlaylists();
+		else void loadPlaylists();
 	}
 </script>
 
@@ -231,33 +236,21 @@
 {/snippet}
 
 <div class="library-wall">
-	{#if kind === 'playlists'}
-		<div class="wall-titlebar playlists-head">
-			<h1
-				class="wall-title"
-				aria-label={playlistCount === undefined
-					? PLAYLISTS_PAGE_LABEL
-					: playlistsHeadingLabel(playlistCount)}
-			>
-				{PLAYLISTS_PAGE_LABEL}
-				{#if playlistCount !== undefined}<span class="wall-count">{playlistCount}</span>{/if}
-			</h1>
-			{@render orderSwitch()}
-			{@render newMenuButton()}
-		</div>
-	{:else}
-		<div class="wall-titlebar">
-			<h1 class="wall-title">Library</h1>
-			{@render newMenuButton()}
-		</div>
+	<div class="wall-titlebar">
+		<h1
+			class="wall-title"
+			aria-label={headCount === undefined
+				? copy.pageLabel
+				: wallHeadingLabel(copy.pageLabel, headCount)}
+		>
+			{copy.pageLabel}
+			{#if headCount !== undefined}<span class="wall-count">{headCount}</span>{/if}
+		</h1>
+		{@render orderSwitch()}
+		{@render newMenuButton()}
+	</div>
+	{#if kind === 'library'}
 		<LibraryContinue />
-
-		<div class="wall-head">
-			<h2 class="wall-heading">
-				{LIBRARY_WALL_HEADING} <span class="wall-count">{wallItems.length}</span>
-			</h2>
-			{@render orderSwitch()}
-		</div>
 	{/if}
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
@@ -286,7 +279,7 @@
 							{#if wallItem.type === 'album'}
 								<LibraryTileContent
 									title={wallItem.item.title}
-									subtitle={tileLine(wallItem)}
+									subtitle={tileDetail(wallItem)}
 									coverAlt={`${ALBUM_COVER_ALT_TYPE} ${wallItem.item.title}`}
 									coverUrl={wallItem.item.cover?.card ?? null}
 									fill={usableAlbumPrimary(wallItem.item.colors)}
@@ -294,7 +287,7 @@
 							{:else}
 								<LibraryTileContent
 									title={wallItem.item.title}
-									subtitle={tileLine(wallItem)}
+									subtitle={tileDetail(wallItem)}
 									coverAlt={`Playlist cover for ${wallItem.item.title}`}
 									coverUrl={wallItem.item.cover?.card ?? null}
 									playlistCovers={wallItem.item.album_covers}
@@ -328,9 +321,11 @@
 		display: flex;
 		flex-shrink: 0;
 		align-items: center;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		gap: 8px;
-		padding: 16px 20px 8px;
+		padding: 16px 20px 12px;
+		border-bottom: 1px solid var(--border);
 	}
 
 	.wall-title {
@@ -345,13 +340,7 @@
 		padding: 0;
 	}
 
-	.playlists-head {
-		flex-wrap: wrap;
-		padding-bottom: 12px;
-		border-bottom: 1px solid var(--border);
-	}
-
-	.playlists-head .wall-order {
+	.wall-titlebar .wall-order {
 		margin-left: auto;
 	}
 
@@ -403,27 +392,6 @@
 
 	.new-menu-item:hover {
 		background: var(--surface-hover);
-	}
-
-	.wall-head {
-		display: flex;
-		flex-shrink: 0;
-		align-items: center;
-		justify-content: space-between;
-		gap: 8px;
-		padding: 0 20px;
-		border-bottom: 1px solid var(--border);
-		background: var(--bg);
-	}
-
-	.wall-heading {
-		color: var(--text);
-		font-family: var(--font-display);
-		font-size: 0.9rem;
-		font-weight: 500;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		white-space: nowrap;
 	}
 
 	.wall-count {
@@ -567,10 +535,6 @@
 
 		.new-menu-item {
 			min-height: 44px;
-		}
-
-		.wall-head {
-			padding: 0 12px;
 		}
 
 		.wall-body {

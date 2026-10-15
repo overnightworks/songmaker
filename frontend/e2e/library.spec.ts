@@ -19,13 +19,11 @@ import {
 	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_SWIPE_RISE_PX,
 	openNowPlayingLabel,
-	PLACE_KIND_PLAYLIST_LABEL,
 	PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 	PLAYLIST_ENTRY_REMOVE_LABEL,
 	playlistEntryOverflowLabel,
 	PLAYLISTS_PAGE_LABEL,
 	PLAYLISTS_WALL_ORDER_GROUP_LABEL,
-	playlistsHeadingLabel,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -39,7 +37,8 @@ import {
 	TAKE_PLAYLIST_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	songEditorOpenLabel
+	songEditorOpenLabel,
+	wallHeadingLabel
 } from '../src/lib/constants';
 import { compareTitles } from '../src/lib/utils/recency';
 import {
@@ -526,7 +525,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 		await surface.getByRole('menuitem', { name: TAKE_PLAYLIST_LABEL }).click();
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 
-		await openLibraryWall(page, shell);
+		await openPlaylistsPage(page, shell);
 		await surface
 			.locator('.library-wall .tile-grid')
 			.locator('.wall-tile-body')
@@ -707,7 +706,7 @@ test(
 		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
 		expect((await albumAdded).ok()).toBe(true);
 
-		await openLibraryWall(page, shell);
+		await openPlaylistsPage(page, shell);
 		await surface
 			.locator('.library-wall .tile-grid')
 			.locator('.wall-tile-body')
@@ -1030,7 +1029,15 @@ async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<voi
 	expect(listen.status()).toBe(200);
 }
 
-test('the albums wall opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
+async function listenInSeededAlbum(page: Page): Promise<void> {
+	const listen = await page.request.post(
+		`/api/songs/${readSeededLibrary().continueReorderSongs.desktop.id}/listen`,
+		{ headers: await csrfHeaders(page) }
+	);
+	expect(listen.status()).toBe(200);
+}
+
+test('#1354 rule 7: the Library lists albums only, opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
 	page
 }) => {
 	const surface = workspace(page);
@@ -1040,7 +1047,8 @@ test('the albums wall opens in A–Z, re-sorts by Last played with the last list
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const continueTiles = surface.locator('.continue-item .tile-title');
-	await listenInPlaylist(page, playlist);
+	const library = readSeededLibrary();
+	await listenInSeededAlbum(page);
 
 	await page.goto('/');
 	await expect(orders.getByRole('button')).toHaveText([
@@ -1048,69 +1056,53 @@ test('the albums wall opens in A–Z, re-sorts by Last played with the last list
 		LIBRARY_WALL_ORDER_LABELS.played
 	]);
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
-	await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
+	await expect(tiles.filter({ hasText: library.albumTitle })).toHaveCount(1);
+	await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(0);
+	const tileLabels = await tiles.evaluateAll((bodies) =>
+		bodies.map((body) => body.getAttribute('aria-label') ?? '')
+	);
+	expect(tileLabels.every((label) => label.startsWith('Open album '))).toBe(true);
 	await expect(continueTiles.first()).toBeVisible();
 	const continueOrder = await continueTiles.allTextContents();
 	const alphabetical = await tiles.locator('.tile-title').allTextContents();
 	expect(alphabetical).toEqual([...alphabetical].sort(compareTitles));
-	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
-		/^Playlist · \d+ songs?$/
-	);
 	const playedBox = await choice('played').boundingBox();
 	expect(playedBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 
-	// The playlist seeded for this attempt holds the newest listen.
+	// The seeded album holds the newest listen.
 	await choice('played').click();
-	await expect(tiles.first()).toContainText(playlist.title);
-	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
+	await expect(tiles.first()).toContainText(library.albumTitle);
+	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 
 	await page.reload();
 	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
-	await expect(tiles.first()).toContainText(playlist.title);
-	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
+	await expect(tiles.first()).toContainText(library.albumTitle);
+	await expect(firstLine).toHaveText(/^today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 
-test('the rail lists albums and playlists in the order the wall is switched to', async ({
+test('the rail lists albums and playlists in the order the Library and Playlists walls are switched to', async ({
 	page,
 	request
 }, testInfo) => {
 	const shell = shellOf(testInfo);
 	const surface = workspace(page);
-	const choice = (order: LibraryWallOrder) =>
-		surface
-			.getByRole('group', { name: LIBRARY_WALL_ORDER_GROUP_LABEL })
-			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
-	type PlaceOrder = { albums: string[]; playlists: string[] };
+	const choice = (group: string, order: LibraryWallOrder) =>
+		surface
+			.getByRole('group', { name: group })
+			.getByRole('button', { name: LIBRARY_WALL_ORDER_LABELS[order], exact: true });
 
-	async function wallOrder(): Promise<PlaceOrder> {
-		const places = await tiles.evaluateAll((bodies) =>
-			bodies.map((body) => ({
-				title: body.querySelector('.tile-title')?.textContent ?? '',
-				line: body.querySelector('.tile-subtitle')?.textContent ?? ''
-			}))
-		);
-		const isPlaylist = (line: string) => line.startsWith(PLACE_KIND_PLAYLIST_LABEL);
-		return {
-			albums: places.filter((place) => !isPlaylist(place.line)).map((place) => place.title),
-			playlists: places.filter((place) => isPlaylist(place.line)).map((place) => place.title)
-		};
-	}
-
-	async function railOrderMatchingWall(): Promise<PlaceOrder> {
-		await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
+	async function railOrderMatchingWall(railRows: string): Promise<string[]> {
 		const rail = await openRailNav(page, shell);
-		const railOrder = async (): Promise<PlaceOrder> => ({
-			albums: await rail.locator('.album-label .row-title').allTextContents(),
-			playlists: await rail.locator('.playlist-label .row-title').allTextContents()
-		});
-		await expect.poll(async () => (await railOrder()).albums.length).toBeGreaterThan(1);
+		const wallTitles = () => tiles.locator('.tile-title').allTextContents();
+		const railTitles = () => rail.locator(`${railRows} .row-title`).allTextContents();
+		await expect.poll(async () => (await railTitles()).length).toBeGreaterThan(1);
 		await expect
-			.poll(async () => JSON.stringify(await railOrder()) === JSON.stringify(await wallOrder()))
+			.poll(async () => JSON.stringify(await railTitles()) === JSON.stringify(await wallTitles()))
 			.toBe(true);
-		return railOrder();
+		return railTitles();
 	}
 
 	// Of two playlists, a listen in the one A–Z puts second brings it to the
@@ -1122,16 +1114,26 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 	await listenInPlaylist(page, laterInAlphabet);
 
 	await page.goto('/');
-	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
-	const alphabetical = await railOrderMatchingWall();
-	expect(alphabetical.albums).toEqual([...alphabetical.albums].sort(compareTitles));
-	expect(alphabetical.playlists).toEqual([...alphabetical.playlists].sort(compareTitles));
+	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'title')).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	const albums = await railOrderMatchingWall('.album-label');
+	expect(albums).toEqual([...albums].sort(compareTitles));
+	await page.goto('/playlists');
+	const playlists = await railOrderMatchingWall('.playlist-label');
+	expect(playlists).toEqual([...playlists].sort(compareTitles));
 
 	await page.reload();
-	await choice('played').click();
-	await expect.poll(async () => (await wallOrder()).playlists[0]).toBe(laterInAlphabet.title);
-	const played = await railOrderMatchingWall();
-	expect(played.playlists[0]).toBe(laterInAlphabet.title);
+	await choice(PLAYLISTS_WALL_ORDER_GROUP_LABEL, 'played').click();
+	await expect(tiles.first()).toContainText(laterInAlphabet.title);
+	expect((await railOrderMatchingWall('.playlist-label'))[0]).toBe(laterInAlphabet.title);
+	await page.goto('/');
+	await expect(choice(LIBRARY_WALL_ORDER_GROUP_LABEL, 'played')).toHaveAttribute(
+		'aria-pressed',
+		'true'
+	);
+	await railOrderMatchingWall('.album-label');
 });
 
 /** Every playlist the server holds, by title in A–Z: the flows before this one seed their own. */
@@ -1160,7 +1162,7 @@ test('the Playlists page opens by address and by search, lists only playlists in
 	const titles = await playlistTitlesInAlphabet(page);
 	const surface = workspace(page);
 	const heading = surface.getByRole('heading', {
-		name: playlistsHeadingLabel(titles.length),
+		name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, titles.length),
 		exact: true
 	});
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
@@ -1237,7 +1239,7 @@ test('the Playlists page opens by address and by search, lists only playlists in
 	await expect(fresh).toHaveURL(/\/playlists$/);
 	await expect(
 		workspace(fresh).getByRole('heading', {
-			name: playlistsHeadingLabel(titles.length),
+			name: wallHeadingLabel(PLAYLISTS_PAGE_LABEL, titles.length),
 			exact: true
 		})
 	).toBeVisible();

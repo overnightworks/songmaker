@@ -65,6 +65,7 @@
 		overflow: hidden;
 		border-radius: 3px;
 		background: var(--surface);
+		container-type: inline-size;
 	}
 
 	.playlist-cover-cell {
@@ -93,7 +94,8 @@
 	.playlist-cover-initials {
 		color: var(--text-subtle);
 		font-family: var(--font-display);
-		font-size: calc(var(--playlist-cover-size) * 0.32);
+		/* A share of the cover's own width, so a cover sized '100%' by its tile reads like one in px (#1091). */
+		font-size: 32cqw;
 		font-weight: 600;
 		line-height: 1;
 	}
