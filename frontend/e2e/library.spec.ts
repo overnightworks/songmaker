@@ -29,6 +29,7 @@ import {
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
+	RAIL_PLAYLISTS_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_NAV_LABEL,
 	PLAYING_MARK_LABEL,
@@ -254,8 +255,9 @@ async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
  * Opening a section is a real navigation (#265), and the rail's own album
  * context row is the way back — the "click back into the album" promise that
  * made the disclosure worth building in the first place (#264). On the phone
- * the way to Settings leads through the Library wall, which folds the drawer's
- * Library group (#593), so the album row is one tap on that group further.
+ * the way to Settings leads through the Library wall, whose own page leaves
+ * the drawer's Library group unfolded (#1354 rule 40, D1), so the album row is
+ * one tap away.
  */
 async function expectSettingsRailRoundTrip(
 	page: Page,
@@ -292,11 +294,9 @@ async function expectSettingsRailRoundTrip(
 
 	const rail = await openRailNav(page, shell);
 	if (shell === 'mobile') {
-		const libraryGroup = rail.getByRole('button', {
-			name: nameStartingWith(RAIL_LIBRARY_LABEL)
-		});
-		await expect(libraryGroup).toHaveAttribute('aria-expanded', 'false');
-		await libraryGroup.click();
+		await expect(
+			rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) })
+		).toHaveAttribute('aria-expanded', 'true');
 	}
 	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
@@ -911,13 +911,8 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 	// Entering an album force-expands its own row without a row click,
 	// and that force-expand is what pulled the whole LIBRARY group open too.
 	await expectRailRowExpanded(firstAlbumRow(), firstAlbumSong());
-	await expect(
-		rail
-			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-			.getByRole('listitem')
-			.first()
-			.getByRole('button', { name: nameStartingWith('All albums') })
-	).toBeVisible();
+	// #1354 rule 40: the word LIBRARY opens the covers, so no row of the list does.
+	await expect(rail.getByRole('button', { name: nameStartingWith('All albums') })).toHaveCount(0);
 
 	function secondAlbumRow(): Locator {
 		return railAlbumRow(rail, library.secondAlbumTitle);
@@ -1008,9 +1003,13 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 
 	await openLibraryWall(page, shell);
 	rail = await openRailNav(page, shell);
+	// #1354 rule 40 (D1): the Library page leaves its own group unfolded and current.
 	await expect(
 		rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) })
-	).toHaveAttribute('aria-expanded', 'false');
+	).toHaveAttribute('aria-expanded', 'true');
+	await expect(
+		rail.getByRole('link', { name: nameStartingWith(RAIL_LIBRARY_LABEL) })
+	).toHaveAttribute('aria-current', 'page');
 
 	console.log(`Rail flow /api requests (${shell}): ${guard.apiRequestCount}`);
 	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
@@ -1246,4 +1245,42 @@ test('the Playlists page opens by address and by search, lists only playlists in
 	await expect(accountCircle(fresh)).toBeVisible();
 	freshGuard.assertClean();
 	await fresh.close();
+});
+
+test('#1354 rule 40: the word Library or Playlists opens its covers, the arrow only folds, and each page leaves its group current and unfolded', async ({
+	page
+}, testInfo) => {
+	const shell = shellOf(testInfo);
+	const surface = workspace(page);
+	const groupWord = async (label: string) =>
+		(await openRailNav(page, shell)).getByRole('link', { name: nameStartingWith(label) });
+	const groupArrow = async (label: string) =>
+		(await openRailNav(page, shell)).getByRole('button', { name: label, exact: true });
+
+	await page.goto('/');
+	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+	await expect(await groupWord(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-current', 'page');
+	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'true');
+	await expect(
+		(await openRailNav(page, shell)).getByRole('button', { name: nameStartingWith('All albums') })
+	).toHaveCount(0);
+
+	await (await groupArrow(RAIL_LIBRARY_LABEL)).click();
+	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'false');
+	await expect(page).toHaveURL(/\/$/);
+
+	await (await groupWord(RAIL_PLAYLISTS_LABEL)).click();
+	await expect(page).toHaveURL(/\/playlists$/);
+	await expect(await groupWord(RAIL_PLAYLISTS_LABEL)).toHaveAttribute('aria-current', 'page');
+	await expect(await groupArrow(RAIL_PLAYLISTS_LABEL)).toHaveAttribute('aria-expanded', 'true');
+
+	await (await groupArrow(RAIL_PLAYLISTS_LABEL)).click();
+	await expect(await groupArrow(RAIL_PLAYLISTS_LABEL)).toHaveAttribute('aria-expanded', 'false');
+	await expect(page).toHaveURL(/\/playlists$/);
+
+	await (await groupWord(RAIL_LIBRARY_LABEL)).click();
+	await expect(page).toHaveURL(/\/$/);
+	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+	await expect(await groupWord(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-current', 'page');
+	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'true');
 });

@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
+	import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
 	import { openCollection } from '$lib/stores/collection';
 	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
-	import { openPlaylist } from '$lib/stores/navigation';
+	import { openPlaylist, openRailSearchTarget } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
 		playlistList,
@@ -12,7 +14,8 @@
 	import {
 		isPlaylistEntryCurrent,
 		playPlaylistEntryAndShowNowPlaying,
-		queueContext
+		queueContext,
+		selectedSongId
 	} from '$lib/stores/player';
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
@@ -44,6 +47,8 @@
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
 	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
+	// The Playlists page itself: its group is current and unfolded there (#1354 D3).
+	const onPlaylistsPage = $derived($librarySurface === 'playlists' && $selectedSongId === null);
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
@@ -103,7 +108,12 @@
 	groupId="rail-playlists-group"
 	storageKey={PLAYLISTS_OPEN_STORAGE_KEY}
 	count={playlistCount}
-	expandTrigger={openPlaylistId !== null || filtering}
+	expandTrigger={onPlaylistsPage || openPlaylistId !== null || filtering}
+	page={{
+		href: resolve(PLAYLISTS_ROUTE_PATH),
+		current: onPlaylistsPage,
+		open: () => void openRailSearchTarget({ kind: 'page', href: PLAYLISTS_ROUTE_PATH })
+	}}
 	{icon}
 >
 	{#snippet children(groupOpen: boolean)}

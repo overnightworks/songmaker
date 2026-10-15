@@ -1,5 +1,12 @@
 <script lang="ts">
+	/* eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path */
 	import type { Snippet } from 'svelte';
+
+	interface GroupPage {
+		href: string;
+		current: boolean;
+		open: () => void;
+	}
 
 	interface Props {
 		label: string;
@@ -13,6 +20,9 @@
 		// effect below for why the previous value must NOT be `$state`.
 		expandTrigger?: boolean;
 		icon?: Snippet;
+		// A group that is also a page: its word links to that page and only the
+		// caret folds (#1354 rule 40). Without a page the whole header folds.
+		page?: GroupPage;
 		children: Snippet<[open: boolean]>;
 	}
 
@@ -23,6 +33,7 @@
 		count,
 		expandTrigger = false,
 		icon,
+		page,
 		children
 	}: Props = $props();
 
@@ -63,46 +74,84 @@
 		}
 	});
 
+	function followPageLink(event: MouseEvent, groupPage: GroupPage): void {
+		const opensElsewhere =
+			event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey;
+		if (opensElsewhere) return;
+		event.preventDefault();
+		groupPage.open();
+	}
+
 	function toggleOpen(): void {
 		open = !open;
 		persistOpen(open);
 	}
 </script>
 
+{#snippet caret()}
+	<svg
+		class="caret"
+		class:open
+		width="10"
+		height="10"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="3"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true"
+	>
+		<polyline points="9 6 15 12 9 18" />
+	</svg>
+{/snippet}
+
+{#snippet heading()}
+	{#if icon}
+		<span class="group-icon" aria-hidden="true">{@render icon()}</span>
+	{/if}
+	<span class="group-title">{label}</span>
+	{#if count !== undefined}
+		<span class="meta">{count}</span>
+	{/if}
+{/snippet}
+
 <div class="rail-group">
 	<div class="disclose-row">
-		<button
-			type="button"
-			class="disclose"
-			aria-label={label}
-			aria-expanded={open}
-			aria-controls={groupId}
-			title={label}
-			onclick={toggleOpen}
-		>
-			<svg
-				class="caret"
-				class:open
-				width="10"
-				height="10"
-				viewBox="0 0 24 24"
-				fill="none"
-				stroke="currentColor"
-				stroke-width="3"
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				aria-hidden="true"
+		{#if page}
+			<button
+				type="button"
+				class="disclose fold"
+				aria-label={label}
+				aria-expanded={open}
+				aria-controls={groupId}
+				title={label}
+				onclick={toggleOpen}
 			>
-				<polyline points="9 6 15 12 9 18" />
-			</svg>
-			{#if icon}
-				<span class="group-icon" aria-hidden="true">{@render icon()}</span>
-			{/if}
-			<span class="group-title">{label}</span>
-			{#if count !== undefined}
-				<span class="meta">{count}</span>
-			{/if}
-		</button>
+				{@render caret()}
+			</button>
+			<a
+				class="disclose page-link"
+				href={page.href}
+				aria-current={page.current ? 'page' : undefined}
+				onclick={(event) => followPageLink(event, page)}
+			>
+				{@render heading()}
+			</a>
+		{:else}
+			<button
+				type="button"
+				class="disclose"
+				aria-label={label}
+				aria-expanded={open}
+				aria-controls={groupId}
+				title={label}
+				onclick={toggleOpen}
+			>
+				{@render caret()}
+				{@render heading()}
+			</button>
+		{/if}
 	</div>
 	<div class="rail-group-panel" data-open={open} id={groupId} inert={!open}>
 		<div class="rail-group-content">
@@ -141,6 +190,21 @@
 		letter-spacing: 0.5px;
 		text-align: left;
 		cursor: pointer;
+	}
+
+	.fold {
+		flex: none;
+		padding-right: 4px;
+	}
+
+	.page-link {
+		text-decoration: none;
+		padding-left: 4px;
+	}
+
+	.page-link[aria-current='page'] {
+		color: color-mix(in srgb, var(--accent) 60%, var(--text));
+		font-weight: 600;
 	}
 
 	.disclose:hover {

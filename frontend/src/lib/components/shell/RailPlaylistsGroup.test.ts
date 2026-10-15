@@ -129,14 +129,37 @@ describe('RailPlaylistsGroup', () => {
 		await vi.waitFor(() => expect(target.querySelector('.meta')?.textContent).toBe('0'));
 	});
 
-	it('toggles the PLAYLISTS group without navigating when its label is clicked', async () => {
+	it('#1354 rule 40: the arrow folds the PLAYLISTS group without navigating', async () => {
 		librarySurface.set('detail');
 		const target = await render();
-		const toggle = requireElement<HTMLButtonElement>(target, 'button.disclose');
-		requireElement<HTMLSpanElement>(toggle, '.group-title').click();
+		const arrow = requireElement<HTMLButtonElement>(target, 'button.disclose');
+		arrow.click();
 		await tick();
-		expect(toggle.getAttribute('aria-expanded')).toBe('true');
+		expect(arrow.getAttribute('aria-expanded')).toBe('true');
 		expect(get(librarySurface)).toBe('detail');
+	});
+
+	it('#1354 rule 40: the word Playlists opens the Playlists covers', async () => {
+		const target = await render();
+		const word = requireElement<HTMLAnchorElement>(target, 'a.page-link');
+		expect(word.getAttribute('href')).toBe('/playlists');
+		expect(word.textContent).toContain('Playlists');
+
+		word.click();
+		await vi.waitFor(() => expect(get(librarySurface)).toBe('playlists'));
+	});
+
+	it('#1354 rule 40 (D3): on the Playlists page its group is the current page and unfolded', async () => {
+		librarySurface.set('playlists');
+		const target = await render();
+		expect(
+			requireElement<HTMLButtonElement>(target, 'button.disclose').getAttribute('aria-expanded')
+		).toBe('true');
+		expect(requireElement(target, 'a.page-link').getAttribute('aria-current')).toBe('page');
+
+		librarySurface.set('browse');
+		await tick();
+		expect(requireElement(target, 'a.page-link').hasAttribute('aria-current')).toBe(false);
 	});
 
 	it('lists the playlists in the order the wall is switched to, A–Z by natural title first', async () => {
