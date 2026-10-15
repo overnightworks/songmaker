@@ -11,7 +11,9 @@ on live, unarchived albums, as ``owner_filter`` decides whose.
 - Listen holds albums and playlists. An album is dated by the viewer's newest
   listen outside a playlist on one of its songs; listens recorded before that
   fact existed cannot tell an album listen from a playlist listen and count
-  for nothing. A playlist is dated by the viewer's newest listen from it.
+  for nothing. A playlist is dated by the viewer's newest listen from it, and
+  numbers and resumes only its live entries: a take not archived, of a live
+  song on a live, unarchived album the viewer may open.
 - Write holds songs, each dated and named by the viewer's newest work on it:
   a saved edit of its recorded kind, a take that is not archived, or a
   message of their own to the co-writer.
@@ -52,7 +54,6 @@ from songmaker_cli.db.models import (
     aware_timestamp,
 )
 from songmaker_cli.db.queries.library import visible_albums
-from songmaker_cli.db.queries.playlists import playlist_holds_song_clause
 from songmaker_cli.timestamps import utcnow
 
 MUSICIAN_CHAT_ROLE: Final[str] = "user"
@@ -116,9 +117,9 @@ def _stamp_song_work(
 class PlaceListen:
     """An album or playlist, when the viewer last listened in it, and to which song.
 
-    ``song_number`` is that song's 1-based place as the album or playlist page
-    numbers it. A playlist that no longer holds its last-played live song
-    names none, and resumes from its start.
+    ``song_number`` is that song's 1-based place among the album's live songs
+    or the playlist's live entries. A playlist none of whose live entries
+    holds its last-played song names none, and resumes from its start.
     """
 
     place: Album | Playlist
@@ -147,13 +148,14 @@ def list_place_listens(
 
     ``owner_id`` is whose albums the viewer may open, ``None`` for every
     album, as ``owner_filter`` decides; playlists are always the viewer's
-    own. Ties fall back to album before playlist, then id. Reading the
-    leading ``limit`` places of each kind is enough before merging: a place
-    behind that cutoff already has ``limit`` places of its own kind ahead of it.
+    own, and name only songs on albums the viewer may open. Ties fall back
+    to album before playlist, then id. Reading the leading ``limit`` places
+    of each kind is enough before merging: a place behind that cutoff
+    already has ``limit`` places of its own kind ahead of it.
     """
     listens = [
         *_album_listens(session, viewer_id=viewer_id, owner_id=owner_id, limit=limit),
-        *_playlist_listens(session, viewer_id=viewer_id, limit=limit),
+        *_playlist_listens(session, viewer_id=viewer_id, owner_id=owner_id, limit=limit),
     ]
     listens.sort(key=_most_recent_listen_first)
     return listens[:limit]
@@ -199,9 +201,12 @@ def _album_listens(
     ]
 
 
-def _playlist_listens(session: Session, *, viewer_id: str, limit: int) -> list[PlaceListen]:
+def _playlist_listens(
+    session: Session, *, viewer_id: str, owner_id: str | None, limit: int,
+) -> list[PlaceListen]:
+    live_song_place = _first_live_place_per_song(viewer_id, owner_id)
     query = (
-        session.query(Playlist, Song, _song_number_in_playlist())
+        session.query(Playlist, Song, live_song_place.c.song_number)
         .options(
             selectinload(Playlist.entries)
             .joinedload(PlaylistEntry.generation)
@@ -209,18 +214,19 @@ def _playlist_listens(session: Session, *, viewer_id: str, limit: int) -> list[P
             .joinedload(Song.album),
         )
         .outerjoin(
-            Song,
+            live_song_place,
             and_(
-                Song.id == Playlist.last_played_song_id,
-                playlist_holds_song_clause(Playlist.id, Playlist.last_played_song_id),
+                live_song_place.c.playlist_id == Playlist.id,
+                live_song_place.c.song_id == Playlist.last_played_song_id,
             ),
         )
+        .outerjoin(Song, Song.id == live_song_place.c.song_id)
         .filter(Playlist.created_by == viewer_id, Playlist.last_played_at.is_not(None))
         .order_by(Playlist.last_played_at.desc(), Playlist.id.asc())
         .limit(limit)
     )
     return [
-        _listen(playlist, playlist.last_played_at, song, song_number if song else None)
+        _listen(playlist, playlist.last_played_at, song, song_number)
         for playlist, song, song_number in query.all()
     ]
 
@@ -265,26 +271,44 @@ def _song_number_in_album() -> ScalarSelect[int]:
     )
 
 
-def _song_number_in_playlist() -> ScalarSelect[int]:
-    """The 1-based place of the song's first entry among the playlist's live entries."""
-    entry, take = aliased(PlaylistEntry), aliased(Generation)
-    first_place_of_song = (
-        select(func.min(entry.position))
-        .select_from(entry)
-        .join(take, entry.generation_id == take.id)
-        .where(entry.playlist_id == Playlist.id, take.song_id == Song.id)
-        .correlate(Playlist, Song)
-        .scalar_subquery()
-    )
-    earlier, earlier_take, earlier_song = aliased(PlaylistEntry), aliased(Generation), aliased(Song)
+def _first_live_place_per_song(viewer_id: str, owner_id: str | None) -> Subquery:
+    """Each song a live entry of the viewer's playlists holds, at its first such place."""
+    live_entries = _numbered_live_entries(viewer_id, owner_id)
     return (
-        select(func.count())
-        .select_from(earlier)
-        .join(earlier_take, earlier.generation_id == earlier_take.id)
-        .join(earlier_song, earlier_take.song_id == earlier_song.id)
-        .where(earlier.playlist_id == Playlist.id, earlier.position <= first_place_of_song)
-        .scalar_subquery()
+        select(
+            live_entries.c.playlist_id,
+            live_entries.c.song_id,
+            func.min(live_entries.c.place).label("song_number"),
+        )
+        .group_by(live_entries.c.playlist_id, live_entries.c.song_id)
+        .subquery()
     )
+
+
+def _numbered_live_entries(viewer_id: str, owner_id: str | None) -> Subquery:
+    """The live entries of the viewer's playlists, numbered 1-based in playlist order.
+
+    An entry is live while its take is not archived and its song is live on
+    a live, unarchived album the viewer may open. Numbering only live
+    entries keeps a removed entry from moving any later song's place.
+    """
+    return visible_albums(
+        select(
+            PlaylistEntry.playlist_id,
+            Generation.song_id,
+            func.row_number().over(
+                partition_by=PlaylistEntry.playlist_id,
+                order_by=(PlaylistEntry.position.asc(), PlaylistEntry.id.asc()),
+            ).label("place"),
+        )
+        .select_from(PlaylistEntry)
+        .join(Playlist, Playlist.id == PlaylistEntry.playlist_id)
+        .join(Generation, Generation.id == PlaylistEntry.generation_id)
+        .join(Song, Song.id == Generation.song_id)
+        .join(Album, Album.id == Song.album_id)
+        .where(Playlist.created_by == viewer_id, Generation.is_archived.is_(False)),
+        owner_id,
+    ).subquery()
 
 
 def _newest_own_work_per_song(viewer_id: str) -> Subquery:

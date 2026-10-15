@@ -416,8 +416,11 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
 
     _seed(factory, seed)
     alice = _client_for(ctx, USER_A)
+    _listen_to(alice, "quiet-3", playlist_id="late-drive")
+    assert _places(_listen_items(alice)) == [("playlist", "late-drive", "quiet-3", 1)]
+
     _listen_to(alice, "quiet-1")
-    album_before = _listen_items(alice)
+    album_before = next(item for item in _listen_items(alice) if item["type"] == "album")
 
     _listen_to(alice, "quiet-2", playlist_id="late-drive")
 
@@ -426,7 +429,7 @@ def test_a_listen_inside_a_playlist_lifts_the_playlist_and_leaves_the_album(
         ("playlist", "late-drive", "quiet-2", 3),
         ("album", "quiet", "quiet-1", 1),
     ]
-    assert items[1] == album_before[0]
+    assert items[1] == album_before
 
 
 def test_an_admins_actions_leave_the_owners_lists_byte_identical_and_move_the_admins_own(
@@ -568,48 +571,113 @@ def test_an_album_falls_back_to_its_newest_listened_live_song(tmp_path: Path) ->
 
 
 def _seed_played_playlist(session, *, entries: list[str], last_played_song_id: str) -> None:
+    """Alice's ``late-drive`` played last at ``last_played_song_id``.
+
+    It may hold album ``quiet``'s three songs and ``aside-1``, the one song of
+    album ``aside``, which a removal below can take out of the playlist's live
+    entries.
+    """
     _add_playable_album(session, album_id="quiet", owner=USER_A, songs=3)
+    _add_playable_album(session, album_id="aside", owner=USER_A, songs=1)
     _add_playlist_of(session, playlist_id="late-drive", owner=USER_A, song_ids=entries)
     playlist = session.get(Playlist, "late-drive")
     playlist.last_played_at = _later(40)
     playlist.last_played_song_id = last_played_song_id
 
 
-@pytest.mark.parametrize(
-    ("entries", "last_played_song_id", "deleted_song", "song", "song_number"),
+_AN_ENTRY_STOPS_BEING_LIVE = pytest.mark.parametrize(
+    "remove_aside",
     [
-        (["quiet-1", "quiet-2", "quiet-3"], "quiet-3", None, "quiet-3", 3),
-        (["quiet-1", "quiet-3", "quiet-3"], "quiet-3", None, "quiet-3", 2),
-        (["quiet-1", "quiet-2", "quiet-3"], "quiet-3", "quiet-1", "quiet-3", 2),
-        (["quiet-1", "quiet-2"], "quiet-3", None, None, None),
-        (["quiet-1", "quiet-3"], "quiet-3", "quiet-3", None, None),
+        lambda session: setattr(session.get(Song, "aside-1"), "deleted_at", _later(41)),
+        lambda session: setattr(session.get(Generation, "aside-1-take"), "is_archived", True),
+        lambda session: setattr(session.get(Album, "aside"), "is_archived", True),
+        lambda session: setattr(session.get(Album, "aside"), "deleted_at", _later(41)),
+        lambda session: setattr(session.get(Album, "aside"), "created_by", USER_B),
     ],
     ids=[
-        "names-its-song-by-its-place",
-        "a-song-held-twice-names-its-first-place",
-        "counts-only-live-songs",
-        "song-left-the-playlist-resumes-from-the-start",
-        "song-deleted-resumes-from-the-start",
+        "deleted-song",
+        "archived-take",
+        "archived-album",
+        "deleted-album",
+        "album-the-viewer-may-not-open",
     ],
 )
-def test_a_played_playlist_names_its_last_played_song_while_it_still_holds_it(
-    tmp_path: Path, entries: list[str], last_played_song_id: str, deleted_song: str | None,
-    song: str | None, song_number: int | None,
-) -> None:
+
+
+def _played_playlist_item(
+    tmp_path: Path, *, entries: list[str], last_played_song_id: str,
+    remove: Callable | None = None,
+) -> dict:
+    """The one item Alice's Listen shows for her played ``late-drive``."""
     client, factory = _make_client(tmp_path, USER_A)
 
     def seed(session) -> None:
-        _seed_played_playlist(
-            session, entries=entries, last_played_song_id=last_played_song_id,
-        )
-        if deleted_song is not None:
-            session.get(Song, deleted_song).deleted_at = _later(41)
+        _seed_played_playlist(session, entries=entries, last_played_song_id=last_played_song_id)
+        if remove is not None:
+            remove(session)
 
     _seed(factory, seed)
 
-    items = _listen_items(client)
-    assert _places(items) == [("playlist", "late-drive", song, song_number)]
-    assert items[0]["played_at"] == _later(40).isoformat()
+    [item] = _listen_items(client)
+    assert item["played_at"] == _later(40).isoformat()
+    return item
+
+
+_RESUMES_FROM_THE_START = {
+    "type": "playlist", "id": "late-drive", "song_id": None, "song_title": None,
+    "song_number": None,
+}
+
+
+@pytest.mark.parametrize(
+    ("entries", "song_number"),
+    [
+        (["quiet-1", "quiet-2", "quiet-3"], 3),
+        (["quiet-1", "quiet-3", "quiet-3"], 2),
+    ],
+    ids=["names-its-song-by-its-place", "a-song-held-twice-names-its-first-place"],
+)
+def test_a_played_playlist_names_its_last_played_song_by_its_place(
+    tmp_path: Path, entries: list[str], song_number: int,
+) -> None:
+    item = _played_playlist_item(tmp_path, entries=entries, last_played_song_id="quiet-3")
+
+    assert _places([item]) == [("playlist", "late-drive", "quiet-3", song_number)]
+    assert item["song_title"] == "Quiet 3"
+
+
+@_AN_ENTRY_STOPS_BEING_LIVE
+def test_an_entry_that_is_no_longer_live_never_raises_a_later_songs_number(
+    tmp_path: Path, remove_aside: Callable,
+) -> None:
+    item = _played_playlist_item(
+        tmp_path, entries=["aside-1", "quiet-1", "quiet-2"], last_played_song_id="quiet-2",
+        remove=remove_aside,
+    )
+
+    assert _places([item]) == [("playlist", "late-drive", "quiet-2", 2)]
+
+
+@_AN_ENTRY_STOPS_BEING_LIVE
+def test_a_playlist_whose_last_played_entry_is_no_longer_live_resumes_from_the_start(
+    tmp_path: Path, remove_aside: Callable,
+) -> None:
+    item = _played_playlist_item(
+        tmp_path, entries=["quiet-1", "aside-1"], last_played_song_id="aside-1",
+        remove=remove_aside,
+    )
+
+    assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
+
+
+def test_a_playlist_whose_last_played_song_left_it_resumes_from_the_start(
+    tmp_path: Path,
+) -> None:
+    item = _played_playlist_item(
+        tmp_path, entries=["quiet-1", "quiet-2"], last_played_song_id="aside-1",
+    )
+
+    assert {key: item[key] for key in _RESUMES_FROM_THE_START} == _RESUMES_FROM_THE_START
 
 
 def test_listen_leaves_out_a_playlist_never_played_and_one_deleted(tmp_path: Path) -> None:
@@ -707,8 +775,9 @@ def _add_playlist_the_viewer_listened_in(session, *, viewer_id: str, index: int)
         ({"limit": 8}, [7, 6, 5, 4, 3, 2, 1, 0]),
         ({"offset": 5, "limit": 3}, [2, 1, 0]),
         ({"offset": 7, "limit": PAGE_MAX_LIMIT}, [0]),
+        ({"offset": 8, "limit": 3}, []),
     ],
-    ids=["default-three", "all", "middle-window", "last-page"],
+    ids=["default-three", "all", "middle-window", "last-page", "past-the-end"],
 )
 def test_an_admins_listen_returns_the_window_of_places_asked_for(
     tmp_path: Path, window: dict[str, int], expected_indexes: list[int],
@@ -730,6 +799,24 @@ def test_an_admins_listen_returns_the_window_of_places_asked_for(
     assert [item["id"].rsplit("-", 1)[1] for item in items] == [
         str(index) for index in expected_indexes
     ]
+
+
+@pytest.mark.parametrize(
+    ("path", "status"),
+    [
+        ("/api/library/continue", 404),
+        ("/api/library/listen", 401),
+        ("/api/library/write", 401),
+    ],
+    ids=["continue-is-gone", "listen-needs-a-session", "write-needs-a-session"],
+)
+def test_home_lists_answer_only_a_signed_in_musician_and_continue_is_gone(
+    library_ctx: tuple[object, object], path: str, status: int,
+) -> None:
+    _factory, ctx = library_ctx
+    signed_out = web_client(make_router_app(ctx))
+
+    assert signed_out.get(path).status_code == status
 
 
 @pytest.mark.parametrize(
@@ -823,12 +910,14 @@ def test_the_newest_kind_of_work_on_a_song_wins_and_listens_never_count(
             session, generation_id="tide-take", song_id="song-tide", created_at=_ts(0),
             created_by=USER_A,
         )
+        _add_take(session, generation_id="nacht-take", song_id="song-nacht", created_at=_ts(0))
         session.commit()
     assert alice.put("/api/songs/song-tide", json={"lyrics": "new words"}).status_code == 200
     assert alice.put("/api/songs/song-alice/title", json={"title": "Duet"}).status_code == 200
     write_before = _write_items(alice)
 
     _listen_to(alice, "song-tide")
+    _listen_to(alice, "song-nacht")
 
     assert _works(_write_items(alice)) == _works(write_before) == [
         ("song-alice", SongWorkKind.RENAMED),
