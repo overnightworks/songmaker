@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import ipaddress
 import itertools
 import json
 import os
@@ -23,6 +25,13 @@ DOCKER_ROOT = REPOSITORY_ROOT / "docker"
 UV_INSTALLED_ENVIRONMENT_FLAGS = frozenset({"--no-sync", "--frozen", "--no-build"})
 IMAGE_VIRTUALENV_BIN = "/app/.venv/bin/"
 WEB_ENTRYPOINT_SCRIPT = "/app/docker-entrypoint.sh"
+E2E_WORKFLOW = REPOSITORY_ROOT / ".github" / "workflows" / "e2e.yml"
+VOICES_E2E_OVERLAY = ("-f", "docker/docker-compose.e2e-voices.yml")
+TEST_STACK_ENVIRONMENT = {
+    "WEB_PORT": "18791",
+    "SONGMAKER_INTERNAL_TOKEN": "compose-config-check",
+}
+DOCKER_DEFAULT_RESTART_POLICY = "no"
 
 
 @dataclass(frozen=True)
@@ -236,6 +245,47 @@ def _declared_named_volumes() -> frozenset[str]:
     volumes = _raw_compose()["volumes"]
     assert isinstance(volumes, dict)
     return frozenset(volumes)
+
+
+def _e2e_workflow_compose_files() -> tuple[str, ...]:
+    workflow = yaml.safe_load(E2E_WORKFLOW.read_text())
+    return tuple(shlex.split(workflow["env"]["COMPOSE_FILES"]))
+
+
+def _test_stacks() -> dict[str, tuple[str, ...]]:
+    workflow_files = _e2e_workflow_compose_files()
+    return {
+        "e2e-workflow": workflow_files,
+        "voices-e2e": (*workflow_files, *VOICES_E2E_OVERLAY),
+    }
+
+
+TEST_STACKS = _test_stacks()
+
+
+@functools.cache
+def _rendered_test_stack_services(compose_files: tuple[str, ...]) -> dict[str, dict]:
+    """The test stack as Compose itself merges it, with every profile active.
+
+    ``--env-file`` keeps a checkout's own ``.env`` out of the rendering.
+    """
+    rendered = subprocess.run(
+        [
+            "docker", "compose", "--env-file", os.devnull, *compose_files,
+            "--profile", "*", "config", "--format", "json",
+        ],
+        cwd=REPOSITORY_ROOT,
+        env={**os.environ, **TEST_STACK_ENVIRONMENT},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert rendered.returncode == 0, rendered.stderr
+    return json.loads(rendered.stdout)["services"]
+
+
+def _binds_loopback_only(host_ip: str) -> bool:
+    return bool(host_ip) and ipaddress.ip_address(host_ip).is_loopback
 
 
 def _service_dockerfile(service_block: str) -> Path:
@@ -643,3 +693,35 @@ def test_check_agent_cli_mounts_rejects_short_syntax_and_host_profiles() -> None
             bind_options = mount.get("bind")
             assert isinstance(bind_options, dict)
             assert bind_options.get("create_host_path") is False
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_a_test_stack_publishes_its_ports_on_loopback_only(
+    compose_files: tuple[str, ...],
+) -> None:
+    """Docker-published ports bypass ufw, so any other host IP reaches the LAN (#1355)."""
+    published_ports = [
+        (service_name, port)
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+        for port in service.get("ports", [])
+    ]
+    assert published_ports, "the test stack publishes no port"
+    reachable_from_outside = [
+        f"{service_name} publishes {port.get('host_ip') or '<every interface>'}"
+        f":{port['published']}"
+        for service_name, port in published_ports
+        if not _binds_loopback_only(port.get("host_ip", ""))
+    ]
+    assert not reachable_from_outside
+
+
+@pytest.mark.parametrize("compose_files", TEST_STACKS.values(), ids=TEST_STACKS.keys())
+def test_no_test_stack_service_comes_back_after_a_reboot(
+    compose_files: tuple[str, ...],
+) -> None:
+    """A test stack nobody tore down must not restart with the machine (#1355)."""
+    restart_policies = {
+        service_name: service.get("restart", DOCKER_DEFAULT_RESTART_POLICY)
+        for service_name, service in _rendered_test_stack_services(compose_files).items()
+    }
+    assert restart_policies == dict.fromkeys(restart_policies, "no")
