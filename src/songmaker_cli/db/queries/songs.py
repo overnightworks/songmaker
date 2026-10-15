@@ -377,7 +377,7 @@ def update_song(
         creative_changed or language_changed or new_gen_params != prev.generation_params
     )
     if edited_by is not None and content_changed:
-        lyrics_changed = prev is None or new_lyrics != prev.lyrics
+        lyrics_changed = lyrics is not None and (prev is None or lyrics != prev.lyrics)
         record_song_edit(
             session, user_id=edited_by, song_id=song_id,
             kind=SongWorkKind.LYRICS if lyrics_changed else SongWorkKind.STYLE,

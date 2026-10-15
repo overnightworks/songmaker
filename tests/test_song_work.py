@@ -146,6 +146,19 @@ def test_the_latest_edit_names_the_kind_of_the_editors_work(tmp_path: Path, db) 
     assert _work_rows(db) == {OWNER_ID: Work(edited=True, kind=SongWorkKind.RENAMED)}
 
 
+@pytest.mark.parametrize("edit", ["lyrics", "prompt"])
+def test_a_save_on_a_song_without_a_version_records_the_kind_it_changed(
+    tmp_path: Path, db, edit: str,
+) -> None:
+    request, kind = EDITS[edit]
+    client = _client(tmp_path, db, user_id=OWNER_ID, role="user")
+    assert client.delete("/api/versions/v1").status_code == 200
+
+    assert _send(client, request).status_code == 200
+
+    assert _work_rows(db) == {OWNER_ID: Work(edited=True, kind=kind)}
+
+
 @pytest.mark.parametrize(
     "save",
     [
@@ -216,13 +229,21 @@ def test_only_a_listen_outside_a_playlist_counts_as_an_album_listen(
     assert _work_rows(db) == {OWNER_ID: Work(played=True, album_played=album_played)}
 
 
-def test_a_rejected_listen_records_no_work(tmp_path: Path, db) -> None:
-    with db() as session:
-        session.get(Generation, "g1").mp3_path = ""
-        session.commit()
+@pytest.mark.parametrize(
+    ("playable", "body", "status"),
+    [(False, None, 422), (True, {"playlist_id": PLAYLIST_ID}, 404)],
+    ids=["no-playable-take", "another-musicians-playlist"],
+)
+def test_a_rejected_listen_records_no_work(
+    tmp_path: Path, db, playable: bool, body: dict | None, status: int,
+) -> None:
+    if not playable:
+        with db() as session:
+            session.get(Generation, "g1").mp3_path = ""
+            session.commit()
     client = _client(tmp_path, db, user_id=ADMIN_ID, role="admin")
 
-    assert _send(client, LISTEN).status_code == 422
+    assert client.post(LISTEN_URL, json=body).status_code == status
 
     assert _work_rows(db) == {}
 
