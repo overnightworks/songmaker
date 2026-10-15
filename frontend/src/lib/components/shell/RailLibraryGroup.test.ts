@@ -34,11 +34,11 @@ import {
 	buildSong as song,
 	createComponentMount,
 	findElementByRoleAndName,
+	lastPlayedPage,
 	railRevealsSettled,
 	recordRailReveals,
 	revealedTitles,
 	requireButtonContainingText,
-	recentWorkPage,
 	requireElement,
 	songsPage
 } from './rail-test-fixtures';
@@ -149,13 +149,13 @@ describe('RailLibraryGroup', () => {
 
 	it('lists the albums in the order the wall is switched to, A–Z by natural title first', async () => {
 		albumList.set([
-			album({ id: 'filler-10', title: 'Filler 10', created_at: '2026-09-03T10:00:00Z' }),
-			album({ id: 'vernissage', title: 'Vernissage', created_at: '2026-09-01T10:00:00Z' }),
-			album({ id: 'filler-2', title: 'Filler 2', created_at: '2026-07-01T10:00:00Z' }),
-			album({ id: 'afterglow', title: 'Afterglow', created_at: '2026-08-01T10:00:00Z' })
+			album({ id: 'filler-10', title: 'Filler 10' }),
+			album({ id: 'vernissage', title: 'Vernissage' }),
+			album({ id: 'filler-2', title: 'Filler 2' }),
+			album({ id: 'afterglow', title: 'Afterglow' })
 		]);
 		vi.mocked(fetchLibraryListen).mockResolvedValue(
-			recentWorkPage('album', ['vernissage', 'filler-2'])
+			lastPlayedPage('album', ['vernissage', 'filler-2'])
 		);
 		const target = await render();
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
@@ -165,11 +165,7 @@ describe('RailLibraryGroup', () => {
 
 		expect(albumTitles()).toEqual(['Afterglow', 'Filler 2', 'Filler 10', 'Vernissage']);
 
-		chooseLibraryWallOrder('added');
-		await tick();
-		expect(albumTitles()).toEqual(['Filler 10', 'Vernissage', 'Afterglow', 'Filler 2']);
-
-		chooseLibraryWallOrder('recent');
+		chooseLibraryWallOrder('played');
 		await vi.waitFor(() =>
 			expect(albumTitles()).toEqual(['Vernissage', 'Filler 2', 'Afterglow', 'Filler 10'])
 		);

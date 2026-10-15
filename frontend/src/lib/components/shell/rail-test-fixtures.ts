@@ -261,9 +261,9 @@ export function railLibraryApiMock() {
 	};
 }
 
-export function recentWorkPage(type: LibraryListenItem['type'], idsByLastWork: string[]) {
+export function lastPlayedPage(type: LibraryListenItem['type'], idsByLastPlayed: string[]) {
 	return {
-		items: idsByLastWork.map((id) => ({
+		items: idsByLastPlayed.map((id) => ({
 			type,
 			id,
 			title: id,

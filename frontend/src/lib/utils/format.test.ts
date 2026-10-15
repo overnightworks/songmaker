@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
 	accountInitial,
 	activityTimeLabel,
-	addedDayLabel,
 	formatTime,
 	localWeekday,
 	placeLine,
@@ -112,20 +111,5 @@ describe('localWeekday', () => {
 
 	it('names the local weekday, not the UTC one', () => {
 		expect(localWeekday(new Date('2026-09-26T22:30:00Z'))).toBe('Sun');
-	});
-});
-
-describe('addedDayLabel', () => {
-	beforeAll(() => vi.stubEnv('TZ', 'Europe/Berlin'));
-	afterAll(() => vi.unstubAllEnvs());
-
-	const sundayNoonInBerlin = new Date('2026-09-27T10:00:00Z');
-
-	it.each([
-		['this year by day and month', '2026-08-03T10:00:00Z', 'added 3 Aug'],
-		['on the local day, not the UTC one', '2026-08-02T22:30:00Z', 'added 3 Aug'],
-		['in another year with the year', '2025-08-03T10:00:00Z', 'added 3 Aug 2025']
-	])('reads a creation %s', (_case, createdAt, label) => {
-		expect(addedDayLabel(createdAt, sundayNoonInBerlin)).toBe(label);
 	});
 });

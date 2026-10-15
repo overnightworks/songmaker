@@ -16,13 +16,13 @@
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import {
-		lastWorkByPlace,
-		lastWorkOf,
+		lastPlayedByPlace,
+		lastPlayedOf,
 		libraryPlaceOrder,
-		readRecentWork
+		readLastPlayed
 	} from '$lib/stores/libraryOrder';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { activityTimeLabel, addedDayLabel, placeLine, songCountLabel } from '$lib/utils/format';
+	import { activityTimeLabel, placeLine, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
@@ -86,7 +86,7 @@
 	});
 
 	$effect(() => {
-		void $lastWorkByPlace;
+		void $lastPlayedByPlace;
 		labelledAt = new Date();
 	});
 
@@ -102,9 +102,8 @@
 	}
 
 	function tileDetail(wallItem: WallItem): string {
-		if (order === 'added') return addedDayLabel(wallItem.item.created_at, labelledAt);
-		const lastWork = order === 'recent' ? lastWorkOf($lastWorkByPlace, wallItem) : undefined;
-		return lastWork ? activityTimeLabel(lastWork.at, labelledAt) : sizeLabel(wallItem);
+		const lastPlayed = order === 'played' ? lastPlayedOf($lastPlayedByPlace, wallItem) : undefined;
+		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(wallItem);
 	}
 
 	function tileLine(wallItem: WallItem): string {
@@ -117,13 +116,13 @@
 	function catchUpWall(): void {
 		void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'recent') void readRecentWork();
+		if ($libraryWallOrder === 'played') void readLastPlayed();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
 		chooseLibraryWallOrder(next);
 		labelledAt = new Date();
-		if (next === 'recent') void readRecentWork();
+		if (next === 'played') void readLastPlayed();
 	}
 
 	function catchUpOnReturnToForeground(): void {
