@@ -301,6 +301,7 @@ describe('LibraryWall', () => {
 
 		expect(pressedOrder(reopened)).toEqual(['Last played']);
 		await vi.waitFor(() => expect(tileTitles(reopened)[0]).toBe('Sonnenlauf'));
+		expect(tileLines(reopened).slice(1)).toEqual(['1 song', 'Playlist · 14 songs', '5 songs']);
 	});
 
 	it.each([

@@ -55,7 +55,7 @@ describe('library order', () => {
 		fetchLibraryListen.mockResolvedValue({
 			items: [listened('kinetic'), listened('vernissage')]
 		});
-		const albums = ['Afterglow', 'Vernissage', 'Kinetic', 'Nightdrive'].map((title) =>
+		const albums = ['Nightdrive', 'Vernissage', 'Kinetic', 'Afterglow'].map((title) =>
 			titled(title)
 		);
 

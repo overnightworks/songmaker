@@ -1049,6 +1049,7 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 
 	await page.reload();
 	await choice('played').click();
+	await expect.poll(async () => (await wallOrder()).playlists[0]).toBe(laterInAlphabet.title);
 	const played = await railOrderMatchingWall();
 	expect(played.playlists[0]).toBe(laterInAlphabet.title);
 });
