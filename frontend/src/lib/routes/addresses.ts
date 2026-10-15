@@ -19,7 +19,7 @@ export function playlistRoutePath(slug: string): string {
 	return `${PLAYLIST_ROUTE_PREFIX}${encodeURIComponent(slug)}`;
 }
 
-export function isAlbumRoutePath(pathname: string): boolean {
+function isAlbumRoutePath(pathname: string): boolean {
 	return pathname.startsWith(ALBUM_ROUTE_PREFIX) && pathname.length > ALBUM_ROUTE_PREFIX.length;
 }
 

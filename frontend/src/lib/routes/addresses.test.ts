@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	albumRoutePath,
-	isAlbumRoutePath,
 	isPlaylistRoutePath,
 	isSongRoutePath,
 	legacySongRoutePath,
@@ -25,12 +24,6 @@ describe('library route addresses', () => {
 	});
 
 	it.each([
-		['album', isAlbumRoutePath, '/album/anfield', true],
-		['album', isAlbumRoutePath, '/album/anfield/tide', true],
-		['album', isAlbumRoutePath, '/album/anfield/tide/take/3', true],
-		['album', isAlbumRoutePath, '/album/', false],
-		['album', isAlbumRoutePath, '/', false],
-		['album', isAlbumRoutePath, '/settings/voices', false],
 		['song', isSongRoutePath, '/album/anfield/tide', true],
 		['song', isSongRoutePath, '/album/anfield/tide/take/3', true],
 		['song', isSongRoutePath, '/album/anfield', false],
@@ -46,6 +39,7 @@ describe('library route addresses', () => {
 
 	it.each([
 		['/', 'root'],
+		['/album/', 'external'],
 		['/album/anfield', 'album'],
 		['/album/anfield/tide', 'album-song'],
 		['/album/anfield/tide/take/3', 'album-song-take'],

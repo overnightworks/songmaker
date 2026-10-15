@@ -163,7 +163,6 @@ import {
 	openCollectionEntry,
 	openLibraryWall,
 	openPlaylist,
-	openPlaylistsWall,
 	openRailSearchTarget,
 	openTakeVersion,
 	pendingDirtyNavigation,
@@ -568,6 +567,10 @@ describe('the address an open playlist carries (issue #286)', () => {
 });
 
 // #1402: the Playlists page is a library page of its own, which search opens.
+function openPlaylistsBySearch(): Promise<void> {
+	return openRailSearchTarget({ kind: 'page', href: '/playlists' });
+}
+
 describe('the Playlists page (#1402)', () => {
 	let stopNavigation: () => void;
 
@@ -581,7 +584,7 @@ describe('the Playlists page (#1402)', () => {
 		await openAlbum('a1');
 		const length = historyLength();
 
-		await openRailSearchTarget({ kind: 'page', href: '/playlists' });
+		await openPlaylistsBySearch();
 
 		expect(location.pathname).toBe('/playlists');
 		expect(get(librarySurface)).toBe('playlists');
@@ -604,12 +607,12 @@ describe('the Playlists page (#1402)', () => {
 
 	it.each([
 		{ over: 'the Library wall', shows: 'its top', open: openLibraryWall, scrolled: 0 },
-		{ over: 'itself', shows: 'where it was', open: openPlaylistsWall, scrolled: 640 }
+		{ over: 'itself', shows: 'where it was', open: openPlaylistsBySearch, scrolled: 640 }
 	])('opened over $over shows $shows', async ({ open, scrolled }) => {
 		await open();
 		captureLibraryScroll(640);
 
-		await openPlaylistsWall();
+		await openPlaylistsBySearch();
 
 		expect(get(libraryScrollAnchor)).toBe(scrolled);
 		expect(historyEntry().scrollAnchor).toBe(scrolled);
@@ -983,7 +986,7 @@ describe.each([
 	['openAlbum', () => openAlbum('a1')],
 	['openPlaylist', () => openPlaylist('p1')],
 	['openLibraryWall', () => openLibraryWall()],
-	['openPlaylistsWall', () => openPlaylistsWall()]
+	['the Playlists page from search', () => openPlaylistsBySearch()]
 ])('%s closes the rail drawer', (_name, action) => {
 	it('closes an open drawer instead of leaving it over the new surface', async () => {
 		toggleSidebar();
@@ -1430,13 +1433,13 @@ describe('a dirty draft guards song switch / leave', () => {
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
-	it('defers openPlaylistsWall the same way', async () => {
+	it('defers the Playlists page from search the same way', async () => {
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
 		setDraftLyrics('unsaved edit');
 
-		await openPlaylistsWall();
+		await openPlaylistsBySearch();
 
 		expect(get(selectedSongId)).toBe('s1');
 		expect(get(librarySurface)).toBe('detail');

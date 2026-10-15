@@ -355,10 +355,6 @@
 		margin-left: auto;
 	}
 
-	.wall-title .wall-count {
-		font-size: 1rem;
-	}
-
 	.new-face {
 		display: inline-flex;
 		align-items: center;

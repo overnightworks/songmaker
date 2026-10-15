@@ -363,7 +363,7 @@ function showPlaylistsWall(): void {
 }
 
 // Like the Library, a fresh history entry, so Back returns to what was open.
-export async function openPlaylistsWall(): Promise<void> {
+async function openPlaylistsWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
 		showPlaylistsWall();
 		await pushLibraryHistory();
