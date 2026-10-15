@@ -950,7 +950,7 @@ async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<voi
 	expect(listen.status()).toBe(200);
 }
 
-test('the albums wall opens in A–Z, re-sorts by Recent and Added with their own lines, keeps the choice across a reload and leaves Continue alone', async ({
+test('the albums wall opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
 	page
 }) => {
 	const surface = workspace(page);
@@ -963,6 +963,10 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	await listenInPlaylist(page, playlist);
 
 	await page.goto('/');
+	await expect(orders.getByRole('button')).toHaveText([
+		LIBRARY_WALL_ORDER_LABELS.title,
+		LIBRARY_WALL_ORDER_LABELS.played
+	]);
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
 	await expect(continueTiles.first()).toBeVisible();
@@ -972,27 +976,25 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
 		/^Playlist · \d+ songs?$/
 	);
-	const recentBox = await choice('recent').boundingBox();
-	expect(recentBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+	const playedBox = await choice('played').boundingBox();
+	expect(playedBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 
-	// The playlist seeded for this attempt is the newest listen and the newest place.
-	await choice('recent').click();
+	// The playlist seeded for this attempt holds the newest listen.
+	await choice('played').click();
 	await expect(tiles.first()).toContainText(playlist.title);
 	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 
-	await choice('added').click();
-	await expect(tiles.first()).toContainText(playlist.title);
-	await expect(firstLine).toHaveText(/^Playlist · added \d{1,2} [A-Z][a-z]{2}$/);
-
 	await page.reload();
-	await expect(choice('added')).toHaveAttribute('aria-pressed', 'true');
-	await expect(firstLine).toHaveText(/^Playlist · added /);
+	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
+	await expect(tiles.first()).toContainText(playlist.title);
+	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 
 test('the rail lists albums and playlists in the order the wall is switched to', async ({
-	page
+	page,
+	request
 }, testInfo) => {
 	const shell = shellOf(testInfo);
 	const surface = workspace(page);
@@ -1031,6 +1033,14 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 		return railOrder();
 	}
 
+	// Of two playlists, a listen in the one A–Z puts second brings it to the
+	// front under Last played: the rail can only show that by leaving A–Z.
+	const second = await seedPlaylist(request, readSeededLibrary());
+	const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
+		compareTitles(a.title, b.title)
+	);
+	await listenInPlaylist(page, laterInAlphabet);
+
 	await page.goto('/');
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	const alphabetical = await railOrderMatchingWall();
@@ -1038,8 +1048,7 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 	expect(alphabetical.playlists).toEqual([...alphabetical.playlists].sort(compareTitles));
 
 	await page.reload();
-	await choice('added').click();
-	const added = await railOrderMatchingWall();
-	expect(added.albums).not.toEqual(alphabetical.albums);
-	expect(added.playlists[0]).toBe(playlist.title);
+	await choice('played').click();
+	const played = await railOrderMatchingWall();
+	expect(played.playlists[0]).toBe(laterInAlphabet.title);
 });

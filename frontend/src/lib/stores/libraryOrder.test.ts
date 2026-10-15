@@ -8,20 +8,16 @@ vi.mock('$lib/api/library', () => ({
 
 import { chooseLibraryWallOrder } from './ui';
 import {
-	ensureRecentWorkRead,
+	ensureLastPlayedRead,
 	inLibraryOrder,
 	libraryPlaceOrder,
-	readRecentWork,
+	readLastPlayed,
 	resetLibraryOrderForTests
 } from './libraryOrder';
 
-type Titled = { id: string; title: string; created_at: string };
+type Titled = { id: string; title: string };
 
-const titled = (title: string, created_at = '2026-09-01T10:00:00Z'): Titled => ({
-	id: title.toLowerCase(),
-	title,
-	created_at
-});
+const titled = (title: string): Titled => ({ id: title.toLowerCase(), title });
 
 const titlesOf = (items: readonly Titled[]) => items.map((item) => item.title);
 
@@ -54,23 +50,8 @@ describe('library order', () => {
 		]);
 	});
 
-	it('orders Added newest first', () => {
-		chooseLibraryWallOrder('added');
-		const albums = [
-			titled('Old', '2026-07-28T10:00:00Z'),
-			titled('New', '2026-09-01T10:00:00Z'),
-			titled('Middle', '2026-08-03T10:00:00Z')
-		];
-
-		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
-			'New',
-			'Middle',
-			'Old'
-		]);
-	});
-
-	it('orders Recent by the last listen read, unranked places last in title order', async () => {
-		chooseLibraryWallOrder('recent');
+	it('orders Last played by the last listen read, unranked places last in title order', async () => {
+		chooseLibraryWallOrder('played');
 		fetchLibraryListen.mockResolvedValue({
 			items: [listened('kinetic'), listened('vernissage')]
 		});
@@ -78,7 +59,7 @@ describe('library order', () => {
 			titled(title)
 		);
 
-		expect(await readRecentWork()).toBe(true);
+		expect(await readLastPlayed()).toBe(true);
 
 		expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
 		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
@@ -90,12 +71,12 @@ describe('library order', () => {
 	});
 
 	it('keeps the last ranking when a later read fails', async () => {
-		chooseLibraryWallOrder('recent');
+		chooseLibraryWallOrder('played');
 		fetchLibraryListen.mockResolvedValueOnce({ items: [listened('kinetic')] });
-		await readRecentWork();
+		await readLastPlayed();
 		fetchLibraryListen.mockRejectedValueOnce(new Error('offline'));
 
-		expect(await readRecentWork()).toBe(false);
+		expect(await readLastPlayed()).toBe(false);
 
 		const albums = [titled('Afterglow'), titled('Kinetic')];
 		expect(titlesOf(inLibraryOrder('album', albums, get(libraryPlaceOrder)))).toEqual([
@@ -104,11 +85,11 @@ describe('library order', () => {
 		]);
 	});
 
-	it('reads the recent ranking once for every caller that only needs it present', async () => {
+	it('reads the last-played ranking once for every caller that only needs it present', async () => {
 		fetchLibraryListen.mockResolvedValue({ items: [listened('kinetic')] });
 
-		await Promise.all([ensureRecentWorkRead(), ensureRecentWorkRead()]);
-		await ensureRecentWorkRead();
+		await Promise.all([ensureLastPlayedRead(), ensureLastPlayedRead()]);
+		await ensureLastPlayedRead();
 
 		expect(fetchLibraryListen).toHaveBeenCalledTimes(1);
 	});

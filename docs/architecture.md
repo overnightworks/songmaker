@@ -175,20 +175,21 @@ Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
 only places the musician listened in) above one wall of albums and playlists together, with no filter chips (#1102;
 state (g) of `docs/design/album-browsing.html` as blessed 27.09.2026 for
 #1071, rewritten by #1354). The wall's heading row holds
-one switch, A–Z · Recent · Added; a first visit opens in A–Z and the choice is
-remembered on this device (`libraryWallOrder` in `stores/ui.ts`), never
-re-sorting Continue. A–Z compares titles ignoring case and accents and
+one switch, A–Z · Last played; a first visit opens in A–Z and the choice is
+remembered on this device (`libraryWallOrder` in `stores/ui.ts`; a stored
+order it does not know, such as an earlier Recent or Added, opens in A–Z),
+never re-sorting Continue. A–Z compares titles ignoring case and accents and
 reads numbers by value, so "Demo 2" precedes "Demo 10" (one
-`Intl.Collator` in `utils/recency.ts`); Recent is the rank `/api/library/listen`
-gives each place, read in pages of 200 until a short page, so every place the
-viewer listened in is ranked by that one listen fact and there is no second
-rule (a place the viewer never listened in has no rank and waits at the end
-in title order); Added is newest
-`created_at` first. One owner, `stores/libraryOrder.ts`, holds these
-comparators and the Recent ranking; the wall and the rail's albums and
-playlists (desktop rail and phone drawer) all ask it, so the switch reorders
-both at once. Each tile's second line follows the order: the size, the
-last listen, or "added 3 Aug", a playlist's line starting "Playlist ·". The
+`Intl.Collator` in `utils/recency.ts`); Last played is the rank
+`/api/library/listen` gives each place, read in pages of 200 until a short
+page, so every place the viewer listened in is ranked by that one listen fact
+and there is no second rule (a place the viewer never listened in has no rank
+and waits at the end in title order). One owner, `stores/libraryOrder.ts`,
+holds these comparators and the Last played ranking; the wall and the rail's
+albums and playlists (desktop rail and phone drawer) all ask it, so the switch
+reorders both at once. Each tile's second line follows the order: the size
+under A–Z, the last listen under Last played (the size for a place never
+listened in), a playlist's line starting "Playlist ·". The
 wall sorts the complete set from the same route-independent loader the rail
 uses (`ensureAllAlbumsLoaded` in `stores/libraryData.ts`). A browse reset,
 which history navigation (Back and Forward, an address, returning to the

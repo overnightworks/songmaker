@@ -18,7 +18,7 @@ import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { toasts } from '$lib/stores/toast';
 import { ApiError } from '$lib/api/fetch';
-import { LIBRARY_WALL_RECENT_PAGE_SIZE } from '$lib/constants';
+import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
@@ -131,19 +131,25 @@ function continueTitles(root: ParentNode): string[] {
 	);
 }
 
-function orderButton(root: ParentNode, label: string): HTMLButtonElement {
+function orderChoices(root: ParentNode): HTMLButtonElement[] {
 	const group = root.querySelector('[role="group"][aria-label="Sort albums and playlists"]');
-	const button = [...(group?.querySelectorAll('button') ?? [])].find(
-		(candidate) => candidate.textContent?.trim() === label
-	);
+	return [...(group?.querySelectorAll('button') ?? [])];
+}
+
+function choiceLabel(choice: HTMLButtonElement): string {
+	return choice.textContent?.trim() ?? '';
+}
+
+function orderButton(root: ParentNode, label: string): HTMLButtonElement {
+	const button = orderChoices(root).find((choice) => choiceLabel(choice) === label);
 	if (!button) throw new Error(`no ${label} order`);
 	return button;
 }
 
 function pressedOrder(root: ParentNode): string[] {
-	return ['A–Z', 'Recent', 'Added'].filter(
-		(label) => orderButton(root, label).getAttribute('aria-pressed') === 'true'
-	);
+	return orderChoices(root)
+		.filter((choice) => choice.getAttribute('aria-pressed') === 'true')
+		.map(choiceLabel);
 }
 
 function place(type: 'album' | 'playlist', id: string, title: string, playedAt: string) {
@@ -162,34 +168,18 @@ function place(type: 'album' | 'playlist', id: string, title: string, playedAt: 
 
 type ListenPage = { offset: number; limit: number };
 
-function isRecentRead(page: ListenPage): boolean {
-	return page.limit === LIBRARY_WALL_RECENT_PAGE_SIZE;
+function isLastPlayedRead(page: ListenPage): boolean {
+	return page.limit === LIBRARY_WALL_PLAYED_PAGE_SIZE;
 }
 
 function seedWall(): void {
 	albumList.set([
-		album({
-			id: 'a-sonne',
-			title: 'Sonnenlauf',
-			song_count: 7,
-			created_at: '2026-07-28T10:00:00Z'
-		}),
-		album({
-			id: 'a-fuer',
-			title: 'Sonne für Andrea',
-			song_count: 5,
-			created_at: '2026-08-03T10:00:00Z'
-		}),
-		album({ id: 'a-nacht', title: 'nachtstrom', song_count: 1, created_at: '2026-09-01T10:00:00Z' })
+		album({ id: 'a-sonne', title: 'Sonnenlauf', song_count: 7 }),
+		album({ id: 'a-fuer', title: 'Sonne für Andrea', song_count: 5 }),
+		album({ id: 'a-nacht', title: 'nachtstrom', song_count: 1 })
 	]);
 	playlistList.set([
-		playlist({
-			id: 'p-night',
-			title: 'Night drive',
-			entry_count: 14,
-			share_slug: null,
-			created_at: '2026-08-20T10:00:00Z'
-		})
+		playlist({ id: 'p-night', title: 'Night drive', entry_count: 14, share_slug: null })
 	]);
 }
 
@@ -208,11 +198,12 @@ describe('LibraryWall', () => {
 		);
 	});
 
-	it('opens in A–Z: albums and playlists together by title, each line giving the size', async () => {
+	it('opens in A–Z, the switch offering only A–Z and Last played: albums and playlists together by title, each line giving the size', async () => {
 		seedWall();
 
 		const root = await render();
 
+		expect(orderChoices(root).map(choiceLabel)).toEqual(['A–Z', 'Last played']);
 		expect(pressedOrder(root)).toEqual(['A–Z']);
 		expect(tileTitles(root)).toEqual([
 			'nachtstrom',
@@ -235,7 +226,7 @@ describe('LibraryWall', () => {
 			vi.unstubAllEnvs();
 		});
 
-		it('orders Recent by the listens Continue reads and names the last listen, never re-sorting Continue', async () => {
+		it('orders Last played by the listens Continue reads and names the last listen, never re-sorting Continue', async () => {
 			seedWall();
 			const continueRow = [place('album', 'a-nacht', 'nachtstrom', '2026-09-27T03:47:00Z')];
 			const everyPlace = [
@@ -245,12 +236,12 @@ describe('LibraryWall', () => {
 				place('album', 'a-sonne', 'Sonnenlauf', '2026-09-20T10:00:00Z')
 			];
 			fetchLibraryListen.mockImplementation((page: ListenPage) =>
-				Promise.resolve({ items: isRecentRead(page) ? everyPlace : continueRow })
+				Promise.resolve({ items: isLastPlayedRead(page) ? everyPlace : continueRow })
 			);
 			const root = await render();
 			await vi.waitFor(() => expect(continueTitles(root)).toEqual(['nachtstrom']));
 
-			orderButton(root, 'Recent').click();
+			orderButton(root, 'Last played').click();
 
 			await vi.waitFor(() =>
 				expect(tileTitles(root)).toEqual([
@@ -261,7 +252,7 @@ describe('LibraryWall', () => {
 				])
 			);
 			expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
-			expect(pressedOrder(root)).toEqual(['Recent']);
+			expect(pressedOrder(root)).toEqual(['Last played']);
 			expect(tileLines(root)).toEqual([
 				'today 05:47',
 				'Playlist · yesterday 23:40',
@@ -271,7 +262,7 @@ describe('LibraryWall', () => {
 			expect(continueTitles(root)).toEqual(['nachtstrom']);
 		});
 
-		it('orders Recent by the listens of every place and names its last listen, past one page of them', async () => {
+		it('orders Last played by the listens of every place and names its last listen, past one page of them', async () => {
 			const titles = Array.from(
 				{ length: 209 },
 				(_, index) => `Album ${String(index).padStart(3, '0')}`
@@ -282,50 +273,34 @@ describe('LibraryWall', () => {
 				.map((title) => place('album', title, title, '2026-09-27T03:47:00Z'));
 			fetchLibraryListen.mockImplementation((page: ListenPage) =>
 				Promise.resolve({
-					items: isRecentRead(page) ? byActivity.slice(page.offset, page.offset + page.limit) : []
+					items: isLastPlayedRead(page)
+						? byActivity.slice(page.offset, page.offset + page.limit)
+						: []
 				})
 			);
 			const root = await render();
 
-			orderButton(root, 'Recent').click();
+			orderButton(root, 'Last played').click();
 
 			await vi.waitFor(() => expect(tileTitles(root)).toEqual(titles.toReversed()));
 			expect(new Set(tileLines(root))).toEqual(new Set(['today 05:47']));
-		});
-
-		it('orders Added newest first and names the day each was made', async () => {
-			seedWall();
-			const root = await render();
-
-			orderButton(root, 'Added').click();
-			await tick();
-
-			expect(tileTitles(root)).toEqual([
-				'nachtstrom',
-				'Night drive',
-				'Sonne für Andrea',
-				'Sonnenlauf'
-			]);
-			expect(tileLines(root)).toEqual([
-				'added 1 Sep',
-				'Playlist · added 20 Aug',
-				'added 3 Aug',
-				'added 28 Jul'
-			]);
 		});
 	});
 
 	it('opens in the order last chosen on this device', async () => {
 		seedWall();
+		fetchLibraryListen.mockResolvedValue({
+			items: [place('album', 'a-sonne', 'Sonnenlauf', '2026-09-21T10:00:00Z')]
+		});
 		const first = await render();
-		orderButton(first, 'Added').click();
+		orderButton(first, 'Last played').click();
 		await unmountAll();
 		libraryWallOrder.set('title');
 
 		const reopened = await render();
 
-		expect(pressedOrder(reopened)).toEqual(['Added']);
-		expect(tileTitles(reopened)[0]).toBe('nachtstrom');
+		expect(pressedOrder(reopened)).toEqual(['Last played']);
+		await vi.waitFor(() => expect(tileTitles(reopened)[0]).toBe('Sonnenlauf'));
 	});
 
 	it.each([
@@ -346,13 +321,13 @@ describe('LibraryWall', () => {
 		expect(root.querySelector('[role="alert"]')).toBeNull();
 	});
 
-	it('keeps the recent ranking when a later read fails and reads again on the foreground and on reconnect', async () => {
+	it('keeps the last-played ranking when a later read fails and reads again on the foreground and on reconnect', async () => {
 		seedWall();
 		const rankedBy = (album: string) =>
 			Promise.resolve({ items: [place('album', album, album, '2026-09-21T10:00:00Z')] });
 		fetchLibraryListen.mockImplementation(() => rankedBy('a-sonne'));
 		const root = await render();
-		orderButton(root, 'Recent').click();
+		orderButton(root, 'Last played').click();
 		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Sonnenlauf'));
 
 		const failedRead = Promise.reject(new Error('offline'));
