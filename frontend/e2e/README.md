@@ -19,6 +19,10 @@ tests keep missing those; `.github/workflows/e2e.yml` runs these on every PR.
 | `back-closes-overlay.spec.ts` | Back closes the open overlay before it moves the library (issue #1114): one table, one row per overlay and way of leaving it — Back closes the phone rail drawer and keeps the playlist, a drawer row tap leaves one Back to the playlist, a Settings page found in the drawer's search closes it and Back then Forward return to Settings (Back from Settings onto a library entry is #1006 S5), and on the desktop Back docks the full Now Playing and keeps the playlist; the next Back reaches the wall; since #1119 also Back closes the take menu and the phone app bar's song menu (and the desktop song menu) and keeps the song, Back over Now Playing closes the This take sheet before Now Playing, and a playlist entry menu item that opens the song leaves one Back to the playlist; since #1125 Back cancels the delete confirmation on the phone and the desktop and the take stays (Cancel there leaves one Back to the playlist), Back on the unsaved-draft dialog keeps editing with the draft, Back closes the song menu's playlist picker and adds nothing, and Back closes an album's share warning on the phone and keeps the album; since #1331 Back closes overlays outside the library too: the phone account menu on Voices (and after a reload over it one Back leaves the page), the voice delete confirmation keeps the voice, the share page's Now Playing closes on Back and its × leaves no entry, and an album tapped in the phone drawer over Voices leaves one Back to Voices |
 | `song-versions.spec.ts`       | The version chip next to Lyrics opens the song's versions as a sheet on the phone and a popover on the desktop (issue #1262, #1245 rules 1-6 and 9): tapping v1 loads it as the draft with its Loaded from v1 line, and Generate saves the loaded text as v3 while v1 and v2 stay as they were, a take-less v2 included; a dirty draft is asked about first, where Cancel keeps it, Undo after Replace brings it back, and Back closes the sheet; the Undo toast goes with the next action, so typing ends it and the opened sheet stands free of it. Open v1 on its take group loads v1 the same way, and Open v1 in Now Playing lands on Edit with v1 loaded while the take plays on; the seeded library's imported take groups as Imported with no Open link, and Now Playing says why it has no lyrics (issue #1273, rules 7-8). Takes are seeded against the database like `song-phone.spec.ts`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 
+A test that belongs to one shell carries that shell's tag, `ONLY_IN_SHELL`
+in `helpers.ts`, and the other shell's project leaves it out, instead of the
+test skipping itself by shell (`docs/testing.md`, the two projects).
+
 `album-address.spec.ts` and `playlist-address.spec.ts` run on **desktop
 only**: what they pin is the router's behaviour across an address that
 changes the route, which is the same code on both shells, and both projects
@@ -33,8 +37,8 @@ cross from, the same shape as the standalone cold song and take opens below.
 
 `kinetic-strip.spec.ts` also runs on **desktop only**, for a different
 reason: the strip it drives has no compact-shell counterpart to exercise —
-its own third test proves exactly that absence, once, rather than every
-other test silently skipping on `mobile`. It is here rather than in the unit
+its own third test proves exactly that absence, once, in a phone context it
+opens itself. It is here rather than in the unit
 suite because jsdom computes no layout at all: whether a drag actually moves
 the strip, whether momentum coasts past the release point on a real
 container query's real overflow, and which axis that container query puts
@@ -312,6 +316,7 @@ export POSTGRES_PASSWORD=e2e-ci-postgres-password
 export SESSION_SECRET=e2e-ci-session-secret-do-not-reuse-anywhere-else
 export SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token
 export ADMIN_USERNAME=e2e-ci-admin ADMIN_PASSWORD='E2eCiSmoke#2026!'
+export GRAFANA_PASSWORD=e2e-ci-grafana-password    # compose refuses up/down without it
 export PUBLIC_BASE_URL=http://localhost:18080   # share links (#339) need this or global-setup's seed 500s
 docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
   up -d --build --wait postgres redis migrate songmaker-web

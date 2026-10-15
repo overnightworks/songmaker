@@ -24,6 +24,7 @@ import { takeGroupLabel, takeVersion, type TakeVersion } from '../src/lib/consta
 import {
 	FlowGuard,
 	loseNetwork,
+	ONLY_IN_SHELL,
 	regainNetwork,
 	TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET,
 	TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET,
@@ -59,12 +60,10 @@ async function seededTakeVersion(page: Page, songId: string): Promise<TakeVersio
 	return version;
 }
 
-test.describe('a finished generation on the phone', () => {
+test.describe('a finished generation on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 	test('brings its take into the Takes list without navigation and drops its card, even when its resource event never arrives', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
 		const guard = new FlowGuard(page);
 		const library = readSeededLibrary();
 		const songTitle = `${TAKE_ARRIVES_SONG_TITLE} ${runMarker()}`;
@@ -112,66 +111,68 @@ test.describe('a finished generation on the phone', () => {
 	});
 });
 
-test.describe('a take that finished while the phone was offline', () => {
-	// The job stream is cut off with a route; a service worker would take the
-	// request out of the page's own routing.
-	test.use({ serviceWorkers: 'block' });
+test.describe(
+	'a take that finished while the phone was offline',
+	{ tag: ONLY_IN_SHELL.mobile },
+	() => {
+		// The job stream is cut off with a route; a service worker would take the
+		// request out of the page's own routing.
+		test.use({ serviceWorkers: 'block' });
 
-	test('is in the Takes list within 10 seconds of the network coming back, and the card stops generating', async ({
-		page,
-		context,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
-		const library = readSeededLibrary();
-		const songTitle = `${TAKE_ARRIVES_SONG_TITLE} Offline ${runMarker()}`;
-		const songId = await seedSongPhoneSong(
-			library.songPhoneAlbumId,
-			songTitle,
-			TAKE_ARRIVES_VERSION_NUMBER,
-			SEEDED_TAKE_COUNT
-		);
-		const seeded = await seededTakeVersion(page, songId);
-		const jobId = await seedRunningGenerationJob(songId, {
-			progress: 0.4,
-			takeIndex: 1,
-			takeCount: 1,
-			phase: 'rendering',
-			generationStartedOffsetSeconds: 30
+		test('is in the Takes list within 10 seconds of the network coming back, and the card stops generating', async ({
+			page,
+			context
+		}) => {
+			const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+			const library = readSeededLibrary();
+			const songTitle = `${TAKE_ARRIVES_SONG_TITLE} Offline ${runMarker()}`;
+			const songId = await seedSongPhoneSong(
+				library.songPhoneAlbumId,
+				songTitle,
+				TAKE_ARRIVES_VERSION_NUMBER,
+				SEEDED_TAKE_COUNT
+			);
+			const seeded = await seededTakeVersion(page, songId);
+			const jobId = await seedRunningGenerationJob(songId, {
+				progress: 0.4,
+				takeIndex: 1,
+				takeCount: 1,
+				phase: 'rendering',
+				generationStartedOffsetSeconds: 30
+			});
+			const panel = page.getByRole('tabpanel');
+			// Each attempt gets a stream that ends at once, the way a dead network
+			// drops it, so the job's end can only arrive after the network returns.
+			await page.route(JOB_STREAM_ROUTE, (route) =>
+				route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
+			);
+
+			await page.goto(`/album/${library.songPhoneAlbumId}`);
+			await workspace(page)
+				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
+				.click();
+			await page.getByRole('tab', { name: /Takes/ }).click();
+			await expect(panel.getByRole('progressbar')).toBeVisible();
+
+			await completeGenerationJobWithoutEvent(jobId);
+			await page.waitForTimeout(CUT_OFF_MS);
+			await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toHaveCount(0);
+
+			await page.unroute(JOB_STREAM_ROUTE);
+			await loseNetwork(page, context);
+			await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toBeVisible();
+			await regainNetwork(page, context);
+
+			await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toBeVisible({
+				timeout: TAKE_AFTER_RETURN_MS
+			});
+			await expect(panel.getByRole('progressbar')).toHaveCount(0);
+			await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toHaveCount(0);
+			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
+
+			console.log(`Take-after-return flow /api requests: ${guard.apiRequestCount}`);
+			guard.assertClean();
+			guard.assertWithinBudget(TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET);
 		});
-		const panel = page.getByRole('tabpanel');
-		// Each attempt gets a stream that ends at once, the way a dead network
-		// drops it, so the job's end can only arrive after the network returns.
-		await page.route(JOB_STREAM_ROUTE, (route) =>
-			route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
-		);
-
-		await page.goto(`/album/${library.songPhoneAlbumId}`);
-		await workspace(page)
-			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
-			.click();
-		await page.getByRole('tab', { name: /Takes/ }).click();
-		await expect(panel.getByRole('progressbar')).toBeVisible();
-
-		await completeGenerationJobWithoutEvent(jobId);
-		await page.waitForTimeout(CUT_OFF_MS);
-		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toHaveCount(0);
-
-		await page.unroute(JOB_STREAM_ROUTE);
-		await loseNetwork(page, context);
-		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toBeVisible();
-		await regainNetwork(page, context);
-
-		await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toBeVisible({
-			timeout: TAKE_AFTER_RETURN_MS
-		});
-		await expect(panel.getByRole('progressbar')).toHaveCount(0);
-		await expect(page.getByText(OFFLINE_STRIP_MESSAGE)).toHaveCount(0);
-		await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
-
-		console.log(`Take-after-return flow /api requests: ${guard.apiRequestCount}`);
-		guard.assertClean();
-		guard.assertWithinBudget(TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET);
-	});
-});
+	}
+);

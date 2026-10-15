@@ -1,8 +1,8 @@
 """A person's own work on a song: the edits they save and the listens they start.
 
 Anyone who can open a song leaves a record of their own, whoever owns it. An
-edit records its kind; a listen outside a playlist is an album listen too. The
-song's global ``last_played_at`` stays the owner's alone.
+edit records its kind; a listen outside a playlist is an album listen too. A
+listen leaves the song itself unmarked, whoever starts it.
 """
 
 from __future__ import annotations
@@ -118,11 +118,6 @@ def _work_rows(db: sessionmaker[Session], song_id: str = SONG_ID) -> dict[str, W
         }
 
 
-def _song_last_played(db: sessionmaker[Session]) -> datetime | None:
-    with db() as session:
-        return session.get(Song, SONG_ID).last_played_at
-
-
 @pytest.mark.parametrize(("user_id", "role"), [(ADMIN_ID, "admin"), (OWNER_ID, "user")])
 @pytest.mark.parametrize("edit", sorted(EDITS))
 def test_saving_an_edit_records_the_editors_own_work_and_its_kind(
@@ -134,7 +129,6 @@ def test_saving_an_edit_records_the_editors_own_work_and_its_kind(
     assert _send(client, request).status_code == 200
 
     assert _work_rows(db) == {user_id: Work(edited=True, kind=kind)}
-    assert _song_last_played(db) is None
 
 
 def test_the_latest_edit_names_the_kind_of_the_editors_work(tmp_path: Path, db) -> None:
@@ -192,26 +186,17 @@ def test_creating_a_song_records_the_creators_own_work(
     }
 
 
-def test_an_admin_listen_on_a_foreign_song_records_only_the_admins_work(
-    tmp_path: Path, db,
+@pytest.mark.parametrize(("user_id", "role"), [(ADMIN_ID, "admin"), (OWNER_ID, "user")])
+def test_a_listen_records_only_the_listeners_own_work_and_leaves_the_song_unmarked(
+    tmp_path: Path, db, user_id: str, role: str,
 ) -> None:
-    client = _client(tmp_path, db, user_id=ADMIN_ID, role="admin")
+    client = _client(tmp_path, db, user_id=user_id, role=role)
 
     assert _send(client, LISTEN).status_code == 200
 
-    assert _work_rows(db) == {ADMIN_ID: Work(played=True, album_played=True)}
-    assert _song_last_played(db) is None
-
-
-def test_an_owner_listen_marks_the_song_and_records_the_owners_work(
-    tmp_path: Path, db,
-) -> None:
-    client = _client(tmp_path, db, user_id=OWNER_ID, role="user")
-
-    assert _send(client, LISTEN).status_code == 200
-
-    assert _work_rows(db) == {OWNER_ID: Work(played=True, album_played=True)}
-    assert _song_last_played(db) is not None
+    assert _work_rows(db) == {user_id: Work(played=True, album_played=True)}
+    with db() as session:
+        assert session.get(Song, SONG_ID).last_played_at is None
 
 
 @pytest.mark.parametrize(

@@ -408,7 +408,9 @@ services:
     logging: *service-logging
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:-admin}
+      # No default on purpose: an unset or empty value refuses the whole
+      # stack instead of silently giving Grafana admin/admin (#1357).
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)}
       GF_AUTH_ANONYMOUS_ENABLED: "false"
     # Loopback only, same reason as songmaker-web above. Reach the dashboards
     # from another machine over an SSH tunnel, not over the LAN.

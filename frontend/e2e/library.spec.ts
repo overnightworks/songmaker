@@ -52,6 +52,7 @@ import {
 	appBar,
 	boundingBoxes,
 	containing,
+	csrfHeaders,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
@@ -974,6 +975,20 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
 });
 
+/** Plays one of the attempt's playlist songs from that playlist, as the player reports it. */
+async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<void> {
+	const playlists = await page.request.get('/api/playlists');
+	expect(playlists.status()).toBe(200);
+	const listed = (await playlists.json()) as Array<{ id: string; slug: string }>;
+	const played = listed.find((candidate) => candidate.slug === seeded.slug);
+	if (!played) throw new Error(`Missing seeded playlist ${seeded.slug}`);
+	const listen = await page.request.post(
+		`/api/songs/${readSeededLibrary().continueReorderSongs.desktop.id}/listen`,
+		{ headers: await csrfHeaders(page), data: { playlist_id: played.id } }
+	);
+	expect(listen.status()).toBe(200);
+}
+
 test('the albums wall opens in A–Z, re-sorts by Recent and Added with their own lines, keeps the choice across a reload and leaves Continue alone', async ({
 	page
 }) => {
@@ -984,6 +999,7 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const continueTiles = surface.locator('.continue-item .tile-title');
+	await listenInPlaylist(page, playlist);
 
 	await page.goto('/');
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
@@ -998,7 +1014,7 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	const recentBox = await choice('recent').boundingBox();
 	expect(recentBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 
-	// The playlist seeded for this attempt is the newest work and the newest place.
+	// The playlist seeded for this attempt is the newest listen and the newest place.
 	await choice('recent').click();
 	await expect(tiles.first()).toContainText(playlist.title);
 	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);

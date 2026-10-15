@@ -225,6 +225,11 @@ mobile project adds what the compact shell does differently — the rail as a
 drawer, the editor opening on Edit, Now Playing's judging panel as a sheet,
 the one 64px transport row with a thumb-sized play control — plus a 320-wide
 check that the album header still reads as a title over its song count.
+Which project runs a test is decided by its shell tag in
+`frontend/playwright.config.ts`, never by a `test.skip` inside the test: a
+test, or a describe whose every test belongs to one shell, carries
+`ONLY_IN_SHELL.desktop` or `ONLY_IN_SHELL.mobile` from
+`frontend/e2e/helpers.ts`, and the other shell's project leaves it out.
 
 What a flow proves that a unit test cannot: the album pick really plays (the
 transport offers Pause, not Retry), Now Playing opens on the judged take, a
@@ -311,6 +316,7 @@ flock /tmp/songmaker-probe.lock env \
   SONGMAKER_INTERNAL_TOKEN=e2e-ci-internal-token \
   ADMIN_USERNAME=e2e-ci-admin \
   ADMIN_PASSWORD='E2eCiSmoke#2026!' \
+  GRAFANA_PASSWORD=e2e-ci-grafana-password \
   PUBLIC_BASE_URL=http://localhost:18080 \
   E2E_BASE_URL=http://localhost:18080 \
   docker compose -f docker-compose.yml -f docker/docker-compose.ci.yml \
