@@ -36,7 +36,7 @@ import {
 	TAKE_PLAYLIST_LABEL,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	COLLECTION_SHUFFLE_ACTION
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import { compareTitles } from '../src/lib/utils/recency';
 import {
@@ -75,6 +75,8 @@ const PHONE_ROW_HEIGHT_PX = 62;
 // the action cluster onto its own row rather than shrinking the title past
 // this (see .header-titles in CollectionHeaderFrame.svelte).
 const HEADER_MIN_TITLE_PX = 160;
+// The header's line under the title: how many songs the page lists.
+const SONG_COUNT = /^\d+ songs?$/;
 
 let guard: FlowGuard;
 let playlist: SeededPlaylist;
@@ -97,29 +99,28 @@ test.afterEach(() => {
  * The album header has to survive the narrowest phone. What is pinned is the
  * floor the header promises its title (`.header-titles` in
  * CollectionHeaderFrame.svelte wraps the action cluster onto its own row
- * rather than shrinking the title past this) and the breadcrumb sitting on the
- * line below it — not that the rendered title is untruncated, which the
- * header's own ellipsis makes unmeasurable from outside.
+ * rather than shrinking the title past this) and the song count sitting on the
+ * line below it where the breadcrumb stood (#1354 rule 24) — not that the
+ * rendered title is untruncated, which the header's own ellipsis makes
+ * unmeasurable from outside.
  *
- * Both are addressed by role: the heading's accessible name is the album
+ * The title is addressed by role: the heading's accessible name is the album
  * title (see CollectionHeader.svelte's aria-label — issue #160), so it is
  * the name filter, not "the only heading in the surface", that selects it.
  */
 async function expectHeaderReadsAtNarrowest(page: Page, albumTitle: string): Promise<void> {
 	const surface = workspace(page);
 	const title = surface.getByRole('heading', { name: albumTitle });
-	const breadcrumb = surface.getByRole('navigation');
+	const songCount = surface.locator('.collection-header').getByText(SONG_COUNT);
 
 	await page.setViewportSize(NARROW_VIEWPORT);
 	await expect(title).toHaveText(albumTitle);
-	await expect(breadcrumb).toHaveText(containing(albumTitle));
-	await expect(
-		breadcrumb.getByRole('button', { name: RAIL_LIBRARY_LABEL, exact: true })
-	).toBeVisible();
+	await expect(songCount).toBeVisible();
+	await expect(surface.getByRole('navigation')).toHaveCount(0);
 
-	const [titleBox, breadcrumbBox] = await boundingBoxes(title, breadcrumb);
+	const [titleBox, songCountBox] = await boundingBoxes(title, songCount);
 	expect(titleBox.width).toBeGreaterThanOrEqual(HEADER_MIN_TITLE_PX);
-	expect(breadcrumbBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
+	expect(songCountBox.y).toBeGreaterThanOrEqual(titleBox.y + titleBox.height);
 
 	await page.setViewportSize(MOBILE_VIEWPORT);
 }
@@ -376,16 +377,15 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	await expectSettingsRailRoundTrip(page, shell, surface, library.albumTitle);
 
 	// One play language (#1003): the header's circle starts the album from its
-	// top, the shuffle square sits beside it, and a song row carries no play
-	// glyph of its own -- tapping it opens the song.
-	await expect(
-		surface.getByRole('button', {
-			name: collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
-			exact: true
-		})
-	).toBeVisible();
-	const pickedSongRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
-	await expect(pickedSongRow.getByRole('button')).toHaveCount(1);
+	// top, shuffle lives in the player alone (#1354 rule 24), and a song box
+	// carries no play glyph of its own -- tapping it plays the song, its ✎
+	// opens it.
+	await expect(surface.getByRole('button', { name: /shuffle/i })).toHaveCount(0);
+	const pickedSongRow = surface.locator('.song-row').filter({ hasText: library.pickedSongTitle });
+	const openPickedSong = pickedSongRow.getByRole('button', {
+		name: songEditorOpenLabel(library.pickedSongTitle)
+	});
+	await expect(pickedSongRow.getByRole('button')).toHaveCount(2);
 	await surface
 		.getByRole('button', {
 			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
@@ -436,7 +436,7 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	).toBeVisible();
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
 
-	await pickedSongRow.getByRole('button').click();
+	await openPickedSong.click();
 	if (shell === 'mobile') {
 		const takesTab = surface.getByRole('tab', { name: /Takes/ });
 		await expect(takesTab).toHaveCount(1);
@@ -621,12 +621,22 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 		.click();
 	await expect(albumHeading).toBeVisible();
 
-	// An album row opens its song from each edge.
-	const songRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
-	for (const edge of ['top', 'bottom', 'left', 'right'] as const) {
-		await tapRowEdge(songRow, songRow.getByRole('button'), edge);
-		await expect(surface.getByRole('tab', { name: /Takes/ })).toHaveCount(1);
-		await page.goBack();
+	// An album row plays its song from each edge and keeps the album page
+	// (#1354 rule 22); taking two songs in turn shows every edge's tap land.
+	const songBox = (title: string) => surface.locator('.song-row').filter({ hasText: title });
+	const [firstTrack, secondTrack] = library.albumTracks;
+	for (const [index, edge] of (['top', 'bottom', 'left', 'right'] as const).entries()) {
+		const [played, other] = index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
+		const row = songBox(played.songTitle);
+		await tapRowEdge(
+			row,
+			row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
+			edge
+		);
+		await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+		await expect(
+			songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+		).toHaveCount(0);
 		await expect(albumHeading).toBeVisible();
 	}
 
@@ -661,7 +671,11 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 		['bottom', 0, 1]
 	] as const) {
 		const row = heldTwice.nth(played);
-		await tapRowEdge(row, row.locator('.entry-info'), edge);
+		await tapRowEdge(
+			row,
+			row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
+			edge
+		);
 		await expect(pause).toBeVisible();
 		await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
 		await expect(
@@ -670,7 +684,7 @@ test('a phone row answers a tap on its edge, and a take held twice marks one row
 	}
 });
 
-test('an album with nothing to play dims its circle and shuffle and leaves the running album playing on', async ({
+test('an album with nothing to play dims its circle and leaves the running album playing on', async ({
 	page
 }, testInfo) => {
 	const shell = shellOf(testInfo);
@@ -679,10 +693,6 @@ test('an album with nothing to play dims its circle and shuffle and leaves the r
 	const transport = page.getByRole('contentinfo');
 	const albumCircle = surface.getByRole('button', {
 		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-		exact: true
-	});
-	const albumShuffle = surface.getByRole('button', {
-		name: collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
 		exact: true
 	});
 
@@ -698,9 +708,7 @@ test('an album with nothing to play dims its circle and shuffle and leaves the r
 	await expect(surface.getByRole('heading', { name: library.secondAlbumTitle })).toBeVisible();
 
 	await expect(albumCircle).toBeDisabled();
-	await expect(albumShuffle).toBeDisabled();
 	await albumCircle.click({ force: true });
-	await albumShuffle.click({ force: true });
 
 	await expect(
 		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })

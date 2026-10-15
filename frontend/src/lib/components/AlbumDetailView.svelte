@@ -24,7 +24,13 @@
 		removeSongsForAlbum,
 		updateAlbumInList
 	} from '$lib/stores/libraryData';
-	import { curateAlbum, isSongCurrent, selectedAlbumId, playAlbum } from '$lib/stores/player';
+	import {
+		curateAlbum,
+		isSongCurrent,
+		playAlbum,
+		playAlbumSong,
+		selectedAlbumId
+	} from '$lib/stores/player';
 	import { selectSong } from '$lib/stores/navigation';
 	import { historyLayerState, holdOpenWhile } from '$lib/stores/layers';
 	import { setOpenCollection } from '$lib/stores/collection';
@@ -45,12 +51,13 @@
 		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
+	import type { SongItem } from '$lib/api/types';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
 	import AlbumMetaEditor, { type AlbumDetails } from './AlbumMetaEditor.svelte';
 	import CollectionHeader from './CollectionHeader.svelte';
-	import PlayingMark from './PlayingMark.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
+	import SongRow from './SongRow.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
 	import NewSongCard from './NewSongCard.svelte';
@@ -277,6 +284,13 @@
 		if (!currentAlbumId) return;
 		void curateAlbum(currentAlbumId);
 	}
+
+	// A tap on a song plays it in place; a song with no take yet has nothing to
+	// play, so the tap opens it in the song editor instead.
+	function onSongTap(song: SongItem): void {
+		if (song.generation_count === 0) selectSong(song.id);
+		else void playAlbumSong(song.album_id, song.id);
+	}
 </script>
 
 {#if selectedAlbum}
@@ -289,8 +303,9 @@
 			{coverAlt}
 			{initials}
 			{artFill}
-			onplay={currentAlbumId && albumHasTakes ? (start) => playAlbum(currentAlbumId, start) : null}
+			onplay={currentAlbumId && albumHasTakes ? () => playAlbum(currentAlbumId) : null}
 			meta={albumMeta}
+			songCount={albumLoad === 'idle' ? albumSongs.length : selectedAlbum.song_count}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
 			onshare={onAlbumShareEnable}
@@ -351,29 +366,26 @@
 					<p class="empty-tab">{ALBUM_NO_SONGS}</p>
 				{/if}
 				{#each albumSongs as s (s.id)}
-					{@const current = isSongCurrent(s.id)}
-					<div class="item-row" class:current>
-						<button class="item-body" data-hitbox="text" onclick={() => selectSong(s.id)}>
-							<PlayingMark {current} />
-							<span class="item-title">{s.title}</span>
-							<span class="item-meta">
-								{s.generation_count} take{s.generation_count !== 1 ? 's' : ''}
-							</span>
-						</button>
-					</div>
+					<SongRow
+						title={s.title}
+						meta={`${s.generation_count} take${s.generation_count !== 1 ? 's' : ''}`}
+						current={isSongCurrent(s.id)}
+						onclick={() => onSongTap(s)}
+						onedit={() => selectSong(s.id)}
+					/>
 				{/each}
 				{#if newSongOpen}
 					<NewSongCard album={selectedAlbum} oncancel={cancelNewSong} oncreated={foldCreatedSong} />
 				{:else}
-					<div class="item-row new-song-row">
+					<div class="new-song-row song-row-frame">
 						<button
 							bind:this={newSongRow}
-							class="item-body"
+							class="new-song-body"
 							data-hitbox="text"
 							onclick={startNewSong}
 						>
 							<Icon name="plus" size={16} />
-							<span class="item-title">{NEW_SONG_ROW_LABEL}</span>
+							<span class="new-song-label">{NEW_SONG_ROW_LABEL}</span>
 						</button>
 					</div>
 				{/if}
@@ -434,42 +446,17 @@
 		padding: 0 1.5rem;
 	}
 
-	.item-row {
-		display: flex;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		font-size: 0.93rem;
-	}
-
-	.item-row:hover {
-		border-color: var(--primary);
-		background: var(--surface-hover);
-	}
-
 	.new-song-row {
+		display: flex;
 		color: var(--text-muted);
-	}
-
-	.new-song-row,
-	.new-song-row:hover {
-		border-color: transparent;
-		background: none;
+		font-size: 0.93rem;
 	}
 
 	.new-song-row:hover {
 		color: var(--text);
 	}
 
-	.item-row.current {
-		border-color: var(--primary);
-	}
-
-	.item-row.current .item-title {
-		color: var(--primary);
-	}
-
-	.item-body {
+	.new-song-body {
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
@@ -477,7 +464,7 @@
 		min-width: 0;
 		background: none;
 		border: none;
-		padding: 0.65rem 0.8rem;
+		padding: var(--song-row-inset-block) var(--song-row-inset-inline);
 		text-align: left;
 		color: inherit;
 		font: inherit;
@@ -486,21 +473,16 @@
 
 	/* The global press scale would shrink the target mid-press and send a release
 	   near the row's edge to the row. */
-	.item-row .item-body:active:not(:disabled) {
+	.new-song-row .new-song-body:active:not(:disabled) {
 		transform: none;
 	}
 
-	.item-title {
+	.new-song-label {
 		flex: 1;
+		line-height: var(--song-row-line-height);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.item-meta {
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-		flex-shrink: 0;
 	}
 
 	.empty-tab {
@@ -533,10 +515,6 @@
 		.picker-anchor {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
-		}
-
-		.item-row {
-			min-height: 62px;
 		}
 
 		.empty-tab {

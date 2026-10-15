@@ -5,7 +5,6 @@ import { get } from 'svelte/store';
 const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
-const mockFetchLibraryContinue = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
 	const { ApiError } = await vi.importActual<typeof import('$lib/api/client')>('$lib/api/client');
@@ -16,10 +15,6 @@ vi.mock('$lib/api/client', async () => {
 		logout: (...args: unknown[]) => mockApiLogout(...args)
 	};
 });
-
-vi.mock('$lib/api/library', () => ({
-	fetchLibraryContinue: (...args: unknown[]) => mockFetchLibraryContinue(...args)
-}));
 
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
@@ -37,7 +32,6 @@ import {
 	classifyAuthFailure,
 	login,
 	logout,
-	clearAuth,
 	hasSessionToLose,
 	resetAuthForTests,
 	signOutFailed
@@ -48,14 +42,11 @@ import {
 	AUTH_SESSION_EXPIRED_DETAIL
 } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
-import { NetworkError, apiFetch } from '$lib/api/fetch';
+import { NetworkError, apiFetch, handleSessionLost } from '$lib/api/fetch';
 import {
 	resetHistoryControllerForTests,
 	standInForDocumentLoadsForTests
 } from '$lib/history/historyController';
-import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
-import { generationFailures } from '$lib/stores/jobs';
-import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
 import { followPlaybackForResume } from '$lib/stores/playbackResume';
 import { recordPlaybackEvent, startPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
@@ -69,8 +60,6 @@ beforeEach(() => {
 	mockFetchMe.mockReset();
 	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
-	mockFetchLibraryContinue.mockReset();
-	resetLibraryOrder();
 	currentUser.set(null);
 	authLoading.set(true);
 	authError.set('');
@@ -157,8 +146,8 @@ describe('checkAuth', () => {
 	);
 
 	it('keeps the expiry notice of a session that ended through the next session check', async () => {
-		currentUser.set(KNOWN_USER);
-		clearAuth('unauthorized');
+		mockFetchMe.mockRejectedValueOnce(new ApiError(401, AUTH_SESSION_EXPIRED_DETAIL, AUTH_ME_PATH));
+		await checkAuth(vi.fn());
 		mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
 		await checkAuth(vi.fn());
 		expect(get(authNotice)).toBe('unauthorized');
@@ -281,91 +270,6 @@ describe('login', () => {
 		mockApiLogin.mockRejectedValueOnce(new Error('Network failure'));
 		await expect(login('alice', 'x')).rejects.toThrow();
 		expect(get(authError)).toBe('Network failure');
-	});
-});
-
-describe('clearAuth', () => {
-	it('sets currentUser to null', () => {
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		clearAuth();
-		expect(get(currentUser)).toBeNull();
-	});
-
-	it.each([
-		['an expired session', 'unauthorized' as const, 'unauthorized'],
-		['a sign-out', undefined, null]
-	])('leaves the sign-in page the notice of %s', (_label, notice, expected) => {
-		authNotice.set('disabled');
-		clearAuth(notice);
-		expect(get(authNotice)).toBe(expected);
-	});
-
-	it('wipes the per-user playlist and generation-failure caches so the next session starts clean', () => {
-		playlistList.set([
-			{
-				id: 'p1',
-				title: 'Leftover',
-				slug: 'leftover',
-				entry_count: 1,
-				is_shared: false,
-				share_slug: null,
-				album_covers: [],
-				created_at: ''
-			}
-		]);
-		selectedPlaylistDetail.set({
-			id: 'p1',
-			title: 'Leftover',
-			slug: 'leftover',
-			entry_count: 1,
-			is_shared: false,
-			share_slug: null,
-			album_covers: [],
-			created_at: '',
-			entries: []
-		});
-		generationFailures.set({ s1: 'Music generation failed' });
-
-		clearAuth();
-
-		expect(get(generationFailures)).toEqual({});
-		expect(get(playlistList)).toEqual([]);
-		expect(get(selectedPlaylistDetail)).toBeNull();
-	});
-
-	it("forgets the previous musician's Recent ranking and reads the next one's afresh", async () => {
-		const workedOn = (id: string) => ({
-			items: [
-				{ type: 'album', id, title: id, album_covers: [], activity_at: '2026-09-27T03:47:00Z' }
-			]
-		});
-		mockFetchLibraryContinue.mockResolvedValueOnce(workedOn('alices-album'));
-		await ensureRecentWorkRead();
-
-		clearAuth();
-		expect(get(lastWorkByPlace).size).toBe(0);
-
-		mockFetchLibraryContinue.mockResolvedValueOnce(workedOn('bobs-album'));
-		await ensureRecentWorkRead();
-		expect([...get(lastWorkByPlace).keys()]).toEqual(['album:bobs-album']);
-	});
-
-	it("drops the previous musician's Recent ranking that arrives after the session ended", async () => {
-		let answerAlicesRead: (page: unknown) => void = () => {};
-		mockFetchLibraryContinue.mockReturnValueOnce(
-			new Promise((resolve) => {
-				answerAlicesRead = resolve;
-			})
-		);
-		const alicesRead = ensureRecentWorkRead();
-
-		clearAuth();
-		answerAlicesRead({
-			items: [{ type: 'album', id: 'alices-album', title: 'A', album_covers: [], activity_at: '' }]
-		});
-		await alicesRead;
-
-		expect(get(lastWorkByPlace).size).toBe(0);
 	});
 });
 
@@ -527,13 +431,18 @@ describe('the remembered playback across the session', () => {
 			loseSession: async () => {
 				mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
 				await checkAuth(vi.fn());
-			}
+			},
+			expectSessionGone: () => expect(get(currentUser)).toBeNull()
 		},
-		{ loss: 'a session lost mid-request', loseSession: async () => clearAuth() }
-	])('a lost session keeps it ($loss)', async ({ loseSession }) => {
+		{
+			loss: 'a session lost mid-request',
+			loseSession: () => handleSessionLost(),
+			expectSessionGone: () => expect(documentLoads.reload).toHaveBeenCalledOnce()
+		}
+	])('a lost session keeps it ($loss)', async ({ loseSession, expectSessionGone }) => {
 		await loseSession();
 
-		expect(get(currentUser)).toBeNull();
+		expectSessionGone();
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 	});
 });

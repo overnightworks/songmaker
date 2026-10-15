@@ -144,10 +144,11 @@ export async function ensurePlaylistsLoaded(): Promise<boolean> {
 	return loadPlaylists();
 }
 
-// Wipes every playlist store, in-flight fetch, and cache -- called both by
-// tests and, in production, by clearAuth() on logout/401 so the next
-// session never sees a stale cached detail or list from the previous user.
-export function resetPlaylists(): void {
+// Wipes every playlist store, in-flight fetch, and cache, so each test starts
+// clean. A session needs no reset: it ends with a fresh page load (#1340,
+// ruling A), so the next session never sees a stale cached detail or list
+// from the previous user.
+export function resetPlaylistsForTests(): void {
 	playlistsInflight = null;
 	playlistList.set([]);
 	setOpenCollection(null);

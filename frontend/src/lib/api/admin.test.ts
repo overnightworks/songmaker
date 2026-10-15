@@ -3,9 +3,6 @@ import { describe, expect, it, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-const mockClearAuth = vi.fn();
-
-vi.mock('$lib/stores/auth', () => ({ clearAuth: (...args: unknown[]) => mockClearAuth(...args) }));
 vi.mock('$app/navigation', async () =>
 	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
 );
@@ -30,7 +27,6 @@ function mockOk(data: unknown) {
 
 beforeEach(() => {
 	mockFetch.mockReset();
-	mockClearAuth.mockReset();
 });
 
 describe('admin worker pool API', () => {

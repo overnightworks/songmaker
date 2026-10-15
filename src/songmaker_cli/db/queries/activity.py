@@ -1,7 +1,8 @@
 """Where a musician last worked: one activity time per album and playlist.
 
-Each person's own work on a song (an edit they saved, a listen they started)
-is recorded here too, whoever owns the song.
+Each person's own work on a song (an edit they saved and its kind, a listen
+they started and whether it was outside a playlist) is recorded here too,
+whoever owns the song.
 
 A place is an album or a playlist. Its activity is the newest thing done
 there, and it names the song that was. The musician's own places count
@@ -23,7 +24,7 @@ from sqlalchemy import ColumnElement, Select, Subquery, and_, case, exists, func
 from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.orm import Session, aliased, selectinload
 
-from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST
+from songmaker_cli.constants import LIBRARY_ITEM_ALBUM, LIBRARY_ITEM_PLAYLIST, SongWorkKind
 from songmaker_cli.db.models import (
     Album,
     ChatMessage,
@@ -45,6 +46,7 @@ class SongWork(StrEnum):
 
     EDITED = "edited_at"
     PLAYED = "played_at"
+    ALBUM_PLAYED = "album_played_at"
 
 
 _UPSERT_INSERT_BY_DIALECT: Final[dict[str, Callable]] = {
@@ -53,10 +55,39 @@ _UPSERT_INSERT_BY_DIALECT: Final[dict[str, Callable]] = {
 }
 
 
-def record_song_work(session: Session, *, user_id: str, song_id: str, work: SongWork) -> None:
-    """Stamp the person's own latest ``work`` on the song, keeping their other kind."""
+def record_song_edit(
+    session: Session, *, user_id: str, song_id: str, kind: SongWorkKind,
+) -> None:
+    """Stamp the person's own latest edit on the song and what kind of edit it was."""
+    _stamp_song_work(
+        session, user_id=user_id, song_id=song_id, works=(SongWork.EDITED,), edit_kind=kind,
+    )
+
+
+def record_song_played(
+    session: Session, *, user_id: str, song_id: str, in_playlist: bool,
+) -> None:
+    """Stamp the person's own latest listen on the song.
+
+    A listen outside a playlist is an album listen too; a library-wide
+    shuffle names no playlist, so it is one.
+    """
+    works = (SongWork.PLAYED,) if in_playlist else (SongWork.PLAYED, SongWork.ALBUM_PLAYED)
+    _stamp_song_work(session, user_id=user_id, song_id=song_id, works=works)
+
+
+def _stamp_song_work(
+    session: Session,
+    *,
+    user_id: str,
+    song_id: str,
+    works: tuple[SongWork, ...],
+    **details: str,
+) -> None:
+    """Stamp ``works`` at one moment with ``details``, keeping the row's other columns."""
     insert = _UPSERT_INSERT_BY_DIALECT[session.bind.dialect.name]
-    stamp = {work.value: utcnow()}
+    now = utcnow()
+    stamp = {work.value: now for work in works} | details
     session.execute(
         insert(UserSongWork)
         .values(user_id=user_id, song_id=song_id, **stamp)

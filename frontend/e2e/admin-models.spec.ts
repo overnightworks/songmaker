@@ -39,9 +39,10 @@ import {
 	MODELS_TASK_COWRITER_LABEL,
 	MODELS_TASK_SCORING_LABEL,
 	PROVIDER_ROUTE_API_LABEL,
-	PROVIDER_ROUTE_CLI_LABEL
+	PROVIDER_ROUTE_CLI_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, nameStartingWith, workspace } from './helpers';
+import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -332,7 +333,7 @@ test('a route that is not set up ends the next co-writer turn with its reason', 
 	const chosenProvider = await providerSelect(page, MODELS_TASK_COWRITER_LABEL).inputValue();
 
 	await page.goto(`/album/${library.albumId}`);
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
 	await surface.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
 
 	const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);

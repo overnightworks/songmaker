@@ -646,21 +646,14 @@ async function resolvePlaylistBySlug(slug: string): Promise<PlaylistItem | null>
 }
 
 function playlistAlreadyShown(playlistId: string): boolean {
-	const collection = get(openCollection);
-	return (
-		get(librarySurface) === 'detail' &&
-		collection?.kind === 'playlist' &&
-		collection.id === playlistId
-	);
+	return playlistWhoseDetailShows(get(librarySurface), get(openCollection)) === playlistId;
 }
 
 function historyAlreadyOpensPlaylist(playlistId: string): boolean {
 	const state = currentLibraryHistoryState();
 	return (
 		isLibraryHistoryState(state) &&
-		state.surface === 'detail' &&
-		state.collection?.kind === 'playlist' &&
-		state.collection.id === playlistId
+		playlistWhoseDetailShows(state.surface, state.collection) === playlistId
 	);
 }
 
@@ -928,6 +921,16 @@ export function albumWhoseSongsShow(
 	collection: CollectionSnapshot
 ): string | null {
 	if (surface !== 'detail' || collection?.kind !== 'album') return null;
+	return collection.id;
+}
+
+// The wall keeps the playlist that was open last as its collection too, yet
+// only the playlist's own detail shows it.
+export function playlistWhoseDetailShows(
+	surface: LibrarySurface,
+	collection: CollectionSnapshot
+): string | null {
+	if (surface !== 'detail' || collection?.kind !== 'playlist') return null;
 	return collection.id;
 }
 

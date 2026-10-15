@@ -11,6 +11,7 @@ import {
 } from '$lib/constants';
 import { visibleSettingsSections } from '$lib/settingsSections';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
+import { matchesRailQuery, normalizeRailQuery } from '$lib/stores/librarySearch';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
 const RAIL_SEARCH_RESULT_LIMIT = 100;
@@ -128,11 +129,11 @@ export function groupRailSearchResults(
 	pages: readonly RailSearchPage[] = visibleRailSearchPages(true)
 ): RailSearchGroup[] {
 	if (!state.query) return [];
-	const query = state.query.toLocaleLowerCase();
+	const query = normalizeRailQuery(state.query);
 	const results = [
 		...state.hits.map((hit) => libraryResult(hit, query)),
 		...newestPlaylistsFirst(playlists)
-			.filter((playlist) => playlist.title.toLocaleLowerCase().includes(query))
+			.filter((playlist) => matchesRailQuery(playlist.title, query))
 			.map((playlist) => playlistResult(playlist, query)),
 		...pages.filter((page) => pageMatches(page, query)).map((page) => pageResult(page, query))
 	];
@@ -300,7 +301,7 @@ function detailTextParts(detail: string | null, query: string | null): RailSearc
 function pageMatches(page: RailSearchPage, query: string): boolean {
 	return [page.label, page.section]
 		.filter((value) => value !== null)
-		.some((value) => value.toLocaleLowerCase().includes(query));
+		.some((value) => matchesRailQuery(value, query));
 }
 
 function pluralize(count: number, noun: string): string {

@@ -226,12 +226,12 @@ describe('/album/<slug> opened cold', () => {
 		const target = openAddress();
 		await vi.waitFor(() => expect(target.textContent).toContain(ALBUM_TITLE));
 
-		requireElement(target, '.item-body').click();
+		requireElement(target, '.song-row-edit').click();
 
 		await vi.waitFor(() =>
 			expect(window.location.pathname).toBe(`/album/${ALBUM_SLUG}/stadion-lauf-a`)
 		);
-		await vi.waitFor(() => expect(target.querySelector('.item-body')).toBeNull());
+		await vi.waitFor(() => expect(target.querySelector('.song-row')).toBeNull());
 	});
 
 	it('opens the addressed album even when the browse listing does not carry it', async () => {

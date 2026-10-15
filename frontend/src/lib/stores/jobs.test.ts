@@ -27,7 +27,7 @@ import {
 	hydrateActiveGeneration,
 	hydrateGenerationFailure,
 	removeJob,
-	resetGenerationFailures,
+	resetGenerationFailuresForTests,
 	trackJob
 } from './jobs';
 import { toasts } from './toast';
@@ -113,7 +113,7 @@ function latestSource(): MockEventSource {
 
 beforeEach(() => {
 	activeJobs.set([]);
-	resetGenerationFailures();
+	resetGenerationFailuresForTests();
 	mockRequestSongRefresh.mockReset();
 	mockRequestSongRefresh.mockResolvedValue(undefined);
 	mockFetchLastFailedGeneration.mockReset();

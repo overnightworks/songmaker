@@ -62,12 +62,16 @@ import {
 	selectedGenerationId,
 	selectedSongId
 } from '$lib/stores/player';
-import { resetPlaylists, selectedPlaylistId, updatePlaylistInList } from '$lib/stores/playlists';
+import {
+	resetPlaylistsForTests,
+	selectedPlaylistId,
+	updatePlaylistInList
+} from '$lib/stores/playlists';
 import {
 	activeJobs,
 	generationFailures,
 	removeJob,
-	resetGenerationFailures
+	resetGenerationFailuresForTests
 } from '$lib/stores/jobs';
 import { closeSidebar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 import { setDesktopNowPlayingSurface } from '$lib/stores/playbackSettings';
@@ -211,7 +215,7 @@ beforeEach(() => {
 	fetchLastFailedGeneration.mockReset();
 	fetchLastFailedGeneration.mockResolvedValue({ job: null });
 	fetchActiveGeneration.mockReset().mockResolvedValue(null);
-	resetGenerationFailures();
+	resetGenerationFailuresForTests();
 	vi.mocked(updateSong).mockReset();
 	toasts.set([]);
 	fetchPlaylists.mockResolvedValue([]);
@@ -227,7 +231,7 @@ beforeEach(() => {
 	});
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetNavigationForTests();
 	stopFollowingShellLayers = followShellLayers();
 	searchQuery.set('');
@@ -255,7 +259,7 @@ afterEach(() => {
 	vi.unstubAllGlobals();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetCollectionForTests();
 });
 
