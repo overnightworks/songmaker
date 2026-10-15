@@ -652,85 +652,88 @@ async function tapRowEdge(row: Locator, target: Locator, edge: RowEdge): Promise
 	await row.tap({ position: edgePositions[edge] });
 }
 
-test('a phone row answers a tap on its edge, and a take held twice marks one row', async ({
-	page
-}, testInfo) => {
-	const shell = shellOf(testInfo);
-	test.skip(shell !== 'mobile', 'The edge taps prove the touch target.');
-	const library = readSeededLibrary();
-	const surface = workspace(page);
-	const albumHeading = surface.getByRole('heading', { name: library.albumTitle });
+// The edge taps prove the touch target, which is the phone shell's.
+test(
+	'a phone row answers a tap on its edge, and a take held twice marks one row',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }, testInfo) => {
+		const shell = shellOf(testInfo);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const albumHeading = surface.getByRole('heading', { name: library.albumTitle });
 
-	await page.goto('/');
-	await surface
-		.locator('.library-wall .tile-grid')
-		.locator('.wall-tile-body')
-		.filter({ hasText: library.albumTitle })
-		.click();
-	await expect(albumHeading).toBeVisible();
-
-	// An album row plays its song from each edge and keeps the album page
-	// (#1354 rule 22); taking two songs in turn shows every edge's tap land.
-	const songBox = (title: string) => surface.locator('.song-row').filter({ hasText: title });
-	const [firstTrack, secondTrack] = library.albumTracks;
-	for (const [index, edge] of (['top', 'bottom', 'left', 'right'] as const).entries()) {
-		const [played, other] = index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
-		const row = songBox(played.songTitle);
-		await tapRowEdge(
-			row,
-			row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
-			edge
-		);
-		await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-		await expect(
-			songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-		).toHaveCount(0);
+		await page.goto('/');
+		await surface
+			.locator('.library-wall .tile-grid')
+			.locator('.wall-tile-body')
+			.filter({ hasText: library.albumTitle })
+			.click();
 		await expect(albumHeading).toBeVisible();
-	}
 
-	// Adding the album puts the playlist's first take in it a second time.
-	await surface.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-	await surface
-		.getByRole('button', { name: COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, exact: true })
-		.click();
-	const albumAdded = page.waitForResponse(
-		(response) =>
-			response.request().method() === 'POST' &&
-			new URL(response.url()).pathname.endsWith('/entries/album')
-	);
-	await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
-	expect((await albumAdded).ok()).toBe(true);
+		// An album row plays its song from each edge and keeps the album page
+		// (#1354 rule 22); taking two songs in turn shows every edge's tap land.
+		const songBox = (title: string) => surface.locator('.song-row').filter({ hasText: title });
+		const [firstTrack, secondTrack] = library.albumTracks;
+		for (const [index, edge] of (['top', 'bottom', 'left', 'right'] as const).entries()) {
+			const [played, other] =
+				index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
+			const row = songBox(played.songTitle);
+			await tapRowEdge(
+				row,
+				row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
+				edge
+			);
+			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+			await expect(
+				songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+			).toHaveCount(0);
+			await expect(albumHeading).toBeVisible();
+		}
 
-	await openLibraryWall(page, shell);
-	await surface
-		.locator('.library-wall .tile-grid')
-		.locator('.wall-tile-body')
-		.filter({ hasText: playlist.title })
-		.click();
-	const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
-	await expect(heldTwice).toHaveCount(2);
-
-	// A playlist row plays from either edge, and only the copy that plays is marked.
-	const pause = page
-		.getByRole('contentinfo')
-		.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
-	for (const [edge, played, other] of [
-		['top', 1, 0],
-		['bottom', 0, 1]
-	] as const) {
-		const row = heldTwice.nth(played);
-		await tapRowEdge(
-			row,
-			row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
-			edge
+		// Adding the album puts the playlist's first take in it a second time.
+		await surface.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+		await surface
+			.getByRole('button', { name: COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL, exact: true })
+			.click();
+		const albumAdded = page.waitForResponse(
+			(response) =>
+				response.request().method() === 'POST' &&
+				new URL(response.url()).pathname.endsWith('/entries/album')
 		);
-		await expect(pause).toBeVisible();
-		await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-		await expect(
-			heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-		).toHaveCount(0);
+		await surface.getByRole('button', { name: nameStartingWith(playlist.title) }).click();
+		expect((await albumAdded).ok()).toBe(true);
+
+		await openLibraryWall(page, shell);
+		await surface
+			.locator('.library-wall .tile-grid')
+			.locator('.wall-tile-body')
+			.filter({ hasText: playlist.title })
+			.click();
+		const heldTwice = playlistEntryRows(page).filter({ hasText: playlist.songTitles[0] });
+		await expect(heldTwice).toHaveCount(2);
+
+		// A playlist row plays from either edge, and only the copy that plays is marked.
+		const pause = page
+			.getByRole('contentinfo')
+			.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true });
+		for (const [edge, played, other] of [
+			['top', 1, 0],
+			['bottom', 0, 1]
+		] as const) {
+			const row = heldTwice.nth(played);
+			await tapRowEdge(
+				row,
+				row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
+				edge
+			);
+			await expect(pause).toBeVisible();
+			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+			await expect(
+				heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+			).toHaveCount(0);
+		}
 	}
-});
+);
 
 test('an album with nothing to play dims its circle and leaves the running album playing on', async ({
 	page

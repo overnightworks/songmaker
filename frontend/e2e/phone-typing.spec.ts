@@ -29,7 +29,7 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { appBar, FlowGuard, nameStartingWith, workspace } from './helpers';
+import { appBar, FlowGuard, nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary, runMarker, seedRunningGenerationJob, seedSongPhoneSong } from './seed';
 
 const PHONE_TYPING_SONG_TITLE = 'Phone Typing';
@@ -124,11 +124,7 @@ async function openSeededSongFromItsAlbum(
 	await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
 }
 
-test.describe('typing on the phone', () => {
-	test.beforeEach(({ isMobile }) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell rule; see the file header.');
-	});
-
+test.describe('typing on the phone', { tag: ONLY_IN_SHELL.mobile }, () => {
 	test('the mini-player and the Generate bar step aside while the keyboard is open in a field, and come back after', async ({
 		page
 	}) => {
