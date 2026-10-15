@@ -13,8 +13,8 @@ import {
 	LIBRARY_RETRY_LABEL,
 	PLAYING_MARK_LABEL,
 	playlistEntryOverflowLabel,
+	songEditorOpenLabel,
 	TRANSPORT_PLAY_LABEL,
-	COLLECTION_SHUFFLE_ACTION,
 	TRANSPORT_PAUSE_LABEL
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
@@ -31,7 +31,7 @@ import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
 	playlistList,
-	resetPlaylists,
+	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 
@@ -69,7 +69,7 @@ vi.mock('$lib/stores/navigation', async (importOriginal) => ({
 
 import PlaylistDetailView from './PlaylistDetailView.svelte';
 import { findElementByRoleAndName } from './shell/rail-test-fixtures';
-import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import playlistDetailViewSource from './PlaylistDetailView.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
@@ -138,7 +138,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	audioPlayer.current = null;
 	queueContext.set({ type: 'library' });
 	setShuffle(false);
@@ -264,19 +264,21 @@ describe('PlaylistDetailView header', () => {
 		await vi.waitFor(() => expect(addToast).toHaveBeenCalledWith(toast, 'error'));
 	});
 
-	it('uses the collection header with play, shuffle and a … menu instead of a visible Share icon', async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
+	it('uses the collection header with Play, its song count and a … menu, with no breadcrumb, shuffle or visible Share icon (#1354 rule 24)', async () => {
+		const target = await renderTwoEntryPlaylist();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.play-circle')?.getAttribute('aria-label')).toBe(
 			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')
 		);
-		expect(header.querySelector('.shuffle-btn')?.getAttribute('aria-label')).toBe(
-			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'playlist')
-		);
+		expect(requireElement(header, '.header-count').textContent).toBe('2 songs');
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
+		expect(target.querySelector('nav')).toBeNull();
+		expect(target.textContent).not.toContain('Playlists');
+		expect(
+			[...target.querySelectorAll('button')].filter((button) =>
+				/shuffle/i.test(accessibleName(button))
+			)
+		).toEqual([]);
 		expect(header.querySelector('.share-btn')).toBeNull();
 		expect(target.textContent).toContain('Tide');
 		expect(header.querySelector('.playlist-cover-initials')?.textContent).toBe('ND');
@@ -326,7 +328,7 @@ describe('PlaylistDetailView row take traits', () => {
 		// #163/5: the separators are the formatter's, not the markup's — written
 		// in the template, the one before the duration lost its leading space
 		// and the row read "take 1· 3:15".
-		expect(row.querySelector('.entry-meta')?.textContent).toBe('Artist · v2 · take 1 · 3:15');
+		expect(row.querySelector('.song-row-detail')?.textContent).toBe('Artist · v2 · take 1 · 3:15');
 	});
 
 	it('omits version and duration when the take does not carry them', async () => {
@@ -351,7 +353,7 @@ describe('PlaylistDetailView row take traits', () => {
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(row.querySelector('.picked-star')).toBeNull();
-		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		const meta = row.querySelector('.song-row-detail')?.textContent ?? '';
 		expect(meta).not.toContain('· v');
 		expect(meta).toBe('Artist · take 1');
 	});
@@ -376,41 +378,9 @@ describe('PlaylistDetailView row take traits', () => {
 		await tick();
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
-		const meta = row.querySelector('.entry-meta')?.textContent ?? '';
+		const meta = row.querySelector('.song-row-detail')?.textContent ?? '';
 		expect(meta).not.toContain('0:00');
 		expect(meta).toContain('v1');
-	});
-});
-
-describe('PlaylistDetailView row overflow menu', () => {
-	it('offers Open song in editor for a take', async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
-
-		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
-		await tick();
-
-		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
-		expect(
-			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
-		).toContain('Open song in editor');
-	});
-
-	it("opens the take's song in the editor and closes the menu", async () => {
-		const target = document.createElement('div');
-		document.body.append(target);
-		mounted.push(mount(PlaylistDetailView, { target }));
-		await tick();
-
-		requireElement<HTMLButtonElement>(target, '.overflow-btn').click();
-		await tick();
-		requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click();
-		await tick();
-
-		expect(selectSong).toHaveBeenCalledWith('s1');
-		expect(target.querySelector('.entry-overflow-menu')).toBeNull();
 	});
 });
 
@@ -441,8 +411,8 @@ describeBackClosesOverlay({
 				)
 		},
 		{
-			way: 'choosing Open song in editor',
-			close: (target) => requireElement<HTMLButtonElement>(target, '.entry-overflow-item').click(),
+			way: "tapping the entry's ✎",
+			close: (target) => requireElement<HTMLButtonElement>(target, '.song-row-edit').click(),
 			actionSawHistoryAt: () => openSongSawHistoryAt
 		}
 	]
@@ -497,22 +467,6 @@ describe('PlaylistDetailView header play', () => {
 		expect(get(shuffleEnabled)).toBe(false);
 	});
 
-	it('plays the playlist shuffled from the shuffle square, starting on a drawn entry', async () => {
-		const drawLast = vi.spyOn(Math, 'random').mockReturnValue(0.99);
-		onTestFinished(() => drawLast.mockRestore());
-		const target = await renderTwoEntryPlaylist();
-
-		requireElement<HTMLButtonElement>(target, '.collection-header .shuffle-btn').click();
-		await tick();
-
-		const ctx = get(queueContext);
-		if (ctx.type !== 'playlist') throw new Error('expected a playlist queue');
-		expect(ctx.playlist).toEqual({ id: 'p1', title: 'Night Drive' });
-		expect(ctx.entries.map((queued) => queued.id)).toEqual(['pe2', 'pe1']);
-		expect(ctx.index).toBe(0);
-		expect(get(shuffleEnabled)).toBe(true);
-	});
-
 	it('pauses the playlist from its circle while it plays, keeps its mark, and resumes on the next tap', async () => {
 		const pause = vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
 			audioPlayer.status = 'paused';
@@ -547,21 +501,20 @@ describe('PlaylistDetailView header play', () => {
 		expect(get(queueContext)).toBe(queueBeforePause);
 	});
 
-	it('dims play and shuffle on an empty playlist, and a tap keeps the running queue', async () => {
+	it('dims play on an empty playlist, and a tap keeps the running queue', async () => {
 		setShuffle(true);
 		const running = { type: 'album' as const, albumId: 'a-running' };
 		queueContext.set(running);
 		const target = await renderPlaylist([]);
-		const header = requireElement(target, '.collection-header');
-		const buttons = [
-			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
-			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'playlist')
-		].map((label) => getByRoleButton(header, label));
+		const circle = getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')
+		);
 
-		for (const button of buttons) button.click();
+		circle.click();
 		await tick();
 
-		expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
+		expect(circle.disabled).toBe(true);
 		expect(get(queueContext)).toBe(running);
 		expect(get(playStartNotice)).toBe('idle');
 		expect(get(shuffleEnabled)).toBe(true);
@@ -571,7 +524,7 @@ describe('PlaylistDetailView header play', () => {
 		['loading', () => new Promise<PlaylistDetailItem>(() => {})],
 		['error', () => Promise.reject(new ApiError(429, 'Too many requests', '/api/playlists/p2'))]
 	] as const)(
-		'starts nothing from the shuffle square while the newly opened playlist is %s',
+		'starts nothing from the play circle while the newly opened playlist is %s',
 		async (loadStatus, fetchNewPlaylist) => {
 			const target = await renderTwoEntryPlaylist();
 			addPlaylistToList({ id: 'p2', title: 'Party Mix', entry_count: 3 });
@@ -580,14 +533,13 @@ describe('PlaylistDetailView header play', () => {
 			await vi.waitFor(() => expect(get(playlistDetailLoad).status).toBe(loadStatus));
 			await tick();
 
-			requireElement<HTMLButtonElement>(target, '.collection-header .shuffle-btn').click();
+			requireElement<HTMLButtonElement>(target, '.collection-header .play-circle').click();
 			await tick();
 
 			expect(requireElement(target, '.collection-header').textContent).toContain('Party Mix');
 			expect(audioPlayer.current).toBeNull();
 			expect(get(queueContext)).toEqual({ type: 'library' });
 			expect(get(playStartNotice)).toBe('idle');
-			expect(get(shuffleEnabled)).toBe(false);
 		}
 	);
 });
@@ -597,7 +549,7 @@ describe('PlaylistDetailView row actions', () => {
 		setShuffle(true);
 		const target = await renderTwoEntryPlaylist();
 
-		target.querySelectorAll<HTMLElement>('.entry-row .entry-info')[1].click();
+		target.querySelectorAll<HTMLElement>('.entry-row .song-row-body')[1].click();
 		await tick();
 
 		expectQueueStartsAtSecondEntry();
@@ -607,10 +559,10 @@ describe('PlaylistDetailView row actions', () => {
 	it('never pauses the take its row body is clicked on while that take plays', async () => {
 		const target = await renderTwoEntryPlaylist();
 		const row = target.querySelectorAll<HTMLElement>('.entry-row')[1];
-		requireElement<HTMLButtonElement>(row, '.entry-info').click();
+		requireElement<HTMLButtonElement>(row, '.song-row-body').click();
 		await tick();
 
-		requireElement<HTMLButtonElement>(row, '.entry-info').click();
+		requireElement<HTMLButtonElement>(row, '.song-row-body').click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('playing');
@@ -622,15 +574,15 @@ describe('PlaylistDetailView row actions', () => {
 		async (status) => {
 			const target = await renderTwoEntryPlaylist();
 			const [tide, ebb] = target.querySelectorAll<HTMLElement>('.entry-row');
-			requireElement<HTMLButtonElement>(ebb, '.entry-info').click();
+			requireElement<HTMLButtonElement>(ebb, '.song-row-body').click();
 			await tick();
 			audioPlayer.status = status;
 			await tick();
 
 			expect(findElementByRoleAndName(ebb, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
-			expect(ebb.classList.contains('current')).toBe(true);
+			expect(requireElement(ebb, '.song-row').classList.contains('current')).toBe(true);
 			expect(findElementByRoleAndName(tide, 'img', PLAYING_MARK_LABEL)).toBeNull();
-			expect(tide.classList.contains('current')).toBe(false);
+			expect(requireElement(tide, '.song-row').classList.contains('current')).toBe(false);
 		}
 	);
 
@@ -641,11 +593,11 @@ describe('PlaylistDetailView row actions', () => {
 		const marks = (): boolean[] =>
 			rows.map((row) => findElementByRoleAndName(row, 'img', PLAYING_MARK_LABEL) !== null);
 
-		requireElement<HTMLButtonElement>(rows[1], '.entry-info').click();
+		requireElement<HTMLButtonElement>(rows[1], '.song-row-body').click();
 		await tick();
 		expect(marks()).toEqual([false, true]);
 
-		requireElement<HTMLButtonElement>(rows[0], '.entry-info').click();
+		requireElement<HTMLButtonElement>(rows[0], '.song-row-body').click();
 		await tick();
 		expect(marks()).toEqual([true, false]);
 	});
@@ -678,10 +630,10 @@ describe('PlaylistDetailView row actions', () => {
 		const items = Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) =>
 			el.textContent?.trim()
 		);
-		expect(items).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+		expect(items).toEqual(['Move up', 'Remove from playlist']);
 	});
 
-	it('carries no play glyph: the row plays, and its … menu is named after the song', async () => {
+	it('carries no play glyph: the row plays, and its ✎ and … menu are named after the song', async () => {
 		openPlaylistDetail(
 			detail({
 				...populatedPlaylistDefaults(),
@@ -695,13 +647,28 @@ describe('PlaylistDetailView row actions', () => {
 
 		const row = requireElement<HTMLElement>(target, '.entry-row');
 		expect(Array.from(row.querySelectorAll('button')).map((button) => button.className)).toEqual([
-			expect.stringContaining('entry-info'),
+			expect.stringContaining('song-row-body'),
+			expect.stringContaining('song-row-edit'),
 			expect.stringContaining('overflow-btn')
 		]);
-		expect(requireElement(row, '.entry-info').textContent).toContain('Tide');
+		expect(requireElement(row, '.song-row-body').textContent).toContain('Tide');
+		expect(accessibleName(requireElement(row, '.song-row-edit'))).toBe(songEditorOpenLabel('Tide'));
 		expect(requireElement(row, '.overflow-btn').getAttribute('aria-label')).toBe(
 			playlistEntryOverflowLabel('Tide')
 		);
+	});
+
+	it("opens the take's song in the editor from its ✎, without playing it", async () => {
+		const target = await renderTwoEntryPlaylist();
+
+		getByRoleButton(
+			target.querySelectorAll<HTMLElement>('.entry-row')[1],
+			songEditorOpenLabel('Ebb')
+		).click();
+		await tick();
+
+		expect(selectSong).toHaveBeenCalledExactlyOnceWith('s1');
+		expect(audioPlayer.current).toBeNull();
 	});
 
 	it('keeps reorder and remove in the … menu on a fine pointer too', async () => {
@@ -731,7 +698,7 @@ describe('PlaylistDetailView row actions', () => {
 		const menu = requireElement<HTMLElement>(target, '.entry-overflow-menu');
 		expect(
 			Array.from(menu.querySelectorAll('.entry-overflow-item')).map((el) => el.textContent?.trim())
-		).toEqual(['Open song in editor', 'Move up', 'Remove from playlist']);
+		).toEqual(['Move up', 'Remove from playlist']);
 	});
 });
 

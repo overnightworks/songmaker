@@ -5,8 +5,7 @@
 		isPlaylistEntryCurrent,
 		playPlaylist,
 		playPlaylistEntry,
-		queueContext,
-		type CollectionStart
+		queueContext
 	} from '$lib/stores/player';
 	import {
 		selectedPlaylist,
@@ -42,7 +41,6 @@
 		LIBRARY_RETRY_LABEL,
 		PLAYLIST_ENTRY_MOVE_DOWN_LABEL,
 		PLAYLIST_ENTRY_MOVE_UP_LABEL,
-		PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 		PLAYLIST_ENTRY_REMOVE_LABEL,
 		playlistEntryOverflowLabel
 	} from '$lib/constants';
@@ -51,7 +49,7 @@
 	import CollectionHeader from './CollectionHeader.svelte';
 	import ConfirmDeleteDialog from './ConfirmDeleteDialog.svelte';
 	import Icon from './Icon.svelte';
-	import PlayingMark from './PlayingMark.svelte';
+	import SongRow from './SongRow.svelte';
 
 	// The header prefers the lightweight playlist already in playlistList so
 	// a slow or failed detail fetch never leaves the previous playlist's
@@ -232,9 +230,7 @@
 	// to start, so the header plays nothing rather than the previously opened
 	// playlist or the library.
 	const playWhole = $derived(
-		playlistDetail && playlistDetail.entries.length > 0
-			? (start: CollectionStart) => playPlaylist(playlistDetail, start)
-			: null
+		playlistDetail && playlistDetail.entries.length > 0 ? () => playPlaylist(playlistDetail) : null
 	);
 
 	// The row is the play target: a tap plays this take from here, with the
@@ -343,6 +339,7 @@
 				playlistCovers={playlistMeta.album_covers}
 				playlistCover={playlistMeta.cover}
 				onplay={playWhole}
+				songCount={playlistMeta.entry_count}
 				onrename={onPlaylistRename}
 				isShared={playlistMeta.is_shared}
 				shareSlug={playlistMeta.share_slug}
@@ -372,108 +369,90 @@
 				     strips in Safari/VoiceOver. -->
 				<ul class="entry-rows" role="list">
 					{#each playlistDetail.entries as entry, i (entry.id)}
-						{@const current = isPlaylistEntryCurrent(entry, $queueContext)}
-						<li class="entry-row" class:current>
-							<button
-								type="button"
-								class="entry-info"
-								data-hitbox="text"
+						<li class="entry-row">
+							<SongRow
+								title={entry.song_title}
+								detail={nowPlayingTakeMeta({
+									artist: entry.artist,
+									versionNumber: entry.version_number,
+									generationNumber: entry.generation_number,
+									durationSec: entry.audio_duration
+								})}
+								picked={entry.is_picked}
+								current={isPlaylistEntryCurrent(entry, $queueContext)}
 								onclick={() => playEntry(i)}
+								onedit={() => openSongInEditor(entry.song_id)}
 							>
-								<PlayingMark {current} />
-								<span class="entry-text">
-									<span class="entry-title">
-										{#if entry.is_picked}<span class="picked-star">★</span>{/if}
-										{entry.song_title}
-									</span>
-									<span class="entry-meta">
-										{nowPlayingTakeMeta({
-											artist: entry.artist,
-											versionNumber: entry.version_number,
-											generationNumber: entry.generation_number,
-											durationSec: entry.audio_duration
-										})}
-									</span>
-								</span>
-							</button>
-							<div class="entry-actions">
-								<div class="entry-overflow-anchor">
-									<button
-										type="button"
-										class="overflow-btn"
-										data-hitbox="frequent"
-										data-hitbox-face
-										aria-haspopup="menu"
-										aria-expanded={$overflowId === entry.id}
-										aria-label={playlistEntryOverflowLabel(entry.song_title)}
-										onclick={(e) => toggleOverflow(entry.id, e)}
-									>
-										<Icon name="more-horizontal" size={16} />
-									</button>
-									{#if $overflowId === entry.id}
-										<div
-											bind:this={overflowMenuEl}
-											class="entry-overflow-menu"
-											role="menu"
-											tabindex="-1"
-											onclick={(e) => e.stopPropagation()}
-											onkeydown={(e) => e.stopPropagation()}
+								{#snippet menu()}
+									<div class="entry-overflow-anchor">
+										<button
+											type="button"
+											class="overflow-btn"
+											data-hitbox="frequent"
+											data-hitbox-face
+											aria-haspopup="menu"
+											aria-expanded={$overflowId === entry.id}
+											aria-label={playlistEntryOverflowLabel(entry.song_title)}
+											onclick={(e) => toggleOverflow(entry.id, e)}
 										>
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												onclick={() => openSongInEditor(entry.song_id)}
+											<Icon name="more-horizontal" size={16} />
+										</button>
+										{#if $overflowId === entry.id}
+											<div
+												bind:this={overflowMenuEl}
+												class="entry-overflow-menu"
+												role="menu"
+												tabindex="-1"
+												onclick={(e) => e.stopPropagation()}
+												onkeydown={(e) => e.stopPropagation()}
 											>
-												{PLAYLIST_ENTRY_OPEN_SONG_LABEL}
-											</button>
-											{#if i > 0}
+												{#if i > 0}
+													<button
+														type="button"
+														role="menuitem"
+														class="entry-overflow-item"
+														data-hitbox="frequent"
+														disabled={reorderBusy}
+														onclick={() => {
+															$overflowId = null;
+															void onMoveEntry(entry.id, i - 1);
+														}}
+													>
+														{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+													</button>
+												{/if}
+												{#if i < playlistDetail.entries.length - 1}
+													<button
+														type="button"
+														role="menuitem"
+														class="entry-overflow-item"
+														data-hitbox="frequent"
+														disabled={reorderBusy}
+														onclick={() => {
+															$overflowId = null;
+															void onMoveEntry(entry.id, i + 1);
+														}}
+													>
+														{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
+													</button>
+												{/if}
 												<button
 													type="button"
 													role="menuitem"
 													class="entry-overflow-item"
 													data-hitbox="frequent"
-													disabled={reorderBusy}
 													onclick={() => {
 														$overflowId = null;
-														void onMoveEntry(entry.id, i - 1);
+														void onRemoveEntry(entry.id);
 													}}
 												>
-													{PLAYLIST_ENTRY_MOVE_UP_LABEL}
+													{PLAYLIST_ENTRY_REMOVE_LABEL}
 												</button>
-											{/if}
-											{#if i < playlistDetail.entries.length - 1}
-												<button
-													type="button"
-													role="menuitem"
-													class="entry-overflow-item"
-													data-hitbox="frequent"
-													disabled={reorderBusy}
-													onclick={() => {
-														$overflowId = null;
-														void onMoveEntry(entry.id, i + 1);
-													}}
-												>
-													{PLAYLIST_ENTRY_MOVE_DOWN_LABEL}
-												</button>
-											{/if}
-											<button
-												type="button"
-												role="menuitem"
-												class="entry-overflow-item"
-												data-hitbox="frequent"
-												onclick={() => {
-													$overflowId = null;
-													void onRemoveEntry(entry.id);
-												}}
-											>
-												{PLAYLIST_ENTRY_REMOVE_LABEL}
-											</button>
-										</div>
-									{/if}
-								</div>
-							</div>
+											</div>
+										{/if}
+									</div>
+								{/snippet}
+							</SongRow>
 						</li>
 					{/each}
 				</ul>
@@ -543,99 +522,6 @@
 		margin: 0;
 		padding: 0;
 		list-style: none;
-	}
-
-	/* The play target and the ⋯ share the row's one grid cell (#1053): the target
-	   fills the whole card, and the later-painted ⋯ stays its own target above it. */
-	.entry-row {
-		--entry-inset-block: 0.65rem;
-		--entry-inset-inline: 0.8rem;
-		--entry-actions-gap: 0.75rem;
-		display: grid;
-		grid-template-areas: 'entry';
-		min-height: 64px;
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
-		color: var(--text);
-		transition:
-			background 0.15s,
-			border-color 0.15s,
-			box-shadow 0.15s;
-	}
-
-	.entry-row:hover {
-		border-color: rgba(160, 32, 240, 0.3);
-		background: var(--surface-hover);
-		box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 7%, transparent);
-	}
-
-	.entry-row.current {
-		border-color: var(--primary);
-	}
-
-	.entry-row.current .entry-title {
-		color: var(--primary);
-	}
-
-	.entry-info {
-		grid-area: entry;
-		min-width: 0;
-		display: flex;
-		align-items: center;
-		gap: 0.6rem;
-		background: none;
-		border: none;
-		padding: var(--entry-inset-block)
-			calc(var(--entry-inset-inline) + var(--hitbox-frequent) + var(--entry-actions-gap))
-			var(--entry-inset-block) var(--entry-inset-inline);
-		color: inherit;
-		font: inherit;
-		text-align: left;
-		cursor: pointer;
-	}
-
-	/* The global press scale would shrink the target mid-press and send a release
-	   near the card's edge to the card. */
-	.entry-row .entry-info:active:not(:disabled) {
-		transform: none;
-	}
-
-	.entry-text {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		align-items: flex-start;
-		gap: 2px;
-	}
-
-	.entry-title {
-		max-width: 100%;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: 1rem;
-	}
-
-	.picked-star {
-		color: var(--accent);
-		text-shadow: 0 0 6px rgba(160, 32, 240, 0.4);
-	}
-
-	.entry-meta {
-		font-size: 0.75rem;
-		color: var(--text-subtle);
-	}
-
-	.entry-actions {
-		grid-area: entry;
-		justify-self: end;
-		align-self: center;
-		margin-right: var(--entry-inset-inline);
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
 	}
 
 	.entry-overflow-anchor {
@@ -725,17 +611,6 @@
 	@media (max-width: 768px) {
 		.entry-list {
 			padding: 0 0.8rem;
-		}
-
-		.entry-row {
-			--entry-inset-block: 0.7rem;
-			--entry-inset-inline: 0.7rem;
-			--entry-actions-gap: 0.6rem;
-			min-height: 62px;
-		}
-
-		.entry-actions {
-			gap: 0.35rem;
 		}
 	}
 </style>

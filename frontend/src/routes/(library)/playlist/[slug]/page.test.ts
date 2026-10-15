@@ -14,7 +14,7 @@ import { openCollection, resetCollectionForTests } from '$lib/stores/collection'
 import { albumList, songList } from '$lib/stores/libraryData';
 import { resetLibraryContextForTests } from '$lib/stores/libraryContext';
 import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
-import { resetPlaylists } from '$lib/stores/playlists';
+import { resetPlaylistsForTests } from '$lib/stores/playlists';
 import { resetResourceSyncForTests, startLibraryResourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
@@ -150,7 +150,7 @@ function coldTabAt(pathname: string): void {
 	resetCollectionForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetResourceSyncForTests();
 	startLibraryResourceSync();
 }
@@ -187,7 +187,7 @@ afterEach(() => {
 	resetResourceSyncForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	resetCollectionForTests();
 	vi.unstubAllGlobals();
 });

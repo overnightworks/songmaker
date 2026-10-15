@@ -521,6 +521,8 @@ def test_the_env_file_is_read_the_way_compose_reads_it(
     [
         'SONGMAKER_CLI_CREDENTIALS_DIR="/srv/songmaker credentials" # note',
         "SONGMAKER_CLI_CREDENTIALS_DIR=/srv/%h/creds",
+        # Literal in Compose, but systemd expands '$' in the ExecStart it lands in.
+        "SONGMAKER_CLI_CREDENTIALS_DIR='/srv/$creds'",
         "SONGMAKER_CLI_CREDENTIALS_DIR=relative/creds",
         'SONGMAKER_CLI_CREDENTIALS_DIR="/srv/unclosed',
         # Outside the subset this reader implements. Guessing differently from

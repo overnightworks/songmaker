@@ -125,6 +125,7 @@ import {
 	curationActive,
 	isPlaylistEntryCurrent,
 	playAlbum,
+	playAlbumSong,
 	playIdleStart,
 	retryLastPlayIntent,
 	playNextSong,
@@ -164,7 +165,11 @@ import {
 	setLibraryTakePool,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
-import { loadPlaylistDetail, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	loadPlaylistDetail,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
 import { PLAYLIST_LOADING_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 
@@ -2415,7 +2420,7 @@ describe('the queue names its next take', () => {
 			},
 			{
 				queue: 'playlist',
-				start: async () => playPlaylist(playlistOfThree, 'top')
+				start: async () => playPlaylist(playlistOfThree)
 			}
 		];
 
@@ -2540,7 +2545,7 @@ describe('the queue names its next take', () => {
 			},
 			{
 				queue: 'playlist',
-				start: async () => playPlaylist(playlistOfTwo, 'top')
+				start: async () => playPlaylist(playlistOfTwo)
 			},
 			{
 				queue: 'library window',
@@ -3718,7 +3723,7 @@ describe('playIdleStart', () => {
 		let answerOpened: { resolve: (d: PlaylistDetailItem) => void; reject: (e: unknown) => void };
 
 		beforeEach(async () => {
-			resetPlaylists();
+			resetPlaylistsForTests();
 			vi.mocked(fetchPlaylist).mockResolvedValueOnce(left);
 			await loadPlaylistDetail(left.id);
 			vi.mocked(fetchPlaylist).mockReturnValueOnce(
@@ -3730,7 +3735,7 @@ describe('playIdleStart', () => {
 		});
 
 		afterEach(() => {
-			resetPlaylists();
+			resetPlaylistsForTests();
 		});
 
 		it('waits for it and then plays it, never the library or the list just left', async () => {
@@ -3820,8 +3825,7 @@ describe('playIdleStart', () => {
 });
 
 describe('playAlbum', () => {
-	it('starts on a drawn song, not on track 1, when asked for a random start', async () => {
-		vi.spyOn(Math, 'random').mockReturnValue(0);
+	function seedThreePickedSongs(): void {
 		songList.set(
 			['s1', 's2', 's3'].map((id, index) =>
 				makeSong({
@@ -3841,16 +3845,54 @@ describe('playAlbum', () => {
 				})
 			)
 		);
+	}
 
-		await playAlbum('a1', 'random');
+	it.each([
+		{ shuffle: false, order: 'album order', queue: ['s1', 's2', 's3'] },
+		{ shuffle: true, order: "the player's shuffle", queue: ['s2', 's3', 's1'] }
+	])(
+		'plays a tapped song, not track 1, and Next continues in $order with the whole album queued',
+		async ({ shuffle, queue }) => {
+			vi.spyOn(Math, 'random').mockReturnValue(0);
+			setShuffle(shuffle);
+			seedThreePickedSongs();
 
-		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
-			restart: true
-		});
-		const ctx = get(queueContext);
-		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
-		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
-	});
+			await playAlbumSong('a1', 's2');
+
+			expect(audioPlayer.load).toHaveBeenNthCalledWith(
+				1,
+				expect.objectContaining({ songId: 's2' }),
+				{ restart: true }
+			);
+			const ctx = get(queueContext);
+			if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
+			expect(ctx.takes.map((take) => take.songId)).toEqual(queue);
+			expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
+
+			await playNextSong();
+
+			expect(audioPlayer.load).toHaveBeenLastCalledWith(expect.objectContaining({ songId: 's3' }));
+		}
+	);
+
+	it.each(['playing', 'paused'] as const)(
+		'keeps a %s song going from where it stands when its box is tapped again',
+		async (status) => {
+			seedThreePickedSongs();
+			await playAlbum('a1', { songId: 's2' });
+			vi.mocked(audioPlayer.load).mockClear();
+			vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
+				audioPlayer.status = 'playing';
+			});
+			audioPlayer.status = status;
+
+			await playAlbumSong('a1', 's2');
+
+			expect(audioPlayer.load).not.toHaveBeenCalled();
+			expect(audioPlayer.status).toBe('playing');
+			expect(audioPlayer.current?.songId).toBe('s2');
+		}
+	);
 
 	it("plays a take with the take's own length, not the length its song asked for", async () => {
 		songList.set([

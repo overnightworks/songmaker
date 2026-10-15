@@ -22,6 +22,7 @@ AUTOSTART_FILES = (
     "alert.sh",
     "check_agent_cli_mounts.sh",
     "install-autostart.sh",
+    "main_checkout.py",
     "songmaker-alert@.service",
     "songmaker.service",
 )

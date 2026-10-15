@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack, type Snippet } from 'svelte';
 	import Icon from './Icon.svelte';
+	import SeekSlider from './SeekSlider.svelte';
 	import {
 		audioPlayer,
 		transportButtonFace,
@@ -216,19 +217,6 @@
 		if (endsSwipe) e.stopPropagation();
 	}
 
-	function seekFromClick(e: MouseEvent, el?: HTMLElement): void {
-		if (duration <= 0) return;
-		const target = el ?? (e.currentTarget as HTMLElement);
-		const rect = target.getBoundingClientRect();
-		const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-		onSeek(ratio * duration);
-	}
-
-	function seekFromRange(e: Event): void {
-		const target = e.currentTarget as HTMLInputElement;
-		onSeek(Number(target.value));
-	}
-
 	onDestroy(() => {
 		viz.destroy();
 	});
@@ -247,7 +235,6 @@
 	</button>
 	<button
 		class="play-btn"
-		class:loading={isLoading}
 		class:playing={isPlaying}
 		class:errored={isError}
 		onclick={onTogglePlay}
@@ -366,19 +353,7 @@
 				{#if waitingForNetwork}{@render waitingNotice()}{/if}
 				{#if takeIsCurrent}
 					<span class="time">{formatTime(currentTime)}</span>
-					<input
-						class="timeline-range"
-						style={`--progress: ${progressPercent}%`}
-						type="range"
-						min="0"
-						max={duration || 0}
-						step="0.1"
-						value={duration > 0 ? currentTime : 0}
-						oninput={seekFromRange}
-						onclick={(e) => seekFromClick(e)}
-						disabled={duration <= 0}
-						aria-label="Seek playback"
-					/>
+					<SeekSlider size="compact" {currentTime} {duration} {formatTime} {onSeek} />
 					<span class="time">{formatTime(duration)}</span>
 				{/if}
 			</div>
@@ -439,9 +414,9 @@
 		width: 62px;
 		height: 62px;
 		border-radius: 50%;
-		border: 2px solid var(--primary);
-		background: color-mix(in srgb, var(--surface) 72%, transparent);
-		color: var(--primary);
+		border: none;
+		background: var(--accent);
+		color: var(--on-accent);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -450,7 +425,6 @@
 		position: relative;
 		transition:
 			background 0.2s,
-			border-color 0.3s,
 			color 0.2s;
 	}
 	.play-btn-face {
@@ -458,48 +432,13 @@
 		align-items: center;
 		justify-content: center;
 	}
-	.play-btn:hover {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		border-color: transparent;
-		color: #fff;
-	}
-	.play-btn.loading {
-		border-color: var(--text-decoration);
-	}
-	.play-btn.playing {
-		border-color: var(--accent);
+	.play-btn:hover:not(.errored) {
+		background: color-mix(in srgb, var(--accent) 82%, var(--text));
 	}
 	.play-btn.errored {
-		border-color: #d34;
+		border: 2px solid #d34;
+		background: color-mix(in srgb, var(--surface) 72%, transparent);
 		color: #d34;
-	}
-	@supports (animation-timeline: auto) or (background-clip: border-box) {
-		@media (prefers-reduced-motion: no-preference) {
-			.play-btn.playing {
-				border-color: transparent;
-				background-origin: border-box;
-				background-clip: padding-box, border-box;
-				background-image:
-					linear-gradient(var(--header-bg), var(--header-bg)),
-					conic-gradient(
-						from var(--border-angle, 0deg),
-						var(--primary),
-						var(--accent),
-						var(--primary)
-					);
-				animation: rotate-border 2s linear infinite;
-			}
-		}
-	}
-	@keyframes rotate-border {
-		to {
-			--border-angle: 360deg;
-		}
-	}
-	@property --border-angle {
-		syntax: '<angle>';
-		initial-value: 0deg;
-		inherits: false;
 	}
 	.spinner {
 		width: 24px;
@@ -510,7 +449,7 @@
 		background-clip: content-box, border-box;
 		background-image:
 			linear-gradient(transparent, transparent),
-			conic-gradient(var(--primary), var(--accent), var(--primary));
+			conic-gradient(var(--on-accent), transparent, var(--on-accent));
 		animation: spin 0.8s linear infinite;
 	}
 	@keyframes spin {
@@ -574,64 +513,6 @@
 		flex-shrink: 0;
 	}
 
-	.timeline-range {
-		--track-bg: color-mix(in srgb, var(--border) 45%, transparent);
-		appearance: none;
-		-webkit-appearance: none;
-		width: 100%;
-		height: 34px;
-		background: transparent;
-		cursor: pointer;
-		accent-color: var(--accent);
-	}
-	.timeline-range:disabled {
-		cursor: default;
-		opacity: 0.45;
-	}
-	.timeline-range::-webkit-slider-runnable-track {
-		height: 8px;
-		border-radius: 999px;
-		background: linear-gradient(
-			90deg,
-			var(--primary) 0%,
-			var(--accent) var(--progress),
-			var(--track-bg) var(--progress),
-			var(--track-bg) 100%
-		);
-		box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent);
-	}
-	.timeline-range::-webkit-slider-thumb {
-		-webkit-appearance: none;
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		border: 2px solid var(--card-bg);
-		background: var(--text);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
-		margin-top: -5px;
-	}
-	.timeline-range:hover:not(:disabled)::-webkit-slider-thumb {
-		background: #fff;
-		box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 30%, transparent);
-	}
-	.timeline-range::-moz-range-track {
-		height: 8px;
-		border-radius: 999px;
-		background: var(--track-bg);
-	}
-	.timeline-range::-moz-range-progress {
-		height: 8px;
-		border-radius: 999px;
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-	}
-	.timeline-range::-moz-range-thumb {
-		width: 18px;
-		height: 18px;
-		border-radius: 50%;
-		border: 2px solid var(--card-bg);
-		background: var(--text);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
-	}
 	.now-playing-btn {
 		display: inline-flex;
 		align-items: center;

@@ -1,11 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
-	import {
-		COLLECTION_SHUFFLE_ACTION,
-		collectionActionLabel,
-		type CollectionPlayKind
-	} from '$lib/constants';
-	import Icon from './Icon.svelte';
+	import { collectionActionLabel, type CollectionPlayKind } from '$lib/constants';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import {
 		transportButtonFace,
@@ -26,11 +21,6 @@
 		transport: TransportState;
 		/** The circle's action; null while the circle has nothing to act on, which dims it. */
 		onplay: (() => void) | null;
-		/**
-		 * The shuffle square's action; absent where the surface offers no
-		 * shuffle, null while the collection has nothing to start, which dims it.
-		 */
-		onshuffle?: (() => void) | null;
 		titleArea: Snippet;
 		actions?: Snippet;
 		coverFallback?: Snippet;
@@ -53,7 +43,6 @@
 		kind,
 		transport,
 		onplay,
-		onshuffle,
 		titleArea,
 		actions,
 		coverFallback,
@@ -63,7 +52,6 @@
 
 	const coverShown = $derived(showCover && Boolean(coverUrl));
 	const playLabel = $derived(collectionActionLabel(transportButtonLabel(transport), kind));
-	const shuffleLabel = $derived(collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind));
 </script>
 
 {#snippet coverArt()}
@@ -115,19 +103,6 @@
 		>
 			<TransportButtonIcon face={transportButtonFace(transport)} size={22} />
 		</button>
-		{#if onshuffle !== undefined}
-			<button
-				type="button"
-				class="shuffle-btn"
-				data-hitbox="frequent"
-				disabled={!onshuffle}
-				onclick={() => onshuffle?.()}
-				aria-label={shuffleLabel}
-				title={shuffleLabel}
-			>
-				<Icon name="shuffle" size={20} />
-			</button>
-		{/if}
 		{#if actions}<span class="header-actions-end">{@render actions()}</span>{/if}
 	</div>
 </div>
@@ -248,30 +223,16 @@
 		height: var(--collection-play-circle);
 		border-radius: 50%;
 		border: none;
-		background: var(--primary);
+		background: var(--accent);
 		color: #fff;
 		margin-right: 0.2rem;
 	}
 
 	.play-circle:hover:not(:disabled) {
-		box-shadow: 0 0 14px color-mix(in srgb, var(--primary) 45%, transparent);
+		box-shadow: 0 0 14px color-mix(in srgb, var(--accent) 45%, transparent);
 	}
 
-	.shuffle-btn {
-		width: var(--hitbox-frequent);
-		height: var(--hitbox-frequent);
-		border: none;
-		border-radius: var(--btn-radius-sm);
-		background: none;
-		color: var(--text-muted);
-	}
-
-	.shuffle-btn:hover:not(:disabled) {
-		color: var(--primary);
-	}
-
-	.play-circle:disabled,
-	.shuffle-btn:disabled {
+	.play-circle:disabled {
 		opacity: 0.4;
 	}
 
