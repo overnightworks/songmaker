@@ -105,6 +105,11 @@
 :root {
 	--primary: #ff3220;
 	--accent: #a020f0;
+	/* The action colour docs/design/vocabulary.html rules (#924, section 9):
+	   where you act and where you are, with the ink that reads on it. Red is
+	   left to failure. */
+	--action: #b45cf5;
+	--on-action: #111;
 	--bg: #0d0d0d;
 	--bg-deep: #050508;
 	--surface: #111;
@@ -220,6 +225,8 @@ html[data-transport-bar='hidden'] {
 [data-theme='light'] {
 	--primary: #d41a0a;
 	--accent: #7a18c0;
+	--action: #7a18c0;
+	--on-action: #fff;
 	--bg: #f4f4f6;
 	--bg-deep: #e8e8ec;
 	--surface: #ffffff;

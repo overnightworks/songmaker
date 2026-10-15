@@ -63,6 +63,7 @@ import {
 	minHeightPx,
 	setPointer
 } from '$lib/test-utils/hitbox';
+import { laidOutSeekLine, pointerOnSeekLine } from '$lib/test-utils/seek-line';
 
 // setPick/setKeep stay mocked so a curation click asserts the call it makes,
 // not the network + song-refresh chain behind it — takeActions.test.ts and
@@ -407,6 +408,19 @@ describe('NowPlaying', () => {
 		expect(controlNames(after)).toEqual(['Next song', 'empty slot']);
 		expect(after?.lastElementChild?.getAttribute('aria-hidden')).toBe('true');
 		expect(target.querySelector('[aria-label*="repeat" i]')).toBeNull();
+	});
+
+	it('plays from where a tap lands on its seek line, not only from its knob (#1382)', async () => {
+		await renderSurface(info());
+		audioPlayer.duration = 180;
+		const seek = vi.spyOn(audioPlayer, 'seek').mockImplementation(() => {});
+		await tick();
+		const line = laidOutSeekLine(target);
+
+		await pointerOnSeekLine(line, 'pointerdown', 0.75);
+		await pointerOnSeekLine(line, 'pointerup', 0.75);
+
+		expect(seek.mock.calls).toEqual([[135]]);
 	});
 
 	it.each([

@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment.svelte';
+import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 	NOW_PLAYING_RESCORE_ACTION_LABEL
@@ -15,6 +16,7 @@ const EMPTY_LABEL = 'No lyrics for this take';
 
 const LINE_1 = 'the lantern hums quietly tonight';
 const LINE_2 = 'we count the fading city lights';
+const LINE_3 = 'and the river keeps our names';
 
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
@@ -68,15 +70,11 @@ class FakeAlignmentWorker {
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
-// jsdom has no scrollIntoView; define a no-op once so vi.spyOn has a real
+// jsdom has no scrollBy; define a no-op once so vi.spyOn has a real
 // implementation to wrap, then restoreAllMocks can clean the spy up after
 // each test without leaving the raw prototype assignment behind.
-if (typeof HTMLElement.prototype.scrollIntoView !== 'function') {
-	HTMLElement.prototype.scrollIntoView = () => {};
-}
-
-function stubScrollIntoView() {
-	return vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+if (typeof HTMLElement.prototype.scrollBy !== 'function') {
+	HTMLElement.prototype.scrollBy = () => {};
 }
 
 // jsdom does no layout, so a scroll box has to be given its measurements.
@@ -111,6 +109,45 @@ function stubResizeObserver(): () => void {
 	return () => {
 		for (const callback of callbacks) callback([], {} as ResizeObserver);
 	};
+}
+
+// Three lines sung one second each, so the time names the sung line.
+function syncedTake(): LyricsProps {
+	return {
+		lyrics: [LINE_1, LINE_2, LINE_3].join('\n'),
+		cues: [cue(0, 1, LINE_1), cue(1, 2, LINE_2), cue(2, 3, LINE_3)],
+		whisperText: null
+	};
+}
+
+// jsdom lays nothing out, so the box is given the shape a browser gives it:
+// 200 px tall with its last 40 px faded, each line 100 px below the one
+// before. The third line ends 70 px below the readable part.
+const LINE_3_BELOW_VIEW_PX = 70;
+
+function layOutSyncedLyrics(reducedMotion = false) {
+	stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+	vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+		const index = this.getAttribute('data-line-index');
+		if (index === null) return { top: 0, bottom: 200 } as DOMRect;
+		const top = Number(index) * 100;
+		return { top, bottom: top + 30 } as DOMRect;
+	});
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({ matches: reducedMotion }))
+	);
+	return vi.spyOn(HTMLElement.prototype, 'scrollBy').mockImplementation(() => {});
+}
+
+async function playTo(seconds: number) {
+	audioPlayer.currentTime = seconds;
+	await tick();
+}
+
+function followButton(): HTMLButtonElement | null {
+	const button = target.querySelector('button');
+	return button?.textContent?.includes(NOW_PLAYING_LYRICS_FOLLOW_LABEL) ? button : null;
 }
 
 function lyricsBox(): HTMLElement {
@@ -344,39 +381,109 @@ describe('NowPlayingLyrics', () => {
 		expect(target.querySelector('.lyrics-text')?.textContent).toBe([LINE_1, LINE_2].join('\n'));
 	});
 
-	it('scrolls the active line into view, smoothly by default', async () => {
-		const lyrics = [LINE_1, LINE_2].join('\n');
-		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = stubScrollIntoView();
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn(() => ({ matches: false }))
-		);
-		audioPlayer.currentTime = 0.5;
+	it.each([
+		{ motion: 'by default', reduced: false, behavior: 'smooth' },
+		{ motion: 'when prefers-reduced-motion is set', reduced: true, behavior: 'auto' }
+	])(
+		'scrolls the lyrics box to the sung line, $behavior $motion',
+		async ({ reduced, behavior }) => {
+			const scrolls = layOutSyncedLyrics(reduced);
+			audioPlayer.currentTime = 2.5;
 
-		await render({ lyrics, cues, whisperText: null });
-		await tick();
+			await render(syncedTake());
 
-		expect(scrollIntoView).toHaveBeenCalledWith(
-			expect.objectContaining({ block: 'nearest', behavior: 'smooth' })
-		);
+			expect(scrolls.mock.calls).toEqual([[{ top: LINE_3_BELOW_VIEW_PX, behavior }]]);
+		}
+	);
+
+	it.each([
+		{ gesture: 'the wheel', event: () => new WheelEvent('wheel', { bubbles: true }) },
+		{ gesture: 'a finger', event: () => new Event('touchmove', { bubbles: true }) },
+		{
+			gesture: 'Page Up',
+			event: () => new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true })
+		}
+	])('stays where the reader scrolls it with $gesture and offers Follow', async ({ event }) => {
+		const scrolls = layOutSyncedLyrics();
+		await render(syncedTake());
+
+		lyricsBox().dispatchEvent(event());
+		await playTo(2.5);
+
+		expect({ scrolls: scrolls.mock.calls.length, follow: followButton() !== null }).toEqual({
+			scrolls: 0,
+			follow: true
+		});
 	});
 
-	it('scrolls the active line instantly when prefers-reduced-motion is set', async () => {
-		const lyrics = [LINE_1, LINE_2].join('\n');
-		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = stubScrollIntoView();
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn(() => ({ matches: true }))
-		);
-		audioPlayer.currentTime = 0.5;
+	it.each([
+		{ input: 'its own scrolling', event: () => new Event('scroll') },
+		{
+			input: 'a key that scrolls nothing',
+			event: () => new KeyboardEvent('keydown', { key: 'Tab', bubbles: true })
+		}
+	])('keeps following the song through $input', async ({ event }) => {
+		const scrolls = layOutSyncedLyrics();
+		await render(syncedTake());
 
-		await render({ lyrics, cues, whisperText: null });
+		lyricsBox().dispatchEvent(event());
+		await playTo(2.5);
+
+		expect({ scrolls: scrolls.mock.calls.length, follow: followButton() !== null }).toEqual({
+			scrolls: 1,
+			follow: false
+		});
+	});
+
+	it('Follow brings the sung line back and follows it again', async () => {
+		const scrolls = layOutSyncedLyrics();
+		await render(syncedTake());
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await playTo(2.5);
+
+		followButton()?.click();
 		await tick();
 
-		expect(scrollIntoView).toHaveBeenCalledWith(
-			expect.objectContaining({ block: 'nearest', behavior: 'auto' })
-		);
+		expect({ scrolls: scrolls.mock.calls, follow: followButton() !== null }).toEqual({
+			scrolls: [[{ top: LINE_3_BELOW_VIEW_PX, behavior: 'smooth' }]],
+			follow: false
+		});
+	});
+
+	it('follows a new take again from its start', async () => {
+		const scrolls = layOutSyncedLyrics();
+		const live = await mountLyrics(syncedTake());
+		await settleAlignment();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+
+		live.lyrics = [LINE_3, LINE_2, LINE_1].join('\n');
+		live.cues = [cue(0, 1, LINE_3), cue(1, 2, LINE_2), cue(2, 3, LINE_1)];
+		await tick();
+		await settleAlignment();
+		await playTo(2.5);
+
+		expect({ scrolls: scrolls.mock.calls.length, follow: followButton() !== null }).toEqual({
+			scrolls: 1,
+			follow: false
+		});
+	});
+
+	it('offers Follow only for lyrics that follow the song, never for plain text', async () => {
+		layOutSyncedLyrics();
+		const live = await mountLyrics(syncedTake());
+		await settleAlignment();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await tick();
+		const timedOffersFollow = followButton() !== null;
+
+		live.cues = null;
+		await tick();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await tick();
+
+		expect({ timedOffersFollow, plainOffersFollow: followButton() !== null }).toEqual({
+			timedOffersFollow: true,
+			plainOffersFollow: false
+		});
 	});
 });

@@ -1,12 +1,14 @@
 <script lang="ts">
 	import type { WhisperCue } from '$lib/api/types';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
 	import {
 		NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 		NOW_PLAYING_LYRICS_ROW_LABEL
 	} from '$lib/constants/now-playing';
 	import { alignInWorker } from '$lib/services/lyricsAlignment.svelte';
 	import { activeLyricLineIndices, type AlignedLyricLine } from '$lib/utils/lyrics-align';
+	import { preferredScrollBehavior } from '$lib/utils/motion';
 
 	let {
 		lyrics,
@@ -25,6 +27,11 @@
 	// Sub-pixel rounding leaves a fraction of a pixel unscrolled at the very
 	// end; anything under this counts as "the reader has seen the last line".
 	const SCROLL_END_TOLERANCE_PX = 1;
+	// The faded strip at the bottom edge; the line that follows the audio is
+	// kept above it, so a synced line is never read half-transparent.
+	const LYRICS_FADE_PX = 40;
+	// The keys that scroll a focused box: pressing one is the reader scrolling.
+	const SCROLL_KEYS = new Set(['ArrowUp', 'ArrowDown', 'PageUp', 'PageDown', 'Home', 'End', ' ']);
 
 	const hasLyrics = $derived(lyrics != null && lyrics.length > 0);
 	const hasCues = $derived(cues != null && cues.length > 0);
@@ -33,11 +40,16 @@
 	// The request is keyed on the take: its lyrics and the identity of its cue
 	// list, never on a playback tick.
 	let alignedLines = $state<AlignedLyricLine[] | null>(null);
+	// Synced lyrics follow the sung line until the reader scrolls them by
+	// hand; then they stay where the reader put them until Follow is pressed
+	// or another take starts.
+	let following = $state(true);
 
 	$effect(() => {
 		const takeLyrics = lyrics;
 		const takeCues = cues;
 		alignedLines = null;
+		following = true;
 		if (takeLyrics == null || takeLyrics.length === 0) return;
 		if (takeCues == null || takeCues.length === 0) return;
 
@@ -58,6 +70,11 @@
 	const scrollTargetIndex = $derived(activeIndices.length > 0 ? activeIndices[0] : null);
 	const showUnsyncedNote = $derived(hasLyrics && !hasCues && Boolean(whisperText));
 	const renderedLineCount = $derived(alignedLines?.length ?? (hasLyrics ? 1 : 0));
+	const showFollow = $derived(alignedLines !== null && !following);
+
+	function canScroll(el: HTMLElement): boolean {
+		return el.scrollHeight - el.clientHeight > SCROLL_END_TOLERANCE_PX;
+	}
 
 	function overflowsBelow(el: HTMLElement | undefined): boolean {
 		if (!el) return false;
@@ -91,16 +108,33 @@
 		return () => observer.disconnect();
 	});
 
+	// Only wheel, touch and keys mean the reader: the box's own scrolls fire
+	// none of them, so following never pauses itself.
+	function pauseFollowing(): void {
+		if (alignedLines && container && canScroll(container)) following = false;
+	}
+
+	function pauseOnScrollKey(event: KeyboardEvent): void {
+		if (SCROLL_KEYS.has(event.key)) pauseFollowing();
+	}
+
+	// Scrolls the lyrics box alone, never the surface around it: a listener
+	// who scrolled the player to its transport or queue stays there.
+	function revealLine(box: HTMLElement, line: HTMLElement): void {
+		const view = box.getBoundingClientRect();
+		const row = line.getBoundingClientRect();
+		const readableBottom = Math.max(view.top, view.bottom - LYRICS_FADE_PX);
+		let offset = 0;
+		if (row.top < view.top) offset = row.top - view.top;
+		else if (row.bottom > readableBottom) offset = row.bottom - readableBottom;
+		if (offset !== 0) box.scrollBy({ top: offset, behavior: preferredScrollBehavior() });
+	}
+
 	$effect(() => {
 		const index = scrollTargetIndex;
-		if (index === null || !container) return;
-		const el = container.querySelector<HTMLElement>(`[data-line-index="${index}"]`);
-		if (!el || typeof el.scrollIntoView !== 'function') return;
-		const reducedMotion =
-			typeof window !== 'undefined' &&
-			typeof window.matchMedia === 'function' &&
-			window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-		el.scrollIntoView({ block: 'nearest', behavior: reducedMotion ? 'auto' : 'smooth' });
+		if (!following || index === null || !container) return;
+		const line = container.querySelector<HTMLElement>(`[data-line-index="${index}"]`);
+		if (line) revealLine(container, line);
 	});
 </script>
 
@@ -111,8 +145,13 @@
 			class="lyrics"
 			class:lyrics-synced={alignedLines !== null}
 			class:more-below={moreBelow}
+			style:--lyrics-fade="{LYRICS_FADE_PX}px"
+			role="presentation"
 			bind:this={container}
 			onscroll={() => (moreBelow = overflowsBelow(container))}
+			onwheel={pauseFollowing}
+			ontouchmove={pauseFollowing}
+			onkeydown={pauseOnScrollKey}
 		>
 			{#if alignedLines}
 				{#each alignedLines as line, index (index)}
@@ -128,6 +167,15 @@
 				<p class="lyrics-text">{lyrics}</p>
 			{/if}
 		</div>
+		{#if showFollow}
+			<button
+				type="button"
+				class="lyrics-follow"
+				data-hitbox="text"
+				onclick={() => (following = true)}
+				><span aria-hidden="true">↓</span> {NOW_PLAYING_LYRICS_FOLLOW_LABEL}</button
+			>
+		{/if}
 		{#if showUnsyncedNote}
 			<p class="lyrics-unsynced">{NOW_PLAYING_LYRICS_UNSYNCED_NOTE}</p>
 		{/if}
@@ -138,6 +186,7 @@
 
 <style>
 	.np-lyrics {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.8rem;
@@ -161,12 +210,8 @@
 		overflow-wrap: anywhere;
 	}
 	.lyrics {
-		--lyrics-fade: 2.5rem;
 		flex: 1;
 		min-height: 0;
-		/* Keeps the line that follows the audio out of the faded strip, so a
-		   synced line is never read half-transparent. */
-		scroll-padding-block-end: var(--lyrics-fade);
 		font-family: var(--font-body);
 		font-size: 1rem;
 		line-height: 1.6;
@@ -190,6 +235,25 @@
 	.lyrics-line.active {
 		color: var(--text);
 		font-weight: 600;
+	}
+	.lyrics-follow {
+		position: absolute;
+		bottom: 0;
+		left: 50%;
+		transform: translateX(-50%);
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		padding: 0.3rem 0.8rem;
+		border: 1px solid var(--action);
+		border-radius: var(--btn-radius-pill);
+		background: var(--surface);
+		color: var(--action);
+		font-family: var(--font-display);
+		font-size: var(--label-font-size);
+		letter-spacing: var(--btn-letter-spacing);
+		text-transform: uppercase;
+		cursor: pointer;
 	}
 	.lyrics-empty {
 		color: var(--text-muted);
