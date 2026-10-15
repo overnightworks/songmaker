@@ -9,8 +9,9 @@
 // Since #1322 an admin with two sessions finds its own marked as this device,
 // and a create refusal in the form clears on typing. Since #1397 a revoke that
 // another tab beat drops the dead row and says the session had already ended,
-// until a revoke works or the admin changes tab. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
-// page, and one the server never received leaves the person signed in.
+// until a revoke works or the admin changes tab. Since #1340 a sign-out while a
+// take plays leaves by a fresh sign-in page, and one the server never received
+// leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
