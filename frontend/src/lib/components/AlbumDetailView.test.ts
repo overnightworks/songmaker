@@ -21,12 +21,12 @@ import {
 	NEW_SONG_ROW_LABEL,
 	newSongCardLabel,
 	PLAYING_MARK_LABEL,
+	songEditorOpenLabel,
 	TRANSPORT_PLAY_LABEL,
-	COLLECTION_SHUFFLE_ACTION,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
+import { accessibleName, getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
 import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
@@ -114,16 +114,18 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/stores/player')>();
 	return {
 		...actual,
-		playAlbum: vi.fn()
+		playAlbum: vi.fn(),
+		playAlbumSong: vi.fn()
 	};
 });
 
 import AlbumDetailView from './AlbumDetailView.svelte';
-import albumDetailViewSource from './AlbumDetailView.svelte?raw';
+import songRowSource from './SongRow.svelte?raw';
 import { selectSong } from '$lib/stores/navigation';
 import {
 	pendingStart,
 	playAlbum,
+	playAlbumSong,
 	playStartNotice,
 	setPendingStartForTests,
 	setShuffle,
@@ -164,6 +166,7 @@ beforeEach(() => {
 	vi.mocked(selectSong).mockReset();
 	createSong.mockReset();
 	vi.mocked(playAlbum).mockReset();
+	vi.mocked(playAlbumSong).mockReset();
 	setShuffle(false);
 });
 
@@ -269,18 +272,24 @@ describe('AlbumDetailView header', () => {
 		expect(target.textContent).not.toContain('Other Night');
 	});
 
-	it('shows the cover, title, the play circle and shuffle beside the menu', async () => {
+	it('shows cover, title, its song count, Play, ⋯ and the songs, with no breadcrumb and no shuffle (#1354 rule 24)', async () => {
 		const target = await renderDetail();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.header-cover')).not.toBeNull();
 		expect(header.querySelector('.header-title')?.textContent).toContain('Night Drive');
+		expect(requireElement(header, '.header-count').textContent).toBe('1 song');
 		expect(
 			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'))
 		).not.toBeNull();
-		expect(
-			getByRoleButton(header, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'))
-		).not.toBeNull();
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
+		expect(target.querySelectorAll('.song-row')).toHaveLength(1);
+		expect(target.querySelector('nav')).toBeNull();
+		expect(target.textContent).not.toContain('Library');
+		expect(
+			[...target.querySelectorAll('button')].filter((button) =>
+				/shuffle/i.test(accessibleName(button))
+			)
+		).toEqual([]);
 	});
 
 	it('starts this album in order from its play circle', async () => {
@@ -292,20 +301,8 @@ describe('AlbumDetailView header', () => {
 			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
 		).click();
 
-		expect(playAlbum).toHaveBeenCalledWith('a-local', 'top');
+		expect(playAlbum).toHaveBeenCalledWith('a-local');
 		expect(get(shuffleEnabled)).toBe(false);
-	});
-
-	it('starts this album shuffled from a drawn song from its shuffle square', async () => {
-		const target = await renderDetail();
-
-		getByRoleButton(
-			requireElement(target, '.collection-header'),
-			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
-		).click();
-
-		expect(playAlbum).toHaveBeenCalledWith('a-local', 'random');
-		expect(get(shuffleEnabled)).toBe(true);
 	});
 
 	function playCircle(target: HTMLElement): HTMLButtonElement {
@@ -438,31 +435,27 @@ describe('AlbumDetailView header', () => {
 				})
 			]
 		]
-	])(
-		'dims play and shuffle on an album %s, and a tap keeps the running queue',
-		async (_, songs) => {
-			setShuffle(true);
-			songList.set(songs);
-			const running = { type: 'library' as const, index: 3 };
-			queueContext.set(running);
-			const target = await renderDetail();
-			const header = requireElement(target, '.collection-header');
-			const buttons = [
-				collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
-			].map((label) => getByRoleButton(header, label));
+	])('dims play on an album %s, and a tap keeps the running queue', async (_, songs) => {
+		setShuffle(true);
+		songList.set(songs);
+		const running = { type: 'library' as const, index: 3 };
+		queueContext.set(running);
+		const target = await renderDetail();
+		const circle = getByRoleButton(
+			requireElement(target, '.collection-header'),
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+		);
 
-			for (const button of buttons) button.click();
-			await tick();
+		circle.click();
+		await tick();
 
-			expect(buttons.map((button) => button.disabled)).toEqual([true, true]);
-			expect(playAlbum).not.toHaveBeenCalled();
-			expect(get(queueContext)).toBe(running);
-			expect(get(shuffleEnabled)).toBe(true);
-		}
-	);
+		expect(circle.disabled).toBe(true);
+		expect(playAlbum).not.toHaveBeenCalled();
+		expect(get(queueContext)).toBe(running);
+		expect(get(shuffleEnabled)).toBe(true);
+	});
 
-	it('keeps pause on the circle of a playing album whose songs have no takes, with shuffle dimmed', async () => {
+	it('keeps pause on the circle of a playing album whose songs have no takes', async () => {
 		songList.set([
 			song({ id: 's-local', album_id: 'a-local', album_title: 'Night Drive', generation_count: 0 })
 		]);
@@ -478,17 +471,12 @@ describe('AlbumDetailView header', () => {
 		expect(
 			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album')).disabled
 		).toBe(false);
-		expect(
-			getByRoleButton(header, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')).disabled
-		).toBe(true);
 	});
 
-	it.each([
-		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-		collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
-	])('sizes "%s" to the frequent hitbox on a coarse pointer', async (label) => {
+	it('sizes Play album to the frequent hitbox on a coarse pointer', async () => {
 		// #163/6: the album header's play is the shortest path to hearing the
 		// album, and on a phone it has to be reachable with a thumb.
+		const label = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album');
 		injectHitboxStyles();
 		const target = await renderDetail();
 		const button = getByRoleButton(requireElement(target, '.collection-header'), label);
@@ -802,7 +790,7 @@ describeBackClosesOverlay({
 });
 
 describe('AlbumDetailView song row', () => {
-	function renderTwoSongs(): Promise<HTMLElement> {
+	function renderSongs(): Promise<HTMLElement> {
 		songList.set([
 			song({
 				id: 's-tide',
@@ -818,51 +806,92 @@ describe('AlbumDetailView song row', () => {
 				album_title: 'Night Drive',
 				title: 'Ebb',
 				generation_count: 1
+			}),
+			song({
+				id: 's-fresh',
+				album_id: 'a-local',
+				album_title: 'Night Drive',
+				title: 'Fresh',
+				generation_count: 0
 			})
 		]);
 		return renderDetail();
 	}
 
 	function rowOf(target: HTMLElement, title: string): HTMLElement {
-		const row = Array.from(target.querySelectorAll<HTMLElement>('.item-row')).find(
-			(candidate) => candidate.querySelector('.item-title')?.textContent === title
+		const row = Array.from(target.querySelectorAll<HTMLElement>('.song-row')).find(
+			(candidate) => candidate.querySelector('.song-row-title')?.textContent?.trim() === title
 		);
 		if (!row) throw new Error(`Expected a row for ${title}`);
 		return row;
 	}
 
+	function boxOf(target: HTMLElement, title: string): HTMLButtonElement {
+		return requireElement<HTMLButtonElement>(rowOf(target, title), '.song-row-body');
+	}
+
 	it('counts takes, not gens, on a song row', async () => {
-		const target = await renderTwoSongs();
-		expect(rowOf(target, 'Tide').querySelector('.item-meta')?.textContent?.trim()).toBe('2 takes');
+		const target = await renderSongs();
+		expect(rowOf(target, 'Tide').querySelector('.song-row-meta')?.textContent?.trim()).toBe(
+			'2 takes'
+		);
 	});
 
-	it('opens the song in the editor when the row is tapped, without playing it', async () => {
-		const target = await renderTwoSongs();
+	it('plays a tapped song in place: the album page stays and the editor stays shut (#1354 rule 22)', async () => {
+		const target = await renderSongs();
 
-		requireElement<HTMLButtonElement>(rowOf(target, 'Tide'), '.item-body').click();
+		boxOf(target, 'Tide').click();
 		await tick();
 
-		expect(selectSong).toHaveBeenCalledWith('s-tide');
-		expect(playAlbum).not.toHaveBeenCalled();
+		expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-tide');
+		expect(selectSong).not.toHaveBeenCalled();
+		expect(getByRoleHeading(target, 'Night Drive')).not.toBeNull();
 	});
+
+	it('opens a song with no take yet in the song editor on a tap (#1354 rule 23)', async () => {
+		const target = await renderSongs();
+
+		boxOf(target, 'Fresh').click();
+		await tick();
+
+		expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-fresh');
+		expect(playAlbumSong).not.toHaveBeenCalled();
+	});
+
+	it.each(['Tide', 'Fresh'])(
+		'opens %s in the song editor from its ✎, without playing it',
+		async (title) => {
+			const target = await renderSongs();
+
+			getByRoleButton(rowOf(target, title), songEditorOpenLabel(title)).click();
+			await tick();
+
+			expect(selectSong).toHaveBeenCalledExactlyOnceWith(`s-${title.toLowerCase()}`);
+			expect(playAlbumSong).not.toHaveBeenCalled();
+		}
+	);
 
 	it('is one target from edge to edge, 44 px high on a coarse pointer', async () => {
 		injectHitboxStyles();
-		const row = rowOf(await renderTwoSongs(), 'Tide');
-		injectComponentStyles(albumDetailViewSource, 'AlbumDetailView.svelte', row);
+		const row = rowOf(await renderSongs(), 'Tide');
+		injectComponentStyles(songRowSource, 'SongRow.svelte', row);
 		setPointer('coarse');
 
 		const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
 		expect([paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))).toEqual([
 			0, 0, 0, 0
 		]);
-		expect(minHeightPx(requireElement(row, '.item-body'), 'album row')).toBe(HITBOX_FREQUENT_PX);
+		expect(minHeightPx(requireElement(row, '.song-row-body'), 'album row')).toBe(
+			HITBOX_FREQUENT_PX
+		);
 	});
 
-	it('carries no play glyph of its own: the row is its only button', async () => {
-		const target = await renderTwoSongs();
+	it('carries no play glyph of its own: the box and its ✎ are its only buttons', async () => {
+		const target = await renderSongs();
 
-		expect(rowOf(target, 'Tide').querySelectorAll('button')).toHaveLength(1);
+		expect(
+			[...rowOf(target, 'Tide').querySelectorAll('button')].map((button) => accessibleName(button))
+		).toEqual([expect.stringMatching(/^Tide\s+2 takes$/), songEditorOpenLabel('Tide')]);
 	});
 
 	it.each(['playing', 'paused'] as const)(
@@ -874,7 +903,7 @@ describe('AlbumDetailView song row', () => {
 			} as unknown as typeof audioPlayer.current;
 			audioPlayer.status = status;
 
-			const target = await renderTwoSongs();
+			const target = await renderSongs();
 
 			expect(
 				findElementByRoleAndName(rowOf(target, 'Tide'), 'img', PLAYING_MARK_LABEL)
@@ -918,7 +947,7 @@ describe('AlbumDetailView new song', () => {
 
 		const items = listItems(target);
 		expect(items).toHaveLength(2);
-		expect(items[0].querySelector('.item-title')?.textContent).toBe('Local Only');
+		expect(items[0].querySelector('.song-row-title')?.textContent?.trim()).toBe('Local Only');
 		expect(items[1].contains(newSongRow(target))).toBe(true);
 	});
 

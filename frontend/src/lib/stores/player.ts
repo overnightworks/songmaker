@@ -354,10 +354,10 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 	return { items: [start, ...shuffled(rest)], startIndex: 0 };
 }
 
-// Where a collection start begins: its top, or — for a shuffled start, which
-// has no top — a drawn entry, since shuffledWithStart keeps the start in front
-// and only shuffles what follows it.
-export type CollectionStart = 'top' | 'random';
+// Where an album start begins: at its first playable song, or at the song the
+// listener tapped on the album page. shuffledWithStart keeps that start in
+// front and shuffles only what follows it.
+export type AlbumStart = 'top' | { songId: string };
 
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling
@@ -911,7 +911,7 @@ async function playOpenPlaylistOnceLoaded(playlistId: string): Promise<void> {
 		playStartNotice.set('idle');
 		return;
 	}
-	playPlaylist(playlist, 'top');
+	playPlaylist(playlist);
 }
 
 async function rebuildLibraryQueueKeepingPlace(): Promise<void> {
@@ -1405,6 +1405,15 @@ export async function playPlaylistEntry(
 	await playRow(playlistEntryRow(playlist, index));
 }
 
+// A song box on the album page (#1383) does the same for the album: it plays
+// the song with the rest of the album queued around it.
+export async function playAlbumSong(albumId: string, songId: string): Promise<void> {
+	await playRow({
+		alreadyLoaded: isSongCurrent(songId),
+		start: () => playAlbum(albumId, { songId })
+	});
+}
+
 type QueueDirection = -1 | 1;
 
 function playStreamInDirection(direction: QueueDirection): boolean {
@@ -1591,10 +1600,9 @@ export async function playPrevSong(): Promise<void> {
 async function firstPlayableAlbumTake(
 	albumId: string,
 	seq: number,
-	start: CollectionStart
+	start: AlbumStart
 ): Promise<{ song: SongItem; gen: GenerationItem } | { unread: SongItem; error: unknown } | null> {
-	const inOrder = albumSongsInOrder(albumId);
-	for (const song of start === 'random' ? shuffled(inOrder) : inOrder) {
+	for (const song of albumSongsFrom(albumId, start)) {
 		if (song.generation_count === 0) continue;
 		try {
 			await ensureGenerationsLoaded(song.id);
@@ -1609,10 +1617,15 @@ async function firstPlayableAlbumTake(
 	return null;
 }
 
+function albumSongsFrom(albumId: string, start: AlbumStart): SongItem[] {
+	const inOrder = albumSongsInOrder(albumId);
+	return start === 'top' ? inOrder : inOrder.filter((song) => song.id === start.songId);
+}
+
 // The album becomes the queue only once its opening take starts: an album
 // that turns out to have nothing playable leaves the running queue, and the
 // place it names as its source, exactly as they were.
-export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
+export async function playAlbum(albumId: string, start: AlbumStart = 'top'): Promise<void> {
 	const playStart = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
@@ -1622,7 +1635,7 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 
 async function runAlbumStart(
 	albumId: string,
-	start: CollectionStart,
+	start: AlbumStart,
 	playStart: PlayStart
 ): Promise<void> {
 	const { seq, signal } = playStart;
@@ -1745,14 +1758,13 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 // keeps the listener's shuffle setting, unlike playPlaylistFrom, where picking a
 // specific entry is itself the statement that the queue should start in
 // playlist order.
-export function playPlaylist(playlist: PlaylistDetailItem, start: CollectionStart): void {
+export function playPlaylist(playlist: PlaylistDetailItem): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist, start));
+		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
 		return;
 	}
 	playStartNotice.set('idle');
-	const startIndex = start === 'random' ? randomIndex(playlist.entries.length) : 0;
-	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, startIndex, { restart: true });
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, 0, { restart: true });
 }
 
 // The one way a surface starts a playlist: name the playlist and the entry

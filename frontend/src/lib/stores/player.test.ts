@@ -125,6 +125,7 @@ import {
 	curationActive,
 	isPlaylistEntryCurrent,
 	playAlbum,
+	playAlbumSong,
 	playIdleStart,
 	retryLastPlayIntent,
 	playNextSong,
@@ -2415,7 +2416,7 @@ describe('the queue names its next take', () => {
 			},
 			{
 				queue: 'playlist',
-				start: async () => playPlaylist(playlistOfThree, 'top')
+				start: async () => playPlaylist(playlistOfThree)
 			}
 		];
 
@@ -2540,7 +2541,7 @@ describe('the queue names its next take', () => {
 			},
 			{
 				queue: 'playlist',
-				start: async () => playPlaylist(playlistOfTwo, 'top')
+				start: async () => playPlaylist(playlistOfTwo)
 			},
 			{
 				queue: 'library window',
@@ -3820,8 +3821,7 @@ describe('playIdleStart', () => {
 });
 
 describe('playAlbum', () => {
-	it('starts on a drawn song, not on track 1, when asked for a random start', async () => {
-		vi.spyOn(Math, 'random').mockReturnValue(0);
+	function seedThreePickedSongs(): void {
 		songList.set(
 			['s1', 's2', 's3'].map((id, index) =>
 				makeSong({
@@ -3841,16 +3841,40 @@ describe('playAlbum', () => {
 				})
 			)
 		);
+	}
 
-		await playAlbum('a1', 'random');
+	it('starts on the tapped song, not on track 1, with the album queued around it', async () => {
+		seedThreePickedSongs();
+
+		await playAlbum('a1', { songId: 's2' });
 
 		expect(audioPlayer.load).toHaveBeenNthCalledWith(1, expect.objectContaining({ songId: 's2' }), {
 			restart: true
 		});
 		const ctx = get(queueContext);
 		if (ctx.type !== 'album' || !ctx.takes) throw new Error('expected an album queue');
+		expect(ctx.takes.map((take) => take.songId)).toEqual(['s1', 's2', 's3']);
 		expect(ctx.takes[ctx.index ?? 0].songId).toBe('s2');
 	});
+
+	it.each(['playing', 'paused'] as const)(
+		'keeps a %s song going from where it stands when its box is tapped again',
+		async (status) => {
+			seedThreePickedSongs();
+			await playAlbum('a1', { songId: 's2' });
+			vi.mocked(audioPlayer.load).mockClear();
+			vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
+				audioPlayer.status = 'playing';
+			});
+			audioPlayer.status = status;
+
+			await playAlbumSong('a1', 's2');
+
+			expect(audioPlayer.load).not.toHaveBeenCalled();
+			expect(audioPlayer.status).toBe('playing');
+			expect(audioPlayer.current?.songId).toBe('s2');
+		}
+	);
 
 	it("plays a take with the take's own length, not the length its song asked for", async () => {
 		songList.set([
