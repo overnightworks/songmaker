@@ -926,7 +926,6 @@ export interface SharedGenerationPayload {
 	artist: string;
 	album_title: string;
 	generation_number: number;
-	seed: number | null;
 	audio_url: string | null;
 	generation_id: string | null;
 	audio_duration: number | null;
@@ -945,6 +944,7 @@ export interface SharedPlaylistEntryPayload {
 	audio_duration: number | null;
 	lyrics: string | null;
 	whisper_cues: WhisperCue[] | null;
+	album_cover?: AlbumCoverUrls | null;
 }
 
 export interface SharedPlaylistPayload {

@@ -1536,6 +1536,86 @@ def test_shared_playlist_cover_routes_hide_unshared_foreign_and_old_keys(tmp_pat
     assert public.get(mosaic_cover).status_code == 404
 
 
+def test_shared_take_payload_has_no_seed_1374_rule_8(two_take_app: TestClient) -> None:
+    slug = _share_slug(two_take_app, "/api/generations/g1/share")
+
+    payload = web_client(two_take_app.app, cookies={}).get(f"/shared/gen/{slug}").json()
+
+    assert "seed" not in payload
+    assert payload["generation_number"] == 1
+
+
+def test_shared_playlist_entries_carry_a_serving_album_cover_only_when_the_file_exists_1374_rule_10(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        album = session.get(Album, "test_album")
+        assert album is not None
+        album.cover_key = "album.png"
+        session.commit()
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+
+    entries_without_file = public.get(f"/shared/playlist/{slug}").json()["entries"]
+    assert [entry["album_cover"] for entry in entries_without_file] == [None] * 3
+
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
+    entries = public.get(f"/shared/playlist/{slug}").json()["entries"]
+
+    expected = {
+        "card": f"/shared/playlist/{slug}/album-cover/test_album?variant=card&v=album.png",
+        "detail": f"/shared/playlist/{slug}/album-cover/test_album?variant=detail&v=album.png",
+    }
+    assert [entry["album_cover"] for entry in entries] == [expected] * 3
+    assert public.get(expected["detail"]).status_code == 200
+
+
+def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        session.add(Album(
+            id="foreign-album", title="Foreign", artist="Other", cover_key="foreign.png",
+        ))
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "foreign-album")
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+
+    entries = public.get(f"/shared/playlist/{slug}").json()["entries"]
+    foreign = public.get(
+        f"/shared/playlist/{slug}/album-cover/foreign-album?variant=detail&v=foreign.png",
+    )
+
+    assert all(entry["album_cover"] is None for entry in entries)
+    assert foreign.status_code == 404
+
+
+def test_unshared_playlist_answers_404_and_serves_no_entry_cover_1374_rule_8(
+    tmp_path: Path,
+) -> None:
+    client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
+    login_and_csrf(client, "admin", "admin12345")
+    with client.app.state.ctx.db() as session:
+        album = session.get(Album, "test_album")
+        assert album is not None
+        album.cover_key = "album.png"
+        session.commit()
+    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "test_album")
+    slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
+    public = web_client(client.app, cookies={})
+    cover_url = public.get(f"/shared/playlist/{slug}").json()["entries"][0]["album_cover"]["detail"]
+
+    assert client.delete("/api/playlists/pl1/share").status_code == 200
+
+    assert public.get(f"/shared/playlist/{slug}").status_code == 404
+    assert public.get(cover_url).status_code == 404
+
+
 def test_shared_playlist_view_warms_versions_in_one_query(tmp_path: Path) -> None:
     client, factory = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
     login_and_csrf(client, "admin", "admin12345")
@@ -1790,12 +1870,12 @@ _SHARED_SONG_KEYS = {
     "generation_id", "audio_duration", "lyrics", "whisper_cues",
 }
 _SHARED_GENERATION_KEYS = {
-    "title", "artist", "album_title", "generation_number", "seed", "audio_url",
+    "title", "artist", "album_title", "generation_number", "audio_url",
     "generation_id", "audio_duration", "lyrics", "whisper_cues", "album_cover",
 }
 _SHARED_PLAYLIST_ENTRY_KEYS = {
     "entry_id", "song_title", "artist", "generation_number", "audio_url",
-    "generation_id", "audio_duration", "lyrics", "whisper_cues",
+    "generation_id", "audio_duration", "lyrics", "whisper_cues", "album_cover",
 }
 
 

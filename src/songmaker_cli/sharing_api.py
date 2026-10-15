@@ -563,7 +563,6 @@ def get_shared_generation(
         artist=album.artist if album else "",
         album_title=album.title if album else "",
         generation_number=gen.generation_number,
-        seed=gen.seed,
         audio_url=(
             _shared_audio_url_for_filename(
                 f"/shared/gen/{slug}/audio", gen.mp3_path,
@@ -641,7 +640,7 @@ def get_shared_playlist(
     if not playlist:
         raise HTTPException(404, NOT_FOUND_DETAIL)
     entries = sorted(playlist.entries, key=lambda e: e.position)
-    entry_items = _shared_playlist_entries(entries, slug)
+    entry_items = _shared_playlist_entries(ctx, entries, slug)
     cover = _shared_playlist_cover(ctx, playlist, slug)
     album_covers = _shared_playlist_album_covers(ctx, entries, slug) if cover is None else []
     response = SharedPlaylistResponse.from_orm(
@@ -653,17 +652,29 @@ def get_shared_playlist(
     return JSONResponse(response.model_dump())
 
 
-def _shared_playlist_entries(entries, slug: str) -> list[SharedPlaylistEntryResponse]:
+def _shared_playlist_entries(
+    ctx: AppContext, entries, slug: str,
+) -> list[SharedPlaylistEntryResponse]:
     return [
         SharedPlaylistEntryResponse.from_orm(
             entry,
             audio_url=_shared_audio_url(
                 f"/shared/playlist/{slug}/audio", entry.generation,
             ),
+            album_cover=_shared_entry_album_cover(ctx, entry, slug),
         )
         for entry in entries
         if entry.generation is not None
     ]
+
+
+def _shared_entry_album_cover(ctx: AppContext, entry, slug: str):
+    album = _entry_album(entry)
+    if album is None or not album_cover_file_exists(
+        ctx.audio_dir, album.id, album.cover_key,
+    ):
+        return None
+    return shared_playlist_album_cover_urls(slug, album.id, album.cover_key)
 
 
 def _shared_playlist_cover(ctx: AppContext, playlist, slug: str):
