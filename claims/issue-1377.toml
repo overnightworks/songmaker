@@ -1,0 +1,7 @@
+claim_id = "60eb0cf34fe147ccac7e90be3ee30221"
+agent = "claude-head"
+role = "builder"
+base = "87fd8c9c5802fb386d5d5a2084e20efbccf86e61"
+branch = "claude-head/issue-1377-deploy-skipped-check-run"
+scope = ["docs/architecture.md", "scripts/auto-deploy.sh", "tests/test_auto_deploy_alerting.py"]
+opened_commit = "ea837eb55d950b38f56f29501ed5ed57d2665efe"
