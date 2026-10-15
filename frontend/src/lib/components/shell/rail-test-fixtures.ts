@@ -57,17 +57,25 @@ interface RailReveal {
 	options: ScrollIntoViewOptions | undefined;
 }
 
+interface RailRevealSetting {
+	reducedMotion?: boolean;
+	animatingUntil?: Promise<void>;
+}
+
 // jsdom lays nothing out, so it has no scrollIntoView, getAnimations or
 // matchMedia. For one test these stand-ins record each row the rail scrolls
-// into view, by its title, with nothing left animating and the given motion
-// preference.
-export function recordRailReveals(reducedMotion = false): RailReveal[] {
+// into view, by its title, with the given motion preference and every element
+// animating until `animatingUntil` settles -- nothing animating without it.
+export function recordRailReveals({
+	reducedMotion = false,
+	animatingUntil
+}: RailRevealSetting = {}): RailReveal[] {
 	const reveals: RailReveal[] = [];
 	const standIns: Record<string, unknown> = {
 		scrollIntoView(this: HTMLElement, options?: ScrollIntoViewOptions) {
 			reveals.push({ title: this.querySelector('.row-title')?.textContent, options });
 		},
-		getAnimations: () => []
+		getAnimations: () => (animatingUntil ? [{ finished: animatingUntil }] : [])
 	};
 	for (const [name, value] of Object.entries(standIns)) {
 		Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value });

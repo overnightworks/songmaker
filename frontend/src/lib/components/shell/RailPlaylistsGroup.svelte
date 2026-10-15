@@ -13,7 +13,7 @@
 		queueContext
 	} from '$lib/stores/player';
 	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { normalizedRailTreeQuery } from '$lib/stores/librarySearch';
+	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		ensureRecentWorkRead,
 		inLibraryOrder,
@@ -48,9 +48,7 @@
 			'playlist',
 			playlists.filter(
 				(playlist) =>
-					!filtering ||
-					playlist.id === openPlaylistId ||
-					playlist.title.toLowerCase().includes(query)
+					!filtering || playlist.id === openPlaylistId || matchesRailQuery(playlist.title, query)
 			),
 			$libraryPlaceOrder
 		)

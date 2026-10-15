@@ -578,7 +578,7 @@ describe('RailLibraryGroup keeps the open album in view', () => {
 	] as const)(
 		'scrolls the open album row into view once a reload lists it ($behavior)',
 		async ({ reducedMotion, behavior }) => {
-			const reveals = recordRailReveals(reducedMotion);
+			const reveals = recordRailReveals({ reducedMotion });
 			albumList.set([]);
 			fetchAlbums.mockResolvedValue(albumsPage({ items: [anfield, lunarStatic], total: 2 }));
 			showAlbumDetail('a2');
@@ -593,7 +593,7 @@ describe('RailLibraryGroup keeps the open album in view', () => {
 		}
 	);
 
-	it('scrolls each album opened after it into view, Back and Forward alike, and not again while it stays open', async () => {
+	it('scrolls each album opened after it into view, and not again while it stays open', async () => {
 		const reveals = recordRailReveals();
 		albumList.set([anfield, lunarStatic]);
 		showAlbumDetail('a1');
@@ -638,5 +638,24 @@ describe('RailLibraryGroup keeps the open album in view', () => {
 		librarySurface.set('detail');
 
 		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Lunar Static']));
+	});
+
+	it('scrolls an album row into view only once its group has finished opening, and not if another album opened meanwhile', async () => {
+		let finishOpening!: () => void;
+		const reveals = recordRailReveals({
+			animatingUntil: new Promise<void>((resolve) => (finishOpening = resolve))
+		});
+		albumList.set([anfield, lunarStatic]);
+		await render();
+
+		showAlbumDetail('a2');
+		await railRevealsSettled();
+		expect(reveals).toEqual([]);
+
+		showAlbumDetail('a1');
+		finishOpening();
+		await railRevealsSettled();
+
+		expect(revealedTitles(reveals)).toEqual(['Anfield']);
 	});
 });

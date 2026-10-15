@@ -11,7 +11,7 @@
 		songList
 	} from '$lib/stores/libraryData';
 	import { isSongCurrent, selectedSongId } from '$lib/stores/player';
-	import { normalizedRailTreeQuery } from '$lib/stores/librarySearch';
+	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		ensureRecentWorkRead,
 		inLibraryOrder,
@@ -78,9 +78,9 @@
 			'album',
 			albums.filter((album) => {
 				if (!filtering || album.id === openAlbumId) return true;
-				if (album.title.toLowerCase().includes(query)) return true;
+				if (matchesRailQuery(album.title, query)) return true;
 				return (songsByAlbum.get(album.id) ?? []).some((song) =>
-					song.title.toLowerCase().includes(query)
+					matchesRailQuery(song.title, query)
 				);
 			}),
 			$libraryPlaceOrder
@@ -152,7 +152,7 @@
 		const albumSongs = songsByAlbum.get(albumId) ?? [];
 		if (!filtering) return albumSongs;
 		return albumSongs.filter(
-			(song) => song.id === currentSongId || song.title.toLowerCase().includes(query)
+			(song) => song.id === currentSongId || matchesRailQuery(song.title, query)
 		);
 	}
 
@@ -267,7 +267,7 @@
 					{/if}
 					{#each visibleAlbums as album (album.id)}
 						{@const expanded = isAlbumExpanded(album.id) || hasMatchingSong(album.id)}
-						{@const current = album.id === openAlbumId}
+						{@const current = album.id === shownAlbumId}
 						<li>
 							<button
 								type="button"

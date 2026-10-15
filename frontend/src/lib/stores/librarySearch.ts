@@ -52,10 +52,19 @@ const EMPTY_SEARCH: LibrarySearchState = {
 	nextCursor: null
 };
 
+// The rail tree's filter and the rail search's own matching (playlists, pages)
+// fold the query and each title through these two, so neither folds case its
+// own way.
+export function normalizeRailQuery(query: string): string {
+	return query.trim().toLocaleLowerCase();
+}
+
+export function matchesRailQuery(text: string, normalizedQuery: string): boolean {
+	return text.toLocaleLowerCase().includes(normalizedQuery);
+}
+
 export const railTreeQuery = writable('');
-export const normalizedRailTreeQuery = derived(railTreeQuery, (query) =>
-	query.trim().toLowerCase()
-);
+export const normalizedRailTreeQuery = derived(railTreeQuery, normalizeRailQuery);
 export const searchQuery = writable('');
 
 export const librarySort = writable<LibrarySort>('newest');

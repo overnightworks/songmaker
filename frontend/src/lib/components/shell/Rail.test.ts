@@ -405,6 +405,7 @@ describe('Rail', () => {
 			playlist({ id: 'p2', title: 'Night Drive', entry_count: 0 })
 		]);
 		setOpenCollection({ kind: 'album', id: 'a1' });
+		librarySurface.set('detail');
 		selectedPlaylistDetail.set(null);
 		const target = await render();
 
@@ -424,5 +425,19 @@ describe('Rail', () => {
 		await tick();
 
 		expect(currentPages()).toEqual([null, null, null, 'page']);
+	});
+
+	it('marks no album as the current page on the wall, which keeps the album open last', async () => {
+		albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
+		setOpenCollection({ kind: 'album', id: 'a1' });
+		librarySurface.set('detail');
+		const target = await render();
+		const albumRow = requireElement<HTMLButtonElement>(target, '.album-label');
+		expect(albumRow.getAttribute('aria-current')).toBe('page');
+
+		librarySurface.set('browse');
+		await tick();
+
+		expect(albumRow.getAttribute('aria-current')).toBeNull();
 	});
 });

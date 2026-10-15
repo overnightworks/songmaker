@@ -151,8 +151,15 @@ on screen only closes the menu. `RailLibraryGroup.svelte` is the LIBRARY group: 
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
 takes/pick summary per row, an equalizer marking the one actually playing, a
-crimson-accent left border marking the selected/current track — the same
-token every rail group's active row uses). The open album's row and its
+crimson left border marking the selected/current track). The row of the album
+or playlist whose own page is on screen is the current page
+(`aria-current="page"`): a purple `--accent` bar, tint and bold name that
+outrank hover, styled once in `RailGroup.svelte` for both groups (#1371). The
+wall and Home keep the last-open collection but mark no row. That row scrolls
+into the rail's view (`revealOpenRailItem` in `rail-item-selector.ts`) each
+time it becomes shown — a navigation, Back, a reload, its group opening, a
+search clearing — once the group has finished opening, and not again while it
+stays shown. The open album's row and its
 selected track pre-expand automatically on entry without overriding a later
 manual collapse; the LIBRARY group's own title does not yet navigate (planned
 for a later slice). There is no Studio/Listen mode split and no third library
