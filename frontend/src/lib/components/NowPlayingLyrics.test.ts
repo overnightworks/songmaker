@@ -72,11 +72,11 @@ class FakeAlignmentWorker {
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
-// jsdom has no scrollBy; define a no-op once so vi.spyOn has a real
-// implementation to wrap, then restoreAllMocks can clean the spy up after
-// each test without leaving the raw prototype assignment behind.
-if (typeof HTMLElement.prototype.scrollBy !== 'function') {
-	HTMLElement.prototype.scrollBy = () => {};
+// jsdom has no scrollTo on elements; define a no-op once so vi.spyOn has a
+// real implementation to wrap, then restoreAllMocks can clean the spy up
+// after each test without leaving the raw prototype assignment behind.
+if (typeof HTMLElement.prototype.scrollTo !== 'function') {
+	HTMLElement.prototype.scrollTo = () => {};
 }
 
 // jsdom does no layout, so a scroll box has to be given its measurements.
@@ -140,12 +140,12 @@ function layOutSyncedLyrics(reducedMotion = false) {
 		'matchMedia',
 		vi.fn(() => ({ matches: reducedMotion }))
 	);
-	const scrolls = vi.spyOn(HTMLElement.prototype, 'scrollBy').mockImplementation(() => {});
+	const scrolls = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {});
 	return { scrolls, scrollTop };
 }
 
-// How far each scroll the box made was sent, in order.
-function scrollDistances(scrolls: MockInstance<HTMLElement['scrollBy']>): number[] {
+// Where each scroll the box made was sent, in order.
+function scrollTargets(scrolls: MockInstance<HTMLElement['scrollTo']>): number[] {
 	return scrolls.mock.calls.map(([options]) => (options as ScrollToOptions).top ?? 0);
 }
 
@@ -459,8 +459,8 @@ describe('NowPlayingLyrics', () => {
 		await act(scrollTop);
 		await singTo(0.5);
 
-		expect({ scrolls: scrollDistances(scrolls), follow: followButton() !== null }).toEqual({
-			scrolls: [LINE_3_BELOW_VIEW_PX, -LINE_3_BELOW_VIEW_PX],
+		expect({ scrolls: scrollTargets(scrolls), follow: followButton() !== null }).toEqual({
+			scrolls: [LINE_3_BELOW_VIEW_PX, 0],
 			follow: false
 		});
 	});

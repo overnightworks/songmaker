@@ -161,8 +161,10 @@
 		if (row.top < view.top) offset = row.top - view.top;
 		else if (row.bottom > readableBottom) offset = row.bottom - readableBottom;
 		if (offset === 0) return;
+		// An absolute target: a relative scroll may add to a smooth scroll still
+		// under way, landing past where the box was sent.
 		ownScroll = { from: box.scrollTop, to: box.scrollTop + offset };
-		box.scrollBy({ top: offset, behavior: preferredScrollBehavior() });
+		box.scrollTo({ top: ownScroll.to, behavior: preferredScrollBehavior() });
 	}
 
 	$effect(() => {
@@ -251,6 +253,9 @@
 		font-size: 1rem;
 		line-height: 1.6;
 		color: var(--text);
+		/* A line rewrapping above the view as it turns bold must not shift the
+		   box: an anchoring scroll would read as the reader's. */
+		overflow-anchor: none;
 	}
 	.lyrics.more-below {
 		mask-image: linear-gradient(to bottom, #000 calc(100% - var(--lyrics-fade)), transparent);
