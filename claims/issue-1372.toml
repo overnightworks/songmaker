@@ -1,0 +1,8 @@
+claim_id = "06978081a21b4164949213a9d8d4b554"
+agent = "claude-head"
+role = "builder"
+base = "92bbdccc7984599058ce968cd98895ec558b331d"
+branch = "claude-head/issue-1372-record-listen-and-work-kinds"
+scope = ["src/songmaker_cli/constants.py", "src/songmaker_cli/db/migrations/versions", "src/songmaker_cli/db/models.py", "src/songmaker_cli/db/queries/__init__.py", "src/songmaker_cli/db/queries/songs.py", "src/songmaker_cli/song_api.py", "tests/test_api.py", "tests/test_db.py", "tests/test_mcp_server.py", "tests/test_song_work.py"]
+opened_commit = "0339ebc90c4406027ec1855d271aecb72b25473a"
+whole_reason = "one recording change: the migration, the model, the two writers and their callers, with the tests that pin the split"
