@@ -10,7 +10,8 @@
 // mounts LibraryWorkspace inside the `(library)` route group (issue #276)
 // rather than a route file of its own. That the app writes this address when
 // a playlist opens is pinned in the unit suite (stores/navigation.test.ts),
-// which costs the stack nothing.
+// which costs the stack nothing. Desktop only, like album-address.spec.ts:
+// the routing is the same code on both shells.
 
 import { expect, test, type Page } from '@playwright/test';
 import {
@@ -19,7 +20,7 @@ import {
 	RAIL_NAV_LABEL,
 	RESOURCE_SYNC_ERROR
 } from '../src/lib/constants';
-import { FlowGuard, containing, nameStartingWith, workspace } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, containing, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary, seedPlaylist } from './seed';
 
 /**
@@ -53,69 +54,66 @@ async function expectWorkspaceStanding(page: Page): Promise<void> {
 	await expect(page.getByText(RESOURCE_SYNC_ERROR, { exact: true })).toHaveCount(0);
 }
 
-test('a playlist address opens cold, in a tab that knows nothing else', async ({
-	page,
-	request,
-	isMobile
-}) => {
-	// Same reasoning as the cold-opens in album-address.spec.ts: shell-
-	// independent router behaviour, so desktop alone proves it.
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
+test(
+	'a playlist address opens cold, in a tab that knows nothing else',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page, request }) => {
+		// Same reasoning as the cold-opens in album-address.spec.ts: shell-
+		// independent router behaviour, so desktop alone proves it.
 
-	const playlist = await seedPlaylist(request, readSeededLibrary());
-	const playlistAddress = `/playlist/${playlist.slug}`;
-	const surface = workspace(page);
+		const playlist = await seedPlaylist(request, readSeededLibrary());
+		const playlistAddress = `/playlist/${playlist.slug}`;
+		const surface = workspace(page);
 
-	await page.goto(playlistAddress);
+		await page.goto(playlistAddress);
 
-	await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
-	await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
-	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
-	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
-	await expectWorkspaceStanding(page);
-});
+		await expect(surface.getByRole('heading', { name: playlist.title })).toBeVisible();
+		await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
+		await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
+		await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
+		await expectWorkspaceStanding(page);
+	}
+);
 
-test('an unknown playlist slug states the address names nothing, without a redirect', async ({
-	page,
-	isMobile
-}) => {
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
+test(
+	'an unknown playlist slug states the address names nothing, without a redirect',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		await page.goto('/playlist/no-such-playlist-here');
 
-	await page.goto('/playlist/no-such-playlist-here');
-
-	await expect(page.getByRole('alert')).toContainText('No such playlist');
-	await expect(page).toHaveURL(/\/playlist\/no-such-playlist-here$/);
-});
+		await expect(page.getByRole('alert')).toContainText('No such playlist');
+		await expect(page).toHaveURL(/\/playlist\/no-such-playlist-here$/);
+	}
+);
 
 // Issue #1165: an address stated as unknown wrote no library entry, so Back
 // onto it from the album the rail opened -- a crossing to another route --
 // must load its route again and state the address once more, never show the
 // wall under it.
-test('Back onto an unknown playlist slug states it again, not the wall', async ({
-	page,
-	isMobile
-}) => {
-	test.skip(Boolean(isMobile), 'Route behaviour is shell-independent'); // NOSONAR S1607: desktop alone proves shell-independent routing.
+test(
+	'Back onto an unknown playlist slug states it again, not the wall',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const library = readSeededLibrary();
+		const unknownAddress = '/playlist/no-such-playlist-here';
+		await page.goto(unknownAddress);
+		await expect(page.getByRole('alert')).toContainText('No such playlist');
 
-	const library = readSeededLibrary();
-	const unknownAddress = '/playlist/no-such-playlist-here';
-	await page.goto(unknownAddress);
-	await expect(page.getByRole('alert')).toContainText('No such playlist');
+		const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+		const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
+		if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
+		await rail
+			.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
+			.getByRole('listitem')
+			.filter({ hasText: library.albumTitle })
+			.getByRole('button', { name: containing(library.albumTitle) })
+			.click();
+		await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
+		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
-	const rail = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
-	const libraryGroup = rail.getByRole('button', { name: nameStartingWith(RAIL_LIBRARY_LABEL) });
-	if ((await libraryGroup.getAttribute('aria-expanded')) === 'false') await libraryGroup.click();
-	await rail
-		.getByRole('navigation', { name: RAIL_LIBRARY_NAV_LABEL })
-		.getByRole('listitem')
-		.filter({ hasText: library.albumTitle })
-		.getByRole('button', { name: containing(library.albumTitle) })
-		.click();
-	await expect(page).toHaveURL(new RegExp(`/album/${library.albumId}$`));
-	await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
+		await page.goBack();
 
-	await page.goBack();
-
-	await expect(page).toHaveURL(new RegExp(`${unknownAddress}$`));
-	await expect(page.getByRole('alert')).toContainText('No such playlist');
-});
+		await expect(page).toHaveURL(new RegExp(`${unknownAddress}$`));
+		await expect(page.getByRole('alert')).toContainText('No such playlist');
+	}
+);

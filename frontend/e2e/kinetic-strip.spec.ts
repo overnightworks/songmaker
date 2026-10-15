@@ -12,7 +12,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { EDITOR_VIEW_COWRITER_LABEL, TRANSPORT_PAUSE_LABEL } from '../src/lib/constants';
 import { nowPlayingTakeLabel } from '../src/lib/constants/now-playing';
-import { DESKTOP_VIEWPORT, FlowGuard, MOBILE_VIEWPORT } from './helpers';
+import { DESKTOP_VIEWPORT, FlowGuard, MOBILE_VIEWPORT, ONLY_IN_SHELL } from './helpers';
 import { readSeededLibrary, seedTakeStripSong } from './seed';
 
 /** Its dedicated album keeps this flow from mutating the shared base library. */
@@ -57,13 +57,7 @@ function expectedSongSlug(title: string): string {
 	return title.toLowerCase().replace(/\s+/g, '-');
 }
 
-// eslint-disable-next-line no-empty-pattern -- Playwright requires the object-destructuring form even with no fixture named
-test.beforeAll(async ({}, testInfo) => {
-	// beforeAll runs once per Playwright project, not once per file — every
-	// test below skips on mobile (each opens its own desktop-shaped context
-	// regardless of project), so seeding the song there would cost a second
-	// one for nothing.
-	if (testInfo.project.name === 'mobile') return;
+test.beforeAll(async () => {
 	const library = readSeededLibrary();
 	await seedTakeStripSong(library.kineticStripAlbumId, KINETIC_STRIP_SONG_TITLE, TAKE_COUNT);
 });
@@ -218,7 +212,9 @@ async function expectNothingPlaying(page: Page): Promise<void> {
 	).not.toBeVisible();
 }
 
-test.describe('kinetic take strip', () => {
+// Every test opens its own context, the phone one included, so each runs
+// once, in the desktop project.
+test.describe('kinetic take strip', { tag: ONLY_IN_SHELL.desktop }, () => {
 	let guard: FlowGuard;
 
 	test.beforeEach(({ page }) => {
@@ -233,10 +229,8 @@ test.describe('kinetic take strip', () => {
 	});
 
 	test('drags, coasts and stops on click without opening the take it lands on, in the column layout the strip renders in at desktop width', async ({
-		browser,
-		isMobile
+		browser
 	}) => {
-		test.skip(Boolean(isMobile), 'this test opens its own desktop-width context');
 		// No storageState/baseURL passed here: the `browser` fixture Playwright
 		// Test injects already carries the project's own `use` config (see
 		// playwright.config.ts) as newContext()'s defaults, so the login
@@ -341,10 +335,8 @@ test.describe('kinetic take strip', () => {
 	});
 
 	test('drags, coasts and stops on click without opening the take it lands on, in the row layout the strip renders in when its container narrows below the desktop floor', async ({
-		browser,
-		isMobile
+		browser
 	}) => {
-		test.skip(Boolean(isMobile), 'this test opens its own narrow desktop-width context'); // NOSONAR S1607: the test creates its own desktop context.
 		const context = await browser.newContext({ viewport: ROW_LAYOUT_VIEWPORT });
 		const page = await context.newPage();
 		guard = new FlowGuard(page);
@@ -430,14 +422,8 @@ test.describe('kinetic take strip', () => {
 	});
 
 	test('the strip is absent from Write at phone width, where the Takes tab owns takes', async ({
-		browser,
-		isMobile
+		browser
 	}) => {
-		// prettier-ignore
-		test.skip( // NOSONAR S1607: own mobile-emulated context.
-			Boolean(isMobile),
-			'this test opens its own mobile-emulated context regardless of project'
-		);
 		const context = await browser.newContext({
 			viewport: MOBILE_VIEWPORT,
 			isMobile: true,

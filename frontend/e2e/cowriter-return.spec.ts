@@ -45,7 +45,7 @@ import {
 	EDITOR_VIEW_COWRITER_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { nameStartingWith, workspace } from './helpers';
+import { nameStartingWith, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 const CONVERSATION_ID = 'e2e-cowriter-return';
@@ -163,12 +163,10 @@ async function scrollChatToTop(page: Page): Promise<void> {
 	);
 }
 
-test.describe('co-writer return at phone width', () => {
+test.describe('co-writer return at phone width', { tag: ONLY_IN_SHELL.mobile }, () => {
 	test('leaving mid-reply and coming back shows the message sent, then the reply', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		let turnState: TurnState = 'idle';
 		let completeTurn = (): void => {};
 		const turnCompleted = new Promise<void>((resolve) => {
@@ -217,10 +215,8 @@ test.describe('co-writer return at phone width', () => {
 	});
 
 	test('an unsent message waits in the composer while Edit and Takes are looked at', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const draft = 'Noch nicht gesendet: der zweite Vers';
 		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
 
@@ -233,10 +229,8 @@ test.describe('co-writer return at phone width', () => {
 	});
 
 	test('retrying the unanswered message it came back to shows it once when the retry fails too', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		let retried = false;
 		await answerConversation(page, () => ({ messages: [sentMessage], turnRunning: false }));
 		await page.route(`**${COWRITER_TURN_PATH}`, (route: Route) => {
@@ -258,10 +252,8 @@ test.describe('co-writer return at phone width', () => {
 	});
 
 	test('a failed message followed by a newer failed one no longer offers Try again', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const older = 'Erste Nachricht, die scheitert';
 		const newer = 'Zweite Nachricht, die auch scheitert';
 		await answerConversation(page, () => ({ messages: [], turnRunning: false }));
@@ -288,10 +280,8 @@ test.describe('co-writer return at phone width', () => {
 	});
 
 	test('a failed message stays once a newer one is answered, the same after a reload', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const failed = 'Erste Nachricht, die scheitert';
 		const stored: ChatMessage[] = [];
 		await answerConversation(page, () => ({ messages: stored, turnRunning: false }));
@@ -336,10 +326,8 @@ test.describe('co-writer return at phone width', () => {
 		await expect(tryAgain).toHaveCount(0);
 	});
 	test('two conversations started the same day read apart and keep their order after a turn', async ({
-		page,
-		isMobile
+		page
 	}) => {
-		test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 		const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60_000).toISOString();
 		const stored: ChatMessage[] = earlierHistory.slice(0, 2);
 		const running = {
@@ -427,10 +415,8 @@ test.describe('co-writer return at phone width', () => {
 		}
 	]) {
 		test(`a reply that arrived while Edit was shown: a musician ${musician} finds the chat where they expect it`, async ({
-			page,
-			isMobile
+			page
 		}) => {
-			test.skip(!isMobile, 'The co-writer is a tab only on the phone; see the file header.');
 			let turnState: TurnState = 'idle';
 			let completeTurn = (): void => {};
 			const turnCompleted = new Promise<void>((resolve) => {
