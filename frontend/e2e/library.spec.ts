@@ -240,7 +240,9 @@ async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
  * content; on the phone it is the account menu's Settings list (#1174).
  * Opening a section is a real navigation (#265), and the rail's own album
  * context row is the way back — the "click back into the album" promise that
- * made the disclosure worth building in the first place (#264).
+ * made the disclosure worth building in the first place (#264). On the phone
+ * the way to Settings leads through the Library wall, which folds the drawer's
+ * Library group (#593), so the album row is one tap on that group further.
  */
 async function expectSettingsRailRoundTrip(
 	page: Page,
@@ -276,6 +278,13 @@ async function expectSettingsRailRoundTrip(
 	}
 
 	const rail = await openRailNav(page, shell);
+	if (shell === 'mobile') {
+		const libraryGroup = rail.getByRole('button', {
+			name: nameStartingWith(RAIL_LIBRARY_LABEL)
+		});
+		await expect(libraryGroup).toHaveAttribute('aria-expanded', 'false');
+		await libraryGroup.click();
+	}
 	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
