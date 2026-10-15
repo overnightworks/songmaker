@@ -16,6 +16,7 @@ import {
 	JOB_TYPE_GENERATE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_SYNC_ERROR,
+	songEditorOpenLabel,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import type { VersionItem } from '../src/lib/api/types';
@@ -23,7 +24,6 @@ import { takeGroupLabel, takeVersion, type TakeVersion } from '../src/lib/consta
 import {
 	FlowGuard,
 	loseNetwork,
-	nameStartingWith,
 	regainNetwork,
 	TAKE_AFTER_RETURN_FLOW_API_REQUEST_BUDGET,
 	TAKE_ARRIVES_FLOW_API_REQUEST_BUDGET,
@@ -89,7 +89,7 @@ test.describe('a finished generation on the phone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();
@@ -149,7 +149,7 @@ test.describe('a take that finished while the phone was offline', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByRole('progressbar')).toBeVisible();

@@ -276,7 +276,7 @@ describe('AlbumCoverEditor in the album header', () => {
 		expect(createAlbumCoverSuggestions).toHaveBeenCalledTimes(1);
 		expect(target.querySelector('.header-title')?.textContent).toContain('Night Drive');
 		expect(target.querySelector('.play-circle')).not.toBeNull();
-		expect(target.querySelector('.item-row')).not.toBeNull();
+		expect(target.querySelector('.song-row')).not.toBeNull();
 	});
 
 	it.each([

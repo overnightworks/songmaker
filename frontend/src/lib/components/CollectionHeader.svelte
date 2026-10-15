@@ -2,17 +2,11 @@
 	import type { Snippet } from 'svelte';
 	import type { AlbumCoverUrls, ShareResult } from '$lib/api/types';
 	import CollectionHeaderFrame from './CollectionHeaderFrame.svelte';
-	import Breadcrumb from './Breadcrumb.svelte';
 	import CollectionMenu from './CollectionMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import PlaylistCover from './PlaylistCover.svelte';
-	import {
-		ALBUM_COVER_ADD_LABEL,
-		ALBUM_COVER_EDIT_LABEL,
-		RAIL_LIBRARY_LABEL,
-		RAIL_PLAYLISTS_LABEL
-	} from '$lib/constants';
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { ALBUM_COVER_ADD_LABEL, ALBUM_COVER_EDIT_LABEL } from '$lib/constants';
+	import { songCountLabel } from '$lib/utils/format';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
 		pendingStart,
@@ -21,8 +15,7 @@
 		setShuffle,
 		stopStartAwaitingNetwork,
 		transportOfTheStart,
-		waitingStartOf,
-		type CollectionStart
+		waitingStartOf
 	} from '$lib/stores/player';
 	import { audioPlayer, type TransportState } from '$lib/services/audioPlayer.svelte';
 
@@ -34,11 +27,10 @@
 		coverAlt: string;
 		initials: string;
 		artFill: string | null;
-		/**
-		 * Starts this collection at `start`, in the order the header has just set;
-		 * null while the view has nothing to start.
-		 */
-		onplay: ((start: CollectionStart) => void) | null;
+		/** Starts this collection from the top; null while the view has nothing to start. */
+		onplay: (() => void) | null;
+		/** The songs the page lists, read under the title. */
+		songCount: number;
 		/** Renames in place through the title; a collection with detailsEditor renames there instead. */
 		onrename?: (title: string) => Promise<void>;
 		isShared: boolean;
@@ -83,6 +75,7 @@
 		initials,
 		artFill,
 		onplay,
+		songCount,
 		onrename,
 		isShared,
 		shareSlug,
@@ -141,13 +134,6 @@
 	function closeCoverEditing(): void {
 		editingCover.set(false);
 	}
-	const breadcrumbItems = $derived([
-		{
-			label: kind === 'playlist' ? RAIL_PLAYLISTS_LABEL : RAIL_LIBRARY_LABEL,
-			onclick: () => void openLibraryWall()
-		},
-		{ label: title }
-	]);
 
 	function triggerRename(): void {
 		editableTitle?.startEdit();
@@ -178,26 +164,24 @@
 		return queueIsThisCollection ? audioPlayer.transport : 'idle';
 	});
 
-	// The header is where a collection's play order is chosen: the circle plays
-	// it in order from the top, the shuffle square beside it plays it shuffled
-	// from a drawn song. Both set the player's own shuffle setting, so the
-	// transport's shuffle control shows the order the header just chose; which
-	// collection starts is the view's answer, through onplay. While this
-	// collection already plays, the circle pauses and resumes it instead and the
-	// order stays as it is — even once the collection has emptied under it. A
-	// view with nothing to start passes no onplay, which dims the shuffle square
-	// and, unless this collection is the queue, the circle, so no tap there
-	// reaches the listener's shuffle setting.
+	// The circle plays the collection in order from the top, so it turns the
+	// player's shuffle off, and the player's shuffle control shows that order;
+	// shuffling is the player's (#1354 rule 24). Which collection starts is the
+	// view's answer, through onplay. While this collection already plays, the
+	// circle pauses and resumes it instead and the order stays as it is — even
+	// once the collection has emptied under it. A view with nothing to start
+	// passes no onplay, which dims the circle unless this collection is the
+	// queue, so no tap there reaches the listener's shuffle setting.
 	function onCircle(): void {
 		if (startWaitsHere) stopStartAwaitingNetwork();
 		else if (queueIsThisCollection) audioPlayer.toggle();
-		else start('top');
+		else startFromTheTop();
 	}
 
-	function start(from: CollectionStart): void {
+	function startFromTheTop(): void {
 		if (!onplay) return;
-		setShuffle(from === 'random');
-		onplay(from);
+		setShuffle(false);
+		onplay();
 	}
 </script>
 
@@ -219,7 +203,7 @@
 		</h2>
 		{#if meta}<p class="header-meta">{meta}</p>{/if}
 	{/if}
-	<Breadcrumb items={breadcrumbItems} />
+	<p class="header-count">{songCountLabel(songCount)}</p>
 {/snippet}
 
 {#snippet actions()}
@@ -267,7 +251,6 @@
 	{kind}
 	transport={circleTransport}
 	onplay={onplay || queueIsThisCollection || startWaitsHere ? onCircle : null}
-	onshuffle={onplay ? () => start('random') : null}
 	{titleArea}
 	{actions}
 	coverFallback={kind === 'playlist' ? coverFallback : undefined}
@@ -288,7 +271,8 @@
 		white-space: nowrap;
 	}
 
-	.header-meta {
+	.header-meta,
+	.header-count {
 		margin: 0.15rem 0 0;
 		font-size: 0.8rem;
 		color: var(--text-muted);

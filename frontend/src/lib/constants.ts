@@ -141,16 +141,13 @@ export const TRANSPORT_RETRY_LABEL = 'Retry';
 export type TransportLabel =
 	typeof TRANSPORT_PLAY_LABEL | typeof TRANSPORT_PAUSE_LABEL | typeof TRANSPORT_RETRY_LABEL;
 
-// A collection header's play circle and the shuffle square beside it name
-// what they do to it by its kind: "Play album", "Pause playlist", "Retry
-// album", "Shuffle album". The circle's action is the transport's own label, so
-// the header tells the bar's story. Every surface that renders the header, and
-// every flow that finds it by name, builds the label here.
+// A collection header's play circle names what it does to it by its kind:
+// "Play album", "Pause playlist", "Retry album". Its action is the transport's
+// own label, so the header tells the bar's story. Every surface that renders
+// the header, and every flow that finds it by name, builds the label here.
 export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
-export const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
-type CollectionAction = TransportLabel | typeof COLLECTION_SHUFFLE_ACTION;
 
-export function collectionActionLabel(action: CollectionAction, kind: CollectionPlayKind): string {
+export function collectionActionLabel(action: TransportLabel, kind: CollectionPlayKind): string {
 	return `${action} ${kind}`;
 }
 
@@ -169,6 +166,12 @@ export function openNowPlayingLabel(songTitle: string): string {
 // Swiping the mini player up opens Now Playing once the finger has risen
 // this far, and further up than sideways; anything less is a tap or a slip.
 export const NOW_PLAYING_SWIPE_RISE_PX = 40;
+// The seek line's accessible name, and the position it reads out as words
+// rather than as a bare count of seconds.
+export const SEEK_PLAYBACK_LABEL = 'Seek playback';
+export function seekPositionLabel(position: string, length: string): string {
+	return `${position} of ${length}`;
+}
 // A cut mini-player title scrolls once, slowly: it rests, travels to its end
 // at this pace, rests again, and glides back to its start.
 export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
@@ -184,6 +187,8 @@ const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
 export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
+// Brings back lyrics that follow the song once the reader scrolled away (#1382).
+export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';
@@ -693,6 +698,11 @@ export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
 
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';
+
+// A song box's ✎: the box itself plays the song, so the pencil names the place it opens.
+export function songEditorOpenLabel(songTitle: string): string {
+	return `Open ${songTitle} in the song editor`;
+}
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
@@ -706,7 +716,6 @@ const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
 export function playlistEntryOverflowLabel(songTitle: string): string {
 	return `${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${songTitle}`;
 }
-export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
 export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
 export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
 export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';

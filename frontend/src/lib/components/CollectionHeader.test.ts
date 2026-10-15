@@ -2,10 +2,6 @@ import { createRawSnippet, mount, tick, unmount, type ComponentProps } from 'sve
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('$lib/stores/toast', () => ({ addToast: vi.fn() }));
-vi.mock('$lib/stores/navigation', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/stores/navigation')>()),
-	openLibraryWall: vi.fn()
-}));
 
 import { get } from 'svelte/store';
 import {
@@ -13,15 +9,15 @@ import {
 	COLLECTION_MENU_LABEL,
 	collectionActionLabel,
 	TRANSPORT_PLAY_LABEL,
-	COLLECTION_SHUFFLE_ACTION,
 	TRANSPORT_PAUSE_LABEL
 } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { albumList } from '$lib/stores/libraryData';
-import { openLibraryWall } from '$lib/stores/navigation';
 import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
 import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import CollectionHeader from './CollectionHeader.svelte';
+import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import { openCollectionMenu } from './shell/rail-test-fixtures';
 import { getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
 
@@ -45,6 +41,7 @@ function baseProps(): CollectionHeaderProps {
 		initials: 'ND',
 		artFill: null,
 		onplay: vi.fn(),
+		songCount: 5,
 		onrename: vi.fn().mockResolvedValue(undefined),
 		isShared: false,
 		shareSlug: null,
@@ -110,6 +107,7 @@ afterEach(async () => {
 	audioPlayer.current = null;
 	audioPlayer.status = 'idle';
 	vi.restoreAllMocks();
+	clearComponentStyles();
 	document.body.replaceChildren();
 });
 
@@ -147,11 +145,23 @@ function queuePlays(kind: HeaderKind, collectionId: string, status: 'playing' | 
 }
 
 describe('CollectionHeader', () => {
-	it('shows cover, title and a Library › title breadcrumb', async () => {
+	it.each(['album', 'playlist'] as const)(
+		'reads the %s title and its song count under it, where the breadcrumb stood',
+		async (kind) => {
+			const target = await render({ ...baseProps(), kind });
+			const titles = requireElement(target, '.header-titles');
+
+			expect(titles.querySelector('.header-title')?.textContent).toContain('Night Drive');
+			expect(requireElement(titles, '.header-count').textContent).toBe('5 songs');
+		}
+	);
+
+	it('fills the play circle with the action colour', async () => {
 		const target = await render(baseProps());
-		expect(target.querySelector('.header-title')?.textContent).toContain('Night Drive');
-		const crumbs = Array.from(target.querySelectorAll('.crumb')).map((el) => el.textContent);
-		expect(crumbs).toEqual(['Library', 'Night Drive']);
+		const circle = requireElement<HTMLElement>(target, '.play-circle');
+		injectComponentStyles(collectionHeaderFrameSource, 'CollectionHeaderFrame.svelte', circle);
+
+		expect(getComputedStyle(circle).background).toBe('var(--accent)');
 	});
 
 	it.each(['album', 'playlist'] as const)(
@@ -163,21 +173,8 @@ describe('CollectionHeader', () => {
 
 			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
 
-			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('top');
+			expect(props.onplay).toHaveBeenCalledOnce();
 			expect(get(shuffleEnabled)).toBe(false);
-		}
-	);
-
-	it.each(['album', 'playlist'] as const)(
-		'starts the %s shuffled from a drawn song from its shuffle square',
-		async (kind) => {
-			const props = { ...baseProps(), kind };
-			const target = await render(props);
-
-			getByRoleButton(target, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)).click();
-
-			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('random');
-			expect(get(shuffleEnabled)).toBe(true);
 		}
 	);
 
@@ -214,67 +211,45 @@ describe('CollectionHeader', () => {
 
 			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
 
-			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('top');
+			expect(props.onplay).toHaveBeenCalledOnce();
 			expect(audioPlayer.status).toBe('playing');
 		}
 	);
 
 	it.each(['album', 'playlist'] as const)(
-		'still pauses the %s from its circle once it empties while playing, with shuffle dimmed',
+		'still pauses the %s from its circle once it empties while playing',
 		async (kind) => {
 			const props = { ...baseProps(), kind, onplay: null };
 			queuePlays(kind, props.collectionId, 'playing');
 			const target = await render(props);
-			const shuffle = getByRoleButton(
-				target,
-				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)
-			);
 
 			getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind)).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('paused');
-			expect(shuffle.disabled).toBe(true);
 		}
 	);
 
 	it.each(['album', 'playlist'] as const)(
-		'dims the circle and shuffle while the %s has nothing to start, and a tap changes nothing',
+		'dims the circle while the %s has nothing to start, and a tap changes nothing',
 		async (kind) => {
 			setShuffle(true);
 			const target = await render({ ...baseProps(), kind, onplay: null });
 			const circle = getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind));
-			const shuffle = getByRoleButton(
-				target,
-				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)
-			);
 
 			circle.click();
-			shuffle.click();
 
-			expect([circle, shuffle].map((button) => button.disabled)).toEqual([true, true]);
+			expect(circle.disabled).toBe(true);
 			expect(get(shuffleEnabled)).toBe(true);
 		}
 	);
 
-	it('offers no word Play button, only the play circle and the shuffle square', async () => {
+	it('offers no word Play button, only the play circle', async () => {
 		const target = await render(baseProps());
 		const actions = requireElement(target, '.header-actions');
 
 		expect(actions.textContent).not.toMatch(/play/i);
 		expect(requireElement(actions, '.play-circle').getAttribute('aria-label')).toBe('Play album');
-		expect(requireElement(actions, '.shuffle-btn').getAttribute('aria-label')).toBe(
-			'Shuffle album'
-		);
-	});
-
-	it('shows a Playlists › title breadcrumb for a playlist', async () => {
-		const target = await render({ ...baseProps(), kind: 'playlist' as const });
-		const crumbs = Array.from(target.querySelectorAll('.crumb')).map(
-			(element) => element.textContent
-		);
-
-		expect(crumbs).toEqual(['Playlists', 'Night Drive']);
 	});
 
 	it('uses the album art fill when an album has no cover', async () => {
@@ -301,14 +276,8 @@ describe('CollectionHeader', () => {
 		expect(target.querySelectorAll('.header-cover .playlist-cover-cell')).toHaveLength(4);
 	});
 
-	it('opens the Library wall from the breadcrumb', async () => {
-		const target = await render(baseProps());
-		requireElement<HTMLButtonElement>(target, '.crumb-link').click();
-		expect(openLibraryWall).toHaveBeenCalledTimes(1);
-	});
-
 	it.each(['album', 'playlist'] as const)(
-		'puts Play, Shuffle and ⋯ of the %s on their own row under cover and title',
+		'puts Play and ⋯ of the %s on their own row under cover and title',
 		async (kind) => {
 			const target = await render({ ...baseProps(), kind });
 			const identity = requireElement(target, '.header-identity');
@@ -318,17 +287,16 @@ describe('CollectionHeader', () => {
 			expect(identity.querySelector('.header-title')).not.toBeNull();
 			expect(identity.contains(actionRow)).toBe(false);
 			expect(identity.compareDocumentPosition(actionRow)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-			const actions = Array.from(
-				actionRow.querySelectorAll('.play-circle, .shuffle-btn, .collection-menu')
-			).map((element) => element.className.split(' ')[0]);
-			expect(actions).toEqual(['play-circle', 'shuffle-btn', 'collection-menu']);
+			const actions = Array.from(actionRow.querySelectorAll('.play-circle, .collection-menu')).map(
+				(element) => element.className.split(' ')[0]
+			);
+			expect(actions).toEqual(['play-circle', 'collection-menu']);
 		}
 	);
 
-	it('renders only play, shuffle and the … menu, no separate visible share icon', async () => {
+	it('renders only play and the … menu, no separate visible share icon', async () => {
 		const target = await render(baseProps());
 		expect(target.querySelector('.play-circle')).not.toBeNull();
-		expect(target.querySelector('.shuffle-btn')).not.toBeNull();
 		expect(target.querySelector('.collection-menu')).not.toBeNull();
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
@@ -451,13 +419,12 @@ describe('CollectionHeader', () => {
 		expect(document.body.querySelector('.menu-panel')).toBeNull();
 	});
 
-	it('keeps its action row to Play, Shuffle and the menu: a new song is made from the track list', async () => {
+	it('keeps its action row to Play and the menu: a new song is made from the track list', async () => {
 		const target = await render(baseProps());
 
 		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
 		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
 			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
-			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
 			COLLECTION_MENU_LABEL
 		]);
 	});
@@ -482,7 +449,7 @@ describe('CollectionHeader', () => {
 		expect(editButton.textContent?.trim()).toBe('Late Night Mix');
 	});
 
-	it('reads the meta line under the title, above the breadcrumb', async () => {
+	it('reads the meta line under the title, above the song count', async () => {
 		const target = await render({ ...baseProps(), meta: 'Live at the Roxy · 1994' });
 		const titles = requireElement(target, '.header-titles');
 		const meta = requireElement(titles, '.header-meta');
@@ -491,7 +458,8 @@ describe('CollectionHeader', () => {
 			requireElement(titles, 'h2').compareDocumentPosition(meta) & Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 		expect(
-			meta.compareDocumentPosition(requireElement(titles, 'nav')) & Node.DOCUMENT_POSITION_FOLLOWING
+			meta.compareDocumentPosition(requireElement(titles, '.header-count')) &
+				Node.DOCUMENT_POSITION_FOLLOWING
 		).toBeTruthy();
 	});
 
@@ -518,7 +486,7 @@ describe('CollectionHeader', () => {
 		const titles = requireElement(target, '.header-titles');
 		expect(titles.querySelector('.fake-details-editor')).not.toBeNull();
 		expect(titles.querySelector('h2')).toBeNull();
-		expect(titles.querySelector('nav')).not.toBeNull();
+		expect(titles.querySelector('.header-count')).not.toBeNull();
 
 		getByRoleButton(target, 'Done').click();
 		await tick();

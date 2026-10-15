@@ -39,6 +39,7 @@
 	import Icon from './Icon.svelte';
 	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import NowPlayingLyrics from './NowPlayingLyrics.svelte';
+	import SeekSlider from './SeekSlider.svelte';
 
 	let {
 		info,
@@ -142,9 +143,6 @@
 	const transport = $derived(audioPlayer.transport);
 	const buttonFace = $derived(transportButtonFace(transport));
 	const waitingNotice = $derived(transportWaitingNotice(transport));
-	const progressPercent = $derived(
-		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
-	);
 
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
@@ -186,11 +184,6 @@
 		$sheetOpen = true;
 		await tick();
 		if (mobileSheet) focusFirstIn(mobileSheet);
-	}
-
-	function seekFromRange(e: Event): void {
-		const target = e.currentTarget as HTMLInputElement;
-		audioPlayer.seek(Number(target.value));
 	}
 </script>
 
@@ -263,20 +256,17 @@
 					stays visible and keeps carrying seek, shuffle, prev/next and play. -->
 				{#if !isDocked}
 					<div class="progress">
-						<span class="time">{formatTime(currentTime)}</span>
-						<input
-							class="progress-range"
-							style:--progress="{progressPercent}%"
-							type="range"
-							min="0"
-							max={duration || 0}
-							step="0.1"
-							value={duration > 0 ? currentTime : 0}
-							oninput={seekFromRange}
-							disabled={duration <= 0}
-							aria-label="Seek playback"
+						<SeekSlider
+							size="full"
+							{currentTime}
+							{duration}
+							{formatTime}
+							onSeek={(seconds) => audioPlayer.seek(seconds)}
 						/>
-						<span class="time">{formatTime(duration)}</span>
+						<div class="progress-times">
+							<span class="time">{formatTime(currentTime)}</span>
+							<span class="time">{formatTime(duration)}</span>
+						</div>
 					</div>
 					<!-- Play sits on the column's centre line: two equal sides around it,
 						the right one closed by an empty square where no repeat control is. -->
@@ -563,49 +553,18 @@
 	}
 	.progress {
 		width: min(320px, 80%);
-		display: grid;
-		grid-template-columns: auto 1fr auto;
-		align-items: center;
-		gap: 0.6rem;
+	}
+	.now-playing.stacked .progress {
+		width: 100%;
+	}
+	.progress-times {
+		display: flex;
+		justify-content: space-between;
 	}
 	.time {
 		font-family: var(--font-display);
 		font-size: var(--label-font-size);
 		color: var(--text-muted);
-	}
-	.progress-range {
-		--track-bg: color-mix(in srgb, var(--border) 45%, transparent);
-		appearance: none;
-		-webkit-appearance: none;
-		width: 100%;
-		height: 24px;
-		background: transparent;
-		cursor: pointer;
-		accent-color: var(--accent);
-	}
-	.progress-range:disabled {
-		cursor: default;
-		opacity: 0.45;
-	}
-	.progress-range::-webkit-slider-runnable-track {
-		height: 4px;
-		border-radius: 999px;
-		background: linear-gradient(
-			90deg,
-			var(--primary) 0%,
-			var(--accent) var(--progress),
-			var(--track-bg) var(--progress),
-			var(--track-bg) 100%
-		);
-	}
-	.progress-range::-webkit-slider-thumb {
-		-webkit-appearance: none;
-		width: 14px;
-		height: 14px;
-		border-radius: 50%;
-		border: 2px solid var(--bg);
-		background: var(--text);
-		margin-top: -5px;
 	}
 	.waiting-notice {
 		margin: 0;
@@ -638,18 +597,16 @@
 		width: 64px;
 		height: 64px;
 		border-radius: 50%;
-		border: 2px solid var(--primary);
-		background: color-mix(in srgb, var(--surface) 72%, transparent);
-		color: var(--primary);
+		border: none;
+		background: var(--accent);
+		color: var(--on-accent);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
 	}
 	.play-btn:hover {
-		background: linear-gradient(135deg, var(--primary), var(--accent));
-		border-color: transparent;
-		color: #fff;
+		background: color-mix(in srgb, var(--accent) 82%, var(--text));
 	}
 	.np-lyrics-col {
 		display: flex;
