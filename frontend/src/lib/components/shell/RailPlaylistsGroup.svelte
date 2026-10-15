@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { openCollection } from '$lib/stores/collection';
+	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
 	import { openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -41,6 +43,7 @@
 	// with no chevron in any state.
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
+	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
 	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
@@ -108,6 +111,7 @@
 			<ul class="playlist-list">
 				{#each visiblePlaylists as playlist (playlist.id)}
 					{@const playlistOpen = playlist.id === openPlaylistId}
+					{@const current = playlist.id === shownPlaylistId}
 					{@const entries =
 						playlistOpen && openPlaylistDetail?.id === playlist.id
 							? openPlaylistDetail.entries
@@ -116,8 +120,8 @@
 						<button
 							type="button"
 							class={RAIL_PLAYLIST_ITEM_CLASS}
-							aria-current={playlistOpen ? 'page' : undefined}
-							use:revealOpenRailItem={playlistOpen && groupOpen && !filtering}
+							aria-current={current ? 'page' : undefined}
+							use:revealOpenRailItem={current && groupOpen && !filtering}
 							onclick={() => onPlaylistLabelClick(playlist.id)}
 						>
 							<PlaylistCover

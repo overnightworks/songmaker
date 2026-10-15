@@ -427,17 +427,24 @@ describe('Rail', () => {
 		expect(currentPages()).toEqual([null, null, null, 'page']);
 	});
 
-	it('marks no album as the current page on the wall, which keeps the album open last', async () => {
-		albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
-		setOpenCollection({ kind: 'album', id: 'a1' });
-		librarySurface.set('detail');
-		const target = await render();
-		const albumRow = requireElement<HTMLButtonElement>(target, '.album-label');
-		expect(albumRow.getAttribute('aria-current')).toBe('page');
+	it.each([
+		{ kind: 'album', id: 'a1', rowSelector: '.album-label' },
+		{ kind: 'playlist', id: 'p1', rowSelector: '.playlist-label' }
+	] as const)(
+		'marks no $kind as the current page on the wall, which keeps the $kind open last',
+		async ({ kind, id, rowSelector }) => {
+			albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
+			playlistList.set([playlist({ id: 'p1', title: 'Morning Run', entry_count: 0 })]);
+			setOpenCollection({ kind, id });
+			librarySurface.set('detail');
+			const target = await render();
+			const openRow = requireElement<HTMLButtonElement>(target, rowSelector);
+			expect(openRow.getAttribute('aria-current')).toBe('page');
 
-		librarySurface.set('browse');
-		await tick();
+			librarySurface.set('browse');
+			await tick();
 
-		expect(albumRow.getAttribute('aria-current')).toBeNull();
-	});
+			expect(openRow.getAttribute('aria-current')).toBeNull();
+		}
+	);
 });

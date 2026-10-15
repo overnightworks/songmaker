@@ -286,6 +286,7 @@ describe('RailPlaylistsGroup', () => {
 			playlist({ id: 'p2', title: 'Night Drive' })
 		]);
 		setOpenCollection({ kind: 'playlist', id: 'p1' });
+		librarySurface.set('detail');
 		await render();
 		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Morning Run']));
 
