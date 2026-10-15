@@ -7,7 +7,7 @@ vi.mock('$app/navigation', async () =>
 );
 
 import { LIBRARY_QUERY_REQUIRED } from '$lib/constants';
-import { fetchLibraryContinue, fetchLibraryPoolQueue, searchLibrary } from './library';
+import { fetchLibraryListen, fetchLibraryPoolQueue, searchLibrary } from './library';
 
 function mockOk(data: unknown) {
 	mockFetch.mockResolvedValueOnce({
@@ -59,25 +59,14 @@ describe('searchLibrary', () => {
 	});
 });
 
-describe('fetchLibraryContinue', () => {
-	it('calls GET /api/library/continue', async () => {
+describe('fetchLibraryListen', () => {
+	it('asks GET /api/library/listen for the page of places the caller names', async () => {
 		mockOk({ items: [] });
 
-		await fetchLibraryContinue();
+		await fetchLibraryListen({ offset: 200, limit: 200 });
 
 		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/library/continue',
-			expect.objectContaining({ credentials: 'include' })
-		);
-	});
-
-	it('asks for the page of places the caller names', async () => {
-		mockOk({ items: [] });
-
-		await fetchLibraryContinue({ offset: 200, limit: 200 });
-
-		expect(mockFetch).toHaveBeenCalledWith(
-			'/api/library/continue?offset=200&limit=200',
+			'/api/library/listen?offset=200&limit=200',
 			expect.objectContaining({ credentials: 'include' })
 		);
 	});

@@ -35,7 +35,7 @@ const CONTINUE_FLOW_API_REQUEST_BUDGET: Record<Shell, number> = {
 	mobile: 48
 };
 
-test('Continue shows up to six places, follows a listen made elsewhere on a return to the foreground, and moves the place of a played song to the front after reload', async ({
+test('Continue shows up to six places listened in, follows a listen made elsewhere on a return to the foreground, and moves the place of a played song to the front after reload', async ({
 	page
 }, testInfo) => {
 	const guard = new FlowGuard(page);
@@ -50,8 +50,7 @@ test('Continue shows up to six places, follows a listen made elsewhere on a retu
 	let continueCoverRequests = 0;
 	page.on('request', (request) => {
 		const url = new URL(request.url());
-		if (request.method() === 'GET' && url.pathname === '/api/library/continue')
-			continueRequests += 1;
+		if (request.method() === 'GET' && url.pathname === '/api/library/listen') continueRequests += 1;
 		if (
 			request.resourceType() === 'image' &&
 			/^\/api\/(?:albums|playlists)\/[^/]+\/cover$/.test(url.pathname)
@@ -70,6 +69,13 @@ test('Continue shows up to six places, follows a listen made elsewhere on a retu
 			return result;
 		};
 	});
+
+	// Continue lists only the places this musician listened in, so one listen
+	// before Home opens makes sure it has a place whatever ran before.
+	const firstListen = await page.request.post(`/api/songs/${listenedSong.id}/listen`, {
+		headers: await csrfHeaders(page)
+	});
+	expect(firstListen.status()).toBe(200);
 
 	await page.goto('/');
 	const continueRow = page.getByRole('region', { name: 'Continue' });
@@ -105,7 +111,7 @@ test('Continue shows up to six places, follows a listen made elsewhere on a retu
 	const continueAfterForeground = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
-			new URL(response.url()).pathname === '/api/library/continue'
+			new URL(response.url()).pathname === '/api/library/listen'
 	);
 	await page.evaluate(() => {
 		Object.defineProperty(document, 'visibilityState', { configurable: true, value: 'hidden' });
@@ -160,7 +166,7 @@ test('Continue shows up to six places, follows a listen made elsewhere on a retu
 	const continueAfterReload = page.waitForResponse(
 		(response) =>
 			response.request().method() === 'GET' &&
-			new URL(response.url()).pathname === '/api/library/continue'
+			new URL(response.url()).pathname === '/api/library/listen'
 	);
 	await page.reload();
 	expect((await continueAfterReload).status()).toBe(200);

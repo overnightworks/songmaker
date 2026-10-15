@@ -16,13 +16,13 @@
 	import { libraryBrowse, loadLibraryBrowse } from '$lib/stores/librarySearch';
 	import { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } from '$lib/stores/ui';
 	import {
-		lastWorkByPlace,
-		lastWorkOf,
+		lastPlayedByPlace,
+		lastPlayedOf,
 		libraryPlaceOrder,
-		readRecentWork
+		readLastPlayed
 	} from '$lib/stores/libraryOrder';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
-	import { activityTimeLabel, addedDayLabel, placeLine, songCountLabel } from '$lib/utils/format';
+	import { activityTimeLabel, placeLine, songCountLabel } from '$lib/utils/format';
 	import {
 		ALBUM_COVER_ALT_TYPE,
 		LIBRARY_ALBUM_CARD_TRACK_MAX_PX,
@@ -31,11 +31,17 @@
 		LIBRARY_NEW_MENU_CLOSE_LABEL,
 		LIBRARY_NEW_MENU_LABEL,
 		LIBRARY_NEW_PLAYLIST_LABEL,
+		LIBRARY_PLAYLISTS_ERROR,
+		LIBRARY_PLAYLISTS_LOADING,
 		LIBRARY_WALL_EMPTY,
 		LIBRARY_WALL_HEADING,
 		LIBRARY_WALL_ORDER_GROUP_LABEL,
 		LIBRARY_WALL_ORDER_LABELS,
 		LIBRARY_WALL_ORDERS,
+		PLAYLISTS_PAGE_LABEL,
+		PLAYLISTS_WALL_EMPTY,
+		PLAYLISTS_WALL_ORDER_GROUP_LABEL,
+		playlistsHeadingLabel,
 		type LibraryWallOrder
 	} from '$lib/constants';
 	import Icon from './Icon.svelte';
@@ -47,7 +53,29 @@
 
 	type NewPlaceKind = 'album' | 'playlist';
 	type WallItem = { type: 'album'; item: AlbumItem } | { type: 'playlist'; item: PlaylistItem };
+	// The Library wall, which still lists albums and playlists together, or the
+	// Playlists page's wall of playlists alone (#1402, frame D3).
+	type WallKind = 'library' | 'playlists';
+	type WallCopy = { orderGroup: string; loading: string; failed: string; empty: string };
 
+	const WALL_COPY: Record<WallKind, WallCopy> = {
+		library: {
+			orderGroup: LIBRARY_WALL_ORDER_GROUP_LABEL,
+			loading: 'Loading library…',
+			failed: 'Could not load library.',
+			empty: LIBRARY_WALL_EMPTY
+		},
+		playlists: {
+			orderGroup: PLAYLISTS_WALL_ORDER_GROUP_LABEL,
+			loading: LIBRARY_PLAYLISTS_LOADING,
+			failed: LIBRARY_PLAYLISTS_ERROR,
+			empty: PLAYLISTS_WALL_EMPTY
+		}
+	};
+
+	let { kind }: { kind: WallKind } = $props();
+
+	const copy = $derived(WALL_COPY[kind]);
 	const albums = $derived($albumList);
 	const playlists = $derived($playlistList);
 	const currentCollection = $derived($openCollection);
@@ -60,11 +88,18 @@
 
 	const wallItems = $derived.by(() => {
 		const items: WallItem[] = [
-			...albums.map((item) => ({ type: 'album' as const, item })),
+			...(kind === 'library' ? albums.map((item) => ({ type: 'album' as const, item })) : []),
 			...playlists.map((item) => ({ type: 'playlist' as const, item }))
 		];
 		return items.sort($libraryPlaceOrder);
 	});
+	const loadStatuses = $derived(
+		kind === 'library' ? [browseState.status, playlistStatus.status] : [playlistStatus.status]
+	);
+	// The Playlists head states how many there are, which only the loaded list
+	// knows: until it has loaded, the library holds none yet after a reload, or
+	// only the playlist an address opened.
+	const playlistCount = $derived(playlistStatus.status === 'ready' ? playlists.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
 	let newMenu: MenuPopover | undefined = $state();
@@ -86,7 +121,7 @@
 	});
 
 	$effect(() => {
-		void $lastWorkByPlace;
+		void $lastPlayedByPlace;
 		labelledAt = new Date();
 	});
 
@@ -102,28 +137,29 @@
 	}
 
 	function tileDetail(wallItem: WallItem): string {
-		if (order === 'added') return addedDayLabel(wallItem.item.created_at, labelledAt);
-		const lastWork = order === 'recent' ? lastWorkOf($lastWorkByPlace, wallItem) : undefined;
-		return lastWork ? activityTimeLabel(lastWork.at, labelledAt) : sizeLabel(wallItem);
+		const lastPlayed = order === 'played' ? lastPlayedOf($lastPlayedByPlace, wallItem) : undefined;
+		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(wallItem);
 	}
 
+	// The Playlists page lists nothing else, so its tiles need no kind word.
 	function tileLine(wallItem: WallItem): string {
-		return placeLine(wallItem.type, tileDetail(wallItem));
+		const detail = tileDetail(wallItem);
+		return kind === 'playlists' ? detail : placeLine(wallItem.type, detail);
 	}
 
 	// A failed read keeps what is on screen, and only an empty wall names it
 	// (#1039 O4): the offline strip owns a lost network, and the wall reads
 	// again when the page returns to the foreground or the network comes back.
 	function catchUpWall(): void {
-		void ensureAllAlbumsLoaded();
+		if (kind === 'library') void ensureAllAlbumsLoaded();
 		void ensurePlaylistsLoaded();
-		if ($libraryWallOrder === 'recent') void readRecentWork();
+		if ($libraryWallOrder === 'played') void readLastPlayed();
 	}
 
 	function chooseOrder(next: LibraryWallOrder): void {
 		chooseLibraryWallOrder(next);
 		labelledAt = new Date();
-		if (next === 'recent') void readRecentWork();
+		if (next === 'played') void readLastPlayed();
 	}
 
 	function catchUpOnReturnToForeground(): void {
@@ -151,54 +187,78 @@
 	}
 
 	function retryLoad(): void {
-		void loadLibraryBrowse({ reset: true });
+		if (kind === 'library') void loadLibraryBrowse({ reset: true });
 		void loadPlaylists();
 	}
 </script>
 
 <svelte:document onvisibilitychange={catchUpOnReturnToForeground} />
 
-<div class="library-wall">
-	<div class="wall-titlebar">
-		<h1 class="wall-title">Library</h1>
-		<MenuPopover
-			bind:this={newMenu}
-			layer="library-new"
-			label={LIBRARY_NEW_MENU_LABEL}
-			closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
-			pressed={$newCard !== null}
+{#snippet newMenuButton()}
+	<MenuPopover
+		bind:this={newMenu}
+		layer="library-new"
+		label={LIBRARY_NEW_MENU_LABEL}
+		closeLabel={LIBRARY_NEW_MENU_CLOSE_LABEL}
+		pressed={$newCard !== null}
+	>
+		{#snippet trigger()}<span class="new-face"
+				><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
+			>{/snippet}
+		<p class="new-menu-heading">New in <b>Library</b></p>
+		<button type="button" class="new-menu-item" onclick={() => startNew('album')}
+			><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
 		>
-			{#snippet trigger()}<span class="new-face"
-					><Icon name="plus" size={16} />{LIBRARY_NEW_FACE}</span
-				>{/snippet}
-			<p class="new-menu-heading">New in <b>Library</b></p>
-			<button type="button" class="new-menu-item" onclick={() => startNew('album')}
-				><Icon name="album" size={16} />{LIBRARY_NEW_ALBUM_LABEL}</button
-			>
-			<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
-				><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
-			>
-		</MenuPopover>
-	</div>
-	<LibraryContinue />
+		<button type="button" class="new-menu-item" onclick={() => startNew('playlist')}
+			><Icon name="playlist" size={16} />{LIBRARY_NEW_PLAYLIST_LABEL}</button
+		>
+	</MenuPopover>
+{/snippet}
 
-	<div class="wall-head">
-		<h2 class="wall-heading">
-			{LIBRARY_WALL_HEADING} <span class="wall-count">{wallItems.length}</span>
-		</h2>
-		<div class="wall-order" role="group" aria-label={LIBRARY_WALL_ORDER_GROUP_LABEL}>
-			{#each LIBRARY_WALL_ORDERS as choice (choice)}
-				<button
-					type="button"
-					class="wall-order-choice"
-					aria-pressed={order === choice}
-					onclick={() => chooseOrder(choice)}
-				>
-					<span class="wall-order-face">{LIBRARY_WALL_ORDER_LABELS[choice]}</span>
-				</button>
-			{/each}
-		</div>
+{#snippet orderSwitch()}
+	<div class="wall-order" role="group" aria-label={copy.orderGroup}>
+		{#each LIBRARY_WALL_ORDERS as choice (choice)}
+			<button
+				type="button"
+				class="wall-order-choice"
+				aria-pressed={order === choice}
+				onclick={() => chooseOrder(choice)}
+			>
+				<span class="wall-order-face">{LIBRARY_WALL_ORDER_LABELS[choice]}</span>
+			</button>
+		{/each}
 	</div>
+{/snippet}
+
+<div class="library-wall">
+	{#if kind === 'playlists'}
+		<div class="wall-titlebar playlists-head">
+			<h1
+				class="wall-title"
+				aria-label={playlistCount === undefined
+					? PLAYLISTS_PAGE_LABEL
+					: playlistsHeadingLabel(playlistCount)}
+			>
+				{PLAYLISTS_PAGE_LABEL}
+				{#if playlistCount !== undefined}<span class="wall-count">{playlistCount}</span>{/if}
+			</h1>
+			{@render orderSwitch()}
+			{@render newMenuButton()}
+		</div>
+	{:else}
+		<div class="wall-titlebar">
+			<h1 class="wall-title">Library</h1>
+			{@render newMenuButton()}
+		</div>
+		<LibraryContinue />
+
+		<div class="wall-head">
+			<h2 class="wall-heading">
+				{LIBRARY_WALL_HEADING} <span class="wall-count">{wallItems.length}</span>
+			</h2>
+			{@render orderSwitch()}
+		</div>
+	{/if}
 
 	<div class="wall-body" bind:this={browseEl} onscroll={onBrowseScroll}>
 		{#if $newCard === 'album'}
@@ -244,13 +304,13 @@
 					</div>
 				{/each}
 			</div>
-		{:else if browseState.status === 'loading' || playlistStatus.status === 'loading'}
-			<p class="empty" role="status">Loading library…</p>
-		{:else if browseState.status === 'error' || playlistStatus.status === 'error'}
-			<p class="empty" role="alert">Could not load library.</p>
+		{:else if loadStatuses.includes('loading')}
+			<p class="empty" role="status">{copy.loading}</p>
+		{:else if loadStatuses.includes('error')}
+			<p class="empty" role="alert">{copy.failed}</p>
 			<button class="retry-btn" onclick={retryLoad}>Retry</button>
 		{:else}
-			<p class="empty">{LIBRARY_WALL_EMPTY}</p>
+			<p class="empty">{copy.empty}</p>
 		{/if}
 	</div>
 </div>
@@ -283,6 +343,16 @@
 
 	.wall-titlebar :global(.menu-trigger) {
 		padding: 0;
+	}
+
+	.playlists-head {
+		flex-wrap: wrap;
+		padding-bottom: 12px;
+		border-bottom: 1px solid var(--border);
+	}
+
+	.playlists-head .wall-order {
+		margin-left: auto;
 	}
 
 	.new-face {

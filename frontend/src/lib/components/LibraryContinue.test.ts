@@ -2,16 +2,16 @@ import { mount, tick, unmount } from 'svelte';
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { LibraryContinueItem } from '$lib/api/library';
+import type { LibraryListenItem } from '$lib/api/library';
 import { libraryContinueCollapsed } from '$lib/stores/ui';
 
-const fetchLibraryContinue = vi.fn();
+const fetchLibraryListen = vi.fn();
 const openAlbum = vi.fn();
 const openPlaylist = vi.fn();
 const selectSong = vi.fn();
 
 vi.mock('$lib/api/library', () => ({
-	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
+	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
 }));
 vi.mock('$lib/stores/navigation', () => ({
 	openAlbum: (...args: unknown[]) => openAlbum(...args),
@@ -23,7 +23,7 @@ import LibraryContinue from './LibraryContinue.svelte';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 
-function item(overrides: Partial<LibraryContinueItem> = {}): LibraryContinueItem {
+function item(overrides: Partial<LibraryListenItem> = {}): LibraryListenItem {
 	return {
 		type: 'album',
 		id: 'album-1',
@@ -32,7 +32,8 @@ function item(overrides: Partial<LibraryContinueItem> = {}): LibraryContinueItem
 		album_covers: [],
 		song_id: null,
 		song_title: null,
-		activity_at: '2026-09-27T03:47:00Z',
+		song_number: null,
+		played_at: '2026-09-27T03:47:00Z',
 		...overrides
 	};
 }
@@ -49,7 +50,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-	fetchLibraryContinue.mockReset();
+	fetchLibraryListen.mockReset();
 	openAlbum.mockReset().mockResolvedValue(undefined);
 	openPlaylist.mockReset().mockResolvedValue(undefined);
 	selectSong.mockReset().mockResolvedValue(undefined);
@@ -71,7 +72,7 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-function continueResponse(items: LibraryContinueItem[]): { items: LibraryContinueItem[] } {
+function continueResponse(items: LibraryListenItem[]): { items: LibraryListenItem[] } {
 	return { items };
 }
 
@@ -94,7 +95,7 @@ async function settle(): Promise<void> {
 
 describe('LibraryContinue', () => {
 	it('renders at most six places, each with its cover, title, song and when', async () => {
-		fetchLibraryContinue.mockResolvedValue(
+		fetchLibraryListen.mockResolvedValue(
 			continueResponse([
 				item({
 					id: 'vernissage',
@@ -110,6 +111,7 @@ describe('LibraryContinue', () => {
 		const target = await render();
 		await settle();
 
+		expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 6 });
 		const tiles = target.querySelectorAll('.continue-item');
 		expect(tiles).toHaveLength(6);
 		expect(tiles[0].querySelector('img')?.getAttribute('src')).toBe('/covers/open-windows.jpg');
@@ -123,7 +125,7 @@ describe('LibraryContinue', () => {
 
 	it("shows a playlist's album covers as its mosaic unless it has its own cover", async () => {
 		const albumCover = { card: '/covers/anfield.jpg', detail: '/covers/anfield-detail.jpg' };
-		fetchLibraryContinue.mockResolvedValue(
+		fetchLibraryListen.mockResolvedValue(
 			continueResponse([
 				item({ type: 'playlist', id: 'night-drive', cover: null, album_covers: [albumCover] }),
 				item({ type: 'playlist', id: 'late-shift', album_covers: [albumCover] })
@@ -141,7 +143,7 @@ describe('LibraryContinue', () => {
 	});
 
 	it('continues on the song a place names, else opens the place itself', async () => {
-		fetchLibraryContinue.mockResolvedValue(
+		fetchLibraryListen.mockResolvedValue(
 			continueResponse([
 				item({ id: 'vernissage', song_id: 'song-1', song_title: 'Kuratorenherz' }),
 				item({
@@ -174,8 +176,8 @@ describe('LibraryContinue', () => {
 	});
 
 	it('names loading and empty states honestly', async () => {
-		let resolveRequest: ((value: { items: LibraryContinueItem[] }) => void) | undefined;
-		fetchLibraryContinue.mockImplementationOnce(
+		let resolveRequest: ((value: { items: LibraryListenItem[] }) => void) | undefined;
+		fetchLibraryListen.mockImplementationOnce(
 			() => new Promise((resolve) => (resolveRequest = resolve))
 		);
 		const target = await render();
@@ -187,19 +189,19 @@ describe('LibraryContinue', () => {
 	});
 
 	it('names an error and retries it', async () => {
-		fetchLibraryContinue.mockRejectedValueOnce(new Error('offline'));
+		fetchLibraryListen.mockRejectedValueOnce(new Error('offline'));
 		const target = await render();
 		await settle();
 		expect(target.textContent).toContain('Could not load continue items.');
 
-		fetchLibraryContinue.mockResolvedValueOnce(continueResponse([item()]));
+		fetchLibraryListen.mockResolvedValueOnce(continueResponse([item()]));
 		target.querySelector<HTMLButtonElement>('.continue-retry')?.click();
 		await settle();
 		expect(target.querySelectorAll('.continue-item')).toHaveLength(1);
 	});
 
 	it('keeps the list it showed when a refresh on return to the foreground fails', async () => {
-		fetchLibraryContinue
+		fetchLibraryListen
 			.mockResolvedValueOnce(continueResponse([item({ id: 'yesterday', title: 'Yesterday' })]))
 			.mockRejectedValueOnce(new Error('offline'))
 			.mockResolvedValueOnce(continueResponse([item({ id: 'vernissage', title: 'Vernissage' })]));
@@ -208,7 +210,7 @@ describe('LibraryContinue', () => {
 
 		dispatchVisibility('visible');
 		await settle();
-		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
 		expect(entryLabels(target)).toEqual(['Open album Yesterday']);
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 		expect(target.querySelector('.continue-retry')).toBeNull();
@@ -219,7 +221,7 @@ describe('LibraryContinue', () => {
 	});
 
 	it('fetches Continue fresh every time Home is shown', async () => {
-		fetchLibraryContinue
+		fetchLibraryListen
 			.mockResolvedValueOnce(continueResponse([item({ id: 'yesterday', title: 'Yesterday' })]))
 			.mockResolvedValueOnce(continueResponse([item({ id: 'vernissage', title: 'Vernissage' })]));
 		const first = await render();
@@ -234,7 +236,7 @@ describe('LibraryContinue', () => {
 	});
 
 	it('refreshes Continue when the app returns to the foreground on Home', async () => {
-		fetchLibraryContinue
+		fetchLibraryListen
 			.mockResolvedValueOnce(continueResponse([item({ id: 'yesterday', title: 'Yesterday' })]))
 			.mockResolvedValueOnce(
 				continueResponse([
@@ -247,7 +249,7 @@ describe('LibraryContinue', () => {
 
 		dispatchVisibility('hidden');
 		await settle();
-		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
+		expect(fetchLibraryListen).toHaveBeenCalledOnce();
 		expect(entryLabels(target)).toEqual(['Open album Yesterday']);
 
 		dispatchVisibility('visible');
@@ -257,8 +259,8 @@ describe('LibraryContinue', () => {
 	});
 
 	it('asks the server once per return even when the foreground signal repeats', async () => {
-		let resolveRefresh: ((value: { items: LibraryContinueItem[] }) => void) | undefined;
-		fetchLibraryContinue
+		let resolveRefresh: ((value: { items: LibraryListenItem[] }) => void) | undefined;
+		fetchLibraryListen
 			.mockResolvedValueOnce(continueResponse([item()]))
 			.mockImplementationOnce(() => new Promise((resolve) => (resolveRefresh = resolve)));
 		const target = await render();
@@ -270,7 +272,7 @@ describe('LibraryContinue', () => {
 		target.querySelector<HTMLButtonElement>('.continue-toggle')?.click();
 		await settle();
 
-		expect(fetchLibraryContinue).toHaveBeenCalledTimes(2);
+		expect(fetchLibraryListen).toHaveBeenCalledTimes(2);
 		expect(entryLabels(target)).toEqual(['Open album Open Windows']);
 		resolveRefresh?.(continueResponse([]));
 		await settle();
@@ -278,7 +280,7 @@ describe('LibraryContinue', () => {
 	});
 
 	it('stops listening for the foreground once Home is left', async () => {
-		fetchLibraryContinue.mockResolvedValue(continueResponse([item()]));
+		fetchLibraryListen.mockResolvedValue(continueResponse([item()]));
 		await render();
 		await settle();
 		await unmount(mounted.splice(0)[0]);
@@ -286,11 +288,11 @@ describe('LibraryContinue', () => {
 		dispatchVisibility('visible');
 		await settle();
 
-		expect(fetchLibraryContinue).toHaveBeenCalledOnce();
+		expect(fetchLibraryListen).toHaveBeenCalledOnce();
 	});
 
 	it('collapses and restores the browser preference', async () => {
-		fetchLibraryContinue.mockResolvedValue(continueResponse([item()]));
+		fetchLibraryListen.mockResolvedValue(continueResponse([item()]));
 		const target = await render();
 		await settle();
 

@@ -1,4 +1,4 @@
-"""Personal library index search."""
+"""Personal library: search, Home's Listen and Write, and the library pool queue."""
 
 from __future__ import annotations
 
@@ -14,11 +14,12 @@ from songmaker_cli.api_helpers import (
 )
 from songmaker_cli.api_models import (
     DEFAULT_LIBRARY_TAKE_POOL,
-    LibraryContinueResponse,
+    LibraryListenResponse,
     LibraryPoolQueueResponse,
     LibrarySearchResponse,
     LibrarySort,
     LibraryTakePool,
+    LibraryWriteResponse,
 )
 from songmaker_cli.app_context import AppContext, get_app_context, get_db_session
 from songmaker_cli.auth_dependencies import get_current_user
@@ -31,10 +32,10 @@ from songmaker_cli.constants import (
 )
 from songmaker_cli.db.models import Album
 from songmaker_cli.db.queries import (
-    CONTINUE_MAX_PLACES,
     count_picked_songs_by_album,
     count_songs_by_album,
-    list_place_activity,
+    list_place_listens,
+    list_worked_songs,
     search_library,
 )
 from songmaker_cli.library_cursor import (
@@ -51,22 +52,35 @@ from songmaker_cli.queue_stream_api import (
 
 router = APIRouter()
 
-# Each Continue page re-reads every place before its window, so the offset is
+LISTEN_DEFAULT_PLACES: Final[int] = 3
+# Each Listen page re-reads every place before its window, so the offset is
 # bounded far beyond any real library to keep one request's work finite.
-CONTINUE_MAX_OFFSET: Final[int] = 100_000
+LISTEN_MAX_OFFSET: Final[int] = 100_000
+WRITE_SONGS: Final[int] = 3
 
 
-@router.get("/library/continue")
-def api_library_continue(
-    offset: int = Query(0, ge=0, le=CONTINUE_MAX_OFFSET),
-    limit: int = Query(CONTINUE_MAX_PLACES, ge=1, le=PAGE_MAX_LIMIT),
+@router.get("/library/listen")
+def api_library_listen(
+    offset: int = Query(0, ge=0, le=LISTEN_MAX_OFFSET),
+    limit: int = Query(LISTEN_DEFAULT_PLACES, ge=1, le=PAGE_MAX_LIMIT),
     user: AuthenticatedUser = Depends(get_current_user),
     session: Session = Depends(get_db_session),
-) -> LibraryContinueResponse:
-    places = list_place_activity(
+) -> LibraryListenResponse:
+    listens = list_place_listens(
         session, viewer_id=user.id, owner_id=owner_filter(user), limit=offset + limit,
     )
-    return LibraryContinueResponse.from_orm(places[offset:])
+    return LibraryListenResponse.from_orm(listens[offset:])
+
+
+@router.get("/library/write")
+def api_library_write(
+    user: AuthenticatedUser = Depends(get_current_user),
+    session: Session = Depends(get_db_session),
+) -> LibraryWriteResponse:
+    worked_songs = list_worked_songs(
+        session, viewer_id=user.id, owner_id=owner_filter(user), limit=WRITE_SONGS,
+    )
+    return LibraryWriteResponse.from_orm(worked_songs)
 
 
 @router.get(

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
+	import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
 	import { openAlbum, openPlaylist, selectSong } from '$lib/stores/navigation';
 	import {
 		initLibraryContinueCollapsed,
@@ -14,7 +14,7 @@
 
 	type LoadState = 'loading' | 'ready' | 'error';
 
-	let items = $state<LibraryContinueItem[]>([]);
+	let items = $state<LibraryListenItem[]>([]);
 	let loadState = $state<LoadState>('loading');
 	let loadedAt = $state(new Date());
 
@@ -27,7 +27,7 @@
 		void refreshItems();
 	});
 
-	// Continue ranks what the musician touched last, so it is never cached
+	// Continue ranks where the musician listened last, so it is never cached
 	// beyond one visit: every show of Home and every return to the foreground
 	// asks the server again, and a signal that repeats mid-request joins it.
 	function refreshItems(): Promise<void> {
@@ -41,7 +41,7 @@
 	async function fetchItems(): Promise<void> {
 		if (loadState === 'error') loadState = 'loading';
 		try {
-			items = (await fetchLibraryContinue()).items;
+			items = (await fetchLibraryListen({ offset: 0, limit: MAX_CONTINUE_ITEMS })).items;
 			loadedAt = new Date();
 			loadState = 'ready';
 		} catch {
@@ -53,18 +53,18 @@
 		if (document.visibilityState === 'visible') void refreshItems();
 	}
 
-	function songOf(item: LibraryContinueItem): { id: string; title: string } | null {
+	function songOf(item: LibraryListenItem): { id: string; title: string } | null {
 		return item.song_id ? { id: item.song_id, title: item.song_title ?? '' } : null;
 	}
 
-	function itemLabel(item: LibraryContinueItem): string {
+	function itemLabel(item: LibraryListenItem): string {
 		const song = songOf(item);
 		return song
 			? `Open song ${song.title} in ${item.type} ${item.title}`
 			: `Open ${item.type} ${item.title}`;
 	}
 
-	function openItem(item: LibraryContinueItem): void {
+	function openItem(item: LibraryListenItem): void {
 		const song = songOf(item);
 		if (song) void selectSong(song.id);
 		else if (item.type === 'album') void openAlbum(item.id);
@@ -113,8 +113,8 @@
 							coverUrl={item.cover?.card ?? null}
 							playlistCovers={item.type === 'playlist' ? item.album_covers : null}
 						/>
-						<time class="continue-when" datetime={item.activity_at}
-							>{activityTimeLabel(item.activity_at, loadedAt)}</time
+						<time class="continue-when" datetime={item.played_at}
+							>{activityTimeLabel(item.played_at, loadedAt)}</time
 						>
 					</button>
 				{/each}

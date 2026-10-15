@@ -15,6 +15,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
+	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -39,9 +40,9 @@ import {
 	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openLibraryWall,
 	openRailNav,
-	openSettingsFromAccountMenu,
 	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	shellOf,
@@ -349,6 +350,20 @@ function openVoicesFromDrawerSearch(page: Page): Promise<void> {
 	return openSettingsSectionFromDrawerSearch(page, SETTINGS_SECTION);
 }
 
+// The phone bar's 🔍 and the sheet it opens, both named as PhoneAppBar.svelte
+// names them (#1354 rule 26).
+const PHONE_SEARCH_LABEL = 'Search';
+
+function searchSheet(page: Page): Locator {
+	return page.getByRole('dialog', { name: PHONE_SEARCH_LABEL, exact: true });
+}
+
+async function openSearchSheet(page: Page): Promise<Locator> {
+	await appBar(page).getByRole('button', { name: PHONE_SEARCH_LABEL, exact: true }).click();
+	await expect(searchSheet(page)).toBeVisible();
+	return searchSheet(page);
+}
+
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile') {
 		await openVoicesFromDrawerSearch(page);
@@ -562,9 +577,9 @@ function escapeInsteadOfBack(row: OverlayRow): OverlayRow {
 const ESCAPE_ROWS = OVERLAY_ROWS.filter((row) => row.leave === goBack).map(escapeInsteadOfBack);
 
 test.describe('Back and Escape close the open overlay first', () => {
+	// Each row belongs to one shell, and only that shell's project runs it.
 	for (const row of [...OVERLAY_ROWS, ...ESCAPE_ROWS]) {
-		test(row.name, async ({ page, request }, testInfo) => {
-			test.skip(shellOf(testInfo) !== row.shell, `The row belongs to the ${row.shell} shell.`);
+		test(row.name, { tag: ONLY_IN_SHELL[row.shell] }, async ({ page, request }) => {
 			const guard = new FlowGuard(page);
 			const { playlist, pages } = await openSeededPlaylist(page, request);
 
@@ -594,32 +609,35 @@ test.describe('Back and Forward between the library and Settings', () => {
 		guard.assertClean();
 	});
 
-	// The phone's account menu is a history layer of its own, and choosing
-	// Settings in it steps off that layer before Settings opens.
-	test('Back from Settings opened in the phone account menu returns to the playlist, and Forward to Settings', async ({
-		page,
-		request
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', 'The account menu belongs to the mobile shell.');
-		const guard = new FlowGuard(page);
-		const { pages } = await openSeededPlaylist(page, request);
-		await openSettingsFromAccountMenu(page);
-		const settingsIndex = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, exact: true });
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsIndex).toBeVisible();
+	// The phone's search sheet is a history layer of its own, and choosing a
+	// page in it steps off that layer before the page opens (#1354 rule 26).
+	test(
+		'Back from Voices chosen in the phone search sheet returns to the playlist, and Forward to Voices',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page, request }) => {
+			const guard = new FlowGuard(page);
+			const { pages } = await openSeededPlaylist(page, request);
+			const sheet = await openSearchSheet(page);
+			await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(SETTINGS_SECTION);
+			await sheet
+				.getByRole('group', { name: 'Pages' })
+				.getByRole('option', { name: nameStartingWith(SETTINGS_SECTION) })
+				.click();
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
 
-		await page.goBack();
+			await page.goBack();
 
-		await expectPlaylistStands(page, pages);
-		await expect(settingsIndex).toBeHidden();
+			await expectPlaylistStands(page, pages);
+			await expect(settingsHeading(page)).toBeHidden();
 
-		await page.goForward();
+			await page.goForward();
 
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsIndex).toBeVisible();
-		await expect(pages.playlist).toBeHidden();
-		guard.assertClean();
-	});
+			await expectSettingsStands(page);
+			await expect(pages.playlist).toBeHidden();
+			guard.assertClean();
+		}
+	);
 
 	test('after a reload on the playlist, Back from Settings returns to it', async ({
 		page,
@@ -689,49 +707,51 @@ test.describe('Back and Forward between the library and Settings', () => {
 		guard.assertClean();
 	});
 
-	test('the phone drawer left open over a reload is gone, and one Back reaches the wall', async ({
-		page,
-		request
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
-		const guard = new FlowGuard(page);
-		const { pages } = await openSeededPlaylist(page, request);
-		await openRailDrawer(page);
+	// The drawer belongs to the mobile shell.
+	test(
+		'the phone drawer left open over a reload is gone, and one Back reaches the wall',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page, request }) => {
+			const guard = new FlowGuard(page);
+			const { pages } = await openSeededPlaylist(page, request);
+			await openRailDrawer(page);
 
-		await page.reload();
+			await page.reload();
 
-		await expect(railDrawer(page)).toBeHidden();
-		await expectPlaylistStands(page, pages);
-		// The library steps off the drawer's own entry by itself once it runs.
-		await expect
-			.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
-			.toBe(false);
-		await page.goBack();
-		await expectReached(page, pages, 'wall');
-		guard.assertClean();
-	});
+			await expect(railDrawer(page)).toBeHidden();
+			await expectPlaylistStands(page, pages);
+			// The library steps off the drawer's own entry by itself once it runs.
+			await expect
+				.poll(() => page.evaluate(() => JSON.stringify(history.state).includes('"layer"')))
+				.toBe(false);
+			await page.goBack();
+			await expectReached(page, pages, 'wall');
+			guard.assertClean();
+		}
+	);
 
-	// The phone drawer carries navigation only, so its way to Settings is the
-	// search's page hit: it leaves the drawer and pushes one entry of its own.
-	test('a drawer link to Settings pushes one entry over the playlist, and Back returns to it', async ({
-		page,
-		request
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
-		const guard = new FlowGuard(page);
-		const { pages } = await openSeededPlaylist(page, request);
-		const entriesOnPlaylist = await page.evaluate(() => history.length);
+	// The drawer belongs to the mobile shell. It carries navigation only, so
+	// its way to Settings is the search's page hit: it leaves the drawer and
+	// pushes one entry of its own.
+	test(
+		'a drawer link to Settings pushes one entry over the playlist, and Back returns to it',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page, request }) => {
+			const guard = new FlowGuard(page);
+			const { pages } = await openSeededPlaylist(page, request);
+			const entriesOnPlaylist = await page.evaluate(() => history.length);
 
-		await openVoicesFromDrawerSearch(page);
-		await expectSettingsStands(page);
-		expect(await page.evaluate(() => history.length)).toBe(entriesOnPlaylist + 1);
+			await openVoicesFromDrawerSearch(page);
+			await expectSettingsStands(page);
+			expect(await page.evaluate(() => history.length)).toBe(entriesOnPlaylist + 1);
 
-		await page.goBack();
+			await page.goBack();
 
-		await expectPlaylistStands(page, pages);
-		await expect(railDrawer(page)).toBeHidden();
-		guard.assertClean();
-	});
+			await expectPlaylistStands(page, pages);
+			await expect(railDrawer(page)).toBeHidden();
+			guard.assertClean();
+		}
+	);
 });
 
 // Issue #1006 (H3): a library page opened over another of the same kind is
@@ -971,39 +991,41 @@ async function tapSongThenMenu(page: Page, songRow: Locator, gapMs: number): Pro
 }
 
 for (const gapMs of [5, 20]) {
-	test(`the menu tapped ${gapMs} ms after a song stays open, and Back closes only the menu`, async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', 'The drawer belongs to the mobile shell.');
-		const guard = new FlowGuard(page);
-		const library = readSeededLibrary();
-		const surface = workspace(page);
-		await page.goto('/');
-		await wallTileNamed(page, library.albumTitle).click();
-		const album = surface.getByRole('heading', { name: library.albumTitle });
-		await expect(album).toBeVisible();
-		const albumAddress = page.url();
-		const songRow = surface.getByRole('button', {
-			name: songEditorOpenLabel(library.pickedSongTitle)
-		});
-
-		for (let tap = 1; tap <= MENU_TAPS_AFTER_SONG; tap += 1) {
-			await tapSongThenMenu(page, songRow, gapMs);
-			await expect(railDrawer(page), `the menu on tap ${tap}`).toBeVisible();
-			await expect(page).toHaveURL(SONG_ADDRESS);
-
-			await page.goBack();
-
-			await expect(railDrawer(page), `the menu after Back on tap ${tap}`).toBeHidden();
-			await expectSongStands(page, 'mobile', library.pickedSongTitle);
-
-			await page.goBack();
-
+	// The drawer belongs to the mobile shell.
+	test(
+		`the menu tapped ${gapMs} ms after a song stays open, and Back closes only the menu`,
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			const library = readSeededLibrary();
+			const surface = workspace(page);
+			await page.goto('/');
+			await wallTileNamed(page, library.albumTitle).click();
+			const album = surface.getByRole('heading', { name: library.albumTitle });
 			await expect(album).toBeVisible();
-			expect(page.url(), `the album's address after tap ${tap}`).toBe(albumAddress);
+			const albumAddress = page.url();
+			const songRow = surface.getByRole('button', {
+				name: songEditorOpenLabel(library.pickedSongTitle)
+			});
+
+			for (let tap = 1; tap <= MENU_TAPS_AFTER_SONG; tap += 1) {
+				await tapSongThenMenu(page, songRow, gapMs);
+				await expect(railDrawer(page), `the menu on tap ${tap}`).toBeVisible();
+				await expect(page).toHaveURL(SONG_ADDRESS);
+
+				await page.goBack();
+
+				await expect(railDrawer(page), `the menu after Back on tap ${tap}`).toBeHidden();
+				await expectSongStands(page, 'mobile', library.pickedSongTitle);
+
+				await page.goBack();
+
+				await expect(album).toBeVisible();
+				expect(page.url(), `the album's address after tap ${tap}`).toBe(albumAddress);
+			}
+			guard.assertClean();
 		}
-		guard.assertClean();
-	});
+	);
 }
 
 // Issue #1165: a crossing the phone opens out of a history layer -- an album
@@ -1012,7 +1034,6 @@ for (const gapMs of [5, 20]) {
 // step once, onto the playlist underneath, and not past it -- the race is one
 // of milliseconds, so each crossing is opened and left many times.
 const QUEUED_CROSSINGS = 20;
-const PHONE_LAYERS_ONLY = 'The drawer and the full Now Playing are phone layers.';
 async function openAlbumFromRail(page: Page, shell: Shell, albumTitle: string): Promise<void> {
 	await (
 		await railLibrary(page, shell)
@@ -1032,50 +1053,53 @@ async function goToPlayingSong(page: Page, title: string): Promise<void> {
 	await nowPlaying.getByRole('button', { name: NOW_PLAYING_GO_TO_SONG, exact: true }).click();
 }
 
-test.describe('one Back right after a crossing out of a phone layer', () => {
-	test('an album tapped in the rail drawer returns to the playlist', async ({
-		page,
-		request
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
-		const guard = new FlowGuard(page);
-		const { pages } = await openSeededPlaylist(page, request);
-		const library = readSeededLibrary();
-		const album = workspace(page).getByRole('heading', { name: library.albumTitle });
+// The drawer and the full Now Playing are phone layers.
+test.describe(
+	'one Back right after a crossing out of a phone layer',
+	{ tag: ONLY_IN_SHELL.mobile },
+	() => {
+		test('an album tapped in the rail drawer returns to the playlist', async ({
+			page,
+			request
+		}) => {
+			const guard = new FlowGuard(page);
+			const { pages } = await openSeededPlaylist(page, request);
+			const library = readSeededLibrary();
+			const album = workspace(page).getByRole('heading', { name: library.albumTitle });
 
-		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
-			await openAlbumFromRail(page, 'mobile', library.albumTitle);
-			await expect(album).toBeVisible();
+			for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+				await openAlbumFromRail(page, 'mobile', library.albumTitle);
+				await expect(album).toBeVisible();
 
-			await page.goBack();
+				await page.goBack();
 
-			await expectPlaylistStands(page, pages);
-		}
-		guard.assertClean();
-	});
+				await expectPlaylistStands(page, pages);
+			}
+			guard.assertClean();
+		});
 
-	test('Go to song in Now Playing returns to the playlist', async ({ page, request }, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
-		const guard = new FlowGuard(page);
-		const { playlist, pages } = await openSeededPlaylist(page, request);
-		await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
-		// Paused, so the seeded three-second take stays the playing song.
-		await page
-			.getByRole('contentinfo')
-			.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-			.click();
+		test('Go to song in Now Playing returns to the playlist', async ({ page, request }) => {
+			const guard = new FlowGuard(page);
+			const { playlist, pages } = await openSeededPlaylist(page, request);
+			await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
+			// Paused, so the seeded three-second take stays the playing song.
+			await page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+				.click();
 
-		for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
-			await goToPlayingSong(page, firstSong(playlist));
-			await expectSongStands(page, 'mobile', firstSong(playlist));
+			for (let open = 1; open <= QUEUED_CROSSINGS; open += 1) {
+				await goToPlayingSong(page, firstSong(playlist));
+				await expectSongStands(page, 'mobile', firstSong(playlist));
 
-			await page.goBack();
+				await page.goBack();
 
-			await expectPlaylistStands(page, pages);
-		}
-		guard.assertClean();
-	});
-});
+				await expectPlaylistStands(page, pages);
+			}
+			guard.assertClean();
+		});
+	}
+);
 
 interface CreatedAlbum {
 	id: string;
@@ -1111,41 +1135,64 @@ async function deleteAlbum(page: Page, albumId: string): Promise<void> {
 	).toBeTruthy();
 }
 
-test('Back closes the share warning on the phone and keeps the album', async ({
-	page
-}, testInfo) => {
-	test.skip(shellOf(testInfo) !== 'mobile', 'The row belongs to the mobile shell.');
-	const guard = new FlowGuard(page);
-	await page.goto('/');
-	const album = await seedAlbumWithoutTakes(page);
-	try {
-		await page.goto(`/album/${album.id}`);
-		const albumHeading = workspace(page).getByRole('heading', { name: album.title });
-		await expect(albumHeading).toBeVisible();
-		const albumAddress = page.url();
+// This flow belongs to the mobile shell.
+test(
+	'Back closes the share warning on the phone and keeps the album',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		await page.goto('/');
+		const album = await seedAlbumWithoutTakes(page);
+		try {
+			await page.goto(`/album/${album.id}`);
+			const albumHeading = workspace(page).getByRole('heading', { name: album.title });
+			await expect(albumHeading).toBeVisible();
+			const albumAddress = page.url();
 
-		await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-		await page.getByRole('dialog', { name: COLLECTION_MENU_LABEL }).locator('.share-btn').click();
-		const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
-		await expect(warning).toBeVisible();
+			await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+			await page.getByRole('dialog', { name: COLLECTION_MENU_LABEL }).locator('.share-btn').click();
+			const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
+			await expect(warning).toBeVisible();
 
-		await page.goBack();
-		await expect(warning).toBeHidden();
-		await expect(albumHeading).toBeVisible();
-		expect(page.url()).toBe(albumAddress);
+			await page.goBack();
+			await expect(warning).toBeHidden();
+			await expect(albumHeading).toBeVisible();
+			expect(page.url()).toBe(albumAddress);
 
-		await page.goBack();
-		await expect(page).not.toHaveURL(albumAddress);
-		guard.assertClean();
-	} finally {
-		await deleteAlbum(page, album.id);
+			await page.goBack();
+			await expect(page).not.toHaveURL(albumAddress);
+			guard.assertClean();
+		} finally {
+			await deleteAlbum(page, album.id);
+		}
 	}
-});
+);
+
+// The phone's account circle lives on the Library (#1354 rule 27), and its
+// menu is a history layer of its own there: Back closes it and keeps the wall.
+test(
+	'Back closes the account menu on the Library and the address stays',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		await page.goto('/');
+		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		await expect(wall).toBeVisible();
+		await accountCircle(page).click();
+		await expect(accountMenu(page)).toBeVisible();
+
+		await page.goBack();
+
+		await expect(accountMenu(page)).toBeHidden();
+		await expect(wall).toBeVisible();
+		await expect(page).toHaveURL(/\/$/);
+		guard.assertClean();
+	}
+);
 
 // Issue #1331: the history controller runs on every page, so Back closes the
 // topmost overlay on Settings and on a share page before it leaves the page.
 test.describe('Back closes the open overlay outside the library', () => {
-	const ACCOUNT_MENU_ON_PHONE = 'The account menu belongs to the mobile shell.';
 	const VOICE_DELETE_TITLE = 'Delete voice?';
 
 	function standsOnLayerEntry(page: Page): Promise<boolean> {
@@ -1164,21 +1211,21 @@ test.describe('Back closes the open overlay outside the library', () => {
 		return ((await response.json()) as { name: string }).name;
 	}
 
-	test('Back closes the account menu on Voices and the address stays', async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
-		const guard = new FlowGuard(page);
-		await openVoicesOverTheWall(page, 'mobile');
-		await accountCircle(page).click();
-		await expect(accountMenu(page)).toBeVisible();
+	test(
+		'Back closes the search sheet on Voices and the address stays',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await openVoicesOverTheWall(page, 'mobile');
+			await openSearchSheet(page);
 
-		await page.goBack();
+			await page.goBack();
 
-		await expect(accountMenu(page)).toBeHidden();
-		await expectSettingsStands(page);
-		guard.assertClean();
-	});
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
+			guard.assertClean();
+		}
+	);
 
 	test('Back cancels the voice delete confirmation: still on Voices, the voice listed', async ({
 		page,
@@ -1259,45 +1306,49 @@ test.describe('Back closes the open overlay outside the library', () => {
 		}
 	});
 
-	test('an album tapped in the phone drawer over Voices leaves one Back to Voices', async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY); // NOSONAR S1607: the drawer is a phone layer only.
-		const guard = new FlowGuard(page);
-		const library = readSeededLibrary();
-		await openVoicesOverTheWall(page, 'mobile');
-		const rail = await openRailNav(page, 'mobile');
-		await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
+	// The drawer is a phone layer.
+	test(
+		'an album tapped in the phone drawer over Voices leaves one Back to Voices',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			const library = readSeededLibrary();
+			await openVoicesOverTheWall(page, 'mobile');
+			const rail = await openRailNav(page, 'mobile');
+			await rail.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL }).click();
 
-		await openAlbumFromRail(page, 'mobile', library.albumTitle);
-		await expect(workspace(page).getByRole('heading', { name: library.albumTitle })).toBeVisible();
-		await expect(railDrawer(page)).toBeHidden();
+			await openAlbumFromRail(page, 'mobile', library.albumTitle);
+			await expect(
+				workspace(page).getByRole('heading', { name: library.albumTitle })
+			).toBeVisible();
+			await expect(railDrawer(page)).toBeHidden();
 
-		await page.goBack();
+			await page.goBack();
 
-		await expectSettingsStands(page);
-		await expect(railDrawer(page)).toBeHidden();
-		guard.assertClean();
-	});
+			await expectSettingsStands(page);
+			await expect(railDrawer(page)).toBeHidden();
+			guard.assertClean();
+		}
+	);
 
-	test('the account menu left open over a reload on Voices is gone, and one Back leaves the page', async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
-		const guard = new FlowGuard(page);
-		await openVoicesOverTheWall(page, 'mobile');
-		await accountCircle(page).click();
-		await expect(accountMenu(page)).toBeVisible();
+	test(
+		'the search sheet left open over a reload on Voices is gone, and one Back leaves the page',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await openVoicesOverTheWall(page, 'mobile');
+			await openSearchSheet(page);
 
-		await page.reload();
+			await page.reload();
 
-		await expect(accountMenu(page)).toBeHidden();
-		await expectSettingsStands(page);
-		await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
-		await page.goBack();
-		await expect(page).toHaveURL(/\/$/);
-		guard.assertClean();
-	});
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
+			await page.goBack();
+			await expect(page).toHaveURL(/\/$/);
+			guard.assertClean();
+		}
+	);
 });
 
 // The legal page's own Back is a history step back to the app page it was

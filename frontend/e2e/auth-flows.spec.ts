@@ -7,9 +7,12 @@
 // session behind an open song page and is sent to the door from there, and
 // since #1340 a drawer tap after the loss returns there to the tapped album.
 // Since #1322 an admin with two sessions finds its own marked as this device,
-// and the admin page keeps a create refusal in the form while a revoke refusal
-// stays. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
-// page, and one the server never received leaves the person signed in.
+// and a create refusal in the form clears on typing while an error on the page
+// stays. Since #1397 a revoke that another tab beat drops the dead row and says
+// the session had already ended, until a revoke works or the admin changes
+// tab, and a create that works clears the Users tab's error. Since #1340 a
+// sign-out while a take plays leaves by a fresh sign-in page, and one the
+// server never received leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
@@ -20,8 +23,9 @@
 // has thrown away and watch the server refuse it.
 //
 // No route interception anywhere: every refusal is the CI stack's own answer.
-// The admin flow's 404 and 409 are its point, so its guard forgives exactly
-// those two statuses on exactly the revoke and create paths.
+// The admin flows' 404s and 409 are their point, so their guard forgives
+// exactly those statuses on exactly the revoke, account-update and create
+// paths.
 // The two numbers the lockout flow depends on are set in
 // `docker/docker-compose.ci.yml`, with the measurement written beside them --
 // the short-window budget counts failed logins per *IP* and the whole run comes
@@ -51,6 +55,7 @@ import { AUTH_SESSION_EXPIRED_MESSAGE } from '../src/lib/constants/auth';
 import {
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
+	ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
 	RAIL_DRAWER_OPEN_LABEL,
@@ -66,10 +71,12 @@ import {
 	SESSION_REFUSAL_STATUSES,
 	type ExpectedRefusal,
 	MOBILE_VIEWPORT,
+	openLibraryWall,
 	openRailNav,
 	containing,
 	loseNetwork,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	regainNetwork,
 	shellOf,
 	workspace,
@@ -89,13 +96,19 @@ import {
  * What each test costs the API, measured on a green run of both shells against
  * the CI recipe (desktop / 375px): 13/13 for the sign-in, 19/19 for the reload,
  * 14/14 for the sign-out and the refused return, 18/15 for the refused admin
- * page, 13/12 for the expired session, 11/11 for the lockout, 23/26 for the
- * deep-link sign-in, 28 at 375px for the phone's session lost behind its
- * menu, and 20 at 390px for the album tapped in its drawer after the session
- * was lost; both run on the phone only. The admin flows were measured at 1440 /
- * 390 instead: 23/21 for the own session and the two refusals, and 8 at 390px
- * for the row-action hitboxes (the admin page plus opening a tab), which runs
- * on the phone only. The #1340 sign-outs were measured at 1440 / 390: 29 and
+ * page, 13/12 for the expired session, 23/26 for the deep-link sign-in, 28 at
+ * 375px for the phone's session lost behind its menu, and 20 at 390px for the
+ * album tapped in its drawer after the session was lost; both run on the phone
+ * only. The admin flows were measured at 1440 /
+ * 390 instead: 27 to 28/25 to 26 for the own session, its two stale revokes,
+ * the revoke that works and the create refusal (#1397), 11/9 for the Users
+ * tab error a create refusal leaves standing and a create that works clears
+ * (#1397), and 8 at 390px for the row-action hitboxes (the admin page plus
+ * opening a tab), which runs on the phone only.
+ * The lockout was measured at 1440 / 375 once it polled for the lock to lift
+ * (#1403): 16 to 17/15, up to eight of them its tries with the right password -- the
+ * one the lock refuses, then one every ten seconds until it lifts.
+ * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
  * sign-out the lost network keeps from the server. One ceiling for the file,
@@ -141,14 +154,16 @@ const ALBUM_OPENING_PATHS = [
 	'/api/settings/models',
 	'/api/resource-events/stream'
 ];
-// The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
-// sentences under proof. Only that flow forgives them.
+// The admin flows whose 404s (a stale revoke, a disable of an account deleted
+// meanwhile) and 409 (a taken username) are the sentences under proof. Only
+// those flows forgive them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
 // The sign-out whose request never reaches the server: only that flow forgives
 // the requests the lost network fails.
 const LOSES_NETWORK_TAG = '@loses-network';
 const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
+	{ path: `${ADMIN_USERS_PATH}/`, statuses: [404] },
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
 ];
 const ADMIN_PAGE_PATH = '/settings/users';
@@ -170,6 +185,7 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 
 const LOGIN_PAGE_URL = /\/login(\?|$)/;
 const WALL_URL = /\/(\?|$)/;
+const WALL_PATH = '/';
 
 // What the account this spec creates signs in with, and what it never signs in
 // with. Both satisfy the login form's own `minlength`, so the browser submits
@@ -192,9 +208,14 @@ const ACCOUNT_LOCKED_DETAIL =
 const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
 const OWN_SESSION_LABEL = 'This device';
 const REVOKE_LABEL = 'Revoke';
-// The server words every /api 404 this way (`spa_fallback` in `server.py`).
-const SESSION_GONE_MESSAGE = 'Not Found';
+const DISABLE_LABEL = 'Disable';
+// What the Users tab shows for an account the server no longer has: the server
+// words every /api 404 this way (`spa_fallback` in `server.py`).
+const USER_GONE_MESSAGE = 'Not Found';
 const USERNAME_TAKEN_MESSAGE = 'Username already exists';
+// What the admin types onto the taken name, which makes it one the server does
+// not have yet.
+const FREE_USERNAME_SUFFIX = '-2';
 const CREATE_USERNAME_PLACEHOLDER = 'Username';
 const CREATE_PASSWORD_PLACEHOLDER = 'Password';
 const CREATE_LABEL = 'Create';
@@ -206,12 +227,17 @@ const PASSWORD_LABEL = 'Password';
 // The lockout has to arrive on its own, from wrong passwords alone, so the
 // spec never encodes the stack's threshold -- it only refuses to type forever.
 const MAX_WRONG_PASSWORDS = 10;
-// A `Retry-After` a run can honour: the CI stack states 60 seconds, and waiting
-// exactly what the server said is what proves the lock is temporary rather than
-// terminal. A production-like stack states an hour, and the flow says so and
-// stops instead of hanging the suite.
+// A `Retry-After` a run can honour: the CI stack states 60 seconds, and being
+// admitted again within what the server said is what proves the lock is
+// temporary rather than terminal. A production-like stack states an hour, and
+// the flow says so and stops instead of hanging the suite.
 const MAX_HONOURED_RETRY_AFTER_SECONDS = 90;
 const LOCKOUT_TEST_TIMEOUT_MS = 180_000;
+// The lock lifts by itself within the `Retry-After` it states, so the flow
+// tries the right password again this often until it gets in, instead of
+// sleeping the statement out. A refused try records no failure, so trying
+// cannot stretch the lock, and each one costs a single request.
+const LOCK_LIFT_POLL_INTERVAL_MS = 10_000;
 
 interface Account {
 	id: string;
@@ -270,6 +296,16 @@ async function submitLogin(page: Page, username: string, password: string): Prom
 		page.getByRole('button', { name: SUBMIT_LABEL }).click()
 	]);
 	return response;
+}
+
+/**
+ * The sign-in page a page without a session sends to: asked to bring the
+ * person back to that page, or plainly the door from the Library, where every
+ * sign-in lands anyway.
+ */
+function isSignInFor(url: URL, address: string): boolean {
+	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? WALL_PATH;
+	return url.pathname === '/login' && returnTo === address;
 }
 
 /** Signs in from the login page and waits until the workspace is standing. */
@@ -492,6 +528,64 @@ async function openSessionsTab(page: Page, shell: Shell): Promise<void> {
 	]);
 }
 
+/**
+ * Revokes the admin's one other device from a second tab of this device, so
+ * the first tab's row for that device is stale.
+ */
+async function revokeOtherDeviceFromSecondTab(
+	page: Page,
+	shell: Shell,
+	admin: Account
+): Promise<void> {
+	const secondTab = await page.context().newPage();
+	const secondTabGuard = new FlowGuard(secondTab);
+	await secondTab.goto(ADMIN_PAGE_PATH);
+	await openSessionsTab(secondTab, shell);
+	const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
+	await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+	await expect(secondTabRows).toHaveCount(1);
+	await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
+	secondTabGuard.assertClean();
+	await secondTab.close();
+}
+
+function createUsernameField(page: Page): Locator {
+	return page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
+}
+
+/**
+ * Submits the Users tab's create form with this spec's own account name, which
+ * the server already has, and returns the refusal the form shows.
+ */
+async function refuseTakenUsername(page: Page): Promise<Locator> {
+	await createUsernameField(page).fill(account.username);
+	await page.getByPlaceholder(CREATE_PASSWORD_PLACEHOLDER, { exact: true }).fill(ACCOUNT_PASSWORD);
+	await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
+	const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
+	await expect(createRefusal).toBeVisible();
+	return createRefusal;
+}
+
+/** Types onto the end of the refused name, the way a person corrects it. */
+async function correctTakenUsername(page: Page): Promise<void> {
+	const usernameField = createUsernameField(page);
+	await usernameField.press('End');
+	await usernameField.pressSequentially(FREE_USERNAME_SUFFIX);
+}
+
+/**
+ * Deletes each named account the stack still has. One the flow already deleted,
+ * or never got as far as creating, is simply not listed.
+ */
+async function deleteAccountsNamed(usernames: readonly string[]): Promise<void> {
+	const response = await adminApi.get(ADMIN_USERS_PATH);
+	expect(response.status()).toBe(200);
+	const accounts = (await response.json()) as Pick<Account, 'id' | 'username'>[];
+	for (const { id, username } of accounts) {
+		if (usernames.includes(username)) await deleteAccount(adminApi, id);
+	}
+}
+
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
 	await page.screenshot({ path, fullPage: true });
@@ -501,62 +595,73 @@ async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise
 test.describe('admin row actions', () => {
 	test.use({ storageState: STORAGE_STATE_FILE });
 
-	test('user and session row actions have touch-sized hitboxes at 390px', async ({
-		page,
-		isMobile
-	}, testInfo) => {
-		test.skip(!isMobile, 'Touch targets are measured by the mobile project.');
-		// The admin's own session offers no Revoke, so the row measured is the
-		// musician's, signed in on a device of its own.
-		await signInElsewhere(account);
-		await page.setViewportSize(MOBILE_VIEWPORT);
-		await page.goto(ADMIN_PAGE_PATH);
-		const userRow = page.getByRole('row').filter({ hasText: account.username });
-		const actions = userRow.getByRole('button');
-		await expect(actions).toHaveText(['Promote', 'Disable', 'Reset PW', 'Delete']);
-		const heights = await actions.evaluateAll((buttons) =>
-			buttons.map((button) => ({
-				label: button.textContent?.trim(),
-				height: button.getBoundingClientRect().height
-			}))
-		);
-		await attachShot(page, testInfo, 'admin-user-actions-390');
+	// Touch targets are measured by the mobile project.
+	test(
+		'user and session row actions have touch-sized hitboxes at 390px',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }, testInfo) => {
+			// The admin's own session offers no Revoke, so the row measured is the
+			// musician's, signed in on a device of its own.
+			await signInElsewhere(account);
+			await page.setViewportSize(MOBILE_VIEWPORT);
+			await page.goto(ADMIN_PAGE_PATH);
+			const userRow = page.getByRole('row').filter({ hasText: account.username });
+			const actions = userRow.getByRole('button');
+			await expect(actions).toHaveText(['Promote', 'Disable', 'Reset PW', 'Delete']);
+			const heights = await actions.evaluateAll((buttons) =>
+				buttons.map((button) => ({
+					label: button.textContent?.trim(),
+					height: button.getBoundingClientRect().height
+				}))
+			);
+			await attachShot(page, testInfo, 'admin-user-actions-390');
 
-		const [sessionsResponse] = await Promise.all([
-			page.waitForResponse((response) => new URL(response.url()).pathname === ADMIN_SESSIONS_PATH),
-			page.getByRole('combobox', { name: ADMIN_TABS_LABEL }).selectOption('sessions')
-		]);
-		expect(sessionsResponse.status()).toBe(200);
-		const revoke = page
-			.getByRole('row')
-			.filter({ hasText: account.username })
-			.getByRole('button', { name: REVOKE_LABEL, exact: true });
-		await expect(revoke).toBeVisible();
-		heights.push({
-			label: 'Revoke',
-			height: await revoke.evaluate((button) => button.getBoundingClientRect().height)
-		});
-		for (const { label, height } of heights) {
-			expect(height, `${label} touch target height`).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+			const [sessionsResponse] = await Promise.all([
+				page.waitForResponse(
+					(response) => new URL(response.url()).pathname === ADMIN_SESSIONS_PATH
+				),
+				page.getByRole('combobox', { name: ADMIN_TABS_LABEL }).selectOption('sessions')
+			]);
+			expect(sessionsResponse.status()).toBe(200);
+			const revoke = page
+				.getByRole('row')
+				.filter({ hasText: account.username })
+				.getByRole('button', { name: REVOKE_LABEL, exact: true });
+			await expect(revoke).toBeVisible();
+			heights.push({
+				label: 'Revoke',
+				height: await revoke.evaluate((button) => button.getBoundingClientRect().height)
+			});
+			for (const { label, height } of heights) {
+				expect(height, `${label} touch target height`).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+			}
+			await attachShot(page, testInfo, 'admin-session-actions-390');
 		}
-		await attachShot(page, testInfo, 'admin-session-actions-390');
-	});
+	);
 });
 
 test(
-	'an admin finds its own session marked this device, and a create refusal clears on typing while a revoke refusal stays',
+	'an admin finds its own session marked this device, a stale revoke drops the dead row and says so until a revoke works or the tab changes, and a create refusal clears on typing',
 	{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
 	async ({ page, isMobile }, testInfo) => {
 		const shell = shellOf(testInfo);
 		await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
-		const username = `e2e-admin-${shell}-${Date.now().toString(36)}`;
+		const stamp = Date.now().toString(36);
+		const username = `e2e-admin-${shell}-${stamp}`;
 		const admin: Account = {
 			id: await createAccount(adminApi, username, ACCOUNT_PASSWORD, 'admin'),
 			username,
 			password: ACCOUNT_PASSWORD
 		};
+		const musicianName = `e2e-musician-${shell}-${stamp}`;
+		const musician: Account = {
+			id: await createAccount(adminApi, musicianName, ACCOUNT_PASSWORD),
+			username: musicianName,
+			password: ACCOUNT_PASSWORD
+		};
 		try {
 			await signInElsewhere(admin);
+			await signInElsewhere(musician);
 			await page.goto('/login');
 			expect((await submitLogin(page, admin.username, admin.password)).status()).toBe(200);
 			await expect(workspace(page)).toBeVisible();
@@ -572,44 +677,84 @@ test(
 			await expect(otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true })).toBeVisible();
 			await attachShot(page, testInfo, `admin-own-session-${shell}`);
 
-			// A second tab of this device revokes the other device, so the first
-			// tab's row for it is stale and the server refuses its revoke.
-			const secondTab = await page.context().newPage();
-			const secondTabGuard = new FlowGuard(secondTab);
-			await secondTab.goto(ADMIN_PAGE_PATH);
-			await openSessionsTab(secondTab, shell);
-			const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
-			await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			await expect(secondTabRows).toHaveCount(1);
-			await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
-			secondTabGuard.assertClean();
-			await secondTab.close();
-
+			await revokeOtherDeviceFromSecondTab(page, shell, admin);
 			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			const revokeRefusal = page.getByText(SESSION_GONE_MESSAGE, { exact: true });
-			await expect(revokeRefusal).toBeVisible();
+			const alreadyEnded = page.getByText(ADMIN_SESSION_ALREADY_ENDED_MESSAGE, { exact: true });
+			await expect(alreadyEnded).toBeVisible();
+			await expect(ownRows).toHaveCount(1);
+			await expect(thisDevice).toHaveCount(1);
+			await attachShot(page, testInfo, `admin-stale-revoke-${shell}`);
+
+			// A third device signs in now, so the next revoke's refresh lists the
+			// row the second tab then makes stale.
+			await signInElsewhere(admin);
+			const musicianRow = page.getByRole('row').filter({ hasText: musician.username });
+			await musicianRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+			await expect(musicianRow).toHaveCount(0);
+			await expect(alreadyEnded).toBeHidden();
+			await expect(ownRows).toHaveCount(2);
+
+			await revokeOtherDeviceFromSecondTab(page, shell, admin);
+			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+			await expect(alreadyEnded).toBeVisible();
+			await expect(ownRows).toHaveCount(1);
 
 			await openAdminTab(page, shell, 'users', 'Users');
-			const usernameField = page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
-			await usernameField.fill(account.username);
-			await page
-				.getByPlaceholder(CREATE_PASSWORD_PLACEHOLDER, { exact: true })
-				.fill(ACCOUNT_PASSWORD);
-			await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
-			const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
-			await expect(createRefusal).toBeVisible();
-			await expect(revokeRefusal).toBeVisible();
+			await expect(alreadyEnded).toBeHidden();
+			const createRefusal = await refuseTakenUsername(page);
 			await attachShot(page, testInfo, `admin-create-refusal-${shell}`);
 
-			await usernameField.press('End');
-			await usernameField.pressSequentially('-2');
+			await correctTakenUsername(page);
 			await expect(createRefusal).toBeHidden();
-			await expect(revokeRefusal).toBeVisible();
 		} finally {
+			await deleteAccount(adminApi, musician.id);
 			await deleteAccount(adminApi, admin.id);
 		}
 	}
 );
+
+test.describe("the run's admin on the Users tab", () => {
+	test.use({ storageState: STORAGE_STATE_FILE });
+
+	test(
+		'a Users tab error stays while a create refusal clears on typing, and leaves with a create that works',
+		{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
+		async ({ page, isMobile }, testInfo) => {
+			const shell = shellOf(testInfo);
+			await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
+			const goneName = `e2e-gone-${shell}-${Date.now().toString(36)}`;
+			const createdName = `${account.username}${FREE_USERNAME_SUFFIX}`;
+			const goneId = await createAccount(adminApi, goneName, ACCOUNT_PASSWORD);
+			try {
+				await page.goto(ADMIN_PAGE_PATH);
+				const goneRow = page.getByRole('row').filter({ hasText: goneName });
+				await expect(goneRow).toBeVisible();
+
+				// Another admin deletes the account after the page listed it, so
+				// the server refuses to disable it.
+				await deleteAccount(adminApi, goneId);
+				await goneRow.getByRole('button', { name: DISABLE_LABEL, exact: true }).click();
+				const usersTabError = page.getByText(USER_GONE_MESSAGE, { exact: true });
+				await expect(usersTabError).toBeVisible();
+
+				const createRefusal = await refuseTakenUsername(page);
+				await expect(usersTabError).toBeVisible();
+				await attachShot(page, testInfo, `admin-users-error-and-create-refusal-${shell}`);
+
+				await correctTakenUsername(page);
+				await expect(createRefusal).toBeHidden();
+				await expect(usersTabError).toBeVisible();
+
+				await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
+				await expect(page.getByRole('row').filter({ hasText: createdName })).toBeVisible();
+				await expect(usersTabError).toBeHidden();
+				await attachShot(page, testInfo, `admin-create-clears-users-error-${shell}`);
+			} finally {
+				await deleteAccountsNamed([goneName, createdName]);
+			}
+		}
+	);
+});
 
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall,
@@ -665,36 +810,32 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	await attachShot(page, testInfo, 'auth-signed-out-cookie-refused');
 });
 
-test('signing out from the open account menu on Voices, Back returns to Voices, which asks for sign-in again', async ({
-	page,
-	isMobile
-}, testInfo) => {
-	test.skip(!isMobile, 'The account menu belongs to the phone shell.'); // NOSONAR S1607: the account menu exists only in the phone shell.
-	await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
-	await signIn(page);
-	await page.goto(VOICES_PAGE_PATH);
-	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
+// The phone's account circle lives on the Library (#1354 rule 25), so the
+// phone signs out there. The account menu belongs to the phone shell.
+test(
+	'signing out from the open account menu on the Library, Back returns to the Library, which asks for sign-in again',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }, testInfo) => {
+		await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
+		await signIn(page);
 
-	await signOut(page, 'mobile');
-	await expect(page).toHaveURL(LOGIN_PAGE_URL);
-	await forgetAppHistorySteps(page);
-	await page.goBack();
+		await signOut(page, 'mobile');
+		await expect(page).toHaveURL(LOGIN_PAGE_URL);
+		await forgetAppHistorySteps(page);
+		await page.goBack();
 
-	// Not an empty page on the Voices address, and not the account menu's
-	// entry stepped through: the door, asked to bring the person back to Voices.
-	await expect(page).toHaveURL(
-		(url) =>
-			url.pathname === '/login' &&
-			url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === VOICES_PAGE_PATH
-	);
-	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
-	expect(await appHistorySteps(page)).toEqual([]);
-	await attachShot(page, testInfo, 'auth-signed-out-back');
-});
+		// Not an empty Library, and not the account menu's entry stepped through:
+		// the door, which brings the person back to the Library.
+		await expect(page).toHaveURL((url) => isSignInFor(url, WALL_PATH));
+		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
+		expect(await appHistorySteps(page)).toEqual([]);
+		await attachShot(page, testInfo, 'auth-signed-out-back');
+	}
+);
 
-// The wide window signs out from its rail beside the song; the phone's song
-// page has no account circle, so the phone walks on to the album through its
-// drawer, the take still playing, and signs out from its account menu there.
+// The wide window signs out from its rail beside the song; the phone's account
+// circle lives on the Library (#1354 rule 25), so the phone walks on to the
+// Library through its drawer, the take still playing, and signs out there.
 test(
 	'signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again',
 	{ tag: PLAYS_A_TAKE_TAG },
@@ -706,9 +847,9 @@ test(
 		await playTheTake(page, shell);
 		let leftFrom = songAddress;
 		if (shell === 'mobile') {
-			leftFrom = albumAddressOf(songAddress);
-			await (await albumInRail(page, shell, leftFrom)).click();
-			await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+			leftFrom = WALL_PATH;
+			await openLibraryWall(page, shell);
+			await expect(page).toHaveURL(WALL_URL);
 		}
 		await markSignedInDocument(page);
 
@@ -721,10 +862,7 @@ test(
 
 		await page.goBack();
 
-		await expect(page).toHaveURL(
-			(url) =>
-				url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
-		);
+		await expect(page).toHaveURL((url) => isSignInFor(url, leftFrom));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		await expect(transportControls(page)).toHaveCount(0);
 		await attachShot(page, testInfo, 'auth-signed-out-while-playing');
@@ -816,11 +954,11 @@ test('a logged-out deep link signs in onto the song it asked for', async ({ page
 	await attachShot(page, testInfo, 'auth-deep-link-returned');
 });
 
+// The drawer the menu opens is the phone shell.
 test(
 	'a session lost behind a song page on the phone is sent to sign-in from the menu',
-	{ tag: LIBRARY_LISTS_REFUSED_TAG },
-	async ({ page, isMobile }, testInfo) => {
-		test.skip(!isMobile, 'The drawer the menu opens is the phone shell.');
+	{ tag: [LIBRARY_LISTS_REFUSED_TAG, ONLY_IN_SHELL.mobile] },
+	async ({ page }, testInfo) => {
 		const songAddress = await seedOwnSong();
 		await signInOnto(page, songAddress);
 		const signedIn = await sessionCookie(page.context());
@@ -843,12 +981,12 @@ test(
 
 // Issue #1340, head ruling: a navigation the person already started counts as
 // where they meant to be. Which of the tap's requests the server refuses first
-// varies from run to run, and the address sign-in returns to must not.
+// varies from run to run, and the address sign-in returns to must not. The
+// drawer is the phone shell.
 test(
 	'a session lost behind the drawer on the phone returns to the album tapped in it',
-	{ tag: ALBUM_OPENING_REFUSED_TAG },
-	async ({ page, isMobile }, testInfo) => {
-		test.skip(!isMobile, 'The drawer is the phone shell.'); // NOSONAR S1607: the drawer exists only in the phone shell.
+	{ tag: [ALBUM_OPENING_REFUSED_TAG, ONLY_IN_SHELL.mobile] },
+	async ({ page }, testInfo) => {
 		await page.setViewportSize(MOBILE_VIEWPORT);
 		const albumAddress = albumAddressOf(await seedOwnSong());
 		await signIn(page);
@@ -879,10 +1017,12 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 	await page.goto('/login');
 
 	let refusal: Response | undefined;
+	let refusedAt = 0;
 	for (let attempt = 1; attempt <= MAX_WRONG_PASSWORDS && !refusal; attempt += 1) {
 		const response = await submitLogin(page, account.username, WRONG_PASSWORD);
 		if (response.status() === 429) {
 			refusal = response;
+			refusedAt = Date.now();
 			break;
 		}
 		expect(response.status()).toBe(401);
@@ -919,10 +1059,33 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 		});
 		return;
 	}
-	// Honouring what the server said, rather than guessing a sleep: after
-	// exactly that long the same account is admitted again, so the lock the
-	// person read about really is temporary.
-	await page.waitForTimeout((retryAfter + 1) * 1000);
-	expect((await submitLogin(page, account.username, account.password)).status()).toBe(200);
+	// Honouring what the server said, rather than guessing a sleep: within
+	// that long the same account is admitted again, so the lock the person
+	// read about really is temporary. A poll never starts a wait that would end
+	// past its deadline, and its last refused try may come just before the lock
+	// lifts, so the deadline runs two intervals past the statement. That slack
+	// only bounds the run: the proof is that no try started once the stated
+	// time was up was still refused. The server's window opened at the first
+	// wrong password, before the refusal, so an honest lock cannot fail this.
+	const statedLiftAt = refusedAt + retryAfter * 1000;
+	let lastRefusedTryStartedAt = refusedAt;
+	await expect
+		.poll(
+			async () => {
+				const tryStartedAt = Date.now();
+				const status = (await submitLogin(page, account.username, account.password)).status();
+				if (status !== 200) lastRefusedTryStartedAt = tryStartedAt;
+				return status;
+			},
+			{
+				intervals: [LOCK_LIFT_POLL_INTERVAL_MS],
+				timeout: retryAfter * 1000 + 2 * LOCK_LIFT_POLL_INTERVAL_MS
+			}
+		)
+		.toBe(200);
+	expect(
+		lastRefusedTryStartedAt,
+		`a try ${lastRefusedTryStartedAt - statedLiftAt}ms after the stated ${retryAfter}s was still refused`
+	).toBeLessThan(statedLiftAt);
 	await expect(page).toHaveURL(WALL_URL);
 });

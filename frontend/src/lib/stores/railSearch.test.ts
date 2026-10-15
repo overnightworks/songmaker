@@ -191,7 +191,7 @@ describe('groupRailSearchResults', () => {
 	const picks = buildPlaylist({ id: 'p1', title: 'Vernissage picks', entry_count: 9 });
 
 	function settingsPage(label: string, href: string) {
-		return { label, href, section: 'Settings' };
+		return { label, href, section: 'Settings', glyph: '⚙' };
 	}
 
 	it.each([
@@ -218,17 +218,20 @@ describe('groupRailSearchResults', () => {
 			]
 		}
 	])(
-		'offers $viewer the Library and every Settings section they can see',
+		'offers $viewer the Library, the Playlists page and every Settings section they can see',
 		({ admin, settingsPages }) => {
 			expect(visibleRailSearchPages(admin)).toEqual([
-				{ label: 'Library', href: '/', section: null },
+				{ label: 'Library', href: '/', section: null, glyph: '▦' },
+				{ label: 'Playlists', href: '/playlists', section: null, glyph: '♫' },
 				...settingsPages
 			]);
 		}
 	);
 
 	it('orders the groups Albums, Songs, Playlists, Pages and gives each result one target', () => {
-		const pages = [{ label: 'Vernissage guide', href: '/settings/voices', section: null }] as const;
+		const pages = [
+			{ label: 'Vernissage guide', href: '/settings/voices', section: null, glyph: '⚙' }
+		] as const;
 
 		const groups = groupRailSearchResults(vernissageState, [picks], pages);
 
@@ -292,6 +295,23 @@ describe('groupRailSearchResults', () => {
 		).toMatchObject({ kindWord, detailParts: [{ text: detail, matched: false }] });
 	});
 
+	// #1402: the hit that opens the Playlists page, and whose name a playlist's
+	// ‹ carries on the phone.
+	it('finds the Playlists page as a plain page with its own glyph', () => {
+		const [pages] = groupRailSearchResults({ ...vernissageState, query: 'playl', hits: [] }, []);
+
+		expect(pages?.label).toBe('Pages');
+		expect(pages?.results).toEqual([
+			expect.objectContaining({
+				label: 'Playlists',
+				kindWord: 'Page',
+				detailParts: [],
+				picture: { kind: 'page', glyph: '♫' },
+				target: { kind: 'page', href: '/playlists' }
+			})
+		]);
+	});
+
 	it('names a settings page as a Settings page and the library as a plain page', () => {
 		const settings = groupRailSearchResults({ ...vernissageState, query: 'gen', hits: [] }, []);
 		const library = groupRailSearchResults({ ...vernissageState, query: 'libr', hits: [] }, []);
@@ -341,7 +361,7 @@ describe('groupRailSearchResults', () => {
 		],
 		['Voices', 'settings', [{ text: 'Voices', matched: false }]]
 	])('highlights the letters of %s that match %s', (label, query, parts) => {
-		const page = { label, href: '/settings/voices', section: 'Settings' } as const;
+		const page = { label, href: '/settings/voices', section: 'Settings', glyph: '⚙' } as const;
 		const [group] = groupRailSearchResults({ ...vernissageState, query, hits: [] }, [], [page]);
 
 		expect(group?.results[0]?.labelParts).toEqual(parts);
@@ -369,6 +389,24 @@ describe('groupRailSearchResults', () => {
 			label: 'Vernissage',
 			detailParts: [{ text: 'Vernissage', matched: false }]
 		});
+	});
+
+	// Spaces around a title do not show, so they do not hide where it starts.
+	it('lists a title padded with spaces among those that start with the query', () => {
+		const state = {
+			...vernissageState,
+			hits: [
+				buildSongSearchHit({ id: 'contains', title: 'After the Vernissage' }),
+				buildSongSearchHit({ id: 'padded-prefix', title: '  Vernissage' })
+			]
+		};
+
+		const [songs] = groupRailSearchResults(state, []);
+
+		expect(songs?.results.map((result) => result.id)).toEqual([
+			'song:padded-prefix',
+			'song:contains'
+		]);
 	});
 
 	it('lists a page only for words its row shows', () => {

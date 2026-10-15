@@ -88,7 +88,7 @@ def _matching_albums(
     after: LibraryCursor | None,
     limit: int,
 ) -> list[Album]:
-    query = _visible_albums(
+    query = visible_albums(
         session.query(Album).filter(title_matches(Album.title, q)), owner_id,
     )
     keyset = _keyset_clause(Album, sort, after, LIBRARY_ITEM_ALBUM)
@@ -107,7 +107,7 @@ def _matching_songs(
     after: LibraryCursor | None,
     limit: int,
 ) -> list[Song]:
-    query = _visible_albums(
+    query = visible_albums(
         session.query(Song)
         .options(*_SONG_LIST_OPTIONS)
         .join(Album)
@@ -121,7 +121,8 @@ def _matching_songs(
     return query.limit(limit).all()
 
 
-def _visible_albums(query, owner_id: str | None):
+def visible_albums(query, owner_id: str | None):
+    """Narrow ``query`` to unarchived albums the viewer may open, as ``owner_filter`` decides."""
     query = query.filter(Album.is_archived.is_(False))
     if owner_id is None:
         return query

@@ -1,50 +1,45 @@
 import { derived, writable, type Readable } from 'svelte/store';
-import { fetchLibraryContinue, type LibraryContinueItem } from '$lib/api/library';
-import { LIBRARY_WALL_RECENT_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
+import { fetchLibraryListen, type LibraryListenItem } from '$lib/api/library';
+import { LIBRARY_WALL_PLAYED_PAGE_SIZE, type LibraryWallOrder } from '$lib/constants';
 import { libraryWallOrder } from '$lib/stores/ui';
 import { compareByCreatedAt } from '$lib/utils/recency';
 
-type LibraryPlaceType = LibraryContinueItem['type'];
-type OrderedItem = { id: string; title: string; created_at?: string | null };
+type LibraryPlaceType = LibraryListenItem['type'];
+type OrderedItem = { id: string; title: string };
 type LibraryPlace = { type: LibraryPlaceType; item: OrderedItem };
-type LastWork = { rank: number; at: string };
+type LastPlayed = { rank: number; at: string };
 type LibraryPlaceComparator = (a: LibraryPlace, b: LibraryPlace) => number;
 
-const recentWork = writable<ReadonlyMap<string, LastWork>>(new Map());
-let recentWorkRequest = 0;
-let recentWorkPresent: Promise<boolean> | null = null;
+const lastPlayed = writable<ReadonlyMap<string, LastPlayed>>(new Map());
+let lastPlayedRequest = 0;
+let lastPlayedPresent: Promise<boolean> | null = null;
 
-export const lastWorkByPlace: Readable<ReadonlyMap<string, LastWork>> = {
-	subscribe: recentWork.subscribe
+export const lastPlayedByPlace: Readable<ReadonlyMap<string, LastPlayed>> = {
+	subscribe: lastPlayed.subscribe
 };
 
 function placeKey(type: LibraryPlaceType, id: string): string {
 	return `${type}:${id}`;
 }
 
-export function lastWorkOf(
-	lastWork: ReadonlyMap<string, LastWork>,
+export function lastPlayedOf(
+	byPlace: ReadonlyMap<string, LastPlayed>,
 	place: LibraryPlace
-): LastWork | undefined {
-	return lastWork.get(placeKey(place.type, place.item.id));
+): LastPlayed | undefined {
+	return byPlace.get(placeKey(place.type, place.item.id));
 }
 
 function compareTitles(a: LibraryPlace, b: LibraryPlace): number {
 	return compareByCreatedAt(a.item, b.item, 'title');
 }
 
-function compareAdded(a: LibraryPlace, b: LibraryPlace): number {
-	return compareByCreatedAt(a.item, b.item, 'newest');
-}
-
-// A place without a rank waits at the end in title order: one newer than
-// the last read of Recent until the next read ranks it, and an album of
-// someone else's the viewer never worked in (only an admin sees one), which
-// Recent never ranks.
-function compareByLastWork(lastWork: ReadonlyMap<string, LastWork>): LibraryPlaceComparator {
+// A place without a rank waits at the end in title order: one the viewer
+// has never listened in, which Listen never ranks, and one newer than the
+// last read of Listen until the next read ranks it.
+function compareByLastPlayed(byPlace: ReadonlyMap<string, LastPlayed>): LibraryPlaceComparator {
 	return (a, b) => {
-		const aRank = lastWorkOf(lastWork, a)?.rank ?? Number.POSITIVE_INFINITY;
-		const bRank = lastWorkOf(lastWork, b)?.rank ?? Number.POSITIVE_INFINITY;
+		const aRank = lastPlayedOf(byPlace, a)?.rank ?? Number.POSITIVE_INFINITY;
+		const bRank = lastPlayedOf(byPlace, b)?.rank ?? Number.POSITIVE_INFINITY;
 		if (aRank === bRank) return compareTitles(a, b);
 		return aRank < bRank ? -1 : 1;
 	};
@@ -52,16 +47,14 @@ function compareByLastWork(lastWork: ReadonlyMap<string, LastWork>): LibraryPlac
 
 function comparatorFor(
 	order: LibraryWallOrder,
-	lastWork: ReadonlyMap<string, LastWork>
+	byPlace: ReadonlyMap<string, LastPlayed>
 ): LibraryPlaceComparator {
-	if (order === 'recent') return compareByLastWork(lastWork);
-	if (order === 'added') return compareAdded;
-	return compareTitles;
+	return order === 'played' ? compareByLastPlayed(byPlace) : compareTitles;
 }
 
 export const libraryPlaceOrder: Readable<LibraryPlaceComparator> = derived(
-	[libraryWallOrder, recentWork],
-	([order, lastWork]) => comparatorFor(order, lastWork)
+	[libraryWallOrder, lastPlayed],
+	([order, byPlace]) => comparatorFor(order, byPlace)
 );
 
 export function inLibraryOrder<T extends OrderedItem>(
@@ -72,16 +65,16 @@ export function inLibraryOrder<T extends OrderedItem>(
 	return items.toSorted((a, b) => compare({ type, item: a }, { type, item: b }));
 }
 
-async function readEveryRecentPlace(): Promise<LibraryContinueItem[] | null> {
-	const places: LibraryContinueItem[] = [];
+async function readEveryPlayedPlace(): Promise<LibraryListenItem[] | null> {
+	const places: LibraryListenItem[] = [];
 	try {
 		for (;;) {
-			const page = await fetchLibraryContinue({
+			const page = await fetchLibraryListen({
 				offset: places.length,
-				limit: LIBRARY_WALL_RECENT_PAGE_SIZE
+				limit: LIBRARY_WALL_PLAYED_PAGE_SIZE
 			});
 			places.push(...page.items);
-			if (page.items.length < LIBRARY_WALL_RECENT_PAGE_SIZE) return places;
+			if (page.items.length < LIBRARY_WALL_PLAYED_PAGE_SIZE) return places;
 		}
 	} catch {
 		return null;
@@ -90,30 +83,30 @@ async function readEveryRecentPlace(): Promise<LibraryContinueItem[] | null> {
 
 // A failed read keeps the ranking already known; only the newest read may
 // replace it.
-export async function readRecentWork(): Promise<boolean> {
-	const request = ++recentWorkRequest;
-	const places = await readEveryRecentPlace();
-	if (places === null || request !== recentWorkRequest) return false;
-	recentWork.set(
+export async function readLastPlayed(): Promise<boolean> {
+	const request = ++lastPlayedRequest;
+	const places = await readEveryPlayedPlace();
+	if (places === null || request !== lastPlayedRequest) return false;
+	lastPlayed.set(
 		new Map(
-			places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.activity_at }])
+			places.map((place, rank) => [placeKey(place.type, place.id), { rank, at: place.played_at }])
 		)
 	);
 	return true;
 }
 
-export function ensureRecentWorkRead(): Promise<boolean> {
-	recentWorkPresent ??= readRecentWork().then((applied) => {
-		if (!applied) recentWorkPresent = null;
+export function ensureLastPlayedRead(): Promise<boolean> {
+	lastPlayedPresent ??= readLastPlayed().then((applied) => {
+		if (!applied) lastPlayedPresent = null;
 		return applied;
 	});
-	return recentWorkPresent;
+	return lastPlayedPresent;
 }
 
 // Bumping the request number rather than zeroing it also discards a read
 // still in flight from the test before.
 export function resetLibraryOrderForTests(): void {
-	recentWorkRequest++;
-	recentWorkPresent = null;
-	recentWork.set(new Map());
+	lastPlayedRequest++;
+	lastPlayedPresent = null;
+	lastPlayed.set(new Map());
 }

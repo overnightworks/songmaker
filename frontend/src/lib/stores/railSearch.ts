@@ -6,9 +6,11 @@ import { searchLibrary, type LibrarySearchHit } from '$lib/api/library';
 import type { AlbumCoverUrls, PlaylistItem } from '$lib/api/types';
 import {
 	LIBRARY_SEARCH_DEBOUNCE_MS,
+	PLAYLISTS_PAGE_LABEL,
 	RAIL_LIBRARY_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
+import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
 import { visibleSettingsSections } from '$lib/settingsSections';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { matchesRailQuery, normalizeRailQuery } from '$lib/stores/librarySearch';
@@ -28,6 +30,7 @@ interface RailSearchPage {
 	label: string;
 	href: Pathname;
 	section: string | null;
+	glyph: string;
 }
 
 type RailSearchKind = RailSearchTarget['kind'];
@@ -67,8 +70,6 @@ interface RailSearchState {
 
 const SEARCH_FAILED_MESSAGE = 'Search failed';
 
-const LIBRARY_PAGE: RailSearchPage = { label: RAIL_LIBRARY_LABEL, href: '/', section: null };
-
 const RAIL_SEARCH_KINDS: Readonly<Record<RailSearchKind, { group: string; word: string }>> = {
 	album: { group: 'Albums', word: 'Album' },
 	song: { group: 'Songs', word: 'Song' },
@@ -80,7 +81,20 @@ const RAIL_SEARCH_GROUP_ORDER: readonly RailSearchKind[] = ['album', 'song', 'pl
 
 const SONG_GLYPH = '♪';
 const LIBRARY_PAGE_GLYPH = '▦';
+const PLAYLISTS_PAGE_GLYPH = '♫';
 const SETTINGS_PAGE_GLYPH = '⚙';
+
+// The library's own pages, before the Settings sections: the Library, and the
+// Playlists page (#1402), whose hit is also what names a playlist's ‹.
+const LIBRARY_PAGES: readonly RailSearchPage[] = [
+	{ label: RAIL_LIBRARY_LABEL, href: '/', section: null, glyph: LIBRARY_PAGE_GLYPH },
+	{
+		label: PLAYLISTS_PAGE_LABEL,
+		href: PLAYLISTS_ROUTE_PATH,
+		section: null,
+		glyph: PLAYLISTS_PAGE_GLYPH
+	}
+];
 
 const EMPTY_RAIL_SEARCH: RailSearchState = {
 	query: '',
@@ -156,16 +170,18 @@ function prefixMatchesFirst(results: RailSearchResult[], query: string): RailSea
 	);
 }
 
-function titleMatchRank(label: string, query: string): number {
-	const title = label.toLocaleLowerCase();
-	if (title.startsWith(query)) return 0;
-	return title.includes(query) ? 1 : 2;
+function titleMatchRank(label: string, normalizedQuery: string): number {
+	const title = normalizeRailQuery(label);
+	if (title.startsWith(normalizedQuery)) return 0;
+	return title.includes(normalizedQuery) ? 1 : 2;
 }
 
-function railSearchTextParts(text: string, query: string): RailSearchTextPart[] {
-	const start = text.toLocaleLowerCase().indexOf(query.toLocaleLowerCase());
+// The text is only lower-cased, never trimmed: the positions found in it cut
+// the text as it is shown.
+function railSearchTextParts(text: string, normalizedQuery: string): RailSearchTextPart[] {
+	const start = text.toLocaleLowerCase().indexOf(normalizedQuery);
 	if (start < 0) return [{ text, matched: false }];
-	const end = start + query.length;
+	const end = start + normalizedQuery.length;
 	return [
 		{ text: text.slice(0, start), matched: false },
 		{ text: text.slice(start, end), matched: true },
@@ -177,9 +193,10 @@ export function visibleRailSearchPages(admin: boolean): readonly RailSearchPage[
 	const settingsPages = visibleSettingsSections(admin).map(({ label, href }) => ({
 		label,
 		href,
-		section: RAIL_SETTINGS_LABEL
+		section: RAIL_SETTINGS_LABEL,
+		glyph: SETTINGS_PAGE_GLYPH
 	}));
-	return [LIBRARY_PAGE, ...settingsPages];
+	return [...LIBRARY_PAGES, ...settingsPages];
 }
 
 export function resetRailSearchForTests(): void {
@@ -276,7 +293,7 @@ function pageResult(page: RailSearchPage, query: string): RailSearchResult {
 		id: `page:${page.href}`,
 		label: page.label,
 		detail: page.section,
-		picture: { kind: 'page', glyph: page.section ? SETTINGS_PAGE_GLYPH : LIBRARY_PAGE_GLYPH },
+		picture: { kind: 'page', glyph: page.glyph },
 		target: { kind: 'page', href: page.href }
 	});
 }

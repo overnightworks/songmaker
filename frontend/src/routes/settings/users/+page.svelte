@@ -17,7 +17,7 @@
 		updateUserRateLimits,
 		deleteUserRateLimits
 	} from '$lib/api/client';
-	import { describeFailure } from '$lib/api/fetch';
+	import { describeFailure, isNotFound } from '$lib/api/fetch';
 	import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 	import type {
 		UserItem,
@@ -70,6 +70,7 @@
 		ModelsTaskSelection
 	} from '$lib/components/ModelsTaskRow.svelte';
 	import {
+		ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 		ADMIN_TABS_LABEL,
 		ADMIN_VOICES_EMPTY,
 		ADMIN_VOICES_HEADING,
@@ -151,6 +152,7 @@
 
 	function selectTab(next: AdminTab): void {
 		tab = next;
+		error = '';
 		if (next === 'ratelimits') {
 			void loadGlobalLimits();
 		} else if (next === 'sessions') {
@@ -713,6 +715,7 @@
 		creating = true;
 		try {
 			await createUser(newUsername, newPassword, newRole);
+			error = '';
 			newUsername = '';
 			newPassword = '';
 			newRole = 'user';
@@ -777,11 +780,24 @@
 	}
 
 	async function handleForceLogout(sessionId: string) {
+		error = '';
 		try {
-			await forceLogout(sessionId);
+			if ((await revokeSession(sessionId)) === 'already-ended') {
+				error = ADMIN_SESSION_ALREADY_ENDED_MESSAGE;
+			}
 			sessions = (await fetchSessions()).items;
 		} catch (e) {
 			error = describeFailure(e, 'Failed');
+		}
+	}
+
+	async function revokeSession(sessionId: string): Promise<'revoked' | 'already-ended'> {
+		try {
+			await forceLogout(sessionId);
+			return 'revoked';
+		} catch (e) {
+			if (isNotFound(e)) return 'already-ended';
+			throw e;
 		}
 	}
 

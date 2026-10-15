@@ -43,9 +43,12 @@ const TAKE_ARRIVES_VERSION_NUMBER = 1;
 const SEEDED_TAKE_COUNT = 1;
 const GENERATION_COMPLETED_TOAST = `${JOB_TYPE_GENERATE} completed`;
 const JOB_STREAM_ROUTE = '**/api/jobs/*/stream';
-// Long enough for the cut-off job stream's backoff to pass the 14s mark, where
-// the former 30s ceiling would have left it waiting up to 16s more.
-const CUT_OFF_MS = 16_000;
+// The cut-off job stream opens, then reopens after 2, 4 and 8 seconds of
+// backoff: its fourth open is the 14s mark, past which the former 30s ceiling
+// would have left it waiting up to 16s more. Jitter can carry that mark to
+// 16.8s, and the cut-off ends as soon as the stream reaches it.
+const CUT_OFF_STREAM_OPENS = 4;
+const CUT_OFF_TIMEOUT_MS = 20_000;
 // The ruling on #1032: back online, the take is there within 10 seconds.
 const TAKE_AFTER_RETURN_MS = 10_000;
 
@@ -143,9 +146,11 @@ test.describe(
 			const panel = page.getByRole('tabpanel');
 			// Each attempt gets a stream that ends at once, the way a dead network
 			// drops it, so the job's end can only arrive after the network returns.
-			await page.route(JOB_STREAM_ROUTE, (route) =>
-				route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' })
-			);
+			let streamOpens = 0;
+			await page.route(JOB_STREAM_ROUTE, (route) => {
+				streamOpens += 1;
+				return route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
+			});
 
 			await page.goto(`/album/${library.songPhoneAlbumId}`);
 			await workspace(page)
@@ -155,7 +160,9 @@ test.describe(
 			await expect(panel.getByRole('progressbar')).toBeVisible();
 
 			await completeGenerationJobWithoutEvent(jobId);
-			await page.waitForTimeout(CUT_OFF_MS);
+			await expect
+				.poll(() => streamOpens, { timeout: CUT_OFF_TIMEOUT_MS })
+				.toBeGreaterThanOrEqual(CUT_OFF_STREAM_OPENS);
 			await expect(panel.getByText(takeGroupLabel(seeded, SEEDED_TAKE_COUNT + 1))).toHaveCount(0);
 
 			await page.unroute(JOB_STREAM_ROUTE);
