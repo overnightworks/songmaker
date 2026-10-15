@@ -377,10 +377,9 @@ def update_song(
         creative_changed or language_changed or new_gen_params != prev.generation_params
     )
     if edited_by is not None and content_changed:
-        lyrics_changed = lyrics is not None and (prev is None or lyrics != prev.lyrics)
         record_song_edit(
             session, user_id=edited_by, song_id=song_id,
-            kind=SongWorkKind.LYRICS if lyrics_changed else SongWorkKind.STYLE,
+            kind=_content_edit_kind(lyrics, prev),
         )
 
     if prev and not force_new_version and (not prev.generations or not creative_changed):
@@ -409,6 +408,11 @@ def update_song(
     session.flush()
     log.info("Updated song %s → v%d", song_id, next_num)
     return version
+
+
+def _content_edit_kind(lyrics: str | None, previous: Version | None) -> SongWorkKind:
+    lyrics_changed = lyrics is not None and (previous is None or lyrics != previous.lyrics)
+    return SongWorkKind.LYRICS if lyrics_changed else SongWorkKind.STYLE
 
 
 def _version_value(value, previous: Version | None, field: str, default):
