@@ -7,11 +7,12 @@
 // session behind an open song page and is sent to the door from there, and
 // since #1340 a drawer tap after the loss returns there to the tapped album.
 // Since #1322 an admin with two sessions finds its own marked as this device,
-// and a create refusal in the form clears on typing. Since #1397 a revoke that
-// another tab beat drops the dead row and says the session had already ended,
-// until a revoke works or the admin changes tab. Since #1340 a sign-out while a
-// take plays leaves by a fresh sign-in page, and one the server never received
-// leaves the person signed in.
+// and a create refusal in the form clears on typing while an error on the page
+// stays. Since #1397 a revoke that another tab beat drops the dead row and says
+// the session had already ended, until a revoke works or the admin changes
+// tab, and a create that works clears the Users tab's error. Since #1340 a
+// sign-out while a take plays leaves by a fresh sign-in page, and one the
+// server never received leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
 // sentences is about the browser and the server together: which page the
@@ -22,8 +23,9 @@
 // has thrown away and watch the server refuse it.
 //
 // No route interception anywhere: every refusal is the CI stack's own answer.
-// The admin flow's 404 and 409 are its point, so its guard forgives exactly
-// those two statuses on exactly the revoke and create paths.
+// The admin flows' 404s and 409 are their point, so their guard forgives
+// exactly those statuses on exactly the revoke, account-update and create
+// paths.
 // The two numbers the lockout flow depends on are set in
 // `docker/docker-compose.ci.yml`, with the measurement written beside them --
 // the short-window budget counts failed logins per *IP* and the whole run comes
@@ -96,9 +98,10 @@ import {
  * deep-link sign-in, 28 at 375px for the phone's session lost behind its
  * menu, and 20 at 390px for the album tapped in its drawer after the session
  * was lost; both run on the phone only. The admin flows were measured at 1440 /
- * 390 instead: 28/25 for the own session, its two stale revokes, the revoke
- * that works and the create refusal (#1397), and 8 at 390px for the row-action
- * hitboxes (the admin page plus opening a tab), which runs on the phone only.
+ * 390 instead: 28/25 to 26 for the own session, its two stale revokes, the
+ * revoke that works and the create refusal (#1397), and 8 at 390px for the
+ * row-action hitboxes (the admin page plus opening a tab), which runs on the
+ * phone only.
  * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
@@ -145,14 +148,16 @@ const ALBUM_OPENING_PATHS = [
 	'/api/settings/models',
 	'/api/resource-events/stream'
 ];
-// The admin flow whose 404 (a stale revoke) and 409 (a taken username) are the
-// sentences under proof. Only that flow forgives them.
+// The admin flows whose 404s (a stale revoke, a disable of an account deleted
+// meanwhile) and 409 (a taken username) are the sentences under proof. Only
+// those flows forgive them.
 const ADMIN_REFUSALS_ARE_THE_POINT_TAG = '@admin-refusals-are-the-point';
 // The sign-out whose request never reaches the server: only that flow forgives
 // the requests the lost network fails.
 const LOSES_NETWORK_TAG = '@loses-network';
 const ADMIN_REFUSALS: readonly ExpectedRefusal[] = [
 	{ path: `${ADMIN_SESSIONS_PATH}/`, statuses: [404] },
+	{ path: `${ADMIN_USERS_PATH}/`, statuses: [404] },
 	{ path: ADMIN_USERS_PATH, statuses: [409] }
 ];
 const ADMIN_PAGE_PATH = '/settings/users';
@@ -196,7 +201,14 @@ const ACCOUNT_LOCKED_DETAIL =
 const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
 const OWN_SESSION_LABEL = 'This device';
 const REVOKE_LABEL = 'Revoke';
+const DISABLE_LABEL = 'Disable';
+// The server's words for an account it no longer has (`USER_NOT_FOUND_DETAIL`
+// in `settings_api.py`), which the Users tab shows as they are.
+const USER_GONE_MESSAGE = 'User not found';
 const USERNAME_TAKEN_MESSAGE = 'Username already exists';
+// What the admin types onto the taken name, which makes it one the server does
+// not have yet.
+const FREE_USERNAME_SUFFIX = '-2';
 const CREATE_USERNAME_PLACEHOLDER = 'Username';
 const CREATE_PASSWORD_PLACEHOLDER = 'Password';
 const CREATE_LABEL = 'Create';
@@ -515,6 +527,43 @@ async function revokeOtherDeviceFromSecondTab(
 	await secondTab.close();
 }
 
+function createUsernameField(page: Page): Locator {
+	return page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
+}
+
+/**
+ * Submits the Users tab's create form with this spec's own account name, which
+ * the server already has, and returns the refusal the form shows.
+ */
+async function refuseTakenUsername(page: Page): Promise<Locator> {
+	await createUsernameField(page).fill(account.username);
+	await page.getByPlaceholder(CREATE_PASSWORD_PLACEHOLDER, { exact: true }).fill(ACCOUNT_PASSWORD);
+	await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
+	const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
+	await expect(createRefusal).toBeVisible();
+	return createRefusal;
+}
+
+/** Types onto the end of the refused name, the way a person corrects it. */
+async function correctTakenUsername(page: Page): Promise<void> {
+	const usernameField = createUsernameField(page);
+	await usernameField.press('End');
+	await usernameField.pressSequentially(FREE_USERNAME_SUFFIX);
+}
+
+/**
+ * Deletes each named account the stack still has. One the flow already deleted,
+ * or never got as far as creating, is simply not listed.
+ */
+async function deleteAccountsNamed(usernames: readonly string[]): Promise<void> {
+	const response = await adminApi.get(ADMIN_USERS_PATH);
+	expect(response.status()).toBe(200);
+	const accounts = (await response.json()) as Pick<Account, 'id' | 'username'>[];
+	for (const { id, username } of accounts) {
+		if (usernames.includes(username)) await deleteAccount(adminApi, id);
+	}
+}
+
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
 	await page.screenshot({ path, fullPage: true });
@@ -627,18 +676,10 @@ test(
 
 			await openAdminTab(page, shell, 'users', 'Users');
 			await expect(alreadyEnded).toBeHidden();
-			const usernameField = page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
-			await usernameField.fill(account.username);
-			await page
-				.getByPlaceholder(CREATE_PASSWORD_PLACEHOLDER, { exact: true })
-				.fill(ACCOUNT_PASSWORD);
-			await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
-			const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
-			await expect(createRefusal).toBeVisible();
+			const createRefusal = await refuseTakenUsername(page);
 			await attachShot(page, testInfo, `admin-create-refusal-${shell}`);
 
-			await usernameField.press('End');
-			await usernameField.pressSequentially('-2');
+			await correctTakenUsername(page);
 			await expect(createRefusal).toBeHidden();
 		} finally {
 			await deleteAccount(adminApi, musician.id);
@@ -646,6 +687,49 @@ test(
 		}
 	}
 );
+
+test.describe("the run's admin on the Users tab", () => {
+	test.use({ storageState: STORAGE_STATE_FILE });
+
+	test(
+		'a Users tab error stays while a create refusal clears on typing, and leaves with a create that works',
+		{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
+		async ({ page, isMobile }, testInfo) => {
+			const shell = shellOf(testInfo);
+			await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
+			const goneName = `e2e-gone-${shell}-${Date.now().toString(36)}`;
+			const createdName = `${account.username}${FREE_USERNAME_SUFFIX}`;
+			const goneId = await createAccount(adminApi, goneName, ACCOUNT_PASSWORD);
+			try {
+				await page.goto(ADMIN_PAGE_PATH);
+				const goneRow = page.getByRole('row').filter({ hasText: goneName });
+				await expect(goneRow).toBeVisible();
+
+				// Another admin deletes the account after the page listed it, so
+				// the server refuses to disable it.
+				await deleteAccount(adminApi, goneId);
+				await goneRow.getByRole('button', { name: DISABLE_LABEL, exact: true }).click();
+				const usersTabError = page.getByText(USER_GONE_MESSAGE, { exact: true });
+				await expect(usersTabError).toBeVisible();
+
+				const createRefusal = await refuseTakenUsername(page);
+				await expect(usersTabError).toBeVisible();
+				await attachShot(page, testInfo, `admin-users-error-and-create-refusal-${shell}`);
+
+				await correctTakenUsername(page);
+				await expect(createRefusal).toBeHidden();
+				await expect(usersTabError).toBeVisible();
+
+				await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
+				await expect(page.getByRole('row').filter({ hasText: createdName })).toBeVisible();
+				await expect(usersTabError).toBeHidden();
+				await attachShot(page, testInfo, `admin-create-clears-users-error-${shell}`);
+			} finally {
+				await deleteAccountsNamed([goneName, createdName]);
+			}
+		}
+	);
+});
 
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall,

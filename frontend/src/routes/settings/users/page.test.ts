@@ -386,6 +386,7 @@ beforeEach(() => {
 	api.fetchUsers.mockResolvedValue([ADMIN_USER, OTHER_USER]);
 	api.fetchAdminVoices.mockResolvedValue(VOICES);
 	api.fetchSessions.mockResolvedValue(pageOf([SESSION]));
+	api.forceLogout.mockResolvedValue(undefined);
 	api.fetchLoginAttempts.mockResolvedValue(pageOf([ATTEMPT]));
 	api.fetchRateLimits.mockResolvedValue({ settings: [] });
 	api.fetchGenerationDefaults.mockResolvedValue({});
