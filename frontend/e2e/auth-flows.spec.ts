@@ -106,7 +106,8 @@ import {
  * (#1397), and 8 at 390px for the row-action hitboxes (the admin page plus
  * opening a tab), which runs on the phone only.
  * The lockout was measured at 1440 / 390 once it polled for the lock to lift
- * (#1403): 17/15, six of them its tries with the right password.
+ * (#1403): 16 to 17/15, up to eight of them its tries with the right password -- the
+ * one the lock refuses, then one every ten seconds until it lifts.
  * The #1340 sign-outs were measured at 1440 / 390: 29 and
  * 32 to 35 for the sign-out while a take plays -- the song page, its take, and
  * on the phone the walk through the drawer to the album -- and 23/23 for the
@@ -226,10 +227,10 @@ const PASSWORD_LABEL = 'Password';
 // The lockout has to arrive on its own, from wrong passwords alone, so the
 // spec never encodes the stack's threshold -- it only refuses to type forever.
 const MAX_WRONG_PASSWORDS = 10;
-// A `Retry-After` a run can honour: the CI stack states 60 seconds, and waiting
-// exactly what the server said is what proves the lock is temporary rather than
-// terminal. A production-like stack states an hour, and the flow says so and
-// stops instead of hanging the suite.
+// A `Retry-After` a run can honour: the CI stack states 60 seconds, and being
+// admitted again within what the server said is what proves the lock is
+// temporary rather than terminal. A production-like stack states an hour, and
+// the flow says so and stops instead of hanging the suite.
 const MAX_HONOURED_RETRY_AFTER_SECONDS = 90;
 const LOCKOUT_TEST_TIMEOUT_MS = 180_000;
 // The lock lifts by itself within the `Retry-After` it states, so the flow
@@ -1016,10 +1017,12 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 	await page.goto('/login');
 
 	let refusal: Response | undefined;
+	let refusedAt = 0;
 	for (let attempt = 1; attempt <= MAX_WRONG_PASSWORDS && !refusal; attempt += 1) {
 		const response = await submitLogin(page, account.username, WRONG_PASSWORD);
 		if (response.status() === 429) {
 			refusal = response;
+			refusedAt = Date.now();
 			break;
 		}
 		expect(response.status()).toBe(401);
@@ -1060,12 +1063,29 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 	// that long the same account is admitted again, so the lock the person
 	// read about really is temporary. A poll never starts a wait that would end
 	// past its deadline, and its last refused try may come just before the lock
-	// lifts, so the deadline runs two intervals past the statement.
+	// lifts, so the deadline runs two intervals past the statement. That slack
+	// only bounds the run: the proof is that no try started once the stated
+	// time was up was still refused. The server's window opened at the first
+	// wrong password, before the refusal, so an honest lock cannot fail this.
+	const statedLiftAt = refusedAt + retryAfter * 1000;
+	let lastRefusedTryStartedAt = refusedAt;
 	await expect
-		.poll(async () => (await submitLogin(page, account.username, account.password)).status(), {
-			intervals: [LOCK_LIFT_POLL_INTERVAL_MS],
-			timeout: retryAfter * 1000 + 2 * LOCK_LIFT_POLL_INTERVAL_MS
-		})
+		.poll(
+			async () => {
+				const tryStartedAt = Date.now();
+				const status = (await submitLogin(page, account.username, account.password)).status();
+				if (status !== 200) lastRefusedTryStartedAt = tryStartedAt;
+				return status;
+			},
+			{
+				intervals: [LOCK_LIFT_POLL_INTERVAL_MS],
+				timeout: retryAfter * 1000 + 2 * LOCK_LIFT_POLL_INTERVAL_MS
+			}
+		)
 		.toBe(200);
+	expect(
+		lastRefusedTryStartedAt,
+		`a try ${lastRefusedTryStartedAt - statedLiftAt}ms after the stated ${retryAfter}s was still refused`
+	).toBeLessThan(statedLiftAt);
 	await expect(page).toHaveURL(WALL_URL);
 });
