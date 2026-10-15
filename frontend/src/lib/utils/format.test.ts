@@ -4,7 +4,6 @@ import {
 	activityTimeLabel,
 	formatTime,
 	localWeekday,
-	placeLine,
 	songCountLabel,
 	titleInitials
 } from './format.ts';
@@ -38,16 +37,6 @@ describe('songCountLabel', () => {
 		[6, '6 songs']
 	])('count=%i -> %j', (count, expected) => {
 		expect(songCountLabel(count)).toBe(expected);
-	});
-});
-
-describe('placeLine', () => {
-	it('says a playlist is one before its detail', () => {
-		expect(placeLine('playlist', '14 songs')).toBe('Playlist · 14 songs');
-	});
-
-	it('leaves an album line as its detail', () => {
-		expect(placeLine('album', '6 songs')).toBe('6 songs');
 	});
 });
 
