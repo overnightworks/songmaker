@@ -75,7 +75,7 @@ export function recordRailReveals({
 		scrollIntoView(this: HTMLElement, options?: ScrollIntoViewOptions) {
 			reveals.push({ title: this.querySelector('.row-title')?.textContent, options });
 		},
-		getAnimations: () => (animatingUntil ? [{ finished: animatingUntil }] : [])
+		getAnimations: () => (animatingUntil === undefined ? [] : [{ finished: animatingUntil }])
 	};
 	for (const [name, value] of Object.entries(standIns)) {
 		Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value });
