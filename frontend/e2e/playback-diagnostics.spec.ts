@@ -58,6 +58,7 @@ async function setOfflineSeenByEveryTab(
  * another tab's write a moment late, so a tab that hides right after another
  * one may still see events the other has just sent -- its own among them, which
  * the first tab sends from the shared buffer too -- and send them again.
+ * That double send is a product race owned by #1151; the test avoids it.
  */
 function storedNetworkEvents(tab: Page): Promise<number> {
 	return tab.evaluate((prefix) => {
@@ -90,6 +91,7 @@ test(
 			await setOfflineSeenByEveryTab(context, tabs, true);
 			await setOfflineSeenByEveryTab(context, tabs, false);
 		}
+		await expect.poll(() => storedNetworkEvents(second)).toBeGreaterThan(0);
 		await hide(first);
 		await expect.poll(() => storedNetworkEvents(second)).toBe(0);
 		await hide(second);
