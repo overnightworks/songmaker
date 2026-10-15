@@ -7,12 +7,15 @@ import {
 } from '$lib/api/client';
 import { replaceSongInList } from '$lib/stores/libraryData';
 import { selectedSongId } from '$lib/stores/player';
+import { addToast } from '$lib/stores/toast';
 import type {
 	GenerationItem,
 	SongItem,
 	VersionGenerationParams,
 	VersionItem
 } from '$lib/api/types';
+
+const VERSIONS_LOAD_FAILED = 'Could not load versions';
 
 interface SongData {
 	lyrics: string;
@@ -201,7 +204,7 @@ function songDataFromVersion(v: VersionItem): SongData {
 export function loadSongData(s: SongItem): void {
 	const data = songDataFromSong(s);
 	editorState.set({ saved: data, draft: { ...data }, loadedFrom: null });
-	loadVersions(s.id);
+	loadVersions(s.id).catch(() => addToast(VERSIONS_LOAD_FAILED, 'error'));
 }
 
 /** Resets the draft back to the last-saved values, discarding unsaved edits. */
