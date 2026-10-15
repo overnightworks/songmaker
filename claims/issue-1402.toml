@@ -1,0 +1,8 @@
+claim_id = "cefada4c3af94a1cbc00b93564ca6aea"
+agent = "claude-head"
+role = "builder"
+base = "8cc32c241369edca00df8b7de48f1bec9307c1f2"
+branch = "claude-head/issue-1402-playlists-own-page"
+scope = ["docs/architecture.md", "frontend/e2e/helpers.ts", "frontend/e2e/library.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/LibraryWorkspace.svelte", "frontend/src/lib/components/LibraryWorkspace.test.ts", "frontend/src/lib/components/PhoneAppBar.svelte", "frontend/src/lib/components/PhoneAppBar.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/routes/addresses.test.ts", "frontend/src/lib/routes/addresses.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/navigation.test.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/railSearch.test.ts", "frontend/src/lib/stores/railSearch.ts", "frontend/src/routes/(library)/playlists/+page.svelte"]
+opened_commit = "0e6e0e4431658767d97cc1876eb7e707d1f07922"
+whole_reason = "one Playlists covers page: its route and address shape, the library surface and history for it, the navigation openers and search page, the wall's kind, the phone bar's list naming, their tests, one e2e flow and the route list doc"
