@@ -25,7 +25,10 @@ const ENTRY_FILES = [
 	'lib/components/CollectionHeaderFrame.svelte',
 	'lib/components/TransportBarFrame.svelte',
 	'lib/components/NowPlayingFrame.svelte',
-	'lib/components/NowPlayingQueue.svelte'
+	'lib/components/NowPlayingQueue.svelte',
+	'lib/components/NowPlayingLyrics.svelte',
+	'lib/components/SeekSlider.svelte',
+	'lib/components/LegalLinks.svelte'
 ].map((relative) => `/src/${relative}`);
 
 const FORBIDDEN_MODULES = [
@@ -120,6 +123,11 @@ function collectRuntimeImports(file: string, visited: Set<string>): void {
 }
 
 describe('share surface import boundary', () => {
+	// A moved or renamed entry would otherwise pass with nothing walked.
+	it.each(ENTRY_FILES)('%s exists to be walked', (entry) => {
+		expect(SOURCE_FILES[entry]).toBeDefined();
+	});
+
 	for (const entry of ENTRY_FILES) {
 		it(`${entry} never runtime-imports stores/player|navigation|editor|takeActions|auth`, () => {
 			const visited = new Set<string>();

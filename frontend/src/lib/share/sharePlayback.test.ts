@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { fromSharedAlbum, type SharedCollectionView } from './sharedCollection';
+import { fromSharedAlbum, fromSharedSong, type SharedCollectionView } from './sharedCollection';
 import { SharePlayback } from './sharePlayback.svelte';
 
 class FakeAudio {
@@ -254,6 +254,69 @@ describe('toggle() and classic playback', () => {
 		playback.next();
 
 		expect(playback.currentTrack?.key).toBe('s1');
+		playback.stop();
+	});
+});
+
+describe('the end of a share', () => {
+	function songView(): SharedCollectionView {
+		return fromSharedSong({
+			title: 'Solo',
+			artist: 'Artist',
+			album_title: 'Album',
+			audio_url: '/shared/song/solo/audio/solo.mp3',
+			generation_id: 'g-solo',
+			audio_duration: 120,
+			lyrics: null,
+			whisper_cues: null,
+			cover: null,
+			album_cover: null
+		});
+	}
+
+	function playToTheEnd(view: SharedCollectionView, trackIndex = 0): SharePlayback {
+		const playback = new SharePlayback();
+		playback.start(view, null);
+		playback.toggle(view.tracks[trackIndex]);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('playing');
+		fakeAudio.fire('ended');
+		return playback;
+	}
+
+	it.each([
+		{ share: 'a single song', view: songView, ended: true, next: 'single' },
+		{ share: 'an album track with one after it', view: albumView, ended: false, next: 's2' }
+	])('$share: ended is $ended once its track runs out', ({ view, ended, next }) => {
+		const playback = playToTheEnd(view());
+
+		expect(playback.ended).toBe(ended);
+		expect(playback.currentTrack?.key).toBe(next);
+		playback.stop();
+	});
+
+	it('plays an ended share again from the start of its first track', () => {
+		const playback = playToTheEnd(songView());
+
+		playback.play();
+
+		expect(playback.ended).toBe(false);
+		expect(audioPlayer.currentTime).toBe(0);
+		expect(audioPlayer.transport).toBe('loading');
+		playback.stop();
+	});
+
+	it('leaves the end on a seek, so Play resumes where the listener put it', () => {
+		const playback = playToTheEnd(songView());
+		const reload = vi.spyOn(fakeAudio, 'load');
+
+		playback.seek(30);
+		playback.play();
+
+		expect(playback.ended).toBe(false);
+		expect(fakeAudio.currentTime).toBe(30);
+		expect(reload).not.toHaveBeenCalled();
+		expect(fakeAudio.playMock).toHaveBeenCalled();
 		playback.stop();
 	});
 });

@@ -453,7 +453,9 @@ wins on source order; `+layout.svelte` owns only the attribute it keys on. Every
 rows, `ToastContainer`, `QueueStreamFeedback`, the editor's bottom padding,
 the collection views and Now Playing's own sheet — follows from it instead of
 carrying its own exception. A share page keeps its bar and never carries the
-attribute, so `SharedFooter`'s `var(--player-height, 88px)` stays as it was. Because the bar unmounts, it cannot own the Web Audio graph: an `<audio>` element can be passed to `createMediaElementSource` exactly once, and closing the context that owns that source routes the element's output into a dead graph for the rest of the session — playback that still reports itself as playing but makes no sound. `audioPlayer.svelte.ts` therefore owns the context and the analyser for the elements' whole life (`getAnalyser`, `resumeAudioGraph`, closed only in `destroy()`, built lazily so a device that never draws a visualizer never routes its audio through Web Audio), and `TransportBarFrame` only borrows the `AnalyserNode`. The player holds two elements, an active deck and a standby deck, each with its own `MediaElementSource` into the one context: `preload(info)` loads the standby, and `load()` promotes it without waiting for `canplay` when it holds exactly the requested URL with future data, so the analyser carries whichever deck is playing. The transport chrome and visualizer live in `TransportBarFrame.svelte`, a
+attribute, so `SharedFooter`'s `var(--player-height, 88px)` stays as it was;
+a shared song or take has no bar at all, and its page sets
+`--player-height: 0px` on itself. Because the bar unmounts, it cannot own the Web Audio graph: an `<audio>` element can be passed to `createMediaElementSource` exactly once, and closing the context that owns that source routes the element's output into a dead graph for the rest of the session — playback that still reports itself as playing but makes no sound. `audioPlayer.svelte.ts` therefore owns the context and the analyser for the elements' whole life (`getAnalyser`, `resumeAudioGraph`, closed only in `destroy()`, built lazily so a device that never draws a visualizer never routes its audio through Web Audio), and `TransportBarFrame` only borrows the `AnalyserNode`. The player holds two elements, an active deck and a standby deck, each with its own `MediaElementSource` into the one context: `preload(info)` loads the standby, and `load()` promotes it without waiting for `canplay` when it holds exactly the requested URL with future data, so the analyser carries whichever deck is playing. The transport chrome and visualizer live in `TransportBarFrame.svelte`, a
 presentational component driven by props plus the `audioPlayer` singleton
 directly (never a store) — `PlayerBar` supplies the app's idle-state copy,
 store-derived prev/next, and its own media-session position/playback-state
@@ -681,11 +683,22 @@ no scores, no sibling takes, no owner — pinned by an exact-key-set test
 in `tests/test_sharing.py`. A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
-`SharedCollection.svelte` composes `CollectionHeaderFrame` (read-only, no `…` menu),
-`TransportBarFrame`, and `NowPlayingFrame` with a queue-only right panel, plus
-`SharedFooter.svelte` (Powered by · Impressum · Datenschutz ·
-Nutzungsbedingungen, its `LegalContent` overlay carrying `aria-modal` for the
-Escape contract above). Playback is owned by `lib/share/sharePlayback.svelte.ts`
+A shared song or take opens as the player (#1391): `SharedCollection.svelte`
+renders `NowPlayingFrame` with `surface="page"` — no header or close, no
+dialog role, no bar, no song list, no shuffle or skip, no right panel — the
+cover beside (wide) or above (stacked) the title, Play, the slider and the
+following lyrics. `SharePlayback` owns what Play means there (`play()`: start
+the first track, pause or resume, or start again once `ended`) and the end
+itself (`ended`: the last track ran out with nothing after it, where
+`audioPlayer` resets to 0:00), so the frame shows "↻ Play again" with the
+slider kept at the end. A shared album or playlist still
+composes `CollectionHeaderFrame` (read-only, no `…` menu),
+`TransportBarFrame`, and `NowPlayingFrame` with a queue-only right panel.
+Every share page ends in `SharedFooter.svelte`: "Powered by" and
+`LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
+Nutzungsbedingungen links the sign-in page uses too, opening its
+`LegalContent` overlay (carrying `aria-modal` for the Escape contract above)
+instead of leaving the page. Playback is owned by `lib/share/sharePlayback.svelte.ts`
 (`SharePlayback`), never `stores/player.ts` — a `share-import-boundary.test.ts`
 grep gate enforces that nothing under `lib/share/`, `lib/components/share/`,
 or the four share routes runtime-imports `stores/player`, `navigation`,

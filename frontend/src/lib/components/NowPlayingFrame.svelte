@@ -22,6 +22,8 @@
 		NOW_PLAYING_COLLAPSE_LABEL,
 		NOW_PLAYING_DOCKED_WIDTH_PX,
 		NOW_PLAYING_EXPAND_LABEL,
+		NOW_PLAYING_PLAY_AGAIN_LABEL,
+		NOW_PLAYING_RIGHT_PANEL_LABEL,
 		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_UP_NEXT_PREFIX,
 		NOW_PLAYING_Z_INDEX,
@@ -53,13 +55,17 @@
 		canNext = false,
 		onprev,
 		onnext,
-		shuffle,
+		shuffle = false,
 		shuffleLabel,
 		onToggleShuffle,
+		onTogglePlay = () => audioPlayer.toggle(),
+		onSeek = (seconds) => audioPlayer.seek(seconds),
+		ended = false,
+		unplayableNotice = null,
 		onGoToSong,
-		upNextTitle,
+		upNextTitle = null,
 		rightPanelLabel,
-		sheetLabel,
+		sheetLabel = NOW_PLAYING_RIGHT_PANEL_LABEL,
 		rightPanelOpenOnMount = false,
 		showTakeLabel = true,
 		lyricsEmptyLabel = NOW_PLAYING_NO_LYRICS,
@@ -84,8 +90,11 @@
 		// 'full' covers the viewport as a modal dialog; 'docked' is a column in
 		// the page's own layout — no dialog role, no focus trap, no transport
 		// of its own, since the transport bar beside it keeps carrying that.
-		surface?: NowPlayingSurfaceKind;
-		onclose: () => void;
+		// 'page' is the whole page a share link opens (#1391): no header, no
+		// close, no bar beside it, flowing in the page's own scroll.
+		surface?: NowPlayingSurfaceKind | 'page';
+		// The overlay surfaces' ×; the page has nothing to close.
+		onclose?: () => void;
 		// The docked panel grows to the full surface; the full surface shrinks
 		// back to the panel wherever the viewport has room for one. A caller
 		// with only one surface omits both.
@@ -95,16 +104,31 @@
 		canNext?: boolean;
 		onprev?: () => void;
 		onnext?: () => void;
-		shuffle: boolean;
-		shuffleLabel: string;
-		onToggleShuffle: () => void;
+		// Shuffle shows only where there is an order to shuffle: a single
+		// shared song leaves all three out.
+		shuffle?: boolean;
+		shuffleLabel?: string;
+		onToggleShuffle?: () => void;
+		// Play and the slider act on the audioPlayer unless the caller owns
+		// what they mean: a share page starts its first track before anything
+		// is loaded, and starts again once it played to its end.
+		onTogglePlay?: () => void;
+		onSeek?: (seconds: number) => void;
+		// The caller's playback ran out with nothing after it: Play becomes
+		// '↻ Play again' and the slider stays at the end, where the player
+		// itself goes back to 0:00.
+		ended?: boolean;
+		// Why there is nothing to play; Play is dimmed and this line says so.
+		unplayableNotice?: string | null;
 		onGoToSong?: () => void;
-		upNextTitle: string | null;
-		rightPanelLabel: string;
+		// The phone's trigger for the right panel: what plays next and the
+		// panel's name. Read only where a rightPanel is given.
+		upNextTitle?: string | null;
+		rightPanelLabel?: string;
 		// The mobile sheet's accessible name. Independent of rightPanelLabel
 		// (the visible trigger button text, which can change with tab state)
 		// so the dialog's aria-label stays a stable description.
-		sheetLabel: string;
+		sheetLabel?: string;
 		rightPanelOpenOnMount?: boolean;
 		// Take/version numbering is an internal editing concept — the app's
 		// NowPlaying shows it, a public share listener never sees "Take N"
@@ -115,7 +139,9 @@
 		lyricsCues?: WhisperCue[] | null;
 		whisperText?: string | null;
 		lyricsText?: string | null;
-		rightPanel: Snippet;
+		// The queue or take panel; a single shared song has none, so it shows
+		// neither the column nor the phone's sheet trigger.
+		rightPanel?: Snippet;
 		// Curation mode's Pick/Keep/Skip strip (issue #228). Rendered in the
 		// cover column, which stays visible in every layout (docked, full,
 		// and mobile stacked) — unlike the queue/take tabs, which mobile
@@ -124,6 +150,8 @@
 	} = $props();
 
 	const isDocked = $derived(surface === 'docked');
+	const isPage = $derived(surface === 'page');
+	const isLayer = $derived(surface === 'full');
 	const sheetOpen = historyLayerState('now-playing-sheet', false);
 
 	let root: HTMLDivElement | undefined = $state();
@@ -138,11 +166,16 @@
 		nowPlayingTakeLabel(info.generation.version_number, info.generation.generation_number)
 	);
 
-	const currentTime = $derived(audioPlayer.currentTime);
-	const duration = $derived(audioPlayer.duration);
+	// Before the player holds a take, the slider shows where it would start
+	// and how long it runs.
+	const duration = $derived(
+		audioPlayer.current === null ? (info.generation.audio_duration_sec ?? 0) : audioPlayer.duration
+	);
+	const currentTime = $derived(ended ? duration : audioPlayer.currentTime);
 	const transport = $derived(audioPlayer.transport);
 	const buttonFace = $derived(transportButtonFace(transport));
-	const waitingNotice = $derived(transportWaitingNotice(transport));
+	const notice = $derived(unplayableNotice ?? transportWaitingNotice(transport));
+	const hasSideControls = $derived(Boolean(onToggleShuffle || onprev || onnext));
 
 	$effect(() => {
 		return subscribeCompactLayout((value) => {
@@ -165,17 +198,17 @@
 
 	// Opening focuses the surface, and so does every change between docked and
 	// full: switching rebuilds the controls the listener was on, which would
-	// otherwise drop focus back to the document.
+	// otherwise drop focus back to the document. The page is not opened.
 	$effect(() => {
-		void surface;
+		if (surface === 'page') return;
 		void tick().then(() => root?.focus());
 	});
 
 	function onWindowKeydown(event: KeyboardEvent): void {
-		// The docked panel is not a layer: it neither traps focus nor answers
-		// Escape — the page's own level-up owns that key while it is open,
-		// exactly as it would with no panel at all.
-		if (isDocked || !root) return;
+		// Only the full surface is a layer: the docked panel and the page
+		// neither trap focus nor answer Escape — the page's own level-up owns
+		// that key, exactly as it would with no panel at all.
+		if (!isLayer || !root) return;
 		const trap = $sheetOpen ? mobileSheet : root;
 		if (trap) handleFocusTrapKeydown(trap, event);
 	}
@@ -189,210 +222,259 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
+{#snippet coverArt()}
+	<div class="cover-art" aria-hidden="true">
+		{#if coverUrl}
+			<img src={coverUrl} alt="" />
+		{/if}
+	</div>
+{/snippet}
+
+{#snippet coverMeta()}
+	<div class="cover-meta">
+		<svelte:element this={isPage ? 'h1' : 'span'} class="cover-title"
+			>{info.songTitle}</svelte:element
+		>
+		{#if stacked && source}
+			<button
+				type="button"
+				class="from-link"
+				data-hitbox="text"
+				onclick={source.open}
+				aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
+				>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
+			>
+		{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
+		{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
+	</div>
+{/snippet}
+
+{#snippet progress()}
+	<div class="progress">
+		<SeekSlider size="full" {currentTime} {duration} {formatTime} {onSeek} />
+		<div class="progress-times">
+			<span class="time">{formatTime(currentTime)}</span>
+			<span class="time">{formatTime(duration)}</span>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet playButton()}
+	{#if ended}
+		<button type="button" class="play-again" onclick={onTogglePlay}
+			><span aria-hidden="true">↻</span> {NOW_PLAYING_PLAY_AGAIN_LABEL}</button
+		>
+	{:else}
+		<button
+			type="button"
+			class="play-btn"
+			onclick={onTogglePlay}
+			disabled={unplayableNotice !== null}
+			aria-label={transportButtonLabel(transport)}
+			aria-busy={transportIsBusy(transport)}
+		>
+			<TransportButtonIcon face={buttonFace} size={26} />
+		</button>
+	{/if}
+{/snippet}
+
+<!-- Play sits on the column's centre line: two equal sides around it, the
+	right one closed by an empty square where no repeat control is. With no
+	control beside it, Play stands alone. -->
+{#snippet transportControls()}
+	{#if hasSideControls}
+		<div class="transport">
+			<div class="transport-side before">
+				{#if onToggleShuffle}
+					<button
+						type="button"
+						class="icon-btn"
+						class:active={shuffle}
+						style:min-width="{HITBOX_FREQUENT_PX}px"
+						style:min-height="{HITBOX_FREQUENT_PX}px"
+						onclick={onToggleShuffle}
+						aria-pressed={shuffle}
+						aria-label={shuffleLabel}
+						title={shuffleLabel}
+					>
+						<Icon name="shuffle" size={18} />
+					</button>
+				{/if}
+				{#if onprev}
+					<button
+						type="button"
+						class="icon-btn"
+						style:min-width="{HITBOX_FREQUENT_PX}px"
+						style:min-height="{HITBOX_FREQUENT_PX}px"
+						onclick={onprev}
+						disabled={!canPrev}
+						aria-label={SONG_PREVIOUS_LABEL}
+					>
+						<Icon name="skip-back" size={20} />
+					</button>
+				{/if}
+			</div>
+			{@render playButton()}
+			<div class="transport-side after">
+				{#if onnext}
+					<button
+						type="button"
+						class="icon-btn"
+						style:min-width="{HITBOX_FREQUENT_PX}px"
+						style:min-height="{HITBOX_FREQUENT_PX}px"
+						onclick={onnext}
+						disabled={!canNext}
+						aria-label={SONG_NEXT_LABEL}
+					>
+						<Icon name="skip-forward" size={20} />
+					</button>
+				{/if}
+				<span
+					class="transport-slot"
+					style:width="{HITBOX_FREQUENT_PX}px"
+					style:height="{HITBOX_FREQUENT_PX}px"
+					aria-hidden="true"
+				></span>
+			</div>
+		</div>
+	{:else}
+		<div class="transport solo">{@render playButton()}</div>
+	{/if}
+	{#if notice}<p class="waiting-notice" role="status">{notice}</p>{/if}
+{/snippet}
+
+{#snippet lyrics()}
+	<NowPlayingLyrics
+		lyrics={lyricsText ?? info.lyrics}
+		cues={lyricsCues}
+		{whisperText}
+		emptyLabel={lyricsEmptyLabel}
+	/>
+{/snippet}
+
 <div
 	bind:this={root}
 	class="now-playing"
 	class:docked={isDocked}
+	class:page={isPage}
 	class:stacked
-	role={isDocked ? 'complementary' : 'dialog'}
-	aria-modal={isDocked ? undefined : 'true'}
-	aria-labelledby="now-playing-title"
+	role={isLayer ? 'dialog' : isDocked ? 'complementary' : undefined}
+	aria-modal={isLayer ? 'true' : undefined}
+	aria-labelledby={isPage ? undefined : 'now-playing-title'}
 	tabindex="-1"
-	style:z-index={isDocked ? null : NOW_PLAYING_Z_INDEX}
+	style:z-index={isLayer ? NOW_PLAYING_Z_INDEX : null}
 	style:width={isDocked ? `${NOW_PLAYING_DOCKED_WIDTH_PX}px` : null}
 >
 	{#key `${info.songId}:${info.generation.id}`}
-		<header class="np-header">
-			<div class="np-heading">
-				<p class="np-kicker">{NOW_PLAYING_LABEL}</p>
-				<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
+		{#if isPage}
+			<!-- The page reads like the picture a share link promises: the cover,
+				then the song, Play, the slider and the words under it. -->
+			<div class="np-body">
+				{@render coverArt()}
+				<section class="np-player-col">
+					{@render coverMeta()}
+					{@render transportControls()}
+					{@render progress()}
+					<div class="np-page-lyrics">{@render lyrics()}</div>
+				</section>
 			</div>
-			<div class="np-header-actions">
-				{#if isDocked && onExpand}
-					<button type="button" class="surface-btn" onclick={onExpand}
-						>{NOW_PLAYING_EXPAND_LABEL}</button
-					>
-				{:else if !isDocked && onCollapse}
-					<button type="button" class="surface-btn" onclick={onCollapse}
-						>{NOW_PLAYING_COLLAPSE_LABEL}</button
-					>
-				{/if}
-				<button
-					type="button"
-					class="icon-btn"
-					style:min-width="{HITBOX_FREQUENT_PX}px"
-					style:min-height="{HITBOX_FREQUENT_PX}px"
-					onclick={onclose}
-					aria-label={NOW_PLAYING_CLOSE}
-				>
-					<Icon name="x" size={20} />
-				</button>
-			</div>
-		</header>
-
-		<div class="np-body">
-			<section class="np-cover-col">
-				<div class="cover-art" aria-hidden="true">
-					{#if coverUrl}
-						<img src={coverUrl} alt="" />
+		{:else}
+			<header class="np-header">
+				<div class="np-heading">
+					<p class="np-kicker">{NOW_PLAYING_LABEL}</p>
+					<h2 id="now-playing-title" class="np-title">{info.songTitle}</h2>
+				</div>
+				<div class="np-header-actions">
+					{#if isDocked && onExpand}
+						<button type="button" class="surface-btn" onclick={onExpand}
+							>{NOW_PLAYING_EXPAND_LABEL}</button
+						>
+					{:else if !isDocked && onCollapse}
+						<button type="button" class="surface-btn" onclick={onCollapse}
+							>{NOW_PLAYING_COLLAPSE_LABEL}</button
+						>
 					{/if}
-				</div>
-				<div class="cover-meta">
-					<span class="cover-title">{info.songTitle}</span>
-					{#if stacked && source}
-						<button
-							type="button"
-							class="from-link"
-							data-hitbox="text"
-							onclick={source.open}
-							aria-label={nowPlayingOpenSourceLabel(source.kind, source.title)}
-							>{nowPlayingFromLabel(source.title)} <span aria-hidden="true">›</span></button
-						>
-					{:else if albumLine}<span class="cover-line">{albumLine}</span>{/if}
-					{#if showTakeLabel}<span class="cover-line">{takeLabel}</span>{/if}
-				</div>
-				{#if curationBar}{@render curationBar()}{/if}
-				<!-- The docked panel has no transport of its own: the bar beside it
-					stays visible and keeps carrying seek, shuffle, prev/next and play. -->
-				{#if !isDocked}
-					<div class="progress">
-						<SeekSlider
-							size="full"
-							{currentTime}
-							{duration}
-							{formatTime}
-							onSeek={(seconds) => audioPlayer.seek(seconds)}
-						/>
-						<div class="progress-times">
-							<span class="time">{formatTime(currentTime)}</span>
-							<span class="time">{formatTime(duration)}</span>
-						</div>
-					</div>
-					<!-- Play sits on the column's centre line: two equal sides around it,
-						the right one closed by an empty square where no repeat control is. -->
-					<div class="transport">
-						<div class="transport-side before">
-							<button
-								type="button"
-								class="icon-btn"
-								class:active={shuffle}
-								style:min-width="{HITBOX_FREQUENT_PX}px"
-								style:min-height="{HITBOX_FREQUENT_PX}px"
-								onclick={onToggleShuffle}
-								aria-pressed={shuffle}
-								aria-label={shuffleLabel}
-								title={shuffleLabel}
-							>
-								<Icon name="shuffle" size={18} />
-							</button>
-							{#if onprev}
-								<button
-									type="button"
-									class="icon-btn"
-									style:min-width="{HITBOX_FREQUENT_PX}px"
-									style:min-height="{HITBOX_FREQUENT_PX}px"
-									onclick={onprev}
-									disabled={!canPrev}
-									aria-label={SONG_PREVIOUS_LABEL}
-								>
-									<Icon name="skip-back" size={20} />
-								</button>
-							{/if}
-						</div>
-						<button
-							type="button"
-							class="play-btn"
-							onclick={() => audioPlayer.toggle()}
-							aria-label={transportButtonLabel(transport)}
-							aria-busy={transportIsBusy(transport)}
-						>
-							<TransportButtonIcon face={buttonFace} size={26} />
-						</button>
-						<div class="transport-side after">
-							{#if onnext}
-								<button
-									type="button"
-									class="icon-btn"
-									style:min-width="{HITBOX_FREQUENT_PX}px"
-									style:min-height="{HITBOX_FREQUENT_PX}px"
-									onclick={onnext}
-									disabled={!canNext}
-									aria-label={SONG_NEXT_LABEL}
-								>
-									<Icon name="skip-forward" size={20} />
-								</button>
-							{/if}
-							<span
-								class="transport-slot"
-								style:width="{HITBOX_FREQUENT_PX}px"
-								style:height="{HITBOX_FREQUENT_PX}px"
-								aria-hidden="true"
-							></span>
-						</div>
-					</div>
-					{#if waitingNotice}<p class="waiting-notice" role="status">{waitingNotice}</p>{/if}
-				{/if}
-			</section>
-
-			<section class="np-lyrics-col">
-				<NowPlayingLyrics
-					lyrics={lyricsText ?? info.lyrics}
-					cues={lyricsCues}
-					{whisperText}
-					emptyLabel={lyricsEmptyLabel}
-				/>
-				{#if onGoToSong}
 					<button
 						type="button"
-						class="go-song"
+						class="icon-btn"
 						style:min-width="{HITBOX_FREQUENT_PX}px"
 						style:min-height="{HITBOX_FREQUENT_PX}px"
-						onclick={onGoToSong}>{NOW_PLAYING_GO_TO_SONG}</button
+						onclick={onclose}
+						aria-label={NOW_PLAYING_CLOSE}
 					>
-				{/if}
-			</section>
+						<Icon name="x" size={20} />
+					</button>
+				</div>
+			</header>
 
-			{#if !stacked}
-				<section class="np-right-col">
-					{@render rightPanel()}
+			<div class="np-body">
+				<section class="np-cover-col">
+					{@render coverArt()}
+					{@render coverMeta()}
+					{#if curationBar}{@render curationBar()}{/if}
+					<!-- The docked panel has no transport of its own: the bar beside it
+						stays visible and keeps carrying seek, shuffle, prev/next and play. -->
+					{#if !isDocked}
+						{@render progress()}
+						{@render transportControls()}
+					{/if}
 				</section>
-			{/if}
-		</div>
 
-		{#if stacked}
-			<button
-				type="button"
-				class="mobile-panel-trigger"
-				onclick={openMobilePanel}
-				aria-haspopup="dialog"
-				aria-expanded={$sheetOpen}
-			>
-				{#if upNextTitle}
-					<span class="trigger-up-next">{NOW_PLAYING_UP_NEXT_PREFIX} {upNextTitle}</span>
+				<section class="np-lyrics-col">
+					{@render lyrics()}
+					{#if onGoToSong}
+						<button
+							type="button"
+							class="go-song"
+							style:min-width="{HITBOX_FREQUENT_PX}px"
+							style:min-height="{HITBOX_FREQUENT_PX}px"
+							onclick={onGoToSong}>{NOW_PLAYING_GO_TO_SONG}</button
+						>
+					{/if}
+				</section>
+
+				{#if rightPanel && !stacked}
+					<section class="np-right-col">
+						{@render rightPanel()}
+					</section>
 				{/if}
-				<span class="trigger-label"
-					>{rightPanelLabel}
-					<Icon name="chevron-up" size={14} /></span
-				>
-			</button>
-			{#if $sheetOpen}
+			</div>
+
+			{#if rightPanel && stacked}
 				<button
 					type="button"
-					class="mobile-sheet-backdrop"
-					tabindex="-1"
-					aria-label={nowPlayingSheetCloseLabel(sheetLabel)}
-					onclick={() => ($sheetOpen = false)}
-				></button>
-				<div
-					bind:this={mobileSheet}
-					class="mobile-sheet"
-					role="dialog"
-					aria-modal="true"
-					aria-label={sheetLabel}
-					tabindex="-1"
+					class="mobile-panel-trigger"
+					onclick={openMobilePanel}
+					aria-haspopup="dialog"
+					aria-expanded={$sheetOpen}
 				>
-					{@render rightPanel()}
-				</div>
+					{#if upNextTitle}
+						<span class="trigger-up-next">{NOW_PLAYING_UP_NEXT_PREFIX} {upNextTitle}</span>
+					{/if}
+					<span class="trigger-label"
+						>{rightPanelLabel}
+						<Icon name="chevron-up" size={14} /></span
+					>
+				</button>
+				{#if $sheetOpen}
+					<button
+						type="button"
+						class="mobile-sheet-backdrop"
+						tabindex="-1"
+						aria-label={nowPlayingSheetCloseLabel(sheetLabel)}
+						onclick={() => ($sheetOpen = false)}
+					></button>
+					<div
+						bind:this={mobileSheet}
+						class="mobile-sheet"
+						role="dialog"
+						aria-modal="true"
+						aria-label={sheetLabel}
+						tabindex="-1"
+					>
+						{@render rightPanel()}
+					</div>
+				{/if}
 			{/if}
 		{/if}
 	{/key}
@@ -529,6 +611,8 @@
 		text-align: center;
 	}
 	.cover-title {
+		margin: 0;
+		font-weight: normal;
 		font-family: var(--font-display);
 		font-size: 1.4rem;
 		color: var(--text);
@@ -605,8 +689,36 @@
 		justify-content: center;
 		cursor: pointer;
 	}
-	.play-btn:hover {
+	.play-btn:hover:not(:disabled),
+	.play-again:hover {
 		background: color-mix(in srgb, var(--accent) 82%, var(--text));
+	}
+	.play-btn:disabled {
+		opacity: 0.45;
+		cursor: default;
+	}
+	.transport.solo {
+		display: flex;
+		justify-content: center;
+	}
+	.play-again {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.6rem;
+		min-height: 56px;
+		padding: 0 1.5rem 0 1.1rem;
+		border: none;
+		border-radius: 999px;
+		background: var(--accent);
+		color: var(--on-accent);
+		font: inherit;
+		font-size: 1.05rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.play-again span {
+		font-size: 1.4rem;
+		line-height: 1;
 	}
 	.np-lyrics-col {
 		display: flex;
@@ -750,5 +862,81 @@
 	.now-playing.stacked .transport,
 	.now-playing.stacked .transport-side {
 		gap: 0.5rem;
+	}
+
+	/* The page a share link opens (#1391): the frame flows in the page's own
+	   scroll instead of covering the viewport. Wide, the cover stands beside
+	   the song, Play, the slider and the words; stacked, all of it is one
+	   centred column. */
+	.now-playing.page {
+		position: static;
+		background: none;
+		overflow: visible;
+	}
+	.now-playing.page .np-body {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 4rem;
+		align-items: start;
+		padding: 0;
+		overflow: visible;
+	}
+	.now-playing.page .cover-art {
+		width: 100%;
+	}
+	.np-player-col {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 1.4rem;
+		min-width: 0;
+	}
+	.now-playing.page .cover-meta {
+		align-items: flex-start;
+		gap: 0.4rem;
+		text-align: left;
+	}
+	.now-playing.page .cover-title {
+		font-size: 2.6rem;
+		font-weight: 500;
+		line-height: 1.1;
+		overflow-wrap: anywhere;
+	}
+	.now-playing.page .cover-line {
+		font-size: 1rem;
+	}
+	.now-playing.page .transport.solo {
+		justify-content: flex-start;
+	}
+	.now-playing.page .play-btn {
+		width: 76px;
+		height: 76px;
+		box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent);
+	}
+	.now-playing.page .progress,
+	.np-page-lyrics {
+		align-self: stretch;
+		width: auto;
+	}
+	.now-playing.page.stacked .np-body {
+		grid-template-columns: minmax(0, 1fr);
+		gap: 1.6rem;
+	}
+	.now-playing.page.stacked .cover-art {
+		justify-self: center;
+		width: min(320px, 80%);
+	}
+	.now-playing.page.stacked .np-player-col,
+	.now-playing.page.stacked .cover-meta {
+		align-items: center;
+		text-align: center;
+	}
+	.now-playing.page.stacked .cover-title {
+		font-size: 1.75rem;
+	}
+	.now-playing.page.stacked .transport.solo {
+		justify-content: center;
+	}
+	.now-playing.page.stacked .np-page-lyrics {
+		text-align: left;
 	}
 </style>

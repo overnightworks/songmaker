@@ -148,13 +148,22 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 
 		const publicContext = await browser.newContext({ storageState: undefined });
 		try {
-			for (const share of [albumShare, songShare, takeShare]) {
+			const albumPage = await publicContext.newPage();
+			await albumPage.goto(albumShare.share_url);
+			await expect(albumPage.locator('.header-cover img')).toBeVisible();
+			await expect(albumPage.locator('.header-cover img')).toHaveAttribute(
+				'alt',
+				`Album ${albumTitle}`
+			);
+			await albumPage.close();
+			// A shared song or take opens as the player, its big cover the album's (#1391).
+			for (const share of [songShare, takeShare]) {
 				const publicPage = await publicContext.newPage();
 				await publicPage.goto(share.share_url);
-				await expect(publicPage.locator('.header-cover img')).toBeVisible();
-				await expect(publicPage.locator('.header-cover img')).toHaveAttribute(
-					'alt',
-					`Album ${albumTitle}`
+				await expect(publicPage.locator('.now-playing.page .cover-art img')).toBeVisible();
+				await expect(publicPage.locator('.now-playing.page .cover-art img')).toHaveAttribute(
+					'src',
+					/\/shared\/(song|gen)\/[^/]+\/album-cover\?/
 				);
 				await publicPage.close();
 			}

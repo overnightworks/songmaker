@@ -1,5 +1,10 @@
 import { mount, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_NAME, SEEK_PLAYBACK_LABEL, TRANSPORT_PLAY_LABEL } from '$lib/constants';
+import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '$lib/constants/now-playing';
+import { SHARE_NO_AUDIO_NOTICE } from '$lib/constants/share';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-song' } } }));
 
@@ -42,6 +47,7 @@ let component: ReturnType<typeof mount> | undefined;
 let audio: FakeAudio;
 
 beforeEach(() => {
+	audioPlayer.destroy();
 	audio = new FakeAudio();
 	vi.stubGlobal('fetch', mockFetch);
 	vi.stubGlobal(
@@ -66,58 +72,92 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 });
 
+const SONG_DURATION_SEC = 187;
+
+function sharedSongPayload(media: Record<string, unknown> = {}) {
+	return {
+		title: 'Solo Track',
+		artist: 'Artist',
+		album_title: 'Album',
+		audio_url: '/audio/solo.mp3',
+		generation_id: 'g1',
+		audio_duration: SONG_DURATION_SEC,
+		lyrics: 'One line to sing',
+		whisper_cues: null,
+		cover: null,
+		album_cover: null,
+		...media
+	};
+}
+
+async function openSharedSong(response: Record<string, unknown>): Promise<HTMLElement> {
+	mockFetch.mockResolvedValueOnce(response);
+	const target = document.createElement('div');
+	document.body.appendChild(target);
+	component = mount(Page, { target });
+	await vi.waitFor(() => expect(target.querySelector('.share-status.loading')).toBeNull());
+	return target;
+}
+
+function sharedSong(media: Record<string, unknown> = {}): Record<string, unknown> {
+	return { ok: true, status: 200, json: async () => sharedSongPayload(media) };
+}
+
+function seekLine(target: HTMLElement): HTMLInputElement {
+	const line = target.querySelector<HTMLInputElement>(`input[aria-label="${SEEK_PLAYBACK_LABEL}"]`);
+	if (!line) throw new Error('Expected the seek line');
+	return line;
+}
+
 describe('shared song page', () => {
-	it('renders a one-track collection and plays it', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: async () => ({
-				title: 'Solo Track',
-				artist: 'Artist',
-				album_title: 'Album',
-				audio_url: '/audio/solo.mp3',
-				cover: null
-			})
-		});
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+	it('opens as the player and plays the song from its own Play', async () => {
+		const target = await openSharedSong(sharedSong());
 
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
-		target.querySelector<HTMLButtonElement>('.track-row')?.click();
+		expect(target.querySelector('h1')?.textContent).toBe('Solo Track');
+		expect(target.querySelectorAll('.track-row')).toHaveLength(0);
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
 
-		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());
-		expect(audio.src).toBe('/audio/solo.mp3');
+		await vi.waitFor(() => expect(audio.src).toBe('/audio/solo.mp3'));
+		expect(document.querySelector('.player-bar')).toBeNull();
+	});
+
+	it('offers Play again at the end and keeps the slider there', async () => {
+		const target = await openSharedSong(sharedSong());
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		await vi.waitFor(() => expect(audio.src).toBe('/audio/solo.mp3'));
+		audio.fire('playing');
+
+		audio.fire('ended');
+
+		const playAgain = await vi.waitFor(() =>
+			getByRoleButton(target, `↻ ${NOW_PLAYING_PLAY_AGAIN_LABEL}`)
+		);
+		expect(Number(seekLine(target).value)).toBe(SONG_DURATION_SEC);
+		expect(target.querySelector('.progress-times')?.textContent).toMatch(/3:07\s*3:07/);
+
+		audio.paused = true;
+		playAgain.click();
+
+		await vi.waitFor(() => expect(target.querySelector('.play-again')).toBeNull());
 	});
 
 	it('shows an honest empty state when the song has no audio', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: async () => ({
-				title: 'Solo Track',
-				artist: 'Artist',
-				album_title: 'Album',
-				audio_url: null,
-				cover: null
-			})
-		});
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+		const target = await openSharedSong(sharedSong({ audio_url: null, generation_id: null }));
 
-		await vi.waitFor(() => expect(target.textContent).toContain('No audio available yet.'));
-		expect(target.querySelectorAll('.track-row')).toHaveLength(0);
+		expect(target.textContent).toContain(SHARE_NO_AUDIO_NOTICE);
+		expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
 	});
 
-	it('shows the missing-link status for a 404', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: false, status: 404 });
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+	it('says in one line that a link is no longer shared, with a way back and no player', async () => {
+		const target = await openSharedSong({ ok: false, status: 404 });
 
-		await vi.waitFor(() => {
-			expect(target.querySelector('h1')?.textContent).toBe('Song not found');
-		});
+		expect(target.querySelector('h1')?.textContent).toBe('Song not found');
+		expect(target.textContent).toContain('This share link is invalid or was removed.');
+		const wayBack = target.querySelector<HTMLAnchorElement>('.share-status a');
+		expect([wayBack?.textContent, wayBack?.getAttribute('href')]).toEqual([
+			`Open ${APP_NAME}`,
+			'/login'
+		]);
+		expect(target.querySelector('.now-playing')).toBeNull();
 	});
 });

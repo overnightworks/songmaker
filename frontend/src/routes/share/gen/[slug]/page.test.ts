@@ -1,7 +1,9 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
+import { TRANSPORT_PLAY_LABEL } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
 
 vi.mock('$app/state', () => ({ page: { params: { slug: 'shared-gen' } } }));
 
@@ -75,6 +77,7 @@ let component: ReturnType<typeof mount> | undefined;
 let audio: FakeAudio;
 
 beforeEach(() => {
+	audioPlayer.destroy();
 	audio = new FakeAudio();
 	vi.stubGlobal('fetch', mockFetch);
 	vi.stubGlobal(
@@ -99,84 +102,72 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 });
 
-describe('shared generation (take) page', () => {
-	it('renders a one-track collection for a shared take without exposing the internal take number', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: async () => sharedTakePayload()
-		});
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+async function openSharedTake(response: Record<string, unknown>): Promise<HTMLElement> {
+	mockFetch.mockResolvedValueOnce(response);
+	const target = document.createElement('div');
+	document.body.appendChild(target);
+	component = mount(Page, { target });
+	await vi.waitFor(() => expect(target.querySelector('.share-status.loading')).toBeNull());
+	return target;
+}
 
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
-		expect(target.textContent).toContain('Artist · Album');
+function sharedTake(media: Record<string, unknown> = {}): Record<string, unknown> {
+	return { ok: true, status: 200, json: async () => sharedTakePayload(media) };
+}
+
+describe('shared generation (take) page', () => {
+	it('opens as the player for a shared take without exposing the internal take number', async () => {
+		const target = await openSharedTake(sharedTake());
+
+		expect(target.querySelector('h1')?.textContent).toBe('Solo Track');
+		expect(target.textContent).toContain('Album · Artist');
 		expect(target.textContent).not.toContain('take 3');
 		// #141/10: the page names a take; only the URL segment stays /share/gen/.
 		expect(document.title).toContain('Take 3 — Solo Track');
 		expect(document.title).not.toContain('Gen #');
 
-		target.querySelector<HTMLButtonElement>('.track-row')?.click();
-		await vi.waitFor(() => expect(target.querySelector('.player-bar')).not.toBeNull());
-		expect(audio.src).toBe('/audio/take3.mp3');
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		await vi.waitFor(() => expect(audio.src).toBe('/audio/take3.mp3'));
+		expect(document.querySelector('.player-bar')).toBeNull();
 	});
 
 	it('shows the take duration from the payload, with no stream manifest in play', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: async () => sharedTakePayload()
-		});
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+		const target = await openSharedTake(sharedTake());
 
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
-
-		expect(target.querySelector('.track-row-duration')?.textContent).toBe('3:07');
+		expect(target.querySelector('.progress-times')?.textContent).toContain('3:07');
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 	});
 
-	it('follows the sung words in Now Playing from the cues the payload carries', async () => {
-		mockFetch.mockResolvedValueOnce({
-			ok: true,
-			status: 200,
-			json: async () =>
-				sharedTakePayload({
-					lyrics: `${FIRST_LINE}\n${SECOND_LINE}`,
-					whisper_cues: [sungCue(0, FIRST_LINE), sungCue(6, SECOND_LINE)]
-				})
-		});
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
-
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(1));
-		target.querySelector<HTMLButtonElement>('.track-row')?.click();
-		await vi.waitFor(() =>
-			expect(document.querySelector('.track-info.open-now-playing')).not.toBeNull()
+	it('follows the sung words under the player from the cues the payload carries', async () => {
+		const target = await openSharedTake(
+			sharedTake({
+				lyrics: `${FIRST_LINE}\n${SECOND_LINE}`,
+				whisper_cues: [sungCue(0, FIRST_LINE), sungCue(6, SECOND_LINE)]
+			})
 		);
-		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
-		await vi.waitFor(() => expect(document.querySelector('.lyrics-synced')).not.toBeNull());
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		await vi.waitFor(() => expect(target.querySelector('.lyrics-synced')).not.toBeNull());
 
 		audioPlayer.currentTime = 8.5;
 		await tick();
 
-		const active = [...document.querySelectorAll('.lyrics-line.active')].map((el) =>
+		const active = [...target.querySelectorAll('.lyrics-line.active')].map((el) =>
 			el.textContent?.trim()
 		);
 		expect(active).toEqual([SECOND_LINE]);
 	});
 
-	it('shows the error status when the fetch fails', async () => {
-		mockFetch.mockResolvedValueOnce({ ok: false, status: 500 });
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
+	it('says in one line that a take is no longer shared, with a way back and no player', async () => {
+		const target = await openSharedTake({ ok: false, status: 404 });
 
-		await vi.waitFor(() => {
-			expect(target.querySelector('h1')?.textContent).toBe('Could not load this generation');
-		});
+		expect(target.querySelector('h1')?.textContent).toBe('Generation not found');
+		expect(target.querySelector('.share-status a')?.getAttribute('href')).toBe('/login');
+		expect(target.querySelector('.now-playing')).toBeNull();
+	});
+
+	it('shows the error status when the fetch fails', async () => {
+		const target = await openSharedTake({ ok: false, status: 500 });
+
+		expect(target.querySelector('h1')?.textContent).toBe('Could not load this generation');
 	});
 });

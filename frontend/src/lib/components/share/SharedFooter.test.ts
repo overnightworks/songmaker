@@ -1,7 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it } from 'vitest';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { LEGAL_SECTIONS } from '../LegalLinks.svelte';
 import SharedFooter from './SharedFooter.svelte';
-import sharedFooterSource from './SharedFooter.svelte?raw';
 
 let mounted: ReturnType<typeof mount> | undefined;
 
@@ -19,8 +20,8 @@ async function render(): Promise<HTMLElement> {
 	return target;
 }
 
-async function openLegal(target: HTMLElement): Promise<void> {
-	requireElement<HTMLButtonElement>(target, '.link-btn').click();
+async function openLegal(target: HTMLElement, label = 'Impressum'): Promise<void> {
+	getByRoleButton(target, label).click();
 	await tick();
 	await tick();
 }
@@ -72,20 +73,16 @@ describe('SharedFooter legal overlay', () => {
 	});
 });
 
-describe('SharedFooter separators', () => {
-	it('renders every link as its own item with the dot drawn by CSS, not inline text', async () => {
-		const target = await render();
-		const items = Array.from(target.querySelectorAll('.footer-item'));
-		expect(items).toHaveLength(4);
-		for (const item of items) {
-			expect(item.textContent).not.toContain('·');
-		}
-	});
+describe('SharedFooter legal links', () => {
+	it.each(LEGAL_SECTIONS)(
+		'opens $label over the share page instead of leaving it',
+		async ({ label }) => {
+			const target = await render();
+			await openLegal(target, label);
 
-	it('draws the separator only before items after the first, so wrapping never strands a dot', () => {
-		const escaped = '.footer-item:not(:first-child)::before'.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-		const match = new RegExp(`${escaped}\\s*{([^}]*)}`).exec(sharedFooterSource);
-		expect(match).not.toBeNull();
-		expect(match?.[1]).toContain("content: '·'");
-	});
+			const tab = requireElement<HTMLElement>(target, '.legal-modal .legal-tabs .active');
+			expect(tab.textContent?.trim()).toBe(label);
+			expect(target.querySelector('.powered')).not.toBeNull();
+		}
+	);
 });

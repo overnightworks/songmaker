@@ -44,6 +44,10 @@ function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null):
 export class SharePlayback {
 	shuffle = $state(false);
 	windowEnded = $state(false);
+	// The share played to its end: its last track ran out with nothing after
+	// it. The player itself goes back to 0:00 there; the page keeps the end
+	// in view and Play starts the share again from its first track.
+	ended = $state(false);
 
 	private collection: SharedCollectionView | null = null;
 	private baseTracks: SharedTrack[] = [];
@@ -102,6 +106,7 @@ export class SharePlayback {
 		this.manifest = null;
 		this.shuffle = false;
 		this.windowEnded = false;
+		this.ended = false;
 		this.fetchStream = fetchStream;
 		this.previousCallbacks = audioPlayer.swapCallbacks({
 			onEnded: (reason) => {
@@ -109,10 +114,12 @@ export class SharePlayback {
 					this.windowEnded = true;
 					return;
 				}
-				this.next();
+				if (this.canNext) this.next();
+				else this.ended = true;
 			},
 			onPlaybackStarted: () => {
 				this.windowEnded = false;
+				this.ended = false;
 			},
 			onAuthLost: null,
 			onStreamRebuild: this.fetchStream ? () => this.rebuildManifest() : null,
@@ -124,6 +131,24 @@ export class SharePlayback {
 	stop(): void {
 		audioPlayer.restoreCallbacks(this.previousCallbacks);
 		audioPlayer.unload();
+	}
+
+	// The share's one Play: it starts the first track, pauses or resumes the
+	// one playing, and once the share played to its end starts it again from
+	// its first track.
+	play(): void {
+		if (this.currentTrack && !this.ended) {
+			audioPlayer.toggle();
+			return;
+		}
+		const first = this.playOrder[0];
+		if (first) void this.playTrack(first);
+	}
+
+	// A seek leaves the end: the listener chose where the song stands.
+	seek(seconds: number): void {
+		this.ended = false;
+		audioPlayer.seek(seconds);
 	}
 
 	toggle(track: SharedTrack): void {
@@ -170,6 +195,7 @@ export class SharePlayback {
 	private async playTrack(track: SharedTrack): Promise<void> {
 		const collection = this.collection;
 		if (track.audioUrl === null || !collection) return;
+		this.ended = false;
 		if (this.canUseStream()) {
 			try {
 				const manifest = await this.ensureManifest();

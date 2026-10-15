@@ -1,6 +1,8 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { APP_NAME } from '$lib/constants';
 import { AUTH_ACCOUNT_DISABLED_MESSAGE, AUTH_SESSION_EXPIRED_MESSAGE } from '$lib/constants/auth';
+import { LEGAL_SECTIONS } from '$lib/components/LegalLinks.svelte';
 
 const { authError, authNotice, mockLogin } = vi.hoisted(() => ({
 	authError: store(''),
@@ -161,6 +163,23 @@ describe('login page', () => {
 		target.querySelector('form')?.dispatchEvent(new SubmitEvent('submit', { cancelable: true }));
 
 		await vi.waitFor(() => expect(goto).toHaveBeenCalledWith(landing, { replaceState: true }));
+	});
+
+	it('names the tab after the app, not the shared song the listener came from', async () => {
+		document.title = 'Neon Tide — Mara Lind | Hallucinai';
+		renderPage();
+		await tick();
+
+		expect(document.title).toBe(APP_NAME);
+	});
+
+	it('links every legal text the shared pages link', async () => {
+		const target = renderPage();
+		await tick();
+
+		expect(Array.from(target.querySelectorAll('.legal-links a')).map((a) => a.textContent)).toEqual(
+			LEGAL_SECTIONS.map((section) => section.label)
+		);
 	});
 
 	it('waits for a submitted form before attempting login', async () => {

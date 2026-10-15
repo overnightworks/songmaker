@@ -4,12 +4,17 @@
 	import {
 		collectionSubtitle,
 		playableTracks,
+		trackPlaybackInfo,
 		type SharedCollectionView,
 		type SharedTrack
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
 	import { ALBUM_COVER_ALT_TYPE } from '$lib/constants';
-	import { SHARE_NOW_PLAYING_NO_LYRICS, SHARE_NOW_PLAYING_SHEET_LABEL } from '$lib/constants/share';
+	import {
+		SHARE_NO_AUDIO_NOTICE,
+		SHARE_NOW_PLAYING_NO_LYRICS,
+		SHARE_NOW_PLAYING_SHEET_LABEL
+	} from '$lib/constants/share';
 	import { formatTime, titleInitials } from '$lib/utils/format';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import CollectionHeaderFrame from '$lib/components/CollectionHeaderFrame.svelte';
@@ -43,6 +48,13 @@
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
 	const coverAlt = $derived(`${ALBUM_COVER_ALT_TYPE} ${view?.albumTitle ?? view?.title ?? ''}`);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
+	// A shared song or take is the player itself (#1391); an album or a
+	// playlist keeps its header, its songs and the bar until its own slice.
+	const opensAsPlayer = $derived(view?.kind === 'song' || view?.kind === 'take');
+	// The track the player page stands on: the one playing, else the one the
+	// share offers, so the player and its words are there before Play.
+	const stagedTrack = $derived(playback.currentTrack ?? view?.tracks[0] ?? null);
+	const stagedInfo = $derived(view && stagedTrack ? trackPlaybackInfo(view, stagedTrack) : null);
 
 	$effect(() => {
 		void view?.cover;
@@ -66,15 +78,6 @@
 			mobileTransport = value;
 		}, MOBILE_TRANSPORT_MEDIA);
 	});
-
-	function onHeaderPlay(): void {
-		if (playback.currentTrack) {
-			audioPlayer.toggle();
-			return;
-		}
-		const first = tracks[0];
-		if (first) playback.toggle(first);
-	}
 
 	function onRowClick(track: SharedTrack): void {
 		playback.toggle(track);
@@ -122,7 +125,7 @@
 	/>
 {/snippet}
 
-<div class="shared-page">
+<div class="shared-page" class:player-page={opensAsPlayer}>
 	<div class="bg-effects" aria-hidden="true">
 		<div class="glow glow-1"></div>
 		<div class="glow glow-2"></div>
@@ -136,6 +139,20 @@
 			{resource}
 			onretry={errorKind === 'error' ? onretry : undefined}
 		/>
+	{:else if opensAsPlayer && stagedInfo}
+		<NowPlayingFrame
+			surface="page"
+			info={stagedInfo}
+			{coverUrl}
+			onTogglePlay={() => playback.play()}
+			onSeek={(seconds) => playback.seek(seconds)}
+			ended={playback.ended}
+			unplayableNotice={tracks.length === 0 ? SHARE_NO_AUDIO_NOTICE : null}
+			showTakeLabel={false}
+			lyricsEmptyLabel={SHARE_NOW_PLAYING_NO_LYRICS}
+			lyricsCues={stagedTrack?.cues ?? null}
+			lyricsText={stagedTrack?.lyrics ?? null}
+		/>
 	{:else if view}
 		<CollectionHeaderFrame
 			{coverUrl}
@@ -146,13 +163,13 @@
 			artFill={null}
 			kind={view.kind}
 			transport={playback.currentTrack !== null ? audioPlayer.transport : 'idle'}
-			onplay={tracks.length > 0 ? onHeaderPlay : null}
+			onplay={tracks.length > 0 ? () => playback.play() : null}
 			{titleArea}
 			coverFallback={view.kind === 'playlist' ? playlistCover : undefined}
 		/>
 
 		{#if tracks.length === 0}
-			<p class="no-audio">No audio available yet.</p>
+			<p class="no-audio">{SHARE_NO_AUDIO_NOTICE}</p>
 		{:else}
 			<div class="track-list">
 				{#each tracks as track (track.key)}
@@ -176,7 +193,7 @@
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack}
+{#if playback.currentTrack && !opensAsPlayer}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -198,7 +215,7 @@
 	/>
 {/if}
 
-{#if $nowPlayingOpen && audioPlayer.current}
+{#if $nowPlayingOpen && audioPlayer.current && !opensAsPlayer}
 	<NowPlayingFrame
 		info={audioPlayer.current}
 		{coverUrl}
@@ -416,8 +433,17 @@
 		text-overflow: ellipsis;
 	}
 
+	/* The player page has no bar under it, so nothing reserves its room, and
+	   wide it needs the width of two columns. */
+	.shared-page.player-page {
+		--player-height: 0px;
+		max-width: 1120px;
+		padding: 4rem 2rem 1rem;
+	}
+
 	@media (max-width: 768px) {
-		.shared-page {
+		.shared-page,
+		.shared-page.player-page {
 			padding: 1.2rem 0.8rem;
 		}
 		.header-title {
