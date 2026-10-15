@@ -66,6 +66,7 @@ import {
 	SESSION_REFUSAL_STATUSES,
 	type ExpectedRefusal,
 	MOBILE_VIEWPORT,
+	openLibraryWall,
 	openRailNav,
 	containing,
 	loseNetwork,
@@ -170,6 +171,7 @@ const PHONE_VIEWPORT = { width: 375, height: 844 };
 
 const LOGIN_PAGE_URL = /\/login(\?|$)/;
 const WALL_URL = /\/(\?|$)/;
+const WALL_PATH = '/';
 
 // What the account this spec creates signs in with, and what it never signs in
 // with. Both satisfy the login form's own `minlength`, so the browser submits
@@ -270,6 +272,16 @@ async function submitLogin(page: Page, username: string, password: string): Prom
 		page.getByRole('button', { name: SUBMIT_LABEL }).click()
 	]);
 	return response;
+}
+
+/**
+ * The sign-in page a page without a session sends to: asked to bring the
+ * person back to that page, or plainly the door from the Library, where every
+ * sign-in lands anyway.
+ */
+function isSignInFor(url: URL, address: string): boolean {
+	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? WALL_PATH;
+	return url.pathname === '/login' && returnTo === address;
 }
 
 /** Signs in from the login page and waits until the workspace is standing. */
@@ -665,36 +677,32 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	await attachShot(page, testInfo, 'auth-signed-out-cookie-refused');
 });
 
-test('signing out from the open account menu on Voices, Back returns to Voices, which asks for sign-in again', async ({
+// The phone's account circle lives on the Library (#1354 rule 25), so the
+// phone signs out there.
+test('signing out from the open account menu on the Library, Back returns to the Library, which asks for sign-in again', async ({
 	page,
 	isMobile
 }, testInfo) => {
 	test.skip(!isMobile, 'The account menu belongs to the phone shell.'); // NOSONAR S1607: the account menu exists only in the phone shell.
 	await page.addInitScript(recordAppHistorySteps, APP_HISTORY_STEPS_KEY);
 	await signIn(page);
-	await page.goto(VOICES_PAGE_PATH);
-	await expect(page.getByRole('heading', { name: VOICES_HEADING })).toBeVisible();
 
 	await signOut(page, 'mobile');
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await forgetAppHistorySteps(page);
 	await page.goBack();
 
-	// Not an empty page on the Voices address, and not the account menu's
-	// entry stepped through: the door, asked to bring the person back to Voices.
-	await expect(page).toHaveURL(
-		(url) =>
-			url.pathname === '/login' &&
-			url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === VOICES_PAGE_PATH
-	);
+	// Not an empty Library, and not the account menu's entry stepped through:
+	// the door, which brings the person back to the Library.
+	await expect(page).toHaveURL((url) => isSignInFor(url, WALL_PATH));
 	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 	expect(await appHistorySteps(page)).toEqual([]);
 	await attachShot(page, testInfo, 'auth-signed-out-back');
 });
 
-// The wide window signs out from its rail beside the song; the phone's song
-// page has no account circle, so the phone walks on to the album through its
-// drawer, the take still playing, and signs out from its account menu there.
+// The wide window signs out from its rail beside the song; the phone's account
+// circle lives on the Library (#1354 rule 25), so the phone walks on to the
+// Library through its drawer, the take still playing, and signs out there.
 test(
 	'signing out while a take plays leaves on a fresh sign-in page without the player, and Back asks for sign-in again',
 	{ tag: PLAYS_A_TAKE_TAG },
@@ -706,9 +714,9 @@ test(
 		await playTheTake(page, shell);
 		let leftFrom = songAddress;
 		if (shell === 'mobile') {
-			leftFrom = albumAddressOf(songAddress);
-			await (await albumInRail(page, shell, leftFrom)).click();
-			await expect(page).toHaveURL(new RegExp(`${leftFrom}$`));
+			leftFrom = WALL_PATH;
+			await openLibraryWall(page, shell);
+			await expect(page).toHaveURL(WALL_URL);
 		}
 		await markSignedInDocument(page);
 
@@ -721,10 +729,7 @@ test(
 
 		await page.goBack();
 
-		await expect(page).toHaveURL(
-			(url) =>
-				url.pathname === '/login' && url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) === leftFrom
-		);
+		await expect(page).toHaveURL((url) => isSignInFor(url, leftFrom));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		await expect(transportControls(page)).toHaveCount(0);
 		await attachShot(page, testInfo, 'auth-signed-out-while-playing');

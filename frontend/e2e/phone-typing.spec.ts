@@ -17,7 +17,6 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
-	APP_NAME,
 	COWRITER_TURN_PATH,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
@@ -313,7 +312,7 @@ test.describe('typing on the phone', () => {
 		await page.goBack();
 
 		await expect(appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL })).toBeVisible();
-		await expect(appBar(page).getByRole('button', { name: APP_NAME })).toBeVisible();
+		await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
 		await expect(page.getByRole('contentinfo')).toBeVisible();
 
 		guard.assertClean();

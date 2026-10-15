@@ -16,6 +16,10 @@
 	import { titleInitials } from '$lib/utils/format';
 	import PlaylistCover from '../PlaylistCover.svelte';
 
+	// `onchoose` runs before a chosen result opens: a sheet holding the search
+	// closes there, so its history entry is left before the result's is pushed.
+	let { onchoose }: { onchoose?: () => void } = $props();
+
 	const DETAIL_SEPARATOR = ' · ';
 	const SELECTED_RESULT_SELECTOR = '[aria-selected="true"]';
 
@@ -94,6 +98,7 @@
 	}
 
 	function selectResult(target: RailSearchTarget): void {
+		onchoose?.();
 		void openRailSearchTarget(target);
 	}
 </script>

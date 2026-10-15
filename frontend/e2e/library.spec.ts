@@ -49,6 +49,7 @@ import {
 import {
 	accountCircle,
 	accountMenu,
+	appBar,
 	boundingBoxes,
 	containing,
 	FlowGuard,
@@ -196,7 +197,9 @@ async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 /**
  * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
  * brand, search, Library and Playlists. Settings, the theme and Log out live
- * in the account circle's menu, so the drawer repeats none of them.
+ * in the account circle's menu on the Library, so the drawer repeats none of
+ * them, and an album opened from another page carries ‹ instead of the circle
+ * (#1354 rule 25, frame I3).
  */
 async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	const rail = await openRailNav(page, 'mobile');
@@ -208,6 +211,21 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
+	await expect(accountCircle(page)).toHaveCount(0);
+}
+
+/**
+ * The phone's ‹ (#1354 rule 25): named after the page it goes back to, and
+ * the account circle only on the Library, with Log out one tap away in it.
+ */
+async function backOnPhone(page: Page, to: string): Promise<void> {
+	await appBar(page)
+		.getByRole('button', { name: `Back to ${to}`, exact: true })
+		.click();
+}
+
+async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await accountCircle(page).click();
 	await expect(
 		accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
@@ -230,9 +248,21 @@ async function expectSettingsRailRoundTrip(
 	surface: Locator,
 	albumTitle: string
 ): Promise<void> {
+	if (shell === 'mobile') {
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expectAccountMenuOnTheLibrary(page);
+	}
 	await openSettingsSection(page, shell, 'Voices');
 
 	await expect(page).toHaveURL(/\/settings\/voices$/);
+	if (shell === 'mobile') {
+		await expect(accountCircle(page)).toHaveCount(0);
+		await backOnPhone(page, RAIL_SETTINGS_LABEL);
+		await expect(page).toHaveURL(/\/settings$/);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/settings\/voices$/);
+	}
 	// The removed second column — the old `.settings-sidebar` — is gone, and
 	// so is any other navigation landmark inside the content area; the rail
 	// stays the one navigation on the page.

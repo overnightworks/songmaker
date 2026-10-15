@@ -182,6 +182,24 @@ describe('RailSearch', () => {
 		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'song', id: 's1' });
 	});
 
+	// The phone's search sheet holds its own history entry, which it must leave
+	// before the chosen result pushes one of its own (#1389).
+	it('lets the sheet holding it close before a chosen result opens', async () => {
+		const steps: string[] = [];
+		navigation.openRailSearchTarget.mockImplementationOnce(() => steps.push('opened'));
+		const sheetSearch = createComponentMount(RailSearch, {
+			onchoose: () => steps.push('sheet closed')
+		});
+		showVernissageResults();
+		const root = await sheetSearch.render();
+
+		resultRows(root)[1]?.click();
+		await sheetSearch.cleanup();
+
+		expect(steps).toEqual(['sheet closed', 'opened']);
+		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'song', id: 's1' });
+	});
+
 	it('gives the first hit the focus edge and opens it on Enter', async () => {
 		showVernissageResults();
 		const root = await render();

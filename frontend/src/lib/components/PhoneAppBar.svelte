@@ -1,16 +1,186 @@
+<script module lang="ts">
+	import type { Pathname } from '$app/types';
+	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
+	import { RAIL_SETTINGS_LABEL } from '$lib/constants';
+	import {
+		albumRoutePath,
+		libraryRouteShape,
+		playlistRoutePath,
+		songRoutePath
+	} from '$lib/routes/addresses';
+	import { visibleRailSearchPages } from '$lib/stores/railSearch';
+
+	export const SEARCH_OPEN_LABEL = 'Search';
+	export const SEARCH_SHEET_LABEL = 'Search';
+	export const SEARCH_CLOSE_LABEL = 'Close search';
+
+	const LIBRARY_HREF: Pathname = '/';
+	const SETTINGS_HREF: Pathname = '/settings';
+	const ALBUM_NAME = 'Album';
+	const PLAYLIST_NAME = 'Playlist';
+	const SONG_NAME = 'Song';
+	const PREVIOUS_PAGE_NAME = 'Previous page';
+
+	export function backLabel(pageName: string): string {
+		return `Back to ${pageName}`;
+	}
+
+	interface LibraryTitles {
+		readonly albums: readonly AlbumItem[];
+		readonly playlists: readonly PlaylistItem[];
+		readonly songs: readonly SongItem[];
+	}
+
+	// The list a page belongs to, which its ‹ opens when no page of the tab's
+	// own lies below it (#1354 rule 25). Until the phone tabs arrive, the
+	// Library lists albums and playlists alike, and a Settings section belongs
+	// to the Settings list.
+	export function listOfPage(pathname: string): Pathname {
+		return pathname.startsWith(`${SETTINGS_HREF}/`) ? SETTINGS_HREF : LIBRARY_HREF;
+	}
+
+	// What ‹ calls the page it goes back to: an app page by the name the app
+	// gives it, an album, playlist or song by its title, or by its kind while
+	// the library has not loaded it.
+	export function pageName(pathname: string, titles: LibraryTitles): string {
+		if (pathname === SETTINGS_HREF) return RAIL_SETTINGS_LABEL;
+		const appPage = visibleRailSearchPages(true).find((page) => page.href === pathname);
+		if (appPage) return appPage.label;
+		switch (libraryRouteShape(pathname)) {
+			case 'album':
+				return (
+					titles.albums.find((album) => albumRoutePath(album.id) === pathname)?.title ?? ALBUM_NAME
+				);
+			case 'playlist':
+				return (
+					titles.playlists.find((playlist) => playlistRoutePath(playlist.slug) === pathname)
+						?.title ?? PLAYLIST_NAME
+				);
+			case 'album-song':
+			case 'album-song-take':
+				return titles.songs.find((song) => isSongAddress(pathname, song))?.title ?? SONG_NAME;
+			default:
+				return PREVIOUS_PAGE_NAME;
+		}
+	}
+
+	function isSongAddress(pathname: string, song: SongItem): boolean {
+		const songPath = songRoutePath(song.album_id, song.slug);
+		return pathname === songPath || pathname.startsWith(`${songPath}/`);
+	}
+</script>
+
 <script lang="ts">
+	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { pageBelowStandingPage, stepBackOffStandingEntry } from '$lib/history/historyController';
+	import { historyLayerState } from '$lib/stores/layers';
+	import { albumList, songList } from '$lib/stores/libraryData';
+	import { openLibraryWall, openRailSearchTarget } from '$lib/stores/navigation';
+	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
+	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import AccountMenu from './AccountMenu.svelte';
 	import EditableTitle from './EditableTitle.svelte';
 	import ShareButton from './ShareButton.svelte';
 	import SongMenu from './editor/SongMenu.svelte';
+	import RailSearch from './shell/RailSearch.svelte';
 
 	let { username, onlogout }: { username: string; onlogout: () => void } = $props();
 
 	let titleEditor: { startEdit: () => void } | undefined = $state();
+	let sheet: HTMLDivElement | undefined = $state();
+
+	const searchSheet = historyLayerState('search-sheet', false);
+
+	interface StandingPage {
+		readonly pathname: string;
+		readonly below: string | null;
+	}
+
+	// `page.state` follows every entry history stands on -- shallow routing
+	// included, which leaves `page.url` where the router last navigated -- so
+	// the bar reads again where history stands, and what lies below it,
+	// whenever that state changes.
+	function standingPage(_stateOfStandingEntry: unknown): StandingPage {
+		return { pathname: location.pathname, below: pageBelowStandingPage() };
+	}
+
+	const standing = $derived(standingPage(page.state));
+	const backTargetName = $derived.by((): string | null => {
+		if (standing.pathname === LIBRARY_HREF) return null;
+		const target =
+			standing.below === null ? listOfPage(standing.pathname) : new URL(standing.below).pathname;
+		return pageName(target, { albums: $albumList, playlists: $playlistList, songs: $songList });
+	});
+
+	// One question decides where ‹ goes and what it is called: a page of the
+	// tab's own below is stepped back onto, otherwise the page's list opens.
+	function goBack(): void {
+		if (pageBelowStandingPage() === null) {
+			void openRailSearchTarget({ kind: 'page', href: listOfPage(location.pathname) });
+			return;
+		}
+		void stepBackOffStandingEntry();
+	}
+
+	function closeSearch(): void {
+		searchSheet.set(false);
+	}
+
+	function focusSearchField(sheetPanel: HTMLElement): void {
+		sheetPanel.querySelector<HTMLInputElement>('input[type="search"]')?.focus();
+	}
+
+	function onWindowKeydown(event: KeyboardEvent): void {
+		if (!$searchSheet || !sheet) return;
+		handleFocusTrapKeydown(sheet, event);
+	}
 </script>
+
+<svelte:window onkeydown={onWindowKeydown} />
+
+{#snippet searchButton()}
+	<button
+		type="button"
+		class="bar-icon"
+		data-hitbox="frequent"
+		aria-haspopup="dialog"
+		aria-expanded={$searchSheet}
+		aria-label={SEARCH_OPEN_LABEL}
+		onclick={() => searchSheet.set(true)}
+	>
+		<svg
+			width="20"
+			height="20"
+			viewBox="0 0 24 24"
+			fill="none"
+			stroke="currentColor"
+			stroke-width="2"
+			stroke-linecap="round"
+			aria-hidden="true"
+		>
+			<circle cx="11" cy="11" r="7" />
+			<path d="m20 20-4-4" />
+		</svg>
+	</button>
+{/snippet}
+
+{#snippet backChevron()}
+	<svg
+		width="20"
+		height="20"
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke="currentColor"
+		stroke-width="2"
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		aria-hidden="true"
+	>
+		<path d="M15 5l-7 7 7 7" />
+	</svg>
+{/snippet}
 
 <header class="mobile-strip">
 	<button
@@ -43,19 +213,55 @@
 				ariaLabel={SONG_TITLE_LABEL}
 			/>
 		</h1>
+		{@render searchButton()}
 		<ShareButton {...$phoneAppBar.share} iconOnly />
 		<SongMenu
 			{...$phoneAppBar.menu}
 			title={$phoneAppBar.title}
 			onrename={() => titleEditor?.startEdit()}
 		/>
+	{:else if backTargetName !== null}
+		<button
+			type="button"
+			class="back"
+			data-hitbox="frequent"
+			aria-label={backLabel(backTargetName)}
+			onclick={goBack}
+		>
+			<span class="back-chevron">{@render backChevron()}</span>
+			<span class="back-name">{backTargetName}</span>
+		</button>
+		{@render searchButton()}
 	{:else}
 		<button type="button" class="brand" onclick={() => openLibraryWall()} data-text={APP_NAME}
 			>{APP_NAME}</button
 		>
+		{@render searchButton()}
 		<AccountMenu {username} {onlogout} />
 	{/if}
 </header>
+
+{#if $searchSheet}
+	<div
+		bind:this={sheet}
+		class="search-sheet"
+		role="dialog"
+		aria-modal="true"
+		aria-label={SEARCH_SHEET_LABEL}
+		{@attach focusSearchField}
+	>
+		<button
+			type="button"
+			class="search-sheet-close"
+			data-hitbox="frequent"
+			aria-label={SEARCH_CLOSE_LABEL}
+			onclick={closeSearch}
+		>
+			{@render backChevron()}
+		</button>
+		<RailSearch onchoose={closeSearch} />
+	</div>
+{/if}
 
 <style>
 	.mobile-strip {
@@ -78,7 +284,9 @@
 		right: 0;
 	}
 
-	.drawer-trigger {
+	.drawer-trigger,
+	.bar-icon {
+		flex: none;
 		border: none;
 		background: none;
 		color: var(--text);
@@ -103,6 +311,37 @@
 		white-space: nowrap;
 	}
 
+	.back {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		padding: 0 10px 0 0;
+		border: none;
+		background: none;
+		color: var(--text);
+		font-family: var(--font-display);
+		font-size: 1.1rem;
+		font-weight: 500;
+		letter-spacing: 0.03em;
+		white-space: nowrap;
+		cursor: pointer;
+	}
+
+	.back-chevron {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex: none;
+		width: var(--hitbox-frequent);
+	}
+
+	.back-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
 	.brand {
 		margin-right: auto;
 		background: none;
@@ -115,5 +354,41 @@
 		color: var(--accent);
 		letter-spacing: var(--btn-letter-spacing);
 		text-transform: uppercase;
+	}
+
+	.search-sheet {
+		position: fixed;
+		inset: 0;
+		z-index: 250;
+		display: flex;
+		flex-direction: column;
+		padding-top: calc((var(--header-height) - var(--hitbox-frequent)) / 2);
+		background: var(--bg);
+	}
+
+	.search-sheet-close {
+		position: absolute;
+		top: calc((var(--header-height) - var(--hitbox-frequent)) / 2);
+		left: var(--row-gap);
+		border: none;
+		background: none;
+		color: var(--text);
+	}
+
+	.search-sheet :global(.rail-search-region) {
+		display: flex;
+		flex: 1;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.search-sheet :global(.rail-search-region .rail-search) {
+		min-height: var(--hitbox-frequent);
+		margin: 0 var(--row-gap) var(--row-gap)
+			calc(var(--row-gap) + var(--hitbox-frequent) + var(--row-gap));
+	}
+
+	.search-sheet :global(.rail-search-region input) {
+		font-size: var(--input-font-size);
 	}
 </style>
