@@ -5,7 +5,7 @@ import { layerSwitch, resetLayersForTests } from '$lib/stores/layers';
 import { fetchAlbum } from '$lib/api/albums';
 import {
 	attachLandingHandler,
-	forgetLayerEntries,
+	releaseLayerEntriesForTests,
 	stepBackOffStandingEntry,
 	type Landing
 } from '$lib/history/historyController';
@@ -59,7 +59,7 @@ import {
 } from '$lib/stores/libraryContext';
 
 export type { DetailTab };
-export { detailTab, forgetLayerEntries };
+export { detailTab };
 
 function urlFromState(state: LibraryHistoryState): string {
 	return libraryHistoryUrl(state);
@@ -642,7 +642,7 @@ export function initNavigation(): () => void {
 }
 
 export function resetNavigationForTests(): void {
-	forgetLayerEntries();
+	releaseLayerEntriesForTests();
 	resetLayersForTests();
 	pendingDirtyNavigation.set(null);
 	openTakesTab();
