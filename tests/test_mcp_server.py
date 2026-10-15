@@ -16,7 +16,12 @@ from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import Session
 from webauth.dependencies import AuthenticatedUser
 
-from songmaker_cli.constants import GET_SONG_ONLY_FOR_OTHER_SONGS, JobStatus, JobType
+from songmaker_cli.constants import (
+    GET_SONG_ONLY_FOR_OTHER_SONGS,
+    JobStatus,
+    JobType,
+    SongWorkKind,
+)
 from songmaker_cli.cowriter.tools import COWRITER_TOOLS
 from songmaker_cli.db.engine import init_test_db
 from songmaker_cli.db.models import (
@@ -467,18 +472,18 @@ def test_write_tools_block_other_users(db_session: Session):
 
 
 @pytest.mark.parametrize(
-    ("tool", "arguments"),
+    ("tool", "arguments", "kind"),
     [
-        (tools.tool_update_song_lyrics, {"lyrics": "new words"}),
-        (tools.tool_update_song_prompt, {"prompt": "jazz"}),
-        (tools.tool_update_song_style, {"bpm": 90}),
-        (tools.tool_rename_song, {"title": "New Title"}),
+        (tools.tool_update_song_lyrics, {"lyrics": "new words"}, SongWorkKind.LYRICS),
+        (tools.tool_update_song_prompt, {"prompt": "jazz"}, SongWorkKind.STYLE),
+        (tools.tool_update_song_style, {"bpm": 90}, SongWorkKind.STYLE),
+        (tools.tool_rename_song, {"title": "New Title"}, SongWorkKind.RENAMED),
     ],
     ids=["lyrics", "prompt", "style", "rename"],
 )
 @pytest.mark.parametrize("editor_id", ["u-admin", "u1"], ids=["admin-on-foreign-song", "owner"])
-def test_co_writer_edits_record_the_editors_own_work(
-    db_session: Session, tool, arguments, editor_id,
+def test_co_writer_edits_record_the_editors_own_work_and_its_kind(
+    db_session: Session, tool, arguments, kind, editor_id,
 ):
     _, _, _, song_id, _ = _seed(db_session)
     db_session.add(User(id="u-admin", username="felix", password_hash="x", role="admin"))
@@ -490,6 +495,7 @@ def test_co_writer_edits_record_the_editors_own_work(
     work = db_session.query(UserSongWork).one()
     assert (work.user_id, work.song_id) == (editor_id, song_id)
     assert work.edited_at is not None
+    assert work.edit_kind == kind
     assert work.played_at is None
 
 
@@ -528,6 +534,7 @@ def test_co_writer_song_creation_records_the_creators_own_work(
     work = db_session.query(UserSongWork).one()
     assert (work.user_id, work.song_id) == (creator_id, result.song_id)
     assert work.edited_at is not None
+    assert work.edit_kind == SongWorkKind.CREATED
 
 
 # ── End-to-end via MCPServer.call_tool ──────────────────────────────────

@@ -10,6 +10,7 @@ from typing import Final
 from sqlalchemy import func, update
 from sqlalchemy.orm import Session, joinedload, selectinload
 
+from songmaker_cli.constants import SongWorkKind
 from songmaker_cli.db.models import (
     Album,
     Generation,
@@ -18,7 +19,7 @@ from songmaker_cli.db.models import (
     Version,
     aware_timestamp,
 )
-from songmaker_cli.db.queries.activity import SongWork, record_song_work
+from songmaker_cli.db.queries.activity import record_song_edit
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError
 from songmaker_cli.db.queries.library import apply_library_sort, title_matches
 from songmaker_cli.db.queries.sentinels import UNSET, _Unset
@@ -309,7 +310,9 @@ def create_song(
     session.add(song)
     session.flush()
     if created_by is not None:
-        record_song_work(session, user_id=created_by, song_id=song.id, work=SongWork.EDITED)
+        record_song_edit(
+            session, user_id=created_by, song_id=song.id, kind=SongWorkKind.CREATED,
+        )
 
     version = Version(
         song_id=song.id, version_number=1,
@@ -343,8 +346,8 @@ def update_song(
     snapshot for existing and future takes. The vocal language belongs to
     the song rather than a version, so the next take uses it whichever
     version it renders. A save that changes the content
-    counts as ``edited_by``'s own work on the song; one that changes nothing
-    does not.
+    counts as ``edited_by``'s own work on the song: a lyrics edit when the
+    lyrics changed, a style edit otherwise. One that changes nothing does not.
     """
     song = get_song(session, song_id)
     if not song:
@@ -374,7 +377,11 @@ def update_song(
         creative_changed or language_changed or new_gen_params != prev.generation_params
     )
     if edited_by is not None and content_changed:
-        record_song_work(session, user_id=edited_by, song_id=song_id, work=SongWork.EDITED)
+        lyrics_changed = prev is None or new_lyrics != prev.lyrics
+        record_song_edit(
+            session, user_id=edited_by, song_id=song_id,
+            kind=SongWorkKind.LYRICS if lyrics_changed else SongWorkKind.STYLE,
+        )
 
     if prev and not force_new_version and (not prev.generations or not creative_changed):
         prev.lyrics = new_lyrics
@@ -513,7 +520,9 @@ def rename_song(
     if not song:
         raise ValueError(f"Song not found: {song_id}")
     if edited_by is not None and title != song.title:
-        record_song_work(session, user_id=edited_by, song_id=song_id, work=SongWork.EDITED)
+        record_song_edit(
+            session, user_id=edited_by, song_id=song_id, kind=SongWorkKind.RENAMED,
+        )
     song.title = title
     song.slug = slug
     if force_new_version:
