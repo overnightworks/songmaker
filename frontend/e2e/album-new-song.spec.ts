@@ -9,13 +9,14 @@ import { expect, test, type Locator, type Page, type TestInfo } from '@playwrigh
 import {
 	ALBUM_NO_SONGS,
 	COLLECTION_MENU_LABEL,
-	collectionPlayLabel,
-	collectionShuffleLabel,
+	collectionActionLabel,
 	NEW_PLACE_CREATE_LABEL,
 	NEW_SONG_CLOSE_LABEL,
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL,
-	newSongCardLabel
+	newSongCardLabel,
+	TRANSPORT_PLAY_LABEL,
+	COLLECTION_SHUFFLE_ACTION
 } from '../src/lib/constants';
 import { appBar, boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
@@ -72,8 +73,12 @@ test('a filled album ends its track list with + New song, under a header of Play
 
 	const actions = surface.locator('.collection-header .header-actions').getByRole('button');
 	await expect(actions).toHaveCount(3);
-	await expect(actions.nth(0)).toHaveAccessibleName(collectionPlayLabel('album'));
-	await expect(actions.nth(1)).toHaveAccessibleName(collectionShuffleLabel('album'));
+	await expect(actions.nth(0)).toHaveAccessibleName(
+		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
+	);
+	await expect(actions.nth(1)).toHaveAccessibleName(
+		collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
+	);
 	await expect(actions.nth(2)).toHaveAccessibleName(COLLECTION_MENU_LABEL);
 
 	const rows = surface.locator('.item-list > *');

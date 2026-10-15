@@ -1,9 +1,15 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { PLAYING_MARK_LABEL, collectionPauseLabel, collectionPlayLabel } from '$lib/constants';
+import {
+	PLAYING_MARK_LABEL,
+	collectionActionLabel,
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
+} from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { SharedTrack } from '$lib/share/sharedCollection';
 import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { findElementByRoleAndName } from '../shell/rail-test-fixtures';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
@@ -172,11 +178,15 @@ describe('SharedCollection track rows', () => {
 
 		audioPlayer.status = 'playing';
 		await tick();
-		expect(getByRoleButton(header, collectionPauseLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist'))
+		).not.toBeNull();
 
 		audioPlayer.status = 'paused';
 		await tick();
-		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'))
+		).not.toBeNull();
 		expect(findElementByRoleAndName(target, 'img', PLAYING_MARK_LABEL)).not.toBeNull();
 	});
 
@@ -193,15 +203,47 @@ describe('SharedCollection track rows', () => {
 
 		audioPlayer.status = 'buffering';
 		await tick();
-		getByRoleButton(header, collectionPauseLabel('playlist')).click();
+		getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist')).click();
 		await tick();
 
-		expect(getByRoleButton(header, collectionPlayLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'))
+		).not.toBeNull();
 	});
+
+	it.each([
+		{ status: 'playing', busy: 'false', face: 'pause' },
+		{ status: 'buffering', busy: 'true', face: 'spinner' },
+		{ status: 'error', busy: 'false', face: 'refresh-cw' }
+	] as const)(
+		'shows on the header circle of a $status share take the face the bar shows (#1330)',
+		async ({ status, busy, face }) => {
+			vi.stubGlobal(
+				'matchMedia',
+				vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }))
+			);
+			const target = await renderShare(null, [], 'playlist', [sharedTrack('e1', 'Tide')]);
+			target.querySelector<HTMLButtonElement>('.track-row')?.click();
+			await tick();
+
+			audioPlayer.status = status;
+			await tick();
+			const circle = target.querySelector('.collection-header .play-circle');
+
+			expect({ busy: circle?.getAttribute('aria-busy'), face: shownTransportFace(circle) }).toEqual(
+				{
+					busy,
+					face
+				}
+			);
+		}
+	);
 
 	it('dims the header play circle of a share without audio', async () => {
 		const target = await renderShare(null);
 
-		expect(getByRoleButton(target, collectionPlayLabel('song')).disabled).toBe(true);
+		expect(
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'song')).disabled
+		).toBe(true);
 	});
 });

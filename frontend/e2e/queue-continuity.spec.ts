@@ -10,7 +10,7 @@
 
 import { expect, request, test, type APIRequestContext, type Page } from '@playwright/test';
 import {
-	collectionPlayLabel,
+	collectionActionLabel,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
 	SHUFFLE_SCOPE_LIBRARY,
@@ -220,7 +220,10 @@ async function expectTransportMovesOn(page: Page, from: SeededTrack, to: SeededT
 async function playAlbum(page: Page, albumId: string) {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
+		.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			exact: true
+		})
 		.click();
 }
 
@@ -390,7 +393,10 @@ test('Next between two places of one take in a playlist moves the audio to the s
 
 	await page.goto(`/playlist/${slug}`);
 	await workspace(page)
-		.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
+		.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
+			exact: true
+		})
 		.click();
 	await expect.poll(() => timeline.requestsOf(trackOf(library, twice))).toBeGreaterThanOrEqual(2);
 	await transport.getByRole('button', { name: 'Next', exact: true }).click();

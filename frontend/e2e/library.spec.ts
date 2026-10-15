@@ -9,9 +9,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import {
 	ACCOUNT_MENU_LOGOUT_LABEL,
-	collectionPauseLabel,
-	collectionPlayLabel,
-	collectionShuffleLabel,
+	collectionActionLabel,
 	COLLECTION_MENU_ADD_TO_PLAYLIST_LABEL,
 	COLLECTION_MENU_LABEL,
 	HITBOX_FREQUENT_PX,
@@ -37,7 +35,8 @@ import {
 	TAKE_OVERFLOW_LABEL,
 	TAKE_PLAYLIST_LABEL,
 	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
+	TRANSPORT_PLAY_LABEL,
+	COLLECTION_SHUFFLE_ACTION
 } from '../src/lib/constants';
 import { compareTitles } from '../src/lib/utils/recency';
 import {
@@ -380,11 +379,19 @@ test('plays the album pick, curates a playlist and serves the public album link'
 	// top, the shuffle square sits beside it, and a song row carries no play
 	// glyph of its own -- tapping it opens the song.
 	await expect(
-		surface.getByRole('button', { name: collectionShuffleLabel('album'), exact: true })
+		surface.getByRole('button', {
+			name: collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
+			exact: true
+		})
 	).toBeVisible();
 	const pickedSongRow = surface.locator('.item-row').filter({ hasText: library.pickedSongTitle });
 	await expect(pickedSongRow.getByRole('button')).toHaveCount(1);
-	await surface.getByRole('button', { name: collectionPlayLabel('album'), exact: true }).click();
+	await surface
+		.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			exact: true
+		})
+		.click();
 
 	const transport = page.getByRole('contentinfo');
 	await expect(transport.getByText(library.pickedSongTitle)).toBeVisible();
@@ -407,13 +414,23 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 	// While the album plays, its circle pauses it and the next tap resumes it
 	// (#1082); the paused row keeps its mark, standing still.
-	await surface.getByRole('button', { name: collectionPauseLabel('album'), exact: true }).click();
+	await surface
+		.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			exact: true
+		})
+		.click();
 	await expect(
 		transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
 	).toBeVisible();
 	await expect(playingMark).toBeVisible();
 	await expect(playingMark.locator('span').first()).toHaveCSS('animation-name', 'none');
-	await surface.getByRole('button', { name: collectionPlayLabel('album'), exact: true }).click();
+	await surface
+		.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			exact: true
+		})
+		.click();
 	await expect(
 		transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
 	).toBeVisible();
@@ -661,11 +678,11 @@ test('an album with nothing to play dims its circle and shuffle and leaves the r
 	const surface = workspace(page);
 	const transport = page.getByRole('contentinfo');
 	const albumCircle = surface.getByRole('button', {
-		name: collectionPlayLabel('album'),
+		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
 		exact: true
 	});
 	const albumShuffle = surface.getByRole('button', {
-		name: collectionShuffleLabel('album'),
+		name: collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
 		exact: true
 	});
 
@@ -698,7 +715,10 @@ test('an album with nothing to play dims its circle and shuffle and leaves the r
 		).toHaveAttribute('aria-pressed', 'false');
 	}
 	await expect(
-		surface.getByRole('button', { name: collectionPauseLabel('album'), exact: true })
+		surface.getByRole('button', {
+			name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+			exact: true
+		})
 	).toHaveCount(0);
 });
 
