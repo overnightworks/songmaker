@@ -357,7 +357,7 @@ function shuffledWithStart<T>(items: T[], startIndex: number): { items: T[]; sta
 // Where an album start begins: at its first playable song, or at the song the
 // listener tapped on the album page. shuffledWithStart keeps that start in
 // front and shuffles only what follows it.
-export type AlbumStart = 'top' | { songId: string };
+type AlbumStart = 'top' | { songId: string };
 
 // A failed stream start remembers what the listener actually asked for, so the
 // "press play to retry" affordance replays that exact intent instead of falling

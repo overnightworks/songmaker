@@ -160,8 +160,6 @@
 	}
 
 	.song-row-edit {
-		width: var(--hitbox-frequent);
-		height: var(--hitbox-frequent);
 		background: none;
 		border: none;
 		border-radius: var(--btn-radius-sm);
