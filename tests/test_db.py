@@ -3274,6 +3274,68 @@ def test_generation_created_by_migration_keeps_existing_takes_unattributed_both_
     engine.dispose()
 
 
+def test_song_work_kind_migration_keeps_existing_work_unknown_both_ways(
+    tmp_path: Path,
+) -> None:
+    import importlib
+
+    from alembic import command
+    from sqlalchemy import create_engine, inspect, text
+
+    migration = importlib.import_module(
+        "songmaker_cli.db.migrations.versions."
+        "5f4912bc4a31_add_user_song_work_kind_and_album_listen",
+    )
+    url = f"sqlite:///{tmp_path / 'song-work-kind.db'}"
+    config = _alembic_config(url)
+    command.upgrade(config, migration.down_revision)
+    engine = create_engine(url)
+    existing_work = "SELECT user_id, edited_at, played_at FROM user_song_work WHERE song_id = 's1'"
+    with engine.begin() as connection:
+        connection.execute(text(
+            "INSERT INTO songs "
+            "(id, title, album_id, vocal_language, track_number, created_at, updated_at, slug) "
+            "VALUES ('s1', 'Thunder', 'a1', '', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, "
+            "'thunder')"
+        ))
+        connection.execute(text(
+            "INSERT INTO user_song_work (user_id, song_id, edited_at, played_at) "
+            "VALUES ('u-old', 's1', '2026-10-01 10:00:00', '2026-10-02 11:00:00')"
+        ))
+        work_before = connection.execute(text(existing_work)).all()
+
+    command.upgrade(config, migration.revision)
+
+    columns = {column["name"]: column for column in inspect(engine).get_columns("user_song_work")}
+    assert columns["edit_kind"]["nullable"] is True
+    assert columns["album_played_at"]["nullable"] is True
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT edit_kind, album_played_at FROM user_song_work WHERE user_id = 'u-old'"
+        )).one() == (None, None)
+        assert connection.execute(text(existing_work)).all() == work_before
+        connection.execute(text(
+            "INSERT INTO user_song_work "
+            "(user_id, song_id, edited_at, edit_kind, played_at, album_played_at) "
+            "VALUES ('u-new', 's1', CURRENT_TIMESTAMP, 'lyrics', CURRENT_TIMESTAMP, "
+            "CURRENT_TIMESTAMP)"
+        ))
+
+    command.downgrade(config, migration.down_revision)
+
+    assert not {"edit_kind", "album_played_at"} & {
+        column["name"] for column in inspect(engine).get_columns("user_song_work")
+    }
+    with engine.begin() as connection:
+        assert connection.execute(text(
+            "SELECT user_id FROM user_song_work ORDER BY user_id"
+        )).scalars().all() == ["u-new", "u-old"]
+        assert connection.execute(text(
+            existing_work + " AND user_id = 'u-old'"
+        )).all() == work_before
+    engine.dispose()
+
+
 @pytest.mark.parametrize(
     ("remove_song", "referenced_song_id"),
     [(soft_delete_song, "s1"), (delete_song, None)],

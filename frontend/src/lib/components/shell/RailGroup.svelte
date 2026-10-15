@@ -189,6 +189,15 @@
 		overflow: hidden;
 	}
 
+	/* The open album or playlist outranks a hovered row: bar, tint and a bold
+	   name together. Two classes deep so a row's own :hover cannot undo it. */
+	.rail-group-panel .rail-group-content :global([aria-current='page']) {
+		box-shadow: inset 3px 0 0 var(--accent);
+		background: color-mix(in srgb, var(--accent) 22%, transparent);
+		color: color-mix(in srgb, var(--accent) 60%, var(--text));
+		font-weight: 600;
+	}
+
 	@media (prefers-reduced-motion: reduce) {
 		.caret,
 		.rail-group-panel {

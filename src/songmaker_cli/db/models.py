@@ -160,7 +160,12 @@ class Song(ShareMixin, Base):
 
 
 class UserSongWork(Base):
-    """One person's own latest edit and listen on a song, whoever owns the song."""
+    """One person's own latest edit and listen on a song, whoever owns the song.
+
+    ``edit_kind`` holds a ``SongWorkKind``; rows written before it existed
+    hold none. ``album_played_at`` is the latest listen outside a playlist,
+    unknown for listens before it existed.
+    """
 
     __tablename__ = "user_song_work"
 
@@ -171,7 +176,9 @@ class UserSongWork(Base):
         ForeignKey(SONGS_ID, ondelete="CASCADE"), primary_key=True, index=True,
     )
     edited_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    edit_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
     played_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
+    album_played_at: Mapped[datetime | None] = mapped_column(TZDateTime, nullable=True)
 
 
 class Version(Base):

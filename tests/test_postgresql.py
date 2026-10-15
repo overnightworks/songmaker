@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import threading
 from datetime import datetime, timedelta, timezone
+from functools import partial
 from pathlib import Path
 
 import pytest
@@ -23,7 +24,7 @@ import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import JobStatus, JobType, LoraStatus
+from songmaker_cli.constants import JobStatus, JobType, LoraStatus, SongWorkKind
 from songmaker_cli.db.engine import (
     init_test_db,
     resolve_database_url,
@@ -47,7 +48,6 @@ from songmaker_cli.db.models import (
 )
 from songmaker_cli.db.queries import (
     JobStatusUpdate,
-    SongWork,
     create_generation_created_event,
     create_job,
     create_session,
@@ -58,7 +58,8 @@ from songmaker_cli.db.queries import (
     list_place_activity,
     list_resource_events_after,
     prune_overflow_sessions,
-    record_song_work,
+    record_song_edit,
+    record_song_played,
     recover_stale_jobs_by_age_and_type,
     update_job_heartbeat,
     update_job_status,
@@ -232,9 +233,13 @@ def test_an_admins_own_work_on_a_foreign_song_round_trips_into_continue_on_postg
         session.add(Song(id="song", title="Song", album_id="vernissage", slug="song"))
         session.commit()
 
-    for work in (SongWork.PLAYED, SongWork.EDITED, SongWork.PLAYED):
+    for record_work in (
+        partial(record_song_played, in_playlist=True),
+        partial(record_song_edit, kind=SongWorkKind.LYRICS),
+        partial(record_song_played, in_playlist=False),
+    ):
         with pg_factory() as session:
-            record_song_work(session, user_id="admin", song_id="song", work=work)
+            record_work(session, user_id="admin", song_id="song")
             session.commit()
 
     with pg_factory() as session:
@@ -243,6 +248,8 @@ def test_an_admins_own_work_on_a_foreign_song_round_trips_into_continue_on_postg
         ranking = [(place.place.id, place.activity_at, place.song.id) for place in places]
 
     assert row.played_at > row.edited_at
+    assert row.edit_kind == SongWorkKind.LYRICS
+    assert row.album_played_at == row.played_at
     assert ranking == [("vernissage", row.played_at, "song")]
 
 

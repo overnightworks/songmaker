@@ -34,6 +34,9 @@ import {
 	buildSong as song,
 	createComponentMount,
 	findElementByRoleAndName,
+	railRevealsSettled,
+	recordRailReveals,
+	revealedTitles,
 	requireButtonContainingText,
 	recentWorkPage,
 	requireElement,
@@ -562,5 +565,97 @@ describe('RailLibraryGroup', () => {
 
 		expect(target.querySelector('[role="alert"]')).toBeNull();
 		expect(requireButtonContainingText(target, 'Recovered')).toBeInstanceOf(HTMLButtonElement);
+	});
+});
+
+describe('RailLibraryGroup keeps the open album in view', () => {
+	const anfield = album({ id: 'a1', title: 'Anfield' });
+	const lunarStatic = album({ id: 'a2', title: 'Lunar Static' });
+
+	it.each([
+		{ reducedMotion: false, behavior: 'smooth' },
+		{ reducedMotion: true, behavior: 'auto' }
+	] as const)(
+		'scrolls the open album row into view once a reload lists it ($behavior)',
+		async ({ reducedMotion, behavior }) => {
+			const reveals = recordRailReveals({ reducedMotion });
+			albumList.set([]);
+			fetchAlbums.mockResolvedValue(albumsPage({ items: [anfield, lunarStatic], total: 2 }));
+			showAlbumDetail('a2');
+
+			await render();
+
+			await vi.waitFor(() =>
+				expect(reveals).toEqual([
+					{ title: 'Lunar Static', options: { block: 'nearest', behavior } }
+				])
+			);
+		}
+	);
+
+	it('scrolls each album opened after it into view, and not again while it stays open', async () => {
+		const reveals = recordRailReveals();
+		albumList.set([anfield, lunarStatic]);
+		showAlbumDetail('a1');
+		await render();
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Anfield']));
+
+		showAlbumDetail('a2');
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Anfield', 'Lunar Static']));
+		showAlbumDetail('a1');
+		await vi.waitFor(() =>
+			expect(revealedTitles(reveals)).toEqual(['Anfield', 'Lunar Static', 'Anfield'])
+		);
+
+		albumList.set([{ ...anfield, song_count: 3 }, lunarStatic]);
+		await railRevealsSettled();
+		expect(revealedTitles(reveals)).toEqual(['Anfield', 'Lunar Static', 'Anfield']);
+	});
+
+	it('scrolls nothing while search results replace the tree, and the album a result opened once the search clears', async () => {
+		const reveals = recordRailReveals();
+		albumList.set([anfield, lunarStatic]);
+		railTreeQuery.set('lunar');
+		await render();
+
+		showAlbumDetail('a2');
+		await railRevealsSettled();
+		expect(reveals).toEqual([]);
+
+		railTreeQuery.set('');
+
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Lunar Static']));
+	});
+
+	it('scrolls nothing while the wall keeps an album in the closed group, and its row once a cover opens it', async () => {
+		const reveals = recordRailReveals();
+		albumList.set([anfield, lunarStatic]);
+		openCollection.set({ kind: 'album', id: 'a2' });
+		await render();
+		await railRevealsSettled();
+		expect(reveals).toEqual([]);
+
+		librarySurface.set('detail');
+
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Lunar Static']));
+	});
+
+	it('scrolls an album row into view only once its group has finished opening, and not if another album opened meanwhile', async () => {
+		let finishOpening!: () => void;
+		const reveals = recordRailReveals({
+			animatingUntil: new Promise<void>((resolve) => (finishOpening = resolve))
+		});
+		albumList.set([anfield, lunarStatic]);
+		await render();
+
+		showAlbumDetail('a2');
+		await railRevealsSettled();
+		expect(reveals).toEqual([]);
+
+		showAlbumDetail('a1');
+		finishOpening();
+		await railRevealsSettled();
+
+		expect(revealedTitles(reveals)).toEqual(['Anfield']);
 	});
 });

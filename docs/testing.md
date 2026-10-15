@@ -211,6 +211,14 @@ walks by hand. Unit tests keep missing those: every operator bug from
 2026-08-23 (dead picker, ▶ after an album switch, shuffle, 429 storm) passed
 them.
 
+A test stack stays on this machine and dies with it. It publishes the web port
+on loopback only (`127.0.0.1:${WEB_PORT}`), like the live stack, because a
+Docker-published port bypasses ufw and an all-interface binding reaches the LAN.
+Every service runs with `restart: "no"`, so a stack nobody tore down does not
+come back after a reboot. `tests/test_packaging_boundary.py` renders the CI
+stack, with and without the Voices overlay, through `docker compose config` and
+pins both.
+
 Two Chromium projects walk the same flow: `desktop` at 1440×900 and `mobile` at
 390×844 with touch input. The steps the two shells share are written once; the
 mobile project adds what the compact shell does differently — the rail as a
