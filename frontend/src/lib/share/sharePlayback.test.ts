@@ -1,8 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
-import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { fromSharedAlbum, fromSharedSong, type SharedCollectionView } from './sharedCollection';
+import { audioPlayer, type AudioPlayerCallbacks } from '$lib/services/audioPlayer.svelte';
+import type { PlaybackInfo } from '$lib/services/playbackTypes';
+import {
+	fromSharedAlbum,
+	fromSharedSong,
+	trackPlaybackInfo,
+	type SharedCollectionView
+} from './sharedCollection';
 import { SharePlayback } from './sharePlayback.svelte';
 
 class FakeAudio {
@@ -84,6 +90,43 @@ function albumView(): SharedCollectionView {
 	});
 }
 
+function songView(): SharedCollectionView {
+	return fromSharedSong({
+		title: 'Solo',
+		artist: 'Artist',
+		album_title: 'Album',
+		audio_url: '/shared/song/solo/audio/solo.mp3',
+		generation_id: 'g-solo',
+		audio_duration: 120,
+		lyrics: null,
+		whisper_cues: null,
+		cover: null,
+		album_cover: null
+	});
+}
+
+// A take of the listener's own library, playing in the signed-in app when
+// they followed a share link.
+function appTake(): PlaybackInfo {
+	const view = albumView();
+	const take = trackPlaybackInfo(view, view.tracks[0]);
+	return {
+		...take,
+		songId: 'private-song',
+		songTitle: 'Private Draft',
+		generation: { ...take.generation, id: 'private-take', audio_duration_sec: 240 }
+	};
+}
+
+const NO_CALLBACKS: AudioPlayerCallbacks = {
+	onEnded: null,
+	onPlaybackStarted: null,
+	onAuthLost: null,
+	onStreamRebuild: null,
+	onCurrentChange: null,
+	networkFailureIsAnnounced: () => false
+};
+
 function streamManifest(windowed: boolean): QueueStreamManifest {
 	return {
 		snapshot_id: 'snap',
@@ -149,14 +192,7 @@ beforeEach(() => {
 	);
 	vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, status: 200 }));
 	audioPlayer.destroy();
-	audioPlayer.swapCallbacks({
-		onEnded: null,
-		onPlaybackStarted: null,
-		onAuthLost: null,
-		onStreamRebuild: null,
-		onCurrentChange: null,
-		networkFailureIsAnnounced: () => false
-	});
+	audioPlayer.swapCallbacks(NO_CALLBACKS);
 });
 
 afterEach(() => {
@@ -187,6 +223,69 @@ describe('start()', () => {
 		playback.start(albumView(), null);
 
 		expect(audioPlayer.currentCallbacks.onAuthLost).toBeNull();
+		playback.stop();
+	});
+
+	it("drops the take the app was playing, and the app's own callbacks hear it go", async () => {
+		const appHeard = vi.fn();
+		audioPlayer.swapCallbacks({ ...NO_CALLBACKS, onCurrentChange: appHeard });
+		audioPlayer.loadUrl(appTake(), '/audio/private-take.mp3', { startAt: 75 });
+		fakeAudio.fire('canplay');
+		await vi.waitFor(() => expect(audioPlayer.status).toBe('playing'));
+
+		const playback = new SharePlayback();
+		playback.start(songView(), null);
+
+		expect({
+			current: audioPlayer.current,
+			time: audioPlayer.currentTime,
+			duration: audioPlayer.duration,
+			sounding: !fakeAudio.paused,
+			appHeard: appHeard.mock.lastCall
+		}).toEqual({ current: null, time: 0, duration: 0, sounding: false, appHeard: [null] });
+		playback.stop();
+	});
+});
+
+describe('a seek before the first Play', () => {
+	it('readies the track there, paused, and Play starts it there', () => {
+		const playback = new SharePlayback();
+		playback.start(songView(), null);
+
+		playback.seek(60);
+		const readied = {
+			shown: audioPlayer.currentTime,
+			sounding: fakeAudio.playMock.mock.calls.length
+		};
+		playback.play();
+		fakeAudio.fire('loadedmetadata');
+		fakeAudio.fire('canplay');
+
+		expect({
+			readied,
+			startedAt: fakeAudio.currentTime,
+			played: fakeAudio.playMock.mock.calls.length
+		}).toEqual({
+			readied: { shown: 60, sounding: 0 },
+			startedAt: 60,
+			played: 1
+		});
+		playback.stop();
+	});
+
+	it('readies a stream at that point of its first track, without a sound', async () => {
+		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
+		const playback = new SharePlayback();
+		playback.start(albumView(), fetchStream);
+
+		playback.seek(4);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		fakeAudio.fire('loadedmetadata');
+
+		expect({ at: fakeAudio.currentTime, played: fakeAudio.playMock.mock.calls.length }).toEqual({
+			at: 4,
+			played: 0
+		});
 		playback.stop();
 	});
 });
@@ -259,21 +358,6 @@ describe('toggle() and classic playback', () => {
 });
 
 describe('the end of a share', () => {
-	function songView(): SharedCollectionView {
-		return fromSharedSong({
-			title: 'Solo',
-			artist: 'Artist',
-			album_title: 'Album',
-			audio_url: '/shared/song/solo/audio/solo.mp3',
-			generation_id: 'g-solo',
-			audio_duration: 120,
-			lyrics: null,
-			whisper_cues: null,
-			cover: null,
-			album_cover: null
-		});
-	}
-
 	function playToTheEnd(view: SharedCollectionView, trackIndex = 0): SharePlayback {
 		const playback = new SharePlayback();
 		playback.start(view, null);
@@ -466,14 +550,7 @@ describe('shuffle', () => {
 describe('stop()', () => {
 	it('restores the previous callback set and unloads playback', () => {
 		const previousOnEnded = vi.fn();
-		audioPlayer.swapCallbacks({
-			onEnded: previousOnEnded,
-			onPlaybackStarted: null,
-			onAuthLost: null,
-			onStreamRebuild: null,
-			onCurrentChange: null,
-			networkFailureIsAnnounced: () => false
-		});
+		audioPlayer.swapCallbacks({ ...NO_CALLBACKS, onEnded: previousOnEnded });
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, null);

@@ -434,9 +434,12 @@
 	}
 
 	/* The player page has no bar under it, so nothing reserves its room, and
-	   wide it needs the width of two columns. */
+	   wide it needs the width of two columns. It is a column of the screen's
+	   height, which the player fills on a phone to keep the sung line in view. */
 	.shared-page.player-page {
 		--player-height: 0px;
+		display: flex;
+		flex-direction: column;
 		max-width: 1120px;
 		padding: 4rem 2rem 1rem;
 	}

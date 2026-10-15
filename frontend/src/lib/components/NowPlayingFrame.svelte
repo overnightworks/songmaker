@@ -172,6 +172,10 @@
 		audioPlayer.current === null ? (info.generation.audio_duration_sec ?? 0) : audioPlayer.duration
 	);
 	const currentTime = $derived(ended ? duration : audioPlayer.currentTime);
+	// The words follow the take the player holds, and no line is sung before
+	// it holds one or once the caller's playback ended — where the player
+	// itself already stands back at 0:00 and would light the opening line.
+	const sungAt = $derived(ended || audioPlayer.current === null ? null : audioPlayer.currentTime);
 	const transport = $derived(audioPlayer.transport);
 	const buttonFace = $derived(transportButtonFace(transport));
 	const notice = $derived(unplayableNotice ?? transportWaitingNotice(transport));
@@ -349,6 +353,7 @@
 		cues={lyricsCues}
 		{whisperText}
 		emptyLabel={lyricsEmptyLabel}
+		position={sungAt}
 	/>
 {/snippet}
 
@@ -867,9 +872,12 @@
 	/* The page a share link opens (#1391): the frame flows in the page's own
 	   scroll instead of covering the viewport. Wide, the cover stands beside
 	   the song, Play, the slider and the words; stacked, all of it is one
-	   centred column. */
+	   centred column. The page around it is a column of the screen's height,
+	   and the frame keeps its own height in it. */
 	.now-playing.page {
+		--page-play-size: 76px;
 		position: static;
+		flex: none;
 		background: none;
 		overflow: visible;
 	}
@@ -907,9 +915,15 @@
 	.now-playing.page .transport.solo {
 		justify-content: flex-start;
 	}
+	/* Play again stands in a row as tall as Play, so the page holds still
+	   under the listener when the song ends. */
+	.now-playing.page .transport {
+		min-height: var(--page-play-size);
+		align-items: center;
+	}
 	.now-playing.page .play-btn {
-		width: 76px;
-		height: 76px;
+		width: var(--page-play-size);
+		height: var(--page-play-size);
 		box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 35%, transparent);
 	}
 	.now-playing.page .progress,
@@ -917,9 +931,23 @@
 		align-self: stretch;
 		width: auto;
 	}
+	/* A phone holds the player and the sung line in one screen: the frame
+	   fills the height the page shows, and the words take what the player
+	   leaves, so the line they follow stays on screen. A screen too short
+	   for even the words' floor scrolls to them, and they fit it whole. */
+	.now-playing.page.stacked {
+		min-height: 100%;
+	}
 	.now-playing.page.stacked .np-body {
 		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: auto minmax(0, 1fr);
 		gap: 1.6rem;
+	}
+	.now-playing.page.stacked .np-page-lyrics {
+		flex: 1 1 0;
+		min-height: 10rem;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
 	}
 	.now-playing.page.stacked .cover-art {
 		justify-self: center;

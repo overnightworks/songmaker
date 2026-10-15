@@ -22,6 +22,15 @@ export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
 
 const STREAM_REFRESH_MARGIN_MS = 60_000;
 
+// Where a track starts and whether it sounds at once: Play starts it from
+// the top, a seek before the first Play readies it, paused, where it landed.
+interface TrackStart {
+	autoplay: boolean;
+	startAt?: number;
+}
+
+const FROM_THE_TOP: TrackStart = { autoplay: true };
+
 const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onEnded: null,
 	onPlaybackStarted: null,
@@ -98,7 +107,11 @@ export class SharePlayback {
 		return { items, currentIndex, upNext };
 	});
 
+	// A share shows only what was shared: whatever the signed-in app was
+	// playing is dropped before the share takes the player over, while the
+	// app's own callbacks still hear that take go.
 	start(collection: SharedCollectionView, fetchStream: ShareStreamFetcher | null): void {
+		audioPlayer.unload();
 		this.collection = collection;
 		this.baseTracks = playableTracks(collection.tracks);
 		this.playOrder = [...this.baseTracks];
@@ -145,10 +158,17 @@ export class SharePlayback {
 		if (first) void this.playTrack(first);
 	}
 
-	// A seek leaves the end: the listener chose where the song stands.
+	// A seek leaves the end: the listener chose where the song stands. Before
+	// the first Play there is nothing to move yet, so the first track is
+	// readied there, paused, and Play starts where the listener put it.
 	seek(seconds: number): void {
 		this.ended = false;
-		audioPlayer.seek(seconds);
+		if (this.currentTrack) {
+			audioPlayer.seek(seconds);
+			return;
+		}
+		const first = this.playOrder[0];
+		if (first) void this.playTrack(first, { autoplay: false, startAt: seconds });
 	}
 
 	toggle(track: SharedTrack): void {
@@ -192,7 +212,7 @@ export class SharePlayback {
 		if (anchor) void this.playTrack(anchor);
 	}
 
-	private async playTrack(track: SharedTrack): Promise<void> {
+	private async playTrack(track: SharedTrack, start: TrackStart = FROM_THE_TOP): Promise<void> {
 		const collection = this.collection;
 		if (track.audioUrl === null || !collection) return;
 		this.ended = false;
@@ -201,7 +221,10 @@ export class SharePlayback {
 				const manifest = await this.ensureManifest();
 				const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
 				if (streamTrack) {
-					audioPlayer.loadStream(manifest, streamTrack.index, { autoplay: true });
+					audioPlayer.loadStream(manifest, streamTrack.index, {
+						autoplay: start.autoplay,
+						resumeAt: streamTrack.start_offset + (start.startAt ?? 0)
+					});
 					return;
 				}
 			} catch {
@@ -210,8 +233,9 @@ export class SharePlayback {
 		}
 		this.manifest = null;
 		audioPlayer.loadUrl(trackPlaybackInfo(collection, track), track.audioUrl, {
-			autoplay: true,
-			restart: true
+			autoplay: start.autoplay,
+			restart: true,
+			startAt: start.startAt
 		});
 	}
 

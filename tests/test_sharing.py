@@ -314,6 +314,40 @@ def test_shared_album_after_revoke(sharing_app: TestClient) -> None:
     assert resp.status_code == 404
 
 
+@pytest.mark.parametrize(
+    ("share_path", "shared_path"),
+    [
+        ("/api/songs/s1/share", "/shared/song/{slug}"),
+        ("/api/generations/g1/share", "/shared/gen/{slug}"),
+    ],
+    ids=["song", "take"],
+)
+@pytest.mark.parametrize(
+    "delete_path",
+    ["/api/songs/s1", "/api/albums/test_album"],
+    ids=["song-deleted", "album-deleted"],
+)
+def test_a_share_whose_song_was_deleted_answers_like_an_unshared_link(
+    sharing_app: TestClient, share_path: str, shared_path: str, delete_path: str,
+) -> None:
+    page = shared_path.format(slug=_share_slug(sharing_app, share_path))
+    unauthed = web_client(sharing_app.app, cookies={})
+
+    def presented() -> dict[str, int]:
+        return {
+            "page": unauthed.get(page).status_code,
+            "audio": unauthed.get(f"{page}/audio/admin_user/g1.mp3").status_code,
+        }
+
+    shared = presented()
+    assert sharing_app.delete(delete_path).status_code == 200
+
+    assert (shared, presented()) == (
+        {"page": 200, "audio": 200},
+        {"page": 404, "audio": 404},
+    )
+
+
 # ── Shared audio endpoint ──────────────────────────────────────────
 
 

@@ -1,18 +1,25 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	PLAYING_MARK_LABEL,
 	collectionActionLabel,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '$lib/constants';
+import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '$lib/constants/now-playing';
 import { SHARE_NO_AUDIO_NOTICE } from '$lib/constants/share';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import type { SharedCollectionView, SharedTrack } from '$lib/share/sharedCollection';
+import type { PlaybackInfo } from '$lib/services/playbackTypes';
+import {
+	trackPlaybackInfo,
+	type SharedCollectionView,
+	type SharedTrack
+} from '$lib/share/sharedCollection';
 import { accessibleName, getByRoleButton } from '$lib/test-utils/accessible-name';
 import { LEGAL_SECTIONS } from '../LegalLinks.svelte';
 import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { findElementByRoleAndName } from '../shell/rail-test-fixtures';
+import nowPlayingFrameSource from '../NowPlayingFrame.svelte?raw';
 import sharedCollectionSource from './SharedCollection.svelte?raw';
 import SharedCollection from './SharedCollection.svelte';
 
@@ -28,12 +35,20 @@ function extractRule(source: string, selector: string): string {
 
 let mounted: ReturnType<typeof mount> | undefined;
 
+// jsdom plays no media: its element neither loads nor pauses, and says so
+// on every share page, since each one first clears the player it takes over.
+beforeEach(() => {
+	vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
+	vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+});
+
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
 	audioPlayer.status = 'idle';
 	vi.unstubAllGlobals();
+	vi.restoreAllMocks();
 });
 
 const DETAIL_COVER = { card: '/covers/card.jpg', detail: '/covers/detail.jpg' };
@@ -94,6 +109,30 @@ describe('SharedCollection page root', () => {
 		const rule = extractRule(sharedCollectionSource, '.shared-page');
 		expect(rule).toContain('height: 100dvh');
 		expect(rule).toContain('overflow-y: auto');
+	});
+
+	// A phone keeps the sung line on screen (#1391): the page is a column of
+	// the screen's height, the stacked player fills it and its words take what
+	// the player leaves; Play again keeps Play's row height at the end.
+	it.each([
+		{ source: sharedCollectionSource, selector: '.shared-page.player-page', rule: 'display: flex' },
+		{
+			source: nowPlayingFrameSource,
+			selector: '.now-playing.page.stacked',
+			rule: 'min-height: 100%'
+		},
+		{
+			source: nowPlayingFrameSource,
+			selector: '.now-playing.page.stacked .np-page-lyrics',
+			rule: 'flex: 1 1 0'
+		},
+		{
+			source: nowPlayingFrameSource,
+			selector: '.now-playing.page .transport',
+			rule: 'min-height: var(--page-play-size)'
+		}
+	])('lays the player page out with $selector { $rule }', ({ source, selector, rule }) => {
+		expect(extractRule(source, selector)).toContain(rule);
 	});
 
 	it('shows an album cover on a shared album and falls back cleanly without one', async () => {
@@ -291,6 +330,114 @@ describe('SharedCollection player page (#1391)', () => {
 			expect(document.querySelector('[role="dialog"]')).toBeNull();
 		}
 	);
+
+	// Two lines sung two seconds each, the first from 0:00.
+	const SUNG_LINES = ['Streetlights hum a borrowed tune', 'Every window holds the moon'];
+	const TIMED_LYRICS: Partial<SharedTrack> = {
+		lyrics: SUNG_LINES.join('\n'),
+		cues: [
+			{ start: 0, end: 2, text: SUNG_LINES[0] },
+			{ start: 2, end: 4, text: SUNG_LINES[1] }
+		]
+	};
+
+	// A take of the listener's own library, playing in the signed-in app.
+	function appTake(): PlaybackInfo {
+		const library: SharedCollectionView = {
+			kind: 'album',
+			title: 'Private Drafts',
+			artist: 'Felix',
+			albumTitle: null,
+			year: null,
+			cover: null,
+			playlistCovers: [],
+			tracks: []
+		};
+		return trackPlaybackInfo(
+			library,
+			sharedTrack('private-take', 'Private Draft', { durationSec: 240 })
+		);
+	}
+
+	function shownTimes(target: HTMLElement): string[] {
+		return Array.from(target.querySelectorAll('.progress-times .time')).map(
+			(time) => time.textContent ?? ''
+		);
+	}
+
+	async function litLines(target: HTMLElement): Promise<string[]> {
+		await vi.waitFor(() =>
+			expect(target.querySelectorAll('.lyrics-line')).toHaveLength(SUNG_LINES.length)
+		);
+		return Array.from(target.querySelectorAll('.lyrics-line.active')).map(
+			(line) => line.textContent?.trim() ?? ''
+		);
+	}
+
+	it.each(['song', 'take'] as const)(
+		'shows none of the take the app was playing when a shared %s opens',
+		async (kind) => {
+			stubLayout(true);
+			audioPlayer.loadUrl(appTake(), '/audio/private-take.mp3', { autoplay: false, startAt: 75 });
+
+			const target = await renderSharedSong(kind);
+
+			expect({
+				times: shownTimes(target),
+				held: audioPlayer.current,
+				named: document.body.textContent?.includes('Private Draft')
+			}).toEqual({ times: ['0:00', '3:00'], held: null, named: false });
+		}
+	);
+
+	it('shows where Play will start once the slider is tapped before Play', async () => {
+		stubLayout(true);
+		const target = await renderSharedSong('song');
+		const slider = target.querySelector<HTMLInputElement>('.seek-input');
+		if (!slider) throw new Error('Expected the seek slider');
+
+		slider.value = '60';
+		slider.dispatchEvent(new Event('input', { bubbles: true }));
+		await tick();
+
+		expect({
+			times: shownTimes(target),
+			play: getByRoleButton(target, TRANSPORT_PLAY_LABEL) !== undefined
+		}).toEqual({ times: ['1:00', '3:00'], play: true });
+	});
+
+	it('lights no line before the first Play, though the first one is sung from 0:00', async () => {
+		stubLayout(true);
+		const target = await renderSharedSong('song', TIMED_LYRICS);
+
+		expect(await litLines(target)).toEqual([]);
+	});
+
+	it('at the end offers Play again, keeps the slider there and lights no line', async () => {
+		stubLayout(true);
+		const target = await renderSharedSong('song', TIMED_LYRICS);
+		getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+		audioPlayer.currentTime = 3;
+		await tick();
+		const whilePlaying = await litLines(target);
+
+		audioPlayer.getElement()?.dispatchEvent(new Event('ended'));
+		await tick();
+
+		expect({
+			whilePlaying,
+			atTheEnd: await litLines(target),
+			times: shownTimes(target),
+			again: target
+				.querySelector('.play-again')
+				?.textContent?.includes(NOW_PLAYING_PLAY_AGAIN_LABEL)
+		}).toEqual({
+			whilePlaying: [SUNG_LINES[1]],
+			atTheEnd: [],
+			times: ['3:00', '3:00'],
+			again: true
+		});
+	});
 
 	it.each(['song', 'take'] as const)(
 		'dims Play on a shared %s without audio and says why',
