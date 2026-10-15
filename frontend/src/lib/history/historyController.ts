@@ -549,26 +549,35 @@ export function stampNavigatedEntry(type: NavigationType): void {
 	}
 	if (type === 'enter') followRouterStart();
 	const pushedOver = pageARouterPushStandsOver();
-	const routerPushed = pushedOver !== null;
 	lookAtStandingEntry();
+	const entry = entryTheNavigationCarried() ?? stampEntryTheNavigationDropped(type, pushedOver);
+	if (pushedOver !== null && entry !== null) pushedPage(entry);
+	else settleOnPage(entry);
+}
+
+// An entry the navigation carried keeps its id; the newest id stands on top.
+function entryTheNavigationCarried(): HistoryEntry | null {
 	const carried = entryOfHistoryState(history.state);
-	if (carried !== null) {
-		if (carried.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
-		if (routerPushed) pushedPage(carried);
-		else settleOnPage(carried);
-		return;
-	}
-	if (routerPushed) standsOnTop = true;
+	if (carried?.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
+	return carried;
+}
+
+// An entry the navigation wrote without one gets back the id it was loaded
+// with on the router's start, a fresh id over the page a router push left,
+// or a first id on top.
+function stampEntryTheNavigationDropped(
+	type: NavigationType,
+	pushedOver: string | null
+): HistoryEntry | null {
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
 	const entry =
-		loaded ?? (routerPushed ? newPageEntryOver(pushedOver) : firstIdOnTop(type === 'enter'));
+		loaded ?? (pushedOver === null ? firstIdOnTop(type === 'enter') : newPageEntryOver(pushedOver));
 	if (entry !== null) {
 		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
 		replaceState(location.href, stampedPageState(pageState, entry));
 	}
-	if (routerPushed && entry !== null) pushedPage(entry);
-	else settleOnPage(entry);
+	return entry;
 }
 
 // A router push -- a link, or a `goto` from anywhere -- stands one place above

@@ -212,8 +212,15 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
-	await expect(appBar(page).getByRole('button', { name: /^Back to / })).toBeVisible();
+	const back = appBar(page).getByRole('button', { name: /^Back to / });
+	await expect(back).toBeVisible();
 	await expect(accountCircle(page)).toHaveCount(0);
+	// ‹ starts right after ☰, inside the first touch square beside it.
+	const [drawerTrigger, chevron] = await boundingBoxes(
+		appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }),
+		back.locator('svg')
+	);
+	expect(chevron.x - (drawerTrigger.x + drawerTrigger.width)).toBeLessThan(HITBOX_FREQUENT_PX);
 }
 
 /**

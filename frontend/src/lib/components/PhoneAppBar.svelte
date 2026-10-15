@@ -73,10 +73,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
-	import { pageBelowStandingPage, stepBackOffStandingEntry } from '$lib/history/historyController';
+	import { pageBelowStandingPage, stepBackOrGoTo } from '$lib/history/historyController';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openLibraryWall, openRailSearchTarget } from '$lib/stores/navigation';
+	import { openLibraryWall } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -114,14 +114,12 @@
 		return pageName(target, { albums: $albumList, playlists: $playlistList, songs: $songList });
 	});
 
-	// One question decides where ‹ goes and what it is called: a page of the
-	// tab's own below is stepped back onto, otherwise the page's list opens.
+	// ‹ is the page's own Back: the history controller steps back onto the page
+	// below, or writes the page's list over the page, by the same question that
+	// names ‹ above. The song, the one page whose draft could be lost on the
+	// way, carries its own bar instead of ‹.
 	function goBack(): void {
-		if (pageBelowStandingPage() === null) {
-			void openRailSearchTarget({ kind: 'page', href: listOfPage(location.pathname) });
-			return;
-		}
-		void stepBackOffStandingEntry();
+		void stepBackOrGoTo(listOfPage(location.pathname));
 	}
 
 	function closeSearch(): void {
@@ -316,6 +314,7 @@
 		min-width: 0;
 		display: flex;
 		align-items: center;
+		justify-content: flex-start;
 		padding: 0 10px 0 0;
 		border: none;
 		background: none;

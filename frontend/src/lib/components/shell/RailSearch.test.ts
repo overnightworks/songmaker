@@ -15,7 +15,7 @@ import {
 
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { railSearch, resetRailSearchForTests } from '$lib/stores/railSearch';
-import { playlistList } from '$lib/stores/playlists';
+import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
@@ -28,6 +28,10 @@ import railSearchSource from './RailSearch.svelte?raw';
 
 const navigation = vi.hoisted(() => ({ openRailSearchTarget: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => navigation);
+vi.mock('$lib/api/client', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/client')>()),
+	fetchPlaylists: vi.fn().mockResolvedValue([])
+}));
 
 const { render, cleanup } = createComponentMount(RailSearch);
 
@@ -90,7 +94,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
 	railTreeQuery.set('');
-	playlistList.set([]);
+	resetPlaylistsForTests();
 	resetRailSearchForTests();
 	clearComponentStyles();
 	clearHitboxStyles();

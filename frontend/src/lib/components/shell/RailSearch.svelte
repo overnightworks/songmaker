@@ -12,7 +12,7 @@
 		type RailSearchTextPart
 	} from '$lib/stores/railSearch';
 	import { openRailSearchTarget } from '$lib/stores/navigation';
-	import { playlistList } from '$lib/stores/playlists';
+	import { ensurePlaylistsLoaded, playlistList } from '$lib/stores/playlists';
 	import { titleInitials } from '$lib/utils/format';
 	import PlaylistCover from '../PlaylistCover.svelte';
 
@@ -46,6 +46,13 @@
 
 	let input: HTMLInputElement;
 	let panel: HTMLElement | undefined = $state();
+
+	// Playlists are found among the ones the library holds, not by the server's
+	// search, so the search reads them in wherever it stands: the phone's sheet
+	// opens on pages that never list them (#1354 rule 26).
+	$effect(() => {
+		void ensurePlaylistsLoaded();
+	});
 
 	function optionId(resultId: string): string {
 		return `${uid}-option-${resultId}`;

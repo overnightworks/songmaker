@@ -237,6 +237,9 @@ describe('history adapter', () => {
 		history.replaceState(null, '', url);
 	}
 
+	// Where a page's own Back goes in these tests when no page lies below.
+	const FALLBACK = '/settings';
+
 	function addressOf(path: string): string {
 		return new URL(path, location.href).href;
 	}
@@ -264,13 +267,11 @@ describe('history adapter', () => {
 		expect(history.state['sveltekit:states'].entry).toEqual(layer);
 	});
 
-	it('a page push remembers the page it stands over, and a replace keeps it', () => {
-		const album = pushEntry('/album/a', {});
+	it("a page's own Back goes to the page it was pushed over, after a rename too", () => {
+		pushEntry('/album/a', {});
 
-		const renamed = replaceEntry('/album/a-renamed', {});
+		replaceEntry('/album/a-renamed', {});
 
-		expect(album).toEqual({ id: expect.any(Number), below: addressOf('/') });
-		expect(renamed).toEqual(album);
 		expect(pageBelowStandingPage()).toBe(addressOf('/'));
 	});
 
@@ -306,7 +307,7 @@ describe('history adapter', () => {
 		const pushed = pushEntry('/album/b', {});
 
 		expect(first).toEqual({ id: 1 });
-		expect(pushed).toEqual({ id: 2, below: addressOf('/album/a') });
+		expect(pushed.id).toBe(2);
 		expect(standingEntry()).toEqual(pushed);
 	});
 
@@ -430,11 +431,8 @@ describe('history adapter', () => {
 		});
 
 		expect(replaced).toEqual(page);
-		expect(standingEntry()).toEqual({
-			id: expect.any(Number),
-			below: addressOf('/album/a/song')
-		});
 		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+		expect(pageBelowStandingPage()).toBe(addressOf('/album/a/song'));
 	});
 
 	it.each([
@@ -448,7 +446,7 @@ describe('history adapter', () => {
 
 			stampNavigatedEntry(type);
 
-			expect(standingEntry()).toEqual({ id: expect.any(Number), below: addressOf('/album/a') });
+			expect(standingPageEntryId()).toEqual(expect.any(Number));
 			expect(pageBelowStandingPage()).toBe(addressOf('/album/a'));
 		}
 	);
@@ -502,25 +500,30 @@ describe('history adapter', () => {
 	});
 
 	// One question decides both where a page's own Back goes and what the
-	// phone's ‹ calls it (#1389): the page below, or none and the fallback.
+	// phone's ‹ calls it (#1389): the page below, or the fallback written over
+	// the page. Either way the tab holds no more entries than before, and the
+	// page Back lands on names where its own Back goes next.
 	it.each([
 		{
 			standing: 'a page pushed over another',
 			arrange: () => void pushEntry('/album/a', {}),
-			below: '/'
+			lands: '/',
+			next: null
 		},
 		{
-			standing: 'a layer over a page pushed over another',
+			standing: 'a page pushed over a page pushed over another',
 			arrange: () => {
 				pushEntry('/album/a', {});
-				holdLayer('album-menu', () => undefined);
+				pushEntry('/album/b', {});
 			},
-			below: '/'
+			lands: '/album/a',
+			next: '/'
 		},
 		{
 			standing: 'an entry without an id',
 			arrange: () => seedForeignEntry('/album/a'),
-			below: null
+			lands: FALLBACK,
+			next: null
 		},
 		{
 			standing: 'an entry that does not know the page below it',
@@ -528,35 +531,45 @@ describe('history adapter', () => {
 				seedForeignEntry('/album/a');
 				replaceEntry('/album/a', {});
 			},
-			below: null
+			lands: FALLBACK,
+			next: null
 		},
 		{
 			standing: "the tab's first entry",
 			arrange: () => enterApp('/album/a', 1),
-			below: null
+			lands: FALLBACK,
+			next: null
 		},
 		{
 			standing: 'the page the app was entered on from one of its own pages',
-			arrange: () => enterApp('/legal', 2, addressOf('/login')),
-			below: '/login'
+			arrange: () => {
+				seedForeignEntry('/login');
+				history.pushState(null, '', '/legal');
+				enterApp('/legal', 2, addressOf('/login'));
+			},
+			lands: '/login',
+			next: null
 		}
-	])(
-		"a page's own Back on $standing steps back exactly when a page lies below",
-		({ arrange, below }) => {
-			arrange();
-			const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
-			vi.mocked(goto).mockClear();
+	])("a page's own Back on $standing lands on $lands", async ({ arrange, lands, next }) => {
+		arrange();
+		const tabLength = history.length;
+		const reported = reportedNavigations.length;
 
-			const pageBelow = pageBelowStandingPage();
-			void stepBackOrGoTo('/');
+		await stepBackOrGoTo(FALLBACK);
+		for (const { type } of reportedNavigations.slice(reported)) stampNavigatedEntry(type);
 
-			expect(pageBelow).toBe(below === null ? null : addressOf(below));
-			expect(vi.mocked(goto).mock.calls).toEqual(
-				below === null ? [['/', { replaceState: true }]] : []
-			);
-			expect(back).toHaveBeenCalledTimes(below === null ? 0 : 1);
-		}
-	);
+		expect(location.pathname).toBe(lands);
+		expect(history.length).toBe(tabLength);
+		expect(pageBelowStandingPage()).toBe(next === null ? null : addressOf(next));
+	});
+
+	it("a page's own Back keeps its target while a layer covers the page", () => {
+		pushEntry('/album/a', {});
+
+		holdLayer('album-menu', () => undefined);
+
+		expect(pageBelowStandingPage()).toBe(addressOf('/'));
+	});
 
 	it.each([
 		{ opened: 'as the only entry of its tab', tabLength: 1 },
@@ -627,8 +640,8 @@ describe('history adapter', () => {
 		await vi.mocked(goto)('/settings');
 		stampNavigatedEntry('link');
 
-		expect(standingEntry()).toEqual({ id: expect.any(Number), below: addressOf('/album/a') });
 		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(song.id);
+		expect(pageBelowStandingPage()).toBe(addressOf('/album/a'));
 	});
 
 	it('a router replace after a Back stays foreign below stamped entries', async () => {

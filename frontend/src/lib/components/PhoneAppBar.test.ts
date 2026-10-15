@@ -18,14 +18,21 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SEARCH_LABEL
 } from '$lib/constants';
+import { goto } from '$app/navigation';
+import { resolve } from '$app/paths';
+import type { Pathname } from '$app/types';
 import {
+	historyStandsStill,
 	installHistoryController,
+	loadHistoryPageForTests,
 	pushEntry,
-	resetHistoryControllerForTests
+	resetHistoryControllerForTests,
+	stampNavigatedEntry
 } from '$lib/history/historyController';
+import { reportedNavigations, startFakeRouter } from '$lib/test-utils/app-navigation';
 import { resetLayersForTests } from '$lib/stores/layers';
 import { albumList, songList } from '$lib/stores/libraryData';
-import { playlistList } from '$lib/stores/playlists';
+import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { resetRailSearchForTests } from '$lib/stores/railSearch';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { buildAlbum, buildPlaylist, buildSong } from './shell/rail-test-fixtures';
@@ -48,6 +55,12 @@ vi.mock('$lib/stores/navigation', () => navigation);
 vi.mock('$lib/api/library', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/library')>()),
 	searchLibrary: vi.fn(() => new Promise(() => undefined))
+}));
+
+const playlistsOnServer = vi.hoisted(() => ({ fetchPlaylists: vi.fn() }));
+vi.mock('$lib/api/client', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/client')>()),
+	fetchPlaylists: playlistsOnServer.fetchPlaylists
 }));
 
 const mounted: Array<ReturnType<typeof mount>> = [];
@@ -92,27 +105,68 @@ function seedLibrary(): void {
 	playlistList.set([buildPlaylist({ slug: 'night-drive', title: 'Night Drive' })]);
 }
 
-// History as a person left it: `from` the page they opened `opened` from, or
-// with no `from` the page the tab was entered on, with nothing of its own below.
-function standOn(opened: string, from?: string): void {
-	if (from === undefined) {
-		history.replaceState(null, '', opened);
-		return;
-	}
-	history.replaceState(null, '', from);
-	pushEntry(opened, {});
+// The app loads on `address` in a fresh tab, the way the root layout starts
+// it: the router starts over the tab's first entry and reports it, and history
+// stands still once the start has run to its end.
+async function enterAppOn(address: string): Promise<void> {
+	history.replaceState(null, '', address);
+	const length = vi.spyOn(history, 'length', 'get').mockReturnValue(1);
+	resetHistoryControllerForTests();
+	loadHistoryPageForTests();
+	startFakeRouter();
+	installHistoryController();
+	stampNavigatedEntry('enter');
+	length.mockRestore();
+	await historyStandsStill();
 }
 
-beforeEach(() => {
+// The root layout stamps every navigation the router reports, in order.
+function stampNavigationsReportedSince(count: number): void {
+	for (const { type } of reportedNavigations.slice(count)) stampNavigatedEntry(type);
+}
+
+async function followLinkTo(address: Pathname): Promise<void> {
+	const reported = reportedNavigations.length;
+	await goto(resolve(address));
+	stampNavigationsReportedSince(reported);
+}
+
+// History as a person left it: `from` the page they opened `opened` from, or
+// with no `from` the page the tab was entered on, with nothing of its own below.
+async function standOn(opened: Pathname, from?: Pathname): Promise<void> {
+	if (from === undefined) {
+		await enterAppOn(opened);
+		return;
+	}
+	await enterAppOn(from);
+	await followLinkTo(opened);
+}
+
+// What ‹ is named now, or null on a page without one.
+function backName(target: HTMLElement): string | null {
+	return target.querySelector('header button.back')?.getAttribute('aria-label') ?? null;
+}
+
+// ‹ pressed, resolving once history has left the page and the root layout
+// has stamped what the router reported on the way.
+async function pressBarBack(target: HTMLElement): Promise<void> {
+	const from = location.pathname;
+	const reported = reportedNavigations.length;
+	target.querySelector<HTMLButtonElement>('header button.back')?.click();
+	await vi.waitFor(() => expect(location.pathname).not.toBe(from));
+	stampNavigationsReportedSince(reported);
+	await tick();
+}
+
+beforeEach(async () => {
 	injectHitboxStyles();
 	setPointer('coarse');
 	phoneAppBar.set(null);
 	sidebarOpen.set(false);
 	sessionStorage.clear();
-	history.replaceState(null, '', '/');
-	resetHistoryControllerForTests();
-	installHistoryController();
+	await enterAppOn('/');
 	seedLibrary();
+	playlistsOnServer.fetchPlaylists.mockResolvedValue([]);
 	for (const open of Object.values(navigation)) open.mockClear();
 });
 
@@ -126,7 +180,7 @@ afterEach(async () => {
 	railTreeQuery.set('');
 	albumList.set([]);
 	songList.set([]);
-	playlistList.set([]);
+	resetPlaylistsForTests();
 	clearHitboxStyles();
 	clearPointer();
 	vi.restoreAllMocks();
@@ -209,7 +263,7 @@ describe('PhoneAppBar', () => {
 
 	// #1354 rule 25: ‹ is named after where it goes, and a page opened from
 	// another one carries no account circle (navigation.html, frame I3).
-	it.each([
+	it.each<{ page: string; opened: Pathname; from?: Pathname; name: string }>([
 		{ page: 'an album opened from the Library', opened: '/album/a1', from: '/', name: 'Library' },
 		{
 			page: 'an album opened from another album',
@@ -245,7 +299,7 @@ describe('PhoneAppBar', () => {
 	])(
 		'names ‹ on $page after $name, beside search and without the account circle',
 		async ({ opened, from, name }) => {
-			standOn(opened, from);
+			await standOn(opened, from);
 			const target = renderBar();
 			await tick();
 
@@ -271,31 +325,37 @@ describe('PhoneAppBar', () => {
 		expect(queryButton(target, backLabel('Cold Harbour'))).not.toBeNull();
 	});
 
-	it('steps back onto the page below on ‹', async () => {
-		standOn('/album/a1', '/');
-		const back = vi.spyOn(history, 'back').mockImplementation(() => undefined);
+	it('steps back on ‹ onto the page below, whose ‹ names the page below it', async () => {
+		await standOn('/album/a2', '/');
+		await followLinkTo('/album/a1');
 		const target = renderBar();
 		await tick();
+		const tabLength = history.length;
 
-		getByRoleButton(target, backLabel('Library')).click();
+		await pressBarBack(target);
 
-		expect(back).toHaveBeenCalledOnce();
-		expect(navigation.openRailSearchTarget).not.toHaveBeenCalled();
+		expect(location.pathname).toBe('/album/a2');
+		expect(history.length).toBe(tabLength);
+		expect(backName(target)).toBe(backLabel('Library'));
 	});
 
-	it.each([
-		{ opened: '/album/a1', list: '/' },
-		{ opened: '/settings/voices', list: '/settings' }
-	])('opens the list of $opened on ‹ with nothing before it', async ({ opened, list }) => {
-		standOn(opened);
-		const back = vi.spyOn(history, 'back');
+	// With nothing before it, ‹ writes the page's list over the page, so the
+	// list's own ‹ goes on rather than back to the page it replaced.
+	it.each<{ page: string; opened: Pathname; list: Pathname; next: string | null }>([
+		{ page: 'a Settings section', opened: '/settings/voices', list: '/settings', next: 'Library' },
+		{ page: 'Settings', opened: '/settings', list: '/', next: null },
+		{ page: 'an album', opened: '/album/a1', list: '/', next: null }
+	])('on $page with nothing before it, ‹ writes $list over it', async ({ opened, list, next }) => {
+		await standOn(opened);
 		const target = renderBar();
 		await tick();
+		const tabLength = history.length;
 
-		target.querySelector<HTMLButtonElement>('button.back')?.click();
+		await pressBarBack(target);
 
-		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'page', href: list });
-		expect(back).not.toHaveBeenCalled();
+		expect(location.pathname).toBe(list);
+		expect(history.length).toBe(tabLength);
+		expect(backName(target)).toBe(next === null ? null : backLabel(next));
 	});
 });
 
@@ -312,7 +372,7 @@ describe('PhoneAppBar search sheet', () => {
 	}
 
 	it('opens over the page with the search field focused', async () => {
-		standOn('/album/a1', '/');
+		await standOn('/album/a1', '/');
 
 		const sheet = await openSearch();
 
@@ -322,7 +382,7 @@ describe('PhoneAppBar search sheet', () => {
 	});
 
 	it('closes on Back and leaves the page where it was', async () => {
-		standOn('/album/a1', '/');
+		await standOn('/album/a1', '/');
 		await openSearch();
 
 		history.back();
@@ -338,6 +398,26 @@ describe('PhoneAppBar search sheet', () => {
 		await tick();
 
 		expect(searchSheet()).toBeNull();
+	});
+
+	it('finds playlists on a page loaded directly, which lists none itself', async () => {
+		resetPlaylistsForTests();
+		playlistsOnServer.fetchPlaylists.mockResolvedValue([
+			buildPlaylist({ slug: 'night-drive', title: 'Night Drive' })
+		]);
+		await standOn('/settings/voices');
+		const sheet = await openSearch();
+		const field = sheet.querySelector<HTMLInputElement>('input[type="search"]');
+		if (!field) throw new Error('Expected the search field');
+
+		field.value = 'night';
+		field.dispatchEvent(new Event('input', { bubbles: true }));
+
+		await vi.waitFor(() =>
+			expect(
+				Array.from(sheet.querySelectorAll('[role="option"]'), (option) => option.textContent)
+			).toEqual([expect.stringContaining('Night Drive')])
+		);
 	});
 
 	it('closes and opens what was chosen', async () => {
