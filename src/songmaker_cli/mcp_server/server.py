@@ -13,6 +13,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
 from mcp.server.mcpserver import MCPServer
+from mcp.server.mcpserver.exceptions import ToolError
 from sqlalchemy.orm import sessionmaker
 
 from songmaker_cli.constants import GET_SONG_TOOL_DESCRIPTION
@@ -65,6 +66,9 @@ def build_server(
             yield session
             if write:
                 session.commit()
+        except (tools.MCPToolError, auth.MCPAuthError) as exc:
+            session.rollback()
+            raise ToolError(str(exc)) from exc
         except Exception:
             session.rollback()
             raise
