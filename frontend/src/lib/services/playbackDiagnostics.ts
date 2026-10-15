@@ -43,8 +43,6 @@ interface TimerGap {
 	totalMs: number;
 }
 
-// Session and sequence name one event across tabs, reloads and the log.
-
 interface Recording {
 	userId: string;
 	session: SessionFacts;
@@ -346,6 +344,7 @@ function isOwn(from: Recording, buffered: BufferedEvent): boolean {
 	return buffered.session.session_id === from.session.session_id;
 }
 
+// Session and sequence name one event across tabs, reloads and the log.
 function keyOf(buffered: BufferedEvent): string {
 	return `${buffered.session.session_id}:${buffered.event.sequence}`;
 }
