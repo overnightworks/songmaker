@@ -769,8 +769,14 @@ async function mountRow(
 	await tick();
 	const row = target.querySelector<HTMLElement>(rowSelector);
 	if (!row) throw new Error(`the ${view} row ${rowSelector} is missing`);
-	const { source, filename } = COMPONENT_STYLE_SOURCES[styles];
-	injectComponentStyles(source, filename, row);
+	// Every collection row stands in the frame SongRow owns, so SongRow's sheet
+	// joins the sheet of whichever component draws the row.
+	const songRow = target.querySelector<HTMLElement>('.song-row');
+	if (!songRow) throw new Error(`the ${view} view shows no song row`);
+	injectInventoryComponentStyles([
+		{ el: songRow, component: 'SongRow' },
+		{ el: row, component: styles }
+	]);
 	return row;
 }
 
