@@ -5,7 +5,6 @@ import { get } from 'svelte/store';
 const mockFetchMe = vi.fn();
 const mockApiLogin = vi.fn();
 const mockApiLogout = vi.fn();
-const mockStopLibraryResourceSync = vi.fn();
 const mockFetchLibraryContinue = vi.fn();
 
 vi.mock('$lib/api/client', async () => {
@@ -22,9 +21,9 @@ vi.mock('$lib/api/library', () => ({
 	fetchLibraryContinue: (...args: unknown[]) => mockFetchLibraryContinue(...args)
 }));
 
-vi.mock('$lib/stores/resourceSync', () => ({
-	stopLibraryResourceSync: (...args: unknown[]) => mockStopLibraryResourceSync(...args)
-}));
+vi.mock('$app/navigation', async () =>
+	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
+);
 
 import {
 	currentUser,
@@ -39,7 +38,9 @@ import {
 	login,
 	logout,
 	clearAuth,
-	resetAuthForTests
+	hasSessionToLose,
+	resetAuthForTests,
+	signOutFailed
 } from './auth';
 import { offline, resetConnectivityForTests } from './connectivity';
 import {
@@ -47,7 +48,11 @@ import {
 	AUTH_SESSION_EXPIRED_DETAIL
 } from '$lib/constants/auth';
 import { ApiError } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import { NetworkError, apiFetch } from '$lib/api/fetch';
+import {
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import { playlistList, selectedPlaylistDetail } from '$lib/stores/playlists';
 import { generationFailures } from '$lib/stores/jobs';
 import { ensureRecentWorkRead, lastWorkByPlace, resetLibraryOrder } from '$lib/stores/libraryOrder';
@@ -58,12 +63,12 @@ import { makeGeneration, makeSong } from '$lib/test-utils/factories';
 
 const AUTH_ME_PATH = '/api/auth/me';
 const KNOWN_USER = { id: 'u1', username: 'admin', role: 'admin' as const };
+const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 
 beforeEach(() => {
 	mockFetchMe.mockReset();
 	mockApiLogin.mockReset();
 	mockApiLogout.mockReset();
-	mockStopLibraryResourceSync.mockReset();
 	mockFetchLibraryContinue.mockReset();
 	resetLibraryOrder();
 	currentUser.set(null);
@@ -71,6 +76,9 @@ beforeEach(() => {
 	authError.set('');
 	authCheckError.set(null);
 	authNotice.set(null);
+	resetHistoryControllerForTests();
+	standInForDocumentLoadsForTests(documentLoads);
+	for (const load of Object.values(documentLoads)) load.mockClear();
 });
 
 afterEach(() => {
@@ -240,6 +248,15 @@ describe('login', () => {
 		expect(get(authError)).toBe('');
 	});
 
+	it('no longer tells a sign-out that failed before', async () => {
+		signOutFailed.set(true);
+		mockApiLogin.mockResolvedValueOnce({ id: 'u1', username: 'alice', role: 'user' });
+
+		await login('alice', 'password');
+
+		expect(get(signOutFailed)).toBe(false);
+	});
+
 	it('sets authError on 401', async () => {
 		authNotice.set('disabled');
 		mockApiLogin.mockRejectedValueOnce(new ApiError(401, 'Invalid credentials', '/api/auth/login'));
@@ -353,25 +370,18 @@ describe('clearAuth', () => {
 });
 
 describe('logout', () => {
-	it('stops resource sync before the logout request', async () => {
+	it('ends the session on the server before it loads sign-in afresh', async () => {
 		const order: string[] = [];
-		mockStopLibraryResourceSync.mockImplementation(() => {
-			order.push('stop');
-		});
 		mockApiLogout.mockImplementation(async () => {
-			order.push('api');
+			order.push('server');
 		});
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		await logout();
-		expect(order).toEqual(['stop', 'api']);
-		expect(get(currentUser)).toBeNull();
-	});
+		documentLoads.assign.mockImplementation((url: string) => order.push(`load ${url}`));
+		currentUser.set(KNOWN_USER);
 
-	it('clears currentUser', async () => {
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		mockApiLogout.mockResolvedValueOnce(undefined);
 		await logout();
-		expect(get(currentUser)).toBeNull();
+
+		expect(order).toEqual(['server', `load ${window.location.origin}/login`]);
+		expect(documentLoads.replace).not.toHaveBeenCalled();
 	});
 
 	it('forgets the playback diagnostics recorded for the user', async () => {
@@ -379,7 +389,7 @@ describe('logout', () => {
 		const stopRecording = startPlaybackDiagnostics('u1');
 		recordPlaybackEvent({ kind: 'freeze', detail: '', take: null });
 		const recordedBefore = localStorage.getItem(diagnosticsKey);
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
+		currentUser.set(KNOWN_USER);
 		mockApiLogout.mockResolvedValueOnce(undefined);
 
 		await logout();
@@ -389,11 +399,69 @@ describe('logout', () => {
 		expect(localStorage.getItem(diagnosticsKey)).toBeNull();
 	});
 
-	it('clears user even if API fails', async () => {
-		currentUser.set({ id: 'u1', username: 'admin', role: 'admin' });
-		mockApiLogout.mockRejectedValueOnce(new Error('fail'));
+	it('stays a sign-out when a request is refused while it ends the session, or after', async () => {
+		currentUser.set(KNOWN_USER);
+		const noticesShown: Array<string | null> = [];
+		const stopWatching = authNotice.subscribe((notice) => noticesShown.push(notice));
+		const refused = vi
+			.spyOn(globalThis, 'fetch')
+			.mockResolvedValue(
+				new Response(JSON.stringify({ detail: 'Not authenticated' }), { status: 401 })
+			);
+		mockApiLogout.mockImplementation(() => apiFetch('/api/songs/s1').catch(() => undefined));
+
 		await logout();
-		expect(get(currentUser)).toBeNull();
+		await apiFetch('/api/songs/s2').catch(() => undefined);
+		refused.mockRestore();
+		stopWatching();
+
+		expect(documentLoads.assign.mock.calls).toEqual([[`${window.location.origin}/login`]]);
+		expect(documentLoads.reload).not.toHaveBeenCalled();
+		expect(documentLoads.replace).not.toHaveBeenCalled();
+		expect(noticesShown).not.toContain('unauthorized');
+	});
+
+	// Only the server's word ends the session: a 2xx, or a 401 for a session it
+	// already no longer held. Any other answer leaves the person signed in, and
+	// says so (#1340, ruling A).
+	it.each([
+		{ answer: 'a 2xx', reply: () => Promise.resolve(), leaves: true },
+		{
+			answer: 'a 401',
+			reply: () => Promise.reject(new ApiError(401, 'Not authenticated', '/api/auth/logout')),
+			leaves: true
+		},
+		{
+			answer: 'no answer',
+			reply: () =>
+				Promise.reject(new NetworkError('/api/auth/logout', new TypeError('Failed to fetch'))),
+			leaves: false
+		},
+		{
+			answer: 'a 403',
+			reply: () => Promise.reject(new ApiError(403, 'CSRF check failed', '/api/auth/logout')),
+			leaves: false
+		},
+		{
+			answer: 'a 503',
+			reply: () => Promise.reject(new ApiError(503, 'Unavailable', '/api/auth/logout')),
+			leaves: false
+		},
+		{
+			answer: 'a 429',
+			reply: () => Promise.reject(new ApiError(429, 'Too many requests', '/api/auth/logout')),
+			leaves: false
+		}
+	])('after $answer to the sign-out, leaves for sign-in: $leaves', async ({ reply, leaves }) => {
+		currentUser.set(KNOWN_USER);
+		mockApiLogout.mockImplementationOnce(reply);
+
+		await logout();
+
+		expect(documentLoads.assign).toHaveBeenCalledTimes(leaves ? 1 : 0);
+		expect(get(signOutFailed)).toBe(!leaves);
+		expect(get(currentUser)).toEqual(KNOWN_USER);
+		expect(hasSessionToLose()).toBe(!leaves);
 	});
 });
 
@@ -433,6 +501,15 @@ describe('the remembered playback across the session', () => {
 		audioPlayer.status = 'idle';
 		flushSync();
 		localStorage.clear();
+	});
+
+	it('logout stops the take that was playing and leaves no take loaded', async () => {
+		mockApiLogout.mockResolvedValueOnce(undefined);
+
+		await logout();
+
+		expect(audioPlayer.current).toBeNull();
+		expect(audioPlayer.status).toBe('idle');
 	});
 
 	it('logout forgets the record', async () => {
