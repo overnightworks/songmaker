@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { openCollection } from '$lib/stores/collection';
+	import { librarySurface, playlistWhoseDetailShows } from '$lib/stores/libraryContext';
 	import { openPlaylist } from '$lib/stores/navigation';
 	import {
 		ensurePlaylistsLoaded,
@@ -13,7 +15,7 @@
 		queueContext
 	} from '$lib/stores/player';
 	import { whenBackOnline } from '$lib/stores/connectivity';
-	import { railTreeQuery } from '$lib/stores/librarySearch';
+	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
 	import {
 		ensureRecentWorkRead,
 		inLibraryOrder,
@@ -24,7 +26,7 @@
 	import PlaylistCover from '../PlaylistCover.svelte';
 	import PlayingMark from '../PlayingMark.svelte';
 	import RailGroup from './RailGroup.svelte';
-	import { RAIL_PLAYLIST_ITEM_CLASS } from './rail-item-selector';
+	import { RAIL_PLAYLIST_ITEM_CLASS, revealOpenRailItem } from './rail-item-selector';
 
 	// Local to this component, matching RailLibraryGroup's own
 	// LIBRARY_OPEN_STORAGE_KEY -- nothing else reads this key.
@@ -41,16 +43,15 @@
 	// with no chevron in any state.
 	const openPlaylistId = $derived($selectedPlaylistId);
 	const openPlaylistDetail = $derived($selectedPlaylistDetail);
-	const query = $derived($railTreeQuery.trim().toLowerCase());
+	const shownPlaylistId = $derived(playlistWhoseDetailShows($librarySurface, $openCollection));
+	const query = $derived($normalizedRailTreeQuery);
 	const filtering = $derived(query.length > 0);
 	const visiblePlaylists = $derived(
 		inLibraryOrder(
 			'playlist',
 			playlists.filter(
 				(playlist) =>
-					!filtering ||
-					playlist.id === openPlaylistId ||
-					playlist.title.toLowerCase().includes(query)
+					!filtering || playlist.id === openPlaylistId || matchesRailQuery(playlist.title, query)
 			),
 			$libraryPlaceOrder
 		)
@@ -105,30 +106,34 @@
 	expandTrigger={openPlaylistId !== null || filtering}
 	{icon}
 >
-	{#snippet children(open: boolean)}
+	{#snippet children(groupOpen: boolean)}
 		<nav class="rail-playlists-nav" aria-label={RAIL_PLAYLISTS_NAV_LABEL}>
 			<ul class="playlist-list">
 				{#each visiblePlaylists as playlist (playlist.id)}
-					{@const expanded = playlist.id === openPlaylistId}
+					{@const playlistOpen = playlist.id === openPlaylistId}
+					{@const current = playlist.id === shownPlaylistId}
 					{@const entries =
-						expanded && openPlaylistDetail?.id === playlist.id ? openPlaylistDetail.entries : []}
+						playlistOpen && openPlaylistDetail?.id === playlist.id
+							? openPlaylistDetail.entries
+							: []}
 					<li>
 						<button
 							type="button"
 							class={RAIL_PLAYLIST_ITEM_CLASS}
-							class:row-active={expanded}
+							aria-current={current ? 'page' : undefined}
+							use:revealOpenRailItem={current && groupOpen && !filtering}
 							onclick={() => onPlaylistLabelClick(playlist.id)}
 						>
 							<PlaylistCover
 								title={playlist.title}
 								covers={playlist.album_covers}
 								cover={playlist.cover}
-								visible={open}
+								visible={groupOpen}
 							/>
 							<span class="row-title">{playlist.title}</span>
 							<span class="row-meta">{playlist.entry_count}</span>
 						</button>
-						<div class="playlist-songs" data-open={expanded} inert={!expanded}>
+						<div class="playlist-songs" data-open={playlistOpen} inert={!playlistOpen}>
 							<div class="playlist-songs-content">
 								<ul>
 									{#each entries as entry, index (entry.id)}

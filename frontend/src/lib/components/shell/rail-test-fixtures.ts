@@ -1,5 +1,5 @@
 import { mount, tick, unmount, type Component } from 'svelte';
-import { vi } from 'vitest';
+import { onTestFinished, vi } from 'vitest';
 
 import type { LibraryContinueItem, LibrarySearchHit } from '$lib/api/library';
 import type {
@@ -12,6 +12,7 @@ import type {
 	SongItem,
 	SongSummaryResponse
 } from '$lib/api/types';
+import { REDUCED_MOTION_MEDIA } from '$lib/constants';
 import { makeSongSummary } from '$lib/test-utils/factories';
 
 // Shared across every Rail*.test.ts in this directory. Vitest only hoists
@@ -49,6 +50,55 @@ export function findElementByRoleAndName(
 			(element) => element.getAttribute('aria-label') === name
 		) ?? null
 	);
+}
+
+interface RailReveal {
+	title: string | null | undefined;
+	options: ScrollIntoViewOptions | undefined;
+}
+
+interface RailRevealSetting {
+	reducedMotion?: boolean;
+	animatingUntil?: Promise<void>;
+}
+
+// jsdom lays nothing out, so it has no scrollIntoView, getAnimations or
+// matchMedia. For one test these stand-ins record each row the rail scrolls
+// into view, by its title, with the given motion preference and every element
+// animating until `animatingUntil` settles -- nothing animating without it.
+export function recordRailReveals({
+	reducedMotion = false,
+	animatingUntil
+}: RailRevealSetting = {}): RailReveal[] {
+	const reveals: RailReveal[] = [];
+	const standIns: Record<string, unknown> = {
+		scrollIntoView(this: HTMLElement, options?: ScrollIntoViewOptions) {
+			reveals.push({ title: this.querySelector('.row-title')?.textContent, options });
+		},
+		getAnimations: () => (animatingUntil === undefined ? [] : [{ finished: animatingUntil }])
+	};
+	for (const [name, value] of Object.entries(standIns)) {
+		Object.defineProperty(HTMLElement.prototype, name, { configurable: true, value });
+	}
+	Object.defineProperty(window, 'matchMedia', {
+		configurable: true,
+		value: (query: string) => ({ matches: reducedMotion && query === REDUCED_MOTION_MEDIA })
+	});
+	onTestFinished(() => {
+		for (const name of Object.keys(standIns)) Reflect.deleteProperty(HTMLElement.prototype, name);
+		Reflect.deleteProperty(window, 'matchMedia');
+	});
+	return reveals;
+}
+
+export function revealedTitles(reveals: readonly RailReveal[]): RailReveal['title'][] {
+	return reveals.map(({ title }) => title);
+}
+
+// The reveal waits for the DOM update and for running animations, both
+// microtasks; one macrotask later every requested reveal has happened.
+export function railRevealsSettled(): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve));
 }
 
 export function buildAlbum(overrides: Partial<AlbumItem> = {}): AlbumItem {
