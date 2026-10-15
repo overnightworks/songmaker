@@ -1,0 +1,8 @@
+claim_id = "588b1f158d1041a49d7cf362c32c9938"
+agent = "claude-head"
+role = "builder"
+base = "da1bfb24becb0976cacfa08fc3d995e9ce600a05"
+branch = "claude-head/issue-1415-small-sonar-rules"
+scope = ["frontend/src/lib/components/PlaylistPicker.test.ts", "frontend/src/lib/constants/auth.ts", "frontend/src/lib/history/historyController.ts", "frontend/src/lib/services/continuousDeck.ts", "frontend/src/lib/services/playbackDiagnostics.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/librarySearch.ts", "frontend/src/lib/stores/loras.ts", "frontend/src/lib/stores/navigation.ts", "frontend/src/lib/stores/presets.ts", "frontend/src/lib/stores/resourceSync.ts"]
+opened_commit = "1fd00cc06e6af2bdf99d0d766b700f3068246d2b"
+whole_reason = "#940 S5 slice 1415 as its body says"
