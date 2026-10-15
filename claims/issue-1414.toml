@@ -1,0 +1,8 @@
+claim_id = "84fdc0894206462a9845d7a74a079322"
+agent = "claude-head"
+role = "builder"
+base = "da1bfb24becb0976cacfa08fc3d995e9ce600a05"
+branch = "claude-head/issue-1414-complexity-under-bar"
+scope = ["frontend/src/lib/stores/generateAction.test.ts", "frontend/src/lib/stores/generateAction.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/stores/playlists.test.ts", "frontend/src/lib/stores/playlists.ts", "frontend/src/lib/utils/lyrics-align.test.ts", "frontend/src/lib/utils/lyrics-align.ts"]
+opened_commit = "7f463b1fe924d2329bf1f9cc11b6ff084b149865"
+whole_reason = "#940 S5 slice 1414 as its body says"
