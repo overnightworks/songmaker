@@ -14,7 +14,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { selectedSong } from '$lib/stores/player';
-	import { librarySurface } from '$lib/stores/libraryContext';
+	import {
+		albumWhoseSongsShow,
+		librarySurface,
+		playlistWhoseDetailShows
+	} from '$lib/stores/libraryContext';
 	import { openCollection } from '$lib/stores/collection';
 	import { loadActiveModels } from '$lib/stores/presets';
 	import { resourceSync, retryResourceSync } from '$lib/stores/resourceSync';
@@ -31,6 +35,8 @@
 	const song = $derived($selectedSong);
 	const surface = $derived($librarySurface);
 	const collection = $derived($openCollection);
+	const shownAlbumId = $derived(albumWhoseSongsShow(surface, collection));
+	const shownPlaylistId = $derived(playlistWhoseDetailShows(surface, collection));
 	const sync = $derived($resourceSync);
 
 	// The live stream's own state is the gate, rather than a promise resolved
@@ -77,12 +83,14 @@
 		<main class="main">
 			{#if song}
 				<SongDetailView />
-			{:else if surface === 'detail' && collection?.kind === 'album'}
-				<AlbumDetailView albumId={collection.id} />
-			{:else if surface === 'detail' && collection?.kind === 'playlist'}
+			{:else if shownAlbumId}
+				<AlbumDetailView albumId={shownAlbumId} />
+			{:else if shownPlaylistId}
 				<PlaylistDetailView />
+			{:else if surface === 'playlists'}
+				<LibraryWall kind="playlists" />
 			{:else}
-				<LibraryWall />
+				<LibraryWall kind="library" />
 			{/if}
 		</main>
 	</div>

@@ -11,6 +11,7 @@ import {
 	ACCOUNT_MENU_LABEL,
 	COWRITER_TURN_PATH,
 	PLAYBACK_DIAGNOSTICS_PATH,
+	PLAYLISTS_PAGE_LABEL,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_LIBRARY_LABEL,
@@ -251,6 +252,25 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 		.click();
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+}
+
+/**
+ * The Playlists page through search (#1402): the rail's field on the desktop,
+ * the 🔍 sheet of the phone's app bar on the phone.
+ */
+export async function openPlaylistsPage(page: Page, shell: Shell): Promise<void> {
+	const phoneSearch = 'Search';
+	let search = page.getByRole('navigation', { name: RAIL_NAV_LABEL });
+	if (shell === 'mobile') {
+		await appBar(page).getByRole('button', { name: phoneSearch, exact: true }).click();
+		search = page.getByRole('dialog', { name: phoneSearch, exact: true });
+	}
+	await search.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(PLAYLISTS_PAGE_LABEL);
+	await search
+		.getByRole('group', { name: 'Pages' })
+		.getByRole('option', { name: nameStartingWith(PLAYLISTS_PAGE_LABEL) })
+		.click();
+	await expect(page).toHaveURL(/\/playlists$/);
 }
 
 /** Headers a browser session's own out-of-page API write needs past the CSRF guard. */

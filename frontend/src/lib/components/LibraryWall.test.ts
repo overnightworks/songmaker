@@ -105,10 +105,10 @@ function reconnect(): void {
 	reportResourceStreamReachable(true);
 }
 
-async function render(): Promise<HTMLElement> {
+async function render(kind: 'library' | 'playlists' = 'library'): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
-	mounted.push(mount(LibraryWall, { target }));
+	mounted.push(mount(LibraryWall, { target, props: { kind } }));
 	await tick();
 	return target;
 }
@@ -132,7 +132,7 @@ function continueTitles(root: ParentNode): string[] {
 }
 
 function orderChoices(root: ParentNode): HTMLButtonElement[] {
-	const group = root.querySelector('[role="group"][aria-label="Sort albums and playlists"]');
+	const group = root.querySelector('[role="group"][aria-label^="Sort "]');
 	return [...(group?.querySelectorAll('button') ?? [])];
 }
 
@@ -421,6 +421,85 @@ describe('LibraryWall', () => {
 		playlistTile?.click();
 		await tick();
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p-local' });
+	});
+});
+
+// #1402, frame D3: the Playlists page shows the same wall of covers for
+// playlists alone, under one head line.
+describe('the Playlists page wall', () => {
+	function seedPlaylists(): void {
+		seedWall();
+		playlistList.update((list) => [
+			...list,
+			playlist({ id: 'p-alpha', title: 'Alpha mix', entry_count: 1, share_slug: null })
+		]);
+	}
+
+	it('shows only playlists, A–Z, under one head line reading Playlists · 2 with the sort switch and + New', async () => {
+		seedPlaylists();
+
+		const root = await render('playlists');
+
+		expect(tileTitles(root)).toEqual(['Alpha mix', 'Night drive']);
+		expect(tileLines(root)).toEqual(['1 song', '14 songs']);
+		const head = root.querySelector('.wall-titlebar');
+		expect(head?.querySelector('h1')?.getAttribute('aria-label')).toBe('Playlists · 2');
+		expect(head?.querySelector('[role="group"]')?.getAttribute('aria-label')).toBe(
+			'Sort playlists'
+		);
+		expect(head?.querySelector(`[aria-label="${NEW_LABEL}"]`)).not.toBeNull();
+		expect(pressedOrder(root)).toEqual(['A–Z']);
+	});
+
+	it('sorts by the one switch the Library uses, which this device remembers for both', async () => {
+		seedPlaylists();
+		fetchLibraryListen.mockResolvedValue({
+			items: [place('playlist', 'p-night', 'Night drive', '2026-09-21T10:00:00Z')]
+		});
+		const playlists = await render('playlists');
+
+		orderButton(playlists, 'Last played').click();
+
+		await vi.waitFor(() => expect(tileTitles(playlists)).toEqual(['Night drive', 'Alpha mix']));
+		await unmountAll();
+		libraryWallOrder.set('title');
+		const library = await render('library');
+		expect(pressedOrder(library)).toEqual(['Last played']);
+	});
+
+	it('says so when there is no playlist yet, and still offers New in Library', async () => {
+		emptyLibrary();
+		const root = await render('playlists');
+
+		const menu = await openNewMenu(root);
+
+		expect(root.querySelector('.wall-body')?.textContent).toContain('No playlists yet.');
+		expect([...menu.querySelectorAll('button')].map((item) => item.textContent?.trim())).toEqual([
+			'Album',
+			'Playlist'
+		]);
+	});
+
+	it.each([
+		{
+			failing: 'the albums',
+			fail: () =>
+				libraryBrowse.update((state) => ({ ...state, status: 'error' as const, error: 'down' })),
+			says: 'No playlists yet.'
+		},
+		{
+			failing: 'the playlists',
+			fail: () => playlistLoad.set({ status: 'error', error: 'down' }),
+			says: 'Failed to load playlists'
+		}
+	])('answers for its playlists alone when $failing could not load', async ({ fail, says }) => {
+		emptyLibrary();
+		const root = await render('playlists');
+
+		fail();
+		await tick();
+
+		expect(root.querySelector('.wall-body .empty')?.textContent).toBe(says);
 	});
 });
 

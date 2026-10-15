@@ -548,6 +548,14 @@ export const LIBRARY_WALL_ORDER_LABELS: Record<LibraryWallOrder, string> = {
 export const LIBRARY_WALL_HEADING = 'Albums & playlists';
 export const LIBRARY_WALL_ORDER_GROUP_LABEL = 'Sort albums and playlists';
 export const LIBRARY_WALL_EMPTY = 'No albums yet.';
+// The Playlists page (#1402): its head, which search names it by too, and the
+// count beside it, read as one heading ('Playlists · 3').
+export const PLAYLISTS_PAGE_LABEL = 'Playlists';
+export function playlistsHeadingLabel(count: number): string {
+	return `${PLAYLISTS_PAGE_LABEL} · ${count}`;
+}
+export const PLAYLISTS_WALL_ORDER_GROUP_LABEL = 'Sort playlists';
+export const PLAYLISTS_WALL_EMPTY = 'No playlists yet.';
 export const LIBRARY_NEW_FACE = 'New';
 export const LIBRARY_NEW_MENU_LABEL = 'New album or playlist';
 export const LIBRARY_NEW_MENU_CLOSE_LABEL = 'Close New in Library';

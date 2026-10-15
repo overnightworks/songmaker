@@ -51,6 +51,8 @@ describe('library route addresses', () => {
 		['/album/anfield/tide/take/3', 'album-song-take'],
 		['/album/anfield/tide/take/', 'album-song'],
 		['/playlist/friday-night', 'playlist'],
+		['/playlists', 'playlists'],
+		['/playlists/friday-night', 'external'],
 		['/settings/voices', 'external']
 	])('classifies %s as %s', (pathname, shape) => {
 		expect(libraryRouteShape(pathname)).toBe(shape);

@@ -163,6 +163,7 @@ import {
 	openCollectionEntry,
 	openLibraryWall,
 	openPlaylist,
+	openPlaylistsWall,
 	openRailSearchTarget,
 	openTakeVersion,
 	pendingDirtyNavigation,
@@ -279,8 +280,9 @@ function crossingWrite(replaceState: boolean) {
 }
 
 describe('isLibraryWorkspacePath', () => {
-	it('is the home path and every album, song, and playlist address', () => {
+	it('is the home path, the Playlists page and every album, song, and playlist address', () => {
 		expect(isLibraryWorkspacePath('/')).toBe(true);
+		expect(isLibraryWorkspacePath('/playlists')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield')).toBe(true);
 		expect(isLibraryWorkspacePath('/album/anfield/stadion-lauf-a')).toBe(true);
 		expect(isLibraryWorkspacePath('/playlist/friday-night')).toBe(true);
@@ -562,6 +564,55 @@ describe('the address an open playlist carries (issue #286)', () => {
 		await openPlaylist('p1');
 		await openLibraryWall();
 		expect(window.location.pathname).toBe('/');
+	});
+});
+
+// #1402: the Playlists page is a library page of its own, which search opens.
+describe('the Playlists page (#1402)', () => {
+	let stopNavigation: () => void;
+
+	beforeEach(() => {
+		stopNavigation = initNavigation();
+	});
+
+	afterEach(() => stopNavigation());
+
+	it('opens from its search hit over a fresh entry at its own address, Back and Forward stepping between it and the album below', async () => {
+		await openAlbum('a1');
+		const length = historyLength();
+
+		await openRailSearchTarget({ kind: 'page', href: '/playlists' });
+
+		expect(location.pathname).toBe('/playlists');
+		expect(get(librarySurface)).toBe('playlists');
+		expect(historyEntry()).toMatchObject({
+			surface: 'playlists',
+			collection: { kind: 'album', id: 'a1' }
+		});
+		expect(historyLength()).toBe(length + 1);
+
+		await pressBack();
+
+		expect(location.pathname).toBe('/album/a1');
+		expect(get(librarySurface)).toBe('detail');
+
+		await pressForward();
+
+		expect(location.pathname).toBe('/playlists');
+		expect(get(librarySurface)).toBe('playlists');
+	});
+
+	it.each([
+		{ over: 'the Library wall', shows: 'its top', open: openLibraryWall, scrolled: 0 },
+		{ over: 'itself', shows: 'where it was', open: openPlaylistsWall, scrolled: 640 }
+	])('opened over $over shows $shows', async ({ open, scrolled }) => {
+		await open();
+		captureLibraryScroll(640);
+
+		await openPlaylistsWall();
+
+		expect(get(libraryScrollAnchor)).toBe(scrolled);
+		expect(historyEntry().scrollAnchor).toBe(scrolled);
 	});
 });
 
@@ -931,7 +982,8 @@ describe('Back and Forward across an app page', () => {
 describe.each([
 	['openAlbum', () => openAlbum('a1')],
 	['openPlaylist', () => openPlaylist('p1')],
-	['openLibraryWall', () => openLibraryWall()]
+	['openLibraryWall', () => openLibraryWall()],
+	['openPlaylistsWall', () => openPlaylistsWall()]
 ])('%s closes the rail drawer', (_name, action) => {
 	it('closes an open drawer instead of leaving it over the new surface', async () => {
 		toggleSidebar();
@@ -1375,6 +1427,19 @@ describe('a dirty draft guards song switch / leave', () => {
 
 		await openLibraryWall();
 		expect(get(selectedSongId)).toBe('s1');
+		expect(get(pendingDirtyNavigation)).not.toBeNull();
+	});
+
+	it('defers openPlaylistsWall the same way', async () => {
+		await openAlbum('a1');
+		await selectSong('s1');
+		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
+		setDraftLyrics('unsaved edit');
+
+		await openPlaylistsWall();
+
+		expect(get(selectedSongId)).toBe('s1');
+		expect(get(librarySurface)).toBe('detail');
 		expect(get(pendingDirtyNavigation)).not.toBeNull();
 	});
 
