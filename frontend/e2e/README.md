@@ -160,11 +160,13 @@ sign-in, 19/19 for the reload, 14/14 for the sign-out and the refused return,
 18/15 for the refused admin page, 13/12 for the expired session and 11/11 for
 the lockout, 23/26 for the deep-link sign-in (#1215), and 28 at 375px for the
 phone's session lost behind its menu (#1230, a phone-only flow). The admin
-flows run at 1440 / 390 instead: 28/25 to 26 for an admin's own session, its
-two stale revokes, the revoke that works and the create refusal (#1322, #1397),
-and 8 at 390px for the mobile admin flow -- the admin page
-plus opening its Sessions tab, where the row-action hitboxes are measured (a
-phone-only flow). All of them stand against a shared ceiling of 30. Its own arrangement -- one
+flows run at 1440 / 390 instead: 27 to 28/25 to 26 for an admin's own session,
+its two stale revokes, the revoke that works and the create refusal (#1322,
+#1397), 11/9 for the Users tab error a create refusal leaves standing and a
+create that works clears (#1397), and 8 at 390px for the mobile admin flow --
+the admin page plus opening its Sessions tab, where the row-action hitboxes are
+measured (a phone-only flow). All of them stand against a shared ceiling of 30.
+Its own arrangement -- one
 non-admin account per project, created through `POST /api/admin/users` and
 deleted again in `afterAll` -- does not touch that budget: like the rail's
 filler albums, it runs from the run's API context rather than the page. What
