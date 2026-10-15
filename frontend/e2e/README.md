@@ -330,6 +330,12 @@ budget note above; the production default is 120) — and the flow will report
 reset the stack; a fresh run right after a previous one still counts against
 the same window, so back-to-back reruns add up rather than starting over.
 
-Artifacts (`playwright-report/`, `test-results/`) are written on failure only
-and uploaded by CI on a failing run. `retries: 1` in CI, with a trace on the
-retry.
+A failing attempt writes its screenshot and `error-context.md` (the page
+snapshot at the failure) to its own folder under `test-results/`. Locally that
+is all: no trace is recorded unless you pass `--trace on`. CI runs with
+`retries: 1` and records a trace on the retry only, as `trace.zip` in the
+retry's own `…-retry1` folder; the failed first attempt's folder keeps its
+screenshot and `error-context.md` whether the retry passes or not. CI uploads
+the HTML report (`playwright-report/`) with `test-results/`, and the compose
+logs, when the job fails or any test was retried; a run where every test passes
+first time records no trace and uploads neither.

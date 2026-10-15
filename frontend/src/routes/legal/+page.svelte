@@ -1,14 +1,11 @@
-<!-- eslint-disable svelte/no-navigation-without-resolve -- static SPA, no base path -->
 <script lang="ts">
 	import LegalContent from '$lib/components/LegalContent.svelte';
 	import { APP_NAME } from '$lib/constants';
+	import { SIGN_IN_PATH } from '$lib/api/fetch';
+	import { stepBackOrGoTo } from '$lib/history/historyController';
 
 	function goBack(): void {
-		if (window.history.length > 1) {
-			window.history.back();
-		} else {
-			window.location.href = '/login';
-		}
+		void stepBackOrGoTo(SIGN_IN_PATH);
 	}
 </script>
 
