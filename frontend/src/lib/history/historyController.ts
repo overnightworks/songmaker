@@ -306,20 +306,25 @@ function lookAtStandingEntry(state: unknown = history.state): void {
 // below which nothing is left to step back to; so is every entry the app is
 // entered on from another site or a typed address, below which that site's
 // pages or the tab's older visits stand -- not the page the person just left.
+// An entry the app is entered on from one of its own pages, by a load of a
+// fresh document, stands over that page, so a page's own Back steps back onto
+// it and can name it (#1389).
 function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
+	const pageLeft = entering && history.length > 1 ? appPageEnteredFrom() : null;
+	if (pageLeft !== null) return newPageEntryOver(pageLeft);
 	const entry = newEntry();
-	if (history.length === 1 || (entering && !loadedFromThisApp())) {
-		historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
-	}
+	if (history.length === 1 || entering) historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
 	return entry;
 }
 
 // The server sends `strict-origin-when-cross-origin`, so a page of the app's
-// own origin names itself as the referrer, and another site or a typed
-// address leaves either a foreign origin or nothing.
-function loadedFromThisApp(): boolean {
-	return document.referrer !== '' && new URL(document.referrer).origin === location.origin;
+// own origin names itself, by its whole address, as the referrer, and another
+// site or a typed address leaves either a foreign origin or nothing.
+function appPageEnteredFrom(): string | null {
+	const referrer = document.referrer;
+	if (referrer === '' || new URL(referrer).origin !== location.origin) return null;
+	return referrer;
 }
 
 function stampedPageState(state: App.PageState, entry: HistoryEntry | null): App.PageState {
@@ -533,10 +538,9 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // page loaded onto. An entry the navigation carried stands as it is, one the
 // start dropped gets back the id it was loaded with, a router push a fresh id
 // over the page it left, and any other a first id on top. The start drops the
-// layer mark and the page below too, so only once it has
-// the mark back can the installed controller step off a layer entry a reload
-// came back onto (`followRouterStart`). A Back or Forward is the landing
-// listener's.
+// layer mark and the page below too, so only once it has the mark back can the
+// installed controller step off a layer entry a reload came back onto
+// (`followRouterStart`). A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
 	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
@@ -907,11 +911,13 @@ export function attachLandingHandler(onLanding: LandingHandler): () => void {
 	};
 }
 
-// A page load, as far as history goes: the state the page loaded onto is read
-// again, the way this module's own load reads it.
+// A page load, as far as history goes: the state the page loaded onto, and
+// where history stands, are read again, the way this module's own load reads
+// them -- so the router's start over that entry is not taken for a push.
 export function loadHistoryPageForTests(): void {
 	stateOnLoad = readStateOnLoad();
 	standsOnTop = standsOnTopOnLoad();
+	lookAtStandingEntry();
 }
 
 export function resetHistoryControllerForTests(): void {

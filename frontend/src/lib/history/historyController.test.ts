@@ -241,10 +241,12 @@ describe('history adapter', () => {
 		return new URL(path, location.href).href;
 	}
 
-	// The page the app is entered on as the only entry of its tab.
-	function enterAsFirstEntry(url: string): void {
+	// The page the app is entered on by a load of a fresh document, into a tab
+	// that then holds `tabLength` entries, from the page `referrer` names.
+	function enterApp(url: string, tabLength: number, referrer = ''): void {
 		seedForeignEntry(url);
-		const length = vi.spyOn(history, 'length', 'get').mockReturnValue(1);
+		vi.spyOn(document, 'referrer', 'get').mockReturnValue(referrer);
+		const length = vi.spyOn(history, 'length', 'get').mockReturnValue(tabLength);
 		loadHistoryPageForTests();
 		startFakeRouter();
 		stampNavigatedEntry('enter');
@@ -530,8 +532,13 @@ describe('history adapter', () => {
 		},
 		{
 			standing: "the tab's first entry",
-			arrange: () => enterAsFirstEntry('/album/a'),
+			arrange: () => enterApp('/album/a', 1),
 			below: null
+		},
+		{
+			standing: 'the page the app was entered on from one of its own pages',
+			arrange: () => enterApp('/legal', 2, addressOf('/login')),
+			below: '/login'
 		}
 	])(
 		"a page's own Back on $standing steps back exactly when a page lies below",
@@ -557,12 +564,7 @@ describe('history adapter', () => {
 	])(
 		"a page's own Back on the page the app was entered on $opened goes to the fallback, written over it",
 		async ({ tabLength }) => {
-			seedForeignEntry('/legal');
-			const length = vi.spyOn(history, 'length', 'get').mockReturnValue(tabLength);
-			loadHistoryPageForTests();
-			startFakeRouter();
-			stampNavigatedEntry('enter');
-			length.mockRestore();
+			enterApp('/legal', tabLength);
 			const back = vi.spyOn(history, 'back');
 			vi.mocked(goto).mockClear();
 
