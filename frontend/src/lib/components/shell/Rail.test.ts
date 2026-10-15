@@ -395,7 +395,7 @@ describe('Rail', () => {
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 	});
 
-	it('marks the open album and the open playlist with the same row-active highlight', async () => {
+	it('marks the open album and the open playlist alike, as the current page', async () => {
 		albumList.set([
 			album({ id: 'a1', title: 'Nachtstrom' }),
 			album({ id: 'a2', title: 'Sonnwendfeuer' })
@@ -413,19 +413,16 @@ describe('Rail', () => {
 		expect(albumLabels).toHaveLength(2);
 		expect(playlistLabels).toHaveLength(2);
 
+		const currentPages = () =>
+			[...albumLabels, ...playlistLabels].map((row) => row.getAttribute('aria-current'));
+
 		// The open album is marked, its sibling is not -- no third state, same
 		// as the open playlist below.
-		expect(albumLabels[0]?.classList.contains('row-active')).toBe(true);
-		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(false);
+		expect(currentPages()).toEqual(['page', null, null, null]);
 
 		setOpenCollection({ kind: 'playlist', id: 'p2' });
 		await tick();
 
-		expect(albumLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(true);
+		expect(currentPages()).toEqual([null, null, null, 'page']);
 	});
 });

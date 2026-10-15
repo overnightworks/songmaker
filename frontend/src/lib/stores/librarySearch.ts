@@ -1,4 +1,4 @@
-import { get, writable } from 'svelte/store';
+import { derived, get, writable } from 'svelte/store';
 import { describeFailure } from '$lib/api/fetch';
 import { fetchAlbums } from '$lib/api/albums';
 import { searchLibrary, type LibrarySort } from '$lib/api/library';
@@ -53,6 +53,9 @@ const EMPTY_SEARCH: LibrarySearchState = {
 };
 
 export const railTreeQuery = writable('');
+export const normalizedRailTreeQuery = derived(railTreeQuery, (query) =>
+	query.trim().toLowerCase()
+);
 export const searchQuery = writable('');
 
 export const librarySort = writable<LibrarySort>('newest');

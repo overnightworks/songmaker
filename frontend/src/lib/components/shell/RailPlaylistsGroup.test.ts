@@ -30,7 +30,9 @@ import {
 	createComponentMount,
 	findElementByRoleAndName,
 	recentWorkPage,
-	requireElement
+	recordRailReveals,
+	requireElement,
+	revealedTitles
 } from './rail-test-fixtures';
 
 vi.mock('$app/navigation', async () =>
@@ -258,7 +260,7 @@ describe('RailPlaylistsGroup', () => {
 		}
 	);
 
-	it('navigates into the playlist and expands it when its label is clicked', async () => {
+	it('navigates into the playlist and marks it as the current page when its label is clicked', async () => {
 		playlistList.set([
 			playlist({ id: 'p1', title: 'Night Drive' }),
 			playlist({ id: 'p2', title: 'Favorites' })
@@ -274,7 +276,22 @@ describe('RailPlaylistsGroup', () => {
 		await tick();
 
 		const rows = target.querySelectorAll<HTMLButtonElement>('.playlist-label');
-		expect(rows[0]?.classList.contains('row-active')).toBe(true);
+		expect(rows[0]?.getAttribute('aria-current')).toBe('page');
+	});
+
+	it('scrolls the open playlist row into view once listed and each time another playlist opens', async () => {
+		const reveals = recordRailReveals();
+		playlistList.set([
+			playlist({ id: 'p1', title: 'Morning Run' }),
+			playlist({ id: 'p2', title: 'Night Drive' })
+		]);
+		setOpenCollection({ kind: 'playlist', id: 'p1' });
+		await render();
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Morning Run']));
+
+		setOpenCollection({ kind: 'playlist', id: 'p2' });
+
+		await vi.waitFor(() => expect(revealedTitles(reveals)).toEqual(['Morning Run', 'Night Drive']));
 	});
 
 	it('holds a playlist row for the unsaved-changes dialog while the open song has a dirty draft (issue #1143)', async () => {
