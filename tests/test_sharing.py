@@ -328,7 +328,8 @@ def _give_album_and_song_a_cover(client: TestClient) -> None:
     with ctx.db() as session:
         album = session.get(Album, "test_album")
         song = session.get(Song, "s1")
-        assert album is not None and song is not None
+        assert album is not None
+        assert song is not None
         album.cover_key = "album.png"
         song.cover_key = "song.png"
         session.commit()

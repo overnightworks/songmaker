@@ -249,7 +249,8 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 });
 
 // What a phone's browser leaves of its screen, upright and on its side, down
-// to an iPhone's in Safari with its toolbars (#1391).
+// to an iPhone's in Safari with its toolbars (#1391). Each project drives them
+// with its own pointer: a touch phone, and a desktop window just as narrow.
 const PHONE_SCREENS = [
 	{ width: 390, height: 844 },
 	{ width: 390, height: 664 },
@@ -265,7 +266,6 @@ test('a shared song shows Play and its words in one screen at every phone height
 	browser,
 	isMobile
 }) => {
-	test.skip(isMobile, 'drives its own phone screens in one signed-out context');
 	const marker = Date.now().toString(36);
 	const album = await postJson<CreatedResource>(page, '/api/albums', {
 		title: `E2E Phone Screens ${marker}`,
@@ -281,8 +281,8 @@ test('a shared song shows Play and its words in one screen at every phone height
 
 		const publicContext = await browser.newContext({
 			storageState: undefined,
-			isMobile: true,
-			hasTouch: true
+			isMobile: Boolean(isMobile),
+			hasTouch: Boolean(isMobile)
 		});
 		try {
 			const publicPage = await publicContext.newPage();
