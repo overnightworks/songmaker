@@ -1,20 +1,24 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { WhisperCue } from '$lib/api/types';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import type { AlignmentRequest, AlignmentResult } from '$lib/services/lyricsAlignment.svelte';
+import { NOW_PLAYING_LYRICS_FOLLOW_LABEL } from '$lib/constants';
 import {
 	NOW_PLAYING_LYRICS_UNSYNCED_NOTE,
 	NOW_PLAYING_RESCORE_ACTION_LABEL
 } from '$lib/constants/now-playing';
 import { alignLyricsToCues } from '$lib/utils/lyrics-align';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { reactiveProps } from '../../tests/reactive-fixtures.svelte';
 import NowPlayingLyrics from './NowPlayingLyrics.svelte';
+import nowPlayingLyricsSource from './NowPlayingLyrics.svelte?raw';
 
 const EMPTY_LABEL = 'No lyrics for this take';
 
 const LINE_1 = 'the lantern hums quietly tonight';
 const LINE_2 = 'we count the fading city lights';
+const LINE_3 = 'and the river keeps our names';
 
 function cue(start: number, end: number, text: string): WhisperCue {
 	return { start, end, text };
@@ -68,15 +72,11 @@ class FakeAlignmentWorker {
 let mounted: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
 
-// jsdom has no scrollIntoView; define a no-op once so vi.spyOn has a real
-// implementation to wrap, then restoreAllMocks can clean the spy up after
-// each test without leaving the raw prototype assignment behind.
-if (typeof HTMLElement.prototype.scrollIntoView !== 'function') {
-	HTMLElement.prototype.scrollIntoView = () => {};
-}
-
-function stubScrollIntoView() {
-	return vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(() => {});
+// jsdom has no scrollTo on elements; define a no-op once so vi.spyOn has a
+// real implementation to wrap, then restoreAllMocks can clean the spy up
+// after each test without leaving the raw prototype assignment behind.
+if (typeof HTMLElement.prototype.scrollTo !== 'function') {
+	HTMLElement.prototype.scrollTo = () => {};
 }
 
 // jsdom does no layout, so a scroll box has to be given its measurements.
@@ -113,6 +113,62 @@ function stubResizeObserver(): () => void {
 	};
 }
 
+// Three lines sung one second each, so the time names the sung line.
+function syncedTake(): LyricsProps {
+	return {
+		lyrics: [LINE_1, LINE_2, LINE_3].join('\n'),
+		cues: [cue(0, 1, LINE_1), cue(1, 2, LINE_2), cue(2, 3, LINE_3)],
+		whisperText: null
+	};
+}
+
+// jsdom lays nothing out, so the box is given the shape a browser gives it:
+// 200 px tall with its last 40 px faded, each line 100 px below the one
+// before and moved up by however far the box is scrolled. Unscrolled, the
+// third line ends 70 px below the readable part.
+const LINE_3_BELOW_VIEW_PX = 70;
+
+function layOutSyncedLyrics(reducedMotion = false) {
+	const { scrollTop } = stubScrollBox({ scrollHeight: 600, clientHeight: 200 });
+	vi.spyOn(Element.prototype, 'getBoundingClientRect').mockImplementation(function (this: Element) {
+		const index = this.getAttribute('data-line-index');
+		if (index === null) return { top: 0, bottom: 200 } as DOMRect;
+		const top = Number(index) * 100 - (this.parentElement?.scrollTop ?? 0);
+		return { top, bottom: top + 30 } as DOMRect;
+	});
+	vi.stubGlobal(
+		'matchMedia',
+		vi.fn(() => ({ matches: reducedMotion }))
+	);
+	const scrolls = vi.spyOn(HTMLElement.prototype, 'scrollTo').mockImplementation(() => {});
+	return { scrolls, scrollTop };
+}
+
+// Where each scroll the box made was sent, in order.
+function scrollTargets(scrolls: MockInstance<HTMLElement['scrollTo']>): number[] {
+	return scrolls.mock.calls.map(([options]) => (options as ScrollToOptions).top ?? 0);
+}
+
+// The box reports a scroll at every position it passes, as a browser does --
+// whether the box sent itself there or the reader dragged its scrollbar.
+async function scrollBoxThrough(scrollTop: MockInstance<() => number>, positions: number[]) {
+	for (const position of positions) {
+		scrollTop.mockReturnValue(position);
+		lyricsBox().dispatchEvent(new Event('scroll'));
+	}
+	await tick();
+}
+
+async function singTo(seconds: number) {
+	audioPlayer.currentTime = seconds;
+	await tick();
+}
+
+function followButton(): HTMLButtonElement | null {
+	const button = target.querySelector('button');
+	return button?.textContent?.includes(NOW_PLAYING_LYRICS_FOLLOW_LABEL) ? button : null;
+}
+
 function lyricsBox(): HTMLElement {
 	const box = target.querySelector<HTMLElement>('.lyrics');
 	if (!box) throw new Error('Expected the lyrics box');
@@ -127,6 +183,7 @@ afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
 	document.body.replaceChildren();
+	clearComponentStyles();
 	audioPlayer.currentTime = 0;
 	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
@@ -344,39 +401,160 @@ describe('NowPlayingLyrics', () => {
 		expect(target.querySelector('.lyrics-text')?.textContent).toBe([LINE_1, LINE_2].join('\n'));
 	});
 
-	it('scrolls the active line into view, smoothly by default', async () => {
-		const lyrics = [LINE_1, LINE_2].join('\n');
-		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = stubScrollIntoView();
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn(() => ({ matches: false }))
-		);
-		audioPlayer.currentTime = 0.5;
+	it.each([
+		{ motion: 'by default', reduced: false, behavior: 'smooth' },
+		{ motion: 'when prefers-reduced-motion is set', reduced: true, behavior: 'auto' }
+	])(
+		'scrolls the lyrics box to the sung line, $behavior $motion',
+		async ({ reduced, behavior }) => {
+			const { scrolls } = layOutSyncedLyrics(reduced);
+			audioPlayer.currentTime = 2.5;
 
-		await render({ lyrics, cues, whisperText: null });
-		await tick();
+			await render(syncedTake());
 
-		expect(scrollIntoView).toHaveBeenCalledWith(
-			expect.objectContaining({ block: 'nearest', behavior: 'smooth' })
-		);
+			expect(scrolls.mock.calls).toEqual([[{ top: LINE_3_BELOW_VIEW_PX, behavior }]]);
+		}
+	);
+
+	it.each([
+		{ gesture: 'the wheel', event: () => new WheelEvent('wheel', { bubbles: true }) },
+		{ gesture: 'a finger', event: () => new Event('touchmove', { bubbles: true }) },
+		{
+			gesture: 'Page Up',
+			event: () => new KeyboardEvent('keydown', { key: 'PageUp', bubbles: true })
+		}
+	])('stays where the reader scrolls it with $gesture and offers Follow', async ({ event }) => {
+		const { scrolls } = layOutSyncedLyrics();
+		await render(syncedTake());
+
+		lyricsBox().dispatchEvent(event());
+		await singTo(2.5);
+
+		expect({ scrolls: scrolls.mock.calls.length, follow: followButton() !== null }).toEqual({
+			scrolls: 0,
+			follow: true
+		});
 	});
 
-	it('scrolls the active line instantly when prefers-reduced-motion is set', async () => {
-		const lyrics = [LINE_1, LINE_2].join('\n');
-		const cues = [cue(0, 1, LINE_1), cue(1, 2, LINE_2)];
-		const scrollIntoView = stubScrollIntoView();
-		vi.stubGlobal(
-			'matchMedia',
-			vi.fn(() => ({ matches: true }))
-		);
-		audioPlayer.currentTime = 0.5;
+	// The box sends itself 70 px down to the third line; whatever the row
+	// does there, the first line sung again sends it back up.
+	it.each([
+		{
+			input: 'its own scroll to the sung line',
+			act: (scrollTop: MockInstance<() => number>) =>
+				scrollBoxThrough(scrollTop, [35, LINE_3_BELOW_VIEW_PX])
+		},
+		{
+			input: 'a key that scrolls nothing',
+			act: async (scrollTop: MockInstance<() => number>) => {
+				await scrollBoxThrough(scrollTop, [LINE_3_BELOW_VIEW_PX]);
+				lyricsBox().dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true }));
+			}
+		}
+	])('keeps following the song through $input', async ({ act }) => {
+		const { scrolls, scrollTop } = layOutSyncedLyrics();
+		await render(syncedTake());
+		await singTo(2.5);
 
-		await render({ lyrics, cues, whisperText: null });
+		await act(scrollTop);
+		await singTo(0.5);
+
+		expect({ scrolls: scrollTargets(scrolls), follow: followButton() !== null }).toEqual({
+			scrolls: [LINE_3_BELOW_VIEW_PX, 0],
+			follow: false
+		});
+	});
+
+	// A dragged scrollbar fires no wheel, touch or key -- only the scrolls.
+	it.each([
+		{ where: 'before the box moved itself', startAt: 0.5, positions: [300], thenAt: 2.5 },
+		{ where: 'past where the box sent itself', startAt: 2.5, positions: [300], thenAt: 0.5 },
+		{
+			where: 'back over the way the box came',
+			startAt: 2.5,
+			positions: [LINE_3_BELOW_VIEW_PX, 35],
+			thenAt: 0.5
+		}
+	])(
+		'stays where the reader drags its scrollbar $where and offers Follow',
+		async ({ startAt, positions, thenAt }) => {
+			const { scrolls, scrollTop } = layOutSyncedLyrics();
+			audioPlayer.currentTime = startAt;
+			await render(syncedTake());
+			const scrollsBeforeDrag = scrolls.mock.calls.length;
+
+			await scrollBoxThrough(scrollTop, positions);
+			await singTo(thenAt);
+
+			expect({
+				scrolls: scrolls.mock.calls.length - scrollsBeforeDrag,
+				follow: followButton() !== null
+			}).toEqual({ scrolls: 0, follow: true });
+		}
+	);
+
+	it('Follow brings the sung line back and follows it again', async () => {
+		const { scrolls } = layOutSyncedLyrics();
+		await render(syncedTake());
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await singTo(2.5);
+
+		followButton()?.click();
 		await tick();
 
-		expect(scrollIntoView).toHaveBeenCalledWith(
-			expect.objectContaining({ block: 'nearest', behavior: 'auto' })
-		);
+		expect({ scrolls: scrolls.mock.calls, follow: followButton() !== null }).toEqual({
+			scrolls: [[{ top: LINE_3_BELOW_VIEW_PX, behavior: 'smooth' }]],
+			follow: false
+		});
+	});
+
+	it('follows a new take again from its start', async () => {
+		const { scrolls } = layOutSyncedLyrics();
+		const live = await mountLyrics(syncedTake());
+		await settleAlignment();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+
+		live.lyrics = [LINE_3, LINE_2, LINE_1].join('\n');
+		live.cues = [cue(0, 1, LINE_3), cue(1, 2, LINE_2), cue(2, 3, LINE_1)];
+		await tick();
+		await settleAlignment();
+		await singTo(2.5);
+
+		expect({ scrolls: scrolls.mock.calls.length, follow: followButton() !== null }).toEqual({
+			scrolls: 1,
+			follow: false
+		});
+	});
+
+	it('writes Follow in the action colour, --accent (#924)', async () => {
+		layOutSyncedLyrics();
+		await render(syncedTake());
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await tick();
+		const follow = followButton();
+		if (!follow) throw new Error('Expected Follow');
+
+		injectComponentStyles(nowPlayingLyricsSource, 'NowPlayingLyrics.svelte', follow);
+
+		expect(getComputedStyle(follow).color).toBe('var(--accent)');
+	});
+
+	it('offers Follow only for lyrics that follow the song, never for plain text', async () => {
+		layOutSyncedLyrics();
+		const live = await mountLyrics(syncedTake());
+		await settleAlignment();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await tick();
+		const timedOffersFollow = followButton() !== null;
+
+		live.cues = null;
+		await tick();
+		lyricsBox().dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+		await tick();
+
+		expect({ timedOffersFollow, plainOffersFollow: followButton() !== null }).toEqual({
+			timedOffersFollow: true,
+			plainOffersFollow: false
+		});
 	});
 });
