@@ -15,7 +15,7 @@ from functools import partial
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine, event, insert, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, sessionmaker
 from webauth.dependencies import AuthenticatedUser
@@ -24,7 +24,7 @@ import songmaker_cli.db.queries.jobs as job_queries
 from songmaker_cli.api_helpers import _SESSION_CAP_LOCK_ID, _begin_exclusive
 from songmaker_cli.api_models import UserLoraCreateRequest
 from songmaker_cli.app_context import AppContext
-from songmaker_cli.constants import JobStatus, JobType, LoraStatus, SongWorkKind
+from songmaker_cli.constants import PAGE_MAX_LIMIT, JobStatus, JobType, LoraStatus, SongWorkKind
 from songmaker_cli.db.engine import (
     init_test_db,
     resolve_database_url,
@@ -55,9 +55,11 @@ from songmaker_cli.db.queries import (
     get_oldest_resource_event_sequence,
     get_resource_event_high_water_mark,
     job_duration_stats,
-    list_place_activity,
+    list_place_listens,
     list_resource_events_after,
+    list_worked_songs,
     prune_overflow_sessions,
+    record_playlist_listen,
     record_song_edit,
     record_song_played,
     recover_stale_jobs_by_age_and_type,
@@ -137,92 +139,10 @@ def test_duration_stats_postgresql_values(pg_factory) -> None:
 
 
 @SKIP_NO_PG
-def test_place_activity_ranks_nullable_terms_the_same_on_postgresql(pg_factory) -> None:
-    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
-
-    def at(offset: int) -> datetime:
-        return start + timedelta(minutes=offset)
-
-    with pg_factory() as session:
-        session.add(User(id="u1", username="musician", password_hash="x", role="user"))
-        session.flush()
-        conversation = Conversation(user_id="u1")
-        session.add(conversation)
-        for album_id, created_offset in [
-            ("take", 0), ("cowriter", 0), ("listened", 0), ("empty", 10),
-        ]:
-            session.add(Album(
-                id=album_id, title=album_id, artist="A", created_by="u1",
-                created_at=at(created_offset),
-            ))
-        for song_id, album_id, last_played_offset in [
-            ("take-song", "take", None),
-            ("cowriter-song", "cowriter", None),
-            ("listened-song", "listened", 30),
-        ]:
-            session.add(Song(
-                id=song_id, title=song_id, album_id=album_id, slug=song_id,
-                created_at=at(0), updated_at=at(0),
-                last_played_at=None if last_played_offset is None else at(last_played_offset),
-            ))
-        session.add_all([
-            Generation(
-                id="take-1", song_id="take-song", generation_number=1,
-                mp3_path="take-1.mp3", created_at=at(40),
-            ),
-            Generation(
-                id="listened-1", song_id="listened-song", generation_number=1,
-                mp3_path="listened-1.mp3", created_at=at(0),
-            ),
-        ])
-        session.flush()
-        session.add(ChatMessage(
-            conversation_id=conversation.id, song_id="cowriter-song", role="user",
-            content="Tighten the chorus", created_at=at(50),
-        ))
-        session.add_all([
-            Playlist(
-                id="played", title="Played", slug="played", created_by="u1",
-                created_at=at(0), updated_at=at(0),
-                last_played_at=at(60), last_played_song_id="listened-song",
-            ),
-            Playlist(
-                id="edited", title="Edited", slug="edited", created_by="u1",
-                created_at=at(0), updated_at=at(20),
-            ),
-        ])
-        session.flush()
-        session.add_all([
-            PlaylistEntry(
-                playlist_id="played", generation_id="listened-1", position=0, added_at=at(0),
-            ),
-            PlaylistEntry(
-                playlist_id="edited", generation_id="take-1", position=0, added_at=at(0),
-            ),
-        ])
-        session.commit()
-
-    with pg_factory() as session:
-        places = list_place_activity(session, viewer_id="u1", owner_id="u1", limit=None)
-        ranking = [
-            (place.place.id, place.activity_at, place.song.id if place.song else None)
-            for place in places
-        ]
-
-    assert ranking == [
-        ("played", at(60), "listened-song"),
-        ("cowriter", at(50), "cowriter-song"),
-        ("take", at(40), "take-song"),
-        ("listened", at(30), "listened-song"),
-        ("edited", at(20), "take-song"),
-        ("empty", at(10), None),
-    ]
-
-
-@SKIP_NO_PG
-def test_an_admins_own_work_on_a_foreign_song_round_trips_into_continue_on_postgresql(
+def test_an_admins_own_records_round_trip_into_listen_and_write_on_postgresql(
     pg_factory,
 ) -> None:
+    long_ago = datetime(2026, 1, 1, tzinfo=timezone.utc)
     with pg_factory() as session:
         session.add_all([
             User(id="owner", username="leonardo", password_hash="x", role="user"),
@@ -230,27 +150,152 @@ def test_an_admins_own_work_on_a_foreign_song_round_trips_into_continue_on_postg
         ])
         session.flush()
         session.add(Album(id="vernissage", title="Vernissage", artist="L", created_by="owner"))
-        session.add(Song(id="song", title="Song", album_id="vernissage", slug="song"))
+        session.add_all([
+            Song(id="first", title="First", album_id="vernissage", slug="first", track_number=1),
+            Song(id="second", title="Second", album_id="vernissage", slug="second", track_number=2),
+        ])
+        session.add(Playlist(id="mix", title="Mix", slug="mix", created_by="admin"))
+        session.flush()
+        session.add(Generation(
+            id="take", song_id="second", generation_number=1, mp3_path="take.mp3",
+            created_by="admin", created_at=long_ago,
+        ))
+        session.add(UserSongWork(user_id="admin", song_id="first", edited_at=long_ago))
+        session.flush()
+        session.add(PlaylistEntry(playlist_id="mix", generation_id="take", position=0))
         session.commit()
 
     for record_work in (
-        partial(record_song_played, in_playlist=True),
-        partial(record_song_edit, kind=SongWorkKind.LYRICS),
-        partial(record_song_played, in_playlist=False),
+        lambda session: record_playlist_listen(
+            session, session.get(Playlist, "mix"), song=session.get(Song, "second"),
+        ),
+        partial(record_song_played, user_id="admin", song_id="second", in_playlist=True),
+        partial(record_song_edit, user_id="admin", song_id="second", kind=SongWorkKind.LYRICS),
+        partial(record_song_played, user_id="admin", song_id="second", in_playlist=False),
     ):
         with pg_factory() as session:
-            record_work(session, user_id="admin", song_id="song")
+            record_work(session)
             session.commit()
 
     with pg_factory() as session:
-        row = session.query(UserSongWork).one()
-        places = list_place_activity(session, viewer_id="admin", owner_id=None, limit=None)
-        ranking = [(place.place.id, place.activity_at, place.song.id) for place in places]
+        row = session.get(UserSongWork, ("admin", "second"))
+        mix_played_at = session.get(Playlist, "mix").last_played_at
+        listens = [
+            (listen.place.id, listen.played_at, listen.song.id, listen.song_number)
+            for listen in list_place_listens(
+                session, viewer_id="admin", owner_id=None, limit=PAGE_MAX_LIMIT,
+            )
+        ]
+        works = [
+            (worked.song.id, worked.work, worked.worked_at)
+            for worked in list_worked_songs(session, viewer_id="admin", owner_id=None, limit=3)
+        ]
+        owners_lists = (
+            list_place_listens(session, viewer_id="owner", owner_id="owner", limit=PAGE_MAX_LIMIT),
+            list_worked_songs(session, viewer_id="owner", owner_id="owner", limit=3),
+        )
 
-    assert row.played_at > row.edited_at
-    assert row.edit_kind == SongWorkKind.LYRICS
-    assert row.album_played_at == row.played_at
-    assert ranking == [("vernissage", row.played_at, "song")]
+    assert listens == [
+        ("vernissage", row.album_played_at, "second", 2),
+        ("mix", mix_played_at, "second", 1),
+    ]
+    assert works == [
+        ("second", SongWorkKind.LYRICS, row.edited_at),
+        ("first", SongWorkKind.EDITED, long_ago),
+    ]
+    assert owners_lists == ([], [])
+
+
+HOME_LIST_STATEMENT_BUDGET_MS = 100.0
+
+
+def _seed_busy_library(session: Session, *, musicians: int, albums: int, songs: int) -> None:
+    """Every musician owns ``albums`` albums of ``songs`` songs and has worked on and
+    listened to each song; playlist ``p<a>`` holds album ``a``'s takes, played from its first.
+    """
+    start = datetime(2026, 9, 1, tzinfo=timezone.utc)
+    owners = [f"m{m}" for m in range(musicians)]
+    session.add_all([
+        User(id=owner, username=owner, password_hash="x", role="user") for owner in owners
+    ])
+    session.flush()
+    session.add_all([Conversation(id=f"{owner}-c", user_id=owner) for owner in owners])
+    session.execute(insert(Album), [
+        {"id": f"{owner}-a{a}", "title": f"{owner}-a{a}", "artist": "A", "created_by": owner}
+        for owner in owners for a in range(albums)
+    ])
+    session.execute(insert(Playlist), [
+        {"id": f"{owner}-p{a}", "title": f"{owner}-p{a}", "slug": f"{owner}-p{a}",
+         "created_by": owner, "last_played_at": start + timedelta(seconds=a),
+         "last_played_song_id": f"{owner}-a{a}-s0"}
+        for owner in owners for a in range(albums)
+    ])
+    song_rows = [
+        (owner, a, s, start + timedelta(seconds=index))
+        for index, (owner, a, s) in enumerate(
+            (owner, a, s) for owner in owners for a in range(albums) for s in range(songs)
+        )
+    ]
+    session.execute(insert(Song), [
+        {"id": f"{owner}-a{a}-s{s}", "title": f"s{s}", "album_id": f"{owner}-a{a}",
+         "slug": f"s{s}", "track_number": s}
+        for owner, a, s, _at in song_rows
+    ])
+    session.execute(insert(Generation), [
+        {"id": f"{owner}-a{a}-s{s}-g", "song_id": f"{owner}-a{a}-s{s}", "generation_number": 1,
+         "mp3_path": f"{owner}-a{a}-s{s}.mp3", "created_by": owner, "created_at": at}
+        for owner, a, s, at in song_rows
+    ])
+    session.execute(insert(PlaylistEntry), [
+        {"playlist_id": f"{owner}-p{a}", "generation_id": f"{owner}-a{a}-s{s}-g", "position": s}
+        for owner, a, s, _at in song_rows
+    ])
+    session.execute(insert(UserSongWork), [
+        {"user_id": owner, "song_id": f"{owner}-a{a}-s{s}", "edited_at": at,
+         "edit_kind": SongWorkKind.LYRICS, "album_played_at": at}
+        for owner, a, s, at in song_rows
+    ])
+    session.execute(insert(ChatMessage), [
+        {"conversation_id": f"{owner}-c", "song_id": f"{owner}-a{a}-s{s}", "role": role,
+         "content": "Tighten the chorus", "created_at": at}
+        for owner, a, s, at in song_rows for role in ("user", "assistant")
+    ])
+
+
+@SKIP_NO_PG
+def test_home_lists_run_within_budget_on_a_busy_library_on_postgresql(pg_factory) -> None:
+    with pg_factory() as session:
+        _seed_busy_library(session, musicians=5, albums=20, songs=10)
+        session.commit()
+        session.execute(text("ANALYZE"))
+
+    with pg_factory() as session:
+        statements: list[tuple[str, dict]] = []
+
+        def record(conn, cursor, statement, parameters, context, executemany) -> None:
+            statements.append((statement, parameters))
+
+        engine = session.get_bind()
+        event.listen(engine, "before_cursor_execute", record)
+        try:
+            listens = list_place_listens(
+                session, viewer_id="m0", owner_id="m0", limit=PAGE_MAX_LIMIT,
+            )
+            worked_songs = list_worked_songs(session, viewer_id="m0", owner_id="m0", limit=3)
+        finally:
+            event.remove(engine, "before_cursor_execute", record)
+        timings = [
+            session.connection().exec_driver_sql(
+                f"EXPLAIN (ANALYZE, FORMAT JSON) {statement}", parameters,
+            ).scalar_one()[0]["Execution Time"]
+            for statement, parameters in statements
+        ]
+
+    print(f"Home list statements on PostgreSQL, execution ms: {timings}")
+    assert len(listens) == 40
+    assert [worked.song.id for worked in worked_songs] == ["m0-a19-s9", "m0-a19-s8", "m0-a19-s7"]
+    assert len(timings) == 4
+    assert max(timings) < HOME_LIST_STATEMENT_BUDGET_MS
 
 
 @SKIP_NO_PG
