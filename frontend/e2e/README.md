@@ -166,7 +166,7 @@ its two stale revokes, the revoke that works and the create refusal (#1322,
 create that works clears (#1397), and 8 at 390px for the mobile admin flow --
 the admin page plus opening its Sessions tab, where the row-action hitboxes are
 measured (a phone-only flow). The lockout, which tries the right password every
-ten seconds until the lock lifts, was measured at 1440 / 390 at 16 to 17/15
+ten seconds until the lock lifts, was measured at 1440 / 375 at 16 to 17/15
 (#1403). All of them stand against a shared ceiling of 30.
 Its own arrangement -- one
 non-admin account per project, created through `POST /api/admin/users` and

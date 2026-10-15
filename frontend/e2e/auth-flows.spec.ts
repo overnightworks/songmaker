@@ -105,7 +105,7 @@ import {
  * tab error a create refusal leaves standing and a create that works clears
  * (#1397), and 8 at 390px for the row-action hitboxes (the admin page plus
  * opening a tab), which runs on the phone only.
- * The lockout was measured at 1440 / 390 once it polled for the lock to lift
+ * The lockout was measured at 1440 / 375 once it polled for the lock to lift
  * (#1403): 16 to 17/15, up to eight of them its tries with the right password -- the
  * one the lock refuses, then one every ten seconds until it lifts.
  * The #1340 sign-outs were measured at 1440 / 390: 29 and
