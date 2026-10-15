@@ -245,8 +245,7 @@ def test_repeated_work_keeps_one_row_that_holds_the_latest_of_each_kind(db) -> N
         record_song_edit(session, user_id=ADMIN_ID, song_id=SONG_ID, kind=SongWorkKind.LYRICS)
         session.commit()
         first = session.get(UserSongWork, (ADMIN_ID, SONG_ID))
-        first_edit = (first.edited_at, first.edit_kind)
-        first_album_played = first.album_played_at
+        first_edited, first_album_played = first.edited_at, first.album_played_at
 
     before_replay = datetime.now(timezone.utc)
     with db() as session:
@@ -256,7 +255,8 @@ def test_repeated_work_keeps_one_row_that_holds_the_latest_of_each_kind(db) -> N
     with db() as session:
         rows = session.query(UserSongWork).all()
         assert len(rows) == 1
-        assert (rows[0].edited_at, rows[0].edit_kind) == first_edit
+        assert rows[0].edited_at == first_edited
+        assert rows[0].edit_kind == SongWorkKind.LYRICS
         assert rows[0].album_played_at == first_album_played
         assert rows[0].played_at.replace(tzinfo=timezone.utc) >= before_replay
 
