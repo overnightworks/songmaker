@@ -431,12 +431,18 @@ describe('the remembered playback across the session', () => {
 			loseSession: async () => {
 				mockFetchMe.mockRejectedValueOnce(new ApiError(401, 'unauthorized', AUTH_ME_PATH));
 				await checkAuth(vi.fn());
-			}
+			},
+			expectSessionGone: () => expect(get(currentUser)).toBeNull()
 		},
-		{ loss: 'a session lost mid-request', loseSession: () => handleSessionLost() }
-	])('a lost session keeps it ($loss)', async ({ loseSession }) => {
+		{
+			loss: 'a session lost mid-request',
+			loseSession: () => handleSessionLost(),
+			expectSessionGone: () => expect(documentLoads.reload).toHaveBeenCalledOnce()
+		}
+	])('a lost session keeps it ($loss)', async ({ loseSession, expectSessionGone }) => {
 		await loseSession();
 
+		expectSessionGone();
 		expect(storedRecord()).toMatchObject({ generationId: 'g-session' });
 	});
 });
