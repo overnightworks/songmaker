@@ -15,6 +15,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_LIBRARY_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
+	RAIL_SEARCH_LABEL,
 	RAIL_SETTINGS_LABEL,
 	SONG_MENU_ADD_TO_PLAYLIST_LABEL,
 	SONG_MENU_LABEL,
@@ -39,9 +40,9 @@ import {
 	csrfHeaders,
 	FlowGuard,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openLibraryWall,
 	openRailNav,
-	openSettingsFromAccountMenu,
 	openSettingsSectionFromDrawerSearch,
 	playlistEntryRows,
 	shellOf,
@@ -349,6 +350,20 @@ function openVoicesFromDrawerSearch(page: Page): Promise<void> {
 	return openSettingsSectionFromDrawerSearch(page, SETTINGS_SECTION);
 }
 
+// The phone bar's 🔍 and the sheet it opens, both named as PhoneAppBar.svelte
+// names them (#1354 rule 26).
+const PHONE_SEARCH_LABEL = 'Search';
+
+function searchSheet(page: Page): Locator {
+	return page.getByRole('dialog', { name: PHONE_SEARCH_LABEL, exact: true });
+}
+
+async function openSearchSheet(page: Page): Promise<Locator> {
+	await appBar(page).getByRole('button', { name: PHONE_SEARCH_LABEL, exact: true }).click();
+	await expect(searchSheet(page)).toBeVisible();
+	return searchSheet(page);
+}
+
 async function openVoicesSettings(page: Page, shell: Shell): Promise<void> {
 	if (shell === 'mobile') {
 		await openVoicesFromDrawerSearch(page);
@@ -594,32 +609,35 @@ test.describe('Back and Forward between the library and Settings', () => {
 		guard.assertClean();
 	});
 
-	// The phone's account menu is a history layer of its own, and choosing
-	// Settings in it steps off that layer before Settings opens.
-	test('Back from Settings opened in the phone account menu returns to the playlist, and Forward to Settings', async ({
-		page,
-		request
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', 'The account menu belongs to the mobile shell.');
-		const guard = new FlowGuard(page);
-		const { pages } = await openSeededPlaylist(page, request);
-		await openSettingsFromAccountMenu(page);
-		const settingsIndex = page.getByRole('heading', { name: RAIL_SETTINGS_LABEL, exact: true });
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsIndex).toBeVisible();
+	// The phone's search sheet is a history layer of its own, and choosing a
+	// page in it steps off that layer before the page opens (#1354 rule 26).
+	test(
+		'Back from Voices chosen in the phone search sheet returns to the playlist, and Forward to Voices',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page, request }) => {
+			const guard = new FlowGuard(page);
+			const { pages } = await openSeededPlaylist(page, request);
+			const sheet = await openSearchSheet(page);
+			await sheet.getByRole('combobox', { name: RAIL_SEARCH_LABEL }).fill(SETTINGS_SECTION);
+			await sheet
+				.getByRole('group', { name: 'Pages' })
+				.getByRole('option', { name: nameStartingWith(SETTINGS_SECTION) })
+				.click();
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
 
-		await page.goBack();
+			await page.goBack();
 
-		await expectPlaylistStands(page, pages);
-		await expect(settingsIndex).toBeHidden();
+			await expectPlaylistStands(page, pages);
+			await expect(settingsHeading(page)).toBeHidden();
 
-		await page.goForward();
+			await page.goForward();
 
-		await expect(page).toHaveURL(/\/settings$/);
-		await expect(settingsIndex).toBeVisible();
-		await expect(pages.playlist).toBeHidden();
-		guard.assertClean();
-	});
+			await expectSettingsStands(page);
+			await expect(pages.playlist).toBeHidden();
+			guard.assertClean();
+		}
+	);
 
 	test('after a reload on the playlist, Back from Settings returns to it', async ({
 		page,
@@ -1142,10 +1160,31 @@ test('Back closes the share warning on the phone and keeps the album', async ({
 	}
 });
 
+// The phone's account circle lives on the Library (#1354 rule 27), and its
+// menu is a history layer of its own there: Back closes it and keeps the wall.
+test(
+	'Back closes the account menu on the Library and the address stays',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		await page.goto('/');
+		const wall = workspace(page).getByRole('heading', { name: RAIL_LIBRARY_LABEL });
+		await expect(wall).toBeVisible();
+		await accountCircle(page).click();
+		await expect(accountMenu(page)).toBeVisible();
+
+		await page.goBack();
+
+		await expect(accountMenu(page)).toBeHidden();
+		await expect(wall).toBeVisible();
+		await expect(page).toHaveURL(/\/$/);
+		guard.assertClean();
+	}
+);
+
 // Issue #1331: the history controller runs on every page, so Back closes the
 // topmost overlay on Settings and on a share page before it leaves the page.
 test.describe('Back closes the open overlay outside the library', () => {
-	const ACCOUNT_MENU_ON_PHONE = 'The account menu belongs to the mobile shell.';
 	const VOICE_DELETE_TITLE = 'Delete voice?';
 
 	function standsOnLayerEntry(page: Page): Promise<boolean> {
@@ -1164,21 +1203,21 @@ test.describe('Back closes the open overlay outside the library', () => {
 		return ((await response.json()) as { name: string }).name;
 	}
 
-	test('Back closes the account menu on Voices and the address stays', async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
-		const guard = new FlowGuard(page);
-		await openVoicesOverTheWall(page, 'mobile');
-		await accountCircle(page).click();
-		await expect(accountMenu(page)).toBeVisible();
+	test(
+		'Back closes the search sheet on Voices and the address stays',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await openVoicesOverTheWall(page, 'mobile');
+			await openSearchSheet(page);
 
-		await page.goBack();
+			await page.goBack();
 
-		await expect(accountMenu(page)).toBeHidden();
-		await expectSettingsStands(page);
-		guard.assertClean();
-	});
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
+			guard.assertClean();
+		}
+	);
 
 	test('Back cancels the voice delete confirmation: still on Voices, the voice listed', async ({
 		page,
@@ -1280,24 +1319,24 @@ test.describe('Back closes the open overlay outside the library', () => {
 		guard.assertClean();
 	});
 
-	test('the account menu left open over a reload on Voices is gone, and one Back leaves the page', async ({
-		page
-	}, testInfo) => {
-		test.skip(shellOf(testInfo) !== 'mobile', ACCOUNT_MENU_ON_PHONE); // NOSONAR S1607: the account menu exists only in the phone shell.
-		const guard = new FlowGuard(page);
-		await openVoicesOverTheWall(page, 'mobile');
-		await accountCircle(page).click();
-		await expect(accountMenu(page)).toBeVisible();
+	test(
+		'the search sheet left open over a reload on Voices is gone, and one Back leaves the page',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const guard = new FlowGuard(page);
+			await openVoicesOverTheWall(page, 'mobile');
+			await openSearchSheet(page);
 
-		await page.reload();
+			await page.reload();
 
-		await expect(accountMenu(page)).toBeHidden();
-		await expectSettingsStands(page);
-		await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
-		await page.goBack();
-		await expect(page).toHaveURL(/\/$/);
-		guard.assertClean();
-	});
+			await expect(searchSheet(page)).toBeHidden();
+			await expectSettingsStands(page);
+			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
+			await page.goBack();
+			await expect(page).toHaveURL(/\/$/);
+			guard.assertClean();
+		}
+	);
 });
 
 // The legal page's own Back is a history step back to the app page it was

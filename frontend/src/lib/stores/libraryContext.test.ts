@@ -129,10 +129,10 @@ import {
 	type LibraryHistoryState
 } from './libraryContext';
 
-// A library entry as it reaches the router: the library beside the id the
-// history controller stamped the entry with (issue #1006).
+// A library entry as it reaches the router: the library beside the entry the
+// history controller stamped, known by its id (issue #1006).
 function stampedLibrary(library: LibraryHistoryState): App.PageState {
-	return { library, entry: { id: expect.any(Number) } };
+	return { library, entry: expect.objectContaining({ id: expect.any(Number) }) };
 }
 
 function emptyPage<T>(items: T[] = []) {

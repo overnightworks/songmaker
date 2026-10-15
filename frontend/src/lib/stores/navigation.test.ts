@@ -265,7 +265,7 @@ afterEach(() => {
 
 // The options a library write that crosses a route boundary navigates with:
 // the library travels as the page state of the entry (issue #1165), beside
-// the entry's id (issue #1006).
+// the entry the history controller stamped, known by its id (issue #1006).
 function crossingWrite(replaceState: boolean) {
 	return {
 		replaceState,
@@ -273,7 +273,7 @@ function crossingWrite(replaceState: boolean) {
 		keepFocus: true,
 		state: {
 			library: expect.objectContaining({ kind: LIBRARY_HISTORY_KIND }),
-			entry: { id: expect.any(Number) }
+			entry: expect.objectContaining({ id: expect.any(Number) })
 		}
 	};
 }

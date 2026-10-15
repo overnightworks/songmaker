@@ -49,6 +49,7 @@ import {
 import {
 	accountCircle,
 	accountMenu,
+	appBar,
 	boundingBoxes,
 	containing,
 	csrfHeaders,
@@ -57,6 +58,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openLibraryWall,
 	openSettingsSection,
 	playlistEntryRows,
@@ -197,7 +199,9 @@ async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 /**
  * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
  * brand, search, Library and Playlists. Settings, the theme and Log out live
- * in the account circle's menu, so the drawer repeats none of them.
+ * in the account circle's menu on the Library, so the drawer repeats none of
+ * them, and an album opened from another page carries ‹ instead of the circle
+ * (#1354 rule 25, frame I3).
  */
 async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	const rail = await openRailNav(page, 'mobile');
@@ -209,6 +213,28 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	const back = appBar(page).getByRole('button', { name: /^Back to / });
+	await expect(back).toBeVisible();
+	await expect(accountCircle(page)).toHaveCount(0);
+	// ‹ starts right after ☰, inside the first touch square beside it.
+	const [drawerTrigger, chevron] = await boundingBoxes(
+		appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }),
+		back.locator('svg')
+	);
+	expect(chevron.x - (drawerTrigger.x + drawerTrigger.width)).toBeLessThan(HITBOX_FREQUENT_PX);
+}
+
+/**
+ * The phone's ‹ (#1354 rule 25): named after the page it goes back to, and
+ * the account circle only on the Library, with Log out one tap away in it.
+ */
+async function backOnPhone(page: Page, to: string): Promise<void> {
+	await appBar(page)
+		.getByRole('button', { name: `Back to ${to}`, exact: true })
+		.click();
+}
+
+async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await accountCircle(page).click();
 	await expect(
 		accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
@@ -223,7 +249,9 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
  * content; on the phone it is the account menu's Settings list (#1174).
  * Opening a section is a real navigation (#265), and the rail's own album
  * context row is the way back — the "click back into the album" promise that
- * made the disclosure worth building in the first place (#264).
+ * made the disclosure worth building in the first place (#264). On the phone
+ * the way to Settings leads through the Library wall, which folds the drawer's
+ * Library group (#593), so the album row is one tap on that group further.
  */
 async function expectSettingsRailRoundTrip(
 	page: Page,
@@ -231,9 +259,21 @@ async function expectSettingsRailRoundTrip(
 	surface: Locator,
 	albumTitle: string
 ): Promise<void> {
+	if (shell === 'mobile') {
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expectAccountMenuOnTheLibrary(page);
+	}
 	await openSettingsSection(page, shell, 'Voices');
 
 	await expect(page).toHaveURL(/\/settings\/voices$/);
+	if (shell === 'mobile') {
+		await expect(accountCircle(page)).toHaveCount(0);
+		await backOnPhone(page, RAIL_SETTINGS_LABEL);
+		await expect(page).toHaveURL(/\/settings$/);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/settings\/voices$/);
+	}
 	// The removed second column — the old `.settings-sidebar` — is gone, and
 	// so is any other navigation landmark inside the content area; the rail
 	// stays the one navigation on the page.
@@ -247,6 +287,13 @@ async function expectSettingsRailRoundTrip(
 	}
 
 	const rail = await openRailNav(page, shell);
+	if (shell === 'mobile') {
+		const libraryGroup = rail.getByRole('button', {
+			name: nameStartingWith(RAIL_LIBRARY_LABEL)
+		});
+		await expect(libraryGroup).toHaveAttribute('aria-expanded', 'false');
+		await libraryGroup.click();
+	}
 	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
@@ -730,6 +777,32 @@ test('an album with nothing to play dims its circle and leaves the running album
 		})
 	).toHaveCount(0);
 });
+
+// An album opened by its address has nothing of the tab's own below it, so
+// its ‹ writes the Library over it (#1354 rule 25): the wall shows in the
+// album's place, and the tab holds no more entries than before (#1389).
+test(
+	'a directly opened album: ‹ shows the Library wall in its place',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const album = surface.getByRole('heading', { name: library.albumTitle });
+		await page.goto(`/album/${library.albumId}`);
+		await expect(album).toBeVisible();
+		const tabLength = await page.evaluate(() => history.length);
+
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+
+		await expect(page).toHaveURL(/\/$/);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(album).toBeHidden();
+		expect(await page.evaluate(() => history.length)).toBe(tabLength);
+		await expect(accountCircle(page)).toBeVisible();
+		guard.assertClean();
+	}
+);
 
 /** One album's own one-target row inside the rail's LIBRARY group. */
 function railAlbumRow(rail: Locator, albumTitle: string): Locator {

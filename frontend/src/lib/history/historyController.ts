@@ -20,10 +20,13 @@ import {
 // closes the topmost overlay before it leaves the page.
 
 // What the controller stamps into an entry's page state. `layer` marks an entry
-// an open layer pushed over the page it covers.
+// an open layer pushed over the page it covers; `below` is the address of the
+// page a pushed page entry stands over, so a page's own Back can name where it
+// goes (#1389).
 export interface HistoryEntry {
 	readonly id: number;
 	readonly layer?: string;
+	readonly below?: string;
 }
 
 interface OpenLayerEntry {
@@ -182,7 +185,8 @@ function isHistoryEntry(value: unknown): value is HistoryEntry {
 		isRecord(value) &&
 		Number.isSafeInteger(value.id) &&
 		(value.id as number) > 0 &&
-		(value.layer === undefined || typeof value.layer === 'string')
+		(value.layer === undefined || typeof value.layer === 'string') &&
+		(value.below === undefined || typeof value.below === 'string')
 	);
 }
 
@@ -214,10 +218,12 @@ function routerIndexOf(state: unknown): number | undefined {
 
 // The page entry history stands on: the standing entry, or under an open
 // layer's entry the page that layer covers. An entry without an id has none.
+function standingPageEntry(standing: HistoryEntry | null): HistoryEntry | null {
+	return standing?.layer === undefined ? standing : ledger.current;
+}
+
 export function standingPageEntryId(): number | null {
-	const standing = standingEntry();
-	if (standing?.layer !== undefined) return ledger.current?.id ?? null;
-	return standing?.id ?? null;
+	return standingPageEntry(standingEntry())?.id ?? null;
 }
 
 // The library starts showing the page entry history stands on, so that entry
@@ -245,9 +251,11 @@ let ledger: HistoryLedger = EMPTY_LEDGER;
 // see its landing as reaching its target. A landing leaves the top as far as
 // the controller can tell, a push reaches it again.
 let standsOnTop = standsOnTopOnLoad();
-// The router's place of the entry history stood on when the controller last
-// looked, which tells a router push from a router replace.
+// Where history stood when the controller last looked: the router's place,
+// which tells a router push from a router replace, and the address, which is
+// the page a router push stands over.
 let lastRouterIndex = routerIndexOf(history.state);
+let lastAddress = location.href;
 const stepBackWaiters = new Map<number, (() => void)[]>();
 let stillnessWaiters: (() => void)[] = [];
 let navigationsUnderway = 0;
@@ -285,24 +293,38 @@ function newEntry(layer?: string): HistoryEntry {
 	return layer === undefined ? { id } : { id, layer };
 }
 
+function newPageEntryOver(below: string): HistoryEntry {
+	return { ...newEntry(), below };
+}
+
+function lookAtStandingEntry(state: unknown = history.state): void {
+	lastRouterIndex = routerIndexOf(state);
+	lastAddress = location.href;
+}
+
 // The id an id-less entry on top gets. The tab's only entry is its first one,
 // below which nothing is left to step back to; so is every entry the app is
 // entered on from another site or a typed address, below which that site's
 // pages or the tab's older visits stand -- not the page the person just left.
+// An entry the app is entered on from one of its own pages, by a load of a
+// fresh document, stands over that page, so a page's own Back steps back onto
+// it and can name it (#1389).
 function firstIdOnTop(entering: boolean): HistoryEntry | null {
 	if (!standsOnTop) return null;
+	const pageLeft = entering && history.length > 1 ? appPageEnteredFrom() : null;
+	if (pageLeft !== null) return newPageEntryOver(pageLeft);
 	const entry = newEntry();
-	if (history.length === 1 || (entering && !loadedFromThisApp())) {
-		historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
-	}
+	if (history.length === 1 || entering) historyStorage.setItem(FIRST_ENTRY_KEY, String(entry.id));
 	return entry;
 }
 
 // The server sends `strict-origin-when-cross-origin`, so a page of the app's
-// own origin names itself as the referrer, and another site or a typed
-// address leaves either a foreign origin or nothing.
-function loadedFromThisApp(): boolean {
-	return document.referrer !== '' && new URL(document.referrer).origin === location.origin;
+// own origin names itself, by its whole address, as the referrer, and another
+// site or a typed address leaves either a foreign origin or nothing.
+function appPageEnteredFrom(): string | null {
+	const referrer = document.referrer;
+	if (referrer === '' || new URL(referrer).origin !== location.origin) return null;
+	return referrer;
 }
 
 function stampedPageState(state: App.PageState, entry: HistoryEntry | null): App.PageState {
@@ -321,13 +343,13 @@ function pushedPage(entry: HistoryEntry): void {
 	ledger = { ...ledger, layers: [], current: entry };
 }
 
-// A push allocates an id; an entry pushed for a layer belongs to that layer
-// until a landing leaves it.
+// A push allocates an id; a page entry remembers the page it stands over, and
+// an entry pushed for a layer belongs to that layer until a landing leaves it.
 export function pushEntry(url: string, state: App.PageState, layer?: string): HistoryEntry {
-	const entry = newEntry(layer);
+	const entry = layer === undefined ? newPageEntryOver(location.href) : newEntry(layer);
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	pushState(url, stampedPageState(state, entry));
-	lastRouterIndex = routerIndexOf(history.state);
+	lookAtStandingEntry();
 	if (layer === undefined) {
 		pushedPage(entry);
 		return entry;
@@ -338,13 +360,13 @@ export function pushEntry(url: string, state: App.PageState, layer?: string): Hi
 }
 
 // A replace rewrites what an entry shows, never which entry it is: it keeps
-// the id and the layer mark. An id-less entry gets its first id here while it
-// is the top entry, and stays foreign below it.
+// the id, the layer mark and the page it stands over. An id-less entry gets
+// its first id here while it is the top entry, and stays foreign below it.
 export function replaceEntry(url: string, state: App.PageState): HistoryEntry | null {
 	const entry = entryOfHistoryState(history.state) ?? firstIdOnTop(false);
 	// eslint-disable-next-line svelte/no-navigation-without-resolve -- static SPA with no base path; callers pass resolved addresses
 	replaceState(url, stampedPageState(state, entry));
-	lastRouterIndex = routerIndexOf(history.state);
+	lookAtStandingEntry();
 	settleOnPage(entry);
 	return entry;
 }
@@ -364,7 +386,8 @@ interface RouteMount {
 }
 
 // A navigation through the router carries its entry the way a shallow write
-// does: a push a fresh id, a replace the id of the entry it writes over.
+// does: a push a fresh id over the page it leaves, a replace the entry it
+// writes over.
 // While it loads, history is not still: the router writes its entry only
 // once the route has loaded, over whatever entry stands then. A replace to
 // the address history already stands on moves nothing: it mounts the route of
@@ -372,7 +395,7 @@ interface RouteMount {
 export async function navigateTo(url: string, options: NavigateOptions): Promise<void> {
 	const entry = options.replaceState
 		? (entryOfHistoryState(history.state) ?? firstIdOnTop(false))
-		: newEntry();
+		: newPageEntryOver(location.href);
 	const mount =
 		options.replaceState && standsOnAddress(url) ? { address: location.href, options } : null;
 	keepTrackOfKeptPage(url);
@@ -505,7 +528,7 @@ export function navigationOnlyMountedRoute(type: NavigationType): boolean {
 // A navigation another one superseded wrote no entry of its own, so only one
 // whose entry stands settles the page.
 function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
-	lastRouterIndex = routerIndexOf(history.state);
+	lookAtStandingEntry();
 	if (options.replaceState) settleOnPage(entry);
 	else pushedPage(entry);
 }
@@ -513,44 +536,58 @@ function navigatedOnto(entry: HistoryEntry, options: NavigateOptions): void {
 // Every navigation the router reports once it has written its entry: a link
 // or a `goto` from anywhere, or -- on `enter` -- its start over the entry the
 // page loaded onto. An entry the navigation carried stands as it is, one the
-// start dropped gets back the id it was loaded with, and any other gets a
-// first id on top. The start drops the layer mark too, so only once it has
-// the mark back can the installed controller step off a layer entry a reload
-// came back onto (`followRouterStart`). A Back or Forward is the landing
-// listener's.
+// start dropped gets back the id it was loaded with, a router push a fresh id
+// over the page it left, and any other a first id on top. The start drops the
+// layer mark and the page below too, so only once it has the mark back can the
+// installed controller step off a layer entry a reload came back onto
+// (`followRouterStart`). A Back or Forward is the landing listener's.
 export function stampNavigatedEntry(type: NavigationType): void {
 	if (location.href !== addressMountedUnderKeptPage) addressMountedUnderKeptPage = null;
 	if (type === 'popstate') {
-		lastRouterIndex = routerIndexOf(history.state);
+		lookAtStandingEntry();
 		return;
 	}
 	if (type === 'enter') followRouterStart();
-	const routerPushed = isRouterPush();
-	lastRouterIndex = routerIndexOf(history.state);
+	const pushedOver = pageARouterPushStandsOver();
+	lookAtStandingEntry();
+	const entry = entryTheNavigationCarried() ?? stampEntryTheNavigationDropped(type, pushedOver);
+	if (pushedOver !== null && entry !== null) pushedPage(entry);
+	else settleOnPage(entry);
+}
+
+// An entry the navigation carried keeps its id; the newest id stands on top.
+function entryTheNavigationCarried(): HistoryEntry | null {
 	const carried = entryOfHistoryState(history.state);
-	if (carried !== null) {
-		if (carried.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
-		if (routerPushed) pushedPage(carried);
-		else settleOnPage(carried);
-		return;
-	}
-	if (routerPushed) standsOnTop = true;
+	if (carried?.id === lastAllocatedEntryId(historyStorage)) standsOnTop = true;
+	return carried;
+}
+
+// An entry the navigation wrote without one gets back the id it was loaded
+// with on the router's start, a fresh id over the page a router push left,
+// or a first id on top.
+function stampEntryTheNavigationDropped(
+	type: NavigationType,
+	pushedOver: string | null
+): HistoryEntry | null {
 	const loaded = type === 'enter' ? entryOfHistoryState(stateOnLoad) : null;
-	const entry = loaded ?? firstIdOnTop(type === 'enter');
+	const entry =
+		loaded ?? (pushedOver === null ? firstIdOnTop(type === 'enter') : newPageEntryOver(pushedOver));
 	if (entry !== null) {
 		const pageState = (pageStateOfHistoryState(history.state) ?? {}) as App.PageState;
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- the address the router has just written
 		replaceState(location.href, stampedPageState(pageState, entry));
 	}
-	if (routerPushed && entry !== null) pushedPage(entry);
-	else settleOnPage(entry);
+	return entry;
 }
 
 // A router push -- a link, or a `goto` from anywhere -- stands one place above
-// the entry the controller last saw, a replace on that same place.
-function isRouterPush(): boolean {
+// the entry the controller last saw, a replace on that same place. Answers the
+// address of the page a push stands over, null for a replace.
+function pageARouterPushStandsOver(): string | null {
 	const index = routerIndexOf(history.state);
-	return index !== undefined && lastRouterIndex !== undefined && index === lastRouterIndex + 1;
+	const pushed =
+		index !== undefined && lastRouterIndex !== undefined && index === lastRouterIndex + 1;
+	return pushed ? lastAddress : null;
 }
 
 // Steps back once and resolves when a landing at or below `target` settles the
@@ -571,16 +608,28 @@ function firstEntryOfTab(): number {
 	return storedCount(historyStorage, FIRST_ENTRY_KEY, 'first history entry');
 }
 
-// A page's own Back control: one step back while an entry of the tab's own
-// stands below the one shown, `fallback` otherwise -- written over the page,
-// so the browser's Back from there does not return to it. An entry without
-// an id is never the tab's own.
-export function stepBackOrGoTo(fallback: string): Promise<void> {
+// The address of the page a page's own Back steps back onto: the page the
+// page history stands on was pushed over, while that page is an entry of the
+// tab's own. Null where there is none -- on the tab's first entry, on an entry
+// without an id, which is never the tab's own, or on one that does not know
+// what it was pushed over -- and there that Back goes elsewhere (#1389).
+export function pageBelowStandingPage(): string | null {
 	const standing = standingEntry();
-	if (standing === null || standing.id <= firstEntryOfTab()) {
-		return startNavigation(fallback, { replaceState: true });
-	}
-	return stepBackTo(standing.id - 1);
+	if (standing === null || standing.id <= firstEntryOfTab()) return null;
+	return standingPageEntry(standing)?.below ?? null;
+}
+
+// A page's own Back control: one step back onto the page below while there is
+// one; otherwise `openList` writes the page's list over the page, never
+// pushing it, so the browser's Back from there does not return to the page.
+export function stepBackOr(openList: () => Promise<void>): Promise<void> {
+	if (pageBelowStandingPage() === null) return openList();
+	return stepBackOffStandingEntry();
+}
+
+// The same Back for a page whose list is a plain route, written over it.
+export function stepBackOrGoTo(fallback: string): Promise<void> {
+	return stepBackOr(() => startNavigation(fallback, { replaceState: true }));
 }
 
 // From an entry with an id, any landing below it is the step's; from a
@@ -812,7 +861,7 @@ function onPopstate(event: PopStateEvent): void {
 	ledger =
 		landingHandler === null ? { ...landing.ledger, current: ledger.current } : landing.ledger;
 	standsOnTop = false;
-	lastRouterIndex = routerIndexOf(event.state);
+	lookAtStandingEntry(event.state);
 	dropLayers(landing.dropLayers);
 	for (const target of landing.settled) settleStepBack(target);
 	if (landing.stepOff) void stepBackTo(rankOf(landed) - 1);
@@ -874,11 +923,13 @@ export function attachLandingHandler(onLanding: LandingHandler): () => void {
 	};
 }
 
-// A page load, as far as history goes: the state the page loaded onto is read
-// again, the way this module's own load reads it.
+// A page load, as far as history goes: the state the page loaded onto, and
+// where history stands, are read again, the way this module's own load reads
+// them -- so the router's start over that entry is not taken for a push.
 export function loadHistoryPageForTests(): void {
 	stateOnLoad = readStateOnLoad();
 	standsOnTop = standsOnTopOnLoad();
+	lookAtStandingEntry();
 }
 
 export function resetHistoryControllerForTests(): void {
@@ -888,7 +939,7 @@ export function resetHistoryControllerForTests(): void {
 	stateOnLoad = readStateOnLoad();
 	ledger = EMPTY_LEDGER;
 	standsOnTop = true;
-	lastRouterIndex = routerIndexOf(history.state);
+	lookAtStandingEntry();
 	stepBackWaiters.clear();
 	stillnessWaiters = [];
 	navigationsUnderway = 0;

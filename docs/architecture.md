@@ -148,12 +148,23 @@ scroll container, the SETTINGS group (also a `RailGroup.svelte`, via
 `RailSettings.svelte`) and a user row (username, theme toggle, Logout —
 inline, no popup menu; `shell/UserRow.svelte`). The phone drawer is
 navigation only — brand, search, LIBRARY and PLAYLISTS (#1174, frame H3 of
-`docs/design/navigation.html`): the phone app bar (`PhoneAppBar.svelte`)
-carries a 44px account circle at its right edge, and its menu
-(`AccountMenu.svelte`) holds Settings, the theme switch and Log out, so the
-drawer repeats none of them; `Rail` renders the block only when the layout
-hands it an `account`. Choosing Settings there while `/settings` is already
-on screen only closes the menu. `RailLibraryGroup.svelte` is the LIBRARY group: it
+`docs/design/navigation.html`). The phone app bar (`PhoneAppBar.svelte`,
+frames I2–I4) keeps ☰ at its left until the phone tabs replace the drawer
+(#1354 slice 9). Beside it every page but the Library and the song carries
+‹, named after where it goes: the page below it in the tab's history, or,
+with nothing of the tab's own below, the page's list (`/settings` for a
+Settings section, the Library otherwise), written over the page; the Library's
+wall the library writes as its own entry, so the wall shows in the page's
+place (`openListOverPage`). The history controller answers both with one
+question (`pageBelowStandingPage`, `stepBackOr`, #1389). 🔍 on every page
+opens the one search, `RailSearch`, in a sheet. The Library carries the brand
+and a 44px account circle at the right edge, whose menu (`AccountMenu.svelte`)
+holds Settings, the theme switch and Log out, so the drawer repeats none of
+them; the song carries its title, share and song menu instead. `Rail`
+renders the block only when the layout hands it an `account`. Choosing
+Settings in the account menu while `/settings` is already on screen only
+closes the menu.
+`RailLibraryGroup.svelte` is the LIBRARY group: it
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
 takes/pick summary per row, an equalizer marking the one actually playing, a

@@ -27,6 +27,11 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
+import {
+	SEARCH_OPEN_LABEL,
+	SEARCH_SHEET_LABEL,
+	backLabel
+} from '$lib/components/PhoneAppBar.svelte';
 import { handleSessionLost } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
@@ -432,10 +437,11 @@ describe('app shell', () => {
 			share: { isShared: false, shareSlug: null, onshare: vi.fn(), onunshare: vi.fn() },
 			menu: { saveDisabled: true, onsave: vi.fn(), onaddtoplaylist: vi.fn(), ondelete: vi.fn() }
 		});
+		replaceHistoryEntry('/album/summer/sommerlicht');
 		const target = await renderLayout('/album/summer/sommerlicht');
 		expect(target.querySelectorAll('.mobile-strip')).toHaveLength(1);
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
-		expect(strip.children).toHaveLength(4);
+		expect(strip.children).toHaveLength(5);
 		expect(strip.querySelector('h1')?.textContent?.trim()).toBe('Sommerlicht');
 		expect(strip.querySelector('.brand')).toBeNull();
 		requireElement<HTMLButtonElement>(strip, '.drawer-trigger').click();
@@ -443,7 +449,8 @@ describe('app shell', () => {
 		expect(document.body.querySelector('.rail')).not.toBeNull();
 		phoneAppBar.set(null);
 		await tick();
-		expect(strip.querySelector('.brand')?.textContent).toBe('Hallucinai');
+		expect(strip.querySelector('.brand')).toBeNull();
+		expect(strip.querySelector('.back')?.textContent?.trim()).toBe('Library');
 	});
 
 	it('opens the rail drawer from the trigger on every private route', async () => {
@@ -948,13 +955,15 @@ describe('a reload over the phone Now Playing', () => {
 
 // A sign-out the server confirmed loads sign-in afresh over the account
 // menu's entry, replacing it: Back from there finds no menu entry to step off,
-// and nothing steps back on the way (#1340, ruling A).
+// and nothing steps back on the way (#1340, ruling A). The account circle
+// lives on the Library (#1354 rule 25).
 describe('signing out on the phone', () => {
 	it("from the open account menu loads sign-in afresh over the menu's entry, and steps back nowhere", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		replaceHistoryEntry('/settings/voices');
-		const target = await renderLayout('/settings/voices');
+		replaceHistoryEntry('/');
+		const target = await renderLayout('/');
+		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		let replacedLayer: string | undefined;
 		const documentLoads = {
 			assign: vi.fn(),
@@ -1012,18 +1021,90 @@ describe('a session lost behind the open phone drawer', () => {
 // The history controller runs on every page, not only in the library, so
 // Back closes an overlay on Settings before it leaves the page (#1331).
 describe('overlays on Settings', () => {
-	it('Back closes the account menu and the address stays', async () => {
+	it('Back closes the search sheet and the address stays', async () => {
 		replaceHistoryEntry('/settings/voices');
 		const target = await renderLayout('/settings/voices');
-		getByRoleButton(target, `${ACCOUNT_MENU_LABEL} · ${USER.username}`).click();
-		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('account-menu'));
-		expect(target.querySelector('.menu-item.logout')).not.toBeNull();
+		const sheet = () =>
+			document.querySelector(`[role="dialog"][aria-label="${SEARCH_SHEET_LABEL}"]`);
+		getByRoleButton(target, SEARCH_OPEN_LABEL).click();
+		await vi.waitFor(() => expect(standingHistoryEntry()?.layer).toBe('search-sheet'));
+		expect(sheet()).not.toBeNull();
 
 		await pressBack();
 
-		await vi.waitFor(() => expect(target.querySelector('.menu-item.logout')).toBeNull());
+		await vi.waitFor(() => expect(sheet()).toBeNull());
 		expect(standingHistoryEntry()?.layer).toBeUndefined();
 		expect(location.pathname).toBe('/settings/voices');
+	});
+});
+
+// On a page the tab was entered on, nothing of the tab's own lies below, so ‹
+// writes the page's list over the page (#1354 rule 25): the list shows, the
+// tab holds no more entries than before, and the list's own ‹ goes on rather
+// than back to the page it replaced (#1389).
+describe('‹ on the page a phone tab was entered on', () => {
+	function barBack(target: HTMLElement): HTMLButtonElement | null {
+		return target.querySelector<HTMLButtonElement>('.mobile-strip button.back');
+	}
+
+	async function pressBarBack(target: HTMLElement, lands: string): Promise<void> {
+		barBack(target)?.click();
+		await vi.waitFor(() => expect(location.pathname).toBe(lands));
+		await historyStandsStill();
+		await tick();
+	}
+
+	function enterTabOn(address: string, entry: unknown = null): void {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		replaceHistoryEntry(address, entry);
+		loadLibraryHistoryPageForTests();
+		startFakeRouter();
+	}
+
+	it.each([
+		{ page: 'an album', address: '/album/a1', collection: { kind: 'album' as const, id: 'a1' } },
+		{
+			page: 'a playlist',
+			address: '/playlist/friday-night',
+			collection: { kind: 'playlist' as const, id: 'p1' }
+		}
+	])('on $page shows the Library wall in its place', async ({ address, collection }) => {
+		const opened = { ...libraryRootState(), surface: 'detail' as const, collection };
+		enterTabOn(address, opened);
+		openCollection.set(collection);
+		librarySurface.set('detail');
+		const target = await renderLayout(address);
+		await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
+		await historyStandsStill();
+		const tabLength = history.length;
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+
+		await pressBarBack(target, '/');
+
+		expect(get(librarySurface)).toBe('browse');
+		expect(historyEntry()).toMatchObject({ surface: 'browse', collection });
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)).toBeNull();
+	});
+
+	it('on a Settings section opens Settings, whose ‹ opens the Library wall', async () => {
+		enterTabOn('/settings/voices');
+		const target = await renderLayout('/settings/voices');
+		await historyStandsStill();
+		const tabLength = history.length;
+
+		await pressBarBack(target, '/settings');
+
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+
+		await pressBarBack(target, '/');
+
+		expect(get(librarySurface)).toBe('browse');
+		expect(historyEntry()).toMatchObject({ surface: 'browse' });
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)).toBeNull();
 	});
 });
 
