@@ -75,25 +75,29 @@ describe('libraryWallOrder', () => {
 	});
 
 	it('restores and persists the order chosen on this device', async () => {
-		localStorage.setItem('songmaker.library-wall-order', 'recent');
+		localStorage.setItem('songmaker.library-wall-order', 'played');
 		const { chooseLibraryWallOrder, initLibraryWallOrder, libraryWallOrder } = await import('./ui');
 
-		expect(get(libraryWallOrder)).toBe('recent');
-		chooseLibraryWallOrder('added');
-		expect(get(libraryWallOrder)).toBe('added');
-		expect(localStorage.getItem('songmaker.library-wall-order')).toBe('added');
+		expect(get(libraryWallOrder)).toBe('played');
+		chooseLibraryWallOrder('title');
+		expect(get(libraryWallOrder)).toBe('title');
+		expect(localStorage.getItem('songmaker.library-wall-order')).toBe('title');
 
-		libraryWallOrder.set('title');
+		libraryWallOrder.set('played');
 		initLibraryWallOrder();
-		expect(get(libraryWallOrder)).toBe('added');
-	});
-
-	it('opens in A–Z when the stored order is not one it knows', async () => {
-		localStorage.setItem('songmaker.library-wall-order', 'newest');
-		const { libraryWallOrder } = await import('./ui');
-
 		expect(get(libraryWallOrder)).toBe('title');
 	});
+
+	// 'recent' and 'added' are the orders this switch offered before Last played.
+	it.each(['recent', 'added', 'newest'])(
+		'opens in A–Z when the stored order is %s, one it does not know',
+		async (stored) => {
+			localStorage.setItem('songmaker.library-wall-order', stored);
+			const { libraryWallOrder } = await import('./ui');
+
+			expect(get(libraryWallOrder)).toBe('title');
+		}
+	);
 });
 
 describe('railWidth', () => {

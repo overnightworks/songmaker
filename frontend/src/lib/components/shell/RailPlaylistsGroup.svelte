@@ -17,7 +17,7 @@
 	import { whenBackOnline } from '$lib/stores/connectivity';
 	import { matchesRailQuery, normalizedRailTreeQuery } from '$lib/stores/librarySearch';
 	import {
-		ensureRecentWorkRead,
+		ensureLastPlayedRead,
 		inLibraryOrder,
 		libraryPlaceOrder
 	} from '$lib/stores/libraryOrder';
@@ -67,7 +67,7 @@
 	$effect(() => whenBackOnline(() => void ensurePlaylistsLoaded()));
 
 	$effect(() => {
-		if ($libraryWallOrder === 'recent') void ensureRecentWorkRead();
+		if ($libraryWallOrder === 'played') void ensureLastPlayedRead();
 	});
 
 	function onPlaylistLabelClick(playlistId: string): void {

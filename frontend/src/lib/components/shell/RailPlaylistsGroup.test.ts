@@ -25,7 +25,7 @@ import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { chooseLibraryWallOrder } from '$lib/stores/ui';
-import { fetchLibraryContinue } from '$lib/api/library';
+import { fetchLibraryListen } from '$lib/api/library';
 import {
 	buildPlaylist as playlist,
 	buildPlaylistDetail as detail,
@@ -33,7 +33,7 @@ import {
 	buildSong as song,
 	createComponentMount,
 	findElementByRoleAndName,
-	recentWorkPage,
+	lastPlayedPage,
 	recordRailReveals,
 	requireElement,
 	revealedTitles
@@ -141,13 +141,13 @@ describe('RailPlaylistsGroup', () => {
 
 	it('lists the playlists in the order the wall is switched to, A–Z by natural title first', async () => {
 		playlistList.set([
-			playlist({ id: 'mix-10', title: 'Mix 10', created_at: '2026-09-03T10:00:00Z' }),
-			playlist({ id: 'night', title: 'night drive', created_at: '2026-09-01T10:00:00Z' }),
-			playlist({ id: 'mix-2', title: 'Mix 2', created_at: '2026-07-01T10:00:00Z' })
+			playlist({ id: 'mix-10', title: 'Mix 10' }),
+			playlist({ id: 'night', title: 'night drive' }),
+			playlist({ id: 'mix-2', title: 'Mix 2' })
 		]);
 		fetchPlaylists.mockResolvedValue(get(playlistList));
-		vi.mocked(fetchLibraryContinue).mockResolvedValue(
-			recentWorkPage('playlist', ['night', 'mix-10'])
+		vi.mocked(fetchLibraryListen).mockResolvedValue(
+			lastPlayedPage('playlist', ['night', 'mix-10'])
 		);
 		const target = await render();
 		requireElement<HTMLButtonElement>(target, 'button.disclose').click();
@@ -159,11 +159,7 @@ describe('RailPlaylistsGroup', () => {
 
 		expect(playlistTitles()).toEqual(['Mix 2', 'Mix 10', 'night drive']);
 
-		chooseLibraryWallOrder('added');
-		await tick();
-		expect(playlistTitles()).toEqual(['Mix 10', 'night drive', 'Mix 2']);
-
-		chooseLibraryWallOrder('recent');
+		chooseLibraryWallOrder('played');
 		await vi.waitFor(() => expect(playlistTitles()).toEqual(['night drive', 'Mix 10', 'Mix 2']));
 	});
 

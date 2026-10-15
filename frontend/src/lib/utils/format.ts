@@ -1,7 +1,6 @@
 import {
 	ALBUM_ART_EMPTY_INITIALS,
 	ALBUM_ART_INITIAL_COUNT,
-	DAY_LABEL_ADDED,
 	DAY_LABEL_TODAY,
 	DAY_LABEL_YESTERDAY,
 	PLACE_KIND_PLAYLIST_LABEL,
@@ -96,9 +95,4 @@ export function activityTimeLabel(activityAt: string, now: Date): string {
 	if (daysAgo === 1) return `${DAY_LABEL_YESTERDAY} ${clock}`;
 	if (daysAgo < DAYS_NAMED_BY_WEEKDAY) return `${localWeekday(moment)} ${clock}`;
 	return localDayAndMonth(moment, now);
-}
-
-/** The day a place was made: "added 3 Aug", "added 3 Aug 2025". */
-export function addedDayLabel(createdAt: string, now: Date): string {
-	return `${DAY_LABEL_ADDED} ${localDayAndMonth(new Date(createdAt), now)}`;
 }

@@ -49,13 +49,16 @@ import {
 import {
 	accountCircle,
 	accountMenu,
+	appBar,
 	boundingBoxes,
 	containing,
+	csrfHeaders,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openLibraryWall,
 	openSettingsSection,
 	playlistEntryRows,
@@ -196,7 +199,9 @@ async function openRailNav(page: Page, shell: Shell): Promise<Locator> {
 /**
  * The phone drawer is navigation only (#1174, frame H3 of navigation.html):
  * brand, search, Library and Playlists. Settings, the theme and Log out live
- * in the account circle's menu, so the drawer repeats none of them.
+ * in the account circle's menu on the Library, so the drawer repeats none of
+ * them, and an album opened from another page carries ‹ instead of the circle
+ * (#1354 rule 25, frame I3).
  */
 async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	const rail = await openRailNav(page, 'mobile');
@@ -208,6 +213,28 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
 	await expect(rail.getByRole('button', { name: 'Logout', exact: true })).toHaveCount(0);
 	await page.keyboard.press('Escape');
 	await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	const back = appBar(page).getByRole('button', { name: /^Back to / });
+	await expect(back).toBeVisible();
+	await expect(accountCircle(page)).toHaveCount(0);
+	// ‹ starts right after ☰, inside the first touch square beside it.
+	const [drawerTrigger, chevron] = await boundingBoxes(
+		appBar(page).getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }),
+		back.locator('svg')
+	);
+	expect(chevron.x - (drawerTrigger.x + drawerTrigger.width)).toBeLessThan(HITBOX_FREQUENT_PX);
+}
+
+/**
+ * The phone's ‹ (#1354 rule 25): named after the page it goes back to, and
+ * the account circle only on the Library, with Log out one tap away in it.
+ */
+async function backOnPhone(page: Page, to: string): Promise<void> {
+	await appBar(page)
+		.getByRole('button', { name: `Back to ${to}`, exact: true })
+		.click();
+}
+
+async function expectAccountMenuOnTheLibrary(page: Page): Promise<void> {
 	await accountCircle(page).click();
 	await expect(
 		accountMenu(page).getByRole('button', { name: ACCOUNT_MENU_LOGOUT_LABEL, exact: true })
@@ -222,7 +249,9 @@ async function expectPhoneDrawerIsNavigationOnly(page: Page): Promise<void> {
  * content; on the phone it is the account menu's Settings list (#1174).
  * Opening a section is a real navigation (#265), and the rail's own album
  * context row is the way back — the "click back into the album" promise that
- * made the disclosure worth building in the first place (#264).
+ * made the disclosure worth building in the first place (#264). On the phone
+ * the way to Settings leads through the Library wall, which folds the drawer's
+ * Library group (#593), so the album row is one tap on that group further.
  */
 async function expectSettingsRailRoundTrip(
 	page: Page,
@@ -230,9 +259,21 @@ async function expectSettingsRailRoundTrip(
 	surface: Locator,
 	albumTitle: string
 ): Promise<void> {
+	if (shell === 'mobile') {
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expectAccountMenuOnTheLibrary(page);
+	}
 	await openSettingsSection(page, shell, 'Voices');
 
 	await expect(page).toHaveURL(/\/settings\/voices$/);
+	if (shell === 'mobile') {
+		await expect(accountCircle(page)).toHaveCount(0);
+		await backOnPhone(page, RAIL_SETTINGS_LABEL);
+		await expect(page).toHaveURL(/\/settings$/);
+		await page.goForward();
+		await expect(page).toHaveURL(/\/settings\/voices$/);
+	}
 	// The removed second column — the old `.settings-sidebar` — is gone, and
 	// so is any other navigation landmark inside the content area; the rail
 	// stays the one navigation on the page.
@@ -246,6 +287,13 @@ async function expectSettingsRailRoundTrip(
 	}
 
 	const rail = await openRailNav(page, shell);
+	if (shell === 'mobile') {
+		const libraryGroup = rail.getByRole('button', {
+			name: nameStartingWith(RAIL_LIBRARY_LABEL)
+		});
+		await expect(libraryGroup).toHaveAttribute('aria-expanded', 'false');
+		await libraryGroup.click();
+	}
 	await rail.getByRole('button', { name: containing(albumTitle) }).click();
 	await expect(surface.getByRole('heading', { name: albumTitle })).toBeVisible();
 }
@@ -730,6 +778,32 @@ test('an album with nothing to play dims its circle and leaves the running album
 	).toHaveCount(0);
 });
 
+// An album opened by its address has nothing of the tab's own below it, so
+// its ‹ writes the Library over it (#1354 rule 25): the wall shows in the
+// album's place, and the tab holds no more entries than before (#1389).
+test(
+	'a directly opened album: ‹ shows the Library wall in its place',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const album = surface.getByRole('heading', { name: library.albumTitle });
+		await page.goto(`/album/${library.albumId}`);
+		await expect(album).toBeVisible();
+		const tabLength = await page.evaluate(() => history.length);
+
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+
+		await expect(page).toHaveURL(/\/$/);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(album).toBeHidden();
+		expect(await page.evaluate(() => history.length)).toBe(tabLength);
+		await expect(accountCircle(page)).toBeVisible();
+		guard.assertClean();
+	}
+);
+
 /** One album's own one-target row inside the rail's LIBRARY group. */
 function railAlbumRow(rail: Locator, albumTitle: string): Locator {
 	return rail
@@ -935,7 +1009,21 @@ test('the one-target rail tree and pin promises hold in a real browser', async (
 	guard.assertWithinBudget(RAIL_FLOW_API_REQUEST_BUDGET[shell]);
 });
 
-test('the albums wall opens in A–Z, re-sorts by Recent and Added with their own lines, keeps the choice across a reload and leaves Continue alone', async ({
+/** Plays one of the attempt's playlist songs from that playlist, as the player reports it. */
+async function listenInPlaylist(page: Page, seeded: SeededPlaylist): Promise<void> {
+	const playlists = await page.request.get('/api/playlists');
+	expect(playlists.status()).toBe(200);
+	const listed = (await playlists.json()) as Array<{ id: string; slug: string }>;
+	const played = listed.find((candidate) => candidate.slug === seeded.slug);
+	if (!played) throw new Error(`Missing seeded playlist ${seeded.slug}`);
+	const listen = await page.request.post(
+		`/api/songs/${readSeededLibrary().continueReorderSongs.desktop.id}/listen`,
+		{ headers: await csrfHeaders(page), data: { playlist_id: played.id } }
+	);
+	expect(listen.status()).toBe(200);
+}
+
+test('the albums wall opens in A–Z, re-sorts by Last played with the last listen on each line, keeps the choice across a reload and leaves Continue alone', async ({
 	page
 }) => {
 	const surface = workspace(page);
@@ -945,8 +1033,13 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	const tiles = surface.locator('.library-wall .tile-grid .wall-tile-body');
 	const firstLine = tiles.first().locator('.tile-subtitle');
 	const continueTiles = surface.locator('.continue-item .tile-title');
+	await listenInPlaylist(page, playlist);
 
 	await page.goto('/');
+	await expect(orders.getByRole('button')).toHaveText([
+		LIBRARY_WALL_ORDER_LABELS.title,
+		LIBRARY_WALL_ORDER_LABELS.played
+	]);
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	await expect(tiles.filter({ hasText: playlist.title })).toHaveCount(1);
 	await expect(continueTiles.first()).toBeVisible();
@@ -956,27 +1049,25 @@ test('the albums wall opens in A–Z, re-sorts by Recent and Added with their ow
 	await expect(tiles.filter({ hasText: playlist.title }).locator('.tile-subtitle')).toHaveText(
 		/^Playlist · \d+ songs?$/
 	);
-	const recentBox = await choice('recent').boundingBox();
-	expect(recentBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+	const playedBox = await choice('played').boundingBox();
+	expect(playedBox?.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
 
-	// The playlist seeded for this attempt is the newest work and the newest place.
-	await choice('recent').click();
+	// The playlist seeded for this attempt holds the newest listen.
+	await choice('played').click();
 	await expect(tiles.first()).toContainText(playlist.title);
 	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 
-	await choice('added').click();
-	await expect(tiles.first()).toContainText(playlist.title);
-	await expect(firstLine).toHaveText(/^Playlist · added \d{1,2} [A-Z][a-z]{2}$/);
-
 	await page.reload();
-	await expect(choice('added')).toHaveAttribute('aria-pressed', 'true');
-	await expect(firstLine).toHaveText(/^Playlist · added /);
+	await expect(choice('played')).toHaveAttribute('aria-pressed', 'true');
+	await expect(tiles.first()).toContainText(playlist.title);
+	await expect(firstLine).toHaveText(/^Playlist · today \d\d:\d\d$/);
 	await expect(continueTiles).toHaveText(continueOrder);
 });
 
 test('the rail lists albums and playlists in the order the wall is switched to', async ({
-	page
+	page,
+	request
 }, testInfo) => {
 	const shell = shellOf(testInfo);
 	const surface = workspace(page);
@@ -1015,6 +1106,14 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 		return railOrder();
 	}
 
+	// Of two playlists, a listen in the one A–Z puts second brings it to the
+	// front under Last played: the rail can only show that by leaving A–Z.
+	const second = await seedPlaylist(request, readSeededLibrary());
+	const [, laterInAlphabet] = [playlist, second].toSorted((a, b) =>
+		compareTitles(a.title, b.title)
+	);
+	await listenInPlaylist(page, laterInAlphabet);
+
 	await page.goto('/');
 	await expect(choice('title')).toHaveAttribute('aria-pressed', 'true');
 	const alphabetical = await railOrderMatchingWall();
@@ -1022,8 +1121,8 @@ test('the rail lists albums and playlists in the order the wall is switched to',
 	expect(alphabetical.playlists).toEqual([...alphabetical.playlists].sort(compareTitles));
 
 	await page.reload();
-	await choice('added').click();
-	const added = await railOrderMatchingWall();
-	expect(added.albums).not.toEqual(alphabetical.albums);
-	expect(added.playlists[0]).toBe(playlist.title);
+	await choice('played').click();
+	await expect.poll(async () => (await wallOrder()).playlists[0]).toBe(laterInAlphabet.title);
+	const played = await railOrderMatchingWall();
+	expect(played.playlists[0]).toBe(laterInAlphabet.title);
 });

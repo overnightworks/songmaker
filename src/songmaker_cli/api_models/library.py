@@ -12,6 +12,7 @@ from songmaker_cli.api_models.songs import (
     AlbumResponse,
     SongSummaryResponse,
     album_cover_urls,
+    song_cover_urls,
 )
 from songmaker_cli.constants import (
     LIBRARY_ITEM_ALBUM,
@@ -19,11 +20,12 @@ from songmaker_cli.constants import (
     LIBRARY_SORT_NEWEST,
     LIBRARY_SORT_OLDEST,
     LIBRARY_SORT_TITLE,
+    SongWorkKind,
 )
 
 if TYPE_CHECKING:
     from songmaker_cli.db.models import Album, Song
-    from songmaker_cli.db.queries.activity import PlaceActivity
+    from songmaker_cli.db.queries.activity import PlaceListen, WorkedSong
 
 LibrarySort = Literal[
     "newest",
@@ -112,8 +114,8 @@ class LibrarySearchResponse(BaseModel):
         return cls(items=items, next_cursor=next_cursor, has_more=has_more)
 
 
-class LibraryContinueItem(BaseModel):
-    """One place in the Library Continue row, with the song the musician was on."""
+class LibraryListenItem(BaseModel):
+    """An album or playlist in Home's Listen, with the song the musician last heard there."""
 
     type: Literal["album", "playlist"]
     id: str
@@ -122,35 +124,73 @@ class LibraryContinueItem(BaseModel):
     album_covers: list[AlbumCoverUrls] = Field(default_factory=list)
     song_id: str | None = None
     song_title: str | None = None
-    activity_at: str
+    song_number: int | None = None
+    played_at: str
 
     @classmethod
-    def from_orm(cls, activity: PlaceActivity) -> LibraryContinueItem:
+    def from_orm(cls, listen: PlaceListen) -> LibraryListenItem:
         from songmaker_cli.db.models import Album as AlbumModel
 
-        place = activity.place
+        place = listen.place
         if isinstance(place, AlbumModel):
             cover = album_cover_urls(place.id, place.cover_key) if place.cover_key else None
             album_covers: list[AlbumCoverUrls] = []
         else:
             cover = uploaded_playlist_cover(place)
             album_covers = playlist_mosaic_covers(place)
-        song = activity.song
+        song = listen.song
         return cls(
-            type=activity.place_type,
+            type=listen.place_type,
             id=place.id,
             title=place.title,
             cover=cover,
             album_covers=album_covers,
             song_id=song.id if song else None,
             song_title=song.title if song else None,
-            activity_at=activity.activity_at.isoformat(),
+            song_number=listen.song_number,
+            played_at=listen.played_at.isoformat(),
         )
 
 
-class LibraryContinueResponse(BaseModel):
-    items: list[LibraryContinueItem]
+class LibraryListenResponse(BaseModel):
+    items: list[LibraryListenItem]
 
     @classmethod
-    def from_orm(cls, places: list[PlaceActivity]) -> LibraryContinueResponse:
-        return cls(items=[LibraryContinueItem.from_orm(place) for place in places])
+    def from_orm(cls, listens: list[PlaceListen]) -> LibraryListenResponse:
+        return cls(items=[LibraryListenItem.from_orm(listen) for listen in listens])
+
+
+class LibraryWriteItem(BaseModel):
+    """A song in Home's Write, with the musician's newest kind of work on it."""
+
+    song_id: str
+    song_title: str
+    album_id: str
+    album_title: str
+    cover: AlbumCoverUrls | None = None
+    album_cover: AlbumCoverUrls | None = None
+    work: SongWorkKind
+    worked_at: str
+
+    @classmethod
+    def from_orm(cls, worked: WorkedSong) -> LibraryWriteItem:
+        song = worked.song
+        album = song.album
+        return cls(
+            song_id=song.id,
+            song_title=song.title,
+            album_id=album.id,
+            album_title=album.title,
+            cover=song_cover_urls(song.id, song.cover_key) if song.cover_key else None,
+            album_cover=album_cover_urls(album.id, album.cover_key) if album.cover_key else None,
+            work=worked.work,
+            worked_at=worked.worked_at.isoformat(),
+        )
+
+
+class LibraryWriteResponse(BaseModel):
+    items: list[LibraryWriteItem]
+
+    @classmethod
+    def from_orm(cls, worked_songs: list[WorkedSong]) -> LibraryWriteResponse:
+        return cls(items=[LibraryWriteItem.from_orm(worked) for worked in worked_songs])

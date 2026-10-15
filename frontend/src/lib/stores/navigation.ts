@@ -325,18 +325,43 @@ export function backToCollection(): void {
 	});
 }
 
-// The rail's "Library" link: leaves the open song (if any) but keeps the
-// open collection in the rail context (GitLab-style — the context persists
-// until another collection replaces it), and always pushes a fresh history
-// entry so the browser back button returns to whatever was open before.
+// The wall shows in place of the open song or collection, while the open
+// collection stays in the rail context (GitLab-style — the context persists
+// until another collection replaces it).
+function showLibraryWall(): void {
+	selectedSongId.set(null);
+	selectedGenerationId.set(null);
+	setLibrarySurface('browse');
+	closeSidebar();
+}
+
+// The rail's "Library" link always pushes a fresh history entry, so the
+// browser back button returns to whatever was open before.
 export async function openLibraryWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		selectedSongId.set(null);
-		selectedGenerationId.set(null);
-		setLibrarySurface('browse');
-		closeSidebar();
+		showLibraryWall();
 		await pushLibraryHistory();
 	});
+}
+
+// The lists a page's ‹ opens when no page of the tab's own lies below it
+// (#1354 rule 25): until the phone tabs arrive, the Library, which lists
+// albums and playlists alike, and the Settings list.
+export type PageList = '/' | '/settings';
+
+// A page's list, written over the page rather than pushed, so the list's own
+// ‹ goes on rather than back to the page it replaced. The Library is the wall,
+// which the library shows from its own stores and so writes as its own entry:
+// a route written over an album would leave the album on screen under the new
+// address. Nothing asks about a draft here yet, since the song, the one page
+// with a draft, carries its own bar without ‹; a way out of a song that comes
+// to open a list asks here, as every other way out of a song does.
+export function openListOverPage(list: PageList): Promise<void> {
+	if (list === '/') {
+		showLibraryWall();
+		return replaceLibraryHistory();
+	}
+	return goto(resolve(list), { replaceState: true });
 }
 
 interface AlbumTrackNeighbors {

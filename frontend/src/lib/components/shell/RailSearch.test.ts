@@ -15,7 +15,7 @@ import {
 
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { railSearch, resetRailSearchForTests } from '$lib/stores/railSearch';
-import { playlistList } from '$lib/stores/playlists';
+import { playlistList, resetPlaylistsForTests } from '$lib/stores/playlists';
 import {
 	buildAlbumSearchHit,
 	buildPlaylist,
@@ -28,6 +28,10 @@ import railSearchSource from './RailSearch.svelte?raw';
 
 const navigation = vi.hoisted(() => ({ openRailSearchTarget: vi.fn() }));
 vi.mock('$lib/stores/navigation', () => navigation);
+vi.mock('$lib/api/client', async (importOriginal) => ({
+	...(await importOriginal<typeof import('$lib/api/client')>()),
+	fetchPlaylists: vi.fn().mockResolvedValue([])
+}));
 
 const { render, cleanup } = createComponentMount(RailSearch);
 
@@ -90,7 +94,7 @@ beforeEach(() => {
 });
 afterEach(async () => {
 	railTreeQuery.set('');
-	playlistList.set([]);
+	resetPlaylistsForTests();
 	resetRailSearchForTests();
 	clearComponentStyles();
 	clearHitboxStyles();
@@ -179,6 +183,24 @@ describe('RailSearch', () => {
 		resultRows(root)[1]?.click();
 		await tick();
 
+		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'song', id: 's1' });
+	});
+
+	// The phone's search sheet holds its own history entry, which it must leave
+	// before the chosen result pushes one of its own (#1389).
+	it('lets the sheet holding it close before a chosen result opens', async () => {
+		const steps: string[] = [];
+		navigation.openRailSearchTarget.mockImplementationOnce(() => steps.push('opened'));
+		const sheetSearch = createComponentMount(RailSearch, {
+			onchoose: () => steps.push('sheet closed')
+		});
+		showVernissageResults();
+		const root = await sheetSearch.render();
+
+		resultRows(root)[1]?.click();
+		await sheetSearch.cleanup();
+
+		expect(steps).toEqual(['sheet closed', 'opened']);
 		expect(navigation.openRailSearchTarget).toHaveBeenCalledWith({ kind: 'song', id: 's1' });
 	});
 

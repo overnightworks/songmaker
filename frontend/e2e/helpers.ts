@@ -26,6 +26,16 @@ import { BASE_URL } from './seed';
 /** The two shells the same flow drives — also the Playwright project names. */
 export type Shell = 'desktop' | 'mobile';
 
+/**
+ * The tag that keeps a test, or every test of a describe, in one shell's
+ * project: `playwright.config.ts` leaves it out of the other shell's project,
+ * so the test needs no skip by shell.
+ */
+export const ONLY_IN_SHELL: Record<Shell, string> = {
+	desktop: '@desktop-only',
+	mobile: '@mobile-only'
+};
+
 // Above 1099px Now Playing keeps its three columns and docks beside the
 // workspace rather than covering it, and above 768px the shell keeps its rail;
 // the mobile viewport is a phone in portrait, and the narrow one is the
