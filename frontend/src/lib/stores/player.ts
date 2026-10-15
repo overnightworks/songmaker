@@ -1760,7 +1760,10 @@ function queueSourceOf(playlist: PlaylistDetailItem): PlaylistQueueSource {
 // playlist order.
 export function playPlaylist(playlist: PlaylistDetailItem): void {
 	if (playlist.entries.length === 0) {
-		reportNothingPlayable(playlist.title, async () => playPlaylist(playlist));
+		reportNothingPlayable(playlist.title, () => {
+			playPlaylist(playlist);
+			return Promise.resolve();
+		});
 		return;
 	}
 	playStartNotice.set('idle');

@@ -377,7 +377,7 @@
 				{#if newSongOpen}
 					<NewSongCard album={selectedAlbum} oncancel={cancelNewSong} oncreated={foldCreatedSong} />
 				{:else}
-					<div class="new-song-row">
+					<div class="new-song-row song-row-frame">
 						<button
 							bind:this={newSongRow}
 							class="new-song-body"
@@ -448,8 +448,6 @@
 
 	.new-song-row {
 		display: flex;
-		border: 1px solid transparent;
-		border-radius: var(--card-radius);
 		color: var(--text-muted);
 		font-size: 0.93rem;
 	}
@@ -466,7 +464,7 @@
 		min-width: 0;
 		background: none;
 		border: none;
-		padding: 0.65rem 0.8rem;
+		padding: var(--song-row-inset-block) var(--song-row-inset-inline);
 		text-align: left;
 		color: inherit;
 		font: inherit;
@@ -481,6 +479,7 @@
 
 	.new-song-label {
 		flex: 1;
+		line-height: var(--song-row-line-height);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
@@ -516,10 +515,6 @@
 		.picker-anchor {
 			padding-left: 0.8rem;
 			padding-right: 0.8rem;
-		}
-
-		.new-song-row {
-			min-height: 62px;
 		}
 
 		.empty-tab {

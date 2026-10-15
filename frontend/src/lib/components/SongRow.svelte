@@ -30,7 +30,7 @@
 <!-- The box and its controls share the box's one grid cell (#1053): the box's
      target fills the whole card, and the later-painted controls stay their own
      targets above it, with the box's text kept clear of them. -->
-<div class="song-row" class:current style:--song-row-controls={controlCount}>
+<div class="song-row song-row-frame" class:current style:--song-row-controls={controlCount}>
 	<button type="button" class="song-row-body" data-hitbox="text" {onclick}>
 		<PlayingMark {current} />
 		<span class="song-row-text">
@@ -62,15 +62,23 @@
 </div>
 
 <style>
-	.song-row {
+	/* What decides a row's height, owned once: the album's + New song row wears
+	   this frame too, so it stands exactly as high as a song box whatever font
+	   the platform resolves — a length line height, not the font's "normal". */
+	:global(.song-row-frame) {
 		--song-row-inset-block: 0.65rem;
 		--song-row-inset-inline: 0.8rem;
+		--song-row-line-height: 1.4rem;
+		border: 1px solid transparent;
+		border-radius: var(--card-radius);
+	}
+
+	.song-row {
 		--song-row-controls-gap: 0.5rem;
 		display: grid;
 		grid-template-areas: 'row';
 		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: var(--card-radius);
+		border-color: var(--border);
 		color: var(--text);
 		transition:
 			background 0.15s,
@@ -132,6 +140,7 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		font-size: 1rem;
+		line-height: var(--song-row-line-height);
 	}
 
 	.picked-star {
@@ -146,6 +155,7 @@
 	.song-row-meta {
 		flex-shrink: 0;
 		font-size: 0.8rem;
+		line-height: var(--song-row-line-height);
 		color: var(--text-muted);
 	}
 
@@ -171,11 +181,14 @@
 	}
 
 	@media (max-width: 768px) {
-		.song-row {
+		:global(.song-row-frame) {
 			--song-row-inset-block: 0.7rem;
 			--song-row-inset-inline: 0.7rem;
-			--song-row-controls-gap: 0.35rem;
 			min-height: 62px;
+		}
+
+		.song-row {
+			--song-row-controls-gap: 0.35rem;
 		}
 	}
 </style>
