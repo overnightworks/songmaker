@@ -78,9 +78,10 @@ songmaker_cli/internal_api.py:register_worker_endpoint # HTTP dispatcher: router
 songmaker_cli/jobs_api.py:api_cancel_job # HTTP dispatcher: router.post('/jobs/{job_id}/cancel', responses={404: {'description': 'Job does not exist'}, 409: {'description': 'Job is not queued or running'}})
 songmaker_cli/jobs_api.py:api_get_job # HTTP dispatcher: router.get('/jobs/{job_id}', responses={404: {'description': 'Job does not exist'}})
 songmaker_cli/jobs_api.py:api_stream_job # HTTP dispatcher: router.get('/jobs/{job_id}/stream', responses={404: {'description': 'Job does not exist'}, 429: {'description': 'Too many open job streams'}, 503: {'description': 'Job stream limiter is unavailable'}})
-songmaker_cli/library_api.py:api_library_continue # HTTP dispatcher: router.get('/library/continue')
+songmaker_cli/library_api.py:api_library_listen # HTTP dispatcher: router.get('/library/listen')
 songmaker_cli/library_api.py:api_library_pool_queue # HTTP dispatcher: router.get('/library/pool-queue')
 songmaker_cli/library_api.py:api_library_search # HTTP dispatcher: router.get('/library/search', responses={422: {'description': 'Search cursor is invalid or does not match the query'}})
+songmaker_cli/library_api.py:api_library_write # HTTP dispatcher: router.get('/library/write')
 songmaker_cli/lifecycle.py:bubblewrap_startup_probe_command # Operational caller scripts/prove_codex_image_sandbox.py outside src
 songmaker_cli/lora_api.py:api_add_sample # HTTP dispatcher: router.post('/loras/{lora_id}/samples', responses={409: {'description': 'LoRA cannot accept another sample'}, 413: {'description': 'Sample file is too large'}, 422: {'description': 'Sample upload is invalid'}})
 songmaker_cli/lora_api.py:api_add_sample_from_generation # HTTP dispatcher: router.post('/loras/{lora_id}/samples/from-generation', responses={404: {'description': 'Generation does not exist'}, 409: {'description': 'LoRA cannot accept another sample'}, 422: {'description': 'Generation cannot be used as a sample'}})

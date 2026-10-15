@@ -89,7 +89,7 @@ from songmaker_cli.db.queries import (
     pick_generation,
     prune_overflow_sessions,
     record_login_attempt,
-    record_song_listen,
+    record_playlist_listen,
     recover_stale_jobs_by_age_and_type,
     recover_stale_jobs_by_type,
     save_rating,
@@ -3348,7 +3348,7 @@ def test_playlist_listen_reference_after_its_song_is_removed(
     seeded_session.add(playlist)
     seeded_session.add(PlaylistEntry(playlist_id="p1", generation_id="g1", position=0))
     seeded_session.flush()
-    record_song_listen(seeded_session, seeded_session.get(Song, "s1"), playlist=playlist)
+    record_playlist_listen(seeded_session, playlist, song=seeded_session.get(Song, "s1"))
     seeded_session.commit()
 
     remove_song(seeded_session, "s1")

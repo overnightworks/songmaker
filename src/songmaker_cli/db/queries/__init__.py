@@ -1,9 +1,10 @@
 """Database query functions — split by domain, re-exported here for compatibility."""
 
-from songmaker_cli.db.queries.activity import CONTINUE_MAX_PLACES as CONTINUE_MAX_PLACES
-from songmaker_cli.db.queries.activity import PlaceActivity as PlaceActivity
+from songmaker_cli.db.queries.activity import PlaceListen as PlaceListen
 from songmaker_cli.db.queries.activity import SongWork as SongWork
-from songmaker_cli.db.queries.activity import list_place_activity as list_place_activity
+from songmaker_cli.db.queries.activity import WorkedSong as WorkedSong
+from songmaker_cli.db.queries.activity import list_place_listens as list_place_listens
+from songmaker_cli.db.queries.activity import list_worked_songs as list_worked_songs
 from songmaker_cli.db.queries.activity import record_song_edit as record_song_edit
 from songmaker_cli.db.queries.activity import record_song_played as record_song_played
 from songmaker_cli.db.queries.albums import RestoreWindowExpiredError as RestoreWindowExpiredError
@@ -423,9 +424,6 @@ from songmaker_cli.db.queries.songs import list_songs as list_songs
 from songmaker_cli.db.queries.songs import move_song as move_song
 from songmaker_cli.db.queries.songs import (
     record_playlist_listen as record_playlist_listen,
-)
-from songmaker_cli.db.queries.songs import (
-    record_song_listen as record_song_listen,
 )
 from songmaker_cli.db.queries.songs import rename_song as rename_song
 from songmaker_cli.db.queries.songs import restore_song as restore_song

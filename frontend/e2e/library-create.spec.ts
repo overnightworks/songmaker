@@ -33,7 +33,7 @@ const LIBRARY_CREATE_FLOW_API_REQUEST_BUDGET = 35;
 const EMPTY_LIST_ANSWERS: Record<string, unknown> = {
 	'/api/albums': { items: [], total: 0, offset: 0, limit: 50, has_more: false },
 	'/api/playlists': [],
-	'/api/library/continue': { items: [] }
+	'/api/library/listen': { items: [] }
 };
 
 let guard: FlowGuard;

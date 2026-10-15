@@ -18,10 +18,11 @@ import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { toasts } from '$lib/stores/toast';
 import { ApiError } from '$lib/api/fetch';
+import { LIBRARY_WALL_RECENT_PAGE_SIZE } from '$lib/constants';
 
 const fetchPlaylists = vi.fn();
 const fetchPlaylist = vi.fn();
-const fetchLibraryContinue = vi.fn();
+const fetchLibraryListen = vi.fn();
 const fetchAlbums = vi.fn();
 const createAlbum = vi.fn();
 const createPlaylist = vi.fn();
@@ -31,7 +32,7 @@ vi.mock('$app/navigation', async () =>
 );
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
 vi.mock('$lib/api/library', () => ({
-	fetchLibraryContinue: (...args: unknown[]) => fetchLibraryContinue(...args)
+	fetchLibraryListen: (...args: unknown[]) => fetchLibraryListen(...args)
 }));
 vi.mock('$lib/api/albums', () => ({ fetchAlbum: vi.fn(), fetchAlbums: vi.fn() }));
 vi.mock('$lib/api/songs', () => ({ fetchSong: vi.fn(), fetchSongs: vi.fn() }));
@@ -56,7 +57,7 @@ beforeEach(() => {
 		...playlist({ id: 'p-local', entry_count: 2, share_slug: null }),
 		entries: []
 	});
-	fetchLibraryContinue.mockReset().mockResolvedValue({ items: [] });
+	fetchLibraryListen.mockReset().mockResolvedValue({ items: [] });
 	fetchAlbums.mockReset().mockResolvedValue(albumPage([], false));
 	createAlbum.mockReset().mockResolvedValue(album({ id: 'a-night', title: 'Night Drive' }));
 	createPlaylist
@@ -145,7 +146,7 @@ function pressedOrder(root: ParentNode): string[] {
 	);
 }
 
-function place(type: 'album' | 'playlist', id: string, title: string, activityAt: string) {
+function place(type: 'album' | 'playlist', id: string, title: string, playedAt: string) {
 	return {
 		type,
 		id,
@@ -154,8 +155,15 @@ function place(type: 'album' | 'playlist', id: string, title: string, activityAt
 		album_covers: [],
 		song_id: null,
 		song_title: null,
-		activity_at: activityAt
+		song_number: null,
+		played_at: playedAt
 	};
+}
+
+type ListenPage = { offset: number; limit: number };
+
+function isRecentRead(page: ListenPage): boolean {
+	return page.limit === LIBRARY_WALL_RECENT_PAGE_SIZE;
 }
 
 function seedWall(): void {
@@ -227,7 +235,7 @@ describe('LibraryWall', () => {
 			vi.unstubAllEnvs();
 		});
 
-		it('orders Recent by the activity Continue reads and names the last work, never re-sorting Continue', async () => {
+		it('orders Recent by the listens Continue reads and names the last listen, never re-sorting Continue', async () => {
 			seedWall();
 			const continueRow = [place('album', 'a-nacht', 'nachtstrom', '2026-09-27T03:47:00Z')];
 			const everyPlace = [
@@ -236,8 +244,8 @@ describe('LibraryWall', () => {
 				place('album', 'a-nacht', 'nachtstrom', '2026-09-24T18:31:00Z'),
 				place('album', 'a-sonne', 'Sonnenlauf', '2026-09-20T10:00:00Z')
 			];
-			fetchLibraryContinue.mockImplementation((page?: { offset: number; limit: number }) =>
-				Promise.resolve({ items: page ? everyPlace : continueRow })
+			fetchLibraryListen.mockImplementation((page: ListenPage) =>
+				Promise.resolve({ items: isRecentRead(page) ? everyPlace : continueRow })
 			);
 			const root = await render();
 			await vi.waitFor(() => expect(continueTitles(root)).toEqual(['nachtstrom']));
@@ -252,7 +260,7 @@ describe('LibraryWall', () => {
 					'Sonnenlauf'
 				])
 			);
-			expect(fetchLibraryContinue).toHaveBeenCalledWith({ offset: 0, limit: 200 });
+			expect(fetchLibraryListen).toHaveBeenCalledWith({ offset: 0, limit: 200 });
 			expect(pressedOrder(root)).toEqual(['Recent']);
 			expect(tileLines(root)).toEqual([
 				'today 05:47',
@@ -263,7 +271,7 @@ describe('LibraryWall', () => {
 			expect(continueTitles(root)).toEqual(['nachtstrom']);
 		});
 
-		it('orders Recent by the activity of every place and names its last work, past one page of that activity', async () => {
+		it('orders Recent by the listens of every place and names its last listen, past one page of them', async () => {
 			const titles = Array.from(
 				{ length: 209 },
 				(_, index) => `Album ${String(index).padStart(3, '0')}`
@@ -272,9 +280,9 @@ describe('LibraryWall', () => {
 			const byActivity = titles
 				.toReversed()
 				.map((title) => place('album', title, title, '2026-09-27T03:47:00Z'));
-			fetchLibraryContinue.mockImplementation((page?: { offset: number; limit: number }) =>
+			fetchLibraryListen.mockImplementation((page: ListenPage) =>
 				Promise.resolve({
-					items: page ? byActivity.slice(page.offset, page.offset + page.limit) : []
+					items: isRecentRead(page) ? byActivity.slice(page.offset, page.offset + page.limit) : []
 				})
 			);
 			const root = await render();
@@ -342,14 +350,14 @@ describe('LibraryWall', () => {
 		seedWall();
 		const rankedBy = (album: string) =>
 			Promise.resolve({ items: [place('album', album, album, '2026-09-21T10:00:00Z')] });
-		fetchLibraryContinue.mockImplementation(() => rankedBy('a-sonne'));
+		fetchLibraryListen.mockImplementation(() => rankedBy('a-sonne'));
 		const root = await render();
 		orderButton(root, 'Recent').click();
 		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('Sonnenlauf'));
 
 		const failedRead = Promise.reject(new Error('offline'));
 		failedRead.catch(() => undefined);
-		fetchLibraryContinue.mockImplementation(() => failedRead);
+		fetchLibraryListen.mockImplementation(() => failedRead);
 		returnToForeground();
 		await failedRead.catch(() => undefined);
 		await tick();
@@ -357,7 +365,7 @@ describe('LibraryWall', () => {
 		expect(tileTitles(root)[0]).toBe('Sonnenlauf');
 		expect(root.querySelector('[role="alert"]')).toBeNull();
 
-		fetchLibraryContinue.mockImplementation(() => rankedBy('a-nacht'));
+		fetchLibraryListen.mockImplementation(() => rankedBy('a-nacht'));
 		reconnect();
 		await vi.waitFor(() => expect(tileTitles(root)[0]).toBe('nachtstrom'));
 	});

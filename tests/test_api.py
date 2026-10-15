@@ -30,10 +30,12 @@ from songmaker_cli.db.models import (
     Score,
     Song,
     User,
+    UserSongWork,
     Version,
 )
 from songmaker_cli.jobs.generation import _load_song_meta
 from songmaker_cli.middleware.gzip import SelectiveGZipMiddleware
+from songmaker_cli.timestamps import aware_timestamp
 
 _DEFAULT_USER_ID = "u-test"
 
@@ -454,12 +456,11 @@ def test_rename_song_other_user_blocked(tmp_path: Path) -> None:
         assert session.query(Song).filter_by(id="s-other").first().title == "Their Song"
 
 
-def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
+def test_listen_song_records_the_listeners_own_listen_and_leaves_the_song_itself_alone(
+    client: TestClient,
+) -> None:
     with client.app.state.ctx.db() as session:
-        song = session.get(Song, "s1")
-        assert song is not None
-        updated_at_before_listen = song.updated_at
-
+        updated_at_before_listen = session.get(Song, "s1").updated_at
     before = datetime.now(timezone.utc)
 
     resp = client.post("/api/songs/s1/listen")
@@ -468,11 +469,10 @@ def test_listen_song_persists_server_timestamp(client: TestClient) -> None:
     assert resp.status_code == 200
     with client.app.state.ctx.db() as session:
         song = session.get(Song, "s1")
-        assert song is not None
-        assert song.last_played_at is not None
-        played_at = song.last_played_at.replace(tzinfo=timezone.utc)
-        assert before <= played_at <= after
+        assert song.last_played_at is None
         assert song.updated_at == updated_at_before_listen
+        listen = session.query(UserSongWork).one()
+        assert before <= aware_timestamp(listen.album_played_at) <= after
 
 
 @pytest.mark.parametrize(
@@ -522,7 +522,7 @@ def _seed_listen_playlists(client: TestClient) -> None:
 
 def _assert_no_listen_recorded(client: TestClient) -> None:
     with client.app.state.ctx.db() as session:
-        assert session.get(Song, "s1").last_played_at is None
+        assert session.query(UserSongWork).count() == 0
         assert session.query(Playlist).filter(
             Playlist.last_played_at.is_not(None)
             | Playlist.last_played_song_id.is_not(None),
@@ -543,10 +543,8 @@ def test_listen_song_from_an_own_playlist_moves_the_playlist_without_editing_it(
     assert resp.status_code == 200
     with client.app.state.ctx.db() as session:
         playlist = session.get(Playlist, "p-own")
-        song = session.get(Song, "s1")
         assert playlist.last_played_song_id == "s1"
         assert before <= playlist.last_played_at.replace(tzinfo=timezone.utc) <= after
-        assert playlist.last_played_at == song.last_played_at
         assert playlist.updated_at == updated_at_before_listen
 
 
@@ -568,7 +566,7 @@ def test_listen_song_without_a_playlist_leaves_every_playlist_untouched(
 
     assert resp.status_code == 200
     with client.app.state.ctx.db() as session:
-        assert session.get(Song, "s1").last_played_at is not None
+        assert session.query(UserSongWork).one().album_played_at is not None
         assert session.query(Playlist).filter(
             Playlist.last_played_at.is_not(None),
         ).count() == 0
@@ -605,15 +603,6 @@ def test_admin_listen_never_moves_another_musicians_playlist(tmp_path: Path) -> 
     _assert_no_listen_recorded(client)
 
 
-def test_admin_listen_on_a_foreign_song_leaves_the_song_unmarked(tmp_path: Path) -> None:
-    client = _make_authed_client(tmp_path, role="admin", user_id="u-admin")
-
-    resp = client.post("/api/songs/s1/listen")
-
-    assert resp.status_code == 200
-    _assert_no_listen_recorded(client)
-
-
 def test_admin_listen_on_a_foreign_song_from_an_own_playlist_marks_only_the_playlist(
     tmp_path: Path,
 ) -> None:
@@ -630,7 +619,6 @@ def test_admin_listen_on_a_foreign_song_from_an_own_playlist_marks_only_the_play
         playlist = session.get(Playlist, "p-admin")
         assert playlist.last_played_song_id == "s1"
         assert playlist.last_played_at is not None
-        assert session.get(Song, "s1").last_played_at is None
 
 
 @pytest.mark.parametrize(
@@ -659,10 +647,7 @@ def test_listen_song_hides_a_foreign_song(tmp_path: Path, body: dict | None) -> 
 
     assert resp.status_code == 404
     assert resp.json()["detail"] == "Song not found"
-    with client.app.state.ctx.db() as session:
-        song = session.get(Song, "s-other")
-        assert song is not None
-        assert song.last_played_at is None
+    _assert_no_listen_recorded(client)
 
 
 def test_rename_album_other_user_blocked(tmp_path: Path) -> None:
