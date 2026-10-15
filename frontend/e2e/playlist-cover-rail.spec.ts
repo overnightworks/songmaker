@@ -39,12 +39,12 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	return (await response.json()) as T;
 }
 
-// The phone reaches the Playlists page through its search sheet, which leaves
-// the query in the drawer's field and the rail's groups hidden behind it.
-async function openDrawerOverPageSearch(page: Page): Promise<void> {
-	await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+// Reaching the Playlists page through search leaves its query in the rail's
+// field, and the rail's groups hidden behind it.
+async function showRailGroupsAfterPageSearch(page: Page, isMobile: boolean): Promise<void> {
+	if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 	await page
-		.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
+		.getByRole('navigation', { name: RAIL_NAV_LABEL })
 		.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })
 		.click();
 }
@@ -180,7 +180,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
-		if (isMobile) await openDrawerOverPageSearch(page);
+		await showRailGroupsAfterPageSearch(page, isMobile);
 		const refreshedRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
@@ -223,7 +223,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 
 		await openPlaylistsPage(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
-		if (isMobile) await openDrawerOverPageSearch(page);
+		await showRailGroupsAfterPageSearch(page, isMobile);
 		const restoredRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
