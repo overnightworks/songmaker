@@ -23,6 +23,7 @@ import {
 	stampNavigatedEntry,
 	standInForDocumentLoadsForTests,
 	standingPageEntryId,
+	stepBackOr,
 	stepBackOrGoTo,
 	stepBackTo,
 	type HistoryEntry
@@ -586,6 +587,29 @@ describe('history adapter', () => {
 			expect(back).not.toHaveBeenCalled();
 			expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
 			expect(location.pathname).toBe('/login');
+		}
+	);
+
+	// A list the library shows from its own stores is no plain route: the page
+	// hands its Back the write that opens it, which runs only where no page of
+	// the tab's own lies below (#1389).
+	it.each([
+		{
+			standing: 'a page pushed over another',
+			arrange: () => void pushEntry('/album/a', {}),
+			lands: '/'
+		},
+		{ standing: "the tab's first entry", arrange: () => enterApp('/album/a', 1), lands: FALLBACK }
+	])(
+		"a page's own Back on $standing, given the write that opens its list, lands on $lands",
+		async ({ arrange, lands }) => {
+			arrange();
+			const tabLength = history.length;
+
+			await stepBackOr(async () => void replaceEntry(FALLBACK, {}));
+
+			expect(location.pathname).toBe(lands);
+			expect(history).toHaveLength(tabLength);
 		}
 	);
 

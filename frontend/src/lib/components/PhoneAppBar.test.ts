@@ -48,6 +48,7 @@ vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation'
 const navigation = vi.hoisted(() => ({
 	openAppPage: vi.fn(),
 	openLibraryWall: vi.fn(),
+	openListOverPage: vi.fn(),
 	openRailSearchTarget: vi.fn()
 }));
 vi.mock('$lib/stores/navigation', () => navigation);
@@ -337,25 +338,6 @@ describe('PhoneAppBar', () => {
 		expect(location.pathname).toBe('/album/a2');
 		expect(history).toHaveLength(tabLength);
 		expect(backName(target)).toBe(backLabel('Library'));
-	});
-
-	// With nothing before it, ‹ writes the page's list over the page, so the
-	// list's own ‹ goes on rather than back to the page it replaced.
-	it.each<{ page: string; opened: Pathname; list: Pathname; next: string | null }>([
-		{ page: 'a Settings section', opened: '/settings/voices', list: '/settings', next: 'Library' },
-		{ page: 'Settings', opened: '/settings', list: '/', next: null },
-		{ page: 'an album', opened: '/album/a1', list: '/', next: null }
-	])('on $page with nothing before it, ‹ writes $list over it', async ({ opened, list, next }) => {
-		await standOn(opened);
-		const target = renderBar();
-		await tick();
-		const tabLength = history.length;
-
-		await pressBarBack(target);
-
-		expect(location.pathname).toBe(list);
-		expect(history).toHaveLength(tabLength);
-		expect(backName(target)).toBe(next === null ? null : backLabel(next));
 	});
 });
 

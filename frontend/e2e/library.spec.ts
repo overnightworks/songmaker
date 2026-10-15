@@ -58,6 +58,7 @@ import {
 	MOBILE_VIEWPORT,
 	NARROW_VIEWPORT,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openLibraryWall,
 	openSettingsSection,
 	playlistEntryRows,
@@ -776,6 +777,32 @@ test('an album with nothing to play dims its circle and leaves the running album
 		})
 	).toHaveCount(0);
 });
+
+// An album opened by its address has nothing of the tab's own below it, so
+// its ‹ writes the Library over it (#1354 rule 25): the wall shows in the
+// album's place, and the tab holds no more entries than before (#1389).
+test(
+	'a directly opened album: ‹ shows the Library wall in its place',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }) => {
+		const guard = new FlowGuard(page);
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+		const album = surface.getByRole('heading', { name: library.albumTitle });
+		await page.goto(`/album/${library.albumId}`);
+		await expect(album).toBeVisible();
+		const tabLength = await page.evaluate(() => history.length);
+
+		await backOnPhone(page, RAIL_LIBRARY_LABEL);
+
+		await expect(page).toHaveURL(/\/$/);
+		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
+		await expect(album).toBeHidden();
+		expect(await page.evaluate(() => history.length)).toBe(tabLength);
+		await expect(accountCircle(page)).toBeVisible();
+		guard.assertClean();
+	}
+);
 
 /** One album's own one-target row inside the rail's LIBRARY group. */
 function railAlbumRow(rail: Locator, albumTitle: string): Locator {

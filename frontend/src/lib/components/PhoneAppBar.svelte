@@ -1,5 +1,4 @@
 <script module lang="ts">
-	import type { Pathname } from '$app/types';
 	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import { RAIL_SETTINGS_LABEL } from '$lib/constants';
 	import {
@@ -8,14 +7,15 @@
 		playlistRoutePath,
 		songRoutePath
 	} from '$lib/routes/addresses';
+	import type { PageList } from '$lib/stores/navigation';
 	import { visibleRailSearchPages } from '$lib/stores/railSearch';
 
 	export const SEARCH_OPEN_LABEL = 'Search';
 	export const SEARCH_SHEET_LABEL = 'Search';
 	export const SEARCH_CLOSE_LABEL = 'Close search';
 
-	const LIBRARY_HREF: Pathname = '/';
-	const SETTINGS_HREF: Pathname = '/settings';
+	const LIBRARY_HREF: PageList = '/';
+	const SETTINGS_HREF: PageList = '/settings';
 	const ALBUM_NAME = 'Album';
 	const PLAYLIST_NAME = 'Playlist';
 	const SONG_NAME = 'Song';
@@ -32,10 +32,9 @@
 	}
 
 	// The list a page belongs to, which its ‹ opens when no page of the tab's
-	// own lies below it (#1354 rule 25). Until the phone tabs arrive, the
-	// Library lists albums and playlists alike, and a Settings section belongs
-	// to the Settings list.
-	export function listOfPage(pathname: string): Pathname {
+	// own lies below it (#1354 rule 25): a Settings section belongs to the
+	// Settings list, every other page to the Library.
+	export function listOfPage(pathname: string): PageList {
 		return pathname.startsWith(`${SETTINGS_HREF}/`) ? SETTINGS_HREF : LIBRARY_HREF;
 	}
 
@@ -73,10 +72,10 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { APP_NAME, RAIL_DRAWER_OPEN_LABEL, SONG_TITLE_LABEL } from '$lib/constants';
-	import { pageBelowStandingPage, stepBackOrGoTo } from '$lib/history/historyController';
+	import { pageBelowStandingPage, stepBackOr } from '$lib/history/historyController';
 	import { historyLayerState } from '$lib/stores/layers';
 	import { albumList, songList } from '$lib/stores/libraryData';
-	import { openLibraryWall } from '$lib/stores/navigation';
+	import { openLibraryWall, openListOverPage } from '$lib/stores/navigation';
 	import { playlistList } from '$lib/stores/playlists';
 	import { phoneAppBar, sidebarOpen, toggleSidebar } from '$lib/stores/ui';
 	import { handleFocusTrapKeydown } from '$lib/utils/focus-trap';
@@ -115,11 +114,11 @@
 	});
 
 	// ‹ is the page's own Back: the history controller steps back onto the page
-	// below, or writes the page's list over the page, by the same question that
-	// names ‹ above. The song, the one page whose draft could be lost on the
-	// way, carries its own bar instead of ‹.
+	// below, or has the page's list written over the page, by the same question
+	// that names ‹ above. The song, the one page whose draft could be lost on
+	// the way, carries its own bar instead of ‹.
 	function goBack(): void {
-		void stepBackOrGoTo(listOfPage(location.pathname));
+		void stepBackOr(() => openListOverPage(listOfPage(location.pathname)));
 	}
 
 	function closeSearch(): void {

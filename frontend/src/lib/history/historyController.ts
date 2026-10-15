@@ -620,13 +620,16 @@ export function pageBelowStandingPage(): string | null {
 }
 
 // A page's own Back control: one step back onto the page below while there is
-// one, `fallback` otherwise -- written over the page, so the browser's Back
-// from there does not return to it.
-export function stepBackOrGoTo(fallback: string): Promise<void> {
-	if (pageBelowStandingPage() === null) {
-		return startNavigation(fallback, { replaceState: true });
-	}
+// one; otherwise `openList` writes the page's list over the page, never
+// pushing it, so the browser's Back from there does not return to the page.
+export function stepBackOr(openList: () => Promise<void>): Promise<void> {
+	if (pageBelowStandingPage() === null) return openList();
 	return stepBackOffStandingEntry();
+}
+
+// The same Back for a page whose list is a plain route, written over it.
+export function stepBackOrGoTo(fallback: string): Promise<void> {
+	return stepBackOr(() => startNavigation(fallback, { replaceState: true }));
 }
 
 // From an entry with an id, any landing below it is the step's; from a

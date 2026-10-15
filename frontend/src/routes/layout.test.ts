@@ -27,7 +27,11 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
-import { SEARCH_OPEN_LABEL, SEARCH_SHEET_LABEL } from '$lib/components/PhoneAppBar.svelte';
+import {
+	SEARCH_OPEN_LABEL,
+	SEARCH_SHEET_LABEL,
+	backLabel
+} from '$lib/components/PhoneAppBar.svelte';
 import { handleSessionLost } from '$lib/api/fetch';
 import { AUTH_CHECK_NETWORK_ERROR, AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants/auth';
 import {
@@ -1031,6 +1035,76 @@ describe('overlays on Settings', () => {
 		await vi.waitFor(() => expect(sheet()).toBeNull());
 		expect(standingHistoryEntry()?.layer).toBeUndefined();
 		expect(location.pathname).toBe('/settings/voices');
+	});
+});
+
+// On a page the tab was entered on, nothing of the tab's own lies below, so ‹
+// writes the page's list over the page (#1354 rule 25): the list shows, the
+// tab holds no more entries than before, and the list's own ‹ goes on rather
+// than back to the page it replaced (#1389).
+describe('‹ on the page a phone tab was entered on', () => {
+	function barBack(target: HTMLElement): HTMLButtonElement | null {
+		return target.querySelector<HTMLButtonElement>('.mobile-strip button.back');
+	}
+
+	async function pressBarBack(target: HTMLElement, lands: string): Promise<void> {
+		barBack(target)?.click();
+		await vi.waitFor(() => expect(location.pathname).toBe(lands));
+		await historyStandsStill();
+		await tick();
+	}
+
+	function enterTabOn(address: string, entry: unknown = null): void {
+		resetLibraryContextForTests();
+		resetNavigationForTests();
+		replaceHistoryEntry(address, entry);
+		loadLibraryHistoryPageForTests();
+		startFakeRouter();
+	}
+
+	it.each([
+		{ page: 'an album', address: '/album/a1', collection: { kind: 'album' as const, id: 'a1' } },
+		{
+			page: 'a playlist',
+			address: '/playlist/friday-night',
+			collection: { kind: 'playlist' as const, id: 'p1' }
+		}
+	])('on $page shows the Library wall in its place', async ({ address, collection }) => {
+		const opened = { ...libraryRootState(), surface: 'detail' as const, collection };
+		enterTabOn(address, opened);
+		openCollection.set(collection);
+		librarySurface.set('detail');
+		const target = await renderLayout(address);
+		await vi.waitFor(() => expect(historyEntry()).toEqual(opened));
+		await historyStandsStill();
+		const tabLength = history.length;
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+
+		await pressBarBack(target, '/');
+
+		expect(get(librarySurface)).toBe('browse');
+		expect(historyEntry()).toMatchObject({ surface: 'browse', collection });
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)).toBeNull();
+	});
+
+	it('on a Settings section opens Settings, whose ‹ opens the Library wall', async () => {
+		enterTabOn('/settings/voices');
+		const target = await renderLayout('/settings/voices');
+		await historyStandsStill();
+		const tabLength = history.length;
+
+		await pressBarBack(target, '/settings');
+
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
+
+		await pressBarBack(target, '/');
+
+		expect(get(librarySurface)).toBe('browse');
+		expect(historyEntry()).toMatchObject({ surface: 'browse' });
+		expect(history).toHaveLength(tabLength);
+		expect(barBack(target)).toBeNull();
 	});
 });
 
