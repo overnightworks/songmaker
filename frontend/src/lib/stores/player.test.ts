@@ -515,41 +515,44 @@ describe('playback dispatch', () => {
 		expect(get(selectedSongId)).toBe('keep');
 	});
 
-	it('playback completion advances album playback to the next song', async () => {
-		const firstGen = makeGen(genDefaults);
-		const secondGen = makeGen({
-			...genDefaults,
-			id: 'g2',
-			song_id: 's2',
-			mp3_path: 'a1/song2.mp3'
-		});
+	it.each([
+		{
+			moment: 'the end of its first song',
+			from: 'top' as const,
+			to: 'Second',
+			move: () => audioPlayer.currentCallbacks.onEnded?.('normal')
+		},
+		{
+			moment: 'Next on its last song',
+			from: { songId: 's2' },
+			to: 'First',
+			move: () => playNextSong()
+		},
+		{
+			moment: 'Previous on its first song',
+			from: 'top' as const,
+			to: 'Second',
+			move: () => playPrevSong()
+		}
+	])('an album queue moves on to $to at $moment', async ({ from, to, move }) => {
 		const firstSong = makeSong({
 			...queuedSongDefaults(),
 			title: 'First',
-			generations: [firstGen]
+			generations: [makeGen(genDefaults)]
 		});
 		const secondSong = makeSong({
 			...queuedSongDefaults(),
 			id: 's2',
 			title: 'Second',
 			track_number: 2,
-			generations: [secondGen]
+			generations: [makeGen({ ...genDefaults, id: 'g2', song_id: 's2', mp3_path: 'a1/song2.mp3' })]
 		});
 		songList.set([firstSong, secondSong]);
-		queueContext.set({ type: 'album', albumId: 'a1' });
-		audioPlayer.current = makePlayback(firstGen, firstSong);
+		await playAlbum('a1', from);
 
-		audioPlayer.currentCallbacks.onEnded?.('normal');
-		await Promise.resolve();
+		await move();
 
-		expect(audioPlayer.load).toHaveBeenLastCalledWith({
-			generation: secondGen,
-			songId: 's2',
-			songTitle: 'Second',
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		});
+		expect(vi.mocked(audioPlayer.load).mock.lastCall?.[0].songTitle).toBe(to);
 	});
 
 	it('playback completion advances playlist playback to the next entry', async () => {
@@ -934,78 +937,6 @@ describe('playback dispatch', () => {
 			expect.objectContaining({ songTitle: 'Second' }),
 			{ restart: true }
 		);
-	});
-
-	it('playNextSong wraps album playback to the first playable song', async () => {
-		const firstGen = makeGen(genDefaults);
-		const secondGen = makeGen({
-			...genDefaults,
-			id: 'g2',
-			song_id: 's2',
-			mp3_path: 'a1/song2.mp3'
-		});
-		const firstSong = makeSong({
-			...queuedSongDefaults(),
-			title: 'First',
-			generations: [firstGen]
-		});
-		const secondSong = makeSong({
-			...queuedSongDefaults(),
-			id: 's2',
-			title: 'Second',
-			track_number: 2,
-			generations: [secondGen]
-		});
-		songList.set([firstSong, secondSong]);
-		queueContext.set({ type: 'album', albumId: 'a1' });
-		audioPlayer.current = makePlayback(secondGen, secondSong);
-
-		await playNextSong();
-
-		expect(audioPlayer.load).toHaveBeenLastCalledWith({
-			generation: firstGen,
-			songId: 's1',
-			songTitle: 'First',
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		});
-	});
-
-	it('playPrevSong wraps album playback to the last playable song', async () => {
-		const firstGen = makeGen(genDefaults);
-		const secondGen = makeGen({
-			...genDefaults,
-			id: 'g2',
-			song_id: 's2',
-			mp3_path: 'a1/song2.mp3'
-		});
-		const firstSong = makeSong({
-			...queuedSongDefaults(),
-			title: 'First',
-			generations: [firstGen]
-		});
-		const secondSong = makeSong({
-			...queuedSongDefaults(),
-			id: 's2',
-			title: 'Second',
-			track_number: 2,
-			generations: [secondGen]
-		});
-		songList.set([firstSong, secondSong]);
-		queueContext.set({ type: 'album', albumId: 'a1' });
-		audioPlayer.current = makePlayback(firstGen, firstSong);
-
-		await playPrevSong();
-
-		expect(audioPlayer.load).toHaveBeenLastCalledWith({
-			generation: secondGen,
-			songId: 's2',
-			songTitle: 'Second',
-			artist: 'Artist',
-			albumTitle: 'Album',
-			lyrics: null
-		});
 	});
 });
 

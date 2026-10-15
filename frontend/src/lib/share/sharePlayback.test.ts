@@ -76,15 +76,15 @@ function albumSong(
 	};
 }
 
-function albumView(): SharedCollectionView {
+function albumView(slug = 'slug'): SharedCollectionView {
 	return fromSharedAlbum({
 		title: 'Album',
 		artist: 'Artist',
 		subtitle: '',
 		year: '',
 		songs: [
-			albumSong('s1', 'First', 1, '/shared/slug/audio/s1.mp3', 128),
-			albumSong('s2', 'Second', 2, '/shared/slug/audio/s2.mp3', 96),
+			albumSong('s1', 'First', 1, `/shared/${slug}/audio/s1.mp3`, 128),
+			albumSong('s2', 'Second', 2, `/shared/${slug}/audio/s2.mp3`, 96),
 			albumSong('s3', 'Third (unpicked)', 3, null, null)
 		]
 	});
@@ -521,7 +521,7 @@ describe('a track still waiting on its stream when the share gives the player ba
 		return { fetchStream, settle };
 	}
 
-	it.each([
+	const settlings = [
 		{
 			stream: 'arrives',
 			settle: (held: ReturnType<typeof heldStream>) => held.settle.answer(streamManifest(false))
@@ -530,7 +530,9 @@ describe('a track still waiting on its stream when the share gives the player ba
 			stream: 'fails',
 			settle: (held: ReturnType<typeof heldStream>) => held.settle.fail(new Error('network'))
 		}
-	])('loads nothing over the app once that stream $stream', async ({ settle }) => {
+	];
+
+	it.each(settlings)('loads nothing over the app once that stream $stream', async ({ settle }) => {
 		const app: AudioPlayerCallbacks = { ...NO_CALLBACKS };
 		audioPlayer.swapCallbacks(app);
 		const held = heldStream();
@@ -550,6 +552,91 @@ describe('a track still waiting on its stream when the share gives the player ba
 			mode: audioPlayer.mode,
 			src: fakeAudio.src
 		}).toEqual({ holds: 'Private Draft', mode: 'classic', src: '/audio/private-take.mp3' });
+	});
+
+	// A page that opens another share keeps its SharePlayback and starts it
+	// again, so the earlier share's request settles into the same instance:
+	// share B, with a stream of its own, started right after share A stopped.
+	function startShareB(playback: SharePlayback) {
+		const fetchStreamB = vi
+			.fn()
+			.mockResolvedValue({ ...streamManifest(false), stream_url: '/share-b-stream.mp3' });
+		playback.start(albumView('share-b'), fetchStreamB);
+		return fetchStreamB;
+	}
+
+	// What B shows once A's request settled, and what B's own Play then plays.
+	async function shareBOnceASettled(
+		playback: SharePlayback,
+		fetchStreamB: ReturnType<typeof startShareB>,
+		settleA: () => void
+	) {
+		settleA();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		const onceAHasSettled = {
+			holds: audioPlayer.current?.songTitle ?? null,
+			src: fakeAudio.src,
+			rowDurations: playback.queueRows.map((row) => row.durationSec)
+		};
+		playback.play();
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		return {
+			onceAHasSettled,
+			bPlays: { holds: audioPlayer.current?.songTitle, src: fakeAudio.src },
+			bAskedForItsStream: fetchStreamB.mock.calls.length
+		};
+	}
+
+	const SHARE_B_ALONE = {
+		onceAHasSettled: { holds: null, src: '', rowDurations: [128, 96] },
+		bPlays: { holds: 'First', src: '/share-b-stream.mp3' },
+		bAskedForItsStream: 1
+	};
+
+	it.each(settlings)(
+		'leaves the next share alone, in the player and in its stream, once that stream $stream',
+		async ({ settle }) => {
+			const held = heldStream();
+			const playback = new SharePlayback();
+			const shareA = albumView('share-a');
+			playback.start(shareA, held.fetchStream);
+			playback.toggle(shareA.tracks[0]);
+			await vi.waitFor(() => expect(held.fetchStream).toHaveBeenCalled());
+			playback.stop();
+			const fetchStreamB = startShareB(playback);
+
+			const seen = await shareBOnceASettled(playback, fetchStreamB, () => settle(held));
+
+			expect(seen).toEqual(SHARE_B_ALONE);
+			playback.stop();
+		}
+	);
+
+	it('leaves the next share alone once a rebuild of the earlier stream arrives', async () => {
+		const rebuild = heldStream();
+		const fetchStreamA = vi
+			.fn()
+			.mockResolvedValueOnce(streamManifest(false))
+			.mockImplementationOnce(rebuild.fetchStream);
+		const playback = new SharePlayback();
+		const shareA = albumView('share-a');
+		playback.start(shareA, fetchStreamA);
+		playback.toggle(shareA.tracks[0]);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+		vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 404 }));
+		fakeAudio.currentTime = 4;
+		fakeAudio.fire('timeupdate');
+		fakeAudio.fire('error');
+		await vi.waitFor(() => expect(rebuild.fetchStream).toHaveBeenCalled());
+		playback.stop();
+		const fetchStreamB = startShareB(playback);
+
+		const seen = await shareBOnceASettled(playback, fetchStreamB, () =>
+			rebuild.settle.answer({ ...streamManifest(false), stream_url: '/share-a-fresh.mp3' })
+		);
+
+		expect(seen).toEqual(SHARE_B_ALONE);
+		playback.stop();
 	});
 });
 

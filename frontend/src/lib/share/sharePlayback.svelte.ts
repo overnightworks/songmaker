@@ -72,9 +72,10 @@ export class SharePlayback {
 	private manifest: QueueStreamManifest | null = $state(null);
 	private fetchStream: ShareStreamFetcher | null = null;
 	private previousCallbacks: AudioPlayerCallbacks = NO_CALLBACKS;
-	// The hold on the player start() was given. A track whose stream was still
-	// on its way when the share gave the player back loads nothing: the player
-	// is the app's again by then (#1391).
+	// The hold on the player start() was given. Each request that waits on
+	// the server keeps the tenure it began in, never this field: a share that
+	// gave the player back and was started again holds a new one, so nothing
+	// the earlier start asked for lands in the player or the manifest (#1391).
 	private tenure: PlayerTenure | null = null;
 
 	readonly currentTrack = $derived(
@@ -226,12 +227,13 @@ export class SharePlayback {
 
 	private async playTrack(track: SharedTrack, start: TrackStart = FROM_THE_TOP): Promise<void> {
 		const collection = this.collection;
-		if (track.audioUrl === null || !collection) return;
+		const tenure = this.tenure;
+		if (track.audioUrl === null || !collection || tenure === null) return;
 		this.ended = false;
 		// Without a stream the track loads in the same task as the press, which
 		// a browser needs to let it sound.
-		const place = this.canUseStream() ? await this.streamPlaceOf(track) : null;
-		if (!this.holdsThePlayer()) return;
+		const place = this.canUseStream() ? await this.streamPlaceOf(track, tenure) : null;
+		if (!this.stillHolds(tenure)) return;
 		if (place) {
 			audioPlayer.loadStream(place.manifest, place.track.index, {
 				autoplay: start.autoplay,
@@ -249,9 +251,12 @@ export class SharePlayback {
 
 	// Null where the track plays on its own instead: the stream could not be
 	// had, or does not hold it.
-	private async streamPlaceOf(track: SharedTrack): Promise<StreamPlace | null> {
+	private async streamPlaceOf(
+		track: SharedTrack,
+		tenure: PlayerTenure
+	): Promise<StreamPlace | null> {
 		try {
-			const manifest = await this.ensureManifest();
+			const manifest = await this.ensureManifest(tenure);
 			const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
 			return streamTrack ? { manifest, track: streamTrack } : null;
 		} catch {
@@ -259,8 +264,8 @@ export class SharePlayback {
 		}
 	}
 
-	private holdsThePlayer(): boolean {
-		return this.tenure !== null && !audioPlayer.changedHandsSince(this.tenure);
+	private stillHolds(tenure: PlayerTenure): boolean {
+		return !audioPlayer.changedHandsSince(tenure);
 	}
 
 	private advanceClassic(direction: 1 | -1): void {
@@ -274,7 +279,7 @@ export class SharePlayback {
 		return this.fetchStream !== null && !this.shuffle;
 	}
 
-	private async ensureManifest(): Promise<QueueStreamManifest> {
+	private async ensureManifest(tenure: PlayerTenure): Promise<QueueStreamManifest> {
 		if (
 			this.manifest &&
 			Date.parse(this.manifest.expires_at) > Date.now() + STREAM_REFRESH_MARGIN_MS
@@ -283,14 +288,16 @@ export class SharePlayback {
 		}
 		if (!this.fetchStream) throw new Error('Stream unavailable for this share');
 		const manifest = await this.fetchStream();
-		this.manifest = manifest;
+		if (this.stillHolds(tenure)) this.manifest = manifest;
 		return manifest;
 	}
 
 	private async rebuildManifest(): Promise<QueueStreamManifest | null> {
-		if (!this.fetchStream) return null;
+		const tenure = this.tenure;
+		if (!this.fetchStream || tenure === null) return null;
 		try {
 			const fresh = await this.fetchStream();
+			if (!this.stillHolds(tenure)) return null;
 			this.manifest = fresh;
 			return fresh;
 		} catch {

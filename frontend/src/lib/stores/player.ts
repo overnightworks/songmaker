@@ -327,16 +327,6 @@ function toPlaybackInfo(gen: GenerationItem, song: SongItem): PlaybackInfo {
 	};
 }
 
-function playGeneration(
-	gen: GenerationItem,
-	song: SongItem,
-	opts: { restart?: boolean } = {}
-): void {
-	clearWindowEnd();
-	clearLibraryQueueSkipFeedback();
-	loadQueueTake(toPlaybackInfo(gen, song), opts);
-}
-
 function randomIndex(length: number): number {
 	return Math.floor(Math.random() * length); // NOSONAR S2245: shuffle has no security context.
 }
@@ -955,13 +945,6 @@ async function rebuildQueueAfterShuffleToggle(): Promise<void> {
 	});
 }
 
-function queueSongs(): SongItem[] {
-	const ctx = get(queueContext);
-	const songs = get(songList);
-	if (ctx.type === 'album') return songs.filter((s) => s.album_id === ctx.albumId);
-	return songs;
-}
-
 export function canPlayPrevSong(
 	current: PlaybackInfo | null,
 	songs: SongItem[],
@@ -1534,70 +1517,26 @@ function playNativeTakesInDirection(
 	if (next.kind === 'take') playNativeIndex(ctx, next.index);
 }
 
-function playContextInDirection(ctx: QueueContext, direction: QueueDirection): boolean {
+// Every queue the app plays holds its takes: an album or library start loads
+// its opening take as the queue at once and gathers the rest around it. Only
+// the library context a reload begins with holds none, and nothing plays in
+// it to step from.
+function playContextInDirection(ctx: QueueContext, direction: QueueDirection): void {
 	if (ctx.type === 'playlist') {
 		playPlaylistInDirection(ctx, direction);
-		return true;
+		return;
 	}
-	if (ctx.takes && ctx.takes.length > 0) {
-		playNativeTakesInDirection(ctx, direction);
-		return true;
-	}
-	return ctx.type === 'library';
-}
-
-async function playSongCandidate(song: SongItem): Promise<boolean> {
-	await ensureGenerationsLoaded(song.id);
-	const fresh = get(songList).find((item) => item.id === song.id);
-	const gen = fresh ? bestGen(fresh) : undefined;
-	if (!gen || !fresh) return false;
-	playGeneration(gen, fresh);
-	return true;
-}
-
-async function playRandomNextSong(songs: SongItem[], currentSongId: string): Promise<void> {
-	const candidates = songs.filter((song) => song.id !== currentSongId && song.generation_count > 0);
-	while (candidates.length > 0) {
-		const index = Math.floor(Math.random() * candidates.length); // NOSONAR S2245: shuffle has no security context.
-		const [next] = candidates.splice(index, 1);
-		if (await playSongCandidate(next)) return;
-	}
-}
-
-async function playAdjacentSong(
-	songs: SongItem[],
-	currentSongId: string,
-	direction: QueueDirection
-): Promise<void> {
-	const currentIndex = songs.findIndex((song) => song.id === currentSongId);
-	for (let offset = 1; offset <= songs.length; offset++) {
-		const song = songs[(currentIndex + direction * offset + songs.length) % songs.length];
-		if (!song || song.id === currentSongId || song.generation_count === 0) continue;
-		if (await playSongCandidate(song)) return;
-	}
+	if (ctx.takes && ctx.takes.length > 0) playNativeTakesInDirection(ctx, direction);
 }
 
 export async function playNextSong(): Promise<void> {
 	if (playStreamInDirection(1)) return;
-	const ctx = get(queueContext);
-	if (playContextInDirection(ctx, 1)) return;
-	const current = audioPlayer.current;
-	if (!current) return;
-	const songs = queueSongs();
-	if (get(shuffleEnabled)) {
-		await playRandomNextSong(songs, current.songId);
-		return;
-	}
-	await playAdjacentSong(songs, current.songId, 1);
+	playContextInDirection(get(queueContext), 1);
 }
 
 export async function playPrevSong(): Promise<void> {
 	if (playStreamInDirection(-1)) return;
-	const ctx = get(queueContext);
-	if (playContextInDirection(ctx, -1)) return;
-	const current = audioPlayer.current;
-	if (!current) return;
-	await playAdjacentSong(queueSongs(), current.songId, -1);
+	playContextInDirection(get(queueContext), -1);
 }
 
 // The album's opening take, which is not always the opening track's:
