@@ -123,6 +123,11 @@ describe('SharedCollection page root', () => {
 		},
 		{
 			source: nowPlayingFrameSource,
+			selector: '.now-playing.page.stacked .np-player-col',
+			rule: 'align-self: stretch'
+		},
+		{
+			source: nowPlayingFrameSource,
 			selector: '.now-playing.page.stacked .np-page-lyrics',
 			rule: 'flex: 1 1 0'
 		},

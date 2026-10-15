@@ -943,6 +943,9 @@
 		grid-template-rows: auto minmax(0, 1fr);
 		gap: 1.6rem;
 	}
+	.now-playing.page.stacked .np-player-col {
+		align-self: stretch;
+	}
 	.now-playing.page.stacked .np-page-lyrics {
 		flex: 1 1 0;
 		min-height: 10rem;
