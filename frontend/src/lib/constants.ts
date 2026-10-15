@@ -130,27 +130,6 @@ export const SONG_LINK_NOT_FOUND_TOAST = 'Song not found — it may have been de
 export const LEGACY_TAKE_LINK_NOT_FOUND_TOAST =
 	'This take no longer exists — opened the song instead';
 
-// A collection header's play circle and the shuffle square beside it name
-// what they do to it by its kind: "Play album", "Pause playlist", "Shuffle
-// album". Every surface that renders the header, and every flow that finds it
-// by name, builds the label here.
-export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
-const COLLECTION_PLAY_ACTION = 'Play';
-const COLLECTION_PAUSE_ACTION = 'Pause';
-const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
-
-export function collectionPlayLabel(kind: CollectionPlayKind): string {
-	return `${COLLECTION_PLAY_ACTION} ${kind}`;
-}
-
-export function collectionPauseLabel(kind: CollectionPlayKind): string {
-	return `${COLLECTION_PAUSE_ACTION} ${kind}`;
-}
-
-export function collectionShuffleLabel(kind: CollectionPlayKind): string {
-	return `${COLLECTION_SHUFFLE_ACTION} ${kind}`;
-}
-
 // The transport's play button is named after the state its click leaves:
 // "Pause" while the listener asked for sound — playing, a take loading or a
 // stalled one recovering, or one waiting for the network — "Retry" once it
@@ -158,6 +137,23 @@ export function collectionShuffleLabel(kind: CollectionPlayKind): string {
 export const TRANSPORT_PLAY_LABEL = 'Play';
 export const TRANSPORT_PAUSE_LABEL = 'Pause';
 export const TRANSPORT_RETRY_LABEL = 'Retry';
+
+export type TransportLabel =
+	typeof TRANSPORT_PLAY_LABEL | typeof TRANSPORT_PAUSE_LABEL | typeof TRANSPORT_RETRY_LABEL;
+
+// A collection header's play circle and the shuffle square beside it name
+// what they do to it by its kind: "Play album", "Pause playlist", "Retry
+// album", "Shuffle album". The circle's action is the transport's own label, so
+// the header tells the bar's story. Every surface that renders the header, and
+// every flow that finds it by name, builds the label here.
+export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
+export const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
+type CollectionAction = TransportLabel | typeof COLLECTION_SHUFFLE_ACTION;
+
+export function collectionActionLabel(action: CollectionAction, kind: CollectionPlayKind): string {
+	return `${action} ${kind}`;
+}
+
 // What the transport says once it gave up on a take while the network was
 // gone: its return retries the take by itself, so no Retry press is asked for.
 export const PLAYER_WAITING_FOR_NETWORK = 'Waiting for the network.';
@@ -641,6 +637,8 @@ export const ACCOUNT_MENU_LABEL = 'Account';
 export const ACCOUNT_MENU_CLOSE_LABEL = 'Close account menu';
 export const ACCOUNT_MENU_SIGNED_IN_PREFIX = 'Signed in as';
 export const ACCOUNT_MENU_LOGOUT_LABEL = 'Log out';
+// A sign-out the server did not confirm leaves the session standing (#1340).
+export const SIGN_OUT_FAILED_MESSAGE = "Couldn't sign out. Check your connection and try again.";
 export const THEME_SWITCH_TO_LIGHT_LABEL = 'Light theme';
 export const THEME_SWITCH_TO_DARK_LABEL = 'Dark theme';
 

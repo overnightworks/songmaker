@@ -7,6 +7,7 @@
 		nowPlayingOpen,
 		nowPlayingSurface,
 		openNowPlaying,
+		pendingStart,
 		playIdleStart,
 		playbackSource,
 		playNextSong,
@@ -20,7 +21,8 @@
 		shuffleEnabled,
 		shuffleLabel,
 		transportOfTheStart,
-		toggleShuffle
+		toggleShuffle,
+		waitingStartOf
 	} from '$lib/stores/player';
 	import { openCollection } from '$lib/stores/collection';
 	import {
@@ -32,7 +34,8 @@
 	import {
 		audioPlayer,
 		transportIsBusy,
-		transportOffersPause
+		transportOffersPause,
+		transportWaitingNotice
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		LIBRARY_QUEUE_EMPTY_TITLE,
@@ -43,13 +46,13 @@
 		MINI_PLAYER_TITLE_SCROLL_REST_MS,
 		MINI_PLAYER_TITLE_SCROLL_RETURN_MS,
 		MINI_PLAYER_WITHOUT_COVER_MEDIA,
-		PLAYER_WAITING_FOR_NETWORK,
 		REDUCED_MOTION_MEDIA,
 		openNowPlayingLabel
 	} from '$lib/constants';
 	import TransportBarFrame from './TransportBarFrame.svelte';
 	import OfflineStrip from './OfflineStrip.svelte';
 	import {
+		clearMediaSessionPositionState,
 		updateMediaSessionPlaybackState,
 		updateMediaSessionPositionState
 	} from '$lib/services/mediaSession';
@@ -71,9 +74,15 @@
 	// A start that waits for the network shows as the transport's own wait, here
 	// and on the lock screen, which is the only surface with the screen off.
 	const barTransport = $derived(transportOfTheStart(current, startNotice, transport));
-	const errorMsg = $derived(
-		barTransport === 'waiting-for-network' ? PLAYER_WAITING_FOR_NETWORK : audioPlayer.error
-	);
+	const waitingSong = $derived(waitingStartOf(startNotice, $pendingStart)?.song ?? null);
+	// While a start waits, the bar names it in place of any take still loaded,
+	// so the take it shows, and a press acts on, is none (#1330).
+	const shownTake = $derived(waitingSong ? null : current);
+	// A waiting start has no position yet, so the timeline shows none rather
+	// than where the take it replaced was paused.
+	const shownTime = $derived(shownTake ? currentTime : 0);
+	const shownDuration = $derived(shownTake ? duration : 0);
+	const errorMsg = $derived(transportWaitingNotice(barTransport) ?? audioPlayer.error);
 
 	const isPlaying = $derived(transport === 'playing');
 	const isLoading = $derived(transportIsBusy(transport));
@@ -94,19 +103,19 @@
 	// The phone names where the music comes from under the title; the
 	// desktop row, and a queue with no source, name the take.
 	const detailLine = $derived.by(() => {
-		if (!current) return '';
+		if (!shownTake) return '';
 		if (mobileTransport && $playbackSource) return nowPlayingFromLabel($playbackSource.title);
 		return nowPlayingTakeLabel(
-			current.generation.version_number,
-			current.generation.generation_number
+			shownTake.generation.version_number,
+			shownTake.generation.generation_number
 		);
 	});
 	const prevSong = $derived(canPlayPrevSong(current, songs, ctx));
 	const nextSong = $derived(canPlayNextSong(current, songs, ctx));
 
 	const coverUrl = $derived.by(() => {
-		if (!current) return null;
-		const song = songs.find((item) => item.id === current.songId);
+		if (!shownTake) return null;
+		const song = songs.find((item) => item.id === shownTake.songId);
 		const album = song ? $albumList.find((item) => item.id === song.album_id) : undefined;
 		return album?.cover?.card ?? null;
 	});
@@ -137,7 +146,7 @@
 	};
 
 	function togglePlay(): void {
-		if (!current) {
+		if (!shownTake) {
 			void playIdleStart();
 			return;
 		}
@@ -149,7 +158,7 @@
 	// The docked panel is a disclosure the bar owns: the same press that opened
 	// it puts it away again. A dialog surface only ever opens from here.
 	function onNowPlayingClick(): void {
-		if (!current) return;
+		if (!shownTake) return;
 		if (docked) closeNowPlaying();
 		else openNowPlaying('queue');
 	}
@@ -158,11 +167,16 @@
 		if (!current) closeNowPlaying();
 	});
 
+	// A start paused from the lock screen stays there, paused, as a take would.
 	$effect(() => {
 		updateMediaSessionPlaybackState(
-			transportOffersPause(barTransport) ? 'playing' : current ? 'paused' : 'none'
+			transportOffersPause(barTransport) ? 'playing' : current || $pendingStart ? 'paused' : 'none'
 		);
-		updateMediaSessionPositionState(currentTime, duration);
+	});
+
+	$effect(() => {
+		if (shownTake) updateMediaSessionPositionState(currentTime, duration);
+		else clearMediaSessionPositionState();
 	});
 
 	$effect(() => {
@@ -196,24 +210,25 @@
 		</span>
 	{/if}
 	<span class="track-text">
-		{#if current}
-			{#key current.songTitle}
+		{#if shownTake}
+			{#key shownTake.songTitle}
 				<span
 					class="track-title"
 					class:glowing={isPlaying}
 					style={titleGlowStyle}
-					{@attach mobileTransport && scrollTitleOnceWhenCut}>{current.songTitle}</span
+					{@attach mobileTransport && scrollTitleOnceWhenCut}>{shownTake.songTitle}</span
 				>
 			{/key}
 			<span class="track-detail" id={detailId}
 				>{detailLine}{#if isLoading}<span class="loading-text">Loading...</span
 					>{:else if inlineFailure}<span class="error-text">{inlineFailure}</span>{/if}</span
 			>
-		{:else if startNotice === 'building' || startNotice === 'awaiting-network'}
+		{:else if waitingSong}
+			<span class="track-title">{waitingSong.songTitle}</span>
+			<span class="track-detail">{waitingSong.albumTitle}</span>
+		{:else if startNotice === 'building' || startNotice === 'restoring'}
 			<span class="track-title">{LIBRARY_QUEUE_LOADING_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
-		{:else if startNotice === 'gave-up-on-network'}
-			<span class="track-title">{idleTarget.label}</span>
 		{:else if startNotice === 'empty'}
 			<span class="track-title">{LIBRARY_QUEUE_EMPTY_TITLE}</span>
 			<span class="track-detail">{idleTarget.label}</span>
@@ -234,9 +249,9 @@
 	<TransportBarFrame
 		transport={barTransport}
 		{errorMsg}
-		takeIsCurrent={current !== null}
-		{currentTime}
-		{duration}
+		takeIsCurrent={shownTake !== null}
+		currentTime={shownTime}
+		duration={shownDuration}
 		{formatTime}
 		canPrev={Boolean(prevSong)}
 		canNext={Boolean(nextSong)}
@@ -251,9 +266,9 @@
 		nowPlayingOpen={$nowPlayingOpen}
 		onOpenNowPlaying={onNowPlayingClick}
 		nowPlayingDocked={docked}
-		nowPlayingDisabled={!current}
-		nowPlayingTargetLabel={current ? openNowPlayingLabel(current.songTitle) : undefined}
-		nowPlayingTargetDescriptionId={current ? detailId : undefined}
+		nowPlayingDisabled={!shownTake}
+		nowPlayingTargetLabel={shownTake ? openNowPlayingLabel(shownTake.songTitle) : undefined}
+		nowPlayingTargetDescriptionId={shownTake ? detailId : undefined}
 		onNowPlayingTriggerBind={(el) => (nowPlayingTrigger = el)}
 		{mobileTransport}
 	/>

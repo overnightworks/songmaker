@@ -1,9 +1,11 @@
 import { writable, derived, get } from 'svelte/store';
 import type { AuthUser } from '$lib/api/types';
 import { ApiError, fetchMe, login as apiLogin, logout as apiLogout } from '$lib/api/client';
-import { NetworkError } from '$lib/api/fetch';
+import { NetworkError, SIGN_IN_PATH } from '$lib/api/fetch';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { SERVER_UNREACHABLE_STATUSES } from '$lib/constants';
 import { forgetPlaybackDiagnostics } from '$lib/services/playbackDiagnostics';
+import { loadAfresh } from '$lib/history/historyController';
 import {
 	AUTH_CHECK_NETWORK_ERROR,
 	AUTH_CHECK_RATE_LIMITED_ERROR,
@@ -26,6 +28,7 @@ export const authCheckError = writable<string | null>(null);
 export const authCheckUnreachable = writable(false);
 let sessionGate: () => void = () => {};
 let pendingSessionCheck: ReturnType<typeof setTimeout> | null = null;
+let signingOut = false;
 export const isAdmin = derived(currentUser, (u) => u?.role === 'admin');
 
 type AuthNotice = 'unauthorized' | 'disabled';
@@ -35,6 +38,8 @@ type AuthNotice = 'unauthorized' | 'disabled';
 export type AuthFailureKind = AuthNotice | 'unreachable' | 'retryable';
 
 export const authNotice = writable<AuthNotice | null>(null);
+// A sign-out the server did not confirm: the person is still signed in.
+export const signOutFailed = writable(false);
 
 export function classifyAuthFailure(error: unknown): AuthFailureKind {
 	if (error instanceof NetworkError) return 'unreachable';
@@ -124,6 +129,8 @@ function stopPendingSessionCheck(): void {
 export function resetAuthForTests(): void {
 	forgetUnreachableSessionCheck();
 	sessionGate = () => {};
+	signingOut = false;
+	signOutFailed.set(false);
 }
 
 export async function login(username: string, password: string): Promise<AuthUser> {
@@ -132,6 +139,7 @@ export async function login(username: string, password: string): Promise<AuthUse
 	try {
 		const user = await apiLogin(username, password);
 		currentUser.set(user);
+		signOutFailed.set(false);
 		return user;
 	} catch (err) {
 		if (err instanceof ApiError) {
@@ -164,24 +172,40 @@ export function clearAuth(notice: AuthNotice | null = null): void {
 	resetTitleDrafts();
 }
 
-// Only a deliberate logout forgets what was playing and what the player
-// recorded; a session that merely ran out (401, clearAuth above) keeps both
-// for the same user's next sign-in. They are forgotten after clearAuth, once
-// no signed-in user is left for a take still playing to save them under again.
+// A sign-out ends here only once the server confirms the session is gone: a
+// shared device must not look signed out while the server still holds it
+// (#1340, ruling A of 14.10.2026). A 401 confirms it as well -- that session
+// was already gone. Confirmed, it forgets what was playing and what the
+// player recorded, which a session that merely ran out keeps for the same
+// user's next sign-in, and leaves by a fresh document load, so nothing the
+// signed-in page held survives in memory. The player is unloaded first, so a
+// save on the way out cannot write the record again (#1187).
+// From the request on the user is still set but no longer has a session to
+// lose: a request refused meanwhile -- a poll -- is this sign-out, not an
+// expiry.
 export async function logout(): Promise<void> {
-	const { stopLibraryResourceSync } = await import('$lib/stores/resourceSync');
 	const { forgetPlaybackResume } = await import('$lib/stores/playbackResume');
 	const user = get(currentUser);
-	stopLibraryResourceSync();
+	signingOut = true;
+	signOutFailed.set(false);
 	try {
 		await apiLogout();
-	} catch {
-		// swallow — always clear local state
-	} finally {
-		clearAuth();
-		if (user) {
-			forgetPlaybackResume(user.id);
-			forgetPlaybackDiagnostics(user.id);
+	} catch (error) {
+		if (!(error instanceof ApiError && error.status === 401)) {
+			signingOut = false;
+			signOutFailed.set(true);
+			return;
 		}
 	}
+	audioPlayer.unload();
+	if (user) {
+		forgetPlaybackResume(user.id);
+		forgetPlaybackDiagnostics(user.id);
+	}
+	await loadAfresh(SIGN_IN_PATH);
+}
+
+// What a refused request asks before it reacts as a lost session.
+export function hasSessionToLose(): boolean {
+	return get(currentUser) !== null && !signingOut;
 }

@@ -17,7 +17,8 @@ import {
 	NOW_PLAYING_NO_LYRICS,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
+	TRANSPORT_RETRY_LABEL,
+	PLAYER_WAITING_FOR_NETWORK
 } from '$lib/constants';
 import {
 	NOW_PLAYING_CURATE_DONE_LABEL,
@@ -426,6 +427,21 @@ describe('NowPlaying', () => {
 				busy: play?.getAttribute('aria-busy'),
 				spinner: play?.querySelector('.spinner') !== null
 			}).toEqual({ named, busy: String(busy), spinner: busy });
+		}
+	);
+
+	it.each([
+		{ transport: 'waiting-for-network', words: PLAYER_WAITING_FOR_NETWORK },
+		{ transport: 'recovering', words: null }
+	] as const)(
+		'says why it waits once given up offline, as the bar does, and not while $transport (#1330)',
+		async ({ transport, words }) => {
+			vi.spyOn(audioPlayer, 'transport', 'get').mockReturnValue(transport);
+			await renderSurface(info());
+
+			expect(
+				target.querySelector('.waiting-notice[role="status"]')?.textContent?.trim() ?? null
+			).toBe(words);
 		}
 	);
 

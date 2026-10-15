@@ -5,10 +5,12 @@
 		ACCOUNT_MENU_LOGOUT_LABEL,
 		ACCOUNT_MENU_SIGNED_IN_PREFIX,
 		RAIL_SETTINGS_LABEL,
+		SIGN_OUT_FAILED_MESSAGE,
 		THEME_SWITCH_TO_DARK_LABEL,
 		THEME_SWITCH_TO_LIGHT_LABEL
 	} from '$lib/constants';
 	import { page } from '$app/state';
+	import { signOutFailed } from '$lib/stores/auth';
 	import { openAppPage } from '$lib/stores/navigation';
 	import { theme, toggleTheme } from '$lib/stores/ui';
 	import { accountInitial } from '$lib/utils/format';
@@ -23,6 +25,12 @@
 	let popover: MenuPopover | undefined = $state();
 
 	const SETTINGS_HREF = '/settings';
+
+	// A failed sign-out is told while the menu that tried it stays open; a
+	// later opening shows the menu as it stands, not an old failure.
+	function forgetFailureOnClose(): () => void {
+		return () => signOutFailed.set(false);
+	}
 
 	function openSettings(): void {
 		popover?.close();
@@ -53,6 +61,11 @@
 		<button class="menu-item logout" onclick={onlogout}>
 			<Icon name="log-out" class="menu-item-icon" />{ACCOUNT_MENU_LOGOUT_LABEL}
 		</button>
+		{#if $signOutFailed}
+			<p class="sign-out-failed" role="alert" {@attach forgetFailureOnClose}>
+				{SIGN_OUT_FAILED_MESSAGE}
+			</p>
+		{/if}
 	</MenuPopover>
 </div>
 
@@ -135,6 +148,13 @@
 	}
 
 	.menu-item.logout :global(.menu-item-icon) {
+		color: var(--score-bad);
+	}
+
+	.sign-out-failed {
+		margin: 0;
+		padding: 0.3rem 0.6rem 0.4rem;
+		font-size: 0.8rem;
 		color: var(--score-bad);
 	}
 </style>
