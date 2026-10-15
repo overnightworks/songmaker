@@ -109,6 +109,7 @@ export async function restoreLibrarySearch(
 		get(librarySearch).hasMore &&
 		get(librarySearch).items.length < target
 	) {
+		// NOSONAR(S9382) each page needs the cursor the previous page returned
 		await runLibrarySearch(q, sort, { reset: false });
 	}
 }
