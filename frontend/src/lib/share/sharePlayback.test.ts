@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { QueueStreamManifest, SharedAlbumSongPayload, WhisperCue } from '$lib/api/types';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import { audioPlayer, type AudioPlayerCallbacks } from '$lib/services/audioPlayer.svelte';
@@ -344,14 +344,25 @@ describe('toggle() and classic playback', () => {
 		playback.stop();
 	});
 
-	it('wraps next/prev in classic mode', () => {
+	it('#1374 rule 7: next and prev stop at the ends in classic mode instead of wrapping', () => {
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, null);
 
 		playback.toggle(view.tracks[1]);
+		fakeAudio.fire('canplay');
+		const atLast = { canNext: playback.canNext, canPrev: playback.canPrev };
 		playback.next();
+		const afterNextAtLast = playback.currentTrack?.key;
+		playback.prev();
+		const afterPrev = playback.currentTrack?.key;
+		const atFirst = { canNext: playback.canNext, canPrev: playback.canPrev };
+		playback.prev();
 
+		expect(atLast).toEqual({ canNext: false, canPrev: true });
+		expect(afterNextAtLast).toBe('s2');
+		expect(afterPrev).toBe('s1');
+		expect(atFirst).toEqual({ canNext: true, canPrev: false });
 		expect(playback.currentTrack?.key).toBe('s1');
 		playback.stop();
 	});
@@ -376,6 +387,36 @@ describe('the end of a share', () => {
 
 		expect(playback.ended).toBe(ended);
 		expect(playback.currentTrack?.key).toBe(next);
+		playback.stop();
+	});
+
+	it('#1374 rule 7: an album ends at its last track in classic mode, even shuffled', () => {
+		const view = albumView();
+		const playback = new SharePlayback();
+		playback.start(view, null);
+		playback.toggle(view.tracks[0]);
+		playback.setShuffle(true);
+		const last = playback.queue.items.at(-1);
+		playback.jump(playback.queue.items.length - 1);
+		fakeAudio.fire('canplay');
+		fakeAudio.fire('playing');
+		fakeAudio.fire('ended');
+
+		expect(playback.ended).toBe(true);
+		expect(playback.currentTrack?.key).toBe(last?.key);
+		expect(playback.canNext).toBe(false);
+		playback.stop();
+	});
+
+	it('#1374 rule 7: Play again on an ended album starts its first song', () => {
+		const view = albumView();
+		const playback = playToTheEnd(view, 1);
+
+		playback.play();
+
+		expect(playback.ended).toBe(false);
+		expect(playback.currentTrack?.key).toBe('s1');
+		expect(audioPlayer.current?.songId).toBe('s1');
 		playback.stop();
 	});
 
@@ -438,18 +479,39 @@ describe('stream playback', () => {
 		playback.stop();
 	});
 
-	it('flags windowEnded without wrapping when a windowed stream ends', async () => {
-		const fetchStream = vi.fn().mockResolvedValue(streamManifest(true));
+	it.each([false, true])(
+		'#1374 rule 7: a stream served as windowed=%s ends at its last track instead of wrapping',
+		async (windowed) => {
+			const fetchStream = vi.fn().mockResolvedValue(streamManifest(windowed));
+			const playback = new SharePlayback();
+			const view = albumView();
+			playback.start(view, fetchStream);
+
+			playback.jump(1);
+			await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+			const canNextAtLast = playback.canNext;
+			fakeAudio.fire('ended');
+
+			expect(canNextAtLast).toBe(false);
+			expect(playback.ended).toBe(true);
+			expect(playback.currentTrack?.key).toBe('s2');
+			playback.stop();
+		}
+	);
+
+	it('#1374 rule 7: Play again after a stream album ended starts its first song', async () => {
+		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
 		const playback = new SharePlayback();
 		const view = albumView();
 		playback.start(view, fetchStream);
-
 		playback.jump(1);
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		fakeAudio.fire('ended');
 
-		expect(playback.windowEnded).toBe(true);
-		expect(playback.currentTrack?.key).toBe('s2');
+		playback.play();
+
+		await vi.waitFor(() => expect(playback.currentTrack?.key).toBe('s1'));
+		expect(playback.ended).toBe(false);
 		playback.stop();
 	});
 
@@ -694,5 +756,65 @@ describe('stop()', () => {
 		expect(audioPlayer.current).toBeNull();
 		fakeAudio.fire('ended');
 		expect(previousOnEnded).toHaveBeenCalled();
+	});
+});
+
+describe('the lock screen', () => {
+	function recordLockScreenTitles(): (string | null)[] {
+		const titles: (string | null)[] = [];
+		const mediaSession = {};
+		Object.defineProperty(mediaSession, 'metadata', {
+			set: (metadata: MediaMetadataInit | null) => titles.push(metadata?.title ?? null)
+		});
+		Object.defineProperty(navigator, 'mediaSession', { value: mediaSession, configurable: true });
+		vi.stubGlobal(
+			'MediaMetadata',
+			vi.fn(function (init: MediaMetadataInit) {
+				return init;
+			})
+		);
+		onTestFinished(() => {
+			Reflect.deleteProperty(navigator, 'mediaSession');
+		});
+		return titles;
+	}
+
+	it('defect:#1374 names the playing song, and goes blank when the share stops', () => {
+		const titles = recordLockScreenTitles();
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, null);
+
+		playback.toggle(view.tracks[1]);
+		playback.stop();
+
+		expect(titles.at(-2)).toBe('Second');
+		expect(titles.at(-1)).toBeNull();
+	});
+
+	it('defect:#1374 names the playing song in stream mode too', async () => {
+		const titles = recordLockScreenTitles();
+		const playback = new SharePlayback();
+		playback.start(albumView(), vi.fn().mockResolvedValue(streamManifest(false)));
+
+		playback.jump(1);
+		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
+
+		expect(titles).toContain('Second');
+		playback.stop();
+	});
+
+	it('defect:#1374 leaves the lock screen to the app that took the player back', () => {
+		const titles = recordLockScreenTitles();
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, null);
+		playback.toggle(view.tracks[0]);
+		audioPlayer.swapCallbacks(NO_CALLBACKS);
+		const written = titles.length;
+
+		playback.stop();
+
+		expect(titles).toHaveLength(written);
 	});
 });

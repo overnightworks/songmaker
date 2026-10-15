@@ -35,7 +35,7 @@
 </script>
 
 <svelte:head>
-	<title>{playlist ? playlist.title : 'Shared Playlist'} | {APP_NAME}</title>
+	<title>{playlist ? playlist.title : 'Shared playlist'} | {APP_NAME}</title>
 </svelte:head>
 
 <SharedCollection

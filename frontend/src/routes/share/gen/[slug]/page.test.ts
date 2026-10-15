@@ -157,10 +157,10 @@ describe('shared generation (take) page', () => {
 		expect(active).toEqual([SECOND_LINE]);
 	});
 
-	it('says in one line that a take is no longer shared, with a way back and no player', async () => {
+	it('defect:#1374 says in one line that a take is no longer shared, with a way back and no player', async () => {
 		const target = await openSharedTake({ ok: false, status: 404 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Generation not found');
+		expect(target.querySelector('h1')?.textContent).toBe('Take not found');
 		expect(target.querySelector('.share-status a')?.getAttribute('href')).toBe('/login');
 		expect(target.querySelector('.now-playing')).toBeNull();
 	});
@@ -168,6 +168,6 @@ describe('shared generation (take) page', () => {
 	it('shows the error status when the fetch fails', async () => {
 		const target = await openSharedTake({ ok: false, status: 500 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Could not load this generation');
+		expect(target.querySelector('h1')?.textContent).toBe('Could not load this take');
 	});
 });

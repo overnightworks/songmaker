@@ -132,26 +132,7 @@ describe('shared playlist page', () => {
 		expect(target.textContent).toContain('Artist');
 	});
 
-	it('passes windowed manifests through and stops without wrapping', async () => {
-		mockFetch
-			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
-			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(true) });
-		const target = document.createElement('div');
-		document.body.appendChild(target);
-		component = mount(Page, { target });
-		await vi.waitFor(() => expect(target.querySelectorAll('.track-row')).toHaveLength(2));
-
-		target.querySelectorAll<HTMLButtonElement>('.track-row')[1].click();
-		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
-		audio.fire('ended');
-		await tick();
-
-		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[1].classList).toContain(
-			'current'
-		);
-	});
-
-	it('wraps a non-windowed playlist stream from its last track to its first', async () => {
+	it('#1374 rule 7: a playlist stream stops at its last song and Play again starts song 1', async () => {
 		mockFetch
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => playlist })
 			.mockResolvedValueOnce({ ok: true, status: 200, json: async () => manifest(false) });
@@ -164,9 +145,17 @@ describe('shared playlist page', () => {
 		await vi.waitFor(() => expect(audioPlayer.mode).toBe('stream'));
 		audio.fire('ended');
 		await tick();
+		document.querySelector<HTMLButtonElement>('.track-info.open-now-playing')?.click();
 
-		expect(target.querySelectorAll<HTMLButtonElement>('.track-row')[0].classList).toContain(
-			'current'
-		);
+		const rows = () => target.querySelectorAll<HTMLButtonElement>('.track-row');
+		expect(rows()[1].classList).toContain('current');
+		await vi.waitFor(() => expect(document.querySelector('.play-again')).not.toBeNull());
+		expect(document.querySelector('.play-again')?.textContent).toContain('Play again');
+		expect(
+			document.querySelector<HTMLButtonElement>('button[aria-label="Next song"]')?.disabled
+		).toBe(true);
+
+		document.querySelector<HTMLButtonElement>('.play-again')?.click();
+		await vi.waitFor(() => expect(rows()[0].classList).toContain('current'));
 	});
 });

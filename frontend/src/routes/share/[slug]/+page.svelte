@@ -35,7 +35,7 @@
 </script>
 
 <svelte:head>
-	<title>{album ? `${album.title} — ${album.artist}` : 'Shared Album'} | {APP_NAME}</title>
+	<title>{album ? `${album.title} — ${album.artist}` : 'Shared album'} | {APP_NAME}</title>
 </svelte:head>
 
 <SharedCollection

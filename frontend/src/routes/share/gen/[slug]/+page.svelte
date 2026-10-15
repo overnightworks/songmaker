@@ -42,7 +42,7 @@
 <SharedCollection
 	{loading}
 	{errorKind}
-	resource="generation"
+	resource="take"
 	onretry={() => fetchData(slug)}
 	{view}
 	fetchStream={null}
