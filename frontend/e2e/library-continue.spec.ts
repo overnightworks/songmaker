@@ -50,8 +50,7 @@ test('Continue shows up to six places listened in, follows a listen made elsewhe
 	let continueCoverRequests = 0;
 	page.on('request', (request) => {
 		const url = new URL(request.url());
-		if (request.method() === 'GET' && url.pathname === '/api/library/listen')
-			continueRequests += 1;
+		if (request.method() === 'GET' && url.pathname === '/api/library/listen') continueRequests += 1;
 		if (
 			request.resourceType() === 'image' &&
 			/^\/api\/(?:albums|playlists)\/[^/]+\/cover$/.test(url.pathname)
