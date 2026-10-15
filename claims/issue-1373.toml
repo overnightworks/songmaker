@@ -1,8 +1,0 @@
-claim_id = "67257cb5e4ee464c80421501bf35498d"
-agent = "claude-head"
-role = "builder"
-base = "41018038aa08a61507042954751bb520367f97bb"
-branch = "claude-head/issue-1373-freeze-the-blessed-library-picture-into"
-scope = ["docs/architecture.md", "docs/design/README.md", "docs/design/album-browsing.html", "docs/design/navigation.html"]
-opened_commit = "a58fb4fbb93f1f24c142601905d2d1e733ff9697"
-whole_reason = "one picture freeze: the picture owner plus the two documents that restate its rules"
