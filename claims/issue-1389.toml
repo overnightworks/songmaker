@@ -1,0 +1,8 @@
+claim_id = "5a8835e45afa4796a4ff363a20351fe1"
+agent = "claude-head"
+role = "builder"
+base = "0c9452d097d9ab9a838aec7dc57790cded0b0b25"
+branch = "claude-head/issue-1389-phone-top-bar-back-search-account"
+scope = ["frontend/src/lib/components/AccountMenu.svelte", "frontend/src/lib/components/shell/PhoneAppBar.svelte", "frontend/src/lib/components/shell/PhoneAppBar.test.ts", "frontend/src/lib/components/shell/RailSearch.svelte", "frontend/src/routes/settings/+layout.svelte"]
+opened_commit = "b4f41ed02e40a44e04949a10fba9ec45d296a066"
+whole_reason = "one phone top bar: the bar, its search sheet, the account menu, the settings layout that uses it, and their tests"
