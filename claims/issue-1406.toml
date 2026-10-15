@@ -1,8 +1,0 @@
-claim_id = "f52afc93ad7e458f82b51a20c198a15d"
-agent = "claude-head"
-role = "builder"
-base = "8cc32c241369edca00df8b7de48f1bec9307c1f2"
-branch = "claude-head/issue-1406-mcp-cve-bump"
-scope = ["pyproject.toml", "src/songmaker_cli/mcp_server/server.py", "tests/test_mcp_server.py", "uv.lock"]
-opened_commit = "39e96b88a027bb856a47840c3477259493d7d11e"
-whole_reason = "one advisory bump: the mcp bound, its lock, the MCP server's error translation it forces, and the MCP server tests"
