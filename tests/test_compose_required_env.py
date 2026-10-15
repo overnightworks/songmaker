@@ -11,6 +11,7 @@ HOME, and a scratch project name. ``--env-file`` replaces the project's
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -25,15 +26,14 @@ COMPOSE_TIMEOUT_SECONDS = 60
 
 @pytest.fixture(scope="module", autouse=True)
 def _require_docker_compose() -> None:
-    try:
-        version = subprocess.run(
-            ["docker", "compose", "version"],
-            capture_output=True,
-            text=True,
-            timeout=COMPOSE_TIMEOUT_SECONDS,
-        )
-    except FileNotFoundError:
+    if shutil.which("docker") is None:
         pytest.fail("docker is not on PATH; this module drives the real `docker compose config`")
+    version = subprocess.run(
+        ["docker", "compose", "version"],
+        capture_output=True,
+        text=True,
+        timeout=COMPOSE_TIMEOUT_SECONDS,
+    )
     if version.returncode != 0:
         pytest.fail(f"`docker compose` is unavailable: {version.stderr.strip()}")
 
