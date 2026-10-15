@@ -67,7 +67,7 @@ image = [
     "pillow>=12.3,<13",
 ]
 mcp = [
-    "mcp>=2,<3",
+    "mcp>=2.2,<3",
 ]
 acestep-worker = [
     "fastapi>=0.100,<1",
