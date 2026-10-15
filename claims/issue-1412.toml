@@ -1,0 +1,7 @@
+claim_id = "9567a4e7ae6b46aeae8acc3a59dcc283"
+agent = "claude-head"
+role = "builder"
+base = "71a4cb76cce441b71627413eb6d26e2bbb9ea544"
+branch = "claude-head/issue-1412-diagnostics-test-without-retry"
+scope = ["frontend/e2e/helpers.ts", "frontend/e2e/playback-diagnostics.spec.ts"]
+opened_commit = "af03c7575d55d72fda0f8d6ad888fd21123152c4"
