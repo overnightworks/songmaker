@@ -1,0 +1,8 @@
+claim_id = "6bd9af74d2204790ae662e0d784c044b"
+agent = "claude-head"
+role = "builder"
+base = "02ea1712b8e1dd6dcc2f720cf830029385bb3548"
+branch = "claude-head/issue-1421-share-payload-seed-covers"
+scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/share/sharedCollection.test.ts", "frontend/src/lib/share/sharedCollection.ts", "src/songmaker_cli/api_models/playlists.py", "src/songmaker_cli/api_models/songs.py", "src/songmaker_cli/sharing_api.py", "tests/test_sharing.py"]
+opened_commit = "39768af81457246f1fc62dd967cf062c8a00ff81"
+whole_reason = "the public share payload: its two models, the sharing API, the generated types, the share adapter, the share tests and the architecture payload paragraph"
