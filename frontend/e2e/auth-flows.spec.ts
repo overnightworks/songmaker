@@ -7,8 +7,9 @@
 // session behind an open song page and is sent to the door from there, and
 // since #1340 a drawer tap after the loss returns there to the tapped album.
 // Since #1322 an admin with two sessions finds its own marked as this device,
-// and the admin page keeps a create refusal in the form while a revoke refusal
-// stays. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
+// and a create refusal in the form clears on typing. Since #1397 a revoke that
+// another tab beat drops the dead row and says the session had already ended,
+// until a revoke works or the admin changes tab. Since #1340 a sign-out while a take plays leaves by a fresh sign-in
 // page, and one the server never received leaves the person signed in.
 //
 // This is here rather than in the unit suite because each of those
@@ -51,6 +52,7 @@ import { AUTH_SESSION_EXPIRED_MESSAGE } from '../src/lib/constants/auth';
 import {
 	ACCOUNT_MENU_LABEL,
 	ACCOUNT_MENU_LOGOUT_LABEL,
+	ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 	ADMIN_TABS_LABEL,
 	HITBOX_FREQUENT_PX,
 	RAIL_DRAWER_OPEN_LABEL,
@@ -192,8 +194,6 @@ const ACCOUNT_LOCKED_DETAIL =
 const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
 const OWN_SESSION_LABEL = 'This device';
 const REVOKE_LABEL = 'Revoke';
-// The server words every /api 404 this way (`spa_fallback` in `server.py`).
-const SESSION_GONE_MESSAGE = 'Not Found';
 const USERNAME_TAKEN_MESSAGE = 'Username already exists';
 const CREATE_USERNAME_PLACEHOLDER = 'Username';
 const CREATE_PASSWORD_PLACEHOLDER = 'Password';
@@ -492,6 +492,27 @@ async function openSessionsTab(page: Page, shell: Shell): Promise<void> {
 	]);
 }
 
+/**
+ * Revokes the admin's one other device from a second tab of this device, so
+ * the first tab's row for that device is stale.
+ */
+async function revokeOtherDeviceFromSecondTab(
+	page: Page,
+	shell: Shell,
+	admin: Account
+): Promise<void> {
+	const secondTab = await page.context().newPage();
+	const secondTabGuard = new FlowGuard(secondTab);
+	await secondTab.goto(ADMIN_PAGE_PATH);
+	await openSessionsTab(secondTab, shell);
+	const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
+	await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+	await expect(secondTabRows).toHaveCount(1);
+	await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
+	secondTabGuard.assertClean();
+	await secondTab.close();
+}
+
 async function attachShot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
 	const path = testInfo.outputPath(`${name}.png`);
 	await page.screenshot({ path, fullPage: true });
@@ -544,19 +565,27 @@ test.describe('admin row actions', () => {
 });
 
 test(
-	'an admin finds its own session marked this device, and a create refusal clears on typing while a revoke refusal stays',
+	'an admin finds its own session marked this device, a stale revoke drops the dead row and says so until a revoke works or the tab changes, and a create refusal clears on typing',
 	{ tag: ADMIN_REFUSALS_ARE_THE_POINT_TAG },
 	async ({ page, isMobile }, testInfo) => {
 		const shell = shellOf(testInfo);
 		await page.setViewportSize(isMobile ? MOBILE_VIEWPORT : DESKTOP_VIEWPORT);
-		const username = `e2e-admin-${shell}-${Date.now().toString(36)}`;
+		const stamp = Date.now().toString(36);
+		const username = `e2e-admin-${shell}-${stamp}`;
 		const admin: Account = {
 			id: await createAccount(adminApi, username, ACCOUNT_PASSWORD, 'admin'),
 			username,
 			password: ACCOUNT_PASSWORD
 		};
+		const musicianName = `e2e-musician-${shell}-${stamp}`;
+		const musician: Account = {
+			id: await createAccount(adminApi, musicianName, ACCOUNT_PASSWORD),
+			username: musicianName,
+			password: ACCOUNT_PASSWORD
+		};
 		try {
 			await signInElsewhere(admin);
+			await signInElsewhere(musician);
 			await page.goto('/login');
 			expect((await submitLogin(page, admin.username, admin.password)).status()).toBe(200);
 			await expect(workspace(page)).toBeVisible();
@@ -572,24 +601,30 @@ test(
 			await expect(otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true })).toBeVisible();
 			await attachShot(page, testInfo, `admin-own-session-${shell}`);
 
-			// A second tab of this device revokes the other device, so the first
-			// tab's row for it is stale and the server refuses its revoke.
-			const secondTab = await page.context().newPage();
-			const secondTabGuard = new FlowGuard(secondTab);
-			await secondTab.goto(ADMIN_PAGE_PATH);
-			await openSessionsTab(secondTab, shell);
-			const secondTabRows = secondTab.getByRole('row').filter({ hasText: admin.username });
-			await secondTabRows.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			await expect(secondTabRows).toHaveCount(1);
-			await expect(secondTabRows).toContainText(OWN_SESSION_LABEL);
-			secondTabGuard.assertClean();
-			await secondTab.close();
-
+			await revokeOtherDeviceFromSecondTab(page, shell, admin);
 			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
-			const revokeRefusal = page.getByText(SESSION_GONE_MESSAGE, { exact: true });
-			await expect(revokeRefusal).toBeVisible();
+			const alreadyEnded = page.getByText(ADMIN_SESSION_ALREADY_ENDED_MESSAGE, { exact: true });
+			await expect(alreadyEnded).toBeVisible();
+			await expect(ownRows).toHaveCount(1);
+			await expect(thisDevice).toHaveCount(1);
+			await attachShot(page, testInfo, `admin-stale-revoke-${shell}`);
+
+			// A third device signs in now, so the next revoke's refresh lists the
+			// row the second tab then makes stale.
+			await signInElsewhere(admin);
+			const musicianRow = page.getByRole('row').filter({ hasText: musician.username });
+			await musicianRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+			await expect(musicianRow).toHaveCount(0);
+			await expect(alreadyEnded).toBeHidden();
+			await expect(ownRows).toHaveCount(2);
+
+			await revokeOtherDeviceFromSecondTab(page, shell, admin);
+			await otherRow.getByRole('button', { name: REVOKE_LABEL, exact: true }).click();
+			await expect(alreadyEnded).toBeVisible();
+			await expect(ownRows).toHaveCount(1);
 
 			await openAdminTab(page, shell, 'users', 'Users');
+			await expect(alreadyEnded).toBeHidden();
 			const usernameField = page.getByPlaceholder(CREATE_USERNAME_PLACEHOLDER, { exact: true });
 			await usernameField.fill(account.username);
 			await page
@@ -598,14 +633,13 @@ test(
 			await page.getByRole('button', { name: CREATE_LABEL, exact: true }).click();
 			const createRefusal = page.getByText(USERNAME_TAKEN_MESSAGE, { exact: true });
 			await expect(createRefusal).toBeVisible();
-			await expect(revokeRefusal).toBeVisible();
 			await attachShot(page, testInfo, `admin-create-refusal-${shell}`);
 
 			await usernameField.press('End');
 			await usernameField.pressSequentially('-2');
 			await expect(createRefusal).toBeHidden();
-			await expect(revokeRefusal).toBeVisible();
 		} finally {
+			await deleteAccount(adminApi, musician.id);
 			await deleteAccount(adminApi, admin.id);
 		}
 	}

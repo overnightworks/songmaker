@@ -17,6 +17,7 @@ import type {
 import { ApiError } from '$lib/api/fetch';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import {
+	ADMIN_SESSION_ALREADY_ENDED_MESSAGE,
 	ADMIN_TABS_LABEL,
 	ADMIN_VOICES_EMPTY,
 	COMPACT_LAYOUT_MEDIA,
@@ -642,13 +643,67 @@ describe('admin settings compact layout', () => {
 	});
 });
 
-describe('admin own session and create-form errors', () => {
+describe('admin sessions, revokes and the errors they leave', () => {
+	const KIM_SESSION: SessionItem = { ...SESSION, id: 's2', user_id: 'u3', username: 'kim' };
+	const USERS_TAB_REFUSAL = 'Cannot remove the last admin';
+
 	function rowOf(section: HTMLElement, username: string): HTMLElement {
 		const row = Array.from(section.querySelectorAll<HTMLElement>('tbody tr')).find(
 			(el) => el.querySelector('[data-label="User"]')?.textContent?.trim() === username
 		);
 		if (!row) throw new Error(`Expected a session row for ${username}`);
 		return row;
+	}
+
+	/**
+	 * The server's live sessions: a revoke ends one, a session it no longer has
+	 * answers 404, and the returned function ends one from another tab.
+	 */
+	function serveSessions(initial: SessionItem[]): (sessionId: string) => void {
+		let live = initial;
+		const end = (sessionId: string): void => {
+			live = live.filter((session) => session.id !== sessionId);
+		};
+		api.fetchSessions.mockImplementation(async () => pageOf(live));
+		api.forceLogout.mockImplementation(async (sessionId: string) => {
+			if (!live.some((session) => session.id === sessionId)) {
+				throw new ApiError(404, 'Not Found', `/api/admin/sessions/${sessionId}`);
+			}
+			end(sessionId);
+		});
+		return end;
+	}
+
+	async function revoke(target: HTMLElement, username: string): Promise<void> {
+		requireElement<HTMLButtonElement>(
+			rowOf(sectionByHeading(target, 'Active Sessions'), username),
+			'button'
+		).click();
+		await flush();
+	}
+
+	function sessionUsernames(target: HTMLElement): string[] {
+		return Array.from(
+			sectionByHeading(target, 'Active Sessions').querySelectorAll('[data-label="User"]')
+		).map((el) => el.textContent?.trim() ?? '');
+	}
+
+	function errorLines(target: HTMLElement): string[] {
+		return Array.from(target.querySelectorAll('.error')).map((el) => el.textContent?.trim() ?? '');
+	}
+
+	async function refuseDisabling(target: HTMLElement, username: string): Promise<void> {
+		api.updateUser.mockRejectedValueOnce(serverRefusal(USERS_TAB_REFUSAL));
+		const row = Array.from(target.querySelectorAll<HTMLElement>('tbody tr')).find(
+			(el) => el.querySelector('[data-label="Username"]')?.textContent?.trim() === username
+		);
+		if (!row) throw new Error(`Expected a user row for ${username}`);
+		const disable = Array.from(row.querySelectorAll<HTMLButtonElement>('button')).find(
+			(button) => button.textContent?.trim() === 'Disable'
+		);
+		if (!disable) throw new Error(`Expected a Disable button for ${username}`);
+		disable.click();
+		await flush();
 	}
 
 	function typeInto(form: HTMLFormElement, placeholder: string, value: string): void {
@@ -700,15 +755,10 @@ describe('admin own session and create-form errors', () => {
 		expect(target.querySelectorAll('.error')).toHaveLength(1);
 	});
 
-	it('typing in the create form clears its own refusal and leaves a revoke failure standing', async () => {
-		api.fetchSessions.mockResolvedValue(pageOf([OWN_SESSION, SESSION]));
-		api.forceLogout.mockRejectedValueOnce(serverRefusal('Session not found'));
+	it('typing in the create form clears its own refusal and leaves the Users error standing', async () => {
 		api.createUser.mockRejectedValueOnce(serverRefusal('Username already exists'));
 		const target = await renderPage(true);
-		await selectTab(target, 'sessions');
-		rowOf(sectionByHeading(target, 'Active Sessions'), 'jane').querySelector('button')?.click();
-		await flush();
-		await selectTab(target, 'users');
+		await refuseDisabling(target, 'jane');
 		const form = await submitCreate(target);
 		expect(target.textContent).toContain('Username already exists');
 
@@ -716,7 +766,57 @@ describe('admin own session and create-form errors', () => {
 		await flush();
 
 		expect(target.textContent).not.toContain('Username already exists');
-		expect(target.textContent).toContain('Session not found');
+		expect(errorLines(target)).toEqual([USERS_TAB_REFUSAL]);
+	});
+
+	it('a revoke of a session that already ended drops its row and says it had already ended', async () => {
+		const endElsewhere = serveSessions([OWN_SESSION, SESSION]);
+		const target = await renderPage(true);
+		await selectTab(target, 'sessions');
+		endElsewhere(SESSION.id);
+
+		await revoke(target, 'jane');
+
+		expect(sessionUsernames(target)).toEqual(['felix']);
+		expect(errorLines(target)).toEqual([ADMIN_SESSION_ALREADY_ENDED_MESSAGE]);
+	});
+
+	it('a revoke that works clears the line an earlier revoke left', async () => {
+		const endElsewhere = serveSessions([OWN_SESSION, SESSION, KIM_SESSION]);
+		const target = await renderPage(true);
+		await selectTab(target, 'sessions');
+		endElsewhere(SESSION.id);
+		await revoke(target, 'jane');
+		expect(errorLines(target)).toEqual([ADMIN_SESSION_ALREADY_ENDED_MESSAGE]);
+
+		await revoke(target, 'kim');
+
+		expect(sessionUsernames(target)).toEqual(['felix']);
+		expect(errorLines(target)).toEqual([]);
+	});
+
+	it('switching tabs drops the error of the tab it leaves, and coming back does not restore it', async () => {
+		const endElsewhere = serveSessions([OWN_SESSION, SESSION]);
+		const target = await renderPage(true);
+		await selectTab(target, 'sessions');
+		endElsewhere(SESSION.id);
+		await revoke(target, 'jane');
+
+		await selectTab(target, 'users');
+		expect(errorLines(target)).toEqual([]);
+
+		await selectTab(target, 'sessions');
+		expect(errorLines(target)).toEqual([]);
+	});
+
+	it('a successful create clears the error the Users tab showed', async () => {
+		const target = await renderPage(true);
+		await refuseDisabling(target, 'jane');
+		expect(errorLines(target)).toEqual([USERS_TAB_REFUSAL]);
+
+		await submitCreate(target);
+
+		expect(errorLines(target)).toEqual([]);
 	});
 
 	it('takes every password minimum from the one shared constant', async () => {
