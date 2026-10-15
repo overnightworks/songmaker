@@ -1578,20 +1578,26 @@ def test_shared_playlist_serves_no_cover_of_a_non_member_album_1374_rule_8(
     client, _ = make_test_app(tmp_path, seed_db=_seed_playlist_with_entries)
     login_and_csrf(client, "admin", "admin12345")
     with client.app.state.ctx.db() as session:
+        member = session.get(Album, "test_album")
+        assert member is not None
+        member.cover_key = "member.png"
         session.add(Album(
             id="foreign-album", title="Foreign", artist="Other", cover_key="foreign.png",
         ))
         session.commit()
-    _write_cover_variants(client.app.state.ctx.audio_dir, "covers", "foreign-album")
+    for album_id in ("test_album", "foreign-album"):
+        _write_cover_variants(client.app.state.ctx.audio_dir, "covers", album_id)
     slug = client.post("/api/playlists/pl1/share").json()["share_slug"]
     public = web_client(client.app, cookies={})
 
     entries = public.get(f"/shared/playlist/{slug}").json()["entries"]
     foreign = public.get(
-        f"/shared/playlist/{slug}/album-cover/foreign-album?variant=detail&v=foreign.png",
+        f"/shared/playlist/{slug}/album-cover/foreign-album?variant=detail&v=member.png",
     )
 
-    assert all(entry["album_cover"] is None for entry in entries)
+    assert {entry["album_cover"]["card"] for entry in entries} == {
+        f"/shared/playlist/{slug}/album-cover/test_album?variant=card&v=member.png",
+    }
     assert foreign.status_code == 404
 
 

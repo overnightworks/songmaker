@@ -702,9 +702,17 @@ copies — a new field on a share response reaches the surface through one
 contract. Each payload carries its take's `generation_id`,
 `audio_duration`, lyrics and `whisper_cues` (the same fields Now Playing
 reads from a generation payload, assembled by
-`api_models/songs.py#share_pick_media`) and nothing else: no transcript,
-no scores, no sibling takes, no owner — pinned by an exact-key-set test
-in `tests/test_sharing.py`. A `SharedTrack` therefore knows its own
+`api_models/songs.py#share_pick_media`) plus the fields below and nothing
+else: no transcript, no scores, no seed, no sibling takes, no owner — pinned
+by exact-key-set tests in `tests/test_sharing.py`. Album: `title`, `artist`,
+`subtitle`, `year`, `cover` and `songs` (each `id`, `title`, `track_number`,
+`audio_url`). Song: `title`, `artist`, `album_title`, `audio_url`, `cover`,
+`album_cover`. Take: `title`, `artist`, `album_title`, `generation_number`
+(the tab title "Take N"), `audio_url`, `album_cover`. Playlist: `title`,
+`cover`, `album_covers` (the mosaic) and `entries` (each `entry_id`,
+`song_title`, `artist`, `generation_number`, `audio_url` and `album_cover`,
+the entry's own album cover, present only when the file exists and served only
+for albums that are members of the shared playlist). A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
