@@ -1,7 +1,0 @@
-claim_id = "ce166c772bad4a7aab80e3827e5f634e"
-agent = "claude-head"
-role = "builder"
-base = "bb9e606a745f2785f1ad6172d2566449b54987aa"
-branch = "claude-head/issue-1362-ci-keeps-flaky-traces"
-scope = [".github/workflows/e2e.yml", "frontend/e2e/README.md", "frontend/playwright.config.ts"]
-opened_commit = "25d82866140faed4dc5c3dedcac8ddc4779b0adc"
