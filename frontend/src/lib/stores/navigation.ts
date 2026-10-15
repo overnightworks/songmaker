@@ -88,9 +88,13 @@ function replaceLibraryHistory(): Promise<void> {
 	return writeLibraryHistory(next, urlFromState(next), 'replace');
 }
 
-function pushLibraryHistory(): Promise<void> {
+// `enterPage` runs once the page being left has been kept and before the new
+// entry is snapshotted, so a reset only the new entry should see cannot reach
+// the entry left behind.
+function pushLibraryHistory(enterPage: () => void = () => {}): Promise<void> {
 	cancelLibraryHistoryApply();
 	void keepLibraryPageAsLeft();
+	enterPage();
 	const next = snapshotLibraryHistory(currentHistoryIndex() + 1);
 	return writeLibraryHistory(next, urlFromState(next), 'push');
 }
@@ -353,20 +357,22 @@ export async function openLibraryWall(): Promise<void> {
 // The Playlists page (#1402) in place of the open song or collection, which
 // stays the rail context as it does behind the Library wall. Coming from
 // another page it starts at its top: the one scroll the library keeps is the
-// other wall's. The phone drawer needs no closing here: a page pushed on top
-// closes the layers below it, and ‹ cannot be reached under the drawer.
-function showPlaylistsWall(): void {
-	if (get(librarySurface) !== 'playlists') captureLibraryScroll(0);
+// other wall's.
+function showPlaylistsWall(): () => void {
+	const cameFromAnotherPage = get(librarySurface) !== 'playlists';
 	selectedSongId.set(null);
 	selectedGenerationId.set(null);
 	setLibrarySurface('playlists');
+	return () => {
+		if (cameFromAnotherPage) captureLibraryScroll(0);
+	};
 }
 
 // Like the Library, a fresh history entry, so Back returns to what was open.
 async function openPlaylistsWall(): Promise<void> {
 	await guardDirtyNavigation(async () => {
-		showPlaylistsWall();
-		await pushLibraryHistory();
+		closeSidebar();
+		await pushLibraryHistory(showPlaylistsWall());
 	});
 }
 
@@ -390,7 +396,7 @@ export function openListOverPage(list: PageList): Promise<void> {
 		return replaceLibraryHistory();
 	}
 	if (list === PLAYLISTS_ROUTE_PATH) {
-		showPlaylistsWall();
+		showPlaylistsWall()();
 		return replaceLibraryHistory();
 	}
 	return goto(resolve(list), { replaceState: true });

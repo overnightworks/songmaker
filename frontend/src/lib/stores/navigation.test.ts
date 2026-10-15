@@ -617,6 +617,36 @@ describe('the Playlists page (#1402)', () => {
 		expect(get(libraryScrollAnchor)).toBe(scrolled);
 		expect(historyEntry().scrollAnchor).toBe(scrolled);
 	});
+
+	it('defect:#1402 opened over a scrolled Library wall keeps the wall scrolled for Back', async () => {
+		await openLibraryWall();
+		captureLibraryScroll(640);
+
+		await openPlaylistsBySearch();
+		await pressBack();
+		await libraryHistoryStepsLanded();
+
+		expect(location.pathname).toBe('/');
+		expect(get(libraryScrollAnchor)).toBe(640);
+	});
+
+	it('defect:#1402 chosen in the phone drawer leaves no drawer entry behind, so Forward returns to it', async () => {
+		await openAlbum('a1');
+		toggleSidebar();
+		await libraryHistoryStepsLanded();
+
+		await openPlaylistsBySearch();
+		await libraryHistoryStepsLanded();
+		expect(get(sidebarOpen)).toBe(false);
+
+		await pressBack();
+		await libraryHistoryStepsLanded();
+		expect(location.pathname).toBe('/album/a1');
+
+		await pressForward();
+		await libraryHistoryStepsLanded();
+		expect(location.pathname).toBe('/playlists');
+	});
 });
 
 // The open song's address names it by slug (issue #275). A rename changes

@@ -150,14 +150,14 @@ inline, no popup menu; `shell/UserRow.svelte`). The phone drawer is
 navigation only — brand, search, LIBRARY and PLAYLISTS (#1174, frame H3 of
 `docs/design/navigation.html`). The phone app bar (`PhoneAppBar.svelte`,
 frames I2–I4) keeps ☰ at its left until the phone tabs replace the drawer
-(#1354 slice 9). Beside it every page but the Library and the song carries
+(#1354 slice 9). Beside it every page but the Library, the Playlists page and the song carries
 ‹, named after where it goes: the page below it in the tab's history, or,
 with nothing of the tab's own below, the page's list (`/settings` for a
-Settings section, the Library otherwise), written over the page; the Library's
-wall the library writes as its own entry, so the wall shows in the page's
+Settings section, the Playlists page for a playlist, the Library otherwise), written over the page; the Library's
+and the Playlists page's walls the library writes as its own entry, so the wall shows in the page's
 place (`openListOverPage`). The history controller answers both with one
 question (`pageBelowStandingPage`, `stepBackOr`, #1389). 🔍 on every page
-opens the one search, `RailSearch`, in a sheet. The Library carries the brand
+opens the one search, `RailSearch`, in a sheet. The Library and the Playlists page carry the brand
 and a 44px account circle at the right edge, whose menu (`AccountMenu.svelte`)
 holds Settings, the theme switch and Log out, so the drawer repeats none of
 them; the song carries its title, share and song menu instead. `Rail`
@@ -235,7 +235,7 @@ resource, so its route resolves nothing and states no verdict. All six of
 `routes/(library)` route group, whose own
 `+layout.svelte` mounts `components/LibraryWorkspace.svelte` — the bootstrap
 gate and the surface switch — exactly once for as long as the browser stays
-on any of the five (issue #276); the route files underneath are thin, each
+on any of the six (issue #276); the route files underneath are thin, each
 resolving its own address and rendering only an overlay (loading / unknown /
 unreachable) stacked over the standing workspace while it does. Before #276
 each mounted the workspace itself, so a crossing between any two swapped the
@@ -305,7 +305,7 @@ these five paths before writing its history entry, which S7 proved
 redundant and removed once `writeLibraryHistory`'s own crossing check
 (`libraryRouteShape`, below) covered leaving *any* non-library route,
 Settings included, not just crossing between two library addresses — see the note
-on `LibraryRouteShape`'s `'external'` shape in `stores/libraryContext.ts` for
+on `LibraryRouteShape`'s `'external'` shape in `routes/addresses.ts` for
 why that shape has to exist for the guard's removal to be safe, and
 `navigation.test.ts`'s "opening a collection from off the library route"
 suite for the per-entry-point proof. A cold tab opened on an album, song,
@@ -357,11 +357,11 @@ scroll, search cursor, another song of the open album (#275), another take of
 the open song (#281), another open playlist (#286), a history layer over the
 library — is shallow routing (`pushState`/`replaceState` from
 `$app/navigation`): synchronous, no route resolution. `libraryRouteShape`
-(root / album / album-song / album-song-take / playlist / external) is what
+(root / playlists / album / album-song / album-song-take / playlist / external) is what
 the crossing check compares — only the route-file depth decides a crossing,
 never which resource the address names, and `/playlist/[slug]` is one route
-file whichever playlist it names. The sixth shape, `external`, is everything
-outside the five library addresses, so leaving Settings, login or a share
+file whichever playlist it names. The seventh shape, `external`, is everything
+outside the six library addresses, so leaving Settings, login or a share
 page always crosses; it is what let issue #265's S7 delete
 `ensureLibraryWorkspaceRoute` (#264's separate guard). Shallow routing keeps
 the page's route and `page.url` where the last navigation left them, and an
