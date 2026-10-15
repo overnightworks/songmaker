@@ -201,7 +201,7 @@ describe('playback resume record', () => {
 		playTake('g-anonymous');
 		setPageVisibility('hidden');
 
-		expect(localStorage.length).toBe(0);
+		expect(localStorage).toHaveLength(0);
 	});
 
 	it("reads the signed-in user's saved take", () => {
@@ -285,6 +285,6 @@ describe('playback resume record', () => {
 			playTo(6);
 			setPageVisibility('hidden');
 		}).not.toThrow();
-		expect(localStorage.length).toBe(0);
+		expect(localStorage).toHaveLength(0);
 	});
 });
