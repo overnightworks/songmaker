@@ -384,7 +384,7 @@ action, and a single `…` menu (`CollectionMenu.svelte`). `CollectionHeader`
 itself is a thin wrapper around `CollectionHeaderFrame.svelte` — the
 presentational cover/Play markup with no store or auth coupling — so the
 share surface (below) can reuse the identical frame with a plain title in
-place of `EditableTitle`/`Breadcrumb`/`CollectionMenu`. There is no visible
+place of `EditableTitle`/`CollectionMenu`. There is no visible
 Share icon — the menu's first line names the object ("Album · <title>" /
 "Playlist · <title>"). The album menu then has exactly seven rows, each a
 bare verb with one icon: Edit details · Cover · Curate · Add to playlist ·
@@ -397,22 +397,27 @@ offline · Rename · Delete playlist. The Share row embeds the existing
 `ShareButton` component as its control (same toggle/clipboard/toast logic,
 not reimplemented); a playlist's Rename forwards to the same `EditableTitle`
 click affordance the title itself uses (`EditableTitle` exposes an
-imperative `startEdit()` via `bind:this` for exactly this). Album rows carry
-their own Play button
-(`playAlbumFromGeneration` on the song's picked/first generation) beside the
-existing click-to-open-song target. Album rows are songs — clicking the row
-body opens the song in the editor. Playlist rows are takes — clicking the row
-plays it, since the editor is an edit view and Now Playing is the play view,
-and there is no click target that means both; each row shows the take's
-duration and version and a `★` when it is that song's picked generation
+imperative `startEdit()` via `bind:this` for exactly this). Under the title
+the header reads how many songs the page lists; it carries no breadcrumb and
+no shuffle, because shuffle is the player's (#1354 rule 24), and its Play
+turns that shuffle off to play from the top. Every song box on both pages is
+one component, `SongRow.svelte`, which imports no store: a tap anywhere on
+the box plays it in place, and its `✎` opens the song in the editor
+(`selectSong`), the one way from either page to the editor; a surface
+without the editor passes no `✎`. An album song plays through
+`playAlbumSong`, which starts the album at that song with the whole album
+queued around it — Next continues in album order, or in the player's
+shuffle when it is on — and an album song with no take yet opens the editor
+on the tap instead (#1354 rules 22–23). A playlist row is a take and plays
+through `playPlaylistEntry`; it shows the take's duration and version and a
+`★` when it is that song's picked generation
 (`PlaylistEntryResponse.version_number`/`is_picked`/`audio_duration`, sourced
-from the entry's generation and its version), and the row's `…` menu carries
-one action, "Open song in editor" (`selectSong` on the take's song). `CollectionHeader` and `SongDetailView`
-both show a `Breadcrumb`: the collection interior is `Library › <title>`,
-the song editor is `Library › <album title> › Track <n> of <m>` (falling
-back to the song's own title when it is not part of a countable album
-track list); each crumb before the current one is a button that jumps
-straight back to that level (`openLibraryWall` / the open collection).
+from the entry's generation and its version), and its `…` menu carries Move
+up · Move down · Remove from playlist. `SongDetailView` shows a
+`Breadcrumb`, `Library › <album title> › Track <n> of <m>` (falling back to
+the song's own title when it is not part of a countable album track list);
+each crumb before the current one is a button that jumps straight back to
+that level (`openLibraryWall` / the open collection).
 
 `PlayerBar` is transport-only: shuffle, prev/play/next, a 44px cover,
 title/subtitle, the seek bar, and a "Now Playing" word-button with an

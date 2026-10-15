@@ -67,7 +67,7 @@ compact shell differs:
 | Song editor   | Opens on **Edit**; the **Takes** tab lists every take with its own play control, a running generation's progress and a failed one's cause (`song-phone.spec.ts`) |
 | Now Playing   | Stacks, so the judging panel is a sheet — and Escape closes sheet, then overlay                                                                                  |
 | Transport     | One 64px row, with a play control at least the frequent-hitbox size                                                                                              |
-| Album header  | Still a readable title over its breadcrumb when the shell narrows to 320                                                                                         |
+| Album header  | Still a readable title over its song count when the shell narrows to 320                                                                                         |
 
 `fullyParallel: false` with one worker: both shells hit one stack behind one IP
 rate-limit window, so their cost stays additive instead of a burst.
