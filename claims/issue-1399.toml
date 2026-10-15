@@ -1,0 +1,8 @@
+claim_id = "a4c0cda50d3243cd9c0d788d19675ec6"
+agent = "claude-head"
+role = "builder"
+base = "ae0220b88e9df9da8961466c1cc4b5260e89e65e"
+branch = "claude-head/issue-1399-one-sort-switch"
+scope = ["docs/architecture.md", "frontend/e2e/library.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/components/shell/RailPlaylistsGroup.svelte", "frontend/src/lib/components/shell/RailPlaylistsGroup.test.ts", "frontend/src/lib/components/shell/rail-test-fixtures.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/stores/libraryOrder.test.ts", "frontend/src/lib/stores/libraryOrder.ts", "frontend/src/lib/stores/ui.test.ts", "frontend/src/lib/stores/ui.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts"]
+opened_commit = "1f8817aaa6aace06f630490b6578e2c0dee45948"
+whole_reason = "one sort switch: its orders and labels, the store and its key, the order owner, the wall and both rail groups that read it, their tests, the two sort e2e flows and the architecture paragraph"
