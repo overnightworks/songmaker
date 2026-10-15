@@ -29,9 +29,11 @@ import {
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
 import {
+	clearMediaSessionPositionState,
 	type LockScreenTitle,
 	setupMediaSessionHandlers,
-	updateMediaSessionMetadata
+	updateMediaSessionMetadata,
+	updateMediaSessionPlaybackState
 } from '$lib/services/mediaSession';
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import {
@@ -538,6 +540,7 @@ function loadNativeTake(info: PlaybackInfo, opts: QueueTakeLoad = {}): void {
 // Every take a queue plays goes through here, so the take after it is
 // already loading while this one plays (#1187 P1).
 function loadQueueTake(info: PlaybackInfo, opts: QueueTakeLoad): void {
+	if (!playsTheAppsTakes()) return;
 	if (opts.startAt !== undefined || opts.autoplay !== undefined) {
 		audioPlayer.load(info, { ...opts, restart: opts.restart ?? true });
 	} else if (opts.restart) {
@@ -1502,7 +1505,7 @@ function takeAfterTheEnd(): PlaybackInfo | null {
 }
 
 function preloadNextTake(): void {
-	audioPlayer.preload(takeAfterCurrent());
+	if (playsTheAppsTakes()) audioPlayer.preload(takeAfterCurrent());
 }
 
 // A step always lands on another place of the playlist, so that place starts
@@ -2080,14 +2083,33 @@ const appPlayerCallbacks: AudioPlayerCallbacks = {
 	onCurrentChange: handleCurrentChange,
 	takeAfter,
 	onTakeSkipped: recordSkippedTake,
-	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip
+	networkFailureIsAnnounced: leaveNetworkFailureToTheStrip,
+	onPlayerTaken: letGoOfThePlayer
 };
 audioPlayer.swapCallbacks(appPlayerCallbacks);
 
-// A share route owns the player while it swaps in its own callbacks, so
-// share playback is never remembered.
+// A share route owns the player while it swaps in its own callbacks: share
+// playback is never remembered, and no take of the app's loads or sounds in
+// it meanwhile — a share link shows only what was shared (#1391).
 function playsTheAppsTakes(): boolean {
 	return audioPlayer.currentCallbacks === appPlayerCallbacks;
+}
+
+// A share route took the player. Nothing the app still had under way lands
+// in it: a start waiting on the server or the network, a Play pressed while
+// the saved take was on its way, an album still to gather, a take waiting to
+// play on once the network is back. The lock screen stops naming the take
+// the app let go of, and stops saying it plays.
+function letGoOfThePlayer(): void {
+	cancelPlayStart();
+	dropPendingStart();
+	playStartNotice.set('idle');
+	restoredAlbumQueueToGather = null;
+	stopWaitingForReturn?.();
+	stopWaitingForReturn = null;
+	updateMediaSessionMetadata(null);
+	updateMediaSessionPlaybackState('none');
+	clearMediaSessionPositionState();
 }
 
 // The queue a resumed take continues in. A library context without takes is
@@ -2116,7 +2138,7 @@ followPlaybackForResume({
  */
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
-	if (saved === null || audioPlayer.current !== null) return;
+	if (saved === null || !playerIsFreeToRestore()) return;
 	restoreUnderway = true;
 	try {
 		await restoreSavedPlayback(saved);
@@ -2128,7 +2150,7 @@ export async function restoreLastPlayback(): Promise<void> {
 
 async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	const found = await playableSavedTake(saved);
-	if (found === null || audioPlayer.current !== null) return;
+	if (found === null || !playerIsFreeToRestore()) return;
 	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
 	if (source.type === 'album') {
@@ -2138,6 +2160,12 @@ async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	} else {
 		await restorePlaylistQueue(source.playlistId, found.take, at);
 	}
+}
+
+// A take loaded in the meantime is never replaced, and a player a share route
+// took meanwhile is not the app's to fill.
+function playerIsFreeToRestore(): boolean {
+	return audioPlayer.current === null && playsTheAppsTakes();
 }
 
 // A Play pressed after a reload, before the saved take is back, keeps its
@@ -2238,7 +2266,7 @@ async function restorePlaylistQueue(
 	at: number
 ): Promise<void> {
 	const playlist = await quietly(() => fetchPlaylist(playlistId));
-	if (playlist === null || audioPlayer.current !== null) return;
+	if (playlist === null || !playerIsFreeToRestore()) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {

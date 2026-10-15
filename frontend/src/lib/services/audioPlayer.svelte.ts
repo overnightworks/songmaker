@@ -135,6 +135,11 @@ export interface AudioPlayerCallbacks {
 	// Only the owner knows whether its page shows the offline strip; a page
 	// without one needs the player's own failure line.
 	networkFailureIsAnnounced: () => boolean;
+	// Another owner took the player: whatever this one still has under way —
+	// a start waiting on the server, a retry waiting on the network — must
+	// not land in it now. An owner that never starts anything late (a share
+	// route) has nothing to drop (#1391).
+	onPlayerTaken?: () => void;
 }
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
@@ -351,12 +356,21 @@ class AudioPlayer {
 	// the player with none.
 	swapCallbacks(next: AudioPlayerCallbacks): AudioPlayerCallbacks {
 		const previous = this.callbacks;
-		this.callbacks = next;
+		this.handOver(next);
 		return previous;
 	}
 
 	restoreCallbacks(previous: AudioPlayerCallbacks): void {
-		this.callbacks = previous;
+		this.handOver(previous);
+	}
+
+	// The one way the player changes hands. The owner it leaves hears so, and
+	// only once the new owner holds it, so whatever the leaving owner drops
+	// already finds the player no longer its own.
+	private handOver(next: AudioPlayerCallbacks): void {
+		const leaving = this.callbacks;
+		this.callbacks = next;
+		if (leaving !== next) leaving.onPlayerTaken?.();
 	}
 
 	// Where the browser can append MP3 into one source, a take plays on the

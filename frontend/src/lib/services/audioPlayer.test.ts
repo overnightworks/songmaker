@@ -2577,6 +2577,25 @@ describe('swapCallbacks() / restoreCallbacks()', () => {
 		expect(appOnEnded).toHaveBeenCalled();
 		expect(shareOnEnded).not.toHaveBeenCalled();
 	});
+
+	it('tells only the owner it leaves that the player was taken, once the new owner holds it', () => {
+		const holdersWhenTaken: { owner: string; holder: AudioPlayerCallbacks }[] = [];
+		const ownedBy = (owner: string): AudioPlayerCallbacks =>
+			callbacks({
+				onPlayerTaken: () => holdersWhenTaken.push({ owner, holder: audioPlayer.currentCallbacks })
+			});
+		const app = ownedBy('app');
+		const share = ownedBy('share');
+		audioPlayer.swapCallbacks(app);
+
+		audioPlayer.swapCallbacks(share);
+		audioPlayer.restoreCallbacks(app);
+
+		expect(holdersWhenTaken).toEqual([
+			{ owner: 'app', holder: share },
+			{ owner: 'share', holder: app }
+		]);
+	});
 });
 
 describe('standby deck', () => {

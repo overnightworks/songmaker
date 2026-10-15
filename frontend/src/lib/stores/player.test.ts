@@ -155,6 +155,7 @@ import {
 import { createLibraryQueueStreamSnapshot } from '$lib/api/client';
 import { recordSongListen } from '$lib/api/songs';
 import { SharePlayback } from '$lib/share/sharePlayback.svelte';
+import { fromSharedSong, type SharedCollectionView } from '$lib/share/sharedCollection';
 import { currentUser } from '$lib/stores/auth';
 import type { ResumeQueueSource } from '$lib/stores/playbackResume';
 import { ApiError, handleSessionLost, NetworkError } from '$lib/api/fetch';
@@ -5045,5 +5046,233 @@ describe('restoring the last playback after a reload', () => {
 		await restoreLastPlayback();
 
 		expect(audioPlayer.current?.generation.id).toBe(tapped.generation.id);
+	});
+});
+
+describe('a share link that takes the player (#1391)', () => {
+	const LISTENER = { id: 'u-share-visit', username: 'listener', role: 'user' as const };
+	// A saved record names its takes by UUID, or the restore refuses it.
+	const PRIVATE_ALBUM_ID = '5a1e7c3d-0000-4000-8000-00000000000a';
+	const PRIVATE_PLAYLIST_ID = '5a1e7c3d-0000-4000-8000-00000000000b';
+	const privateTake = makeGen({
+		...genDefaults,
+		id: '5a1e7c3d-0000-4000-8000-00000000000c',
+		song_id: '5a1e7c3d-0000-4000-8000-00000000000d',
+		is_picked: true,
+		audio_duration_sec: 180
+	});
+	const privateSong = makeSong({
+		...queuedSongDefaults(),
+		id: privateTake.song_id,
+		title: 'Private Draft',
+		album_id: PRIVATE_ALBUM_ID,
+		generations: [privateTake]
+	});
+	// The same song as the library lists it before its takes were read.
+	const privateSongUnread = { ...privateSong, generations: [] };
+
+	function sharedSong(): SharedCollectionView {
+		return fromSharedSong({
+			title: 'Shared Song',
+			artist: 'Artist',
+			album_title: 'Shared Album',
+			audio_url: '/shared/song/shared/audio/shared.mp3',
+			generation_id: 'g-shared',
+			audio_duration: 120,
+			lyrics: null,
+			whisper_cues: null,
+			cover: null,
+			album_cover: null
+		});
+	}
+
+	function saveLastPlayback(source: ResumeQueueSource): void {
+		localStorage.setItem(
+			`playbackResume:${LISTENER.id}`,
+			JSON.stringify({
+				source,
+				songId: privateSong.id,
+				generationId: privateTake.id,
+				position: 30,
+				savedAt: 0
+			})
+		);
+	}
+
+	// The next request the app makes through `request`, held until the test
+	// answers it.
+	function holdNextRequest<T>(request: {
+		mockImplementationOnce: (fn: () => Promise<T>) => unknown;
+	}): {
+		requested: () => boolean;
+		answer: (value: T) => void;
+	} {
+		let requested = false;
+		let answer: (value: T) => void = () => {};
+		request.mockImplementationOnce(() => {
+			requested = true;
+			return new Promise<T>((resolve) => {
+				answer = resolve;
+			});
+		});
+		return { requested: () => requested, answer: (value) => answer(value) };
+	}
+
+	interface PendingStart {
+		settled: Promise<void>;
+		// The start has asked the server and waits on its answer.
+		waiting: () => boolean;
+		arrive: () => void;
+	}
+
+	// Every way the app starts a take that waits on the server first.
+	const PENDING_STARTS: Record<string, () => PendingStart> = {
+		'the restore of the last playback': () => {
+			saveLastPlayback({ type: 'album', albumId: PRIVATE_ALBUM_ID });
+			const song = holdNextRequest<SongItem>(vi.mocked(fetchSong));
+			return {
+				settled: restoreLastPlayback(),
+				waiting: song.requested,
+				arrive: () => song.answer(privateSong)
+			};
+		},
+		'the restore of the last playlist': () => {
+			saveLastPlayback({ type: 'playlist', playlistId: PRIVATE_PLAYLIST_ID });
+			vi.mocked(fetchSong).mockResolvedValueOnce(privateSong);
+			const playlist = holdNextRequest<PlaylistDetailItem>(vi.mocked(fetchPlaylist));
+			return {
+				settled: restoreLastPlayback(),
+				waiting: playlist.requested,
+				arrive: () =>
+					playlist.answer(
+						makeDetail({
+							...playlistDefaults,
+							id: PRIVATE_PLAYLIST_ID,
+							entries: [
+								makePlaylistEntry({
+									...playlistEntryDefaults,
+									generation_id: privateTake.id,
+									song_id: privateSong.id,
+									song_title: privateSong.title
+								})
+							]
+						})
+					)
+			};
+		},
+		'a library start': () => {
+			const queue = holdNextRequest<LibraryPoolQueue>(vi.mocked(fetchLibraryPoolQueue));
+			return {
+				settled: playIdleStart(),
+				waiting: queue.requested,
+				arrive: () =>
+					queue.answer(
+						makePoolQueue({
+							takes: [makePoolTake({ generation_id: privateTake.id, song_id: privateSong.id })]
+						})
+					)
+			};
+		},
+		'an album start': () => {
+			songList.set([privateSongUnread]);
+			const song = holdNextRequest<SongItem>(vi.mocked(fetchSong));
+			return {
+				settled: playAlbum(PRIVATE_ALBUM_ID),
+				waiting: song.requested,
+				arrive: () => song.answer(privateSong)
+			};
+		}
+	};
+
+	async function startWaitingOnTheServer(kind: string): Promise<PendingStart> {
+		const pending = PENDING_STARTS[kind]();
+		await vi.waitFor(() => expect(pending.waiting()).toBe(true));
+		return pending;
+	}
+
+	let share: SharePlayback;
+
+	beforeEach(() => {
+		currentUser.set(LISTENER);
+		share = new SharePlayback();
+		vi.spyOn(audioPlayer, 'loadUrl').mockImplementation((info) => {
+			audioPlayer.current = info;
+		});
+	});
+
+	afterEach(() => {
+		share.stop();
+		currentUser.set(null);
+		localStorage.clear();
+	});
+
+	it.each(Object.keys(PENDING_STARTS))(
+		'%s still waiting on the server when a share link takes the player loads nothing of the app',
+		async (kind) => {
+			const pending = await startWaitingOnTheServer(kind);
+			share.start(sharedSong(), null);
+
+			pending.arrive();
+			await pending.settled;
+
+			expect({
+				loaded: vi.mocked(audioPlayer.load).mock.calls.length,
+				readied: vi.mocked(audioPlayer.preload).mock.calls.length,
+				held: audioPlayer.current,
+				queue: get(queueContext)
+			}).toEqual({ loaded: 0, readied: 0, held: null, queue: { type: 'library' } });
+		}
+	);
+
+	it("leaves the share's own take in the player when the app's start arrives after Play", async () => {
+		const pending = await startWaitingOnTheServer('an album start');
+		share.start(sharedSong(), null);
+		share.play();
+
+		pending.arrive();
+		await pending.settled;
+
+		expect(audioPlayer.current?.songTitle).toBe('Shared Song');
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+	});
+
+	it('an album start left behind for a share link does not start once the listener is back', async () => {
+		const pending = await startWaitingOnTheServer('an album start');
+		share.start(sharedSong(), null);
+		share.stop();
+
+		pending.arrive();
+		await pending.settled;
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(get(playStartNotice)).toBe('idle');
+	});
+
+	// The lock screen's Next runs the app's, on a share page too.
+	it("the app's Next, pressed on a share page, plays nothing of the app's", async () => {
+		songList.set([privateSong]);
+		queueContext.set({ type: 'album', albumId: PRIVATE_ALBUM_ID });
+		share.start(sharedSong(), null);
+		share.play();
+
+		await playNextSong();
+
+		expect(audioPlayer.load).not.toHaveBeenCalled();
+		expect(audioPlayer.current?.songTitle).toBe('Shared Song');
+	});
+
+	it("the lock screen stops naming the app's take, or saying it plays, once a share link takes the player", () => {
+		const lockScreenState = watchLockScreenTitle() as {
+			metadata: MediaMetadataInit | null;
+			playbackState?: MediaSessionPlaybackState;
+		};
+		audioPlayer.current = makePlayback(privateTake, privateSong);
+		lockScreenState.metadata = { title: privateSong.title };
+		lockScreenState.playbackState = 'playing';
+
+		share.start(sharedSong(), null);
+
+		expect(lockScreenState.metadata).toBeNull();
+		expect(lockScreenState.playbackState).toBe('none');
 	});
 });
