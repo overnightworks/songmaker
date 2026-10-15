@@ -1,0 +1,8 @@
+claim_id = "f6a1a468f12d4b55ace758eebb9cc700"
+agent = "claude-head"
+role = "builder"
+base = "da1bfb24becb0976cacfa08fc3d995e9ce600a05"
+branch = "claude-head/issue-1413-version-load-visible"
+scope = ["frontend/src/lib/stores/editor.test.ts", "frontend/src/lib/stores/editor.ts"]
+opened_commit = "dc18e932fd037cf9f7ae1a01114586d6b055b9b6"
+whole_reason = "#940 S5 slice 1413 as its body says"
