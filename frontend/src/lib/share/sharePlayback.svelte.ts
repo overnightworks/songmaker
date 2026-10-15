@@ -8,7 +8,8 @@ import type { QueueStreamManifest, QueueStreamTrackItem } from '$lib/api/types';
 import {
 	audioPlayer,
 	type AudioPlayerCallbacks,
-	type PlaybackInfo
+	type PlaybackInfo,
+	type PlayerTenure
 } from '$lib/services/audioPlayer.svelte';
 import {
 	playableTracks,
@@ -30,6 +31,12 @@ interface TrackStart {
 }
 
 const FROM_THE_TOP: TrackStart = { autoplay: true };
+
+// Where a track stands in the share's stream.
+interface StreamPlace {
+	manifest: QueueStreamManifest;
+	track: QueueStreamTrackItem;
+}
 
 const NO_CALLBACKS: AudioPlayerCallbacks = {
 	onEnded: null,
@@ -65,6 +72,10 @@ export class SharePlayback {
 	private manifest: QueueStreamManifest | null = $state(null);
 	private fetchStream: ShareStreamFetcher | null = null;
 	private previousCallbacks: AudioPlayerCallbacks = NO_CALLBACKS;
+	// The hold on the player start() was given. A track whose stream was still
+	// on its way when the share gave the player back loads nothing: the player
+	// is the app's again by then (#1391).
+	private tenure: PlayerTenure | null = null;
 
 	readonly currentTrack = $derived(
 		this.activeIndex >= 0 ? (this.playOrder[this.activeIndex] ?? null) : null
@@ -139,6 +150,7 @@ export class SharePlayback {
 			onCurrentChange: (current) => this.resyncActiveIndex(current),
 			networkFailureIsAnnounced: () => false
 		});
+		this.tenure = audioPlayer.tenure;
 	}
 
 	stop(): void {
@@ -216,20 +228,16 @@ export class SharePlayback {
 		const collection = this.collection;
 		if (track.audioUrl === null || !collection) return;
 		this.ended = false;
-		if (this.canUseStream()) {
-			try {
-				const manifest = await this.ensureManifest();
-				const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
-				if (streamTrack) {
-					audioPlayer.loadStream(manifest, streamTrack.index, {
-						autoplay: start.autoplay,
-						resumeAt: streamTrack.start_offset + (start.startAt ?? 0)
-					});
-					return;
-				}
-			} catch {
-				this.manifest = null;
-			}
+		// Without a stream the track loads in the same task as the press, which
+		// a browser needs to let it sound.
+		const place = this.canUseStream() ? await this.streamPlaceOf(track) : null;
+		if (!this.holdsThePlayer()) return;
+		if (place) {
+			audioPlayer.loadStream(place.manifest, place.track.index, {
+				autoplay: start.autoplay,
+				resumeAt: place.track.start_offset + (start.startAt ?? 0)
+			});
+			return;
 		}
 		this.manifest = null;
 		audioPlayer.loadUrl(trackPlaybackInfo(collection, track), track.audioUrl, {
@@ -237,6 +245,22 @@ export class SharePlayback {
 			restart: true,
 			startAt: start.startAt
 		});
+	}
+
+	// Null where the track plays on its own instead: the stream could not be
+	// had, or does not hold it.
+	private async streamPlaceOf(track: SharedTrack): Promise<StreamPlace | null> {
+		try {
+			const manifest = await this.ensureManifest();
+			const streamTrack = manifest.tracks.find((t) => this.streamKeyOf(t) === track.key);
+			return streamTrack ? { manifest, track: streamTrack } : null;
+		} catch {
+			return null;
+		}
+	}
+
+	private holdsThePlayer(): boolean {
+		return this.tenure !== null && !audioPlayer.changedHandsSince(this.tenure);
 	}
 
 	private advanceClassic(direction: 1 | -1): void {

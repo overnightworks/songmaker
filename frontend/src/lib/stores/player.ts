@@ -25,6 +25,7 @@ import {
 	transportOffersPause,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
+	type PlayerTenure,
 	type StreamFallbackState,
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
@@ -375,6 +376,7 @@ export async function retryLastPlayIntent(): Promise<boolean> {
 
 let playStartSeq = 0;
 let playStartAbort: AbortController | null = null;
+let playStartTenure: PlayerTenure = audioPlayer.tenure;
 
 interface PlayStart {
 	seq: number;
@@ -390,6 +392,7 @@ function beginPlayStart(): PlayStart {
 function openPlayStart(): PlayStart {
 	cancelPlayStart();
 	playStartAbort = new AbortController();
+	playStartTenure = audioPlayer.tenure;
 	return { seq: playStartSeq, signal: playStartAbort.signal };
 }
 
@@ -399,8 +402,12 @@ function cancelPlayStart(): void {
 	retryPlayIntent = null;
 }
 
+// A start lands only while it is the newest one and the player has not
+// changed hands since it began: one begun before a share route took the
+// player, or while the share held it, is not the app's to land once the app
+// holds it again (#1391).
 function playStartIsCurrent(seq: number): boolean {
-	return seq === playStartSeq;
+	return seq === playStartSeq && !audioPlayer.changedHandsSince(playStartTenure);
 }
 
 // Offline, the strip already says why a start could not reach its takes: the
@@ -2138,19 +2145,20 @@ followPlaybackForResume({
  */
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
-	if (saved === null || !playerIsFreeToRestore()) return;
-	restoreUnderway = true;
+	if (saved === null || !playsTheAppsTakes()) return;
+	const tenure = audioPlayer.tenure;
+	if (!restoreMayLoad(tenure)) return;
+	restoringIn = tenure;
 	try {
-		await restoreSavedPlayback(saved);
+		await restoreSavedPlayback(saved, tenure);
 	} finally {
-		restoreUnderway = false;
-		playWhatWasAskedForIfNothingWasRestored();
+		endRestore(tenure);
 	}
 }
 
-async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
+async function restoreSavedPlayback(saved: SavedPlayback, tenure: PlayerTenure): Promise<void> {
 	const found = await playableSavedTake(saved);
-	if (found === null || !playerIsFreeToRestore()) return;
+	if (found === null || !restoreMayLoad(tenure)) return;
 	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
 	if (source.type === 'album') {
@@ -2158,24 +2166,33 @@ async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	} else if (source.type === 'library') {
 		await restoreLibraryTake(source, found.take, at);
 	} else {
-		await restorePlaylistQueue(source.playlistId, found.take, at);
+		await restorePlaylistQueue(source.playlistId, found.take, at, tenure);
 	}
 }
 
-// A take loaded in the meantime is never replaced, and a player a share route
-// took meanwhile is not the app's to fill.
-function playerIsFreeToRestore(): boolean {
-	return audioPlayer.current === null && playsTheAppsTakes();
+// A take loaded in the meantime is never replaced. A player that changed
+// hands since the restore began is not the restore's to fill: a share route
+// took it, and once it gives it back, what the restore asked for before is
+// not what the listener came back to (#1391).
+function restoreMayLoad(tenure: PlayerTenure): boolean {
+	return audioPlayer.current === null && !audioPlayer.changedHandsSince(tenure);
 }
 
 // A Play pressed after a reload, before the saved take is back, keeps its
 // intent: the transport reads Pause with its spinner, a second press
 // withdraws it, and the take plays from its saved position once it is back
-// (#1330).
-let restoreUnderway = false;
+// (#1330). The restore under way is named by the tenure it began in and is
+// over once the player changed hands, whatever its request still waits on:
+// a Play pressed in the app after that starts what the transport names
+// (#1391).
+let restoringIn: PlayerTenure | null = null;
+
+function restoreIsUnderway(): boolean {
+	return restoringIn !== null && !audioPlayer.changedHandsSince(restoringIn);
+}
 
 function askForTheRestoringTake(): boolean {
-	if (!restoreUnderway) return false;
+	if (!restoreIsUnderway()) return false;
 	playStartNotice.set(get(playStartNotice) === 'restoring' ? 'idle' : 'restoring');
 	return true;
 }
@@ -2184,9 +2201,17 @@ function askForTheRestoringTake(): boolean {
 // is answered here, so a later one goes to the take itself.
 function restoredStart(resumeAtTrackTime: number): QueueStart {
 	const askedForSound = get(playStartNotice) === 'restoring';
-	restoreUnderway = false;
+	restoringIn = null;
 	if (askedForSound) playStartNotice.set('idle');
 	return { resumeAtTrackTime, autoplay: askedForSound };
+}
+
+// A restore that ends without its take answers the press it kept, unless a
+// newer restore, begun once the app held the player again, keeps it now.
+function endRestore(tenure: PlayerTenure): void {
+	if (restoringIn !== tenure) return;
+	restoringIn = null;
+	playWhatWasAskedForIfNothingWasRestored();
 }
 
 // A saved take that cannot come back leaves the press to start what the
@@ -2263,10 +2288,11 @@ async function playableSavedTake(
 async function restorePlaylistQueue(
 	playlistId: string,
 	take: GenerationItem,
-	at: number
+	at: number,
+	tenure: PlayerTenure
 ): Promise<void> {
 	const playlist = await quietly(() => fetchPlaylist(playlistId));
-	if (playlist === null || !playerIsFreeToRestore()) return;
+	if (playlist === null || !restoreMayLoad(tenure)) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
 	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {

@@ -727,14 +727,20 @@ media-session metadata or `windowEnded` store) and `stop()` calls
 `audioPlayer.restoreCallbacks()` then `audioPlayer.unload()`, so a logged-in
 tab that navigates into a share route and back never carries share state (or
 loses the app's callbacks) into the app. Both calls hand the player over
-through one place that tells the owner it leaves (`onPlayerTaken`): the app
-then cancels every start still waiting on the server or the network, drops
-the Play pressed during a restore, and clears the lock screen's title and
-playing state; and `stores/player.ts` loads or readies a take
-(`loadQueueTake`, `preloadNextTake`) and restores the last playback only
-while its own callbacks hold the player (`playsTheAppsTakes`), so a start
-that arrives late — or the lock screen's Next, which runs the app's on a
-share page too — never puts a private take under a share page (#1391).
+through one place, which opens a new tenure (`audioPlayer.tenure`) and tells
+the owner it leaves (`onPlayerTaken`). The tenure decides whether work still
+waiting on the server may touch the player: the app's play starts and its
+restore of the last playback, and the share's track waiting on its stream,
+each keep the tenure they began in and load nothing once
+`audioPlayer.changedHandsSince(tenure)` — even after the player came back, so
+a request the app sent before a share link answers into neither the share
+nor the app the listener returned to. On `onPlayerTaken` the app aborts the
+requests and network waits still out, drops the Play pressed during a
+restore, and clears the lock screen's title and playing state; and
+`stores/player.ts` loads or readies a take (`loadQueueTake`,
+`preloadNextTake`) only while its own callbacks hold the player
+(`playsTheAppsTakes`), so the lock screen's Next, which runs the app's on a
+share page too, never puts a private take under a share page (#1391).
 Shuffle on share is share-local
 (never touches `queueShuffleEnabled`) and, per product decision, switches
 playback to per-track `loadUrl` over a shuffled permutation while enabled,

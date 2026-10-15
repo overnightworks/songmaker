@@ -5125,8 +5125,9 @@ describe('a share link that takes the player (#1391)', () => {
 		arrive: () => void;
 	}
 
-	// Every way the app starts a take that waits on the server first.
-	const PENDING_STARTS: Record<string, () => PendingStart> = {
+	// Every way the app starts a take that waits on the server first; the
+	// restore waits at each of its three requests.
+	const RESTORES: Record<string, () => PendingStart> = {
 		'the restore of the last playback': () => {
 			saveLastPlayback({ type: 'album', albumId: PRIVATE_ALBUM_ID });
 			const song = holdNextRequest<SongItem>(vi.mocked(fetchSong));
@@ -5134,6 +5135,21 @@ describe('a share link that takes the player (#1391)', () => {
 				settled: restoreLastPlayback(),
 				waiting: song.requested,
 				arrive: () => song.answer(privateSong)
+			};
+		},
+		'the restore of the last library queue': () => {
+			saveLastPlayback({ type: 'library', pool: 'mix', shuffle: false });
+			vi.mocked(fetchSong).mockResolvedValueOnce(privateSong);
+			const queue = holdNextRequest<LibraryPoolQueue>(vi.mocked(fetchLibraryPoolQueue));
+			return {
+				settled: restoreLastPlayback(),
+				waiting: queue.requested,
+				arrive: () =>
+					queue.answer(
+						makePoolQueue({
+							takes: [makePoolTake({ generation_id: privateTake.id, song_id: privateSong.id })]
+						})
+					)
 			};
 		},
 		'the restore of the last playlist': () => {
@@ -5159,7 +5175,11 @@ describe('a share link that takes the player (#1391)', () => {
 						})
 					)
 			};
-		},
+		}
+	};
+
+	const PENDING_STARTS: Record<string, () => PendingStart> = {
+		...RESTORES,
 		'a library start': () => {
 			const queue = holdNextRequest<LibraryPoolQueue>(vi.mocked(fetchLibraryPoolQueue));
 			return {
@@ -5206,6 +5226,19 @@ describe('a share link that takes the player (#1391)', () => {
 		localStorage.clear();
 	});
 
+	// What the app put in the player and shows about it: for a start a share
+	// link ended, nothing at all.
+	function whatTheAppDid() {
+		return {
+			loaded: vi.mocked(audioPlayer.load).mock.calls.length,
+			readied: vi.mocked(audioPlayer.preload).mock.calls.length,
+			held: audioPlayer.current,
+			queue: get(queueContext),
+			notice: get(playStartNotice)
+		};
+	}
+	const NOTHING = { loaded: 0, readied: 0, held: null, queue: { type: 'library' }, notice: 'idle' };
+
 	it.each(Object.keys(PENDING_STARTS))(
 		'%s still waiting on the server when a share link takes the player loads nothing of the app',
 		async (kind) => {
@@ -5215,12 +5248,63 @@ describe('a share link that takes the player (#1391)', () => {
 			pending.arrive();
 			await pending.settled;
 
+			expect(whatTheAppDid()).toEqual(NOTHING);
+		}
+	);
+
+	it.each(Object.keys(PENDING_STARTS))(
+		'%s, left behind for a share link, loads nothing once the listener is back',
+		async (kind) => {
+			const pending = await startWaitingOnTheServer(kind);
+			share.start(sharedSong(), null);
+			share.stop();
+
+			pending.arrive();
+			await pending.settled;
+
+			expect(whatTheAppDid()).toEqual(NOTHING);
+		}
+	);
+
+	it.each(Object.keys(RESTORES))(
+		'%s, with Play pressed before a share link took the player, neither loads nor plays once the listener is back',
+		async (kind) => {
+			const pending = await startWaitingOnTheServer(kind);
+			void playIdleStart();
+			const pressKept = get(playStartNotice);
+			share.start(sharedSong(), null);
+			share.stop();
+
+			pending.arrive();
+			await pending.settled;
+
+			expect({ pressKept, app: whatTheAppDid() }).toEqual({
+				pressKept: 'restoring',
+				app: NOTHING
+			});
+		}
+	);
+
+	it.each(Object.keys(RESTORES))(
+		'%s, left behind for a share link, leaves a Play pressed once back to start what the transport names',
+		async (kind) => {
+			const ownTake = makePoolTake({ generation_id: 'own-take', song_id: 'own-song' });
+			const pending = await startWaitingOnTheServer(kind);
+			share.start(sharedSong(), null);
+			share.stop();
+			const ownQueue = holdNextRequest<LibraryPoolQueue>(vi.mocked(fetchLibraryPoolQueue));
+
+			const pressed = playIdleStart();
+			const noticeOnPress = get(playStartNotice);
+			pending.arrive();
+			await pending.settled;
+			ownQueue.answer(makePoolQueue({ takes: [ownTake] }));
+			await pressed;
+
 			expect({
-				loaded: vi.mocked(audioPlayer.load).mock.calls.length,
-				readied: vi.mocked(audioPlayer.preload).mock.calls.length,
-				held: audioPlayer.current,
-				queue: get(queueContext)
-			}).toEqual({ loaded: 0, readied: 0, held: null, queue: { type: 'library' } });
+				noticeOnPress,
+				loaded: vi.mocked(audioPlayer.load).mock.calls.map(([take]) => take.generation.id)
+			}).toEqual({ noticeOnPress: 'building', loaded: [ownTake.generation_id] });
 		}
 	);
 
@@ -5234,18 +5318,6 @@ describe('a share link that takes the player (#1391)', () => {
 
 		expect(audioPlayer.current?.songTitle).toBe('Shared Song');
 		expect(audioPlayer.load).not.toHaveBeenCalled();
-	});
-
-	it('an album start left behind for a share link does not start once the listener is back', async () => {
-		const pending = await startWaitingOnTheServer('an album start');
-		share.start(sharedSong(), null);
-		share.stop();
-
-		pending.arrive();
-		await pending.settled;
-
-		expect(audioPlayer.load).not.toHaveBeenCalled();
-		expect(get(playStartNotice)).toBe('idle');
 	});
 
 	// The lock screen's Next runs the app's, on a share page too.

@@ -507,6 +507,52 @@ describe('stream playback', () => {
 	});
 });
 
+describe('a track still waiting on its stream when the share gives the player back', () => {
+	// The share's stream request, answered only once the test says so.
+	function heldStream() {
+		const settle = { answer: (_manifest: QueueStreamManifest) => {}, fail: (_err: Error) => {} };
+		const fetchStream = vi.fn(
+			() =>
+				new Promise<QueueStreamManifest>((resolve, reject) => {
+					settle.answer = resolve;
+					settle.fail = reject;
+				})
+		);
+		return { fetchStream, settle };
+	}
+
+	it.each([
+		{
+			stream: 'arrives',
+			settle: (held: ReturnType<typeof heldStream>) => held.settle.answer(streamManifest(false))
+		},
+		{
+			stream: 'fails',
+			settle: (held: ReturnType<typeof heldStream>) => held.settle.fail(new Error('network'))
+		}
+	])('loads nothing over the app once that stream $stream', async ({ settle }) => {
+		const app: AudioPlayerCallbacks = { ...NO_CALLBACKS };
+		audioPlayer.swapCallbacks(app);
+		const held = heldStream();
+		const playback = new SharePlayback();
+		const view = albumView();
+		playback.start(view, held.fetchStream);
+		playback.toggle(view.tracks[0]);
+		await vi.waitFor(() => expect(held.fetchStream).toHaveBeenCalled());
+
+		playback.stop();
+		audioPlayer.loadUrl(appTake(), '/audio/private-take.mp3', { autoplay: false });
+		settle(held);
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect({
+			holds: audioPlayer.current?.songTitle,
+			mode: audioPlayer.mode,
+			src: fakeAudio.src
+		}).toEqual({ holds: 'Private Draft', mode: 'classic', src: '/audio/private-take.mp3' });
+	});
+});
+
 describe('shuffle', () => {
 	it('drops out of stream mode to classic per-track playback, keeping the playing track first', async () => {
 		const fetchStream = vi.fn().mockResolvedValue(streamManifest(false));
