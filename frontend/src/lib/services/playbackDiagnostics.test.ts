@@ -324,19 +324,37 @@ describe('playback diagnostics recorder', () => {
 		}
 	);
 
-	it('keeps the events for the next start when the page hides without a network', async () => {
-		const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+	it.each([
+		{
+			when: 'without a network',
+			arrange: async () => {
+				const offline = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+				return () => offline.mockRestore();
+			}
+		},
+		{
+			when: 'on its way to a fresh document',
+			arrange: async () => {
+				const controller = await import('$lib/history/historyController');
+				const loads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+				controller.standInForDocumentLoadsForTests(loads);
+				await controller.reloadAfresh();
+				return () => controller.resetHistoryControllerForTests();
+			}
+		}
+	])('keeps the events for the next start when the page hides $when', async ({ arrange }) => {
 		startFor(LISTENER);
-		recorder.recordPlaybackEvent(note('offline'));
+		recorder.recordPlaybackEvent(note('before hiding'));
+		const restore = await arrange();
 		hidePage();
 		await letTheServerAnswer();
-		offline.mockRestore();
+		restore();
 
 		await openPage();
 		startFor(LISTENER);
 		await letTheServerAnswer();
 
-		expect(sentDetails()).toEqual(['offline', 'hidden']);
+		expect(sentDetails()).toEqual(['before hiding', 'hidden']);
 		expect(fetchMock.mock.calls.every(([, init]) => !init.keepalive)).toBe(true);
 	});
 

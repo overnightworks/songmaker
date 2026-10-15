@@ -13,8 +13,9 @@ import {
 	ALBUM_YEAR_LABEL,
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,
-	collectionPlayLabel,
-	NEW_ALBUM_TITLE_LABEL
+	collectionActionLabel,
+	NEW_ALBUM_TITLE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -72,7 +73,10 @@ async function expectActionRowUnderCoverAndTitle(
 	title: string
 ): Promise<void> {
 	const heading = header.getByRole('heading', { name: title });
-	const play = header.getByRole('button', { name: collectionPlayLabel(kind), exact: true });
+	const play = header.getByRole('button', {
+		name: collectionActionLabel(TRANSPORT_PLAY_LABEL, kind),
+		exact: true
+	});
 	await expect(heading).toBeVisible();
 	await expect(play).toBeVisible();
 	const [cover, titleBox, playBox] = await boundingBoxes(

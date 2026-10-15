@@ -233,6 +233,29 @@ async function holdTakeAudioBack(page: Page): Promise<() => void> {
 	return release;
 }
 
+// Holds the reopened page's request for the saved song back until the flow
+// releases it, as a slow network holds the restore before its take is known.
+// Resolves once the held request has been sent, so the restore is under way.
+async function holdTheSavedSongBack(
+	page: Page
+): Promise<{ sent: Promise<unknown>; release: () => void }> {
+	const songId = await page.evaluate(() => {
+		const key = Object.keys(localStorage).find((name) => name.startsWith('playbackResume:'));
+		return key === undefined ? null : JSON.parse(localStorage.getItem(key) ?? 'null').songId;
+	});
+	if (typeof songId !== 'string') throw new Error('Expected a saved take to restore');
+	let release: () => void = () => {};
+	const released = new Promise<void>((resolve) => {
+		release = resolve;
+	});
+	const savedSong = `**/api/songs/${songId}`;
+	await page.route(savedSong, async (route) => {
+		await released;
+		await route.continue();
+	});
+	return { sent: page.waitForRequest(savedSong), release };
+}
+
 // The desktop transport shows the take's position on its seek slider; the
 // phone's shows it only as the progress line across its top.
 async function shownPosition(page: Page, shell: Shell, takeSeconds: number): Promise<number> {
@@ -369,6 +392,41 @@ test.describe('a slow network holds the restored take back', () => {
 		});
 
 		console.log(`Playback restore wait flow /api requests (${shell}): ${guard.apiRequestCount}`);
+		guard.assertClean();
+		guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
+	});
+});
+
+test.describe('a slow network holds the restore back before its take is known', () => {
+	test('a Play pressed then reads Pause with its spinner and plays from the saved position once the take is back (#1330)', async ({
+		page
+	}, testInfo) => {
+		const guard = new FlowGuard(page);
+		const shell = shellOf(testInfo);
+		const marker = `${shell} ${runMarker()}`;
+		const songTitle = `Early Play ${marker}`;
+		await followTheAudioDecks(page);
+		const { transport, play, pause } = transportOf(page);
+		let savedSong = { sent: Promise.resolve() as Promise<unknown>, release: () => {} };
+
+		await withAlbumOfItsOwn(page, marker, [{ title: songTitle }], async (albumId) => {
+			await pauseMidTakeAndReload(page, shell, albumId, songTitle, async () => {
+				savedSong = await holdTheSavedSongBack(page);
+			});
+			await savedSong.sent;
+
+			await expect(transport).not.toContainText(songTitle);
+			await play.click();
+			await expect(pause).toHaveAttribute('aria-busy', 'true');
+			savedSong.release();
+
+			await expect(transport).toContainText(songTitle);
+			await expect(pause).toHaveAttribute('aria-busy', 'false');
+			expect(await loadedDeckPositions(page)).toEqual([expect.closeTo(MID_TAKE_SECONDS, 0)]);
+			await pause.click();
+		});
+
+		console.log(`Playback early Play flow /api requests (${shell}): ${guard.apiRequestCount}`);
 		guard.assertClean();
 		guard.assertWithinBudget(PLAYBACK_RESTORE_FLOW_API_REQUEST_BUDGET);
 	});

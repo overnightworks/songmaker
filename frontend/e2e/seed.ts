@@ -1049,6 +1049,28 @@ export async function seedOwnSongAddress(
 	songTitle: string
 ): Promise<string> {
 	const seed = await SeedApi.login(api, credentials);
+	return (await createOwnSong(seed, credentials, songTitle)).address;
+}
+
+/** `seedOwnSongAddress`, with one take of the fixture tone the song plays. */
+export async function seedOwnTakeAddress(
+	api: APIRequestContext,
+	credentials: Credentials,
+	songTitle: string
+): Promise<string> {
+	const seed = await SeedApi.login(api, credentials);
+	const song = await createOwnSong(seed, credentials, songTitle);
+	await seed.postFile<ImportedTake>(`/api/songs/${song.id}/reimport`, {
+		mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+	});
+	return song.address;
+}
+
+async function createOwnSong(
+	seed: SeedApi,
+	credentials: Credentials,
+	songTitle: string
+): Promise<{ id: string; address: string }> {
 	const album = await seed.postJson<CreatedResource>('/api/albums', {
 		title: `${ALBUM_TITLE_PREFIX} ${runMarker()}`,
 		artist: credentials.username
@@ -1059,7 +1081,7 @@ export async function seedOwnSongAddress(
 		lyrics: `${songTitle} lyrics`,
 		prompt: 'calm test tone'
 	});
-	return `/album/${album.id}/${song.slug}`;
+	return { id: song.id, address: `/album/${album.id}/${song.slug}` };
 }
 
 /** Removes an account created for a flow, rows and all. */

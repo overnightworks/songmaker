@@ -3,6 +3,7 @@ import { get, writable } from 'svelte/store';
 import { page } from '$app/state';
 import { fetchAlbum } from '$lib/api/albums';
 import {
+	historyComesToRest,
 	historyMoves,
 	historyStandsStill,
 	historyStateOnLoad,
@@ -330,8 +331,8 @@ function navigateLibraryRoute(
 // and take the address back to the song (issue #1143), and a held write would
 // navigate over the page the user went to last. A held write that navigates
 // moves history again, so the wait starts over until nothing is left to land.
-export async function libraryHistoryStepsLanded(): Promise<void> {
-	while (historyMoves()) await historyStandsStill();
+export function libraryHistoryStepsLanded(): Promise<void> {
+	return historyComesToRest();
 }
 
 function pathnameOf(url: string): string {

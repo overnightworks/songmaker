@@ -22,12 +22,17 @@ import type {
 import {
 	audioPlayer,
 	RECOVERY_DEADLINE_MS,
+	transportOffersPause,
 	type AudioPlayerCallbacks,
 	type PlaybackInfo,
 	type StreamFallbackState,
 	type TransportState
 } from '$lib/services/audioPlayer.svelte';
-import { setupMediaSessionHandlers, updateMediaSessionMetadata } from '$lib/services/mediaSession';
+import {
+	type LockScreenTitle,
+	setupMediaSessionHandlers,
+	updateMediaSessionMetadata
+} from '$lib/services/mediaSession';
 import { type OpenCollection, openCollection } from '$lib/stores/collection';
 import {
 	albumList,
@@ -235,9 +240,11 @@ export const playbackSource = derived(
 // 'awaiting-network': a start that could not read its takes offline waits
 // for the network, with nothing playing yet (#1288). 'gave-up-on-network':
 // it waited as long as a stalled take does and now waits calmly, as a given-up
-// take does, until the network's return runs it again (#1312).
+// take does, until the network's return runs it again (#1312). 'restoring':
+// Play was pressed while the take a reload restores is still on its way
+// (#1330).
 type PlayStartNotice =
-	'idle' | 'building' | 'awaiting-network' | 'gave-up-on-network' | 'empty' | 'error';
+	'idle' | 'building' | 'awaiting-network' | 'gave-up-on-network' | 'restoring' | 'empty' | 'error';
 export const playStartNotice = writable<PlayStartNotice>('idle');
 export const libraryQueueSkipped = writable<QueueStreamSkipItem[]>([]);
 export const libraryQueueSkippedComplete = writable(true);
@@ -372,12 +379,22 @@ interface PlayStart {
 	signal: AbortSignal;
 }
 
+// A new start replaces whatever start came before it, a waiting one included.
 function beginPlayStart(): PlayStart {
-	playStartAbort?.abort();
+	dropPendingStart();
+	return openPlayStart();
+}
+
+function openPlayStart(): PlayStart {
+	cancelPlayStart();
 	playStartAbort = new AbortController();
+	return { seq: playStartSeq, signal: playStartAbort.signal };
+}
+
+function cancelPlayStart(): void {
+	playStartAbort?.abort();
 	playStartSeq += 1;
 	retryPlayIntent = null;
-	return { seq: playStartSeq, signal: playStartAbort.signal };
 }
 
 function playStartIsCurrent(seq: number): boolean {
@@ -401,26 +418,68 @@ function retryOnceBackOnline(
 	return true;
 }
 
+// An album start that could not read its takes offline, held until a take of
+// it plays: the bar and the lock screen, the only surface with the screen
+// off, name the song it will play (#1312, #1330). A start paused from the
+// lock screen stays named there, paused, until its Play runs it again.
+interface PendingStart {
+	albumId: string;
+	song: LockScreenTitle;
+}
+const pendingStartState = writable<PendingStart | null>(null);
+export const pendingStart = readonly(pendingStartState);
+
+// Component tests hold a waiting start as this store would (#1330).
+export function setPendingStartForTests(start: PendingStart | null): void {
+	pendingStartState.set(start);
+}
+let runPendingStartAgain: ((playStart: PlayStart) => Promise<void>) | null = null;
+let pendingStartGiveUp: ReturnType<typeof setTimeout> | undefined;
+
 // The bar shows the start waiting until it runs again, a newer start
-// replaces it, or the listener stops it; the lock screen, the only surface
-// with the screen off, names the song it waits for (#1312).
-function noticeStartAwaitingNetwork(signal: AbortSignal, waitingFor: SongItem): void {
+// replaces it, or the listener stops it. Running again once the network is
+// back continues this same start, so nothing it shows lapses meanwhile. The
+// start is what the listener asked to hear, so it takes the place of a take
+// already loaded, and that take falls silent rather than play on under it.
+function noticeStartAwaitingNetwork(
+	start: PendingStart,
+	runAgain: (playStart: PlayStart) => Promise<void>
+): void {
+	pendingStartState.set(start);
+	runPendingStartAgain = runAgain;
+	if (audioPlayer.current) audioPlayer.pause();
+	updateMediaSessionMetadata(start.song);
 	playStartNotice.set('awaiting-network');
-	updateMediaSessionMetadata({
-		songTitle: waitingFor.title,
-		artist: waitingFor.artist,
-		albumTitle: waitingFor.album_title
-	});
-	const giveUp = setTimeout(() => playStartNotice.set('gave-up-on-network'), RECOVERY_DEADLINE_MS);
-	signal.addEventListener(
-		'abort',
-		() => {
-			clearTimeout(giveUp);
-			playStartNotice.set('idle');
-			if (!audioPlayer.current) updateMediaSessionMetadata(null);
-		},
-		{ once: true }
+	clearTimeout(pendingStartGiveUp);
+	pendingStartGiveUp = setTimeout(
+		() => playStartNotice.set('gave-up-on-network'),
+		RECOVERY_DEADLINE_MS
 	);
+}
+
+function stopPendingStartWait(): void {
+	clearTimeout(pendingStartGiveUp);
+	if (startAwaitsNetwork(get(playStartNotice))) playStartNotice.set('idle');
+}
+
+function dropPendingStart(): void {
+	stopPendingStartWait();
+	if (get(pendingStart) === null) return;
+	pendingStartState.set(null);
+	runPendingStartAgain = null;
+	updateMediaSessionMetadata(audioPlayer.current);
+}
+
+// A take that plays is what the listener now hears, so a start still pending
+// is over: the lock screen names that take, and the network starts nothing.
+function endPendingStartForThePlayingTake(): void {
+	if (get(pendingStart) === null) return;
+	cancelPlayStart();
+	dropPendingStart();
+}
+
+function lockScreenTitleOf(song: SongItem): LockScreenTitle {
+	return { songTitle: song.title, artist: song.artist, albumTitle: song.album_title };
 }
 
 function poolTakeToPlaybackInfo(take: LibraryPoolTakeItem): PlaybackInfo {
@@ -569,9 +628,11 @@ function playNativeIndex(ctx: Exclude<QueueContext, { type: 'playlist' }>, index
 interface LibraryTakeStart extends QueueStart {
 	keepPlaying?: boolean;
 	tappedRowSong?: SongItem;
-	// A restore reports nothing it cannot rebuild (#1187 P2), so the listener
-	// who reopens the page is never asked to retry a play they did not start.
-	quiet?: boolean;
+	// A restore starts the queue at the saved position and reports nothing it
+	// cannot rebuild (#1187 P2), so the listener who reopens the page is never
+	// asked to retry a play they did not start. Whether it plays is decided
+	// once its take is back, so a Play pressed meanwhile keeps its intent (#1330).
+	restoredAt?: number;
 }
 
 function reportLibraryTakeStartFailure(
@@ -581,10 +642,7 @@ function reportLibraryTakeStartFailure(
 	toast: string
 ): void {
 	clearLibraryQueueSkipFeedback();
-	if (opts.quiet) {
-		playStartNotice.set('idle');
-		return;
-	}
+	if (opts.restoredAt !== undefined) return;
 	retryPlayIntent = () => playLibraryFromGeneration(gen, opts);
 	playStartNotice.set(notice);
 	addToast(toast, 'error');
@@ -599,6 +657,18 @@ function currentTakeAtPosition(): { generation: GenerationItem; position: number
 	};
 }
 
+// Where a library queue whose takes are back starts: a restore answers a
+// Play pressed while they were on their way, and a continuation goes on from
+// where the take that plays now stands.
+function libraryQueueStart(
+	opts: LibraryTakeStart,
+	continuation: { position: number } | null
+): QueueStart {
+	if (opts.restoredAt !== undefined) return restoredStart(opts.restoredAt);
+	playStartNotice.set('idle');
+	return opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts;
+}
+
 // A take row never plays alone (#1187 P6): when the pool holds only the
 // tapped take, as it does before anything is picked, the row's song names the
 // album the queue continues through instead.
@@ -608,7 +678,9 @@ async function playLibraryFromGeneration(
 ): Promise<void> {
 	const { seq, signal } = beginPlayStart();
 	setQueueContext({ type: 'library' });
-	playStartNotice.set('building');
+	// A restore waits as album and playlist restores do, with the transport
+	// free to take a Play for the take it brings back.
+	if (opts.restoredAt === undefined) playStartNotice.set('building');
 	clearLibraryQueueSkipFeedback();
 	clearWindowEnd();
 	let requested = gen;
@@ -646,18 +718,14 @@ async function playLibraryFromGeneration(
 			reportLibraryTakeStartFailure(startGeneration, opts, 'error', QUEUE_TAKE_MISSING_TOAST);
 			return;
 		}
-		playStartNotice.set('idle');
+		const start = libraryQueueStart(opts, continuation);
 		if (takes.length === 1 && opts.tappedRowSong) {
 			await playAlbumFromGeneration(opts.tappedRowSong.album_id, opts.tappedRowSong, gen);
 			return;
 		}
 		libraryQueueSkipped.set(queue.skipped ?? []);
 		libraryQueueSkippedComplete.set(queue.skipped_complete ?? true);
-		playNativeLibraryTakes(
-			takes,
-			startIndex,
-			opts.keepPlaying ? { ...opts, resumeAtTrackTime: continuation?.position } : opts
-		);
+		playNativeLibraryTakes(takes, startIndex, start);
 		return;
 	}
 }
@@ -743,7 +811,7 @@ export function idlePlayTarget(input: {
 // The transport with no take: a start that waits for the network is what the
 // listener asked for, so a press stops it rather than starting another.
 export async function playIdleStart(): Promise<void> {
-	if (stopStartAwaitingNetwork()) return;
+	if (stopStartAwaitingNetwork() || askForTheRestoringTake()) return;
 	const target = idlePlayTarget({
 		collection: get(openCollection),
 		playlist: get(selectedPlaylistDetail),
@@ -763,31 +831,69 @@ export async function playIdleStart(): Promise<void> {
 }
 
 // The bar and the lock screen show a start that waits for the network as the
-// transport's own wait, and their presses stop it (#1288).
-function startAwaitsNetwork(current: PlaybackInfo | null, notice: PlayStartNotice): boolean {
-	return !current && (notice === 'awaiting-network' || notice === 'gave-up-on-network');
+// transport's own wait, whatever take is loaded, and their presses stop it
+// (#1288, #1330).
+function startAwaitsNetwork(notice: PlayStartNotice): boolean {
+	return notice === 'awaiting-network' || notice === 'gave-up-on-network';
+}
+
+// The start the bar and the album header show as waiting, naming its song and
+// its album, as the lock screen does (#1330).
+export function waitingStartOf(
+	notice: PlayStartNotice,
+	pending: PendingStart | null
+): PendingStart | null {
+	return startAwaitsNetwork(notice) ? pending : null;
 }
 
 // A start that waits for the network shows the transport a take waiting for
-// it shows: recovering at first, then given up after the same deadline (#1312).
+// it shows: recovering at first, then given up after the same deadline
+// (#1312). A Play pressed before a restored take arrived shows it loading,
+// as a press on the take itself would (#1330).
 export function transportOfTheStart(
 	current: PlaybackInfo | null,
 	notice: PlayStartNotice,
 	transport: TransportState
 ): TransportState {
-	if (!startAwaitsNetwork(current, notice)) return transport;
+	if (!current && notice === 'restoring') return 'loading';
+	if (!startAwaitsNetwork(notice)) return transport;
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
-function stopStartAwaitingNetwork(): boolean {
-	if (!startAwaitsNetwork(audioPlayer.current, get(playStartNotice))) return false;
-	playStartAbort?.abort();
+// The bar's and the header's press withdraw a waiting start altogether.
+export function stopStartAwaitingNetwork(): boolean {
+	if (!pauseStartAwaitingNetwork()) return false;
+	dropPendingStart();
+	return true;
+}
+
+// The lock screen pauses a waiting start the way it pauses a take: it stops
+// waiting but stays named, and the lock screen's Play runs it again (#1330).
+function pauseStartAwaitingNetwork(): boolean {
+	if (!startAwaitsNetwork(get(playStartNotice))) return false;
+	cancelPlayStart();
+	stopPendingStartWait();
+	return true;
+}
+
+function resumePausedStart(): boolean {
+	const runAgain = runPendingStartAgain;
+	if (runAgain === null) return false;
+	if (startAwaitsNetwork(get(playStartNotice))) return true;
+	const playStart = openPlayStart();
+	playStartNotice.set('awaiting-network');
+	void runAgain(playStart).catch(toastAlbumSongsFailure);
 	return true;
 }
 
 function pauseFromLockScreen(): void {
-	if (stopStartAwaitingNetwork()) return;
+	if (pauseStartAwaitingNetwork()) return;
 	audioPlayer.pause();
+}
+
+function playFromLockScreen(): void {
+	if (resumePausedStart()) return;
+	audioPlayer.play();
 }
 
 // The playlist store owns loading and joins the fetch already in flight; a
@@ -1224,8 +1330,10 @@ const PLAYBACK_FAILED_TOAST = 'Playback failed';
 // toggles pause if the row's take is already playing, otherwise starts a
 // queue from it (its album, else the library pool), reporting any failure as
 // a toast instead of throwing into the caller.
+// A press on the row of the take that offers Pause, a waiting one included,
+// is that Pause, as the bar's is (#1330).
 export async function playTake(gen: GenerationItem, song: SongItem): Promise<void> {
-	if (audioPlayer.current?.generation.id === gen.id && audioPlayer.status === 'playing') {
+	if (isTakeCurrent(gen) && transportOffersPause(audioPlayer.transport)) {
 		audioPlayer.toggle();
 		return;
 	}
@@ -1505,10 +1613,19 @@ async function firstPlayableAlbumTake(
 // that turns out to have nothing playable leaves the running queue, and the
 // place it names as its source, exactly as they were.
 export async function playAlbum(albumId: string, start: CollectionStart = 'top'): Promise<void> {
-	const { seq, signal } = beginPlayStart();
+	const playStart = beginPlayStart();
 	clearWindowEnd();
 	clearLibraryQueueSkipFeedback();
 	playStartNotice.set('building');
+	await runAlbumStart(albumId, start, playStart);
+}
+
+async function runAlbumStart(
+	albumId: string,
+	start: CollectionStart,
+	playStart: PlayStart
+): Promise<void> {
+	const { seq, signal } = playStart;
 	if (albumSongsInOrder(albumId).length === 0) {
 		await loadSongsForAlbum(albumId);
 		if (!playStartIsCurrent(seq)) return;
@@ -1516,21 +1633,29 @@ export async function playAlbum(albumId: string, start: CollectionStart = 'top')
 	const startTake = await firstPlayableAlbumTake(albumId, seq, start);
 	if (!playStartIsCurrent(seq)) return;
 	if (startTake && 'unread' in startTake) {
-		if (retryOnceBackOnline(startTake.error, signal, () => playAlbum(albumId, start))) {
-			noticeStartAwaitingNetwork(signal, startTake.unread);
+		const runAgain = (again: PlayStart) => runAlbumStart(albumId, start, again);
+		const runAgainOnceBackOnline = () => {
+			playStartNotice.set('awaiting-network');
+			return runAgain(playStart);
+		};
+		if (retryOnceBackOnline(startTake.error, signal, runAgainOnceBackOnline)) {
+			noticeStartAwaitingNetwork({ albumId, song: lockScreenTitleOf(startTake.unread) }, runAgain);
 			return;
 		}
+		dropPendingStart();
 		playStartNotice.set('idle');
 		toastAlbumSongsFailure(startTake.error);
 		return;
 	}
 	if (!startTake) {
+		dropPendingStart();
 		reportNothingPlayable(albumTitle(get(albumList), albumId), () => playAlbum(albumId, start));
 		return;
 	}
-	playStartNotice.set('idle');
 	playNativeAlbumTakes(albumId, [albumQueueTake(startTake.song, startTake.gen)], 0);
-	await gatherAlbumQueueAround(albumId, startTake.song, startTake.gen, { seq, signal });
+	playStartNotice.set('idle');
+	dropPendingStart();
+	await gatherAlbumQueueAround(albumId, startTake.song, startTake.gen, playStart);
 }
 
 async function playAlbumFromGeneration(
@@ -1730,7 +1855,7 @@ async function rebuildQueueStream(state: StreamFallbackState): Promise<QueueStre
 }
 
 setupMediaSessionHandlers({
-	play: () => audioPlayer.play(),
+	play: playFromLockScreen,
 	pause: pauseFromLockScreen,
 	stop: pauseFromLockScreen,
 	next: () => {
@@ -1838,6 +1963,7 @@ function recordFirstTakeListen(): void {
 }
 
 function handlePlaybackStarted(): void {
+	endPendingStartForThePlayingTake();
 	recordFirstTakeListen();
 	gatherRestoredAlbumQueue();
 }
@@ -1976,20 +2102,57 @@ followPlaybackForResume({
 export async function restoreLastPlayback(): Promise<void> {
 	const saved = savedPlayback();
 	if (saved === null || audioPlayer.current !== null) return;
+	restoreUnderway = true;
+	try {
+		await restoreSavedPlayback(saved);
+	} finally {
+		restoreUnderway = false;
+		playWhatWasAskedForIfNothingWasRestored();
+	}
+}
+
+async function restoreSavedPlayback(saved: SavedPlayback): Promise<void> {
 	const found = await playableSavedTake(saved);
 	if (found === null || audioPlayer.current !== null) return;
-	const start: QueueStart = {
-		resumeAtTrackTime: positionWithinTake(saved.position, found.take),
-		autoplay: false
-	};
+	const at = positionWithinTake(saved.position, found.take);
 	const { source } = saved;
 	if (source.type === 'album') {
-		restoreAlbumTake(found.song, found.take, start);
+		restoreAlbumTake(found.song, found.take, restoredStart(at));
 	} else if (source.type === 'library') {
-		await restoreLibraryTake(source, found.take, start);
+		await restoreLibraryTake(source, found.take, at);
 	} else {
-		await restorePlaylistQueue(source.playlistId, found.take, start);
+		await restorePlaylistQueue(source.playlistId, found.take, at);
 	}
+}
+
+// A Play pressed after a reload, before the saved take is back, keeps its
+// intent: the transport reads Pause with its spinner, a second press
+// withdraws it, and the take plays from its saved position once it is back
+// (#1330).
+let restoreUnderway = false;
+
+function askForTheRestoringTake(): boolean {
+	if (!restoreUnderway) return false;
+	playStartNotice.set(get(playStartNotice) === 'restoring' ? 'idle' : 'restoring');
+	return true;
+}
+
+// Where the restored take starts, and whether it plays: the press, if any,
+// is answered here, so a later one goes to the take itself.
+function restoredStart(resumeAtTrackTime: number): QueueStart {
+	const askedForSound = get(playStartNotice) === 'restoring';
+	restoreUnderway = false;
+	if (askedForSound) playStartNotice.set('idle');
+	return { resumeAtTrackTime, autoplay: askedForSound };
+}
+
+// A saved take that cannot come back leaves the press to start what the
+// transport names, as it would have without a reload; a take the listener
+// started in the meantime has already answered it.
+function playWhatWasAskedForIfNothingWasRestored(): void {
+	if (get(playStartNotice) !== 'restoring') return;
+	playStartNotice.set('idle');
+	if (audioPlayer.current === null) void playIdleStart();
 }
 
 // The device's library settings are what build, extend and save a library
@@ -1998,11 +2161,11 @@ export async function restoreLastPlayback(): Promise<void> {
 async function restoreLibraryTake(
 	source: Extract<ResumeQueueSource, { type: 'library' }>,
 	take: GenerationItem,
-	start: QueueStart
+	at: number
 ): Promise<void> {
 	setLibraryTakePool(source.pool);
 	setShuffle(source.shuffle);
-	await playLibraryFromGeneration(take, { ...start, quiet: true });
+	await playLibraryFromGeneration(take, { restoredAt: at });
 }
 
 // Gathering an album's takes costs a request per song, so a restored album
@@ -2057,13 +2220,16 @@ async function playableSavedTake(
 async function restorePlaylistQueue(
 	playlistId: string,
 	take: GenerationItem,
-	start: QueueStart
+	at: number
 ): Promise<void> {
 	const playlist = await quietly(() => fetchPlaylist(playlistId));
 	if (playlist === null || audioPlayer.current !== null) return;
 	const index = playlist.entries.findIndex((entry) => entry.generation_id === take.id);
 	if (index < 0) return;
-	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, { restart: true, ...start });
+	startPlaylistQueue(queueSourceOf(playlist), playlist.entries, index, {
+		restart: true,
+		...restoredStart(at)
+	});
 }
 
 async function quietly<T>(request: () => Promise<T>): Promise<T | null> {

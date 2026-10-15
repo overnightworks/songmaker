@@ -11,9 +11,10 @@ import { get } from 'svelte/store';
 import {
 	COLLECTION_MENU_COVER_HINT,
 	COLLECTION_MENU_LABEL,
-	collectionPauseLabel,
-	collectionPlayLabel,
-	collectionShuffleLabel
+	collectionActionLabel,
+	TRANSPORT_PLAY_LABEL,
+	COLLECTION_SHUFFLE_ACTION,
+	TRANSPORT_PAUSE_LABEL
 } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { albumList } from '$lib/stores/libraryData';
@@ -138,11 +139,10 @@ function queuePlays(kind: HeaderKind, collectionId: string, status: 'playing' | 
 		lyrics: null
 	};
 	audioPlayer.status = status;
-	vi.spyOn(audioPlayer, 'pause').mockImplementation(() => {
-		audioPlayer.status = 'paused';
-	});
-	vi.spyOn(audioPlayer, 'play').mockImplementation(() => {
-		audioPlayer.status = 'playing';
+	// jsdom gives the player no media element, so the circle's press, the
+	// transport's own toggle, moves the status the way a real element does.
+	vi.spyOn(audioPlayer, 'toggle').mockImplementation(() => {
+		audioPlayer.status = audioPlayer.status === 'playing' ? 'paused' : 'playing';
 	});
 }
 
@@ -161,7 +161,7 @@ describe('CollectionHeader', () => {
 			const props = { ...baseProps(), kind };
 			const target = await render(props);
 
-			getByRoleButton(target, collectionPlayLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
 
 			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('top');
 			expect(get(shuffleEnabled)).toBe(false);
@@ -174,7 +174,7 @@ describe('CollectionHeader', () => {
 			const props = { ...baseProps(), kind };
 			const target = await render(props);
 
-			getByRoleButton(target, collectionShuffleLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)).click();
 
 			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('random');
 			expect(get(shuffleEnabled)).toBe(true);
@@ -189,15 +189,17 @@ describe('CollectionHeader', () => {
 			queuePlays(kind, props.collectionId, 'playing');
 			const target = await render(props);
 
-			getByRoleButton(target, collectionPauseLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind)).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('paused');
-			getByRoleButton(target, collectionPlayLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('playing');
-			expect(getByRoleButton(target, collectionPauseLabel(kind))).not.toBeNull();
+			expect(
+				getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind))
+			).not.toBeNull();
 			expect(props.onplay).not.toHaveBeenCalled();
 			expect(get(shuffleEnabled)).toBe(true);
 		}
@@ -210,7 +212,7 @@ describe('CollectionHeader', () => {
 			queuePlays(kind, 'c-other', 'playing');
 			const target = await render(props);
 
-			getByRoleButton(target, collectionPlayLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind)).click();
 
 			expect(props.onplay).toHaveBeenCalledExactlyOnceWith('top');
 			expect(audioPlayer.status).toBe('playing');
@@ -223,9 +225,12 @@ describe('CollectionHeader', () => {
 			const props = { ...baseProps(), kind, onplay: null };
 			queuePlays(kind, props.collectionId, 'playing');
 			const target = await render(props);
-			const shuffle = getByRoleButton(target, collectionShuffleLabel(kind));
+			const shuffle = getByRoleButton(
+				target,
+				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)
+			);
 
-			getByRoleButton(target, collectionPauseLabel(kind)).click();
+			getByRoleButton(target, collectionActionLabel(TRANSPORT_PAUSE_LABEL, kind)).click();
 			await tick();
 
 			expect(audioPlayer.status).toBe('paused');
@@ -238,8 +243,11 @@ describe('CollectionHeader', () => {
 		async (kind) => {
 			setShuffle(true);
 			const target = await render({ ...baseProps(), kind, onplay: null });
-			const circle = getByRoleButton(target, collectionPlayLabel(kind));
-			const shuffle = getByRoleButton(target, collectionShuffleLabel(kind));
+			const circle = getByRoleButton(target, collectionActionLabel(TRANSPORT_PLAY_LABEL, kind));
+			const shuffle = getByRoleButton(
+				target,
+				collectionActionLabel(COLLECTION_SHUFFLE_ACTION, kind)
+			);
 
 			circle.click();
 			shuffle.click();
@@ -448,8 +456,8 @@ describe('CollectionHeader', () => {
 
 		const actions = [...requireElement(target, '.header-actions').querySelectorAll('button')];
 		expect(actions.map((button) => button.getAttribute('aria-label'))).toEqual([
-			collectionPlayLabel('album'),
-			collectionShuffleLabel('album'),
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album'),
 			COLLECTION_MENU_LABEL
 		]);
 	});
