@@ -778,6 +778,24 @@ log_guard_reason() {
     fi
 }
 
+# Compose owns the list of variables the stack cannot start without: every
+# `${VAR:?...}` in docker-compose.yml (GRAFANA_PASSWORD since #1357). The job
+# guard's `compose exec` does not notice a missing one, so without asking
+# first it would surface only at `compose build`, after the checkout has
+# already moved. The refusal quotes compose's own message and is an ordinary
+# counted refusal. `--quiet` is mandatory: without it compose prints the fully
+# interpolated configuration, every .env secret included, straight into the
+# journal.
+compose_config_refusal() {
+    local moment="$1"
+    local config_error
+    if config_error="$(compose config --quiet 2>&1)"; then
+        return 0
+    fi
+    log_err "docker compose refuses the stack configuration $moment — refusing to deploy, the running stack is untouched: $config_error"
+    fail_tick "compose configuration refused $moment"
+}
+
 # Prints exactly one of green, waiting, or failed. An API/CLI failure is a
 # named error return because it is not evidence that the fetched commit is
 # safe to deploy. The API's explicit zero-run envelope waits only until the
@@ -1010,6 +1028,10 @@ if ! safe_git merge-base --is-ancestor "$LOCAL_HEAD" "$REMOTE_HEAD"; then
     fail_tick "local HEAD diverged from origin/$DEPLOY_BRANCH"
 fi
 
+# The checked-out stack configuration must be complete before anything
+# below runs; see compose_config_refusal.
+compose_config_refusal "before pull"
+
 # --- 6. Job guard, ahead of the first step that touches the checkout. An
 # unreachable DB fails closed: unknown job state is treated as "do not
 # deploy", not as "assume idle".
@@ -1152,6 +1174,10 @@ if [[ "$CHECKED_OUT_HEAD" != "$DEPLOY_COMMIT" ]]; then
     log_err "HEAD in $REPO_ROOT is $CHECKED_OUT_HEAD after fast-forward, not the selected deploy candidate $DEPLOY_COMMIT — refusing to build"
     fail_tick "checked out commit differs from verified commit"
 fi
+
+# The selected commit may require a variable the previous one did not; name
+# it before the base-image and compose builds rather than after them.
+compose_config_refusal "after fast-forward to $DEPLOY_COMMIT"
 
 # Base images are local-only. Check the selected candidate against the revision
 # that is actually running, rather than against the checkout's previous HEAD:
