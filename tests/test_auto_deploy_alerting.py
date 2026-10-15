@@ -17,6 +17,7 @@ import re
 import shlex
 import stat
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -52,6 +53,14 @@ CHECK_RUN_FIELD_SEPARATOR = "\x1f"
 REQUIRED_ACTIONS_JOB_NAME = "Backend (Python 3.12)"
 ADVISORY_ACTIONS_JOB_NAME = "SonarCloud scan"
 
+REQUIRED_GRAFANA_PASSWORD = (
+    "${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)}"
+)
+GRAFANA_PASSWORD_REFUSAL = (
+    "error while interpolating services.grafana.environment.GF_SECURITY_ADMIN_PASSWORD: "
+    "required variable GRAFANA_PASSWORD is missing a value: "
+    "GRAFANA_PASSWORD must be set in .env (see docker/.env.docker.example)"
+)
 VALID_ALERT_ENV = """\
 ALERT_EMAIL_TO='operator@example.com'
 SMTP_HOST='smtp.example.com'
@@ -59,6 +68,20 @@ SMTP_PORT='587'
 SMTP_USER='songmaker@example.com'
 SMTP_PASSWORD='correct-horse-battery-staple'
 """
+
+
+@dataclass(frozen=True)
+class ComposeConfigRefusal:
+    """How the fake `docker compose config --quiet` refuses a configuration.
+
+    It exits 1, as compose does for every refusal (a missing variable, invalid
+    YAML, no compose file). ``when_compose_file_contains`` limits the refusal
+    to checkouts whose docker-compose.yml carries that text, standing in for a
+    commit that introduces a newly required variable.
+    """
+
+    stderr: str
+    when_compose_file_contains: str | None = None
 
 
 def _check_runs_response(*runs: tuple[str, ...]) -> str:
@@ -132,6 +155,7 @@ class Checkout:
         self._prune_sleep_seconds = 0
         self._compose_up_exit_code = 0
         self._compose_project_name = "songmaker"
+        self._compose_config_refusal: ComposeConfigRefusal | None = None
         self._prometheus_ready_exit_code = 0
         self._prometheus_reload_exit_code = 0
         self._prometheus_rules_exit_code = 0
@@ -215,6 +239,11 @@ class Checkout:
         self._compose_project_name = project_name
         self._write_docker_stub()
 
+    def refuse_compose_config(self, refusal: ComposeConfigRefusal) -> None:
+        """Make `docker compose config --quiet` fail the way compose itself does."""
+        self._compose_config_refusal = refusal
+        self._write_docker_stub()
+
     def set_prometheus_ready_exit_code(self, exit_code: int) -> None:
         self._prometheus_ready_exit_code = exit_code
         self._write_curl_stub()
@@ -266,11 +295,40 @@ class Checkout:
             "exit 2\n",
         )
 
+    def _compose_config_quiet_stub(self) -> str:
+        """Compose's own validation; the wrapper runs it inside the checkout."""
+        refusal_branch = ""
+        refusal = self._compose_config_refusal
+        if refusal is not None:
+            condition = (
+                "true"
+                if refusal.when_compose_file_contains is None
+                else f"grep -qsF -- {shlex.quote(refusal.when_compose_file_contains)} "
+                "docker-compose.yml"
+            )
+            refusal_branch = (
+                f"    if {condition}; then\n"
+                f"        printf '%s\\n' {shlex.quote(refusal.stderr)} >&2\n"
+                "        exit 1\n"
+                "    fi\n"
+            )
+        return (
+            'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--quiet" ]]; then\n'
+            '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
+            '        printf "%s\\n" "$DOCKER_COMPOSE_STDERR" >&2\n'
+            "    fi\n"
+            + refusal_branch
+            + "    exit 0\n"
+            "fi\n"
+        )
+
     def _write_docker_stub(self) -> None:
         _write_executable(
             self._bin / "docker",
             "#!/bin/bash\n"
             'printf "%s\\n" "$*" >> "$DOCKER_CALLS_FILE"\n'
+            + self._compose_config_quiet_stub()
+            +
             'if [[ "$1" == "compose" && "$2" == "config" && "$3" == "--format" '
             '&& "$4" == "json" ]]; then\n'
             '    if [[ -n "${DOCKER_COMPOSE_STDERR:-}" ]]; then\n'
@@ -392,25 +450,25 @@ class Checkout:
         _git(self.root, "commit", "-m", "add mount preflight")
         _git(self.root, "push", "origin", "main")
 
-    def move_main_forward(self) -> None:
+    def _up_to_date_pusher(self) -> Path:
+        """A second clone standing in for whoever lands commits on origin/main."""
         clone = self.root.parent / "pusher"
         if not clone.exists():
             _git(self.root.parent, "clone", str(self.origin), str(clone))
             _git(clone, "config", "user.email", "test@example.com")
             _git(clone, "config", "user.name", "Test")
         _git(clone, "pull", "--ff-only", "origin", "main")
+        return clone
+
+    def move_main_forward(self) -> None:
+        clone = self._up_to_date_pusher()
         self._commits_pushed += 1
         (clone / "README.md").write_text(f"moved {self._commits_pushed}\n")
         _git(clone, "commit", "-am", f"move main {self._commits_pushed}")
         _git(clone, "push", "origin", "main")
 
     def move_main_forward_with_changed_alert_rules(self) -> None:
-        clone = self.root.parent / "pusher"
-        if not clone.exists():
-            _git(self.root.parent, "clone", str(self.origin), str(clone))
-            _git(clone, "config", "user.email", "test@example.com")
-            _git(clone, "config", "user.name", "Test")
-        _git(clone, "pull", "--ff-only", "origin", "main")
+        clone = self._up_to_date_pusher()
         rules = clone / PROMETHEUS_RULE_PATH
         rules.write_text(rules.read_text() + "\n# changed by deploy test\n")
         _git(clone, "add", str(PROMETHEUS_RULE_PATH))
@@ -418,12 +476,7 @@ class Checkout:
         _git(clone, "push", "origin", "main")
 
     def move_main_forward_with_changed_prometheus_config(self) -> None:
-        clone = self.root.parent / "pusher"
-        if not clone.exists():
-            _git(self.root.parent, "clone", str(self.origin), str(clone))
-            _git(clone, "config", "user.email", "test@example.com")
-            _git(clone, "config", "user.name", "Test")
-        _git(clone, "pull", "--ff-only", "origin", "main")
+        clone = self._up_to_date_pusher()
         config = clone / "monitoring" / "prometheus.yml"
         config.write_text(config.read_text() + "\n# changed by deploy test\n")
         _git(clone, "add", "monitoring/prometheus.yml")
@@ -431,17 +484,19 @@ class Checkout:
         _git(clone, "push", "origin", "main")
 
     def move_main_forward_with_changed_base_image(self) -> None:
-        clone = self.root.parent / "pusher"
-        if not clone.exists():
-            _git(self.root.parent, "clone", str(self.origin), str(clone))
-            _git(clone, "config", "user.email", "test@example.com")
-            _git(clone, "config", "user.name", "Test")
-        _git(clone, "pull", "--ff-only", "origin", "main")
+        clone = self._up_to_date_pusher()
         base_dockerfile = clone / "docker" / "base" / "acestep-base.Dockerfile"
         base_dockerfile.parent.mkdir(parents=True)
         base_dockerfile.write_text("# changed by deploy test\n")
         _git(clone, "add", "docker/base/acestep-base.Dockerfile")
         _git(clone, "commit", "-m", "change base image")
+        _git(clone, "push", "origin", "main")
+
+    def move_main_forward_with_compose_file(self, content: str) -> None:
+        clone = self._up_to_date_pusher()
+        (clone / "docker-compose.yml").write_text(content)
+        _git(clone, "add", "docker-compose.yml")
+        _git(clone, "commit", "-m", "change compose file")
         _git(clone, "push", "origin", "main")
 
     def move_main_forward_after_check_lookup(self) -> None:
@@ -550,6 +605,12 @@ class Checkout:
     @property
     def journal(self) -> str:
         return self.log_file.read_text() if self.log_file.exists() else ""
+
+    @property
+    def head(self) -> str:
+        return subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], cwd=self.root, text=True,
+        ).strip()
 
     @property
     def docker_calls(self) -> str:
@@ -686,6 +747,70 @@ def test_a_missing_mount_preflight_is_logged_and_the_deploy_continues(tmp_path: 
     assert result.returncode == 0
     assert "mount preflight not installed, skipping" in checkout.journal
     assert "compose build" in checkout.docker_calls
+
+
+@pytest.mark.parametrize(
+    "compose_error",
+    [
+        pytest.param(GRAFANA_PASSWORD_REFUSAL, id="missing-variable"),
+        pytest.param("yaml: line 2: did not find expected ',' or ']'", id="invalid-yaml"),
+    ],
+)
+def test_an_invalid_compose_configuration_refuses_before_the_job_guard_and_the_pull(
+    tmp_path: Path, compose_error: str,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    head_before = checkout.head
+    checkout.move_main_forward()
+    checkout.refuse_compose_config(ComposeConfigRefusal(stderr=compose_error))
+
+    exit_codes = [checkout.tick().returncode for _ in range(FAILURE_ALERT_THRESHOLD)]
+
+    assert exit_codes == [0, 0, 1]
+    assert "reason: compose configuration refused before pull" in checkout.journal
+    assert compose_error in checkout.journal
+    assert checkout.head == head_before
+    assert set(checkout.docker_calls.splitlines()) == {"compose config --quiet"}
+
+
+def test_a_commit_needing_a_missing_variable_is_refused_after_the_fast_forward_before_any_build(
+    tmp_path: Path,
+) -> None:
+    checkout = Checkout(tmp_path)
+    checkout.write_alert_config()
+    checkout.adopt_current_head_as_deployed()
+    deployed_before = checkout.deployed_sha_file.read_text()
+    checkout.set_base_images_present(False)
+    checkout.refuse_compose_config(
+        ComposeConfigRefusal(
+            stderr=GRAFANA_PASSWORD_REFUSAL,
+            when_compose_file_contains=REQUIRED_GRAFANA_PASSWORD,
+        ),
+    )
+    checkout.move_main_forward_with_compose_file(
+        "services:\n"
+        "  grafana:\n"
+        "    environment:\n"
+        f"      GF_SECURITY_ADMIN_PASSWORD: {REQUIRED_GRAFANA_PASSWORD}\n",
+    )
+
+    fast_forward_tick = checkout.tick()
+
+    assert fast_forward_tick.returncode == 0
+    assert checkout.head == checkout.remote_main_sha()
+    assert "refuses the stack configuration after fast-forward" in checkout.journal
+    assert GRAFANA_PASSWORD_REFUSAL in checkout.journal
+    assert [
+        call for call in checkout.docker_calls.splitlines()
+        if "build" in call or call.startswith("compose up")
+    ] == []
+    assert checkout.deployed_sha_file.read_text() == deployed_before
+
+    checkout.tick()
+
+    assert "refuses the stack configuration before pull" in checkout.journal
 
 
 def test_green_checks_allow_the_fetched_commit_to_fast_forward_and_deploy(tmp_path: Path) -> None:
