@@ -2,7 +2,11 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, test, type Page } from '@playwright/test';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import {
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants';
 import {
 	csrfHeaders,
 	FlowGuard,
@@ -190,7 +194,7 @@ async function playTheSongsTake(
 ): Promise<void> {
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: nameStartingWith(songTitle) })
+		.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 		.click();
 	if (shell === 'mobile') await page.getByRole('tab', { name: /Takes/ }).click();
 	const take = workspace(page).locator('.take-row');

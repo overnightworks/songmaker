@@ -15,8 +15,7 @@ import {
 	NEW_SONG_ROW_LABEL,
 	NEW_SONG_TITLE_LABEL,
 	newSongCardLabel,
-	TRANSPORT_PLAY_LABEL,
-	COLLECTION_SHUFFLE_ACTION
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import { appBar, boundingBoxes, csrfHeaders, FlowGuard, shellOf, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
@@ -63,7 +62,7 @@ async function createEmptyAlbum(
 	return { id: album.id, title };
 }
 
-test('a filled album ends its track list with + New song, under a header of Play · Shuffle · ⋯', async ({
+test('a filled album ends its track list with + New song, under a header of Play · ⋯', async ({
 	page
 }) => {
 	const library = readSeededLibrary();
@@ -72,14 +71,11 @@ test('a filled album ends its track list with + New song, under a header of Play
 	await expect(surface.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 
 	const actions = surface.locator('.collection-header .header-actions').getByRole('button');
-	await expect(actions).toHaveCount(3);
+	await expect(actions).toHaveCount(2);
 	await expect(actions.nth(0)).toHaveAccessibleName(
 		collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album')
 	);
-	await expect(actions.nth(1)).toHaveAccessibleName(
-		collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'album')
-	);
-	await expect(actions.nth(2)).toHaveAccessibleName(COLLECTION_MENU_LABEL);
+	await expect(actions.nth(1)).toHaveAccessibleName(COLLECTION_MENU_LABEL);
 
 	const rows = surface.locator('.item-list > *');
 	await expect(rows.last().getByRole('button')).toHaveAccessibleName(NEW_SONG_ROW_LABEL);

@@ -4,7 +4,8 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_SEARCH_CLEAR_LABEL,
-	RAIL_SEARCH_LABEL
+	RAIL_SEARCH_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import { FlowGuard, appBar, nameStartingWith, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
@@ -99,7 +100,7 @@ test('the rail search tells an album from its songs and finds a settings page in
 	guard.assertClean();
 });
 
-test('album, song, and take content begin at their breadcrumb headers on desktop and 375 px', async ({
+test('album content begins at its header, song and take content at their breadcrumb headers, on desktop and 375 px', async ({
 	page,
 	isMobile
 }) => {
@@ -112,10 +113,10 @@ test('album, song, and take content begin at their breadcrumb headers on desktop
 
 	await page.goto(albumAddress);
 	await expect(surface.locator(':scope > .detail-panel > .collection-header')).toBeVisible();
-	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toBeVisible();
+	await expect(surface.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0);
 	await expect(surface.locator('.library-row-scrim')).toHaveCount(0);
 
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
 	if (isMobile) {
 		// The layout's own app bar carries the song header at compact widths

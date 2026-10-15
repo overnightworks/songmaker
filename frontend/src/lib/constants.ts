@@ -141,16 +141,13 @@ export const TRANSPORT_RETRY_LABEL = 'Retry';
 export type TransportLabel =
 	typeof TRANSPORT_PLAY_LABEL | typeof TRANSPORT_PAUSE_LABEL | typeof TRANSPORT_RETRY_LABEL;
 
-// A collection header's play circle and the shuffle square beside it name
-// what they do to it by its kind: "Play album", "Pause playlist", "Retry
-// album", "Shuffle album". The circle's action is the transport's own label, so
-// the header tells the bar's story. Every surface that renders the header, and
-// every flow that finds it by name, builds the label here.
+// A collection header's play circle names what it does to it by its kind:
+// "Play album", "Pause playlist", "Retry album". Its action is the transport's
+// own label, so the header tells the bar's story. Every surface that renders
+// the header, and every flow that finds it by name, builds the label here.
 export type CollectionPlayKind = 'album' | 'playlist' | 'song' | 'take';
-export const COLLECTION_SHUFFLE_ACTION = 'Shuffle';
-type CollectionAction = TransportLabel | typeof COLLECTION_SHUFFLE_ACTION;
 
-export function collectionActionLabel(action: CollectionAction, kind: CollectionPlayKind): string {
+export function collectionActionLabel(action: TransportLabel, kind: CollectionPlayKind): string {
 	return `${action} ${kind}`;
 }
 
@@ -701,6 +698,11 @@ export const RAIL_PLAYLISTS_NAV_LABEL = 'Rail playlists';
 
 // Every row's PlayingMark reads this, in the rail, the detail views and the shared page.
 export const PLAYING_MARK_LABEL = 'Playing';
+
+// A song box's ✎: the box itself plays the song, so the pencil names the place it opens.
+export function songEditorOpenLabel(songTitle: string): string {
+	return `Open ${songTitle} in the song editor`;
+}
 // Shown when ensureAllAlbumsLoaded fails outright, so a library the rail
 // could not reach at all does not look like one that is merely empty.
 export const RAIL_LIBRARY_LOAD_ERROR = "Couldn't load your library";
@@ -714,7 +716,6 @@ const PLAYLIST_ENTRY_OVERFLOW_LABEL = 'More';
 export function playlistEntryOverflowLabel(songTitle: string): string {
 	return `${PLAYLIST_ENTRY_OVERFLOW_LABEL} for ${songTitle}`;
 }
-export const PLAYLIST_ENTRY_OPEN_SONG_LABEL = 'Open song in editor';
 export const PLAYLIST_ENTRY_MOVE_UP_LABEL = 'Move up';
 export const PLAYLIST_ENTRY_MOVE_DOWN_LABEL = 'Move down';
 export const PLAYLIST_ENTRY_REMOVE_LABEL = 'Remove from playlist';

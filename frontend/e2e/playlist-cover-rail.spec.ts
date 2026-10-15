@@ -12,6 +12,7 @@ import {
 	RAIL_PLAYLISTS_LABEL,
 	RAIL_PLAYLISTS_NAV_LABEL
 } from '../src/lib/constants';
+import { openLibraryWall } from './helpers';
 import { BASE_URL } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -163,10 +164,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=detail`)
 		);
 
-		await page
-			.locator('.collection-header')
-			.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true })
-			.click();
+		await openLibraryWall(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.tile-cover img')).toHaveAttribute(
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
@@ -212,10 +210,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			4
 		);
 
-		await page
-			.locator('.collection-header')
-			.getByRole('button', { name: RAIL_PLAYLISTS_LABEL, exact: true })
-			.click();
+		await openLibraryWall(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
 		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
 		const restoredRail = isMobile

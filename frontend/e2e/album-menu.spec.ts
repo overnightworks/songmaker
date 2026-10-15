@@ -1,4 +1,4 @@
-// The collection ⋯ opens fully on screen, and a collection's Play · Shuffle · ⋯
+// The collection ⋯ opens fully on screen, and a collection's Play · ⋯
 // sit on their own row under cover and title (#1135, #915 F1+F5). Both are
 // layout promises jsdom cannot measure, so only a real browser at a phone and
 // a laptop width shows them: the operator's phone cut the album menu off past

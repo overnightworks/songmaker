@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
-import { TRANSPORT_PAUSE_LABEL, TRANSPORT_PLAY_LABEL } from '../src/lib/constants';
+import {
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL,
+	songEditorOpenLabel
+} from '../src/lib/constants';
 import {
 	csrfHeaders,
 	FlowGuard,
@@ -128,12 +132,8 @@ test('Continue shows up to six places, follows a listen made elsewhere on a retu
 		.locator('.wall-tile-body')
 		.filter({ hasText: library.albumTitle })
 		.click();
-	// An album row opens the song (#1010); its take row's own play face plays it.
-	await surface
-		.locator('.item-row')
-		.filter({ hasText: listenedSong.title })
-		.getByRole('button')
-		.click();
+	// An album row's ✎ opens the song (#1383); its take row's own play face plays it.
+	await surface.getByRole('button', { name: songEditorOpenLabel(listenedSong.title) }).click();
 	if (shell === 'mobile') await surface.getByRole('tab', { name: /Takes/ }).click();
 	const take = surface.locator('.take-row');
 	await expect(take).toHaveCount(1);

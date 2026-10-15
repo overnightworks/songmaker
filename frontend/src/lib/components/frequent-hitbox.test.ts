@@ -130,6 +130,7 @@ import PlaylistDetailView from './PlaylistDetailView.svelte';
 import PlaylistPicker from './PlaylistPicker.svelte';
 import PlayerBar from './PlayerBar.svelte';
 import ThemeToggle from './ThemeToggle.svelte';
+import Breadcrumb from './Breadcrumb.svelte';
 import RailSearch from './shell/RailSearch.svelte';
 import Layout from '../../routes/+layout.svelte';
 import themeToggleSource from './ThemeToggle.svelte?raw';
@@ -139,6 +140,7 @@ import playlistPickerSource from './PlaylistPicker.svelte?raw';
 import collectionMenuSource from './CollectionMenu.svelte?raw';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
 import breadcrumbSource from './Breadcrumb.svelte?raw';
+import songRowSource from './SongRow.svelte?raw';
 import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 import layoutSource from '../../routes/+layout.svelte?raw';
 import railSearchSource from './shell/RailSearch.svelte?raw';
@@ -151,6 +153,7 @@ import railSearchSource from './shell/RailSearch.svelte?raw';
 const COMPONENT_STYLE_SOURCES = {
 	ThemeToggle: { source: themeToggleSource, filename: 'ThemeToggle.svelte' },
 	PlaylistDetailView: { source: playlistDetailViewSource, filename: 'PlaylistDetailView.svelte' },
+	AlbumDetailView: { source: albumDetailViewSource, filename: 'AlbumDetailView.svelte' },
 	PlaylistPicker: { source: playlistPickerSource, filename: 'PlaylistPicker.svelte' },
 	CollectionMenu: { source: collectionMenuSource, filename: 'CollectionMenu.svelte' },
 	CollectionHeaderFrame: {
@@ -158,6 +161,7 @@ const COMPONENT_STYLE_SOURCES = {
 		filename: 'CollectionHeaderFrame.svelte'
 	},
 	Breadcrumb: { source: breadcrumbSource, filename: 'Breadcrumb.svelte' },
+	SongRow: { source: songRowSource, filename: 'SongRow.svelte' },
 	TransportBarFrame: { source: transportBarFrameSource, filename: 'TransportBarFrame.svelte' },
 	RailSearch: { source: railSearchSource, filename: 'RailSearch.svelte' },
 	Layout: { source: layoutSource, filename: '+layout.svelte' }
@@ -191,9 +195,14 @@ const INVENTORY = [
 	},
 	{
 		name: 'playlist-row',
-		selector: '.entry-info[data-hitbox="text"]',
+		selector: '.song-row-body[data-hitbox="text"]',
 		shape: 'text',
-		component: 'PlaylistDetailView'
+		component: 'SongRow'
+	},
+	{
+		name: 'song-row-edit',
+		selector: '.song-row-edit[data-hitbox="frequent"]',
+		component: 'SongRow'
 	},
 	{
 		name: 'playlist-picker-add',
@@ -208,11 +217,6 @@ const INVENTORY = [
 	{
 		name: 'collection-play',
 		selector: '.play-circle[data-hitbox="frequent"]',
-		component: 'CollectionHeaderFrame'
-	},
-	{
-		name: 'collection-shuffle',
-		selector: '.shuffle-btn[data-hitbox="frequent"]',
 		component: 'CollectionHeaderFrame'
 	},
 	{
@@ -440,6 +444,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	document.body.append(root);
 
 	const themeTarget = document.createElement('div');
+	const breadcrumbTarget = document.createElement('div');
 	const playlistTarget = document.createElement('div');
 	const pickerTarget = document.createElement('div');
 	const railSearchTarget = document.createElement('div');
@@ -447,6 +452,7 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const playerTarget = document.createElement('div');
 	root.append(
 		themeTarget,
+		breadcrumbTarget,
 		playlistTarget,
 		pickerTarget,
 		railSearchTarget,
@@ -457,6 +463,13 @@ async function renderInventory(): Promise<RenderedInventory> {
 	const playlistPickerOnClose = vi.fn();
 
 	mounted.push(mount(ThemeToggle, { target: themeTarget }));
+	// The song editor's header carries the breadcrumb.
+	mounted.push(
+		mount(Breadcrumb, {
+			target: breadcrumbTarget,
+			props: { items: [{ label: 'Library', onclick: vi.fn() }, { label: 'Local Album' }] }
+		})
+	);
 	mounted.push(mount(PlaylistDetailView, { target: playlistTarget }));
 	mounted.push(
 		mount(PlaylistPicker, {
@@ -601,9 +614,9 @@ describe('frequent action hitboxes', () => {
 
 	it('leaves a playlist row no padding outside its play target', async () => {
 		const { root } = await renderInventory();
-		const row = root.querySelector('.entry-row');
+		const row = root.querySelector('.entry-row .song-row');
 		if (!row) throw new Error('playlist row is missing');
-		injectComponentStyles(playlistDetailViewSource, 'PlaylistDetailView.svelte', row);
+		injectComponentStyles(songRowSource, 'SongRow.svelte', row);
 
 		const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);
 		expect([paddingTop, paddingRight, paddingBottom, paddingLeft].map((side) => px(side))).toEqual([
@@ -741,7 +754,11 @@ function applyNarrowScreenRules(): void {
 	document.head.append(sheet);
 }
 
-async function mountRow(view: 'album' | 'playlist', rowSelector: string): Promise<HTMLElement> {
+async function mountRow(
+	view: 'album' | 'playlist',
+	rowSelector: string,
+	styles: ComponentId
+): Promise<HTMLElement> {
 	const target = document.createElement('div');
 	document.body.append(target);
 	if (view === 'album') {
@@ -752,23 +769,31 @@ async function mountRow(view: 'album' | 'playlist', rowSelector: string): Promis
 	await tick();
 	const row = target.querySelector<HTMLElement>(rowSelector);
 	if (!row) throw new Error(`the ${view} row ${rowSelector} is missing`);
-	injectComponentStyles(
-		view === 'album' ? albumDetailViewSource : playlistDetailViewSource,
-		view === 'album' ? 'AlbumDetailView.svelte' : 'PlaylistDetailView.svelte',
-		row
-	);
+	// Every collection row stands in the frame SongRow owns, so SongRow's sheet
+	// joins the sheet of whichever component draws the row.
+	const songRow = target.querySelector<HTMLElement>('.song-row');
+	if (!songRow) throw new Error(`the ${view} view shows no song row`);
+	injectInventoryComponentStyles([
+		{ el: songRow, component: 'SongRow' },
+		{ el: row, component: styles }
+	]);
 	return row;
 }
 
 describe('collection rows on a phone', () => {
 	it.each([
-		{ row: 'album song', view: 'album', rowSelector: '.item-row' },
-		{ row: 'album + New song', view: 'album', rowSelector: '.new-song-row' },
-		{ row: 'playlist entry', view: 'playlist', rowSelector: '.entry-row' }
+		{ row: 'album song', view: 'album', rowSelector: '.song-row', styles: 'SongRow' },
+		{
+			row: 'album + New song',
+			view: 'album',
+			rowSelector: '.new-song-row',
+			styles: 'AlbumDetailView'
+		},
+		{ row: 'playlist entry', view: 'playlist', rowSelector: '.song-row', styles: 'SongRow' }
 	] as const)(
 		'draws the $row row 62 px high, the whole row inside its border its target',
-		async ({ row: name, view, rowSelector }) => {
-			const row = await mountRow(view, rowSelector);
+		async ({ row: name, view, rowSelector, styles }) => {
+			const row = await mountRow(view, rowSelector, styles);
 			applyNarrowScreenRules();
 
 			const { paddingTop, paddingRight, paddingBottom, paddingLeft } = getComputedStyle(row);

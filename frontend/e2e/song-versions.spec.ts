@@ -55,6 +55,7 @@ import {
 	versionLoadedToastLabel,
 	versionsChipAccessibleLabel,
 	openNowPlayingLabel,
+	songEditorOpenLabel,
 	takesDraftBanner
 } from '../src/lib/constants';
 import {
@@ -183,7 +184,7 @@ async function reportOneWorkerOnline(page: Page): Promise<void> {
 async function openSongEditor(page: Page, song: SeededVersions): Promise<void> {
 	await page.goto(`/album/${song.albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: nameStartingWith(song.title) })
+		.getByRole('button', { name: songEditorOpenLabel(song.title) })
 		.click();
 	const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL, exact: true });
 	if (await editTab.isVisible()) await editTab.click();
@@ -855,7 +856,7 @@ test.describe('the versions of a song', () => {
 		const library = readSeededLibrary();
 		await page.goto(`/album/${library.albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
 			.click();
 		await showTakes(page);
 

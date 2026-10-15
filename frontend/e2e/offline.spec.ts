@@ -38,7 +38,8 @@ import {
 	SSE_RECONNECT_MAX_DELAY_MS,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
+	TRANSPORT_RETRY_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -262,7 +263,7 @@ test.describe('losing the network on the phone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 		await expect(generate).toHaveAccessibleName(GENERATE_WITHOUT_GPU);
@@ -347,7 +348,7 @@ test.describe('losing the network while a take plays on the phone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await page
@@ -408,7 +409,7 @@ test.describe('tapping a take row Play while the network is gone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}/[^/]+$`));
@@ -541,7 +542,7 @@ test.describe('pressing the album header Play while the network is gone', () => 
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(loadedTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(loadedTitle) })
 			.click();
 		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
 		await workspace(page)
@@ -622,7 +623,7 @@ test.describe('losing the network while a take generates on the phone', () => {
 
 			await page.goto(`/album/${library.songPhoneAlbumId}`);
 			await workspace(page)
-				.getByRole('button', { name: nameStartingWith(songTitle) })
+				.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 				.click();
 			await takesTab.click();
 			await expect(panel.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '40');
@@ -721,7 +722,7 @@ test.describe('losing the network while a take generates on the phone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 		await expect(panel.getByText(new RegExp(`^${takeCounter}40%`))).toBeVisible();
@@ -792,7 +793,7 @@ test.describe('losing the network while a take generates on the phone', () => {
 
 		await page.goto(`/album/${library.songPhoneAlbumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(songTitle) })
 			.click();
 		await page.getByRole('tab', { name: /Takes/ }).click();
 
