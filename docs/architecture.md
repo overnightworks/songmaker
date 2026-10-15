@@ -164,6 +164,10 @@ them; the song carries its title, share and song menu instead. `Rail`
 renders the block only when the layout hands it an `account`. Choosing
 Settings in the account menu while `/settings` is already on screen only
 closes the menu.
+In the LIBRARY and PLAYLISTS groups the word is a link to the group's own list
+page (`/`, `/playlists`) and the caret beside it is the only fold control
+(#1354 rule 40); there is no "All albums" row. On its own page a group is
+the current page and opens, as drawn in `docs/design/navigation.html`.
 `RailLibraryGroup.svelte` is the LIBRARY group: it
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
@@ -178,8 +182,7 @@ time it becomes shown — a navigation, Back, a reload, its group opening, a
 search clearing — once the group has finished opening, and not again while it
 stays shown. The open album's row and its
 selected track pre-expand automatically on entry without overriding a later
-manual collapse; the LIBRARY group's own title does not yet navigate (planned
-for a later slice). There is no Studio/Listen mode split and no third library
+manual collapse. There is no Studio/Listen mode split and no third library
 tab for
 Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
 (`LibraryContinue.svelte`: up to six places from `/api/library/listen`, so
