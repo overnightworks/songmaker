@@ -31,7 +31,7 @@ import {
 	loadPlaylistDetail,
 	playlistDetailLoad,
 	playlistList,
-	resetPlaylists,
+	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 
@@ -138,7 +138,7 @@ beforeEach(() => {
 afterEach(async () => {
 	for (const component of mounted.splice(0)) await unmount(component);
 	document.body.replaceChildren();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	audioPlayer.current = null;
 	queueContext.set({ type: 'library' });
 	setShuffle(false);

@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { goto } from '$app/navigation';
 import { ApiError } from '$lib/api/fetch';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { addToast } from '$lib/stores/toast';
 import { replaceHistoryEntry } from '$lib/test-utils/library-history';
 import {
@@ -51,7 +51,7 @@ let restoreUnhandledRejections: (() => void) | undefined;
 beforeEach(() => {
 	createPlaylist.mockReset().mockResolvedValue(playlist(ROAD_TRIP));
 	vi.mocked(addToast).mockClear();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
 	resetCollectionForTests();

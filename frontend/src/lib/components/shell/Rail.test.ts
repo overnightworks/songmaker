@@ -10,7 +10,11 @@ import { librarySurface, resetLibraryContextForTests } from '$lib/stores/library
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	playlistList,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
 	buildAlbum as album,
@@ -135,7 +139,7 @@ afterEach(async () => {
 	collapsedMounted = undefined;
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
-	resetPlaylists();
+	resetPlaylistsForTests();
 	discardDraft();
 	pendingDirtyNavigation.set(null);
 	vi.mocked(goto).mockClear();
