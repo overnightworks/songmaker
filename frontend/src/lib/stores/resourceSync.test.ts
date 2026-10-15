@@ -19,9 +19,9 @@ vi.mock('$lib/stores/auth', () => {
 		}
 	};
 	return {
-		clearAuth: vi.fn(() => currentUser.set(null)),
 		classifyAuthFailure: mockClassifyAuthFailure,
-		currentUser
+		currentUser,
+		hasSessionToLose: () => user !== null
 	};
 });
 vi.mock('$app/navigation', async () =>
@@ -29,9 +29,13 @@ vi.mock('$app/navigation', async () =>
 );
 
 import { ApiError, NetworkError } from '$lib/api/fetch';
-import { clearAuth, currentUser } from '$lib/stores/auth';
+import { currentUser } from '$lib/stores/auth';
 import { selectedSongId } from '$lib/stores/player';
-import { goto } from '$app/navigation';
+import {
+	reloadAfresh,
+	resetHistoryControllerForTests,
+	standInForDocumentLoadsForTests
+} from '$lib/history/historyController';
 import type { AuthUser, GenerationCreatedResourceEvent, SongItem } from '$lib/api/types';
 import {
 	EVENT_SOURCE_CLOSED,
@@ -269,6 +273,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	resetResourceSyncForTests();
+	resetHistoryControllerForTests();
 	selectedSongId.set(null);
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
@@ -1892,6 +1897,44 @@ describe('resource sync owner', () => {
 
 		expect(get(store)).toMatchObject({ status: 'error', error });
 	});
+
+	// Issue #1340: the server holds no session for a page leaving for a fresh
+	// document, so a stream it opened would only come back refused.
+	it.each([
+		{
+			when: 'starting the sync',
+			beforeTheLeave: async () => undefined,
+			afterTheLeave: async (controller: ResourceSyncController) => controller.start()
+		},
+		{
+			when: 'losing its live stream',
+			beforeTheLeave: async (controller: ResourceSyncController, sources: MockEventSource[]) => {
+				controller.start();
+				latestSource(sources).emit('hello', { high_water_mark: '0' });
+				await flush();
+				await controller.waitForReady();
+			},
+			afterTheLeave: async (_controller: ResourceSyncController, sources: MockEventSource[]) => {
+				latestSource(sources).error();
+				await flush();
+			}
+		}
+	])(
+		'opens no stream when $when after the page began leaving for a fresh document',
+		async ({ beforeTheLeave, afterTheLeave }) => {
+			vi.useFakeTimers();
+			standInForDocumentLoadsForTests({ assign: vi.fn(), replace: vi.fn(), reload: vi.fn() });
+			const { controller, sources } = setup();
+			await beforeTheLeave(controller, sources);
+			const streamsBeforeTheLeave = sources.length;
+
+			await reloadAfresh();
+			await afterTheLeave(controller, sources);
+			await vi.advanceTimersByTimeAsync(SAFE_RECONNECT_ADVANCE_MS);
+
+			expect(sources).toHaveLength(streamsBeforeTheLeave);
+		}
+	);
 });
 
 describe('library resource sync wiring', () => {
@@ -1979,8 +2022,8 @@ describe('library resource sync wiring', () => {
 		'handles a %s auth probe through the singleton owner',
 		async (status, syncStatus, error, pageOffline) => {
 			vi.useFakeTimers();
-			vi.mocked(clearAuth).mockClear();
-			vi.mocked(goto).mockClear();
+			const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+			standInForDocumentLoadsForTests(documentLoads);
 			vi.stubGlobal('EventSource', MockEventSource);
 			vi.stubGlobal(
 				'fetch',
@@ -2000,13 +2043,14 @@ describe('library resource sync wiring', () => {
 
 			expect(get(resourceSync)).toMatchObject({ status: syncStatus, error, ready: false });
 			expect(get(offline)).toBe(pageOffline);
-			expect(clearAuth).not.toHaveBeenCalled();
-			expect(goto).not.toHaveBeenCalled();
+			expect(documentLoads.reload).not.toHaveBeenCalled();
 			expect(MockEventSource.instances[0].closed).toBe(status === 403);
 		}
 	);
 
 	it('routes a 401 on its auth probe through the one shared session-lost reaction', async () => {
+		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+		standInForDocumentLoadsForTests(documentLoads);
 		vi.stubGlobal('EventSource', MockEventSource);
 		vi.stubGlobal(
 			'fetch',
@@ -2026,8 +2070,6 @@ describe('library resource sync wiring', () => {
 		await flush();
 		await flush();
 
-		expect(clearAuth).toHaveBeenCalledOnce();
-		expect(goto).toHaveBeenCalledOnce();
-		expect(vi.mocked(goto).mock.calls[0][0]).toMatch(/^\/login(\?|$)/);
+		expect(documentLoads.reload).toHaveBeenCalledOnce();
 	});
 });

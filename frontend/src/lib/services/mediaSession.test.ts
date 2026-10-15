@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { recordPlaybackEvent } from './playbackDiagnostics';
 import {
+	clearMediaSessionPositionState,
 	setupMediaSessionHandlers,
 	updateMediaSessionMetadata,
 	updateMediaSessionPlaybackState,
@@ -16,7 +17,8 @@ interface FakeMediaSession {
 	handlers: Map<Action, MediaSessionActionHandler | null>;
 	metadata: MediaMetadata | null;
 	playbackState: MediaSessionPlaybackState;
-	positionStates: MediaPositionState[];
+	// Every position state published; null clears it.
+	positionStates: (MediaPositionState | null)[];
 	setPositionState: (state?: MediaPositionState) => void;
 	setActionHandler: (action: MediaSessionAction, handler: MediaSessionActionHandler | null) => void;
 }
@@ -29,7 +31,7 @@ function fakeMediaSession(rejectedAction?: Action): FakeMediaSession {
 		playbackState: 'none',
 		positionStates: [],
 		setPositionState(state) {
-			if (state) this.positionStates.push(state);
+			this.positionStates.push(state ?? null);
 		},
 		setActionHandler(action, handler) {
 			if (action === rejectedAction) throw new Error('unsupported action');
@@ -210,6 +212,15 @@ describe('Media Session state', () => {
 		updateMediaSessionPositionState(position, duration);
 
 		expect(session.positionStates).toEqual([]);
+	});
+
+	it('clears the position a take left on the lock screen', () => {
+		const session = installMediaSession();
+		updateMediaSessionPositionState(4, 10);
+
+		clearMediaSessionPositionState();
+
+		expect(session.positionStates.at(-1)).toBeNull();
 	});
 
 	it('ignores a browser rejection of an otherwise valid position state', () => {

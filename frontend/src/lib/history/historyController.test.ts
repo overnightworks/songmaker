@@ -5,21 +5,24 @@ import { goto } from '$app/navigation';
 import {
 	allocateEntryId,
 	attachLandingHandler,
-	forgetLayerEntries,
 	historyStandsStill,
 	installHistoryController,
 	land,
 	landedEntry,
+	loadAfresh,
 	loadHistoryPageForTests,
 	mountRouteOfLandedAddress,
 	navigateTo,
 	pageStateOfHistoryState,
 	pushEntry,
+	reloadAfresh,
 	remountOverStandingEntry,
 	replaceEntry,
 	resetHistoryControllerForTests,
 	stampNavigatedEntry,
+	standInForDocumentLoadsForTests,
 	standingPageEntryId,
+	stepBackOrGoTo,
 	stepBackTo,
 	type HistoryEntry
 } from '$lib/history/historyController';
@@ -453,15 +456,39 @@ describe('history adapter', () => {
 		expect(location.pathname).toBe('/settings/voices');
 	});
 
-	it('a layer opened after its entries were forgotten still gets an entry of its own', () => {
-		const page = pushEntry('/settings', {});
-		forgetLayerEntries();
+	it("a page's own Back steps back onto the page of the tab it was opened from", async () => {
+		const signIn = pushEntry('/login', {});
+		pushEntry('/legal', {});
+		vi.mocked(goto).mockClear();
 
-		holdLayer('rail-drawer', () => undefined);
+		await stepBackOrGoTo('/login');
 
-		expect(standingEntry()).toEqual({ id: expect.any(Number), layer: 'rail-drawer' });
-		expect((standingEntry() as HistoryEntry).id).toBeGreaterThan(page.id);
+		expect(standingEntry()).toEqual(signIn);
+		expect(goto).not.toHaveBeenCalled();
 	});
+
+	it.each([
+		{ opened: 'as the only entry of its tab', tabLength: 1 },
+		{ opened: 'by a tab that came from another site', tabLength: 3 }
+	])(
+		"a page's own Back on the page the app was entered on $opened goes to the fallback, written over it",
+		async ({ tabLength }) => {
+			seedForeignEntry('/legal');
+			const length = vi.spyOn(history, 'length', 'get').mockReturnValue(tabLength);
+			loadHistoryPageForTests();
+			startFakeRouter();
+			stampNavigatedEntry('enter');
+			length.mockRestore();
+			const back = vi.spyOn(history, 'back');
+			vi.mocked(goto).mockClear();
+
+			await stepBackOrGoTo('/login');
+
+			expect(back).not.toHaveBeenCalled();
+			expect(goto).toHaveBeenCalledWith('/login', { replaceState: true });
+			expect(location.pathname).toBe('/login');
+		}
+	);
 
 	it('refuses a second install', () => {
 		expect(() => installHistoryController()).toThrow(/already installed/);
@@ -584,6 +611,172 @@ describe('history adapter', () => {
 	});
 });
 
+// Issue #1340, ruling A: a sign-out or a lost session leaves by a fresh
+// document load. Over a layer's entry the load replaces it, so Back finds no
+// copy of the page to step off and nothing steps back meanwhile; over a page
+// entry it keeps the page, so Back loads it afresh.
+describe('leaving for a fresh document', () => {
+	const loads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
+
+	beforeEach(() => {
+		sessionStorage.clear();
+		history.replaceState(null, '', '/settings/voices');
+		resetHistoryControllerForTests();
+		installHistoryController();
+		standInForDocumentLoadsForTests(loads);
+		for (const load of Object.values(loads)) load.mockClear();
+	});
+
+	afterEach(() => {
+		resetHistoryControllerForTests();
+		resetLayersForTests();
+		vi.restoreAllMocks();
+	});
+
+	const origin = window.location.origin;
+
+	// A `#` part reaches the address through a take's provenance link or a
+	// bookmark; a load to an address that differs only in it would scroll to
+	// the anchor and load nothing.
+	it.each([
+		{
+			leave: 'sign-in',
+			over: 'a page entry',
+			standing: '/settings/voices',
+			openLayer: false,
+			go: () => loadAfresh('/login'),
+			load: 'assign',
+			args: [`${origin}/login`]
+		},
+		{
+			leave: 'sign-in',
+			over: "an open layer's entry",
+			standing: '/settings/voices',
+			openLayer: true,
+			go: () => loadAfresh('/login'),
+			load: 'replace',
+			args: [`${origin}/login`]
+		},
+		{
+			leave: 'an address that differs from the standing one only in its `#` part',
+			over: 'a page entry',
+			standing: '/album/a1/song-1#take-12',
+			openLayer: false,
+			go: () => loadAfresh('/album/a1/song-1#take-3'),
+			load: 'assign',
+			args: [`${origin}/album/a1/song-1`]
+		},
+		{
+			leave: 'the standing address',
+			over: 'a page entry',
+			standing: '/settings/voices',
+			openLayer: false,
+			go: reloadAfresh,
+			load: 'reload',
+			args: []
+		},
+		{
+			leave: 'the standing address',
+			over: "an open layer's entry",
+			standing: '/settings/voices',
+			openLayer: true,
+			go: reloadAfresh,
+			load: 'replace',
+			args: [`${origin}/settings/voices`]
+		},
+		{
+			leave: 'the standing address with a `#` part',
+			over: 'a page entry',
+			standing: '/album/a1/song-1#take-12',
+			openLayer: false,
+			go: reloadAfresh,
+			load: 'reload',
+			args: []
+		},
+		{
+			leave: 'the standing address with a `#` part',
+			over: "an open layer's entry",
+			standing: '/album/a1/song-1#take-12',
+			openLayer: true,
+			go: reloadAfresh,
+			load: 'replace',
+			args: [`${origin}/album/a1/song-1`]
+		}
+	] as const)(
+		'loads $leave afresh over $over by $load, and steps back nowhere',
+		async ({ standing, openLayer, go, load, args }) => {
+			pushEntry(standing, {});
+			if (openLayer) holdLayer('account-menu', () => undefined);
+			const backs = vi.spyOn(history, 'back');
+
+			await go();
+
+			expect(loads[load]).toHaveBeenCalledExactlyOnceWith(...args);
+			const others = Object.entries(loads).filter(([name]) => name !== load);
+			for (const [, other] of others) expect(other).not.toHaveBeenCalled();
+			expect(backs).not.toHaveBeenCalled();
+		}
+	);
+
+	// Two library requests refused together each react to the lost session;
+	// every further load would abort the one before it (CI run 38602720334).
+	it.each([
+		{
+			first: 'the standing address',
+			then: 'the standing address',
+			go: [reloadAfresh, reloadAfresh],
+			load: 'reload'
+		},
+		{
+			first: 'sign-in',
+			then: 'the standing address',
+			go: [() => loadAfresh('/login'), reloadAfresh],
+			load: 'assign'
+		},
+		{
+			first: 'the standing address',
+			then: 'sign-in',
+			go: [reloadAfresh, () => loadAfresh('/login')],
+			load: 'reload'
+		}
+	] as const)('leaves once when $first and $then are asked for together', async ({ go, load }) => {
+		pushEntry('/settings/voices', {});
+
+		await Promise.all(go.map((leave) => leave()));
+		await reloadAfresh();
+
+		expect(loads[load]).toHaveBeenCalledOnce();
+		const others = Object.entries(loads).filter(([name]) => name !== load);
+		for (const [, other] of others) expect(other).not.toHaveBeenCalled();
+	});
+
+	// Playwright runs without the back-forward cache, so this row is the guard's
+	// only proof: Back onto the page a sign-out left would otherwise show it
+	// again with the signed-in state still in memory.
+	it.each([
+		{
+			shown: 'restored from the back-forward cache after leaving',
+			left: true,
+			persisted: true,
+			reloads: 1
+		},
+		{
+			shown: 'restored from the back-forward cache without leaving',
+			left: false,
+			persisted: true,
+			reloads: 0
+		},
+		{ shown: 'loaded anew after leaving', left: true, persisted: false, reloads: 0 }
+	])('a page $shown is loaded afresh $reloads time(s)', async ({ left, persisted, reloads }) => {
+		pushEntry('/settings/voices', {});
+		if (left) await loadAfresh('/login');
+
+		window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted }));
+
+		expect(loads.reload).toHaveBeenCalledTimes(reloads);
+	});
+});
+
 describe('route convergence after a landing', () => {
 	let stopConverging: () => void;
 
@@ -698,6 +891,32 @@ describe('route convergence after a landing', () => {
 		expect(reportedNavigations.at(-1)).toEqual({ type: 'goto', pathname: '/album/a' });
 	});
 
+	// Issue #1340: the first of two Backs from Settings lands on a song's entry
+	// written over the album's page, so the router heads to the album and the
+	// landing mounts the song over it; the second Back, onto the album, aborts
+	// both and starts nothing of its own.
+	it('a Back that aborts the mount its landing issued mounts the route of the address it landed on', async () => {
+		pushEntry('/album/a/song', {});
+		const loading = abortableNavigation();
+		vi.mocked(goto).mockImplementationOnce(() => Promise.resolve());
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		const landedOnAlbum = new Promise((resolve) =>
+			window.addEventListener('popstate', resolve, { once: true })
+		);
+		history.back();
+		await landedOnAlbum;
+		fakePage.url = new URL('/settings', location.href);
+
+		await loading.abort();
+
+		await vi.waitFor(() => expect(fakePage.url.pathname).toBe('/album/a'));
+		expect(location.pathname).toBe('/album/a');
+	});
+
 	it('an aborted navigation leaves the mount to the navigation that took over', async () => {
 		const loading = abortableNavigation();
 		mountRouteOfLandedAddress({
@@ -715,6 +934,31 @@ describe('route convergence after a landing', () => {
 		await loading.abort();
 
 		expect(reportedNavigations).toHaveLength(navigated);
+	});
+
+	// Issue #1340: the router reports a navigation only after the mount it
+	// aborts has failed -- the album a tap in the drawer opens -- and not at all
+	// while another one loads.
+	it('an aborted navigation leaves the mount to a page navigation issued before the router reports it', async () => {
+		const loading = abortableNavigation();
+		mountRouteOfLandedAddress({
+			type: 'popstate',
+			to: navigationTo('/album/a'),
+			complete: loading.complete
+		});
+		const releaseRouteLoads = holdRouteLoads();
+		const navigated = navigateTo('/album/b', {
+			replaceState: false,
+			noScroll: true,
+			keepFocus: true,
+			state: {}
+		});
+
+		await loading.abort();
+		releaseRouteLoads();
+		await navigated;
+
+		expect(location.pathname).toBe('/album/b');
 	});
 
 	it.each(['link', 'goto'] as const)(
