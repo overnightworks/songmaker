@@ -22,6 +22,7 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	SETTINGS_NAV_LABEL
 } from '../src/lib/constants';
+import { libraryRouteShape } from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
 
 /** The two shells the same flow drives — also the Playwright project names. */
@@ -173,20 +174,68 @@ function isSentAsThePageLeaves(url: string): boolean {
 
 const isResourceEventStream = (url: URL): boolean => url.pathname === RESOURCE_EVENT_STREAM_PATH;
 
+// SvelteKit's shallow routing keeps, beside the entry it writes, the address
+// of the page it leaves mounted, and a navigation writes its entry without it
+// (the router stand-in in src/lib/test-utils/app-navigation.ts keeps the same
+// key).
+const ROUTER_MOUNTED_PAGE_KEY = 'sveltekit:pageurl';
+
+/** The path history stands on, and the path of the page the router has mounted. */
+interface RouterStanding {
+	address: string;
+	mountedPage: string;
+}
+
+function routerStanding(page: Page): Promise<RouterStanding> {
+	return page.evaluate((mountedPageKey) => {
+		const mountedPage: unknown = (history.state as Record<string, unknown> | null)?.[
+			mountedPageKey
+		];
+		return {
+			address: location.pathname,
+			mountedPage:
+				typeof mountedPage === 'string' ? new URL(mountedPage).pathname : location.pathname
+		};
+	}, ROUTER_MOUNTED_PAGE_KEY);
+}
+
 /**
- * Takes the page's network away the way a phone loses it. `setOffline` alone
- * leaves a live event stream the page already holds running (see
- * docs/testing.md), so the page's open loads are stopped the way a dropped
- * network ends them, and every reopen of the library's resource stream is
- * refused until `regainNetwork`. `keepOpenStreams` leaves the streams already
- * open running and refuses only new requests: the moment a stream's last
- * event is already on its way when the network goes.
+ * Waits until the router has mounted the route of the address the page
+ * stands on. Opening a song writes the song's address first and loads its
+ * route module after (`writeLibraryHistoryNow` in stores/libraryContext.ts),
+ * so the album's route stays mounted under the song's address until that
+ * module is in.
+ */
+async function routeOfAddressMounted(page: Page): Promise<void> {
+	await expect
+		.poll(
+			async () => {
+				const { address, mountedPage } = await routerStanding(page);
+				return libraryRouteShape(mountedPage) === libraryRouteShape(address);
+			},
+			{ message: 'the route of the address the page stands on has mounted' }
+		)
+		.toBe(true);
+}
+
+/**
+ * Takes the page's network away the way a phone loses it, once the route of
+ * the address the page stands on has mounted: a route module the cut catches
+ * loading fails the whole app into SvelteKit's error page, a product gap
+ * #1160 owns, while these flows lose the network on a page that is open.
+ * `setOffline` alone leaves a live event stream the page already holds
+ * running (see docs/testing.md), so the page's open loads are stopped the way
+ * a dropped network ends them, and every reopen of the library's resource
+ * stream is refused until `regainNetwork`. `keepOpenStreams` leaves the
+ * streams already open running and refuses only new requests: the moment a
+ * stream's last event is already on its way when the network goes.
  */
 export async function loseNetwork(
 	page: Page,
 	context: BrowserContext,
 	{ keepOpenStreams = false }: { keepOpenStreams?: boolean } = {}
 ): Promise<void> {
+	await routeOfAddressMounted(page);
 	pagesWithoutNetwork.add(page);
 	await page.route(isResourceEventStream, (route) => route.abort('internetdisconnected'));
 	await context.setOffline(true);
