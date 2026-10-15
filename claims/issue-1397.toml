@@ -1,8 +1,0 @@
-claim_id = "b1298b1e11eb414185f446e688270d8b"
-agent = "claude-head"
-role = "builder"
-base = "eee07b19c4366c321826c0dbcd7fa3a0a567bb08"
-branch = "claude-head/issue-1397-stale-revoke-and-page-errors"
-scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
-opened_commit = "dfa6494dda61e1dfad718cbe393f3102a7e988a6"
-whole_reason = "one admin-page error rule: the users page, its unit test, its admin e2e flow with the README rows that pin it, and the one constant the three share"
