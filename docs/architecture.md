@@ -132,6 +132,13 @@ User clicks "Generate"                    User clicks "Score"
 
 SvelteKit single-page app. All state in Svelte stores.
 
+**Ruled, not yet built (#1354).** The picture and the 41 rules the operator
+ruled on 15.10.2026 stand in state (i) of `docs/design/navigation.html`. They
+overtake the phone shell (the drawer, and "Back closes the open layer
+first"), the library wall and its sort, the `CollectionHeader`'s
+`Breadcrumb` and Shuffle, and the `PlayerBar` described below. Until #1354's
+slices land, this section describes what runs.
+
 The app shell is one navigation, not modes. A left `Rail` (264px, inline on
 wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any
 coarse pointer) holds: the brand (the rail's Library shortcut, `openLibraryWall`)
@@ -151,15 +158,23 @@ on screen only closes the menu. `RailLibraryGroup.svelte` is the LIBRARY group: 
 loads every album route-independently (`ensureAllAlbumsLoaded`, #304) and
 lists all of them, each expandable one level into its own tracks (a
 takes/pick summary per row, an equalizer marking the one actually playing, a
-crimson-accent left border marking the selected/current track — the same
-token every rail group's active row uses). The open album's row and its
+crimson left border marking the selected/current track). The row of the album
+or playlist whose own page is on screen is the current page
+(`aria-current="page"`): a purple `--accent` bar, tint and bold name that
+outrank hover, styled once in `RailGroup.svelte` for both groups (#1371). The
+wall and Home keep the last-open collection but mark no row. That row scrolls
+into the rail's view (`revealOpenRailItem` in `rail-item-selector.ts`) each
+time it becomes shown — a navigation, Back, a reload, its group opening, a
+search clearing — once the group has finished opening, and not again while it
+stays shown. The open album's row and its
 selected track pre-expand automatically on entry without overriding a later
 manual collapse; the LIBRARY group's own title does not yet navigate (planned
 for a later slice). There is no Studio/Listen mode split and no third library
 tab for
 Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
-above one wall of albums and playlists together, with no filter chips (#1102,
-frame (g) of `docs/design/album-browsing.html`). The wall's heading row holds
+above one wall of albums and playlists together, with no filter chips (#1102;
+state (g) of `docs/design/album-browsing.html` as blessed 27.09.2026 for
+#1071, rewritten by #1354). The wall's heading row holds
 one switch, A–Z · Recent · Added; a first visit opens in A–Z and the choice is
 remembered on this device (`libraryWallOrder` in `stores/ui.ts`), never
 re-sorting Continue. A–Z compares titles ignoring case and accents and
@@ -1035,7 +1050,7 @@ User (username, role: admin|user, Argon2id hash)
   │           │     └── Rating (0-100, notes)
   │           └── ChatMessage (role, content — per-song conversation history)
   ├── CowriterUserMemory (durable co-writer notes; survives new conversations)
-  ├── UserSongWork (song, edited_at?, played_at? — this person's own latest edit and listen on any song they can open, owner or not)
+  ├── UserSongWork (song, edited_at?, edit_kind?, played_at?, album_played_at? — this person's own latest edit and its kind, latest listen, and latest listen outside a playlist, on any song they can open, owner or not)
   ├── ResourceEventCursor (per-user monotonic high-water mark)
   ├── ResourceEvent (30-day durable invalidation history; historical IDs, no resource FK)
   ├── Job (type, status, progress, phase?, generation_started_at?, take_index?, take_count?, error, queue_position, album?)
@@ -1047,7 +1062,7 @@ Also: UserSession, LoginAttempt, Playlist (slug — globally unique, share_slug?
       CowriterSongMemory, CowriterAlbumMemory
 ```
 
-`UserSongWork` is keyed by (user, song) and upserted by `record_song_work()` in `db/queries/activity.py` when that person creates a song (`POST /api/songs`, the co-writer's `create_song`), saves an edit that changes something, or starts a listen. `create_song()` in `db/queries/songs.py` records the creation for its `created_by`, and `update_song()` and `rename_song()` there decide whether an edit changed the content or the title and record it for their `edited_by`; the song update and rename endpoints and the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song` pass the caller, so a save that changes nothing (`PUT /api/songs/{id}` with `{}`, the same lyrics or title again) records nothing. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled. Continue reads it for albums the viewer does not own (see `/api/library/continue`), skipping soft-deleted songs.
+`UserSongWork` is keyed by (user, song) and upserted by `record_song_edit()` and `record_song_played()` in `db/queries/activity.py` when that person creates a song (`POST /api/songs`, the co-writer's `create_song`), saves an edit that changes something, or starts a listen. `create_song()` in `db/queries/songs.py` records the creation for its `created_by`, and `update_song()` and `rename_song()` there decide whether an edit changed the content or the title and record it for their `edited_by`; the song update and rename endpoints and the co-writer's MCP song-edit tools `update_song_lyrics`, `update_song_prompt`, `update_song_style` and `rename_song` pass the caller, so a save that changes nothing (`PUT /api/songs/{id}` with `{}`, the same lyrics or title again) records nothing. An edit also records its kind (`SongWorkKind` in `constants.py`): `created`, `renamed`, `lyrics` when the lyrics changed, else `style` (prompt, BPM, key, duration, language or generation params), so a save that changes the lyrics and the style is `lyrics`. A listen without a `playlist_id` also stamps `album_played_at`; a library-wide shuffle names no playlist, so it counts. Nothing reads either yet. It is separate from `Song.last_played_at`, which stays the owner's alone, and it starts empty: past edits and listens are not backfilled. Continue reads it for albums the viewer does not own (see `/api/library/continue`), skipping soft-deleted songs.
 
 A take's `created_by` names the user who made it — the job's user for a generated take, the acting user for a reimported one — set by `create_generation()` in `db/queries/generations.py`, which every creation path goes through. It is a fact of the row, so a take already saved keeps its maker even when the rest of its batch is cancelled or fails; it is never derived from job time windows. Takes saved before the column existed keep `created_by = NULL`, since their maker is not honestly recoverable, and deleting a user clears the field rather than the take.
 
@@ -1217,7 +1232,7 @@ close the stream.
 | PUT | `/api/songs/{id}/album` | user | Move song to different album |
 | POST | `/api/songs` | user | Create song in album |
 | POST | `/api/songs/{id}/generate` | user | Submit generation job (→ music queue) |
-| POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this updates Continue activity without changing any edit time. The song's `last_played_at` is recorded only for its owner — an admin's listen on a foreign song answers 200 and leaves the song alone. Every accepted listen stamps the caller's own `UserSongWork.played_at`. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |
+| POST | `/api/songs/{id}/listen` | user | Record that a playable song was started; this updates Continue activity without changing any edit time. The song's `last_played_at` is recorded only for its owner — an admin's listen on a foreign song answers 200 and leaves the song alone. Every accepted listen stamps the caller's own `UserSongWork.played_at`, and one without a `playlist_id` also its `album_played_at`. An optional body `{ "playlist_id": … }` names the caller's playlist it was played from, which then also records `last_played_at` and `last_played_song_id` on that playlist without changing its edit time. Checks run in order: song ownership 404, unplayable song 422, playlist unknown or not the caller's (admins included) 404, playlist without a take of the song 422. A rejected request records nothing. |
 | GET | `/api/songs/{id}/active-generation` | user | The song's newest queued/running generate job, or `null` if none. Ownership 404. Hydrates the song on entry so the frontend can reopen the job's SSE stream after a reload. |
 | GET | `/api/songs/{id}/last-failed-generation` | user | The song's last generate/repaint/cover job if it's still a failure -- `null` once a newer job (any status) or a newer non-archived take supersedes it. Ownership 404. Hydrates the take-list failure banner on page load/reopen; live SSE always wins over it. |
 | POST | `/api/generations/{id}/score` | user | Submit scoring job (→ scoring queue) |

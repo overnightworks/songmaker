@@ -61,7 +61,6 @@ from songmaker_cli.covers import (
 )
 from songmaker_cli.db.queries import (
     RestoreWindowExpiredError,
-    SongWork,
     cleanup_song,
     count_generations_by_song,
     count_songs,
@@ -75,7 +74,7 @@ from songmaker_cli.db.queries import (
     record_audit,
     record_playlist_listen,
     record_song_listen,
-    record_song_work,
+    record_song_played,
     rename_song,
     restore_song,
     set_song_cover_key,
@@ -339,7 +338,9 @@ def api_record_song_listen(
         record_song_listen(session, song, playlist=playlist)
     elif playlist is not None:
         record_playlist_listen(session, playlist, song=song)
-    record_song_work(session, user_id=user.id, song_id=song.id, work=SongWork.PLAYED)
+    record_song_played(
+        session, user_id=user.id, song_id=song.id, in_playlist=playlist is not None,
+    )
     session.commit()
     return StatusResponse()
 

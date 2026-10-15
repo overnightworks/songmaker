@@ -38,7 +38,7 @@ import { selectedAlbumId, selectedGenerationId, selectedSongId } from '$lib/stor
 import {
 	playlistList,
 	playlistLoad,
-	resetPlaylists,
+	resetPlaylistsForTests,
 	selectedPlaylistDetail
 } from '$lib/stores/playlists';
 
@@ -167,7 +167,7 @@ beforeEach(() => {
 	);
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	searchQuery.set('');
 	albumList.set([]);
 	allAlbumsLoad.set({ status: 'idle', error: null });
@@ -187,7 +187,7 @@ beforeEach(() => {
 afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 });
 
 describe('library history snapshot', () => {

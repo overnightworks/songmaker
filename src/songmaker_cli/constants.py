@@ -104,6 +104,22 @@ LIBRARY_CURSOR_INVALID: Final[str] = "Invalid library cursor"
 LIBRARY_CURSOR_MISMATCH: Final[str] = "Library cursor does not match query and sort"
 LIKE_ESCAPE_CHAR: Final[str] = "\\"
 
+
+class SongWorkKind(StrEnum):
+    """The kind of a person's own work on a song.
+
+    An edit recorded before kinds existed has none and reads as ``EDITED``.
+    """
+
+    CREATED = "created"
+    LYRICS = "lyrics"
+    STYLE = "style"
+    RENAMED = "renamed"
+    TAKE = "take"
+    COWRITER = "cowriter"
+    EDITED = "edited"
+
+
 # Scoring pipeline
 SILENCE_TOP_DB = 40
 SILENCE_MIN_GAP_SECONDS = 2.0
