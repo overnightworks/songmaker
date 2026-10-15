@@ -1,0 +1,8 @@
+claim_id = "7d0227d8af3049a0976d95e9c06352ce"
+agent = "claude-head"
+role = "builder"
+base = "4048cac790267dce336160e01c2ae476f3e3a0e4"
+branch = "claude-head/issue-1394-shell-tags-not-test-skip"
+scope = ["docs/testing.md", "frontend/e2e/README.md", "frontend/e2e/admin-models.spec.ts", "frontend/e2e/album-address.spec.ts", "frontend/e2e/album-cover.spec.ts", "frontend/e2e/cowriter-return.spec.ts", "frontend/e2e/helpers.ts", "frontend/e2e/kinetic-strip.spec.ts", "frontend/e2e/offline.spec.ts", "frontend/e2e/playback-diagnostics.spec.ts", "frontend/e2e/playlist-address.spec.ts", "frontend/e2e/self-hosted-fonts.spec.ts", "frontend/e2e/settings-phone.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/e2e/take-arrives.spec.ts", "frontend/e2e/voices.spec.ts", "frontend/playwright.config.ts"]
+opened_commit = "d42cb2e2f94d1290f787765a41a861a78edd52ca"
+whole_reason = "one owner for the E2E shell decision: the Playwright projects, the shell tag beside Shell, and every non-S4b spec that skipped by shell, with the two docs that state the rule"
