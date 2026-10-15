@@ -19,8 +19,6 @@
 		TAKES_LOADING,
 		TAKES_MOBILE_HINT,
 		TAKES_RETRY_LABEL,
-		TRANSPORT_PLAY_LABEL,
-		TRANSPORT_PAUSE_LABEL,
 		takesDraftBanner
 	} from '$lib/constants';
 	import {
@@ -38,7 +36,12 @@
 	import { playTake, playTakeAndShowNowPlaying, selectedGenerationId } from '$lib/stores/player';
 	import { clearGenerationSelection, persistLibraryHistory } from '$lib/stores/navigation';
 	import { rescoringTakeIds } from '$lib/stores/takeActions';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+	import {
+		audioPlayer,
+		transportButtonFace,
+		transportButtonLabel,
+		transportIsBusy
+	} from '$lib/services/audioPlayer.svelte';
 	import { formatScore, qualityFlag, scoreColor, scoreReadings } from '$lib/utils/scores';
 	import { getGenerationActions, type GenerationActions } from '$lib/contexts/generation-actions';
 	import {
@@ -54,6 +57,7 @@
 	import { describeFailure } from '$lib/api/fetch';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from '../Icon.svelte';
+	import TransportButtonIcon from '../TransportButtonIcon.svelte';
 	import PlaylistPicker from '../PlaylistPicker.svelte';
 	import ConfirmDialog from '../ConfirmDialog.svelte';
 	import GenerationStatusSlot from './GenerationStatusSlot.svelte';
@@ -358,7 +362,7 @@
 					{/if}
 				</div>
 				{#each group.generations as gen (gen.id)}
-					{@const playing = isGenPlaying(gen) && audioPlayer.status === 'playing'}
+					{@const transport = isGenPlaying(gen) ? audioPlayer.transport : 'idle'}
 					{@const duration = formatDuration(gen)}
 					{@const provenance = takeProvenance(gen)}
 					{@const headline = headlineScore(gen)}
@@ -386,12 +390,13 @@
 										data-hitbox-face
 										onclick={(event) => handlePlayClick(gen, event)}
 										aria-pressed={$selectionMode ? $selectedIds.has(gen.id) : undefined}
-										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : playing ? TRANSPORT_PAUSE_LABEL : TRANSPORT_PLAY_LABEL} ${takeName}`}
+										aria-busy={$selectionMode ? undefined : transportIsBusy(transport)}
+										aria-label={`${$selectionMode ? TAKE_SELECT_LABEL : transportButtonLabel(transport)} ${takeName}`}
 									>
 										{#if $selectionMode}
 											<Icon name={$selectedIds.has(gen.id) ? 'check-square' : 'square'} size={16} />
 										{:else}
-											<Icon name={playing ? 'pause' : 'play'} size={16} />
+											<TransportButtonIcon face={transportButtonFace(transport)} size={16} />
 										{/if}
 									</button>
 								{/if}
