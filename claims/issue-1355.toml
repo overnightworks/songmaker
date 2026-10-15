@@ -1,7 +1,0 @@
-claim_id = "23854daa3f9c4a0884282c56abeab5ce"
-agent = "claude-head"
-role = "builder"
-base = "87fd8c9c5802fb386d5d5a2084e20efbccf86e61"
-branch = "claude-head/issue-1355-test-stacks-loopback-no-restart"
-scope = ["docker/docker-compose.ci.yml", "docs/testing.md", "tests/test_packaging_boundary.py"]
-opened_commit = "ba83ab9a7c98dee978f19f8398ae9f77272eece6"
