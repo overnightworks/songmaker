@@ -1,0 +1,8 @@
+claim_id = "9bb10d127ee0418aab445070234461b3"
+agent = "claude-head"
+role = "builder"
+base = "c014ef164ff6ca491e71a62085c2cf578bcd8c0d"
+branch = "claude-head/issue-1408-library-albums-only"
+scope = ["docs/architecture.md", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library-create.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/playlist-cover-rail.spec.ts", "frontend/e2e/song-phone.spec.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/components/PlaylistCover.svelte", "frontend/src/lib/components/PlaylistCover.test.ts", "frontend/src/lib/constants.ts", "frontend/src/lib/utils/format.test.ts", "frontend/src/lib/utils/format.ts"]
+opened_commit = "281cbcbeba352b14a39a1d48f3ee0df007a655c4"
+whole_reason = "the Library wall becomes albums only with both empty lines, the playlist cover mosaic fix, their tests, the specs that opened playlists from the wall, and the wall paragraph"
