@@ -559,7 +559,7 @@ describe('history adapter', () => {
 		for (const { type } of reportedNavigations.slice(reported)) stampNavigatedEntry(type);
 
 		expect(location.pathname).toBe(lands);
-		expect(history.length).toBe(tabLength);
+		expect(history).toHaveLength(tabLength);
 		expect(pageBelowStandingPage()).toBe(next === null ? null : addressOf(next));
 	});
 

@@ -335,7 +335,7 @@ describe('PhoneAppBar', () => {
 		await pressBarBack(target);
 
 		expect(location.pathname).toBe('/album/a2');
-		expect(history.length).toBe(tabLength);
+		expect(history).toHaveLength(tabLength);
 		expect(backName(target)).toBe(backLabel('Library'));
 	});
 
@@ -354,7 +354,7 @@ describe('PhoneAppBar', () => {
 		await pressBarBack(target);
 
 		expect(location.pathname).toBe(list);
-		expect(history.length).toBe(tabLength);
+		expect(history).toHaveLength(tabLength);
 		expect(backName(target)).toBe(next === null ? null : backLabel(next));
 	});
 });
