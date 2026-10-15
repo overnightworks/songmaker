@@ -115,10 +115,7 @@ export class SharePlayback {
 	readonly queue = $derived.by((): QueueViewModel => {
 		const items = this.queueRows;
 		const currentIndex = this.activeIndex;
-		const upNext =
-			items.length > 1 && currentIndex >= 0
-				? (items[(currentIndex + 1) % items.length] ?? null)
-				: null;
+		const upNext = currentIndex >= 0 ? (items[currentIndex + 1] ?? null) : null;
 		return { items, currentIndex, upNext };
 	});
 

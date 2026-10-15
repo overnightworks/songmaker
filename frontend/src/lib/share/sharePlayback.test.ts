@@ -408,6 +408,20 @@ describe('the end of a share', () => {
 		playback.stop();
 	});
 
+	it('#1374 rule 7: nothing is up next at the last song, since the album does not wrap', () => {
+		const view = albumView();
+		const playback = new SharePlayback();
+		playback.start(view, null);
+
+		playback.toggle(view.tracks[0]);
+		const upNextAtFirst = playback.queue.upNext?.key;
+		playback.toggle(view.tracks[1]);
+
+		expect(upNextAtFirst).toBe('s2');
+		expect(playback.queue.upNext).toBeNull();
+		playback.stop();
+	});
+
 	it('#1374 rule 7: Play again on an ended album starts its first song', () => {
 		const view = albumView();
 		const playback = playToTheEnd(view, 1);
