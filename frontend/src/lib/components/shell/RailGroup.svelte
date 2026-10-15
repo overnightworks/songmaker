@@ -133,6 +133,7 @@
 			<a
 				class="disclose page-link"
 				href={page.href}
+				title={label}
 				aria-current={page.current ? 'page' : undefined}
 				onclick={(event) => followPageLink(event, page)}
 			>

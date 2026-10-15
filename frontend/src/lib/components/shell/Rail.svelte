@@ -312,6 +312,10 @@
 		justify-content: center;
 	}
 
+	.rail-collapsed :global(.fold) {
+		display: none;
+	}
+
 	.rail-collapsed :global(.disclose) {
 		flex: 0 0 40px;
 		justify-content: center;

@@ -182,8 +182,7 @@ time it becomes shown — a navigation, Back, a reload, its group opening, a
 search clearing — once the group has finished opening, and not again while it
 stays shown. The open album's row and its
 selected track pre-expand automatically on entry without overriding a later
-manual collapse; the LIBRARY group's own title does not yet navigate (planned
-for a later slice). There is no Studio/Listen mode split and no third library
+manual collapse. There is no Studio/Listen mode split and no third library
 tab for
 Shared. `LibraryWall.svelte` (the main-area library browser) shows Continue
 (`LibraryContinue.svelte`: up to six places from `/api/library/listen`, so

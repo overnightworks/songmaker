@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { RAIL_DRAWER_LABEL, RAIL_DRAWER_OPEN_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
 
-test('the desktop rail remembers its 52-px icon column while the 375 px drawer stays expanded', async ({
+test('the desktop rail (defect:#1409) remembers its 52-px icon column while the 375 px drawer stays expanded', async ({
 	page,
 	isMobile
 }) => {
@@ -60,11 +60,22 @@ test('the desktop rail remembers its 52-px icon column while the 375 px drawer s
 	await expect(rail).toHaveClass(/rail-collapsed/);
 	await expect(rail).toHaveCSS('width', '52px');
 	await expect(rail.getByRole('button', { name: 'Expand rail' })).toBeVisible();
-	for (const label of ['Library', 'Playlists', 'Settings']) {
-		await expect(rail.getByRole('button', { name: label, exact: true })).toHaveAttribute(
-			'title',
-			label
-		);
+	await expect(rail.getByRole('button', { name: 'Settings', exact: true })).toHaveAttribute(
+		'title',
+		'Settings'
+	);
+	// defect:#1409 (#1354 rule 40): the fold control hides, so the icon column fits the 52 px rail.
+	expect(await railScroll.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(
+		true
+	);
+	for (const [label, pathname] of [
+		['Playlists', '/playlists'],
+		['Library', '/']
+	]) {
+		const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
+		await expect(groupIcon).toHaveAttribute('title', label);
+		await groupIcon.click();
+		await expect.poll(() => new URL(page.url()).pathname).toBe(pathname);
 	}
 
 	await page.reload();
