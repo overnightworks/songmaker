@@ -1,6 +1,13 @@
 import { defineConfig } from '@playwright/test';
-import { DESKTOP_VIEWPORT, MOBILE_VIEWPORT, type Shell } from './e2e/helpers';
+import { DESKTOP_VIEWPORT, MOBILE_VIEWPORT, ONLY_IN_SHELL, type Shell } from './e2e/helpers';
 import { BASE_URL, STORAGE_STATE_FILE } from './e2e/seed';
+
+// Playwright matches a project's grep against the title path and the tags
+// joined by spaces, so the tag must stand between spaces or at an end: a
+// title or a longer tag that merely contains it never decides the shell.
+function taggedOnlyIn(shell: Shell): RegExp {
+	return new RegExp(`(?:^|\\s)${ONLY_IN_SHELL[shell]}(?:\\s|$)`);
+}
 
 export default defineConfig({
 	testDir: './e2e',
@@ -23,10 +30,12 @@ export default defineConfig({
 	projects: [
 		{
 			name: 'desktop' satisfies Shell,
+			grepInvert: taggedOnlyIn('mobile'),
 			use: { browserName: 'chromium', viewport: DESKTOP_VIEWPORT }
 		},
 		{
 			name: 'mobile' satisfies Shell,
+			grepInvert: taggedOnlyIn('desktop'),
 			use: {
 				browserName: 'chromium',
 				viewport: MOBILE_VIEWPORT,

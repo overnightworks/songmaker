@@ -60,6 +60,7 @@ import {
 	containing,
 	FlowGuard,
 	nameStartingWith,
+	ONLY_IN_SHELL,
 	openRailNav,
 	openSettingsSection,
 	openSettingsSectionFromDrawerSearch,
@@ -160,296 +161,304 @@ function expectSongAddressStands(page: Page, albumId: string, title: string): vo
 }
 
 test.describe('song page at phone width', () => {
-	test('lists takes with a play control each, shows a running generation, then its failure', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		// Stands in for the absent worker's own heartbeat (see the file header):
-		// every /health this page makes reports one online, so generateAction's
-		// disabled-reason check never masks the failed job below.
-		await page.route('**/health', async (route) => {
-			const response = await route.fetch();
-			const body = (await response.json()) as Record<string, unknown>;
-			await route.fulfill({
-				response,
-				json: { ...body, acestep_workers_online: 1, acestep_workers_total: 1 }
+	test(
+		'lists takes with a play control each, shows a running generation, then its failure',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			// Stands in for the absent worker's own heartbeat (see the file header):
+			// every /health this page makes reports one online, so generateAction's
+			// disabled-reason check never masks the failed job below.
+			await page.route('**/health', async (route) => {
+				const response = await route.fetch();
+				const body = (await response.json()) as Record<string, unknown>;
+				await route.fulfill({
+					response,
+					json: { ...body, acestep_workers_online: 1, acestep_workers_total: 1 }
+				});
 			});
-		});
-		const guard = new FlowGuard(page);
-		const library = readSeededLibrary();
-		// A per-attempt title, not the bare constant: CI retries this test once
-		// on failure (playwright.config.ts), and a retry re-seeding the same
-		// title into the same shared album would leave two rows starting with
-		// it, breaking the row lookup below with a strict-mode violation.
-		const songTitle = `${SONG_PHONE_SONG_TITLE} ${runMarker()}`;
-		const songId = await seedSongPhoneSong(
-			library.songPhoneAlbumId,
-			songTitle,
-			SONG_PHONE_VERSION_NUMBER,
-			SONG_PHONE_TAKE_COUNT
-		);
-		const songAddress = `/album/${library.songPhoneAlbumId}/${expectedSongSlug(songTitle)}`;
-		// The one song-phone-panel element (SongPhoneView.svelte): its content
-		// swaps with the active tab, so this locator always reads whichever tab
-		// is current rather than naming Edit and Takes separately.
-		const panel = page.getByRole('tabpanel');
+			const guard = new FlowGuard(page);
+			const library = readSeededLibrary();
+			// A per-attempt title, not the bare constant: CI retries this test once
+			// on failure (playwright.config.ts), and a retry re-seeding the same
+			// title into the same shared album would leave two rows starting with
+			// it, breaking the row lookup below with a strict-mode violation.
+			const songTitle = `${SONG_PHONE_SONG_TITLE} ${runMarker()}`;
+			const songId = await seedSongPhoneSong(
+				library.songPhoneAlbumId,
+				songTitle,
+				SONG_PHONE_VERSION_NUMBER,
+				SONG_PHONE_TAKE_COUNT
+			);
+			const songAddress = `/album/${library.songPhoneAlbumId}/${expectedSongSlug(songTitle)}`;
+			// The one song-phone-panel element (SongPhoneView.svelte): its content
+			// swaps with the active tab, so this locator always reads whichever tab
+			// is current rather than naming Edit and Takes separately.
+			const panel = page.getByRole('tabpanel');
 
-		// A cold open of the song's own address (a reload, a shared link, a
-		// bookmark) stands in its album exactly as a track-list open does, so
-		// a non-pick take queues the album, not the library pool (#997).
-		await page.goto(songAddress);
-		await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
+			// A cold open of the song's own address (a reload, a shared link, a
+			// bookmark) stands in its album exactly as a track-list open does, so
+			// a non-pick take queues the album, not the library pool (#997).
+			await page.goto(songAddress);
+			await expect(page.getByRole('heading', { name: songTitle })).toBeVisible();
 
-		await page.getByRole('tab', { name: /Takes/ }).click();
-		await expect(
-			panel.getByText(takeGroupLabel(await seededTakeVersion(page, songId), SONG_PHONE_TAKE_COUNT))
-		).toBeVisible();
+			await page.getByRole('tab', { name: /Takes/ }).click();
+			await expect(
+				panel.getByText(
+					takeGroupLabel(await seededTakeVersion(page, songId), SONG_PHONE_TAKE_COUNT)
+				)
+			).toBeVisible();
 
-		const playButtons = panel.getByRole('button', {
-			name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`)
-		});
-		await expect(playButtons).toHaveCount(SONG_PHONE_TAKE_COUNT);
-		for (const box of await boundingBoxes(...(await playButtons.all()))) {
-			expect(box.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
-			expect(box.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+			const playButtons = panel.getByRole('button', {
+				name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`)
+			});
+			await expect(playButtons).toHaveCount(SONG_PHONE_TAKE_COUNT);
+			for (const box of await boundingBoxes(...(await playButtons.all()))) {
+				expect(box.width).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+				expect(box.height).toBeGreaterThanOrEqual(HITBOX_FREQUENT_PX);
+			}
+
+			await panel
+				.getByRole('button', { name: `${TRANSPORT_PLAY_LABEL} ${SECOND_TAKE_LABEL}`, exact: true })
+				.click();
+			// The phone bar says where the music comes from (#1058, frame C2); the
+			// player names the take on Now Playing, opened from the bar's title.
+			await page
+				.getByRole('contentinfo')
+				.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
+				.click();
+			const nowPlaying = page.getByRole('dialog', { name: songTitle });
+			await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
+			await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
+			await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
+			await expect(nowPlaying).toBeHidden();
+
+			// A seeded running job, discovered the same way a reload would: a fresh
+			// cold open re-runs loadSongContext's hydrateActiveGeneration.
+			const jobId = await seedRunningGenerationJob(songId, {
+				progress: LOADING_JOB_PROGRESS,
+				takeIndex: RUNNING_JOB_TAKE_INDEX,
+				takeCount: RUNNING_JOB_TAKE_COUNT,
+				phase: LOADING_JOB_PHASE
+			});
+			await page.goto(songAddress);
+			// The song comes back on the Takes tab it was left on (#1047); the
+			// Generate status lives on Edit.
+			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			const generateStatus = panel.getByRole('status');
+			await expect(generateStatus).toHaveText(
+				`${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL}`
+			);
+
+			await page.getByRole('tab', { name: /Takes/ }).click();
+			await expect(panel.getByRole('progressbar')).toBeVisible();
+			await expect(panel.getByText(LOADING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
+			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
+			await expect(panel.getByText(REMAINING_TIME_PATTERN)).toHaveCount(0);
+
+			// Leaving the model load live, over the same job's still-open SSE
+			// stream — no reload, matching a real worker's own reporting path.
+			await advanceGenerationJobPhase(jobId, {
+				progress: RUNNING_JOB_PROGRESS,
+				phase: RUNNING_JOB_PHASE,
+				generationStartedOffsetSeconds: RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS
+			});
+			await expect(panel.getByText(RUNNING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
+			await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
+			await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
+
+			await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
+			await expect(generateStatus).toContainText(
+				new RegExp(
+					`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
+				)
+			);
+
+			// Failing the same job live, over its still-open SSE stream — no
+			// reload, matching a real worker crash's own reporting path.
+			await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
+			await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
+			// The same failure also raises a toast (ToastContainer.svelte) that
+			// overlaps the expand button until it is dismissed or its own 5s timer
+			// runs out — dismiss it explicitly so the click below isn't racing that
+			// timer.
+			await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
+			await panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_EXPAND_LABEL }).click();
+			await expect(
+				panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL })
+			).toBeVisible();
+
+			console.log(`Song-phone flow /api requests: ${guard.apiRequestCount}`);
+			guard.assertClean();
+			guard.assertWithinBudget(SONG_PHONE_FLOW_API_REQUEST_BUDGET);
 		}
-
-		await panel
-			.getByRole('button', { name: `${TRANSPORT_PLAY_LABEL} ${SECOND_TAKE_LABEL}`, exact: true })
-			.click();
-		// The phone bar says where the music comes from (#1058, frame C2); the
-		// player names the take on Now Playing, opened from the bar's title.
-		await page
-			.getByRole('contentinfo')
-			.getByRole('button', { name: openNowPlayingLabel(songTitle), exact: true })
-			.click();
-		const nowPlaying = page.getByRole('dialog', { name: songTitle });
-		await expect(nowPlaying.getByRole('button', { name: PLAYS_FROM_AN_ALBUM })).toBeVisible();
-		await expect(nowPlaying.getByText(SECOND_TAKE_LABEL, { exact: true })).toBeVisible();
-		await nowPlaying.getByRole('button', { name: NOW_PLAYING_CLOSE, exact: true }).click();
-		await expect(nowPlaying).toBeHidden();
-
-		// A seeded running job, discovered the same way a reload would: a fresh
-		// cold open re-runs loadSongContext's hydrateActiveGeneration.
-		const jobId = await seedRunningGenerationJob(songId, {
-			progress: LOADING_JOB_PROGRESS,
-			takeIndex: RUNNING_JOB_TAKE_INDEX,
-			takeCount: RUNNING_JOB_TAKE_COUNT,
-			phase: LOADING_JOB_PHASE
-		});
-		await page.goto(songAddress);
-		// The song comes back on the Takes tab it was left on (#1047); the
-		// Generate status lives on Edit.
-		await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
-		const generateStatus = panel.getByRole('status');
-		await expect(generateStatus).toHaveText(
-			`${RUNNING_JOB_TAKE_COUNTER} · ${LOADING_JOB_PHASE_LABEL}`
-		);
-
-		await page.getByRole('tab', { name: /Takes/ }).click();
-		await expect(panel.getByRole('progressbar')).toBeVisible();
-		await expect(panel.getByText(LOADING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
-		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: true })).toBeVisible();
-		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toHaveCount(0);
-
-		// Leaving the model load live, over the same job's still-open SSE
-		// stream — no reload, matching a real worker's own reporting path.
-		await advanceGenerationJobPhase(jobId, {
-			progress: RUNNING_JOB_PROGRESS,
-			phase: RUNNING_JOB_PHASE,
-			generationStartedOffsetSeconds: RUNNING_JOB_GENERATION_STARTED_OFFSET_SECONDS
-		});
-		await expect(panel.getByText(RUNNING_JOB_PHASE_LABEL, { exact: true })).toBeVisible();
-		await expect(panel.getByText(RUNNING_JOB_TAKE_COUNTER, { exact: false })).toBeVisible();
-		await expect(panel.getByText(REMAINING_TIME_PATTERN)).toBeVisible();
-
-		await page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL }).click();
-		await expect(generateStatus).toContainText(
-			new RegExp(
-				`${RUNNING_JOB_TAKE_COUNTER} · ${RUNNING_JOB_PHASE_LABEL} · ${Math.round(RUNNING_JOB_PROGRESS * 100)}% · ${REMAINING_TIME_PATTERN.source}`
-			)
-		);
-
-		// Failing the same job live, over its still-open SSE stream — no
-		// reload, matching a real worker crash's own reporting path.
-		await failGenerationJob(jobId, FAILED_GENERATION_SENTENCE);
-		await expect(panel.getByText(FAILED_GENERATION_SENTENCE)).toBeVisible();
-		// The same failure also raises a toast (ToastContainer.svelte) that
-		// overlaps the expand button until it is dismissed or its own 5s timer
-		// runs out — dismiss it explicitly so the click below isn't racing that
-		// timer.
-		await page.getByRole('alert').getByRole('button', { name: 'Dismiss' }).click();
-		await panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_EXPAND_LABEL }).click();
-		await expect(
-			panel.getByRole('button', { name: EDITOR_GENERATE_FAILURE_COLLAPSE_LABEL })
-		).toBeVisible();
-
-		console.log(`Song-phone flow /api requests: ${guard.apiRequestCount}`);
-		guard.assertClean();
-		guard.assertWithinBudget(SONG_PHONE_FLOW_API_REQUEST_BUDGET);
-	});
+	);
 
 	// Issue #1047: the tab choice is remembered per song for the session; a
 	// song opened for the first time lands on Edit, and a reload restores the
 	// tab the open song was left on. The phone song page has no previous/next
 	// control (#970), so stepping between songs is proven in navigation.test.ts.
-	test('remembers each song tab, opens a fresh song on Edit, and keeps the tab on reload', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const library = readSeededLibrary();
-		const albumAddress = `/album/${library.songPhoneAlbumId}`;
-		const marker = runMarker();
-		const firstTitle = `${SONG_PHONE_SONG_TITLE} ${marker} first`;
-		const secondTitle = `${SONG_PHONE_SONG_TITLE} ${marker} second`;
-		await seedSongPhoneSong(library.songPhoneAlbumId, firstTitle, 1, 1);
-		await seedSongPhoneSong(library.songPhoneAlbumId, secondTitle, 1, 1);
-		const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
-		const takesTab = page.getByRole('tab', { name: /^Takes/ });
-		const openFromAlbum = async (title: string) => {
-			await workspace(page)
-				.getByRole('button', { name: songEditorOpenLabel(title) })
+	test(
+		'remembers each song tab, opens a fresh song on Edit, and keeps the tab on reload',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const library = readSeededLibrary();
+			const albumAddress = `/album/${library.songPhoneAlbumId}`;
+			const marker = runMarker();
+			const firstTitle = `${SONG_PHONE_SONG_TITLE} ${marker} first`;
+			const secondTitle = `${SONG_PHONE_SONG_TITLE} ${marker} second`;
+			await seedSongPhoneSong(library.songPhoneAlbumId, firstTitle, 1, 1);
+			await seedSongPhoneSong(library.songPhoneAlbumId, secondTitle, 1, 1);
+			const editTab = page.getByRole('tab', { name: EDITOR_TAB_EDIT_LABEL });
+			const takesTab = page.getByRole('tab', { name: /^Takes/ });
+			const openFromAlbum = async (title: string) => {
+				await workspace(page)
+					.getByRole('button', { name: songEditorOpenLabel(title) })
+					.click();
+				await expect(page.getByRole('heading', { name: title })).toBeVisible();
+				expectSongAddressStands(page, library.songPhoneAlbumId, title);
+			};
+
+			await page.goto(albumAddress);
+			await openFromAlbum(firstTitle);
+			await expect(editTab).toHaveAttribute('aria-selected', 'true');
+			await takesTab.click();
+			await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+			await page.goBack();
+			await openFromAlbum(secondTitle);
+			await expect(editTab).toHaveAttribute('aria-selected', 'true');
+
+			await page.goBack();
+			await openFromAlbum(firstTitle);
+			await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+			await page.reload();
+			await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
+			await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+
+			await editTab.click();
+			await page.reload();
+			await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
+			await expect(editTab).toHaveAttribute('aria-selected', 'true');
+		}
+	);
+
+	test(
+		'a drawer album tap with an unsaved draft asks first: Cancel keeps the draft, Discard leaves (#1143)',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const library = readSeededLibrary();
+			const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
+				await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+			const tapTheOtherAlbumInTheDrawer = async () => {
+				const rail = await openRailNav(page, 'mobile');
+				await rail.getByRole('button', { name: containing(library.secondAlbumTitle) }).click();
+				await expect(unsavedDraftDialog).toBeVisible();
+			};
+
+			await tapTheOtherAlbumInTheDrawer();
+			await unsavedDraftDialog
+				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
 				.click();
-			await expect(page.getByRole('heading', { name: title })).toBeVisible();
-			expectSongAddressStands(page, library.songPhoneAlbumId, title);
-		};
+			await expect(unsavedDraftDialog).toBeHidden();
+			await expect(songHeading).toBeVisible();
+			await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
 
-		await page.goto(albumAddress);
-		await openFromAlbum(firstTitle);
-		await expect(editTab).toHaveAttribute('aria-selected', 'true');
-		await takesTab.click();
-		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+			await tapTheOtherAlbumInTheDrawer();
+			await unsavedDraftDialog
+				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.click();
+			await expect(
+				workspace(page).getByRole('heading', { name: library.secondAlbumTitle })
+			).toBeVisible();
 
-		await page.goBack();
-		await openFromAlbum(secondTitle);
-		await expect(editTab).toHaveAttribute('aria-selected', 'true');
+			await page.goBack();
+			await expect(songHeading).toBeVisible();
+			await expect(lyrics).toHaveValue(savedLyrics);
+		}
+	);
 
-		await page.goBack();
-		await openFromAlbum(firstTitle);
-		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
+	test(
+		'Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const library = readSeededLibrary();
+			const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(
+				page,
+				library.songPhoneAlbumId
+			);
 
-		await page.reload();
-		await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
-		await expect(takesTab).toHaveAttribute('aria-selected', 'true');
-
-		await editTab.click();
-		await page.reload();
-		await expect(page.getByRole('heading', { name: firstTitle })).toBeVisible();
-		await expect(editTab).toHaveAttribute('aria-selected', 'true');
-	});
-
-	test('a drawer album tap with an unsaved draft asks first: Cancel keeps the draft, Discard leaves (#1143)', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const library = readSeededLibrary();
-		const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
-			await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
-		const tapTheOtherAlbumInTheDrawer = async () => {
-			const rail = await openRailNav(page, 'mobile');
-			await rail.getByRole('button', { name: containing(library.secondAlbumTitle) }).click();
+			await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
 			await expect(unsavedDraftDialog).toBeVisible();
-		};
+			await unsavedDraftDialog
+				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.click();
 
-		await tapTheOtherAlbumInTheDrawer();
-		await unsavedDraftDialog
-			.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
-			.click();
-		await expect(unsavedDraftDialog).toBeHidden();
-		await expect(songHeading).toBeVisible();
-		await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
+			const accountHeading = page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 });
+			await expect(page).toHaveURL(/\/settings\/account$/);
+			await expect(accountHeading).toBeVisible();
+			await page.reload();
+			await expect(page).toHaveURL(/\/settings\/account$/);
+			await expect(accountHeading).toBeVisible();
+		}
+	);
 
-		await tapTheOtherAlbumInTheDrawer();
-		await unsavedDraftDialog
-			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-			.click();
-		await expect(
-			workspace(page).getByRole('heading', { name: library.secondAlbumTitle })
-		).toBeVisible();
+	test(
+		'Back with an unsaved draft asks first: Cancel keeps the draft on the song, Discard leaves without saving (#1143)',
+		{ tag: ONLY_IN_SHELL.mobile },
+		async ({ page }) => {
+			const library = readSeededLibrary();
+			const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
+				await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+			const songAddress = page.url();
 
-		await page.goBack();
-		await expect(songHeading).toBeVisible();
-		await expect(lyrics).toHaveValue(savedLyrics);
-	});
+			await page.goBack();
+			await expect(unsavedDraftDialog).toBeVisible();
+			await expect(page).toHaveURL(songAddress);
+			await unsavedDraftDialog
+				.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
+				.click();
+			await expect(unsavedDraftDialog).toBeHidden();
+			await expect(page).toHaveURL(songAddress);
+			await expect(songHeading).toBeVisible();
+			await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
 
-	test('Discard on a Settings page from the drawer search lands on its address, which a reload keeps (#1143)', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const library = readSeededLibrary();
-		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+			await page.goBack();
+			await expect(unsavedDraftDialog).toBeVisible();
+			await unsavedDraftDialog
+				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.click();
+			await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}$`));
+			await expect(songHeading).toBeHidden();
 
-		await openSettingsSectionFromDrawerSearch(page, ACCOUNT_SECTION);
-		await expect(unsavedDraftDialog).toBeVisible();
-		await unsavedDraftDialog
-			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-			.click();
-
-		const accountHeading = page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 });
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(accountHeading).toBeVisible();
-		await page.reload();
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(accountHeading).toBeVisible();
-	});
-
-	test('Back with an unsaved draft asks first: Cancel keeps the draft on the song, Discard leaves without saving (#1143)', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
-		const library = readSeededLibrary();
-		const { songHeading, lyrics, savedLyrics, unsavedDraftDialog } =
-			await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
-		const songAddress = page.url();
-
-		await page.goBack();
-		await expect(unsavedDraftDialog).toBeVisible();
-		await expect(page).toHaveURL(songAddress);
-		await unsavedDraftDialog
-			.getByRole('button', { name: DIALOG_CANCEL_LABEL, exact: true })
-			.click();
-		await expect(unsavedDraftDialog).toBeHidden();
-		await expect(page).toHaveURL(songAddress);
-		await expect(songHeading).toBeVisible();
-		await expect(lyrics).toHaveValue(new RegExp(`${UNSAVED_DRAFT_LINE}$`));
-
-		await page.goBack();
-		await expect(unsavedDraftDialog).toBeVisible();
-		await unsavedDraftDialog
-			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-			.click();
-		await expect(page).toHaveURL(new RegExp(`/album/${library.songPhoneAlbumId}$`));
-		await expect(songHeading).toBeHidden();
-
-		await page.goForward();
-		await expect(songHeading).toBeVisible();
-		await expect(lyrics).toHaveValue(savedLyrics);
-	});
+			await page.goForward();
+			await expect(songHeading).toBeVisible();
+			await expect(lyrics).toHaveValue(savedLyrics);
+		}
+	);
 
 	// The defect #1144 fixed reproduced on the desktop rail as well; the phone
 	// rows above cover the drawer, this one the 1440 px rail's Settings group.
-	test('Discard on a desktop rail Settings link with an unsaved draft lands on the page (#1143)', async ({
-		page,
-		isMobile
-	}) => {
-		test.skip(isMobile, 'Desktop rail Settings group; the phone reaches Settings above.');
-		const library = readSeededLibrary();
-		const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(page, library.songPhoneAlbumId);
+	test(
+		'Discard on a desktop rail Settings link with an unsaved draft lands on the page (#1143)',
+		{ tag: ONLY_IN_SHELL.desktop },
+		async ({ page }) => {
+			const library = readSeededLibrary();
+			const { unsavedDraftDialog } = await openSongWithAnUnsavedDraft(
+				page,
+				library.songPhoneAlbumId
+			);
 
-		await openSettingsSection(page, 'desktop', ACCOUNT_SECTION);
-		await expect(unsavedDraftDialog).toBeVisible();
-		await unsavedDraftDialog
-			.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
-			.click();
+			await openSettingsSection(page, 'desktop', ACCOUNT_SECTION);
+			await expect(unsavedDraftDialog).toBeVisible();
+			await unsavedDraftDialog
+				.getByRole('button', { name: EDITOR_UNSAVED_DISCARD_LABEL, exact: true })
+				.click();
 
-		await expect(page).toHaveURL(/\/settings\/account$/);
-		await expect(page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 })).toBeVisible();
-	});
+			await expect(page).toHaveURL(/\/settings\/account$/);
+			await expect(page.getByRole('heading', { name: ACCOUNT_SECTION, level: 1 })).toBeVisible();
+		}
+	);
 });
 
 // Leaving Now Playing on the phone (issue #1002): the full surface is a
@@ -582,15 +591,10 @@ const NOW_PLAYING_LEAVES: {
 	}
 ];
 
-test.describe('leaving Now Playing at phone width', () => {
+test.describe('leaving Now Playing at phone width', { tag: ONLY_IN_SHELL.mobile }, () => {
 	for (const { name: originName, openFromRow } of NOW_PLAYING_ORIGINS) {
 		for (const { name: leaveName, leave } of NOW_PLAYING_LEAVES) {
-			test(`${leaveName} from Now Playing shows ${originName} again`, async ({
-				page,
-				request,
-				isMobile
-			}) => {
-				test.skip(!isMobile, 'Mobile-only compact-shell UI; see the file header.');
+			test(`${leaveName} from Now Playing shows ${originName} again`, async ({ page, request }) => {
 				const guard = new FlowGuard(page);
 				const opened = await openFromRow(page, request);
 				const { origin, cameFrom } = opened;

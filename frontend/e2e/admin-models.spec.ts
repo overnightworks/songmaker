@@ -42,7 +42,7 @@ import {
 	PROVIDER_ROUTE_CLI_LABEL,
 	songEditorOpenLabel
 } from '../src/lib/constants';
-import { FlowGuard, workspace } from './helpers';
+import { FlowGuard, ONLY_IN_SHELL, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -198,69 +198,194 @@ async function attachShot(
 	await testInfo.attach(name, { path, contentType: 'image/png' });
 }
 
-test('the Models table keeps every task, route, model and status on screen at every desktop width', async ({
-	page,
-	isMobile
-}, testInfo) => {
-	test.skip(Boolean(isMobile), 'The phone shell shows cards; they have their own test below');
+// The phone shell shows cards; they have their own test below.
+test(
+	'the Models table keeps every task, route, model and status on screen at every desktop width',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }, testInfo) => {
+		await openModelsTab(page);
 
-	await openModelsTab(page);
+		// One row per task, and nothing else: the three tasks that ask the one
+		// dispatch (#820, line 1).
+		await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toBeVisible();
+		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toBeVisible();
+		await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toBeVisible();
+		await expect(page.locator('.tt-row')).toHaveCount(3);
 
-	// One row per task, and nothing else: the three tasks that ask the one
-	// dispatch (#820, line 1).
-	await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toBeVisible();
-	await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toBeVisible();
-	await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toBeVisible();
-	await expect(page.locator('.tt-row')).toHaveCount(3);
-
-	// Both routes stay offered in every row, and the one that is not set up
-	// says why rather than disappearing (line 4).
-	for (const task of [
-		MODELS_TASK_COWRITER_LABEL,
-		MODELS_TASK_COVER_LABEL,
-		MODELS_TASK_SCORING_LABEL
-	]) {
-		const routes = routeSwitch(page, task);
-		await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_CLI_LABEL })).toBeVisible();
-		await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_API_LABEL })).toBeVisible();
-	}
-	await expect(routeSwitch(page, MODELS_TASK_COWRITER_LABEL)).toHaveAccessibleDescription(
-		new RegExp(`${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}[\\s\\S]*${MODELS_ROUTE_KEY_NOT_SET_PHRASE}`)
-	);
-
-	// A model list nothing can fetch says so instead of inventing a value (line 7).
-	const coverModel = modelSelect(page, MODELS_TASK_COVER_LABEL);
-	await expect(coverModel).toHaveText(MODELS_NO_MODELS_LABEL);
-	await expect(coverModel).toBeDisabled();
-
-	// The row-level extra sits under a collapsed Advanced, in the Co-Writer row
-	// alone (line 13).
-	const advanced = page.getByText(MODELS_ADVANCED_LABEL, { exact: true });
-	await expect(advanced).toHaveCount(1);
-	await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeHidden();
-	await advanced.click();
-	await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeVisible();
-
-	// The columns are the picture's five, and every one of them -- Status
-	// included, the one the operator found clipped away -- stays on screen at
-	// every width, without the page ever scrolling sideways.
-	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-	// The keyless existing installation pins the judge route to CLI (#903).
-	await expect(scoringStatus).toContainText(
-		`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
-	);
-	for (const width of DESKTOP_WIDTHS) {
-		await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
-		for (const column of [
-			MODELS_COLUMN_TASK_LABEL,
-			MODELS_COLUMN_PROVIDER_LABEL,
-			MODELS_COLUMN_ROUTE_LABEL,
-			MODELS_COLUMN_MODEL_LABEL,
-			MODELS_COLUMN_STATUS_LABEL
+		// Both routes stay offered in every row, and the one that is not set up
+		// says why rather than disappearing (line 4).
+		for (const task of [
+			MODELS_TASK_COWRITER_LABEL,
+			MODELS_TASK_COVER_LABEL,
+			MODELS_TASK_SCORING_LABEL
 		]) {
-			await expect(columnHeader(page, column)).toBeInViewport();
+			const routes = routeSwitch(page, task);
+			await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_CLI_LABEL })).toBeVisible();
+			await expect(routes.getByRole('button', { name: PROVIDER_ROUTE_API_LABEL })).toBeVisible();
 		}
+		await expect(routeSwitch(page, MODELS_TASK_COWRITER_LABEL)).toHaveAccessibleDescription(
+			new RegExp(`${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}[\\s\\S]*${MODELS_ROUTE_KEY_NOT_SET_PHRASE}`)
+		);
+
+		// A model list nothing can fetch says so instead of inventing a value (line 7).
+		const coverModel = modelSelect(page, MODELS_TASK_COVER_LABEL);
+		await expect(coverModel).toHaveText(MODELS_NO_MODELS_LABEL);
+		await expect(coverModel).toBeDisabled();
+
+		// The row-level extra sits under a collapsed Advanced, in the Co-Writer row
+		// alone (line 13).
+		const advanced = page.getByText(MODELS_ADVANCED_LABEL, { exact: true });
+		await expect(advanced).toHaveCount(1);
+		await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeHidden();
+		await advanced.click();
+		await expect(page.getByText(MODELS_HISTORY_TAIL_LABEL)).toBeVisible();
+
+		// The columns are the picture's five, and every one of them -- Status
+		// included, the one the operator found clipped away -- stays on screen at
+		// every width, without the page ever scrolling sideways.
+		const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
+		// The keyless existing installation pins the judge route to CLI (#903).
+		await expect(scoringStatus).toContainText(
+			`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
+		);
+		for (const width of DESKTOP_WIDTHS) {
+			await page.setViewportSize({ width, height: DESKTOP_HEIGHT });
+			for (const column of [
+				MODELS_COLUMN_TASK_LABEL,
+				MODELS_COLUMN_PROVIDER_LABEL,
+				MODELS_COLUMN_ROUTE_LABEL,
+				MODELS_COLUMN_MODEL_LABEL,
+				MODELS_COLUMN_STATUS_LABEL
+			]) {
+				await expect(columnHeader(page, column)).toBeInViewport();
+			}
+			await expect(scoringStatus).toBeInViewport();
+			for (const task of [
+				MODELS_TASK_COWRITER_LABEL,
+				MODELS_TASK_COVER_LABEL,
+				MODELS_TASK_SCORING_LABEL
+			]) {
+				await expectProviderNameShownWhole(page, task);
+				await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
+			}
+			await expectNoSidewaysScroll(page);
+			await attachShot(page, testInfo, `admin-models-${width}`);
+		}
+	}
+);
+
+// Saving a row is shell-independent, and the two shells share one budget.
+test(
+	'a task keeps the provider it was given, even one no route can run',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		await openModelsTab(page);
+
+		// Cover is the row whose selection the server keeps whatever the routes can
+		// do (#820, lines 2, 3 and 8), so this is where a real save can be driven
+		// end to end against a stack where nothing is set up.
+		const cover = providerSelect(page, MODELS_TASK_COVER_LABEL);
+		const before = await cover.inputValue();
+		const options = await cover
+			.locator('option')
+			.evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
+		const chosen = options.indexOf(before);
+		const neighbour = chosen + 1 < options.length ? chosen + 1 : chosen - 1;
+		expect(options[neighbour], 'the Cover row offers more than one provider').toBeTruthy();
+
+		try {
+			// Chosen from the keyboard, because the box a person reads is drawn beside
+			// the native select rather than being it (#883): only a select that still
+			// takes focus and still answers the arrow keys can be driven this way.
+			await cover.focus();
+			await page.keyboard.press(neighbour > chosen ? 'ArrowDown' : 'ArrowUp');
+			await expect(cover).toHaveValue(options[neighbour]);
+			await expectSaved(page, MODELS_TASK_COVER_LABEL);
+
+			await openModelsTab(page);
+			await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(options[neighbour]);
+		} finally {
+			// The selection is instance-wide and outlives the test, so it is put back
+			// through the same control: `album-cover.spec.ts` runs against this stack
+			// afterwards and asks the provider left here to draw.
+			await providerSelect(page, MODELS_TASK_COVER_LABEL).selectOption(before);
+			await expectSaved(page, MODELS_TASK_COVER_LABEL);
+		}
+	}
+);
+
+// The compact shell opens the same chat in a sheet; the turn is the same.
+test(
+	'a route that is not set up ends the next co-writer turn with its reason',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const library = readSeededLibrary();
+		const surface = workspace(page);
+
+		await openModelsTab(page);
+		const chosenProvider = await providerSelect(page, MODELS_TASK_COWRITER_LABEL).inputValue();
+
+		await page.goto(`/album/${library.albumId}`);
+		await surface
+			.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) })
+			.click();
+		await surface.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
+
+		const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
+		await ask.fill('Write me a second verse.');
+		await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
+
+		// The turn ends with the reason the chosen route failed for, after the
+		// chosen provider's name -- never with a quiet switch to a provider that
+		// would have worked (#820, line 8; #1069).
+		const failure = surface.getByRole('alert');
+		await expect(failure).toBeVisible();
+		await expect(failure).toContainText(NAMED_TURN_FAILURES);
+		await expect(failure).toContainText(new RegExp(`${chosenProvider}: `, 'i'));
+
+		await openModelsTab(page);
+		await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toHaveValue(chosenProvider);
+	}
+);
+
+// The desktop shell shows the table; it has its own test above.
+test(
+	'at 375px every task is a card with its own labelled lines',
+	{ tag: ONLY_IN_SHELL.mobile },
+	async ({ page }, testInfo) => {
+		await page.setViewportSize(PHONE_VIEWPORT);
+		await openModelsTab(page);
+
+		// The table's one header row gives way to a label on every line of every
+		// card, so each value still says what it is (#820, line 12).
+		await expect(columnHeader(page, MODELS_COLUMN_TASK_LABEL)).toBeHidden();
+		for (const task of [
+			MODELS_TASK_COWRITER_LABEL,
+			MODELS_TASK_COVER_LABEL,
+			MODELS_TASK_SCORING_LABEL
+		]) {
+			const card = taskRow(page, task);
+			for (const column of [
+				MODELS_COLUMN_PROVIDER_LABEL,
+				MODELS_COLUMN_ROUTE_LABEL,
+				MODELS_COLUMN_MODEL_LABEL,
+				MODELS_COLUMN_STATUS_LABEL
+			]) {
+				await expect(card.getByText(column, { exact: true })).toBeVisible();
+			}
+		}
+		// The cards stack, so the last task's status is reached by scrolling down --
+		// never by scrolling sideways.
+		const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
+		// The keyless existing installation pins the judge route to CLI (#903).
+		await expect(scoringStatus).toContainText(
+			`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
+		);
+		await scoringStatus.scrollIntoViewIfNeeded();
 		await expect(scoringStatus).toBeInViewport();
+
+		// The narrowest provider column there is, and the name still stands in it
+		// whole (#820, line 5; #883).
 		for (const task of [
 			MODELS_TASK_COWRITER_LABEL,
 			MODELS_TASK_COVER_LABEL,
@@ -269,137 +394,8 @@ test('the Models table keeps every task, route, model and status on screen at ev
 			await expectProviderNameShownWhole(page, task);
 			await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
 		}
+
 		await expectNoSidewaysScroll(page);
-		await attachShot(page, testInfo, `admin-models-${width}`);
+		await attachShot(page, testInfo, 'admin-models-375', true);
 	}
-});
-
-test('a task keeps the provider it was given, even one no route can run', async ({
-	page,
-	isMobile
-}) => {
-	test.skip(
-		Boolean(isMobile),
-		'Saving a row is shell-independent; the two shells share one budget'
-	);
-
-	await openModelsTab(page);
-
-	// Cover is the row whose selection the server keeps whatever the routes can
-	// do (#820, lines 2, 3 and 8), so this is where a real save can be driven
-	// end to end against a stack where nothing is set up.
-	const cover = providerSelect(page, MODELS_TASK_COVER_LABEL);
-	const before = await cover.inputValue();
-	const options = await cover
-		.locator('option')
-		.evaluateAll((nodes) => nodes.map((node) => (node as HTMLOptionElement).value));
-	const chosen = options.indexOf(before);
-	const neighbour = chosen + 1 < options.length ? chosen + 1 : chosen - 1;
-	expect(options[neighbour], 'the Cover row offers more than one provider').toBeTruthy();
-
-	try {
-		// Chosen from the keyboard, because the box a person reads is drawn beside
-		// the native select rather than being it (#883): only a select that still
-		// takes focus and still answers the arrow keys can be driven this way.
-		await cover.focus();
-		await page.keyboard.press(neighbour > chosen ? 'ArrowDown' : 'ArrowUp');
-		await expect(cover).toHaveValue(options[neighbour]);
-		await expectSaved(page, MODELS_TASK_COVER_LABEL);
-
-		await openModelsTab(page);
-		await expect(providerSelect(page, MODELS_TASK_COVER_LABEL)).toHaveValue(options[neighbour]);
-	} finally {
-		// The selection is instance-wide and outlives the test, so it is put back
-		// through the same control: `album-cover.spec.ts` runs against this stack
-		// afterwards and asks the provider left here to draw.
-		await providerSelect(page, MODELS_TASK_COVER_LABEL).selectOption(before);
-		await expectSaved(page, MODELS_TASK_COVER_LABEL);
-	}
-});
-
-test('a route that is not set up ends the next co-writer turn with its reason', async ({
-	page,
-	isMobile
-}) => {
-	test.skip(
-		Boolean(isMobile),
-		'The compact shell opens the same chat in a sheet; the turn is the same'
-	);
-
-	const library = readSeededLibrary();
-	const surface = workspace(page);
-
-	await openModelsTab(page);
-	const chosenProvider = await providerSelect(page, MODELS_TASK_COWRITER_LABEL).inputValue();
-
-	await page.goto(`/album/${library.albumId}`);
-	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
-	await surface.getByRole('button', { name: EDITOR_VIEW_COWRITER_LABEL, exact: true }).click();
-
-	const ask = surface.getByPlaceholder(COWRITER_COMPOSER_PLACEHOLDER);
-	await ask.fill('Write me a second verse.');
-	await surface.getByRole('button', { name: COWRITER_SEND_LABEL, exact: true }).click();
-
-	// The turn ends with the reason the chosen route failed for, after the
-	// chosen provider's name -- never with a quiet switch to a provider that
-	// would have worked (#820, line 8; #1069).
-	const failure = surface.getByRole('alert');
-	await expect(failure).toBeVisible();
-	await expect(failure).toContainText(NAMED_TURN_FAILURES);
-	await expect(failure).toContainText(new RegExp(`${chosenProvider}: `, 'i'));
-
-	await openModelsTab(page);
-	await expect(providerSelect(page, MODELS_TASK_COWRITER_LABEL)).toHaveValue(chosenProvider);
-});
-
-test('at 375px every task is a card with its own labelled lines', async ({
-	page,
-	isMobile
-}, testInfo) => {
-	test.skip(!isMobile, 'The desktop shell shows the table; it has its own test above');
-
-	await page.setViewportSize(PHONE_VIEWPORT);
-	await openModelsTab(page);
-
-	// The table's one header row gives way to a label on every line of every
-	// card, so each value still says what it is (#820, line 12).
-	await expect(columnHeader(page, MODELS_COLUMN_TASK_LABEL)).toBeHidden();
-	for (const task of [
-		MODELS_TASK_COWRITER_LABEL,
-		MODELS_TASK_COVER_LABEL,
-		MODELS_TASK_SCORING_LABEL
-	]) {
-		const card = taskRow(page, task);
-		for (const column of [
-			MODELS_COLUMN_PROVIDER_LABEL,
-			MODELS_COLUMN_ROUTE_LABEL,
-			MODELS_COLUMN_MODEL_LABEL,
-			MODELS_COLUMN_STATUS_LABEL
-		]) {
-			await expect(card.getByText(column, { exact: true })).toBeVisible();
-		}
-	}
-	// The cards stack, so the last task's status is reached by scrolling down --
-	// never by scrolling sideways.
-	const scoringStatus = taskStatus(page, MODELS_TASK_SCORING_LABEL);
-	// The keyless existing installation pins the judge route to CLI (#903).
-	await expect(scoringStatus).toContainText(
-		`Claude ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
-	);
-	await scoringStatus.scrollIntoViewIfNeeded();
-	await expect(scoringStatus).toBeInViewport();
-
-	// The narrowest provider column there is, and the name still stands in it
-	// whole (#820, line 5; #883).
-	for (const task of [
-		MODELS_TASK_COWRITER_LABEL,
-		MODELS_TASK_COVER_LABEL,
-		MODELS_TASK_SCORING_LABEL
-	]) {
-		await expectProviderNameShownWhole(page, task);
-		await expectFieldShownWhole(fieldOf(modelSelect(page, task)));
-	}
-
-	await expectNoSidewaysScroll(page);
-	await attachShot(page, testInfo, 'admin-models-375', true);
-});
+);

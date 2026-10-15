@@ -5,6 +5,7 @@
 // Only the latin and latin-ext subsets ship, in woff2 alone (issue #1224).
 
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
+import { ONLY_IN_SHELL } from './helpers';
 import { readSeededLibrary } from './seed';
 
 const GOOGLE_FONT_HOSTS: readonly string[] = ['fonts.googleapis.com', 'fonts.gstatic.com'];
@@ -68,56 +69,71 @@ async function expectSelfHostedFonts(page: Page): Promise<void> {
 	}
 }
 
-// The font stack is the same stylesheet in both shells; one shell proves it.
-test.skip(({ isMobile }) => Boolean(isMobile), 'Fonts are shell-independent');
+// The font stack is the same stylesheet in both shells, so the desktop alone
+// proves it.
+test(
+	'the login page renders its fonts without asking a Google host',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ browser }) => {
+		const context = await browser.newContext({ storageState: ANONYMOUS });
+		const googleRequests = recordGoogleFontRequests(context);
+		const page = await context.newPage();
 
-test('the login page renders its fonts without asking a Google host', async ({ browser }) => {
-	const context = await browser.newContext({ storageState: ANONYMOUS });
-	const googleRequests = recordGoogleFontRequests(context);
-	const page = await context.newPage();
+		await page.goto('/login');
+		await expectSelfHostedFonts(page);
 
-	await page.goto('/login');
-	await expectSelfHostedFonts(page);
-
-	expect(googleRequests).toEqual([]);
-	await context.close();
-});
-
-test('a song renders its fonts without asking a Google host', async ({ page, context }) => {
-	const library = readSeededLibrary();
-	const googleRequests = recordGoogleFontRequests(context);
-	const songSlug = library.pickedSongTitle.toLowerCase().replace(/\s+/g, '-');
-
-	await page.goto(`/album/${library.albumId}/${songSlug}`);
-	await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
-	await expectSelfHostedFonts(page);
-
-	expect(googleRequests).toEqual([]);
-});
-
-test('a share page renders its fonts without asking a Google host', async ({ browser }) => {
-	const library = readSeededLibrary();
-	const context = await browser.newContext({ storageState: ANONYMOUS });
-	const googleRequests = recordGoogleFontRequests(context);
-	const page = await context.newPage();
-
-	await page.goto(library.albumShareUrl);
-	await expect(page.getByText(library.albumTitle).first()).toBeVisible();
-	await expectSelfHostedFonts(page);
-
-	expect(googleRequests).toEqual([]);
-	await context.close();
-});
-
-test('only latin and latin-ext woff2 fonts are precached and served as woff2', async ({ page }) => {
-	const fontPaths = await precachedFontPaths(page);
-
-	expect(fontPaths).toHaveLength(SHIPPED_FONT_FILE_COUNT);
-	for (const path of fontPaths) {
-		expect(path.split('/').pop()).toMatch(SHIPPED_FONT_FILE);
+		expect(googleRequests).toEqual([]);
+		await context.close();
 	}
+);
 
-	const font = await page.request.get(fontPaths[0]);
-	expect(font.ok()).toBe(true);
-	expect(font.headers()['content-type']).toBe('font/woff2');
-});
+test(
+	'a song renders its fonts without asking a Google host',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page, context }) => {
+		const library = readSeededLibrary();
+		const googleRequests = recordGoogleFontRequests(context);
+		const songSlug = library.pickedSongTitle.toLowerCase().replace(/\s+/g, '-');
+
+		await page.goto(`/album/${library.albumId}/${songSlug}`);
+		await expect(page.getByRole('heading', { name: library.pickedSongTitle })).toBeVisible();
+		await expectSelfHostedFonts(page);
+
+		expect(googleRequests).toEqual([]);
+	}
+);
+
+test(
+	'a share page renders its fonts without asking a Google host',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ browser }) => {
+		const library = readSeededLibrary();
+		const context = await browser.newContext({ storageState: ANONYMOUS });
+		const googleRequests = recordGoogleFontRequests(context);
+		const page = await context.newPage();
+
+		await page.goto(library.albumShareUrl);
+		await expect(page.getByText(library.albumTitle).first()).toBeVisible();
+		await expectSelfHostedFonts(page);
+
+		expect(googleRequests).toEqual([]);
+		await context.close();
+	}
+);
+
+test(
+	'only latin and latin-ext woff2 fonts are precached and served as woff2',
+	{ tag: ONLY_IN_SHELL.desktop },
+	async ({ page }) => {
+		const fontPaths = await precachedFontPaths(page);
+
+		expect(fontPaths).toHaveLength(SHIPPED_FONT_FILE_COUNT);
+		for (const path of fontPaths) {
+			expect(path.split('/').pop()).toMatch(SHIPPED_FONT_FILE);
+		}
+
+		const font = await page.request.get(fontPaths[0]);
+		expect(font.ok()).toBe(true);
+		expect(font.headers()['content-type']).toBe('font/woff2');
+	}
+);
