@@ -165,7 +165,11 @@ import {
 	setLibraryTakePool,
 	type LibraryTakePool
 } from '$lib/stores/playbackSettings';
-import { loadPlaylistDetail, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	loadPlaylistDetail,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { openCollection } from '$lib/stores/collection';
 import { PLAYLIST_LOADING_LABEL, RAIL_LIBRARY_LABEL } from '$lib/constants';
 
@@ -3719,7 +3723,7 @@ describe('playIdleStart', () => {
 		let answerOpened: { resolve: (d: PlaylistDetailItem) => void; reject: (e: unknown) => void };
 
 		beforeEach(async () => {
-			resetPlaylists();
+			resetPlaylistsForTests();
 			vi.mocked(fetchPlaylist).mockResolvedValueOnce(left);
 			await loadPlaylistDetail(left.id);
 			vi.mocked(fetchPlaylist).mockReturnValueOnce(
@@ -3731,7 +3735,7 @@ describe('playIdleStart', () => {
 		});
 
 		afterEach(() => {
-			resetPlaylists();
+			resetPlaylistsForTests();
 		});
 
 		it('waits for it and then plays it, never the library or the list just left', async () => {

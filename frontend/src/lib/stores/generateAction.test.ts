@@ -49,7 +49,7 @@ import { browserReportsOnline } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from './connectivity';
 import { cancelGeneration, generate, generateAction, offersCancel } from './generateAction';
 import { startHealthPolling, stopHealthPolling } from './health';
-import { activeJobs, generationFailures, removeJob, resetGenerationFailures } from './jobs';
+import { activeJobs, generationFailures, removeJob, resetGenerationFailuresForTests } from './jobs';
 import { songList } from './libraryData';
 import { selectedSongId } from './player';
 import { activeModels } from './presets';
@@ -79,7 +79,7 @@ const queuedJob: JobItem = {
 
 beforeEach(async () => {
 	vi.resetAllMocks();
-	resetGenerationFailures();
+	resetGenerationFailuresForTests();
 	vi.stubGlobal(
 		'EventSource',
 		class {

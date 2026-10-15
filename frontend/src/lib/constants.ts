@@ -166,6 +166,12 @@ export function openNowPlayingLabel(songTitle: string): string {
 // Swiping the mini player up opens Now Playing once the finger has risen
 // this far, and further up than sideways; anything less is a tap or a slip.
 export const NOW_PLAYING_SWIPE_RISE_PX = 40;
+// The seek line's accessible name, and the position it reads out as words
+// rather than as a bare count of seconds.
+export const SEEK_PLAYBACK_LABEL = 'Seek playback';
+export function seekPositionLabel(position: string, length: string): string {
+	return `${position} of ${length}`;
+}
 // A cut mini-player title scrolls once, slowly: it rests, travels to its end
 // at this pace, rests again, and glides back to its start.
 export const MINI_PLAYER_TITLE_SCROLL_PX_PER_SECOND = 30;
@@ -181,6 +187,8 @@ const MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX = 359.98;
 export const MINI_PLAYER_WITHOUT_COVER_MEDIA = `(max-width: ${MINI_PLAYER_WITHOUT_COVER_MAX_VIEWPORT_PX}px)`;
 export const NOW_PLAYING_NO_LYRICS = 'No lyrics for this take';
 export const NOW_PLAYING_IMPORTED_TAKE_NO_LYRICS = 'Imported take — no lyrics were saved with it.';
+// Brings back lyrics that follow the song once the reader scrolled away (#1382).
+export const NOW_PLAYING_LYRICS_FOLLOW_LABEL = 'Follow';
 export const NOW_PLAYING_GO_TO_SONG = 'Go to song';
 export const NOW_PLAYING_CLOSE = 'Close';
 export const NOW_PLAYING_TAKE_PREFIX = 'Take';

@@ -14,8 +14,8 @@ import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/s
 import { openCollection } from '$lib/stores/collection';
 import { albumList, allAlbumsLoad } from '$lib/stores/libraryData';
 import { libraryWallOrder } from '$lib/stores/ui';
-import { resetLibraryOrder } from '$lib/stores/libraryOrder';
-import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { toasts } from '$lib/stores/toast';
 import { ApiError } from '$lib/api/fetch';
 
@@ -64,10 +64,10 @@ beforeEach(() => {
 		.mockResolvedValue(playlist({ id: 'p-road', title: 'Road Trip', share_slug: null }));
 	localStorage.clear();
 	libraryWallOrder.set('title');
-	resetLibraryOrder();
+	resetLibraryOrderForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	albumList.set([album({ id: 'a-local', title: 'Local Album' })]);
 	playlistList.set([]);
 	playlistLoad.set({ status: 'ready', error: null });
@@ -86,7 +86,7 @@ afterEach(async () => {
 	resetConnectivityForTests();
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	allAlbumsLoad.set({ status: 'idle', error: null });
 });
 

@@ -10,7 +10,11 @@ import { librarySurface, resetLibraryContextForTests } from '$lib/stores/library
 import { albumList } from '$lib/stores/libraryData';
 import { railTreeQuery } from '$lib/stores/librarySearch';
 import { pendingDirtyNavigation } from '$lib/stores/navigation';
-import { playlistList, resetPlaylists, selectedPlaylistDetail } from '$lib/stores/playlists';
+import {
+	playlistList,
+	resetPlaylistsForTests,
+	selectedPlaylistDetail
+} from '$lib/stores/playlists';
 import { railWidth, RAIL_MAX_WIDTH_PX, RAIL_MIN_WIDTH_PX } from '$lib/stores/ui';
 import {
 	buildAlbum as album,
@@ -135,7 +139,7 @@ afterEach(async () => {
 	collapsedMounted = undefined;
 	resetLibraryContextForTests();
 	railTreeQuery.set('');
-	resetPlaylists();
+	resetPlaylistsForTests();
 	discardDraft();
 	pendingDirtyNavigation.set(null);
 	vi.mocked(goto).mockClear();
@@ -395,7 +399,7 @@ describe('Rail', () => {
 		expect(playlistPanel.getAttribute('data-open')).toBe('true');
 	});
 
-	it('marks the open album and the open playlist with the same row-active highlight', async () => {
+	it('marks the open album and the open playlist alike, as the current page', async () => {
 		albumList.set([
 			album({ id: 'a1', title: 'Nachtstrom' }),
 			album({ id: 'a2', title: 'Sonnwendfeuer' })
@@ -405,6 +409,7 @@ describe('Rail', () => {
 			playlist({ id: 'p2', title: 'Night Drive', entry_count: 0 })
 		]);
 		setOpenCollection({ kind: 'album', id: 'a1' });
+		librarySurface.set('detail');
 		selectedPlaylistDetail.set(null);
 		const target = await render();
 
@@ -413,19 +418,37 @@ describe('Rail', () => {
 		expect(albumLabels).toHaveLength(2);
 		expect(playlistLabels).toHaveLength(2);
 
+		const currentPages = () =>
+			[...albumLabels, ...playlistLabels].map((row) => row.getAttribute('aria-current'));
+
 		// The open album is marked, its sibling is not -- no third state, same
 		// as the open playlist below.
-		expect(albumLabels[0]?.classList.contains('row-active')).toBe(true);
-		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(false);
+		expect(currentPages()).toEqual(['page', null, null, null]);
 
 		setOpenCollection({ kind: 'playlist', id: 'p2' });
 		await tick();
 
-		expect(albumLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(albumLabels[1]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[0]?.classList.contains('row-active')).toBe(false);
-		expect(playlistLabels[1]?.classList.contains('row-active')).toBe(true);
+		expect(currentPages()).toEqual([null, null, null, 'page']);
 	});
+
+	it.each([
+		{ kind: 'album', id: 'a1', rowSelector: '.album-label' },
+		{ kind: 'playlist', id: 'p1', rowSelector: '.playlist-label' }
+	] as const)(
+		'marks no $kind as the current page on the wall, which keeps the $kind open last',
+		async ({ kind, id, rowSelector }) => {
+			albumList.set([album({ id: 'a1', title: 'Nachtstrom' })]);
+			playlistList.set([playlist({ id: 'p1', title: 'Morning Run', entry_count: 0 })]);
+			setOpenCollection({ kind, id });
+			librarySurface.set('detail');
+			const target = await render();
+			const openRow = requireElement<HTMLButtonElement>(target, rowSelector);
+			expect(openRow.getAttribute('aria-current')).toBe('page');
+
+			librarySurface.set('browse');
+			await tick();
+
+			expect(openRow.getAttribute('aria-current')).toBeNull();
+		}
+	);
 });

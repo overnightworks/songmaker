@@ -1,6 +1,6 @@
 import { mount, tick, unmount } from 'svelte';
 import { afterEach, beforeEach, expect } from 'vitest';
-import { playlistList, playlistLoad, resetPlaylists } from '$lib/stores/playlists';
+import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import PlaylistPicker from './PlaylistPicker.svelte';
 
@@ -47,7 +47,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	picker.hide();
-	resetPlaylists();
+	resetPlaylistsForTests();
 	document.body.replaceChildren();
 });
 
