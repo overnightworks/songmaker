@@ -9,12 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import type { PlaylistDetailItem, PlaylistEntryItem } from '$lib/api/types';
 import { ApiError, NetworkError } from '$lib/api/fetch';
 import {
-	collectionPauseLabel,
-	collectionPlayLabel,
-	collectionShuffleLabel,
+	collectionActionLabel,
 	LIBRARY_RETRY_LABEL,
 	PLAYING_MARK_LABEL,
-	playlistEntryOverflowLabel
+	playlistEntryOverflowLabel,
+	TRANSPORT_PLAY_LABEL,
+	COLLECTION_SHUFFLE_ACTION,
+	TRANSPORT_PAUSE_LABEL
 } from '$lib/constants';
 import { setOpenCollection } from '$lib/stores/collection';
 import {
@@ -270,10 +271,10 @@ describe('PlaylistDetailView header', () => {
 		await tick();
 		const header = requireElement(target, '.collection-header');
 		expect(header.querySelector('.play-circle')?.getAttribute('aria-label')).toBe(
-			collectionPlayLabel('playlist')
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')
 		);
 		expect(header.querySelector('.shuffle-btn')?.getAttribute('aria-label')).toBe(
-			collectionShuffleLabel('playlist')
+			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'playlist')
 		);
 		expect(header.querySelector('.collection-menu')).not.toBeNull();
 		expect(header.querySelector('.share-btn')).toBeNull();
@@ -525,22 +526,24 @@ describe('PlaylistDetailView header play', () => {
 		});
 		const target = await renderTwoEntryPlaylist();
 		const header = requireElement(target, '.collection-header');
-		getByRoleButton(header, collectionPlayLabel('playlist')).click();
+		getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')).click();
 		await tick();
 		const queueBeforePause = get(queueContext);
 
-		getByRoleButton(header, collectionPauseLabel('playlist')).click();
+		getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist')).click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('paused');
 		expect(
 			findElementByRoleAndName(target.querySelectorAll('.entry-row')[0], 'img', PLAYING_MARK_LABEL)
 		).not.toBeNull();
-		getByRoleButton(header, collectionPlayLabel('playlist')).click();
+		getByRoleButton(header, collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist')).click();
 		await tick();
 
 		expect(audioPlayer.status).toBe('playing');
-		expect(getByRoleButton(header, collectionPauseLabel('playlist'))).not.toBeNull();
+		expect(
+			getByRoleButton(header, collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'playlist'))
+		).not.toBeNull();
 		expect(get(queueContext)).toBe(queueBeforePause);
 	});
 
@@ -550,9 +553,10 @@ describe('PlaylistDetailView header play', () => {
 		queueContext.set(running);
 		const target = await renderPlaylist([]);
 		const header = requireElement(target, '.collection-header');
-		const buttons = [collectionPlayLabel('playlist'), collectionShuffleLabel('playlist')].map(
-			(label) => getByRoleButton(header, label)
-		);
+		const buttons = [
+			collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
+			collectionActionLabel(COLLECTION_SHUFFLE_ACTION, 'playlist')
+		].map((label) => getByRoleButton(header, label));
 
 		for (const button of buttons) button.click();
 		await tick();

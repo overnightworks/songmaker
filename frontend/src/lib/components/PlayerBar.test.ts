@@ -20,7 +20,11 @@ import {
 	TRANSPORT_PLAY_LABEL,
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
-import { audioPlayer, type PlaybackInfo } from '$lib/services/audioPlayer.svelte';
+import {
+	audioPlayer,
+	STALL_RECOVERY_MS,
+	type PlaybackInfo
+} from '$lib/services/audioPlayer.svelte';
 import type { PlaylistDetailItem } from '$lib/api/types';
 import { albumList, songList } from '$lib/stores/libraryData';
 import {
@@ -31,6 +35,7 @@ import {
 	queueContext,
 	selectedAlbumId,
 	selectedSongId,
+	setPendingStartForTests,
 	setShuffle,
 	shuffleEnabled
 } from '$lib/stores/player';
@@ -151,10 +156,20 @@ function loadTake(songTitle?: string): void {
 	audioPlayer.load(barTake(songTitle), { autoplay: false });
 }
 
-function installLockScreen(): Pick<MediaSession, 'playbackState'> {
-	const lockScreen = {
-		playbackState: 'none' as MediaSessionPlaybackState,
-		setPositionState() {}
+interface FakeLockScreen {
+	playbackState: MediaSessionPlaybackState;
+	// Every position state the lock screen was given; null clears it.
+	positions: (MediaPositionState | null)[];
+	setPositionState: (state?: MediaPositionState) => void;
+}
+
+function installLockScreen(): FakeLockScreen {
+	const lockScreen: FakeLockScreen = {
+		playbackState: 'none',
+		positions: [],
+		setPositionState(state) {
+			this.positions.push(state ?? null);
+		}
 	};
 	Object.defineProperty(navigator, 'mediaSession', { configurable: true, value: lockScreen });
 	onTestFinished(() => {
@@ -163,8 +178,25 @@ function installLockScreen(): Pick<MediaSession, 'playbackState'> {
 	return lockScreen;
 }
 
+const WAITING_SONG = { songTitle: 'Opening Move', artist: 'Artist', albumTitle: 'Nachtstrom' };
+
+// An album header start that could not read its takes offline, as the player
+// store holds it: the bar names its song, and the lock screen does too.
+function holdAlbumStart(notice: 'awaiting-network' | 'gave-up-on-network' | 'idle'): void {
+	openCollection.set({ kind: 'album', id: 'a1' });
+	albumList.set([albumItem({ share_slug: null, cover: null })]);
+	setPendingStartForTests({ albumId: 'a1', song: WAITING_SONG });
+	playStartNotice.set(notice);
+}
+
+// A take of another album, loaded and paused, as after a reload or a pause
+// before the listener opened the album that now waits.
+function loadPausedTake(): void {
+	audioPlayer.load(barTake('Earlier Song'), { autoplay: false });
+}
+
 const RESTORED_POSITION = 13;
-const PAST_THE_STALL_CHECK_MS = 5001;
+const PAST_THE_STALL_CHECK_MS = STALL_RECOVERY_MS + 1;
 
 let component: ReturnType<typeof mount> | undefined;
 let target: HTMLDivElement;
@@ -201,6 +233,7 @@ beforeEach(() => {
 	selectedPlaylistDetail.set(null);
 	openCollection.set(null);
 	playStartNotice.set('idle');
+	setPendingStartForTests(null);
 	nowPlayingSurface.set('closed');
 	nowPlayingDockable.set(false);
 	setShuffle(false);
@@ -232,30 +265,86 @@ describe('PlayerBar stream boundaries', () => {
 		expect(playIdleStart).toHaveBeenCalledOnce();
 	});
 
-	it('a start that waits for the network shows the waiting transport, and a press goes to the start (#1288)', async () => {
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
-		const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+	it.each([
+		{ loaded: 'no take', load: () => {} },
+		{ loaded: 'a paused take', load: loadPausedTake }
+	])(
+		'with $loaded loaded, a start that waits for the network shows the waiting transport, and a press goes to the start (#1288, #1330)',
+		async ({ load }) => {
+			load();
+			holdAlbumStart('awaiting-network');
+			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+			component = mount(PlayerBar, { target });
+			await tick();
+
+			const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
+			expect(transport?.querySelector('.spinner')).not.toBeNull();
+			transport?.click();
+			expect(playIdleStart).toHaveBeenCalledOnce();
+		}
+	);
+
+	it.each([
+		{ notice: 'awaiting-network', loaded: 'no take', load: () => {} },
+		{ notice: 'gave-up-on-network', loaded: 'no take', load: () => {} },
+		{ notice: 'awaiting-network', loaded: 'a paused take', load: loadPausedTake }
+	] as const)(
+		'while an album header start waits ($notice) with $loaded loaded, the bar names its song and album with Pause, as the lock screen does (#1330)',
+		async ({ notice, load }) => {
+			useDesktopLayout();
+			load();
+			holdAlbumStart(notice);
+			component = mount(PlayerBar, { target });
+			await tick();
+
+			expect({
+				title: target.querySelector('.track-title')?.textContent,
+				detail: target.querySelector('.track-detail')?.textContent,
+				main: playButton().getAttribute('aria-label'),
+				timeReadouts: target.querySelectorAll('.timeline .time').length
+			}).toEqual({
+				title: WAITING_SONG.songTitle,
+				detail: WAITING_SONG.albumTitle,
+				main: TRANSPORT_PAUSE_LABEL,
+				timeReadouts: 0
+			});
+		}
+	);
+
+	it("a start waiting over a take paused partway shows none of that take's position, on the phone's progress line or the lock screen (#1330)", async () => {
+		const lockScreen = installLockScreen();
+		loadPausedTake();
 		component = mount(PlayerBar, { target });
+		audio.currentTime = 5;
+		audio.fire('loadedmetadata');
+		audio.fire('timeupdate');
+		await tick();
+		const positionShown = () => ({
+			progressLine: target.querySelector<HTMLElement>('.mobile-progress-fill')?.style.width,
+			lockScreen: lockScreen.positions.at(-1)
+		});
+		const overThePausedTake = positionShown();
+
+		holdAlbumStart('awaiting-network');
 		await tick();
 
-		expect(target.querySelector('.track-title')?.textContent).toBe(LIBRARY_QUEUE_LOADING_TITLE);
-		const transport = target.querySelector<HTMLButtonElement>('button[aria-label="Pause"]');
-		expect(transport?.querySelector('.spinner')).not.toBeNull();
-		transport?.click();
-		expect(playIdleStart).toHaveBeenCalledOnce();
+		expect({ overThePausedTake, whileTheStartWaits: positionShown() }).toEqual({
+			overThePausedTake: {
+				progressLine: '25%',
+				lockScreen: { duration: 20, playbackRate: 1, position: 5 }
+			},
+			whileTheStartWaits: { progressLine: '0%', lockScreen: null }
+		});
 	});
 
 	it('pausing a waiting album start leaves the album title with Play and no 0:00/0:00 (#1312)', async () => {
 		useDesktopLayout();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
+		holdAlbumStart('awaiting-network');
 		component = mount(PlayerBar, { target });
 		await tick();
 
 		playStartNotice.set('idle');
+		setPendingStartForTests(null);
 		await tick();
 
 		expect({
@@ -289,6 +378,36 @@ describe('PlayerBar stream boundaries', () => {
 
 		const readsPlay = { label: TRANSPORT_PLAY_LABEL, busy: 'false', spinner: false };
 		const readsBusyPause = { label: TRANSPORT_PAUSE_LABEL, busy: 'true', spinner: true };
+
+		it('reads Pause with its spinner for a Play pressed before the saved take arrived (#1330)', async () => {
+			playStartNotice.set('restoring');
+			const playIdleStart = vi.spyOn(playerStore, 'playIdleStart').mockResolvedValue();
+			component = mount(PlayerBar, { target });
+			await tick();
+			const whileItArrives = buttonFacts(playButton());
+
+			await clickAndSettle();
+
+			expect({ whileItArrives, pressGoesToTheStart: playIdleStart.mock.calls.length }).toEqual({
+				whileItArrives: readsBusyPause,
+				pressGoesToTheStart: 1
+			});
+		});
+
+		it('the timeline shows the restored position while the take still loads (#1330)', async () => {
+			useDesktopLayout();
+			const take = barTake();
+			audioPlayer.load(
+				{ ...take, generation: { ...take.generation, audio_duration_sec: 180 } },
+				{ autoplay: false, startAt: 73 }
+			);
+			component = mount(PlayerBar, { target });
+			await tick();
+
+			expect(
+				[...target.querySelectorAll('.timeline .time')].map((time) => time.textContent)
+			).toEqual(['1:13', '3:00']);
+		});
 
 		it('reads Play before any press, and Pause with its spinner after the first', async () => {
 			const transport = await mountRestoredTake();
@@ -358,16 +477,28 @@ describe('PlayerBar stream boundaries', () => {
 		);
 	});
 
-	it('the lock screen offers Pause while a start waits for the network, like the bar (#1288)', async () => {
-		const lockScreen = installLockScreen();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set('awaiting-network');
-		component = mount(PlayerBar, { target });
-		await tick();
+	it.each([
+		{
+			start: 'waits for the network, like the bar (#1288)',
+			notice: 'awaiting-network',
+			reads: 'playing'
+		},
+		{
+			start: 'was paused from the lock screen, like a paused take (#1330)',
+			notice: 'idle',
+			reads: 'paused'
+		}
+	] as const)(
+		'the lock screen reads $reads while an album start $start',
+		async ({ notice, reads }) => {
+			const lockScreen = installLockScreen();
+			holdAlbumStart(notice);
+			component = mount(PlayerBar, { target });
+			await tick();
 
-		expect(lockScreen.playbackState).toBe('playing');
-	});
+			expect(lockScreen.playbackState).toBe(reads);
+		}
+	);
 
 	it('idle Play copy follows an open album interior', async () => {
 		openCollection.set({ kind: 'album', id: 'a1' });
@@ -1273,7 +1404,6 @@ describe('PlayerBar while typing on the phone', () => {
 });
 
 describe('PlayerBar while a take stalls (#1234)', () => {
-	const STALL_LOOK_MS = 5000;
 	const PAST_THE_RECOVERY_DEADLINE_MS = 3 * 60 * 1000;
 
 	afterEach(() => {
@@ -1312,9 +1442,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		arrange: () => void = () => {}
 	): Promise<void> {
 		arrange();
-		openCollection.set({ kind: 'album', id: 'a1' });
-		albumList.set([albumItem({ share_slug: null, cover: null })]);
-		playStartNotice.set(notice);
+		holdAlbumStart(notice);
 		component = mount(PlayerBar, { target });
 		await tick();
 	}
@@ -1364,7 +1492,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 
 	it.each([
 		{ moment: 'while it buffers', wait: 0 },
-		{ moment: 'while a recovery reload runs', wait: STALL_LOOK_MS }
+		{ moment: 'while a recovery reload runs', wait: STALL_RECOVERY_MS }
 	])('offers Pause $moment, and Pause stops the recovery', async ({ wait }) => {
 		await stallWhilePlaying();
 		await vi.advanceTimersByTimeAsync(wait);
@@ -1426,7 +1554,7 @@ describe('PlayerBar while a take stalls (#1234)', () => {
 		{ moment: 'while it buffers', reach: () => vi.advanceTimersByTimeAsync(0) },
 		{
 			moment: 'while a recovery reload runs',
-			reach: () => vi.advanceTimersByTimeAsync(STALL_LOOK_MS)
+			reach: () => vi.advanceTimersByTimeAsync(STALL_RECOVERY_MS)
 		},
 		{ moment: 'while it waits for the network', reach: () => giveUpWhileOfflineAfterStall() }
 	])('the lock screen offers Pause $moment, like the bar', async ({ reach }) => {

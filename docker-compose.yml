@@ -55,7 +55,7 @@ services:
         condition: service_healthy
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-songmaker}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-songmaker}
-    entrypoint: ["uv", "run", "alembic", "upgrade", "head"]
+    entrypoint: ["uv", "run", "--no-sync", "--frozen", "--no-build", "alembic", "upgrade", "head"]
     restart: "no"
     logging: *service-logging
     cap_drop:

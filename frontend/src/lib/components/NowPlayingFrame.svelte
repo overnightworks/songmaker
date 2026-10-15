@@ -6,7 +6,8 @@
 		audioPlayer,
 		transportButtonFace,
 		transportButtonLabel,
-		transportIsBusy
+		transportIsBusy,
+		transportWaitingNotice
 	} from '$lib/services/audioPlayer.svelte';
 	import {
 		HITBOX_FREQUENT_PX,
@@ -36,6 +37,7 @@
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import { subscribeCompactLayout } from '$lib/utils/compact-layout';
 	import Icon from './Icon.svelte';
+	import TransportButtonIcon from './TransportButtonIcon.svelte';
 	import NowPlayingLyrics from './NowPlayingLyrics.svelte';
 
 	let {
@@ -139,6 +141,7 @@
 	const duration = $derived(audioPlayer.duration);
 	const transport = $derived(audioPlayer.transport);
 	const buttonFace = $derived(transportButtonFace(transport));
+	const waitingNotice = $derived(transportWaitingNotice(transport));
 	const progressPercent = $derived(
 		duration > 0 ? Math.max(0, Math.min(100, (currentTime / duration) * 100)) : 0
 	);
@@ -313,10 +316,7 @@
 							aria-label={transportButtonLabel(transport)}
 							aria-busy={transportIsBusy(transport)}
 						>
-							{#if buttonFace === 'spinner'}<span class="spinner"></span>{:else}<Icon
-									name={buttonFace}
-									size={26}
-								/>{/if}
+							<TransportButtonIcon face={buttonFace} size={26} />
 						</button>
 						<div class="transport-side after">
 							{#if onnext}
@@ -340,6 +340,7 @@
 							></span>
 						</div>
 					</div>
+					{#if waitingNotice}<p class="waiting-notice" role="status">{waitingNotice}</p>{/if}
 				{/if}
 			</section>
 
@@ -606,6 +607,12 @@
 		background: var(--text);
 		margin-top: -5px;
 	}
+	.waiting-notice {
+		margin: 0;
+		font-size: 0.8rem;
+		color: var(--text-muted);
+		text-align: center;
+	}
 	.transport {
 		align-self: stretch;
 		display: grid;
@@ -643,19 +650,6 @@
 		background: linear-gradient(135deg, var(--primary), var(--accent));
 		border-color: transparent;
 		color: #fff;
-	}
-	.spinner {
-		width: 26px;
-		height: 26px;
-		border: 2px solid currentColor;
-		border-right-color: transparent;
-		border-radius: 50%;
-		animation: spin 0.8s linear infinite;
-	}
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
 	}
 	.np-lyrics-col {
 		display: flex;

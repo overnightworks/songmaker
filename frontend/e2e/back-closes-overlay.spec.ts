@@ -1,7 +1,7 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
 	COLLECTION_MENU_LABEL,
-	collectionPlayLabel,
+	collectionActionLabel,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
@@ -22,7 +22,8 @@ import {
 	TAKE_DELETE_LABEL,
 	TAKE_DELETE_TITLE_TEMPLATE,
 	TAKE_OVERFLOW_LABEL,
-	TRANSPORT_PAUSE_LABEL
+	TRANSPORT_PAUSE_LABEL,
+	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_EXPAND_LABEL,
@@ -55,6 +56,8 @@ import {
 	seedVoiceDrafts,
 	type SeededPlaylist
 } from './seed';
+
+const PLAY_PLAYLIST_LABEL = collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist');
 
 const SETTINGS_SECTION = 'Voices';
 const SETTINGS_SECTION_HEADING = 'My Voices';
@@ -93,9 +96,7 @@ async function openRailDrawer(page: Page): Promise<void> {
 
 async function expandNowPlaying(page: Page, playlist: SeededPlaylist): Promise<void> {
 	const [playing] = playlist.songTitles;
-	await workspace(page)
-		.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
-		.click();
+	await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
 	await page
 		.getByRole('contentinfo')
 		.getByRole('button', { name: NOW_PLAYING_LABEL, exact: true })
@@ -1055,9 +1056,7 @@ test.describe('one Back right after a crossing out of a phone layer', () => {
 		test.skip(shellOf(testInfo) !== 'mobile', PHONE_LAYERS_ONLY);
 		const guard = new FlowGuard(page);
 		const { playlist, pages } = await openSeededPlaylist(page, request);
-		await workspace(page)
-			.getByRole('button', { name: collectionPlayLabel('playlist'), exact: true })
-			.click();
+		await workspace(page).getByRole('button', { name: PLAY_PLAYLIST_LABEL, exact: true }).click();
 		// Paused, so the seeded three-second take stays the playing song.
 		await page
 			.getByRole('contentinfo')
@@ -1224,7 +1223,10 @@ test.describe('Back closes the open overlay outside the library', () => {
 			await expect(sharePage.getByRole('heading', { name: library.albumTitle })).toBeVisible();
 			const shareAddress = sharePage.url();
 			await sharePage
-				.getByRole('button', { name: collectionPlayLabel('album'), exact: true })
+				.getByRole('button', {
+					name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+					exact: true
+				})
 				.click();
 			const openNowPlaying = sharePage.getByRole('button', {
 				name: NOW_PLAYING_LABEL,

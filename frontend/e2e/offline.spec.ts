@@ -12,6 +12,9 @@
 // by itself once the network is back (#1161), and the album header Play
 // pressed offline waits and starts the album then (#1288); both show the same
 // waiting transport from the tap (#1312), on the phone and the desktop alike.
+// While the album start waits, its header reads Pause, the bar and the lock
+// screen name its song, and the lock screen pauses and resumes it as it does a
+// take, with no blank moment once the network is back (#1330).
 //
 // The network is cut for real (`loseNetwork`): `setOffline` alone leaves an
 // already open event stream running, so the page's open loads are stopped
@@ -20,14 +23,13 @@
 
 import { expect, test, type Locator, type Page, type Route } from '@playwright/test';
 import {
-	collectionPlayLabel,
+	collectionActionLabel,
 	EDITOR_GENERATE_CANCEL_OFFLINE_LABEL,
 	EDITOR_GENERATE_LAST_SEEN_PROGRESS_LABEL,
 	EDITOR_GENERATE_MODE_LABELS,
 	EDITOR_GENERATE_RECONNECTING_LABEL,
 	EDITOR_GENERATE_TAKE_TEMPLATE,
 	EDITOR_GPU_OFFLINE_TITLE,
-	LIBRARY_QUEUE_LOADING_TITLE,
 	OFFLINE_STRIP_MESSAGE,
 	RESOURCE_EVENT_STREAM_PATH,
 	RESOURCE_SYNC_ERROR,
@@ -160,6 +162,83 @@ async function answerOnceAndDrop(route: Route): Promise<void> {
 		contentType: 'text/event-stream',
 		body: `data: ${JSON.stringify(job)}\n\n`
 	});
+}
+
+interface LockScreenMoment {
+	title: string | null;
+	state: MediaSessionPlaybackState;
+}
+
+interface LockScreenWindow {
+	lockScreen: { moments: LockScreenMoment[]; press: (action: MediaSessionAction) => void };
+}
+
+// A locked phone shows only the page's media session: the page writes down
+// every title and state it hands the session, and keeps the actions it
+// installs there so the flow can press them as the lock screen would.
+async function watchTheLockScreen(page: Page): Promise<void> {
+	await page.addInitScript(() => {
+		const session = navigator.mediaSession;
+		const prototype = Object.getPrototypeOf(session) as MediaSession;
+		const metadata = Object.getOwnPropertyDescriptor(prototype, 'metadata');
+		const state = Object.getOwnPropertyDescriptor(prototype, 'playbackState');
+		if (!metadata?.get || !metadata.set || !state?.get || !state.set)
+			throw new Error('The media session has no metadata or playbackState accessors');
+		const readMetadata = metadata.get;
+		const writeMetadata = metadata.set;
+		const readState = state.get;
+		const writeState = state.set;
+		const moments: LockScreenMoment[] = [];
+		const noteTheMoment = () =>
+			moments.push({
+				title: (readMetadata.call(session) as MediaMetadata | null)?.title ?? null,
+				state: readState.call(session) as MediaSessionPlaybackState
+			});
+		Object.defineProperty(session, 'metadata', {
+			configurable: true,
+			get: () => readMetadata.call(session),
+			set: (value: MediaMetadata | null) => {
+				writeMetadata.call(session, value);
+				noteTheMoment();
+			}
+		});
+		Object.defineProperty(session, 'playbackState', {
+			configurable: true,
+			get: () => readState.call(session),
+			set: (value: MediaSessionPlaybackState) => {
+				writeState.call(session, value);
+				noteTheMoment();
+			}
+		});
+		const actions = new Map<MediaSessionAction, MediaSessionActionHandler | null>();
+		const setActionHandler = session.setActionHandler.bind(session);
+		session.setActionHandler = (action, handler) => {
+			actions.set(action, handler);
+			setActionHandler(action, handler);
+		};
+		(window as unknown as LockScreenWindow).lockScreen = {
+			moments,
+			press: (action) => {
+				const handler = actions.get(action);
+				if (!handler) throw new Error(`The page installed no lock-screen ${action}`);
+				handler({ action });
+			}
+		};
+	});
+}
+
+function lockScreenMoments(page: Page): Promise<LockScreenMoment[]> {
+	return page.evaluate(() => (window as unknown as LockScreenWindow).lockScreen.moments);
+}
+
+async function lockScreenNow(page: Page): Promise<LockScreenMoment | undefined> {
+	return (await lockScreenMoments(page)).at(-1);
+}
+
+function pressOnTheLockScreen(page: Page, action: MediaSessionAction): Promise<void> {
+	return page.evaluate((pressed) => {
+		(window as unknown as LockScreenWindow).lockScreen.press(pressed);
+	}, action);
 }
 
 async function serverReturns(page: Page): Promise<void> {
@@ -367,46 +446,135 @@ test.describe('pressing the album header Play while the network is gone', () => 
 	// The takes must come over the network, not from the service worker's cache.
 	test.use({ serviceWorkers: 'block' });
 
-	test('waits in the bar and its transport with no toast and plays the album by itself once the network is back (#1288)', async ({
+	function headerStartControls(page: Page) {
+		const transport = page.getByRole('contentinfo');
+		return {
+			transport,
+			barPause: transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true }),
+			play: workspace(page).getByRole('button', {
+				name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+				exact: true
+			}),
+			headerPause: workspace(page).getByRole('button', {
+				name: collectionActionLabel(TRANSPORT_PAUSE_LABEL, 'album'),
+				exact: true
+			}),
+			songTakesRefused: () =>
+				page.waitForEvent('requestfailed', (request) =>
+					SONG_TAKES_PATH.test(new URL(request.url()).pathname)
+				)
+		};
+	}
+
+	test('waits in the bar, the header and the lock screen with no toast, pauses and resumes from the lock screen, and plays the album by itself once the network is back (#1288, #1330)', async ({
 		page,
 		context
 	}) => {
 		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
 		const library = readSeededLibrary();
 		const [firstTrack] = library.albumTracks;
-		const transport = page.getByRole('contentinfo');
-		const waiting = transport.getByText(LIBRARY_QUEUE_LOADING_TITLE, { exact: true });
-		const play = workspace(page).getByRole('button', {
-			name: collectionPlayLabel('album'),
-			exact: true
-		});
+		const { transport, barPause, play, headerPause, songTakesRefused } = headerStartControls(page);
+		const waitingOnTheLockScreen = { title: firstTrack.songTitle, state: 'playing' };
+		await watchTheLockScreen(page);
 
 		await page.goto(`/album/${library.albumId}`);
 		await expect(play).toBeVisible();
 		await loseNetwork(page, context);
 		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
-		const songTakesRefused = page.waitForEvent('requestfailed', (request) =>
-			SONG_TAKES_PATH.test(new URL(request.url()).pathname)
-		);
+		const firstRefusal = songTakesRefused();
 		await play.click();
-		await songTakesRefused;
+		await firstRefusal;
 
-		await expect(waiting).toBeVisible();
-		await expect(
-			transport
-				.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
-				.locator('.spinner')
-		).toBeVisible();
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(barPause.locator('.spinner')).toBeVisible();
+		await expect(headerPause).toHaveAttribute('aria-busy', 'true');
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
 		await expect(page.getByRole('alert')).toHaveCount(0);
+
+		await pressOnTheLockScreen(page, 'pause');
+		await expect
+			.poll(() => lockScreenNow(page))
+			.toEqual({ title: firstTrack.songTitle, state: 'paused' });
+		await expect(play).toBeVisible();
+		const refusedAgain = songTakesRefused();
+		await pressOnTheLockScreen(page, 'play');
+		await refusedAgain;
+		await expect(headerPause).toHaveAttribute('aria-busy', 'true');
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
+		const sinceTheResume = (await lockScreenMoments(page)).length;
 
 		await regainNetwork(page, context);
 
 		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
 		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(barPause).toBeVisible();
+		await expect(barPause.locator('.spinner')).toHaveCount(0);
+		await expect(headerPause).toBeVisible();
+		expect(
+			(await lockScreenMoments(page))
+				.slice(sinceTheResume)
+				.filter(
+					(moment) =>
+						moment.title !== waitingOnTheLockScreen.title ||
+						moment.state !== waitingOnTheLockScreen.state
+				)
+		).toEqual([]);
+		await expect(page.getByRole('alert')).toHaveCount(0);
+		guard.assertClean();
+	});
+
+	// The most common daily state: a take of another album is loaded and
+	// paused, here restored by the reload that opens this album.
+	test('with a paused take of another album loaded, waits in its place in the header, the bar and the lock screen, and plays the album once the network is back (#1330)', async ({
+		page,
+		context,
+		isMobile
+	}) => {
+		const guard = new FlowGuard(page, { losesNetworkOnPurpose: true });
+		const library = readSeededLibrary();
+		const [firstTrack] = library.albumTracks;
+		const loadedTitle = `${OFFLINE_SONG_TITLE} Loaded ${runMarker()}`;
+		await seedSongPhoneSong(library.songPhoneAlbumId, loadedTitle, 1, 1);
+		const { transport, barPause, play, headerPause, songTakesRefused } = headerStartControls(page);
+		const waitingOnTheLockScreen = { title: firstTrack.songTitle, state: 'playing' };
+		await watchTheLockScreen(page);
+
+		await page.goto(`/album/${library.songPhoneAlbumId}`);
+		await workspace(page)
+			.getByRole('button', { name: nameStartingWith(loadedTitle) })
+			.click();
+		if (isMobile) await page.getByRole('tab', { name: /Takes/ }).click();
+		await workspace(page)
+			.locator('.take-row')
+			.getByRole('button', { name: new RegExp(`^${TRANSPORT_PLAY_LABEL} v`) })
+			.click();
+		await expect(barPause.locator('.spinner')).toHaveCount(0);
+		await barPause.click();
 		await expect(
-			transport.getByRole('button', { name: TRANSPORT_PAUSE_LABEL, exact: true })
+			transport.getByRole('button', { name: TRANSPORT_PLAY_LABEL, exact: true })
 		).toBeVisible();
-		await expect(waiting).toHaveCount(0);
+		await page.goto(`/album/${library.albumId}`);
+		await expect(transport.getByText(loadedTitle, { exact: true })).toBeVisible();
+		await expect(play).toBeVisible();
+		await loseNetwork(page, context);
+		await expect(offlineStrip(page)).toBeVisible({ timeout: OFFLINE_NOTICE_MS });
+		const refusal = songTakesRefused();
+		await play.click();
+		await refusal;
+
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(transport.getByText(loadedTitle, { exact: true })).toHaveCount(0);
+		await expect(barPause.locator('.spinner')).toBeVisible();
+		await expect(headerPause).toHaveAttribute('aria-busy', 'true');
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
+
+		await regainNetwork(page, context);
+
+		await expect(offlineStrip(page)).toHaveCount(0, { timeout: BACK_ONLINE_MS });
+		await expect(transport.getByText(firstTrack.songTitle, { exact: true })).toBeVisible();
+		await expect(barPause.locator('.spinner')).toHaveCount(0);
+		await expect(headerPause).toBeVisible();
+		await expect.poll(() => lockScreenNow(page)).toEqual(waitingOnTheLockScreen);
 		await expect(page.getByRole('alert')).toHaveCount(0);
 		guard.assertClean();
 	});

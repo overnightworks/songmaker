@@ -87,6 +87,7 @@ import { playTake, playTakeAndShowNowPlaying } from '$lib/stores/player';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 import { playlistList, playlistLoad } from '$lib/stores/playlists';
 import TakesListHarness from './tests/TakesListHarness.svelte';
+import { shownTransportFace } from '$lib/test-utils/transport-face';
 
 function measuredTakeDefaults(): Partial<GenerationItem> {
 	return { generation_params: { audio_duration: 195 }, audio_duration_sec: 195 };
@@ -962,25 +963,35 @@ describe('TakesList', () => {
 	});
 
 	it.each([
-		['playing', 'Pause'],
-		['paused', 'Play']
-	] as const)('names the transport action for a %s take', async (status, label) => {
-		const currentSong = song(versionedSongDefaults());
-		audioPlayer.current = {
-			generation: currentSong.generations[0],
-			songId: currentSong.id,
-			songTitle: currentSong.title,
-			artist: '',
-			albumTitle: '',
-			lyrics: null
-		};
-		audioPlayer.status = status;
-		const { target } = await render({ song: currentSong });
-		const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
-		expect(button).not.toBeNull();
-		button?.click();
-		expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
-	});
+		{ status: 'playing', label: 'Pause', busy: 'false', face: 'pause' },
+		{ status: 'paused', label: 'Play', busy: 'false', face: 'play' },
+		{ status: 'buffering', label: 'Pause', busy: 'true', face: 'spinner' },
+		{ status: 'error', label: 'Retry', busy: 'false', face: 'refresh-cw' }
+	] as const)(
+		'names the transport action for a $status take and shows the face the bar shows (#1330)',
+		async ({ status, label, busy, face }) => {
+			const currentSong = song(versionedSongDefaults());
+			audioPlayer.current = {
+				generation: currentSong.generations[0],
+				songId: currentSong.id,
+				songTitle: currentSong.title,
+				artist: '',
+				albumTitle: '',
+				lyrics: null
+			};
+			audioPlayer.status = status;
+			const { target } = await render({ song: currentSong });
+			const button = target.querySelector<HTMLButtonElement>(`[aria-label="${label} v3 · take 3"]`);
+			expect({ busy: button?.getAttribute('aria-busy'), face: shownTransportFace(button) }).toEqual(
+				{
+					busy,
+					face
+				}
+			);
+			button?.click();
+			expect(playTake).toHaveBeenCalledWith(currentSong.generations[0], currentSong);
+		}
+	);
 
 	it.each(['ctrlKey', 'metaKey'])(
 		'selects through the play control with %s without playback',
