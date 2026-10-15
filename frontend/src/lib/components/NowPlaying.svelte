@@ -194,7 +194,7 @@
 		// advancing past a failed pick would silently skip the song instead.
 		const picked = await setPick(song.id, playingGeneration.id, true);
 		if (!picked) return;
-		await playNextSong();
+		playNextSong();
 	}
 
 	async function onCurateKeep(): Promise<void> {
@@ -203,7 +203,7 @@
 	}
 
 	function onCurateSkip(): void {
-		void playNextSong();
+		playNextSong();
 	}
 
 	function onCurateDone(): void {

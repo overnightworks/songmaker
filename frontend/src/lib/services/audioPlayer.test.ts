@@ -2577,6 +2577,44 @@ describe('swapCallbacks() / restoreCallbacks()', () => {
 		expect(appOnEnded).toHaveBeenCalled();
 		expect(shareOnEnded).not.toHaveBeenCalled();
 	});
+
+	it('tells only the owner it leaves that the player was taken, once the new owner holds it', () => {
+		const holdersWhenTaken: { owner: string; holder: AudioPlayerCallbacks }[] = [];
+		const ownedBy = (owner: string): AudioPlayerCallbacks =>
+			callbacks({
+				onPlayerTaken: () => holdersWhenTaken.push({ owner, holder: audioPlayer.currentCallbacks })
+			});
+		const app = ownedBy('app');
+		const share = ownedBy('share');
+		audioPlayer.swapCallbacks(app);
+
+		audioPlayer.swapCallbacks(share);
+		audioPlayer.restoreCallbacks(app);
+
+		expect(holdersWhenTaken).toEqual([
+			{ owner: 'app', holder: share },
+			{ owner: 'share', holder: app }
+		]);
+	});
+
+	it('ends a tenure only when the player changes hands, and never brings it back', () => {
+		const app = callbacks();
+		audioPlayer.swapCallbacks(app);
+		const appBefore = audioPlayer.tenure;
+
+		audioPlayer.swapCallbacks(app);
+		const keptBySwappingInTheSameOwner = !audioPlayer.changedHandsSince(appBefore);
+		const shareCallbacks = callbacks();
+		audioPlayer.swapCallbacks(shareCallbacks);
+		const share = audioPlayer.tenure;
+		audioPlayer.restoreCallbacks(app);
+
+		expect({
+			keptBySwappingInTheSameOwner,
+			appBeforeEnded: audioPlayer.changedHandsSince(appBefore),
+			shareEnded: audioPlayer.changedHandsSince(share)
+		}).toEqual({ keptBySwappingInTheSameOwner: true, appBeforeEnded: true, shareEnded: true });
+	});
 });
 
 describe('standby deck', () => {

@@ -5,8 +5,9 @@
 	import { historyLayerState } from '$lib/stores/layers';
 	import { focusFirstIn, handleFocusTrapKeydown } from '$lib/utils/focus-trap';
 	import LegalContent from '../LegalContent.svelte';
+	import LegalLinks, { type LegalSection } from '../LegalLinks.svelte';
 
-	const legalSection = historyLayerState<string | null>('shared-legal', null);
+	const legalSection = historyLayerState<LegalSection | null>('shared-legal', null);
 	let modal: HTMLDivElement | undefined = $state();
 
 	function closeLegal(): void {
@@ -28,21 +29,11 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<p class="powered">
-	<span class="footer-item">Powered by <a href="/">{APP_NAME}</a></span>
-	<span class="footer-item"
-		><button class="link-btn" onclick={() => ($legalSection = 'impressum')}>Impressum</button></span
-	>
-	<span class="footer-item"
-		><button class="link-btn" onclick={() => ($legalSection = 'datenschutz')}>Datenschutz</button
-		></span
-	>
-	<span class="footer-item">
-		<button class="link-btn" onclick={() => ($legalSection = 'nutzungsbedingungen')}
-			>Nutzungsbedingungen</button
-		>
-	</span>
-</p>
+<footer class="powered">
+	<LegalLinks onopen={(section) => ($legalSection = section)}>
+		{#snippet lead()}Powered by <a href="/">{APP_NAME}</a>{/snippet}
+	</LegalLinks>
+</footer>
 
 {#if $legalSection}
 	<div class="legal-overlay">
@@ -62,18 +53,10 @@
 
 <style>
 	.powered {
-		display: flex;
-		flex-wrap: wrap;
-		justify-content: center;
 		margin-top: 3rem;
 		padding-bottom: calc(var(--player-height, 88px) + 1rem);
 		font-size: 0.75rem;
 		color: var(--text-subtle, #888);
-	}
-
-	.footer-item:not(:first-child)::before {
-		content: '·';
-		margin: 0 0.35em;
 	}
 
 	.powered a {
@@ -84,21 +67,8 @@
 		background-clip: text;
 	}
 
-	.powered a:hover,
-	.powered .link-btn:hover {
+	.powered a:hover {
 		-webkit-text-fill-color: transparent;
-	}
-
-	.link-btn {
-		background: none;
-		border: none;
-		padding: 0;
-		font: inherit;
-		cursor: pointer;
-		color: var(--text-muted, #888);
-		background: linear-gradient(90deg, var(--primary), var(--accent));
-		-webkit-background-clip: text;
-		background-clip: text;
 	}
 
 	.legal-overlay {

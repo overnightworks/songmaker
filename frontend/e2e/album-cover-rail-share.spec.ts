@@ -38,6 +38,27 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	return (await response.json()) as T;
 }
 
+// A song of the album with one real take imported, as a share presents it.
+async function createSongWithTake(
+	page: Page,
+	albumId: string,
+	song: { title: string; lyrics: string }
+): Promise<{ song: CreatedResource; take: CreatedResource }> {
+	const created = await postJson<CreatedResource>(page, '/api/songs', {
+		...song,
+		album_id: albumId,
+		prompt: 'quiet test song'
+	});
+	const reimport = await page.request.post(`/api/songs/${created.id}/reimport`, {
+		headers: await csrfHeaders(page),
+		multipart: {
+			mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
+		}
+	});
+	expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
+	return { song: created, take: (await reimport.json()) as CreatedResource };
+}
+
 async function postCover(page: Page, albumId: string): Promise<void> {
 	const response = await page.request.post(`/api/albums/${albumId}/cover`, {
 		headers: await csrfHeaders(page),
@@ -108,20 +129,10 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 		artist: 'E2E Cover Artist'
 	});
 	try {
-		const song = await postJson<CreatedResource>(page, '/api/songs', {
+		const { song, take } = await createSongWithTake(page, album.id, {
 			title: `E2E Cover Song ${marker}`,
-			album_id: album.id,
-			lyrics: 'A cover belongs to this album.',
-			prompt: 'quiet test song'
+			lyrics: 'A cover belongs to this album.'
 		});
-		const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
-			headers: await csrfHeaders(page),
-			multipart: {
-				mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-			}
-		});
-		expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
-		const take = (await reimport.json()) as CreatedResource;
 		await postCover(page, album.id);
 
 		const [albumShare, songShare, takeShare] = await Promise.all([
@@ -148,13 +159,22 @@ test('a fresh album cover reaches wall, album header, rail, and every share page
 
 		const publicContext = await browser.newContext({ storageState: undefined });
 		try {
-			for (const share of [albumShare, songShare, takeShare]) {
+			const albumPage = await publicContext.newPage();
+			await albumPage.goto(albumShare.share_url);
+			await expect(albumPage.locator('.header-cover img')).toBeVisible();
+			await expect(albumPage.locator('.header-cover img')).toHaveAttribute(
+				'alt',
+				`Album ${albumTitle}`
+			);
+			await albumPage.close();
+			// A shared song or take opens as the player, its big cover the album's (#1391).
+			for (const share of [songShare, takeShare]) {
 				const publicPage = await publicContext.newPage();
 				await publicPage.goto(share.share_url);
-				await expect(publicPage.locator('.header-cover img')).toBeVisible();
-				await expect(publicPage.locator('.header-cover img')).toHaveAttribute(
-					'alt',
-					`Album ${albumTitle}`
+				await expect(publicPage.locator('.now-playing.page .cover-art img')).toBeVisible();
+				await expect(publicPage.locator('.now-playing.page .cover-art img')).toHaveAttribute(
+					'src',
+					/\/shared\/(song|gen)\/[^/]+\/album-cover\?/
 				);
 				await publicPage.close();
 			}
@@ -179,20 +199,10 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 		artist: 'E2E Cover Artist'
 	});
 	try {
-		const song = await postJson<CreatedResource>(page, '/api/songs', {
+		const { take } = await createSongWithTake(page, album.id, {
 			title: `E2E Shared Playlist Song ${marker}`,
-			album_id: album.id,
-			lyrics: 'A shared playlist cover should be current.',
-			prompt: 'quiet test song'
+			lyrics: 'A shared playlist cover should be current.'
 		});
-		const reimport = await page.request.post(`/api/songs/${song.id}/reimport`, {
-			headers: await csrfHeaders(page),
-			multipart: {
-				mp3: { name: 'take.mp3', mimeType: 'audio/mpeg', buffer: readFileSync(TAKE_FIXTURE) }
-			}
-		});
-		expect(reimport.ok(), `Take import failed: ${await reimport.text()}`).toBeTruthy();
-		const take = (await reimport.json()) as CreatedResource;
 		await postCover(page, album.id);
 		const playlist = await postJson<CreatedResource>(page, '/api/playlists', {
 			title: `E2E Shared Playlist ${marker}`
@@ -235,5 +245,69 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 		} finally {
 			await deleteOwnedAlbum(page, album.id);
 		}
+	}
+});
+
+// What a phone's browser leaves of its screen, upright and on its side, down
+// to an iPhone's in Safari with its toolbars (#1391). Each project drives them
+// with its own pointer: a touch phone, and a desktop window just as narrow.
+const PHONE_SCREENS = [
+	{ width: 390, height: 844 },
+	{ width: 390, height: 664 },
+	{ width: 375, height: 667 },
+	{ width: 360, height: 640 },
+	{ width: 844, height: 390 }
+];
+// The words keep room for a few lines however short the screen.
+const WORDS_MIN_HEIGHT_PX = 80;
+
+test('a shared song shows Play and its words in one screen at every phone height (#1391)', async ({
+	page,
+	browser,
+	isMobile
+}) => {
+	const marker = Date.now().toString(36);
+	const album = await postJson<CreatedResource>(page, '/api/albums', {
+		title: `E2E Phone Screens ${marker}`,
+		artist: 'E2E Cover Artist'
+	});
+	try {
+		const lines = Array.from({ length: 24 }, (_, index) => `Line ${index + 1} of the shared song`);
+		const { song } = await createSongWithTake(page, album.id, {
+			title: `E2E Phone Song ${marker}`,
+			lyrics: lines.join('\n')
+		});
+		const share = await postJson<ShareResult>(page, `/api/songs/${song.id}/share`, {});
+
+		const publicContext = await browser.newContext({
+			storageState: undefined,
+			isMobile: Boolean(isMobile),
+			hasTouch: Boolean(isMobile)
+		});
+		try {
+			const publicPage = await publicContext.newPage();
+			for (const screen of PHONE_SCREENS) {
+				await publicPage.setViewportSize(screen);
+				await publicPage.goto(share.share_url);
+				await expect(publicPage.locator('.now-playing.page .play-btn')).toBeVisible();
+				const play = await publicPage.locator('.now-playing.page .play-btn').boundingBox();
+				const words = await publicPage.locator('.now-playing.page .np-lyrics').boundingBox();
+				if (!play || !words) throw new Error(`No player at ${screen.width}x${screen.height}`);
+				const onScreen = (box: { y: number; height: number }) =>
+					box.y >= 0 && Math.round(box.y + box.height) <= screen.height;
+				expect(
+					{
+						play: onScreen(play),
+						words: onScreen(words),
+						wordsTall: words.height >= WORDS_MIN_HEIGHT_PX
+					},
+					`${screen.width}x${screen.height}: play ${JSON.stringify(play)}, words ${JSON.stringify(words)}`
+				).toEqual({ play: true, words: true, wordsTall: true });
+			}
+		} finally {
+			await publicContext.close();
+		}
+	} finally {
+		await deleteOwnedAlbum(page, album.id);
 	}
 });
