@@ -21,8 +21,8 @@
 // (resolveLegacySongQueryAddress in stores/libraryContext.test.ts).
 
 import { expect, test, type Page } from '@playwright/test';
-import { RESOURCE_SYNC_ERROR } from '../src/lib/constants';
-import { FlowGuard, nameStartingWith, workspace } from './helpers';
+import { RESOURCE_SYNC_ERROR, songEditorOpenLabel } from '../src/lib/constants';
+import { FlowGuard, workspace } from './helpers';
 import { readSeededLibrary } from './seed';
 
 /**
@@ -106,7 +106,7 @@ test('an album address opens cold, a track click is one step to the song address
 	// `(library)` route group's own layout keeps LibraryWorkspace standing
 	// across it (issue #276), so the editor no longer remounts on the way
 	// there — see the request-budget note on ALBUM_ADDRESS_FLOW_API_REQUEST_BUDGET.
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
 	await expect(page).toHaveURL(songAddress);
 	await expectWorkspaceStanding(page);
 

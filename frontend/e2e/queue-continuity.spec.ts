@@ -16,7 +16,8 @@ import {
 	SHUFFLE_SCOPE_LIBRARY,
 	TRANSPORT_PAUSE_LABEL,
 	TRANSPORT_PLAY_LABEL,
-	TRANSPORT_RETRY_LABEL
+	TRANSPORT_RETRY_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_QUEUE_TAB,
@@ -550,11 +551,7 @@ test.describe('on a fresh account', () => {
 		const surface = workspace(page);
 
 		await page.goto(`/album/${unpicked.albumId}`);
-		await surface
-			.locator('.item-row')
-			.filter({ hasText: first.songTitle })
-			.getByRole('button')
-			.click();
+		await surface.getByRole('button', { name: songEditorOpenLabel(first.songTitle) }).click();
 		if (shellOf(testInfo) === 'mobile') await surface.getByRole('tab', { name: /Takes/ }).click();
 		const take = surface.locator('.take-row');
 		await expect(take).toHaveCount(1);

@@ -42,7 +42,8 @@ import {
 	NOW_PLAYING_CLOSE,
 	openNowPlayingLabel,
 	RAIL_LIBRARY_LABEL,
-	TRANSPORT_PLAY_LABEL
+	TRANSPORT_PLAY_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_RIGHT_PANEL_LABEL,
@@ -134,7 +135,7 @@ async function openSongWithAnUnsavedDraft(
 	const lyrics = page.getByRole('textbox', { name: /^Lyrics/ });
 	await page.goto(`/album/${albumId}`);
 	await workspace(page)
-		.getByRole('button', { name: nameStartingWith(title) })
+		.getByRole('button', { name: songEditorOpenLabel(title) })
 		.click();
 	await expect(songHeading).toBeVisible();
 	expectSongAddressStands(page, albumId, title);
@@ -309,7 +310,7 @@ test.describe('song page at phone width', () => {
 		const takesTab = page.getByRole('tab', { name: /^Takes/ });
 		const openFromAlbum = async (title: string) => {
 			await workspace(page)
-				.getByRole('button', { name: nameStartingWith(title) })
+				.getByRole('button', { name: songEditorOpenLabel(title) })
 				.click();
 			await expect(page.getByRole('heading', { name: title })).toBeVisible();
 			expectSongAddressStands(page, library.songPhoneAlbumId, title);
@@ -513,7 +514,7 @@ const NOW_PLAYING_ORIGINS: {
 			const playing = library.pickedSongTitle;
 			await page.goto(`/album/${library.albumId}`);
 			await workspace(page)
-				.getByRole('button', { name: nameStartingWith(playing) })
+				.getByRole('button', { name: songEditorOpenLabel(playing) })
 				.click();
 			const origin = page.getByRole('heading', { name: playing });
 			await expect(origin).toBeVisible();

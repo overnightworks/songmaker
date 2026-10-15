@@ -9,7 +9,6 @@ import {
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
-	PLAYLIST_ENTRY_OPEN_SONG_LABEL,
 	playlistEntryOverflowLabel,
 	RAIL_DRAWER_LABEL,
 	RAIL_DRAWER_OPEN_LABEL,
@@ -23,7 +22,8 @@ import {
 	TAKE_DELETE_TITLE_TEMPLATE,
 	TAKE_OVERFLOW_LABEL,
 	TRANSPORT_PAUSE_LABEL,
-	TRANSPORT_PLAY_LABEL
+	TRANSPORT_PLAY_LABEL,
+	songEditorOpenLabel
 } from '../src/lib/constants';
 import {
 	NOW_PLAYING_EXPAND_LABEL,
@@ -127,13 +127,15 @@ async function openEntryMenu(page: Page, playlist: SeededPlaylist): Promise<void
 	await expect(workspace(page).getByRole('menu')).toBeVisible();
 }
 
-async function openSongFromEntryMenu(page: Page): Promise<void> {
-	await workspace(page).getByRole('menuitem', { name: PLAYLIST_ENTRY_OPEN_SONG_LABEL }).click();
+// The entry's ✎ is the one way from a playlist row to its song (#1383).
+async function openSongFromEntryPencil(page: Page, playlist: SeededPlaylist): Promise<void> {
+	await workspace(page)
+		.getByRole('button', { name: songEditorOpenLabel(firstSong(playlist)) })
+		.click();
 }
 
 async function openSongsTakes(page: Page, playlist: SeededPlaylist): Promise<Locator> {
-	await openEntryMenu(page, playlist);
-	await openSongFromEntryMenu(page);
+	await openSongFromEntryPencil(page, playlist);
 	await expectSongStands(page, 'mobile', firstSong(playlist));
 	await page.getByRole('tab', { name: /Takes/ }).click();
 	return page.getByRole('tabpanel');
@@ -176,8 +178,7 @@ async function pressEscape(page: Page): Promise<void> {
 }
 
 async function openSong(page: Page, shell: Shell, playlist: SeededPlaylist): Promise<void> {
-	await openEntryMenu(page, playlist);
-	await openSongFromEntryMenu(page);
+	await openSongFromEntryPencil(page, playlist);
 	await expectSongStands(page, shell, firstSong(playlist));
 }
 
@@ -300,8 +301,7 @@ function songMenuRow(shell: Shell): OverlayRow {
 		name: `Back closes the song menu ${shell === 'mobile' ? 'from the phone app bar' : 'on the desktop'} and keeps the song`,
 		shell,
 		open: async (page, playlist) => {
-			await openEntryMenu(page, playlist);
-			await openSongFromEntryMenu(page);
+			await openSongFromEntryPencil(page, playlist);
 			await expectSongStands(page, shell, firstSong(playlist));
 			await songBar(page, shell).getByRole('button', { name: SONG_MENU_LABEL }).click();
 			await expect(page.getByRole('dialog', { name: SONG_MENU_LABEL })).toBeVisible();
@@ -429,10 +429,10 @@ const OVERLAY_ROWS: OverlayRow[] = [
 		afterwards: backReaches('wall')
 	},
 	{
-		name: 'a playlist entry menu item that opens the song leaves one Back to the playlist',
+		name: "a playlist entry's ✎ tapped while its menu is open leaves one Back to the playlist",
 		shell: 'mobile',
 		open: openEntryMenu,
-		leave: openSongFromEntryMenu,
+		leave: openSongFromEntryPencil,
 		expectLeft: async (page, _pages, playlist) => {
 			await expectSongStands(page, 'mobile', firstSong(playlist));
 		},
@@ -773,7 +773,7 @@ test.describe('Back from Settings onto a page opened over another of its kind', 
 		const [song, nextSong] = readSeededLibrary().albumTracks;
 		await page.goto(`/album/${readSeededLibrary().albumId}`);
 		await workspace(page)
-			.getByRole('button', { name: nameStartingWith(song.songTitle) })
+			.getByRole('button', { name: songEditorOpenLabel(song.songTitle) })
 			.click();
 		await expectSongStands(page, shell, song.songTitle);
 		const songAddress = page.url();
@@ -880,7 +880,7 @@ test('two Backs in one task from Settings over a song show the album at its addr
 	await wallTiles(page).locator('.wall-tile-body').filter({ hasText: library.albumTitle }).click();
 	await expect(album).toBeVisible();
 	const albumAddress = page.url();
-	await surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) }).click();
+	await surface.getByRole('button', { name: songEditorOpenLabel(library.pickedSongTitle) }).click();
 	await expect(song).toBeVisible();
 	await openVoicesSettings(page, shell);
 
@@ -933,7 +933,9 @@ test('one Back right after a song opens from its album returns to the album', as
 	const song = songBar(page, shellOf(testInfo)).getByRole('heading', {
 		name: library.pickedSongTitle
 	});
-	const songRow = surface.getByRole('button', { name: nameStartingWith(library.pickedSongTitle) });
+	const songRow = surface.getByRole('button', {
+		name: songEditorOpenLabel(library.pickedSongTitle)
+	});
 
 	for (let open = 1; open <= SONG_OPENS; open += 1) {
 		await songRow.click();
@@ -982,7 +984,7 @@ for (const gapMs of [5, 20]) {
 		await expect(album).toBeVisible();
 		const albumAddress = page.url();
 		const songRow = surface.getByRole('button', {
-			name: nameStartingWith(library.pickedSongTitle)
+			name: songEditorOpenLabel(library.pickedSongTitle)
 		});
 
 		for (let tap = 1; tap <= MENU_TAPS_AFTER_SONG; tap += 1) {
