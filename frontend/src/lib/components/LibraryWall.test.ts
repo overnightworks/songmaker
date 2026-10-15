@@ -451,6 +451,23 @@ describe('the Playlists page wall', () => {
 		expect(pressedOrder(root)).toEqual(['A–Z']);
 	});
 
+	it('states no count in its head until the playlists have loaded, whichever the library holds meanwhile', async () => {
+		let deliver: (items: unknown[]) => void = () => undefined;
+		fetchPlaylists.mockReturnValueOnce(new Promise((resolve) => (deliver = resolve)));
+		playlistLoad.set({ status: 'idle', error: null });
+		const nightDrive = playlist({ id: 'p-night', title: 'Night drive', share_slug: null });
+		playlistList.set([nightDrive]);
+		const root = await render('playlists');
+		const heading = () => root.querySelector('.wall-titlebar h1');
+
+		expect(heading()?.getAttribute('aria-label')).toBe('Playlists');
+		expect(heading()?.textContent?.trim()).toBe('Playlists');
+
+		deliver([nightDrive, playlist({ id: 'p-alpha', title: 'Alpha mix', share_slug: null })]);
+
+		await vi.waitFor(() => expect(heading()?.getAttribute('aria-label')).toBe('Playlists · 2'));
+	});
+
 	it('sorts by the one switch the Library uses, which this device remembers for both', async () => {
 		seedPlaylists();
 		fetchLibraryListen.mockResolvedValue({

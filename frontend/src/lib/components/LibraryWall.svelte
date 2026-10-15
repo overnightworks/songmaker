@@ -96,6 +96,10 @@
 	const loadStatuses = $derived(
 		kind === 'library' ? [browseState.status, playlistStatus.status] : [playlistStatus.status]
 	);
+	// The Playlists head states how many there are, which only the loaded list
+	// knows: until it has loaded, the library holds none yet after a reload, or
+	// only the playlist an address opened.
+	const playlistCount = $derived(playlistStatus.status === 'ready' ? playlists.length : undefined);
 
 	let browseEl = $state<HTMLElement | null>(null);
 	let newMenu: MenuPopover | undefined = $state();
@@ -229,8 +233,14 @@
 <div class="library-wall">
 	{#if kind === 'playlists'}
 		<div class="wall-titlebar playlists-head">
-			<h1 class="wall-title" aria-label={playlistsHeadingLabel(wallItems.length)}>
-				{PLAYLISTS_PAGE_LABEL} <span class="wall-count">{wallItems.length}</span>
+			<h1
+				class="wall-title"
+				aria-label={playlistCount === undefined
+					? PLAYLISTS_PAGE_LABEL
+					: playlistsHeadingLabel(playlistCount)}
+			>
+				{PLAYLISTS_PAGE_LABEL}
+				{#if playlistCount !== undefined}<span class="wall-count">{playlistCount}</span>{/if}
 			</h1>
 			{@render orderSwitch()}
 			{@render newMenuButton()}
