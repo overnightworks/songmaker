@@ -4,7 +4,7 @@ import {
 	makeSong as song
 } from '$lib/test-utils/factories';
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { get } from 'svelte/store';
 
 import type { CoverSuggestionsResponse } from '$lib/api/types';
@@ -199,12 +199,12 @@ function requireElement<T extends Element>(root: ParentNode, selector: string): 
 	return element;
 }
 
+function songsPage(items: ReturnType<typeof song>[]) {
+	return { items, total: items.length, offset: 0, limit: 200, has_more: false };
+}
+
 describe('AlbumDetailView songs that could not load', () => {
 	const ALBUM_SONGS_FAILURE = 'Failed to load songs';
-
-	function songsPage(items: ReturnType<typeof song>[]) {
-		return { items, total: items.length, offset: 0, limit: 200, has_more: false };
-	}
 
 	function retryButton(target: HTMLElement): HTMLButtonElement | undefined {
 		return Array.from(target.querySelectorAll('button')).find(
@@ -290,6 +290,21 @@ describe('AlbumDetailView header', () => {
 				/shuffle/i.test(accessibleName(button))
 			)
 		).toEqual([]);
+	});
+
+	it("shows the album's song count while its songs load", async () => {
+		albumList.set([album({ id: 'a-local', title: 'Night Drive', song_count: 5 })]);
+		songList.set([]);
+		let answerSongs: (page: ReturnType<typeof songsPage>) => void = () => {};
+		vi.mocked(fetchSongs).mockReturnValueOnce(new Promise((resolve) => (answerSongs = resolve)));
+		const songsLoaded = loadSongsForAlbum('a-local');
+		onTestFinished(async () => {
+			answerSongs(songsPage([]));
+			await songsLoaded;
+		});
+		const target = await renderDetail();
+
+		expect(requireElement(target, '.collection-header .header-count').textContent).toBe('5 songs');
 	});
 
 	it('starts this album in order from its play circle', async () => {

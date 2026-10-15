@@ -135,9 +135,8 @@ SvelteKit single-page app. All state in Svelte stores.
 **Ruled, not yet built (#1354).** The picture and the 41 rules the operator
 ruled on 15.10.2026 stand in state (i) of `docs/design/navigation.html`. They
 overtake the phone shell (the drawer, and "Back closes the open layer
-first"), the library wall and its sort, the `CollectionHeader`'s
-`Breadcrumb` and Shuffle, and the `PlayerBar` described below. Until #1354's
-slices land, this section describes what runs.
+first"), the library wall and its sort, and the `PlayerBar` described
+below. Until #1354's slices land, this section describes what runs.
 
 The app shell is one navigation, not modes. A left `Rail` (264px, inline on
 wide layouts, behind a drawer with a 46px trigger strip on ≤768px or any

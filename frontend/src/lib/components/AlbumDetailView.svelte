@@ -305,7 +305,7 @@
 			{artFill}
 			onplay={currentAlbumId && albumHasTakes ? () => playAlbum(currentAlbumId) : null}
 			meta={albumMeta}
-			songCount={albumSongs.length}
+			songCount={albumLoad === 'idle' ? albumSongs.length : selectedAlbum.song_count}
 			isShared={selectedAlbum.is_shared}
 			shareSlug={selectedAlbum.share_slug}
 			onshare={onAlbumShareEnable}
