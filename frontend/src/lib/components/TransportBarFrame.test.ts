@@ -1,8 +1,10 @@
 import { createRawSnippet, mount, tick, unmount } from 'svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { formatTime } from '$lib/utils/format';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import { laidOutSeekLine, pointerOnSeekLine, shownSeekTime } from '$lib/test-utils/seek-line';
 import TransportBarFrame from './TransportBarFrame.svelte';
+import transportBarFrameSource from './TransportBarFrame.svelte?raw';
 
 let component: ReturnType<typeof mount> | undefined;
 
@@ -10,6 +12,7 @@ afterEach(async () => {
 	if (component) await unmount(component);
 	component = undefined;
 	document.body.replaceChildren();
+	clearComponentStyles();
 	vi.restoreAllMocks();
 });
 
@@ -78,6 +81,22 @@ describe('TransportBarFrame seek line (#1382)', () => {
 		expect({ whileDragging, seeks: onSeek.mock.calls }).toEqual({
 			whileDragging: { shown: '1:12', seeks: 0 },
 			seeks: [[72]]
+		});
+	});
+});
+
+describe('TransportBarFrame play button (#924)', () => {
+	it('paints Play in the action colour, --accent, with the ink that reads on it', async () => {
+		const target = await mountDesktopFrame({ takeIsCurrent: true });
+		const play = target.querySelector<HTMLElement>('.play-btn');
+		if (!play) throw new Error('Expected the play button');
+
+		injectComponentStyles(transportBarFrameSource, 'TransportBarFrame.svelte', play);
+		const style = getComputedStyle(play);
+
+		expect({ fill: style.background, ink: style.color }).toEqual({
+			fill: 'var(--accent)',
+			ink: 'var(--on-accent)'
 		});
 	});
 });

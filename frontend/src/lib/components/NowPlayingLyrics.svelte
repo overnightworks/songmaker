@@ -24,9 +24,9 @@
 
 	let container: HTMLDivElement | undefined = $state();
 
-	// Sub-pixel rounding leaves a fraction of a pixel unscrolled at the very
-	// end; anything under this counts as "the reader has seen the last line".
-	const SCROLL_END_TOLERANCE_PX = 1;
+	// Sub-pixel rounding stops a scroll a fraction of a pixel short of where
+	// it was headed; anything under this counts as having arrived.
+	const SCROLL_ROUNDING_PX = 1;
 	// The faded strip at the bottom edge; the line that follows the audio is
 	// kept above it, so a synced line is never read half-transparent.
 	const LYRICS_FADE_PX = 40;
@@ -73,12 +73,12 @@
 	const showFollow = $derived(alignedLines !== null && !following);
 
 	function canScroll(el: HTMLElement): boolean {
-		return el.scrollHeight - el.clientHeight > SCROLL_END_TOLERANCE_PX;
+		return el.scrollHeight - el.clientHeight > SCROLL_ROUNDING_PX;
 	}
 
 	function overflowsBelow(el: HTMLElement | undefined): boolean {
 		if (!el) return false;
-		return el.scrollHeight - el.clientHeight - el.scrollTop > SCROLL_END_TOLERANCE_PX;
+		return el.scrollHeight - el.clientHeight - el.scrollTop > SCROLL_ROUNDING_PX;
 	}
 
 	// The lyrics box is only as tall as the column allows — in the 400px docked
@@ -108,10 +108,43 @@
 		return () => observer.disconnect();
 	});
 
-	// Only wheel, touch and keys mean the reader: the box's own scrolls fire
-	// none of them, so following never pauses itself.
+	// Where the box last sent itself to the sung line: from where it set out
+	// to where it was headed. A smooth scroll passes every position between
+	// the two; once it arrives, only the arrival is still its own.
+	let ownScroll: { from: number; to: number } | null = null;
+
 	function pauseFollowing(): void {
 		if (alignedLines && container && canScroll(container)) following = false;
+	}
+
+	// A box that grew since clamps its scroll to its new end, and that clamp
+	// is still the box's own scroll rather than the reader's.
+	function clampToScrollRange(el: HTMLElement, top: number): number {
+		return Math.max(0, Math.min(top, el.scrollHeight - el.clientHeight));
+	}
+
+	// Wheel, touch and keys name the reader before the box even moves, but
+	// a dragged scrollbar fires none of them: a scroll that lands anywhere the
+	// box did not send itself is the reader's too.
+	function followOrPauseAt(el: HTMLElement): void {
+		if (!ownScroll) {
+			pauseFollowing();
+			return;
+		}
+		const from = clampToScrollRange(el, ownScroll.from);
+		const to = clampToScrollRange(el, ownScroll.to);
+		const position = el.scrollTop;
+		const outsideOwnWay =
+			position < Math.min(from, to) - SCROLL_ROUNDING_PX ||
+			position > Math.max(from, to) + SCROLL_ROUNDING_PX;
+		if (outsideOwnWay) pauseFollowing();
+		else if (Math.abs(position - to) <= SCROLL_ROUNDING_PX) ownScroll = { from: to, to };
+	}
+
+	function onScroll(): void {
+		if (!container) return;
+		moreBelow = overflowsBelow(container);
+		if (following) followOrPauseAt(container);
 	}
 
 	function pauseOnScrollKey(event: KeyboardEvent): void {
@@ -127,7 +160,9 @@
 		let offset = 0;
 		if (row.top < view.top) offset = row.top - view.top;
 		else if (row.bottom > readableBottom) offset = row.bottom - readableBottom;
-		if (offset !== 0) box.scrollBy({ top: offset, behavior: preferredScrollBehavior() });
+		if (offset === 0) return;
+		ownScroll = { from: box.scrollTop, to: box.scrollTop + offset };
+		box.scrollBy({ top: offset, behavior: preferredScrollBehavior() });
 	}
 
 	$effect(() => {
@@ -148,7 +183,7 @@
 			style:--lyrics-fade="{LYRICS_FADE_PX}px"
 			role="presentation"
 			bind:this={container}
-			onscroll={() => (moreBelow = overflowsBelow(container))}
+			onscroll={onScroll}
 			onwheel={pauseFollowing}
 			ontouchmove={pauseFollowing}
 			onkeydown={pauseOnScrollKey}
@@ -247,10 +282,10 @@
 		align-items: center;
 		gap: 0.3rem;
 		padding: 0.3rem 0.8rem;
-		border: 1px solid var(--action);
+		border: 1px solid var(--accent);
 		border-radius: var(--btn-radius-pill);
 		background: var(--surface);
-		color: var(--action);
+		color: var(--accent);
 		font-family: var(--font-display);
 		font-size: var(--label-font-size);
 		letter-spacing: var(--btn-letter-spacing);

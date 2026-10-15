@@ -13,6 +13,11 @@
 
 	let { currentTime, duration, formatTime, onSeek, size }: Props = $props();
 
+	// A key press moves the song far enough to hear the difference: an arrow
+	// by a few seconds, a page key by about a verse.
+	const KEY_STEP_SECONDS = 5;
+	const PAGE_STEP_SECONDS = 30;
+
 	let band: HTMLDivElement | undefined = $state();
 	// The pointer that holds the line, and where it would land. The song
 	// itself only moves on release, so dragging never makes it stutter.
@@ -60,8 +65,38 @@
 		dragRatio = null;
 	}
 
-	// The range input stays the keyboard's and the screen reader's way in:
-	// arrows, Home and End step it, and each step seeks at once.
+	function keyLanding(key: string): number | null {
+		switch (key) {
+			case 'ArrowRight':
+			case 'ArrowUp':
+				return currentTime + KEY_STEP_SECONDS;
+			case 'ArrowLeft':
+			case 'ArrowDown':
+				return currentTime - KEY_STEP_SECONDS;
+			case 'PageUp':
+				return currentTime + PAGE_STEP_SECONDS;
+			case 'PageDown':
+				return currentTime - PAGE_STEP_SECONDS;
+			case 'Home':
+				return 0;
+			case 'End':
+				return duration;
+			default:
+				return null;
+		}
+	}
+
+	// The range input stays the keyboard's and the screen reader's way in.
+	// Keys step from where the song is rather than from the range's rounded
+	// value, and each step seeks at once.
+	function seekFromKey(e: KeyboardEvent): void {
+		const landing = keyLanding(e.key);
+		if (landing === null) return;
+		e.preventDefault();
+		onSeek(Math.max(0, Math.min(duration, landing)));
+	}
+
+	// A screen reader's swipe steps the range itself, by the same arrow step.
 	function seekFromInput(e: Event): void {
 		onSeek(Number((e.currentTarget as HTMLInputElement).value));
 	}
@@ -84,8 +119,9 @@
 		type="range"
 		min="0"
 		max={duration || 0}
-		step="0.1"
+		step={KEY_STEP_SECONDS}
 		value={seekable ? currentTime : 0}
+		onkeydown={seekFromKey}
 		oninput={seekFromInput}
 		disabled={!seekable}
 		aria-label={SEEK_PLAYBACK_LABEL}
@@ -149,7 +185,7 @@
 		display: block;
 		width: calc(var(--seek-ratio) * 100%);
 		height: 100%;
-		background: var(--action);
+		background: var(--accent);
 	}
 	.seek-knob {
 		position: absolute;

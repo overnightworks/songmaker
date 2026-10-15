@@ -64,6 +64,8 @@ import {
 	setPointer
 } from '$lib/test-utils/hitbox';
 import { laidOutSeekLine, pointerOnSeekLine } from '$lib/test-utils/seek-line';
+import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
+import nowPlayingFrameSource from './NowPlayingFrame.svelte?raw';
 
 // setPick/setKeep stay mocked so a curation click asserts the call it makes,
 // not the network + song-refresh chain behind it — takeActions.test.ts and
@@ -172,6 +174,7 @@ afterEach(async () => {
 	vi.restoreAllMocks();
 	document.body.replaceChildren();
 	clearHitboxStyles();
+	clearComponentStyles();
 	document.documentElement.dataset.pointer = '';
 	audioPlayer.current = null;
 	audioPlayer.destroy();
@@ -443,6 +446,20 @@ describe('NowPlaying', () => {
 			}).toEqual({ named, busy: String(busy), spinner: busy });
 		}
 	);
+
+	it('paints its play button in the action colour, --accent, as the bar does (#924)', async () => {
+		await renderSurface(info());
+		const play = target.querySelector<HTMLElement>('.transport .play-btn');
+		if (!play) throw new Error('Expected the play button');
+
+		injectComponentStyles(nowPlayingFrameSource, 'NowPlayingFrame.svelte', play);
+		const style = getComputedStyle(play);
+
+		expect({ fill: style.background, ink: style.color }).toEqual({
+			fill: 'var(--accent)',
+			ink: 'var(--on-accent)'
+		});
+	});
 
 	it.each([
 		{ transport: 'waiting-for-network', words: PLAYER_WAITING_FOR_NETWORK },

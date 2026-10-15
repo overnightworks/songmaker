@@ -415,8 +415,8 @@
 		height: 62px;
 		border-radius: 50%;
 		border: none;
-		background: var(--action);
-		color: var(--on-action);
+		background: var(--accent);
+		color: var(--on-accent);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -433,7 +433,7 @@
 		justify-content: center;
 	}
 	.play-btn:hover:not(.errored) {
-		background: color-mix(in srgb, var(--action) 82%, var(--text));
+		background: color-mix(in srgb, var(--accent) 82%, var(--text));
 	}
 	.play-btn.errored {
 		border: 2px solid #d34;
@@ -449,7 +449,7 @@
 		background-clip: content-box, border-box;
 		background-image:
 			linear-gradient(transparent, transparent),
-			conic-gradient(var(--on-action), transparent, var(--on-action));
+			conic-gradient(var(--on-accent), transparent, var(--on-accent));
 		animation: spin 0.8s linear infinite;
 	}
 	@keyframes spin {

@@ -598,15 +598,15 @@
 		height: 64px;
 		border-radius: 50%;
 		border: none;
-		background: var(--action);
-		color: var(--on-action);
+		background: var(--accent);
+		color: var(--on-accent);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		cursor: pointer;
 	}
 	.play-btn:hover {
-		background: color-mix(in srgb, var(--action) 82%, var(--text));
+		background: color-mix(in srgb, var(--accent) 82%, var(--text));
 	}
 	.np-lyrics-col {
 		display: flex;
