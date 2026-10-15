@@ -10,9 +10,10 @@ import {
 	RAIL_DRAWER_OPEN_LABEL,
 	RAIL_NAV_LABEL,
 	RAIL_PLAYLISTS_LABEL,
-	RAIL_PLAYLISTS_NAV_LABEL
+	RAIL_PLAYLISTS_NAV_LABEL,
+	RAIL_SEARCH_CLEAR_LABEL
 } from '../src/lib/constants';
-import { openLibraryWall } from './helpers';
+import { openPlaylistsPage } from './helpers';
 import { BASE_URL } from './seed';
 
 const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -36,6 +37,16 @@ async function postJson<T>(page: Page, url: string, data: unknown): Promise<T> {
 	const response = await page.request.post(url, { headers: await csrfHeaders(page), data });
 	expect(response.ok(), `POST ${url} failed: ${await response.text()}`).toBeTruthy();
 	return (await response.json()) as T;
+}
+
+// Reaching the Playlists page through search leaves its query in the rail's
+// field, and the rail's groups hidden behind it.
+async function showRailGroupsAfterPageSearch(page: Page, isMobile: boolean): Promise<void> {
+	if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+	await page
+		.getByRole('navigation', { name: RAIL_NAV_LABEL })
+		.getByRole('button', { name: RAIL_SEARCH_CLEAR_LABEL })
+		.click();
 }
 
 async function deleteOwnedPlaylist(page: Page, playlistId: string): Promise<void> {
@@ -115,7 +126,7 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			}
 		});
 
-		await page.goto('/');
+		await page.goto('/playlists');
 		const wallPlaylistTile = page
 			.locator('.library-wall .tile-grid')
 			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true });
@@ -164,12 +175,12 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=detail`)
 		);
 
-		await openLibraryWall(page, isMobile ? 'mobile' : 'desktop');
+		await openPlaylistsPage(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.tile-cover img')).toHaveAttribute(
 			'src',
 			new RegExp(`/api/playlists/${playlist.id}/cover\\?variant=card`)
 		);
-		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		await showRailGroupsAfterPageSearch(page, isMobile);
 		const refreshedRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
@@ -210,9 +221,9 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 			4
 		);
 
-		await openLibraryWall(page, isMobile ? 'mobile' : 'desktop');
+		await openPlaylistsPage(page, isMobile ? 'mobile' : 'desktop');
 		await expect(wallPlaylistTile.locator('.playlist-cover-cell')).toHaveCount(4);
-		if (isMobile) await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
+		await showRailGroupsAfterPageSearch(page, isMobile);
 		const restoredRail = isMobile
 			? page
 					.getByRole('dialog', { name: RAIL_DRAWER_LABEL })
@@ -236,5 +247,38 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		} finally {
 			await deleteOwnedAlbum(page, album.id);
 		}
+	}
+});
+
+// defect:#1091: the wall sized its covers '100%', so the initials came out a
+// fraction of a pixel. They keep the 32% of the cover's width they have at 18 px.
+const INITIALS_SHARE_OF_COVER = 0.32;
+const READABLE_INITIALS_PX = 14;
+
+test('defect:#1091: a playlist without covers shows readable initials on the Playlists wall', async ({
+	page
+}) => {
+	const playlistTitle = `E2E Plain Playlist ${Date.now().toString(36)}`;
+	const playlist = await postJson<CreatedResource>(page, '/api/playlists', {
+		title: playlistTitle
+	});
+	try {
+		await page.goto('/playlists');
+		const cover = page
+			.locator('.library-wall .tile-grid')
+			.getByRole('button', { name: `Open playlist ${playlistTitle}`, exact: true })
+			.locator('.playlist-cover');
+		const initials = cover.locator('.playlist-cover-initials').first();
+		await expect(initials).toBeVisible();
+
+		const coverWidth = (await cover.boundingBox())?.width ?? 0;
+		const initialsSize = await initials.evaluate((cell) =>
+			parseFloat(getComputedStyle(cell).fontSize)
+		);
+
+		expect(initialsSize).toBeGreaterThanOrEqual(READABLE_INITIALS_PX);
+		expect(initialsSize / coverWidth).toBeCloseTo(INITIALS_SHARE_OF_COVER, 2);
+	} finally {
+		await deleteOwnedPlaylist(page, playlist.id);
 	}
 });
