@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
 	import { historyLayerState } from '$lib/stores/layers';
 	import {
@@ -61,11 +62,14 @@
 		coverFailed = false;
 	});
 
+	// Only another share restarts playback. Taking the player over makes the
+	// app's callbacks read its state, and a Play changing that state must not
+	// run this again and unload what it just started.
 	$effect(() => {
 		const collection = view;
 		const streamFetcher = fetchStream;
 		if (!collection) return;
-		playback.start(collection, streamFetcher);
+		untrack(() => playback.start(collection, streamFetcher));
 		return () => playback.stop();
 	});
 

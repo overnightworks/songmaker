@@ -718,7 +718,9 @@ work against a `/shared/.../audio/...` URL instead of the app's
 `/audio/{mp3_path}` convention. `SharePlayback.start()` first calls
 `audioPlayer.unload()` while the app's callbacks are still installed, so a
 take the signed-in app was playing is gone — and the app's media session
-hears it go — before the share page shows anything; it then installs its own
+hears it go — before the share page shows anything (`SharedCollection` calls
+it untracked, so the player state those callbacks read never restarts the
+share and unloads what Play just started); it then installs its own
 `AudioPlayerCallbacks` via `audioPlayer.swapCallbacks()` (`onAuthLost: null`,
 `onCurrentChange` only resyncing its own queue position — never the app's
 media-session metadata or `windowEnded` store) and `stop()` calls

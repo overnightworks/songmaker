@@ -390,6 +390,30 @@ describe('SharedCollection player page (#1391)', () => {
 		}
 	);
 
+	it.each(['song', 'take'] as const)(
+		'keeps playing a shared %s once Play is pressed, while the app still owned the player',
+		async (kind) => {
+			stubLayout(true);
+			// The app's own callbacks read the player's state when its take goes
+			// (stores/player#handleCurrentChange), and the page takes the player
+			// over while they are installed.
+			const appCallbacks = audioPlayer.swapCallbacks({
+				...audioPlayer.currentCallbacks,
+				onCurrentChange: () => void audioPlayer.status
+			});
+			const target = await renderSharedSong(kind);
+
+			getByRoleButton(target, TRANSPORT_PLAY_LABEL).click();
+			await tick();
+			const playing = audioPlayer.current?.songTitle ?? null;
+			if (mounted) await unmount(mounted);
+			mounted = undefined;
+			audioPlayer.restoreCallbacks(appCallbacks);
+
+			expect(playing).toBe('Neon Tide');
+		}
+	);
+
 	it('shows where Play will start once the slider is tapped before Play', async () => {
 		stubLayout(true);
 		const target = await renderSharedSong('song');
