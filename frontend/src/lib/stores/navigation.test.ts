@@ -248,7 +248,7 @@ beforeEach(() => {
 	// stale selectedSongId and re-derives openCollection through the
 	// selectedSong subscription in navigation.ts before this line clears it.
 	resetCollectionForTests();
-	replaceHistoryEntry('/');
+	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 	startFakeRouter();
 	installHistoryController();
 	vi.mocked(goto).mockClear();
@@ -309,7 +309,7 @@ describe('isLibraryWorkspacePath', () => {
 // router mounts its route by writing over that entry (issue #1165).
 describe('history writes across the route boundary (issue #269)', () => {
 	it('opens an album address through the router', async () => {
-		replaceHistoryEntry('/', libraryRootState());
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH, libraryRootState());
 		await openAlbum('a1');
 		expect(vi.mocked(goto)).toHaveBeenCalledWith('/album/a1', crossingWrite(true));
 		expect(window.location.pathname).toBe('/album/a1');
@@ -320,8 +320,8 @@ describe('history writes across the route boundary (issue #269)', () => {
 		await openAlbum('a1');
 		vi.mocked(goto).mockClear();
 		await openLibraryWall();
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(true));
-		expect(window.location.pathname).toBe('/');
+		expect(vi.mocked(goto)).toHaveBeenCalledWith(LIBRARY_ROUTE_PATH, crossingWrite(true));
+		expect(window.location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(historyEntry().surface).toBe('browse');
 	});
 
@@ -385,7 +385,7 @@ describe('history writes across the route boundary (issue #269)', () => {
 	])(
 		'lands a Back pressed while $stillLoading still loads on the album the song was opened from',
 		async ({ openTheAlbum }) => {
-			replaceHistoryEntry('/', libraryRootState());
+			replaceHistoryEntry(LIBRARY_ROUTE_PATH, libraryRootState());
 			await openTheAlbum();
 			const album = historyEntry();
 			nextRouteNeverLoads();
@@ -548,7 +548,7 @@ describe('the address an open album carries (issue #269)', () => {
 	it('gives the wall back the home address when the album is only the rail context', async () => {
 		await openAlbum('a1');
 		await openLibraryWall();
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	});
 });
 
@@ -563,7 +563,7 @@ describe('the address an open playlist carries (issue #286)', () => {
 		fetchPlaylists.mockResolvedValueOnce([playlistItem({ share_slug: null })]);
 		await openPlaylist('p1');
 		await openLibraryWall();
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	});
 });
 
@@ -627,7 +627,7 @@ describe('the Playlists page (#1402)', () => {
 		await pressBack();
 		await libraryHistoryStepsLanded();
 
-		expect(location.pathname).toBe('/');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(get(libraryScrollAnchor)).toBe(640);
 	});
 
@@ -778,7 +778,7 @@ describe('opening a collection from off the library route', () => {
 	it('openPlaylist lands on the library route with the playlist open', async () => {
 		replaceHistoryEntry('/settings/voices');
 		await openPlaylist('p1');
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(get(openCollection)).toEqual({ kind: 'playlist', id: 'p1' });
 		expect(get(librarySurface)).toBe('detail');
 	});
@@ -855,9 +855,9 @@ describe('opening a collection from off the library route', () => {
 	it('openLibraryWall leaves settings for the wall through a navigation, not shallow routing', async () => {
 		replaceHistoryEntry('/settings/voices');
 		await openLibraryWall();
-		expect(window.location.pathname).toBe('/');
+		expect(window.location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(get(librarySurface)).toBe('browse');
-		expect(vi.mocked(goto)).toHaveBeenCalledWith('/', crossingWrite(false));
+		expect(vi.mocked(goto)).toHaveBeenCalledWith(LIBRARY_ROUTE_PATH, crossingWrite(false));
 	});
 });
 
@@ -958,7 +958,7 @@ describe('Back and Forward across an app page', () => {
 
 		await vi.waitFor(() => expect(get(librarySurface)).toBe('browse'));
 		expect(get(openCollection)).toBeNull();
-		expect(location.pathname).toBe('/');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		stopNavigation();
 	});
 
@@ -993,7 +993,7 @@ describe('Back and Forward across an app page', () => {
 		await openAppPage(SETTINGS);
 		await pressBack();
 
-		expect(location.pathname).toBe('/');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 		expect(historyEntry()).toMatchObject({ surface: 'browse', scrollAnchor: 480 });
 		await vi.waitFor(() => expect(get(libraryScrollAnchor)).toBe(480));
 	});
@@ -1490,7 +1490,7 @@ describe('a dirty draft guards song switch / leave', () => {
 	});
 
 	it('defers revealPlayingSong the same way', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1511,7 +1511,7 @@ describe('a dirty draft guards song switch / leave', () => {
 	// independent of the current route). The guard must run first, so parking
 	// leaves the route untouched.
 	it('does not navigate off the current route before the dirty-draft confirm resolves', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1708,7 +1708,7 @@ describe('openTakeVersion', () => {
 
 describe('revealPlayingSong', () => {
 	it('opens the song at its own address, then crosses again to the take', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		await revealPlayingSong(song({ ...navigableSongDefaults(), slug: 's1' }), 'g1');
 		// The song's own address crosses the route boundary once; the take is
 		// its own route file too (issue #281), so pinning it crosses a second
@@ -1789,7 +1789,7 @@ describe('initNavigation', () => {
 	});
 
 	it('does not attempt a save on browser-back when the draft is clean', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		await openAlbum('a1');
 		await selectSong('s1');
 		loadSongData(song({ ...navigableSongDefaults(), slug: 's1' }));
@@ -1823,7 +1823,7 @@ describe('initNavigation', () => {
 	});
 
 	it('still seeds a default root entry on a genuinely cold "/" visit', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 
 		const cleanup = initNavigation();
 
@@ -2171,7 +2171,7 @@ describe('full Now Playing owns one history entry', () => {
 		expect(location.pathname).toBe(playlistPath);
 		await pressBack();
 		stopNavigation = initNavigation();
-		await vi.waitFor(() => expect(location.pathname).toBe('/'));
+		await vi.waitFor(() => expect(location.pathname).toBe(LIBRARY_ROUTE_PATH));
 		expect(standingHistoryEntry()?.id).toBeLessThan(page?.id ?? Number.NEGATIVE_INFINITY);
 	});
 
@@ -2776,7 +2776,7 @@ describe('overlays outside the library', () => {
 
 describe('openRailSearchTarget', () => {
 	it('uses the Library action for the Library page target', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		selectedSongId.set('s1');
 		librarySurface.set('detail');
 		toggleSidebar();
@@ -2789,7 +2789,7 @@ describe('openRailSearchTarget', () => {
 	});
 
 	it('opens one page target and closes the rail drawer', async () => {
-		replaceHistoryEntry('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 		toggleSidebar();
 		expect(get(sidebarOpen)).toBe(true);
 
