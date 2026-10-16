@@ -19,6 +19,7 @@ nothing when PROJECT_ROOT is the main checkout itself.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -28,10 +29,15 @@ class CheckoutError(Exception):
     """The question cannot be answered; the message is safe to print."""
 
 
+def _is_enterable_directory(path: Path) -> bool:
+    """Whether git can start in ``path``; unlike ``Path.is_dir``, never raises for a denied path."""
+    return os.path.isdir(path) and os.access(path, os.X_OK)
+
+
 def main_checkout_elsewhere(project_root: Path) -> Path | None:
     """The main checkout when ``project_root`` is a linked worktree of it, else ``None``."""
     not_a_checkout = CheckoutError(f"{project_root} is not a git checkout")
-    if not project_root.is_dir():
+    if not _is_enterable_directory(project_root):
         raise not_a_checkout
     try:
         common_dir = subprocess.run(
