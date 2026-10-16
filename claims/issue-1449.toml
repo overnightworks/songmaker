@@ -1,0 +1,8 @@
+claim_id = "a9f8e8494b134eda987ac216397b4f84"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "957427f3e8e82d5cfe40f6d3354ca15d241732c4"
+branch = "claude/issue-1449-password-rule-reason-in-api"
+scope = ["frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts", "src/songmaker_cli/admin_api.py", "src/songmaker_cli/api_models/auth.py", "src/songmaker_cli/server.py", "tests/test_admin_api.py", "tests/test_server.py"]
+opened_commit = "d737003a369ee429bdb2005f030b30d818857681"
+whole_reason = "the password rule's reason in API refusals: the validation handler or the password models, the admin API, their tests, and the admin page that shows it"
