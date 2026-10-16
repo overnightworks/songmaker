@@ -11,40 +11,15 @@ import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
 import { resetResourceSyncForTests, resourceSync } from '$lib/stores/resourceSync';
 import { selectedGenerationId, selectedSongId } from '$lib/stores/player';
 
-const api = vi.hoisted(() => ({
-	fetchAlbums: vi.fn(),
-	fetchSong: vi.fn(),
-	fetchLibraryListen: vi.fn(),
-	fetchActiveModels: vi.fn()
-}));
-
 vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
-vi.mock('$app/navigation', async () =>
-	(await import('$lib/test-utils/app-navigation')).fakeAppNavigation()
-);
 vi.mock('$app/paths', () => ({ resolve: vi.fn((path: string) => path) }));
-vi.mock('$lib/api/albums', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/albums')>()),
-	fetchAlbums: api.fetchAlbums
-}));
-vi.mock('$lib/api/songs', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/songs')>()),
-	fetchSong: api.fetchSong
-}));
-vi.mock('$lib/api/library', () => ({
-	searchLibrary: vi.fn().mockResolvedValue({ items: [], next_cursor: null, has_more: false }),
-	fetchLibraryListen: api.fetchLibraryListen
-}));
-vi.mock('$lib/api/client', async (importOriginal) => ({
-	...(await importOriginal<typeof import('$lib/api/client')>()),
-	fetchSong: api.fetchSong,
-	fetchActiveModels: api.fetchActiveModels
-}));
 
 import LibraryAddressHarness from './harness.svelte';
 
 const SONG_ID = 'song-uuid-1';
+const EMPTY_PAGE = { items: [], total: 0, offset: 0, limit: 50, has_more: false };
 
+const requested: string[] = [];
 const mounted: Array<ReturnType<typeof mount>> = [];
 
 function openAddress(): HTMLElement {
@@ -69,12 +44,14 @@ function coldTabAt(search: string): void {
 }
 
 beforeEach(() => {
-	api.fetchAlbums
-		.mockReset()
-		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 50, has_more: false });
-	api.fetchSong.mockReset();
-	api.fetchLibraryListen.mockReset().mockResolvedValue({ items: [] });
-	api.fetchActiveModels.mockReset().mockResolvedValue([]);
+	requested.length = 0;
+	vi.stubGlobal(
+		'fetch',
+		vi.fn(async (path: string) => {
+			requested.push(path);
+			return Response.json(path.startsWith('/api/albums') ? EMPTY_PAGE : []);
+		})
+	);
 });
 
 afterEach(() => {
@@ -84,6 +61,7 @@ afterEach(() => {
 	resetLibraryContextForTests();
 	resetLibrarySearchForTests();
 	resetCollectionForTests();
+	vi.unstubAllGlobals();
 });
 
 describe('/library', () => {
@@ -110,7 +88,7 @@ describe('/library', () => {
 
 		await vi.waitFor(() => expect(target.querySelector('.library-wall')).not.toBeNull());
 		expect(target.querySelector('.address-overlay')).toBeNull();
-		expect(api.fetchSong).not.toHaveBeenCalled();
+		expect(requested.filter((path) => path.startsWith('/api/songs'))).toEqual([]);
 		expect(location.pathname + location.search).toBe(`${LIBRARY_ROUTE_PATH}?song=${SONG_ID}`);
 	});
 });
