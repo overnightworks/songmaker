@@ -656,6 +656,22 @@ export function followShellLayers(): () => void {
 	};
 }
 
+// The history controller's landing handler: by the time a landing reaches
+// here the controller has closed the layers it left, so only a landing on
+// another page entry is the library's to apply.
+function onLanding(landing: Landing, landedState: unknown): void {
+	if (!landing.apply) return;
+	const state = libraryHistoryEntry(landedState);
+	let songPutBack = false;
+	void guardDirtyNavigation(
+		() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),
+		() => {
+			putTheSongBackOverTheLanding();
+			songPutBack = true;
+		}
+	);
+}
+
 // A cold tab's history entry carries no LibraryHistoryState until something
 // writes one -- this seeds a fresh root entry for that case, but only on a
 // plain `/` visit, which is the one library workspace path with no address
@@ -683,22 +699,6 @@ export function initNavigation(): () => void {
 		if (window.location.pathname === '/') void replaceLibraryHistory();
 	} else if (existing.songId) {
 		void loadSongContext(existing.songId);
-	}
-
-	// The history controller's landing handler: by the time a landing reaches
-	// here the controller has closed the layers it left, so only a landing on
-	// another page entry is the library's to apply.
-	function onLanding(landing: Landing, landedState: unknown): void {
-		if (!landing.apply) return;
-		const state = libraryHistoryEntry(landedState);
-		let songPutBack = false;
-		void guardDirtyNavigation(
-			() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),
-			() => {
-				putTheSongBackOverTheLanding();
-				songPutBack = true;
-			}
-		);
 	}
 
 	return attachLandingHandler(onLanding);

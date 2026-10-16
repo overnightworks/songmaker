@@ -1,5 +1,3 @@
-import { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS } from '$lib/constants';
-
 // Auth-check failure copy (issue #117). Kept separate from lib/constants.ts,
 // which another lane owns for the same landing window.
 
@@ -19,4 +17,4 @@ export const AUTH_CHECK_RETRY_LABEL = 'Retry';
 // A session check the server did not answer asks again this often, the same
 // cadence the library's return probe keeps, so the app loads within about a
 // second of the server's return (#1118).
-export const AUTH_CHECK_RETURN_PROBE_INTERVAL_MS = RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS;
+export { RESOURCE_SYNC_RETURN_PROBE_INTERVAL_MS as AUTH_CHECK_RETURN_PROBE_INTERVAL_MS } from '$lib/constants';

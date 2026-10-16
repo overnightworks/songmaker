@@ -731,7 +731,9 @@ function pushLayerEntry(layer: Layer): void {
 
 function dropLayers(open: readonly OpenLayerEntry[]): void {
 	const left = new Set(open.map((layer) => layer.entry));
-	const depth = stackedLayers().findIndex((layer) => left.has(entryOfLayer.get(layer) ?? NaN));
+	const depth = stackedLayers().findIndex((layer) =>
+		left.has(entryOfLayer.get(layer) ?? Number.NaN)
+	);
 	for (const [layer, entry] of entryOfLayer) if (left.has(entry)) entryOfLayer.delete(layer);
 	if (depth !== -1) dropLayersFrom(depth);
 }
