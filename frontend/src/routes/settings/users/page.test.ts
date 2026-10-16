@@ -1290,7 +1290,7 @@ describe('admin models tab', () => {
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('✓Ready · key set');
 	});
 
-	describe('with the judge saved on the CLI route of a keyless install', () => {
+	describe('with the judge saved on the CLI route', () => {
 		beforeEach(() => {
 			api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-sonnet', 'cli'));
 		});

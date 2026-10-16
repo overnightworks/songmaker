@@ -149,10 +149,11 @@ database (`seedTakeStripSong`), the same way the rail's filler albums do.
 `admin-models.spec.ts` carries its own file-wide ceiling,
 `MODELS_FLOW_API_REQUEST_BUDGET` (local to the spec): 11 for the table at four
 desktop widths, 24 for the Cover row's save, reload and restore, 46 for the
-co-writer turn and 9 for the phone cards, against a shared 60. Its three desktop tests
-run on **desktop only** and its card test on **mobile only** — the table and
-the cards are two different surfaces, so each is driven where it exists rather
-than skipped in the other shell.
+co-writer turn, 9 for the phone cards and 24 (20 on the phone) for the Scoring
+row's save, reload and restore, against a shared 60. Its four desktop tests
+run on **desktop only** and its card test and the Scoring row's phone test on
+**mobile only** — the table and the cards are two different surfaces, so each
+is driven where it exists rather than skipped in the other shell.
 
 `auth-flows.spec.ts` carries its own, `AUTH_FLOW_API_REQUEST_BUDGET` (local to
 the spec): measured over both shells (desktop / 375px) at 13/13 for the

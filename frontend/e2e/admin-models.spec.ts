@@ -469,7 +469,7 @@ for (const { shell, viewport } of SCORING_VIEWPORTS) {
 				await providers.selectOption('codex');
 				expect((await saving).postDataJSON()).toEqual({
 					provider: 'codex',
-					route: PROVIDER_ROUTE_CLI_LABEL.toLowerCase(),
+					route: 'cli',
 					model: ''
 				});
 				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
