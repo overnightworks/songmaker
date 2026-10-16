@@ -137,6 +137,7 @@
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import ShareLinkChip from './ShareLinkChip.svelte';
 	import PlaylistPicker from './PlaylistPicker.svelte';
+	import { songTakesLoaded } from '$lib/utils/playable';
 
 	let showDeleteConfirm = $state(false);
 	let versionAwaitingReplace = $state<{
@@ -419,11 +420,7 @@
 	 */
 	async function refreshTakes(songId: string): Promise<void> {
 		const current = get(selectedSong);
-		if (
-			current &&
-			current.id === songId &&
-			current.generations.length >= current.generation_count
-		) {
+		if (current && current.id === songId && songTakesLoaded(current)) {
 			takesStatus = 'ready';
 			takesError = null;
 			return;

@@ -51,6 +51,7 @@
 		PLACE_LINE_SEPARATOR
 	} from '$lib/constants';
 	import { titleInitials } from '$lib/utils/format';
+	import { albumHasPlayableTake, songPlayability } from '$lib/utils/playable';
 	import type { SongItem } from '$lib/api/types';
 	import { usableAlbumPrimary } from '$lib/utils/contrast';
 	import AlbumCoverEditor from './AlbumCoverEditor.svelte';
@@ -85,11 +86,13 @@
 					.sort((a, b) => a.track_number - b.track_number)
 			: []
 	);
-	// Nothing to play is decided here once, from the songs the view shows: an
-	// album without songs, or whose songs have no take yet, gives the header
-	// nothing to start, so neither of its controls can reach the running queue.
-	const albumHasTakes = $derived(albumSongs.some((s) => s.generation_count > 0));
 	const albumLoad = $derived(currentAlbumId ? $albumSongsLoad[currentAlbumId] : undefined);
+	// An album with nothing to hear gives the header nothing to start, so
+	// neither of its controls can reach the running queue.
+	const albumHasTakes = $derived(
+		selectedAlbum !== null &&
+			albumHasPlayableTake(selectedAlbum, albumSongs, { songsComplete: albumLoad === 'idle' })
+	);
 	const albumLoadFailure = $derived(currentAlbumId ? albumSongsLoadFailure(currentAlbumId) : null);
 	const coverUrl = $derived(selectedAlbum?.cover?.detail ?? null);
 	const coverAlt = $derived(
@@ -285,10 +288,10 @@
 		void curateAlbum(currentAlbumId);
 	}
 
-	// A tap on a song plays it in place; a song with no take yet has nothing to
-	// play, so the tap opens it in the song editor instead.
+	// Unknown takes go straight to the player, which owns loading and cancellation.
+	// Only a song already known to have nothing to hear opens the editor.
 	function onSongTap(song: SongItem): void {
-		if (song.generation_count === 0) selectSong(song.id);
+		if (songPlayability(song) === 'none') selectSong(song.id);
 		else void playAlbumSong(song.album_id, song.id);
 	}
 </script>
