@@ -1,0 +1,8 @@
+claim_id = "3200d3ff74ac45619b550aa6ea31d300"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "ded0b6b45253c844afe76724eb48ad6a6816a6e6"
+branch = "claude/issue-1461-phone-library-list"
+scope = ["frontend/e2e/library-phone-list.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/seed.ts", "frontend/src/lib/components/LibraryRow.svelte", "frontend/src/lib/components/LibraryRow.test.ts", "frontend/src/lib/components/LibraryTileContent.svelte", "frontend/src/lib/components/LibraryTileContent.test.ts", "frontend/src/lib/components/LibraryWall.svelte", "frontend/src/lib/components/LibraryWall.test.ts", "frontend/src/lib/constants.ts"]
+opened_commit = "aafb6b7401977ba3354836331f395bd73a07f6ba"
+whole_reason = "the phone Library list with play: a new row component and its test, the tile content and the wall with their tests, the constants, the seed, the library spec and a new phone-list spec"
