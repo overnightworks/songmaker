@@ -745,7 +745,13 @@ footer follows below. A shared album is the same page surface with its
 songs (#1443): the frame gains a `collectionHead` (the album title as the h1,
 "Artist · Album", and "Now playing · song · n of N"), shuffle and Previous /
 Next, a lyrics label naming the song, and the `NowPlayingQueue` ("Songs", only
-the playable songs) under the lyrics, in a page that scrolls on `.shared-page`.
+the playable songs), in a page that scrolls on `.shared-page`.
+On desktop, songs and takes use two columns (cover | title, player and lyrics);
+the lyrics fill the space below the player inside the viewport. Albums and
+playlists use three columns (cover, title and player | lyrics | songs). The
+left column stays sticky inside the page scroll root, the lyrics are bounded
+to the viewport and scroll internally, and the songs flow with the page.
+On phones the order remains cover, heading and player, lyrics, then songs.
 A tap on a row plays it; a tap on the playing row pauses or resumes it. Once the
 player's transport leaves `.shared-page`'s view (one `IntersectionObserver` in
 `SharedCollection.svelte`, re-attached after every song change), the
@@ -753,7 +759,8 @@ player's transport leaves `.shared-page`'s view (one `IntersectionObserver` in
 scrolls back up to the player without adding a history entry. Shared playlists
 use this same page surface (#1455), with the playlist mosaic (or its uploaded
 cover), a playable-song count, and each song’s album name beneath its queue
-title. The bar follows the current song’s album cover.
+title. The bar follows the current song’s album cover. On desktop the sticky
+transport remains in view, so the same observer keeps the bar hidden (#1462).
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
 `LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
 Nutzungsbedingungen links the sign-in page uses too, opening its
