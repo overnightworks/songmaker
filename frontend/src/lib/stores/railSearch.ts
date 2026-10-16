@@ -10,7 +10,7 @@ import {
 	RAIL_LIBRARY_LABEL,
 	RAIL_SETTINGS_LABEL
 } from '$lib/constants';
-import { PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
+import { LIBRARY_ROUTE_PATH, PLAYLISTS_ROUTE_PATH } from '$lib/routes/addresses';
 import { visibleSettingsSections } from '$lib/settingsSections';
 import { reloadWhileUnreachable } from '$lib/stores/connectivity';
 import { matchesRailQuery, normalizeRailQuery } from '$lib/stores/librarySearch';
@@ -87,7 +87,7 @@ const SETTINGS_PAGE_GLYPH = '⚙';
 // The library's own pages, before the Settings sections: the Library, and the
 // Playlists page (#1402), whose hit is also what names a playlist's ‹.
 const LIBRARY_PAGES: readonly RailSearchPage[] = [
-	{ label: RAIL_LIBRARY_LABEL, href: '/', section: null, glyph: LIBRARY_PAGE_GLYPH },
+	{ label: RAIL_LIBRARY_LABEL, href: LIBRARY_ROUTE_PATH, section: null, glyph: LIBRARY_PAGE_GLYPH },
 	{
 		label: PLAYLISTS_PAGE_LABEL,
 		href: PLAYLISTS_ROUTE_PATH,

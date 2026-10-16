@@ -9,6 +9,7 @@ import {
 } from '@playwright/test';
 import {
 	ACCOUNT_MENU_LABEL,
+	APP_NAME,
 	COWRITER_TURN_PATH,
 	PLAYBACK_DIAGNOSTICS_PATH,
 	PLAYLISTS_PAGE_LABEL,
@@ -21,7 +22,11 @@ import {
 	RESOURCE_EVENT_STREAM_PATH,
 	SETTINGS_NAV_LABEL
 } from '../src/lib/constants';
-import { libraryRouteShape } from '../src/lib/routes/addresses';
+import {
+	HOME_ROUTE_PATH,
+	LIBRARY_ROUTE_PATH,
+	libraryRouteShape
+} from '../src/lib/routes/addresses';
 import { BASE_URL } from './seed';
 
 /** The two shells the same flow drives — also the Playwright project names. */
@@ -37,15 +42,15 @@ export const ONLY_IN_SHELL: Record<Shell, string> = {
 	mobile: '@mobile-only'
 };
 
-/** Where the Library wall lives; the Library moves off `/` with #1354 slice 6, so this changes then. */
-export const LIBRARY_PATH = '/';
+/** Where the Library wall lives. */
+export const LIBRARY_PATH: string = LIBRARY_ROUTE_PATH;
 
 /**
- * The app's first page, for flows that need only a loaded app. Once the
- * Library leaves `/`, Home takes it, so such flows must not be tied to the
+ * The app's first page, for flows that need only a loaded app. Home and the
+ * Library are separate addresses, so such flows must not be tied to the
  * Library's address.
  */
-export const HOME_PATH = '/';
+export const HOME_PATH: string = HOME_ROUTE_PATH;
 
 /** The address of `path` on any origin, with or without a query: what `toHaveURL` waits for. */
 function urlOfPath(path: string): RegExp {
@@ -317,6 +322,25 @@ export async function openLibraryWall(page: Page, shell: Shell): Promise<void> {
 	await rail.getByRole('link', { name: nameStartingWith(RAIL_LIBRARY_LABEL) }).click();
 	if (shell === 'mobile')
 		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await expect(page).toHaveURL(LIBRARY_URL);
+}
+
+/**
+ * Home through the brand: the phone bar's own where it shows one, otherwise
+ * (an album or Settings page, whose bar shows ‹) the rail's, behind the drawer.
+ */
+export async function openHome(page: Page, shell: Shell): Promise<void> {
+	const brand = { name: APP_NAME, exact: true };
+	const barBrand = appBar(page).getByRole('button', brand);
+	if (shell === 'desktop' || !(await barBrand.isVisible())) {
+		const rail = await openRailNav(page, shell);
+		await rail.getByRole('button', brand).click();
+	} else {
+		await barBrand.click();
+	}
+	if (shell === 'mobile')
+		await expect(page.getByRole('dialog', { name: RAIL_DRAWER_LABEL })).toBeHidden();
+	await expect(page).toHaveURL(HOME_URL);
 }
 
 /**

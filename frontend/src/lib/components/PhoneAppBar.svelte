@@ -4,6 +4,7 @@
 	import {
 		albumRoutePath,
 		isPlaylistRoutePath,
+		LIBRARY_ROUTE_PATH,
 		libraryRouteShape,
 		playlistRoutePath,
 		PLAYLISTS_ROUTE_PATH,
@@ -16,7 +17,7 @@
 	export const SEARCH_SHEET_LABEL = 'Search';
 	export const SEARCH_CLOSE_LABEL = 'Close search';
 
-	const LIBRARY_HREF: PageList = '/';
+	const LIBRARY_HREF: PageList = LIBRARY_ROUTE_PATH;
 	const PLAYLISTS_HREF: PageList = PLAYLISTS_ROUTE_PATH;
 	const SETTINGS_HREF: PageList = '/settings';
 	// The lists the app opens on, which carry the brand and the account circle
