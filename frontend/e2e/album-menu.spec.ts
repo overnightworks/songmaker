@@ -347,7 +347,7 @@ async function expectRowIsOneTarget(row: Locator): Promise<void> {
 	expect(box.height).toBeCloseTo(HITBOX_FREQUENT_PX, 0);
 }
 
-test('the album Share row is one 44 px target that shows off and on, from a tap on its word or the keys', async ({
+test('1480_R1, 1480_R2, 1480_R3: the album Share row is one 44 px target that shows off and on, from a tap on its word or the keys', async ({
 	page
 }, testInfo) => {
 	await onOwnAlbum(page, testInfo, async (album) => {
@@ -378,7 +378,7 @@ test('the album Share row is one 44 px target that shows off and on, from a tap 
 	});
 });
 
-test('the playlist Share row is the same 44 px target, named for the playlist', async ({
+test('1480_R1, 1480_R2: the playlist Share row is the same 44 px target, named for the playlist', async ({
 	page,
 	request
 }) => {

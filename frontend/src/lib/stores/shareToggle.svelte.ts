@@ -7,8 +7,9 @@ import {
 } from '$lib/constants';
 import { addToast } from './toast';
 
-export interface ShareToggleSource {
+interface ShareToggleSource {
 	isShared: boolean;
+	shareSlug: string | null | undefined;
 	onshare: () => Promise<ShareResult>;
 	onunshare: () => Promise<void>;
 }
@@ -16,6 +17,8 @@ export interface ShareToggleSource {
 /**
  * The one tap on a share control, whatever it looks like: unshares a shared
  * item, otherwise shares it and copies the link, telling the person which.
+ * It also owns how the control shows its state: the icon, and the tooltip
+ * that names the share page once shared.
  */
 export function createShareToggle(source: () => ShareToggleSource) {
 	let busy = $state(false);
@@ -47,6 +50,13 @@ export function createShareToggle(source: () => ShareToggleSource) {
 	return {
 		get busy() {
 			return busy;
+		},
+		get iconName() {
+			return source().isShared ? 'link' : 'share';
+		},
+		get sharedTooltip() {
+			const { isShared, shareSlug } = source();
+			return isShared ? `Shared: /share/${shareSlug ?? ''}` : undefined;
 		},
 		toggle
 	};

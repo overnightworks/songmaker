@@ -301,7 +301,7 @@ describe('CollectionHeader', () => {
 		expect(target.querySelector('.share-btn')).toBeNull();
 	});
 
-	it('names the object first in the menu and lists the album rows in their order', async () => {
+	it('915_C3: names the object first in the menu and lists the album rows in their order', async () => {
 		const target = await render({
 			...detailsEditingAlbum(),
 			coverEditor: fakeCoverEditor(),

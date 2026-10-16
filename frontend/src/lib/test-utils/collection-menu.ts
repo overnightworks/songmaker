@@ -2,8 +2,9 @@
 // word, without the hint or state its right edge shows.
 
 function rowLabel(row: Element): string {
-	const hint = row.querySelector('.menu-item-hint')?.textContent ?? '';
-	return (row.textContent ?? '').replace(hint, '').trim();
+	const labelOnly = row.cloneNode(true) as Element;
+	labelOnly.querySelector('.menu-item-hint')?.remove();
+	return (labelOnly.textContent ?? '').trim();
 }
 
 export function menuRowLabels(menu: ParentNode): string[] {

@@ -86,6 +86,7 @@
 
 	const shareToggle = createShareToggle(() => ({
 		isShared,
+		shareSlug,
 		onshare: shareAndWarnIfIncomplete,
 		onunshare
 	}));
@@ -130,9 +131,9 @@
 	hint?: string,
 	close: (action: () => void) => void = runAndClose,
 	pressed?: boolean,
-	title?: string
+	tooltip?: string
 )}
-	<button class="menu-item" aria-pressed={pressed} {title} onclick={() => close(action)}>
+	<button class="menu-item" aria-pressed={pressed} title={tooltip} onclick={() => close(action)}>
 		{#if icon}<Icon name={icon} size={14} />{/if}
 		{label}
 		{#if hint}<span class="menu-item-hint" aria-hidden="true">{hint}</span>{/if}
@@ -143,11 +144,11 @@
 	{@render actionRow(
 		shareLabel,
 		shareToggle.toggle,
-		isShared ? 'link' : 'share',
+		shareToggle.iconName,
 		isShared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT,
 		runLeavingMenuOpen,
 		isShared,
-		isShared ? `Shared: /share/${shareSlug ?? ''}` : undefined
+		shareToggle.sharedTooltip
 	)}
 {/snippet}
 

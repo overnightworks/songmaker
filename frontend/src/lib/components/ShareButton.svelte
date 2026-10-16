@@ -13,7 +13,7 @@
 	}
 
 	let { iconOnly = false, isShared, shareSlug, onshare, onunshare }: Props = $props();
-	const shareToggle = createShareToggle(() => ({ isShared, onshare, onunshare }));
+	const shareToggle = createShareToggle(() => ({ isShared, shareSlug, onshare, onunshare }));
 </script>
 
 <button
@@ -25,9 +25,9 @@
 	aria-pressed={iconOnly ? isShared : undefined}
 	onclick={shareToggle.toggle}
 	disabled={shareToggle.busy}
-	title={isShared ? `Shared: /share/${shareSlug ?? ''}` : 'Share'}
+	title={shareToggle.sharedTooltip ?? 'Share'}
 >
-	{#if isShared}<Icon name="link" size={14} />{:else}<Icon name="share" size={14} />{/if}
+	<Icon name={shareToggle.iconName} size={14} />
 </button>
 
 <style>

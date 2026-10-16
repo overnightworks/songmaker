@@ -550,7 +550,7 @@ describe('AlbumDetailView header', () => {
 		expect(minHeightPx(button, label)).toBe(HITBOX_FREQUENT_PX);
 	});
 
-	it('names the album and lists Edit details, Cover, Curate, Add to playlist, Share, Archive, Delete in the menu', async () => {
+	it('915_C3: names the album and lists Edit details, Cover, Curate, Add to playlist, Share, Archive, Delete in the menu', async () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');

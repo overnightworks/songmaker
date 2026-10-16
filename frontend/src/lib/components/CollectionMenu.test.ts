@@ -5,6 +5,7 @@ import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
 import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import CollectionMenu from './CollectionMenu.svelte';
+import { openCollectionMenu } from './shell/rail-test-fixtures';
 
 const mounted: Array<ReturnType<typeof mount>> = [];
 const SHARE_WARNING_LABEL = 'Missing from the share page';
@@ -54,13 +55,8 @@ async function render(overrides: Partial<ComponentProps<typeof CollectionMenu>> 
 	return { target, props };
 }
 
-async function openMenu(target: HTMLElement) {
-	target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-	await tick();
-}
-
 async function openMenuAndShare(target: HTMLElement, shareLabel = 'Share') {
-	await openMenu(target);
+	await openCollectionMenu(target);
 	menuRow(target, shareLabel).click();
 	await tick();
 	await tick();
@@ -141,21 +137,24 @@ describe('CollectionMenu Share row', () => {
 	it.each([
 		{ isShared: false, state: 'off' },
 		{ isShared: true, state: 'on' }
-	])('shows $state in words on the one Share control when isShared is $isShared', async (row) => {
-		const { target } = await render({ isShared: row.isShared });
-		await openMenu(target);
+	])(
+		'1480_R2: shows $state in words on the one Share control when isShared is $isShared',
+		async (row) => {
+			const { target } = await render({ isShared: row.isShared });
+			await openCollectionMenu(target);
 
-		const share = menuRow(target, 'Share');
+			const share = menuRow(target, 'Share');
 
-		expect(share.querySelector('.menu-item-hint')?.textContent).toBe(row.state);
-		expect(share.getAttribute('aria-pressed')).toBe(String(row.isShared));
-		expect(share.querySelector('svg')).not.toBeNull();
-	});
+			expect(share.querySelector('.menu-item-hint')?.textContent).toBe(row.state);
+			expect(share.getAttribute('aria-pressed')).toBe(String(row.isShared));
+			expect(share.querySelector('svg')).not.toBeNull();
+		}
+	);
 
-	it('draws a different icon once shared, so the state is not colour alone', async () => {
+	it('1480_R2: draws a different icon once shared, so the state is not colour alone', async () => {
 		const iconOf = async (isShared: boolean) => {
 			const { target } = await render({ isShared });
-			await openMenu(target);
+			await openCollectionMenu(target);
 			const icon = menuRow(target, 'Share').querySelector('svg')?.innerHTML;
 			await unmount(mounted.pop() as ReturnType<typeof mount>);
 			return icon;
@@ -165,10 +164,10 @@ describe('CollectionMenu Share row', () => {
 	});
 
 	it.each(shareRowKinds)(
-		'shares and copies the link from a tap on the $kind row, keeping the menu open',
+		'1480_R3: shares and copies the link from a tap on the $kind row, keeping the menu open',
 		async ({ kind, label }) => {
 			const { target, props } = await render({ kind });
-			await openMenu(target);
+			await openCollectionMenu(target);
 
 			menuRow(target, label).click();
 
@@ -181,10 +180,10 @@ describe('CollectionMenu Share row', () => {
 	);
 
 	it.each(shareRowKinds)(
-		'unshares a shared $kind from a tap on its row, without copying a link',
+		'1480_R3: unshares a shared $kind from a tap on its row, without copying a link',
 		async ({ kind, label }) => {
 			const { target, props } = await render({ kind, isShared: true, shareSlug: 'abc' });
-			await openMenu(target);
+			await openCollectionMenu(target);
 
 			menuRow(target, label).click();
 
@@ -194,13 +193,13 @@ describe('CollectionMenu Share row', () => {
 		}
 	);
 
-	it('ignores a second tap while the first share is still under way', async () => {
+	it('1480_R3: ignores a second tap while the first share is still under way', async () => {
 		let finishShare: (result: ShareResult) => void = () => {};
 		const onshare = vi.fn<() => Promise<ShareResult>>(
 			() => new Promise((resolve) => (finishShare = resolve))
 		);
 		const { target } = await render({ onshare });
-		await openMenu(target);
+		await openCollectionMenu(target);
 
 		menuRow(target, 'Share').click();
 		menuRow(target, 'Share').click();
@@ -225,7 +224,7 @@ function albumMenuProps() {
 }
 
 describe('CollectionMenu album rows', () => {
-	it('lists exactly Edit details · Cover · Curate · Add to playlist · Share · Archive · Delete, Delete red and last', async () => {
+	it('915_C3: lists exactly Edit details · Cover · Curate · Add to playlist · Share · Archive · Delete, Delete red and last', async () => {
 		const { target } = await render(albumMenuProps());
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
@@ -245,7 +244,7 @@ describe('CollectionMenu album rows', () => {
 
 	it('tells on the Cover row what the cover editor offers: upload · suggest', async () => {
 		const { target } = await render(albumMenuProps());
-		await openMenu(target);
+		await openCollectionMenu(target);
 
 		expect(menuRow(target, 'Cover').querySelector('.menu-item-hint')?.textContent).toBe(
 			'upload · suggest'
