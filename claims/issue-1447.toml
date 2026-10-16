@@ -1,8 +1,0 @@
-claim_id = "08f27cc6d5804b05a3a34b4f78edf52e"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "7c2520b7d3005dbece7be353088a596db4129aeb"
-branch = "claude/issue-1447-admin-errors-on-their-tab"
-scope = ["frontend/e2e/README.md", "frontend/e2e/auth-flows.spec.ts", "frontend/src/lib/constants.ts", "frontend/src/routes/settings/users/+page.svelte", "frontend/src/routes/settings/users/page.test.ts"]
-opened_commit = "da198e4f4d5c6a2c1e512a8c9b7ce46a48b26997"
-whole_reason = "admin page error wording and ownership: the users settings page and its test, the constants for its messages, the auth-flows spec and the e2e README that pin them"
