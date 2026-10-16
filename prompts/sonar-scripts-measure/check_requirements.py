@@ -54,7 +54,7 @@ def _arguments() -> argparse.Namespace:
 
 
 def _git(project_root: Path, *arguments: str) -> subprocess.CompletedProcess[bytes]:
-    return subprocess.run(
+    return subprocess.run(  # NOSONAR(pythonsecurity:S8705) keyed probe
         ["git", *arguments], cwd=project_root, check=False, capture_output=True
     )
 
