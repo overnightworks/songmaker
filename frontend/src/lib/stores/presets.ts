@@ -133,8 +133,8 @@ export const effectiveGenerationDefaults = derived(
 	[builtinDefaults, generationDefaults, recipeModel],
 	([$builtinDefaults, $generationDefaults, $recipeModel]) =>
 		({
-			...($builtinDefaults[$recipeModel ?? ''] ?? {}),
-			...($generationDefaults[$recipeModel ?? ''] ?? {})
+			...$builtinDefaults[$recipeModel ?? ''],
+			...$generationDefaults[$recipeModel ?? '']
 		}) as Required<VersionGenerationParams>
 );
 
