@@ -1,5 +1,5 @@
 import { mount, tick, unmount } from 'svelte';
-import { afterEach, beforeEach, describe, expect } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import PlaylistPicker from './PlaylistPicker.svelte';
@@ -49,6 +49,27 @@ afterEach(() => {
 	picker.hide();
 	resetPlaylistsForTests();
 	document.body.replaceChildren();
+});
+
+it('defect:#1444 lists every supplied playlist with its title and entry count', async () => {
+	playlistList.set([
+		NIGHT_DRIVE,
+		{ ...NIGHT_DRIVE, id: 'playlist-2', title: 'Morning Run', slug: 'morning-run', entry_count: 0 }
+	]);
+	const target = document.createElement('div');
+	document.body.append(target);
+	picker.open(target);
+	await tick();
+
+	expect(
+		Array.from(target.querySelectorAll('.picker-item'), (item) => ({
+			title: item.querySelector('.picker-title')?.textContent,
+			count: item.querySelector('.picker-count')?.textContent
+		}))
+	).toEqual([
+		{ title: 'Night Drive', count: '3' },
+		{ title: 'Morning Run', count: '0' }
+	]);
 });
 
 describe('the playlist picker closes on history Back', () => {
