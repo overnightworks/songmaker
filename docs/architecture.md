@@ -707,9 +707,17 @@ copies — a new field on a share response reaches the surface through one
 contract. Each payload carries its take's `generation_id`,
 `audio_duration`, lyrics and `whisper_cues` (the same fields Now Playing
 reads from a generation payload, assembled by
-`api_models/songs.py#share_pick_media`) and nothing else: no transcript,
-no scores, no sibling takes, no owner — pinned by an exact-key-set test
-in `tests/test_sharing.py`. A `SharedTrack` therefore knows its own
+`api_models/songs.py#share_pick_media`) plus the fields below and nothing
+else: no transcript, no scores, no seed, no sibling takes, no owner — pinned
+by exact-key-set tests in `tests/test_sharing.py`. Album: `title`, `artist`,
+`subtitle`, `year`, `cover` and `songs` (each `id`, `title`, `track_number`,
+`audio_url`). Song: `title`, `artist`, `album_title`, `audio_url`, `cover`,
+`album_cover`. Take: `title`, `artist`, `album_title`, `generation_number`
+(the tab title "Take N"), `audio_url`, `album_cover`. Playlist: `title`,
+`cover`, `album_covers` (the mosaic) and `entries` (each `entry_id`,
+`song_title`, `artist`, `generation_number`, `audio_url` and `album_cover`,
+the entry's own album cover, present only when the file exists and served only
+for albums that are members of the shared playlist). A `SharedTrack` therefore knows its own
 duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
@@ -778,7 +786,9 @@ in both modes — from the stream manifest while one is in play, otherwise
 from the payload's `audio_duration` — and Now Playing follows the lyrics in
 both, because `SharedCollection` hands the frame the playing track's own
 lyrics and cues (`lyricsText`/`lyricsCues`) rather than relying on `info`,
-whose `lyrics` a public stream manifest redacts. A take scored without
+whose `lyrics` a public stream manifest redacts (as it redacts `seed` and the stored `mp3_path`, which
+starts with the creator's account id: a stream track carries `seed: null` and
+`mp3_path: ""` to a stranger and the real values only to the signed-in owner). A take scored without
 `whisper_cues` renders static lyrics, the same fallback the app uses.
 
 ### Backend (`src/songmaker_cli/`)
