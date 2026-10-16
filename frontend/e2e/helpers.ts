@@ -509,14 +509,26 @@ export function playingAudioState(page: Page): Promise<PlayingAudioState> {
 	}, PLAYING_AUDIO_KEY);
 }
 
+// How far the tapped take must play on before the tap counts as played.
+const PLAYBACK_PROGRESS_SECONDS = 0.3;
+
 /**
- * How far the media element the app last started has played, 0 while it is
- * paused: a take the app only marked as playing, or the one it just left,
- * has not played yet.
+ * Passes once the media element the app last started has played on from where
+ * it stands when this is called, so call it right after the tap's playing mark
+ * shows. A paused element has not played on: a take the app only marked as
+ * playing, or the one it just left, does not pass. Position alone proves
+ * nothing, because on the continuous deck `currentTime` is the position in the
+ * whole stream and a tap on a take the deck already holds is a seek that moves
+ * it without a frame played.
  */
-export async function playedSeconds(page: Page): Promise<number> {
-	const { paused, time } = await playingAudioState(page);
-	return paused ? 0 : time;
+export async function expectPlaybackAdvances(page: Page): Promise<void> {
+	const { time: startedAt } = await playingAudioState(page);
+	await expect
+		.poll(async () => {
+			const { paused, time } = await playingAudioState(page);
+			return paused ? 0 : time - startedAt;
+		})
+		.toBeGreaterThan(PLAYBACK_PROGRESS_SECONDS);
 }
 
 export interface RenderedBox {
@@ -577,7 +589,7 @@ function coversPath(refusal: ExpectedRefusal, pathname: string): boolean {
  */
 export class FlowGuard {
 	private readonly failures: string[] = [];
-	private readonly abandonedTakePaths = new Set<string>();
+	private readonly takesBeingAbandoned = new Set<string>();
 	private apiRequests = 0;
 
 	constructor(page: Page, options: FlowGuardOptions = {}) {
@@ -598,14 +610,14 @@ export class FlowGuard {
 		page.on('requestfailed', (request) => {
 			const errorText = request.failure()?.errorText ?? 'unknown';
 			// Chromium reports a stream the client cancelled in flight, a send the
-			// leaving page cut off and a take the flow declared it abandons as a
+			// leaving page cut off and a take the running step abandons as a
 			// failed request with exactly this error, indistinguishable from any
 			// other intentional client-side abort. Every other reason still fails
 			// the flow, including a 429 or 5xx on the same path (handled below).
 			const cutOffOnPurpose =
 				isClosedOnPurpose(request.url()) ||
 				isSentAsThePageLeaves(request.url()) ||
-				this.abandonedTakePaths.has(new URL(request.url()).pathname);
+				this.takesBeingAbandoned.has(new URL(request.url()).pathname);
 			if (errorText === 'net::ERR_ABORTED' && cutOffOnPurpose) {
 				return;
 			}
@@ -635,16 +647,21 @@ export class FlowGuard {
 	}
 
 	/**
-	 * Declares, right before the step that leaves it, a take the flow stops
-	 * loading: the player cancels the download of the take it moves off, which
-	 * Chromium reports as an aborted request whether or not the whole take had
-	 * arrived. From then on an abort on exactly this take's address no longer
-	 * fails the flow; an abort on any other take still does. The declaration
-	 * says nothing about the take the flow moves to, so the flow itself must
-	 * check that the successor plays.
+	 * Runs the step that leaves these takes — a tap or a Next that repicks the
+	 * queue — and forgives, for exactly as long as it runs, the aborted downloads
+	 * of those takes: the player cancels the download of every take it drops or
+	 * asks for anew, which Chromium reports as an aborted request whether or not
+	 * the whole take had arrived, and a look-ahead it had only just started can
+	 * fall to the same tap. The step ends with the proof that the successor plays,
+	 * so an abort after it, or of any other take, still fails the flow.
 	 */
-	abandonsTake(audioPath: string): void {
-		this.abandonedTakePaths.add(audioPath);
+	async abandoningTakes(audioPaths: readonly string[], step: () => Promise<void>): Promise<void> {
+		for (const audioPath of audioPaths) this.takesBeingAbandoned.add(audioPath);
+		try {
+			await step();
+		} finally {
+			for (const audioPath of audioPaths) this.takesBeingAbandoned.delete(audioPath);
+		}
 	}
 
 	get apiRequestCount(): number {

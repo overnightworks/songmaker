@@ -56,6 +56,7 @@ import {
 	boundingBoxes,
 	containing,
 	csrfHeaders,
+	expectPlaybackAdvances,
 	FlowGuard,
 	LIBRARY_FLOW_API_REQUEST_BUDGET,
 	MOBILE_VIEWPORT,
@@ -66,7 +67,6 @@ import {
 	openLibraryWall,
 	openPlaylistsPage,
 	openSettingsSection,
-	playedSeconds,
 	playlistEntryRows,
 	RAIL_FLOW_API_REQUEST_BUDGET,
 	shellOf,
@@ -629,8 +629,6 @@ test('plays the album pick, curates a playlist and serves the public album link'
 
 // A card's border is the only part of it that is not its target (#1053).
 const ROW_BORDER_PX = 1;
-// How far the tapped song must have played before the tap counts as played.
-const PLAYBACK_PROGRESS_SECONDS = 0.3;
 
 type RowEdge = 'top' | 'bottom' | 'left' | 'right';
 
@@ -682,29 +680,28 @@ test(
 
 		// An album row plays its song from each edge and keeps the album page
 		// (#1354 rule 22); taking two songs in turn shows every edge's tap land.
-		// A tap repicks the queue: the player drops the take it leaves and the third
-		// one it had requested ahead of the second, either possibly still arriving.
+		// A tap repicks the queue: the player drops the takes it leaves and asks for
+		// the tapped one anew, any of them possibly still arriving.
 		const songBox = (title: string) => surface.locator('.song-row').filter({ hasText: title });
-		const [firstTrack, secondTrack, heldAheadTrack] = library.albumTracks;
+		const [firstTrack, secondTrack] = library.albumTracks;
+		const albumTakes = library.albumTracks.map((track) => track.audioPath);
 		for (const [index, edge] of (['top', 'bottom', 'left', 'right'] as const).entries()) {
 			const [played, other] =
 				index % 2 === 0 ? [firstTrack, secondTrack] : [secondTrack, firstTrack];
 			const row = songBox(played.songTitle);
-			if (index > 0) {
-				guard.abandonsTake(other.audioPath);
-				guard.abandonsTake(heldAheadTrack.audioPath);
-			}
-			await tapRowEdge(
-				row,
-				row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
-				edge
-			);
-			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-			await expect(
-				songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-			).toHaveCount(0);
-			await expect(albumHeading).toBeVisible();
-			await expect.poll(() => playedSeconds(page)).toBeGreaterThan(PLAYBACK_PROGRESS_SECONDS);
+			await guard.abandoningTakes(index === 0 ? [] : albumTakes, async () => {
+				await tapRowEdge(
+					row,
+					row.getByRole('button', { name: nameStartingWith(played.songTitle) }),
+					edge
+				);
+				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+				await expect(
+					songBox(other.songTitle).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+				).toHaveCount(0);
+				await expect(albumHeading).toBeVisible();
+				await expectPlaybackAdvances(page);
+			});
 		}
 
 		// Adding the album puts the playlist's first take in it a second time.
@@ -738,16 +735,19 @@ test(
 			['bottom', 0, 1]
 		] as const) {
 			const row = heldTwice.nth(played);
-			await tapRowEdge(
-				row,
-				row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
-				edge
-			);
-			await expect(pause).toBeVisible();
-			await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
-			await expect(
-				heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
-			).toHaveCount(0);
+			await guard.abandoningTakes(albumTakes, async () => {
+				await tapRowEdge(
+					row,
+					row.getByRole('button', { name: nameStartingWith(playlist.songTitles[0]) }),
+					edge
+				);
+				await expect(pause).toBeVisible();
+				await expect(row.getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })).toBeVisible();
+				await expect(
+					heldTwice.nth(other).getByRole('img', { name: PLAYING_MARK_LABEL, exact: true })
+				).toHaveCount(0);
+				await expectPlaybackAdvances(page);
+			});
 		}
 	}
 );

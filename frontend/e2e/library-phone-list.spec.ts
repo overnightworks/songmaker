@@ -3,12 +3,12 @@ import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	expectPlaybackAdvances,
 	FlowGuard,
 	LIBRARY_PATH,
 	LIBRARY_URL,
 	observePlayingAudio,
 	ONLY_IN_SHELL,
-	playedSeconds,
 	playingAudioState,
 	workspace
 } from './helpers';
@@ -29,6 +29,10 @@ async function screenshot(page: Page, name: string): Promise<void> {
 	if (!screenshotDirectory) return;
 	mkdirSync(screenshotDirectory, { recursive: true });
 	await page.screenshot({ path: path.join(screenshotDirectory, `${name}.png`) });
+}
+
+function takePathsOf(albumId: string): string[] {
+	return fixture.tracks[albumId].map((track) => track.audioPath);
 }
 
 function row(page: Page, title: string): Locator {
@@ -163,11 +167,12 @@ test(
 		);
 		await screenshot(page, 'playing');
 		const playerBar = page.locator('.player-bar');
-		guard.abandonsTake(fixture.tracks[playable.id][0].audioPath);
-		await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
-		await expect(playerBar).toContainText(secondTrack.title);
-		expect((await secondAudioResponse).ok()).toBe(true);
-		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(1);
+		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+			await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
+			await expect(playerBar).toContainText(secondTrack.title);
+			expect((await secondAudioResponse).ok()).toBe(true);
+			await expectPlaybackAdvances(page);
+		});
 		await pause.click();
 		await expect(play).toBeVisible();
 		const paused = await playingAudioState(page);
@@ -204,14 +209,15 @@ test(
 		);
 		await row(page, last.title).scrollIntoViewIfNeeded();
 		const bottomBefore = await scroll.evaluate((el) => el.scrollTop);
-		guard.abandonsTake(secondTrack.audioPath);
-		await row(page, last.title)
-			.getByRole('button', { name: `Play ${last.title}`, exact: true })
-			.click();
-		await expect(
-			row(page, last.title).getByRole('button', { name: `Pause ${last.title}`, exact: true })
-		).toBeVisible();
-		await expect.poll(() => playedSeconds(page)).toBeGreaterThan(0);
+		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+			await row(page, last.title)
+				.getByRole('button', { name: `Play ${last.title}`, exact: true })
+				.click();
+			await expect(
+				row(page, last.title).getByRole('button', { name: `Pause ${last.title}`, exact: true })
+			).toBeVisible();
+			await expectPlaybackAdvances(page);
+		});
 		await expect(page).toHaveURL(LIBRARY_URL);
 		expect(await scroll.evaluate((el) => el.scrollTop)).toBe(bottomBefore);
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toHaveCount(0);
@@ -297,12 +303,13 @@ test(
 		});
 		await play.click();
 		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(0);
-		guard.abandonsTake(fixture.tracks[playable.id][0].audioPath);
-		await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
-		await expect
-			.poll(async () => new URL((await playingAudioState(page)).src).pathname)
-			.toBe(secondTrack.audioPath);
-		await expect.poll(async () => (await playingAudioState(page)).time).toBeGreaterThan(1);
+		await guard.abandoningTakes(takePathsOf(playable.id), async () => {
+			await page.locator('.player-bar').getByRole('button', { name: 'Next', exact: true }).click();
+			await expect
+				.poll(async () => new URL((await playingAudioState(page)).src).pathname)
+				.toBe(secondTrack.audioPath);
+			await expectPlaybackAdvances(page);
+		});
 		await row(page, playable.title)
 			.getByRole('button', { name: `Pause ${playable.title}`, exact: true })
 			.click();
