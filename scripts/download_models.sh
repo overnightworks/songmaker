@@ -13,7 +13,7 @@ if [[ -f "$ENV_FILE" ]]; then
 fi
 
 if [[ ! -x "$VENV_PYTHON" ]]; then
-    echo "ERROR: Python venv not found at $VENV_PYTHON — run 'uv sync' first"
+    echo "ERROR: Python venv not found at $VENV_PYTHON — run 'uv sync' first" >&2
     exit 1
 fi
 

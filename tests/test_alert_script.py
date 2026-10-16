@@ -9,9 +9,11 @@ touching a network or reimplementing the script's own logic in Python.
 from __future__ import annotations
 
 import base64
+import shutil
 import stat
 import subprocess
 import threading
+from collections.abc import Iterator
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -28,6 +30,11 @@ VALID_ENV = {
     "SMTP_USER": "songmaker@example.com",
     "SMTP_PASSWORD": "correct-horse-battery-staple",
 }
+
+# Passwords the shell reads as glob syntax (a bracket expression, an escaping
+# backslash): a redaction that treats the password as a pattern instead of as
+# text leaves each of them readable.
+GLOB_PASSWORDS = ["dummy[x]pw", "digits[0-9]pw", "back\\slash"]
 
 
 def _write_env_file(path: Path, values: dict[str, str]) -> Path:
@@ -48,6 +55,13 @@ def _write_env_file(path: Path, values: dict[str, str]) -> Path:
 
 
 def _install_fake_curl(bin_dir: Path, exit_code: int = 0, error_message: str = "") -> Path:
+    """Stand in for curl, recording what alert.sh handed it.
+
+    FAKE_CURL_FORWARD_CONFIG_TO_URL hands the --config alert.sh built to the
+    real curl (FAKE_CURL_REAL_CURL) and has it fetch that URL, so the
+    credentials travel through exactly the transport alert.sh uses.
+    FAKE_CURL_UNREAD_CONFIG makes the fake exit without ever reading it.
+    """
     bin_dir.mkdir(exist_ok=True)
     fake_curl = bin_dir / "curl"
     fake_curl.write_text(
@@ -55,13 +69,21 @@ def _install_fake_curl(bin_dir: Path, exit_code: int = 0, error_message: str = "
         "set -euo pipefail\n"
         'echo "$@" >> "${FAKE_CURL_ARGS_FILE:-/dev/null}"\n'
         'env >> "${FAKE_CURL_ENV_FILE:-/dev/null}"\n'
+        'CONFIG_PATH=""\n'
         'PREVIOUS_ARG=""\n'
         'for ARG in "$@"; do\n'
         '    if [[ "$PREVIOUS_ARG" == "--config" ]]; then\n'
-        '        cat "$ARG" >> "${FAKE_CURL_CONFIG_FILE:-/dev/null}"\n'
+        '        CONFIG_PATH="$ARG"\n'
         "    fi\n"
         '    PREVIOUS_ARG="$ARG"\n'
         "done\n"
+        'if [[ -n "${FAKE_CURL_FORWARD_CONFIG_TO_URL:-}" ]]; then\n'
+        '    exec "$FAKE_CURL_REAL_CURL" --silent --show-error --fail --basic \\\n'
+        '        --config "$CONFIG_PATH" --url "$FAKE_CURL_FORWARD_CONFIG_TO_URL"\n'
+        "fi\n"
+        'if [[ -n "$CONFIG_PATH" && -z "${FAKE_CURL_UNREAD_CONFIG:-}" ]]; then\n'
+        '    cat "$CONFIG_PATH" >> "${FAKE_CURL_CONFIG_FILE:-/dev/null}"\n'
+        "fi\n"
         'if [[ -n "${FAKE_CURL_CAPTURE_STDIN_FILE:-}" ]]; then\n'
         '    cat > "$FAKE_CURL_CAPTURE_STDIN_FILE"\n'
         "else\n"
@@ -84,6 +106,7 @@ def _run_alert(
     fake_curl_exit_code: int = 0,
     fake_curl_error_message: str = "",
     extra_env: dict[str, str] | None = None,
+    script: Path = ALERT_SCRIPT,
 ) -> subprocess.CompletedProcess[str]:
     bin_dir = tmp_path / "bin"
     _install_fake_curl(bin_dir, fake_curl_exit_code, fake_curl_error_message)
@@ -96,12 +119,22 @@ def _run_alert(
         env.update(extra_env)
 
     return subprocess.run(
-        [str(ALERT_SCRIPT), *args],
+        [str(script), *args],
         capture_output=True,
         text=True,
         env=env,
         timeout=10,
     )
+
+
+def _alert_script_whose_credentials_producer_is(tmp_path: Path, producer_body: str) -> Path:
+    """A copy of alert.sh whose curl_credentials_config runs ``producer_body``."""
+    scripts_dir = tmp_path / "scripts"
+    scripts_dir.mkdir()
+    shutil.copy(ALERT_CONFIG_LIB, scripts_dir)
+    with (scripts_dir / ALERT_CONFIG_LIB.name).open("a") as config_lib:
+        config_lib.write(f"\ncurl_credentials_config() {{\n    {producer_body}\n}}\n")
+    return Path(shutil.copy(ALERT_SCRIPT, scripts_dir))
 
 
 def test_sends_mail_via_curl_on_success(tmp_path: Path) -> None:
@@ -179,18 +212,19 @@ def test_smtp_failure_reports_named_error_without_sending(tmp_path: Path) -> Non
     assert "sent" not in result.stdout
 
 
-def test_smtp_failure_never_leaks_password_in_output(tmp_path: Path) -> None:
+@pytest.mark.parametrize("password", [VALID_ENV["SMTP_PASSWORD"], *GLOB_PASSWORDS])
+def test_smtp_failure_never_leaks_password_in_output(tmp_path: Path, password: str) -> None:
     result = _run_alert(
         tmp_path,
         ["subject", "body"],
-        VALID_ENV,
+        {**VALID_ENV, "SMTP_PASSWORD": password},
         fake_curl_exit_code=1,
-        fake_curl_error_message=f"auth rejected for password {VALID_ENV['SMTP_PASSWORD']}",
+        fake_curl_error_message=f"auth rejected for password {password}",
     )
 
     assert result.returncode != 0
-    assert VALID_ENV["SMTP_PASSWORD"] not in result.stderr
-    assert VALID_ENV["SMTP_PASSWORD"] not in result.stdout
+    assert password not in result.stderr
+    assert password not in result.stdout
     assert "[REDACTED]" in result.stderr
 
 
@@ -233,14 +267,9 @@ def test_password_reaches_curl_off_the_command_line(tmp_path: Path, password: st
     assert config_file.read_text().strip() != ""
 
 
-@pytest.mark.parametrize("password", AWKWARD_PASSWORDS)
-def test_curl_reads_back_the_exact_credentials(password: str) -> None:
-    """The credential line alert.sh writes, parsed by the real curl.
-
-    Drives curl's own config parser against a loopback HTTP server: what
-    comes out the far side must be the byte-for-byte user and password,
-    whatever the password contains.
-    """
+@pytest.fixture
+def basic_auth_server() -> Iterator[tuple[str, dict[str, str]]]:
+    """A loopback HTTP server; its URL and the credentials the last request sent."""
     received: dict[str, str] = {}
 
     class Handler(BaseHTTPRequestHandler):
@@ -259,27 +288,80 @@ def test_curl_reads_back_the_exact_credentials(password: str) -> None:
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
-        result = subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'source "{ALERT_CONFIG_LIB}"\n'
-                'curl --silent --show-error --fail --basic --config /dev/fd/3 '
-                f'--url http://127.0.0.1:{server.server_address[1]}/ '
-                '3<<<"$(curl_credentials_config "$1" "$2")"',
-                "test_curl_reads_back_the_exact_credentials",
-                VALID_ENV["SMTP_USER"],
-                password,
-            ],
-            capture_output=True,
-            text=True,
-            timeout=10,
-        )
+        yield f"http://127.0.0.1:{server.server_address[1]}/", received
     finally:
         server.shutdown()
 
+
+@pytest.mark.parametrize("password", AWKWARD_PASSWORDS)
+def test_curl_reads_back_the_exact_credentials(
+    tmp_path: Path,
+    password: str,
+    basic_auth_server: tuple[str, dict[str, str]],
+) -> None:
+    """The credentials alert.sh sends, parsed by the real curl.
+
+    alert.sh itself runs and builds its --config; the fake curl passes that
+    exact --config on to the real curl, which fetches a loopback server. What
+    arrives there must be the byte-for-byte user and password, whatever the
+    password contains.
+    """
+    server_url, received = basic_auth_server
+    real_curl = shutil.which("curl")
+    assert real_curl, "the real curl is needed to prove how it reads alert.sh's credentials"
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        {**VALID_ENV, "SMTP_PASSWORD": password},
+        extra_env={
+            "FAKE_CURL_FORWARD_CONFIG_TO_URL": server_url,
+            "FAKE_CURL_REAL_CURL": real_curl,
+        },
+    )
+
     assert result.returncode == 0, result.stderr
     assert received["credentials"] == f"{VALID_ENV['SMTP_USER']}:{password}"
+
+
+@pytest.mark.parametrize(
+    "producer_body",
+    ["return 23", 'kill -PIPE "$BASHPID"'],
+    ids=["exits-with-status-23", "killed-by-sigpipe"],
+)
+def test_failing_credentials_producer_never_reports_sent(
+    tmp_path: Path,
+    producer_body: str,
+) -> None:
+    args_file = tmp_path / "curl-args.txt"
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        VALID_ENV,
+        extra_env={"FAKE_CURL_ARGS_FILE": str(args_file)},
+        script=_alert_script_whose_credentials_producer_is(tmp_path, producer_body),
+    )
+
+    assert result.returncode != 0
+    assert "sent" not in result.stdout
+    assert "credentials" in result.stderr
+    assert not args_file.exists(), "curl must not start without its credentials"
+
+
+def test_failed_credential_write_does_not_count_as_sent(tmp_path: Path) -> None:
+    # Larger than a pipe holds, so the write fails once curl exits unread.
+    password_larger_than_a_pipe_buffer = "x" * 200_000
+
+    result = _run_alert(
+        tmp_path,
+        ["subject", "body"],
+        {**VALID_ENV, "SMTP_PASSWORD": password_larger_than_a_pipe_buffer},
+        extra_env={"FAKE_CURL_UNREAD_CONFIG": "1"},
+    )
+
+    assert result.returncode != 0
+    assert "sent" not in result.stdout
 
 
 def test_env_file_is_not_exported_into_curls_environment(tmp_path: Path) -> None:

@@ -21,8 +21,8 @@ TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 SNAPSHOT_DIR="$BACKUP_DIR/$TIMESTAMP"
 
 if [[ ! -d "$BACKUP_DIR" ]]; then
-    echo "ERROR: Backup directory $BACKUP_DIR does not exist."
-    echo "Mount your external drive and create the directory first."
+    echo "ERROR: Backup directory $BACKUP_DIR does not exist." >&2
+    echo "Mount your external drive and create the directory first." >&2
     exit 1
 fi
 

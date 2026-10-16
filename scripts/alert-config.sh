@@ -55,6 +55,7 @@ load_alert_config() {
 _escape_curl_config_value() {
     local value="${1//\\/\\\\}"
     printf '%s' "${value//\"/\\\"}"
+    return
 }
 
 curl_credentials_config() {
@@ -63,4 +64,5 @@ curl_credentials_config() {
     printf 'user = "%s:%s"\n' \
         "$(_escape_curl_config_value "$user")" \
         "$(_escape_curl_config_value "$password")"
+    return
 }
