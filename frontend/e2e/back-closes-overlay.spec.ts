@@ -1,11 +1,16 @@
 import { expect, test, type APIRequestContext, type Locator, type Page } from '@playwright/test';
 import {
+	mockPlaylist,
+	playlistPayload,
+	PLAYLIST_API,
+	PLAYLIST_URL
+} from './share-playlist-fixtures';
+import {
 	COLLECTION_MENU_LABEL,
 	collectionActionLabel,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
 	EDITOR_UNSAVED_TITLE,
-	NOW_PLAYING_CLOSE,
 	NOW_PLAYING_GO_TO_SONG,
 	NOW_PLAYING_LABEL,
 	openNowPlayingLabel,
@@ -1278,10 +1283,9 @@ test.describe('Back closes the open overlay outside the library', () => {
 		}
 	});
 
-	test('Back closes the playlist share page Now Playing, and its close button leaves no entry behind', async ({
+	test('scrolling back to the playlist player leaves browser Back intact', async ({
 		browser
 	}, testInfo) => {
-		const library = readSeededLibrary();
 		const { viewport, isMobile, hasTouch } = testInfo.project.use;
 		const loggedOut = await browser.newContext({
 			storageState: undefined,
@@ -1289,44 +1293,33 @@ test.describe('Back closes the open overlay outside the library', () => {
 			isMobile,
 			hasTouch
 		});
+		const sharePage = await loggedOut.newPage();
+		const guard = new FlowGuard(sharePage, {
+			refusalsExpectedOn: [{ path: `${PLAYLIST_API}/stream`, statuses: [404] }]
+		});
 		try {
-			const sharePage = await loggedOut.newPage();
-			const guard = new FlowGuard(sharePage);
-			await sharePage.goto(library.playlistShareUrl);
-			await expect(sharePage.locator('.header-title')).toBeVisible();
-			const shareAddress = sharePage.url();
+			await mockPlaylist(sharePage, playlistPayload(24));
+			await sharePage.goto('/login');
+			await sharePage.goto(PLAYLIST_URL);
 			await sharePage
-				.getByRole('button', {
-					name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
-					exact: true
-				})
+				.locator('.now-playing.page')
+				.getByRole('button', { name: 'Play', exact: true })
 				.click();
-			const openNowPlaying = sharePage.getByRole('button', {
-				name: NOW_PLAYING_LABEL,
-				exact: true
-			});
-			const closeNowPlaying = sharePage.getByRole('button', {
-				name: NOW_PLAYING_CLOSE,
-				exact: true
-			});
-			await openNowPlaying.click();
-			await expect(closeNowPlaying).toBeVisible();
-
+			await sharePage
+				.locator('.shared-page')
+				.evaluate((element) => element.scrollTo(0, element.scrollHeight));
+			const bar = sharePage.locator('footer.player-bar');
+			await bar.getByRole('button', { name: 'Back to the player' }).first().click();
+			await expect(bar).toBeHidden();
+			await expect(sharePage.getByRole('dialog')).toHaveCount(0);
 			await sharePage.goBack();
-
-			await expect(closeNowPlaying).toBeHidden();
-			expect(sharePage.url()).toBe(shareAddress);
-
-			await openNowPlaying.click();
-			await expect(closeNowPlaying).toBeVisible();
-			await closeNowPlaying.click();
-
-			await expect(closeNowPlaying).toBeHidden();
-			await expect.poll(() => standsOnLayerEntry(sharePage)).toBe(false);
-			expect(sharePage.url()).toBe(shareAddress);
-			guard.assertClean();
+			await expect(sharePage).toHaveURL(/\/login$/);
 		} finally {
-			await loggedOut.close();
+			try {
+				guard.assertClean();
+			} finally {
+				await loggedOut.close();
+			}
 		}
 	});
 
