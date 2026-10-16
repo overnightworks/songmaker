@@ -150,26 +150,36 @@ def extract_functions(source: str, path: Path) -> list[Function]:
     return functions
 
 
-def discover_functions(paths: Sequence[Path], include_tests: bool = False) -> list[Function]:
-    files: set[Path] = set()
+def is_audited_source(path: Path, include_tests: bool) -> bool:
+    if path.suffix != ".py":
+        return False
+    return include_tests or not ("tests" in path.parts or path.name.startswith("test_"))
+
+
+def source_files(paths: Sequence[Path], include_tests: bool) -> set[Path]:
     roots = list(paths)
     if include_tests and Path("tests").is_dir():
         roots.append(Path("tests"))
+    files: set[Path] = set()
     for root in roots:
         if not root.exists():
             raise AuditError(f"Source path does not exist: {root}")
         candidates = root.rglob("*.py") if root.is_dir() else [root]
-        for path in candidates:
-            if path.suffix != ".py":
-                continue
-            if not include_tests and ("tests" in path.parts or path.name.startswith("test_")):
-                continue
-            files.add(path.resolve())
+        files.update(
+            path.resolve() for path in candidates if is_audited_source(path, include_tests)
+        )
+    return files
+
+
+def display_path(path: Path) -> Path:
+    return path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path
+
+
+def discover_functions(paths: Sequence[Path], include_tests: bool = False) -> list[Function]:
     functions = []
-    for path in sorted(files):
-        display = path.relative_to(Path.cwd()) if path.is_relative_to(Path.cwd()) else path
+    for path in sorted(source_files(paths, include_tests)):
         with tokenize.open(path) as stream:
-            functions.extend(extract_functions(stream.read(), display))
+            functions.extend(extract_functions(stream.read(), display_path(path)))
     return functions
 
 
@@ -298,6 +308,34 @@ def cosine(left: Vector, right: Vector) -> float:
     return max(-1.0, min(1.0, math.sumprod(left, right)))
 
 
+def is_same_or_enclosing_function(left: Function, right: Function) -> bool:
+    if (left.path, left.line) == (right.path, right.line):
+        return True
+    return left.path == right.path and (
+        left.name.startswith(right.name + ".") or right.name.startswith(left.name + ".")
+    )
+
+
+def score_pair(
+    left: FunctionSignals,
+    right: FunctionSignals,
+    code_threshold: float,
+    summary_threshold: float,
+    require_both: bool,
+) -> Pair | None:
+    code = cosine(left.code, right.code)
+    summary = None
+    if left.summary_vector is not None and right.summary_vector is not None:
+        summary = cosine(left.summary_vector, right.summary_vector)
+    code_matches = code >= code_threshold
+    summary_matches = summary is not None and summary >= summary_threshold
+    matches = code_matches and summary_matches if require_both else code_matches or summary_matches
+    if not matches:
+        return None
+    score = (code + summary) / 2 if summary is not None else code
+    return Pair(left, right, code, summary, score)
+
+
 def find_pairs(
     signals: Sequence[FunctionSignals],
     code_threshold: float = DEFAULT_CODE_THRESHOLD,
@@ -306,25 +344,11 @@ def find_pairs(
 ) -> list[Pair]:
     pairs = []
     for left, right in itertools.combinations(signals, 2):
-        if (left.function.path, left.function.line) == (right.function.path, right.function.line):
+        if is_same_or_enclosing_function(left.function, right.function):
             continue
-        if left.function.path == right.function.path and (
-            left.function.name.startswith(right.function.name + ".")
-            or right.function.name.startswith(left.function.name + ".")
-        ):
-            continue
-        code = cosine(left.code, right.code)
-        summary = None
-        if left.summary_vector is not None and right.summary_vector is not None:
-            summary = cosine(left.summary_vector, right.summary_vector)
-        code_matches = code >= code_threshold
-        summary_matches = summary is not None and summary >= summary_threshold
-        matches = (
-            code_matches and summary_matches if require_both else code_matches or summary_matches
-        )
-        if matches:
-            score = (code + summary) / 2 if summary is not None else code
-            pairs.append(Pair(left, right, code, summary, score))
+        pair = score_pair(left, right, code_threshold, summary_threshold, require_both)
+        if pair is not None:
+            pairs.append(pair)
     return sorted(
         pairs,
         key=lambda pair: (-pair.score, pair.left.function.location, pair.right.function.location),
@@ -495,6 +519,13 @@ def positive_integer(value: str) -> int:
     return number
 
 
+def emit_report(report: str, destination: Path | None) -> None:
+    if destination is not None:
+        destination.write_text(report, encoding="utf-8")  # NOSONAR(S8707) Operator-named CLI path.
+    else:
+        print(report, end="")
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("paths", nargs="*", type=Path, default=[Path("src")])
@@ -548,10 +579,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             args.summary_threshold,
             args.require_both,
         )
-        if args.report:
-            args.report.write_text(report, encoding="utf-8")
-        else:
-            print(report, end="")
+        emit_report(report, args.report)
         return int(args.fail_above is not None and any(p.score > args.fail_above for p in pairs))
     except (AuditError, OSError, SyntaxError) as error:
         print(f"similar_functions: {error}", file=sys.stderr)

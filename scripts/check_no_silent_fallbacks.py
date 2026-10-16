@@ -330,42 +330,51 @@ def _try_parse(text: str, filename: str) -> ast.AST | None:
         return None
 
 
+def _line_hits(lines: Sequence[str], rel_path: str, rules: Iterable[Rule]) -> list[_Hit]:
+    return [
+        _Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line)
+        for lineno, line in enumerate(lines, start=1)
+        for rule in rules
+        if rule._compiled is not None and rule._compiled.search(line)
+    ]
+
+
+def _tree_hits(
+    tree: ast.AST, lines: Sequence[str], rel_path: str, rules: Iterable[Rule],
+) -> tuple[list[_Hit], dict[str, int]]:
+    hits: list[_Hit] = []
+    counts: dict[str, int] = {}
+    for rule in rules:
+        if rule.inspect_tree is None:
+            continue
+        ast_hits, n_sites = rule.inspect_tree(tree, lines)
+        counts[rule.name] = n_sites
+        hits.extend(
+            _Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line, detail=detail)
+            for lineno, line, detail in ast_hits
+        )
+    return hits, counts
+
+
 def _scan_file(
     path: Path, rel_path: str, rules: Iterable[Rule],
 ) -> tuple[list[_Hit], dict[str, int]]:
-    hits: list[_Hit] = []
     applicable = [rule for rule in rules if rule.applies_to(rel_path)]
     counts = {rule.name: 0 for rule in applicable}
     try:
         text = path.read_text(encoding="utf-8")
     except (UnicodeDecodeError, OSError):
-        return hits, counts
+        return [], counts
     lines = text.splitlines()
-    for lineno, line in enumerate(lines, start=1):
-        for rule in applicable:
-            compiled = rule._compiled
-            if compiled is not None and compiled.search(line):
-                hits.append(_Hit(rule=rule, rel_path=rel_path, lineno=lineno, line=line))
+    hits = _line_hits(lines, rel_path, applicable)
     for rule in applicable:
         if rule._compiled is not None:
             counts[rule.name] = 1
     tree = _try_parse(text, rel_path)
     if tree is not None:
-        for rule in applicable:
-            if rule.inspect_tree is None:
-                continue
-            ast_hits, n_sites = rule.inspect_tree(tree, lines)
-            counts[rule.name] = n_sites
-            for lineno, line, detail in ast_hits:
-                hits.append(
-                    _Hit(
-                        rule=rule,
-                        rel_path=rel_path,
-                        lineno=lineno,
-                        line=line,
-                        detail=detail,
-                    ),
-                )
+        ast_hits, ast_counts = _tree_hits(tree, lines, rel_path, applicable)
+        hits.extend(ast_hits)
+        counts.update(ast_counts)
     return hits, counts
 
 
