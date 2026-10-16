@@ -141,6 +141,9 @@ test('a playlist rail row shows its album-cover mosaic and opens with one click 
 		const collapsedMosaicRow = rail
 			.locator('#rail-playlists-group li')
 			.filter({ hasText: playlistTitle });
+		// A group is unfolded on its own page (#1354 D3): fold it with its caret.
+		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'true');
+		await playlistsGroup.click();
 		await expect(playlistsGroup).toHaveAttribute('aria-expanded', 'false');
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell')).toHaveCount(4);
 		await expect(collapsedMosaicRow.locator('.playlist-cover-cell img')).toHaveCount(0);
