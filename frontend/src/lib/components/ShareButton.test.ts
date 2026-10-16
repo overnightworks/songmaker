@@ -123,7 +123,7 @@ describe('ShareButton', () => {
 		expect(addToast).toHaveBeenCalledWith(SHARE_BUTTON_COPY_FAILED_TOAST, 'success');
 	});
 
-	it('unshares a shared item, reporting it, without copying a link', async () => {
+	it('1480_R4: unshares a shared item, reporting it, without copying a link', async () => {
 		Object.defineProperty(navigator, 'clipboard', {
 			value: { writeText: vi.fn().mockResolvedValue(undefined) },
 			configurable: true
@@ -138,7 +138,7 @@ describe('ShareButton', () => {
 		expect(addToast).toHaveBeenCalledWith(SHARE_BUTTON_UNSHARED_TOAST, 'success');
 	});
 
-	it('is disabled while a share is under way and enabled again once it is done', async () => {
+	it('1480_R4: is disabled while a share is under way and enabled again once it is done', async () => {
 		let finishShare: (result: ShareResult) => void = () => {};
 		const { target } = await render({
 			onshare: vi.fn<() => Promise<ShareResult>>(
@@ -159,13 +159,16 @@ describe('ShareButton', () => {
 	it.each([
 		{ isShared: false, shareSlug: null, tooltip: 'Share' },
 		{ isShared: true, shareSlug: 'abc', tooltip: 'Shared: /share/abc' }
-	])('titles the button "$tooltip" when isShared is $isShared', async (state) => {
-		const { target } = await render(state);
+	])(
+		'1480_R4: titles the button "$tooltip" when isShared is $isShared',
+		async ({ tooltip, ...props }) => {
+			const { target } = await render(props);
 
-		expect(shareButton(target).title).toBe(state.tooltip);
-	});
+			expect(shareButton(target).title).toBe(tooltip);
+		}
+	);
 
-	it('draws a different icon once shared', async () => {
+	it('1480_R4: draws a different icon once shared', async () => {
 		const iconOf = async (isShared: boolean) => {
 			const { target } = await render({ isShared });
 			return shareButton(target).querySelector('svg')?.innerHTML;
