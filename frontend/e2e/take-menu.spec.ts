@@ -34,7 +34,7 @@ const ALBUM_FORM_MENU_WIDTH_PX = 238;
 const SONG_TITLE = 'Take menu cells';
 const TAKE_COUNT = 16;
 const MIDDLE_TAKE_INDEX = TAKE_COUNT / 2;
-const FOOT_OF_LIST_TAKE_INDEX = 10;
+const FOOT_OF_LIST_REACH_PX = HITBOX_FREQUENT_PX;
 const SAME_PLACE_TOLERANCE_PX = 0.5;
 const ROW_LABELS_IN_ORDER = [
 	TAKE_REPAINT_LABEL,
@@ -66,18 +66,14 @@ const CELLS: Cell[] = [
 interface TakePosition {
 	name: string;
 	index: number;
-	atFootOfScrollArea: boolean;
+	listScrolledToFoot: boolean;
 }
 
 const TAKE_POSITIONS: TakePosition[] = [
-	{ name: 'first', index: 0, atFootOfScrollArea: false },
-	{ name: 'middle', index: MIDDLE_TAKE_INDEX, atFootOfScrollArea: false },
-	{ name: 'last', index: TAKE_COUNT - 1, atFootOfScrollArea: false },
-	{
-		name: 'row scrolled to the foot of the list',
-		index: FOOT_OF_LIST_TAKE_INDEX,
-		atFootOfScrollArea: true
-	}
+	{ name: 'first take', index: 0, listScrolledToFoot: false },
+	{ name: 'middle take', index: MIDDLE_TAKE_INDEX, listScrolledToFoot: false },
+	{ name: 'last take', index: TAKE_COUNT - 1, listScrolledToFoot: false },
+	{ name: 'lowest reachable row', index: TAKE_COUNT - 1, listScrolledToFoot: true }
 ];
 
 let guard: FlowGuard;
@@ -131,12 +127,33 @@ function takeMenu(page: Page): Locator {
 }
 
 /**
- * The lowest a clickable trigger stands: the transport bar keeps the last
- * 71-95 px of the viewport, so no row's trigger can sit within 44 px of the
- * viewport bottom; scrolled to the foot of its list it is as close as it gets.
+ * The lowest a take's trigger can stand. No trigger sits within 44 px of the
+ * viewport bottom: the scroll area holding the list ends above the transport
+ * bar. The lowest a clickable trigger gets is its bottom on that scroll
+ * area's bottom edge; returns the area's box to measure that against.
  */
-async function scrollToFootOfScrollArea(trigger: Locator): Promise<void> {
-	await trigger.evaluate((node) => node.scrollIntoView({ block: 'end' }));
+async function scrollToFootOfList(trigger: Locator): Promise<RenderedBox> {
+	return trigger.evaluate((node) => {
+		node.scrollIntoView({ block: 'end' });
+		let area = node.parentElement;
+		while (
+			area &&
+			!(
+				area.scrollHeight > area.clientHeight &&
+				/auto|scroll/.test(getComputedStyle(area).overflowY)
+			)
+		)
+			area = area.parentElement;
+		if (!area) throw new Error('Expected the takes list to sit in a scrolling area');
+		const { x, y, width, height } = area.getBoundingClientRect();
+		return { x, y, width, height };
+	});
+}
+
+function expectTriggerAtFootOf(triggerBox: RenderedBox, scrollArea: RenderedBox): void {
+	expect(Math.abs(bottomOf(scrollArea) - bottomOf(triggerBox))).toBeLessThanOrEqual(
+		FOOT_OF_LIST_REACH_PX
+	);
 }
 
 async function dangerColor(page: Page): Promise<string> {
@@ -216,16 +233,19 @@ const GRID: GridCell[] = TAKE_POSITIONS.flatMap((position, positionIndex) =>
 
 for (const { ids, position, cell } of GRID) {
 	test(
-		`915_C3 ${ids}: the ${position.name} take's ⋯ opens fully on screen in the album form at ${cell.width} px, and again in the same place`,
+		`915_C3 ${ids}: the ${position.name}'s ⋯ opens fully on screen in the album form at ${cell.width} px, and again in the same place`,
 		{ tag: ONLY_IN_SHELL[cell.shell] },
 		async ({ page }, testInfo: TestInfo) => {
 			await onOwnTakes(page, cell, async () => {
 				const trigger = takeMenuTriggers(page).nth(position.index);
-				if (position.atFootOfScrollArea) await scrollToFootOfScrollArea(trigger);
+				const scrollArea = position.listScrolledToFoot
+					? await scrollToFootOfList(trigger)
+					: undefined;
 				const [triggerBox] = await boundingBoxes(trigger);
+				if (scrollArea) expectTriggerAtFootOf(triggerBox, scrollArea);
 
 				const first = await openCheckedMenu(page, trigger, cell);
-				if (position.atFootOfScrollArea) expect(bottomOf(first)).toBeLessThanOrEqual(triggerBox.y);
+				if (scrollArea) expect(bottomOf(first)).toBeLessThanOrEqual(triggerBox.y);
 				await closeWithEscape(page, trigger);
 				const second = await openCheckedMenu(page, trigger, cell);
 
