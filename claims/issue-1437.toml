@@ -1,0 +1,8 @@
+claim_id = "be438673bfb84c4989bff65224bd71a0"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "89dada09edab12f83abac6106beec2a3a3ea18e3"
+branch = "claude/issue-1437-playable-owner-frontend"
+scope = ["frontend/src/lib/components/AlbumDetailView.svelte", "frontend/src/lib/components/AlbumDetailView.test.ts", "frontend/src/lib/components/SongDetailView.svelte", "frontend/src/lib/components/SongDetailView.test.ts", "frontend/src/lib/components/shell/RailLibraryGroup.svelte", "frontend/src/lib/components/shell/RailLibraryGroup.test.ts", "frontend/src/lib/stores/libraryContext.test.ts", "frontend/src/lib/stores/libraryContext.ts", "frontend/src/lib/stores/player.test.ts", "frontend/src/lib/stores/player.ts", "frontend/src/lib/utils/playable.test.ts", "frontend/src/lib/utils/playable.ts", "frontend/src/routes/(library)/album/[slug]/page.test.ts"]
+opened_commit = "dd75e6081a9625ac33b0dfa1a069d4990d5cf91e"
+whole_reason = "one frontend owner for something to hear: the new utils/playable module and every decider moved onto it in the player store, the album page, the rail group, the library context and the song page, with their tests"
