@@ -51,6 +51,7 @@ import {
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
+import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
@@ -225,7 +226,7 @@ async function unmountCurrentLayout(): Promise<void> {
 }
 
 beforeEach(() => {
-	replaceHistoryEntry('/');
+	replaceHistoryEntry(LIBRARY_ROUTE_PATH);
 	stubMatchMedia(true);
 	document.documentElement.dataset.pointer = 'coarse';
 	Object.defineProperty(window, 'innerWidth', { configurable: true, value: VIEWPORT_PX });
@@ -331,7 +332,7 @@ function stubMatchMediaAtWidth(width: number): void {
 async function renderDesktopLayout(width = NOW_PLAYING_STACKED_MAX_PX + 1): Promise<HTMLElement> {
 	stubMatchMediaAtWidth(width);
 	delete document.documentElement.dataset.pointer;
-	return renderLayout('/');
+	return renderLayout(LIBRARY_ROUTE_PATH);
 }
 
 function pressEscape(target: EventTarget): void {
@@ -340,7 +341,7 @@ function pressEscape(target: EventTarget): void {
 
 describe('app shell', () => {
 	it('keeps the private PlayerBar and body reservation visible while idle', async () => {
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const body = requireElement<HTMLElement>(target, '.app-shell');
 
 		expect(audioPlayer.current).toBeNull();
@@ -370,7 +371,7 @@ describe('app shell', () => {
 		currentUser.set(null);
 		authLoading.set(true);
 		vi.mocked(checkAuth).mockImplementationOnce(() => new Promise(() => {}));
-		const target = mountLayout('/');
+		const target = mountLayout(LIBRARY_ROUTE_PATH);
 		await tick();
 
 		expect(target.querySelector('.loading')).not.toBeNull();
@@ -379,7 +380,7 @@ describe('app shell', () => {
 	});
 
 	it('removes the PlayerBar and reservation after auth loss', async () => {
-		const privateTarget = await renderLayout('/');
+		const privateTarget = await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(privateTarget.querySelector('.player-bar')).not.toBeNull();
 		currentUser.set(null);
 		await tick();
@@ -388,7 +389,7 @@ describe('app shell', () => {
 	});
 
 	it('keeps the mobile strip trigger, brand and account circle inside 320px', async () => {
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const strip = requireElement<HTMLElement>(target, '.mobile-strip');
 		const trigger = requireElement<HTMLButtonElement>(strip, '.drawer-trigger');
 		const brand = requireElement<HTMLButtonElement>(strip, '.brand');
@@ -414,7 +415,7 @@ describe('app shell', () => {
 
 	it('acts as the Library link when the mobile-strip brand is clicked', async () => {
 		librarySurface.set('detail');
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const brand = requireElement<HTMLButtonElement>(target, '.mobile-strip .brand');
 		// Named after what it is (the wordmark), not what it does -- GitHub's own
 		// logo pattern -- so it never collides with the LIBRARY rail group's own
@@ -463,7 +464,7 @@ describe('app shell', () => {
 	});
 
 	it('keeps the phone drawer to navigation, leaving Settings and the user row to the account circle', async () => {
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
 		await tick();
 		const drawer = requireElement<HTMLElement>(document.body, '.drawer-panel');
@@ -477,7 +478,7 @@ describe('app shell', () => {
 	it('renders the rail inline instead of a drawer on wide layouts, keeping its Settings group and user row', async () => {
 		stubMatchMedia(false);
 		delete document.documentElement.dataset.pointer;
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(target.querySelector('.mobile-strip')).toBeNull();
 		const rail = requireElement<HTMLElement>(target, '.rail');
 		expect(rail.textContent).toContain(RAIL_SETTINGS_LABEL);
@@ -513,7 +514,7 @@ describe('app shell', () => {
 
 	it('keeps the drawer full-width when this browser collapsed the desktop rail', async () => {
 		railCollapsed.set(true);
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		requireElement<HTMLButtonElement>(target, '.drawer-trigger').click();
 		await tick();
 		const rail = requireElement<HTMLElement>(document.body, '.drawer-panel .rail');
@@ -529,7 +530,7 @@ describe('app shell', () => {
 	// give it back together.
 	it('hands the bottom to the keyboard while a field has focus on the phone, and takes it back on leaving it', async () => {
 		const closeKeyboard = openOnScreenKeyboard();
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const lyrics = document.createElement('textarea');
 		requireElement<HTMLElement>(target, 'main').append(lyrics);
 
@@ -563,7 +564,7 @@ describe('app shell', () => {
 	// every surface reserves for the bar grows by the strip while it shows, so
 	// the phone's Generate bar stays above the strip instead of under it.
 	it('adds the offline strip to the room the transport bar takes, and gives it back online', async () => {
-		await renderLayout('/');
+		await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(document.documentElement.dataset.offline).toBeUndefined();
 
 		reportResourceStreamReachable(false);
@@ -597,7 +598,7 @@ describe('app shell', () => {
 describe('global Escape', () => {
 	it('goes from a song to its collection', async () => {
 		selectedSongId.set('s1');
-		await renderLayout('/');
+		await renderLayout(LIBRARY_ROUTE_PATH);
 		pressEscape(window);
 		await tick();
 		expect(get(selectedSongId)).toBeNull();
@@ -607,7 +608,7 @@ describe('global Escape', () => {
 	it('goes from the collection to the Library wall', async () => {
 		selectedSongId.set(null);
 		librarySurface.set('detail');
-		await renderLayout('/');
+		await renderLayout(LIBRARY_ROUTE_PATH);
 		pressEscape(window);
 		await tick();
 		expect(get(librarySurface)).toBe('browse');
@@ -615,7 +616,7 @@ describe('global Escape', () => {
 
 	it('does nothing while typing in a textarea', async () => {
 		selectedSongId.set('s1');
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const textarea = document.createElement('textarea');
 		target.append(textarea);
 		pressEscape(textarea);
@@ -625,7 +626,7 @@ describe('global Escape', () => {
 
 	it('closes the open rail drawer first and leaves the song only on the next Escape', async () => {
 		selectedSongId.set('s1');
-		await renderLayout('/');
+		await renderLayout(LIBRARY_ROUTE_PATH);
 		sidebarOpen.set(true);
 		await tick();
 
@@ -797,7 +798,7 @@ describe('docked Now Playing', () => {
 
 	it('opens full screen on a compact viewport, which has no room to dock', async () => {
 		audioPlayer.current = playing();
-		const target = await renderLayout('/');
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 
 		openNowPlaying('queue');
 		await tick();
@@ -826,7 +827,7 @@ describe('auth check failure', () => {
 			authCheckError.set('Too many requests. Retry in a moment to check your session.');
 			return null;
 		});
-		const target = mountLayout('/');
+		const target = mountLayout(LIBRARY_ROUTE_PATH);
 		await tick();
 		await Promise.resolve();
 		await tick();
@@ -851,7 +852,7 @@ describe('auth check failure', () => {
 				.mockImplementation(async () => Response.json(USER))
 		);
 
-		const target = mountLayout('/');
+		const target = mountLayout(LIBRARY_ROUTE_PATH);
 
 		await vi.waitFor(() => expect(target.textContent).toContain(OFFLINE_STRIP_MESSAGE));
 		expect(target.textContent).not.toContain(AUTH_CHECK_NETWORK_ERROR);
@@ -866,7 +867,7 @@ describe('auth check failure', () => {
 	});
 
 	it.each([
-		['the library', '/', '/login'],
+		['the library', LIBRARY_ROUTE_PATH, '/login'],
 		[
 			'a logged-out deep link',
 			'/album/northern-lights/glass-river',
@@ -934,7 +935,7 @@ describe('a reload over the phone Now Playing', () => {
 		startFakeRouter();
 		currentUser.set(null);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout('/');
+		mountLayout(LIBRARY_ROUTE_PATH);
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
 		);
@@ -945,11 +946,11 @@ describe('a reload over the phone Now Playing', () => {
 			currentUser.set(USER);
 			return USER;
 		});
-		await goto(resolve('/'));
+		await goto(resolve(LIBRARY_ROUTE_PATH));
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
-		expect(location.pathname).toBe('/');
+		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
 	});
 });
 
@@ -961,8 +962,8 @@ describe('signing out on the phone', () => {
 	it("from the open account menu loads sign-in afresh over the menu's entry, and steps back nowhere", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		replaceHistoryEntry('/');
-		const target = await renderLayout('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		let replacedLayer: string | undefined;
 		const documentLoads = {
@@ -995,8 +996,8 @@ describe('a session lost behind the open phone drawer', () => {
 	it("steps back nowhere, and loads the page afresh over the drawer's entry", async () => {
 		resetLibraryContextForTests();
 		resetNavigationForTests();
-		replaceHistoryEntry('/');
-		const target = await renderLayout('/');
+		replaceHistoryEntry(LIBRARY_ROUTE_PATH);
+		const target = await renderLayout(LIBRARY_ROUTE_PATH);
 		const documentLoads = { assign: vi.fn(), replace: vi.fn(), reload: vi.fn() };
 		standInForDocumentLoadsForTests(documentLoads);
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
@@ -1067,7 +1068,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 			page: 'an album',
 			address: '/album/a1',
 			collection: { kind: 'album' as const, id: 'a1' },
-			list: { name: 'Library', address: '/', surface: 'browse' }
+			list: { name: 'Library', address: LIBRARY_ROUTE_PATH, surface: 'browse' }
 		},
 		{
 			page: 'a playlist',
@@ -1105,7 +1106,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 		expect(history).toHaveLength(tabLength);
 		expect(barBack(target)?.getAttribute('aria-label')).toBe(backLabel('Library'));
 
-		await pressBarBack(target, '/');
+		await pressBarBack(target, LIBRARY_ROUTE_PATH);
 
 		expect(get(librarySurface)).toBe('browse');
 		expect(historyEntry()).toMatchObject({ surface: 'browse' });
@@ -1122,7 +1123,7 @@ describe('‹ on the page a phone tab was entered on', () => {
 // the library is actually shown.
 describe('the live library stream', () => {
 	it.each([
-		['the library route', '/'],
+		['the library route', LIBRARY_ROUTE_PATH],
 		['an album address', '/album/anfield'],
 		['a song address', '/album/anfield/stadion-lauf-a'],
 		['a playlist address', '/playlist/friday-night'],
@@ -1145,7 +1146,7 @@ describe('the live library stream', () => {
 		currentUser.set(null);
 		authLoading.set(false);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout('/');
+		mountLayout(LIBRARY_ROUTE_PATH);
 		await tick();
 		await Promise.resolve();
 		await tick();
@@ -1153,7 +1154,7 @@ describe('the live library stream', () => {
 	});
 
 	it('shuts down when the browser leaves the library', async () => {
-		await renderLayout('/');
+		await renderLayout(LIBRARY_ROUTE_PATH);
 		expect(liveStream.stop).not.toHaveBeenCalled();
 
 		await unmountCurrentLayout();
