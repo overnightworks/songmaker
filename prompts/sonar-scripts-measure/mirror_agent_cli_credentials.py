@@ -342,7 +342,7 @@ def prepare_mirror_directory(mirror_directory: Path) -> None:
     # moment in which it is readable by anyone else.
     mirror_directory.parent.mkdir(parents=True, exist_ok=True)
     try:
-        os.mkdir(mirror_directory, MIRROR_DIR_MODE)  # NOSONAR(pythonsecurity:S8707) keyed probe
+        os.mkdir(mirror_directory, MIRROR_DIR_MODE)  # NOSONAR(S8707) keyed probe
     except FileExistsError:
         pass
     info = mirror_directory.lstat()

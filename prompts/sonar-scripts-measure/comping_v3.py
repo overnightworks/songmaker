@@ -123,7 +123,7 @@ def run_demucs(src: Path, out_dir: Path) -> dict[str, Path]:
         log.info("demucs cache hit for %s", name)
         return {s: cached / f"{s}.wav" for s in STEM_NAMES}
 
-    out_dir.mkdir(parents=True, exist_ok=True)  # NOSONAR(pythonsecurity:S8707) keyed probe
+    out_dir.mkdir(parents=True, exist_ok=True)  # NOSONAR(S8707) keyed probe
     log.info("running demucs on %s", src.name)
     cmd = [
         sys.executable, "-m", "demucs.separate",
@@ -132,7 +132,7 @@ def run_demucs(src: Path, out_dir: Path) -> dict[str, Path]:
         "--filename", "{stem}.{ext}",
         str(src),
     ]
-    subprocess.run(cmd, check=True)  # NOSONAR(pythonsecurity:S8705) keyed probe
+    subprocess.run(cmd, check=True)  # NOSONAR(S8705) keyed probe
     return {s: cached / f"{s}.wav" for s in STEM_NAMES}
 
 
@@ -241,7 +241,7 @@ def loudnorm_via_ffmpeg(in_path: Path, out_path: Path) -> None:
         "-ar", "48000", "-ac", "2", "-c:a", "pcm_s16le",
         str(out_path),
     ]
-    subprocess.run(cmd, check=True)  # NOSONAR(pythonsecurity:S8705) keyed probe
+    subprocess.run(cmd, check=True)  # NOSONAR(S8705) keyed probe
 
 
 def main() -> None:

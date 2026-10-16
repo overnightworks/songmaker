@@ -81,7 +81,7 @@ def run_demucs(src: Path, work_dir: Path) -> dict[str, Path]:
         "--filename", "{stem}.{ext}",
         str(src),
     ]
-    subprocess.run(cmd, check=True)  # NOSONAR(pythonsecurity:S8705) keyed probe
+    subprocess.run(cmd, check=True)  # NOSONAR(S8705) keyed probe
     out_dir = work_dir / DEMUCS_MODEL / src.stem
     return {
         "vocals": out_dir / "vocals.wav",
@@ -101,7 +101,7 @@ def acestep_submit_extract(base_url: str, src_audio_path: str, track_name: str) 
         "use_random_seed": True,
         "thinking": False,
     }
-    req = urllib.request.Request(  # NOSONAR(pythonsecurity:S8703) keyed probe
+    req = urllib.request.Request(  # NOSONAR(S8703) keyed probe
         f"{base_url}/release_task",
         data=json.dumps(payload).encode("utf-8"),
         headers={"Content-Type": "application/json"},
@@ -122,7 +122,7 @@ def acestep_poll_task(base_url: str, task_id: str) -> dict:
     while time.monotonic() < deadline:
         try:
             url = f"{base_url}/get_task_result/{task_id}"
-            with urllib.request.urlopen(url, timeout=15) as resp:  # NOSONAR(pythonsecurity:S8703) keyed probe
+            with urllib.request.urlopen(url, timeout=15) as resp:  # NOSONAR(S8703) keyed probe
                 body = json.loads(resp.read().decode("utf-8"))
         except urllib.error.HTTPError as exc:
             if exc.code == 404:
@@ -219,7 +219,7 @@ def main() -> None:
     rng = random.Random(time.time_ns())
     blind_map: dict[str, dict] = {}
     for sep, track, src_wav in candidates:
-        nonce = rng.randint(1000, 9999)  # NOSONAR(python:S2245) keyed probe
+        nonce = rng.randint(1000, 9999)  # NOSONAR(S2245) keyed probe
         blind_name = f"{track}_{nonce}.wav"
         blind_path = blind_dir / blind_name
         ffmpeg_normalize(src_wav, blind_path)

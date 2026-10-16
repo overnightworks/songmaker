@@ -80,7 +80,7 @@ def _supervise(raw_arguments: list[str]) -> int:
         str(guard_read),
     ]
     try:
-        process = subprocess.Popen(  # NOSONAR(pythonsecurity:S8705) keyed probe
+        process = subprocess.Popen(  # NOSONAR(S8705) keyed probe
             command,
             cwd=Path.cwd(),
             env=os.environ.copy(),
