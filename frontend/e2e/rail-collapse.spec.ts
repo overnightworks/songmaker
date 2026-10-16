@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { RAIL_DRAWER_LABEL, RAIL_DRAWER_OPEN_LABEL, RAIL_NAV_LABEL } from '../src/lib/constants';
+import { HOME_PATH, LIBRARY_PATH } from './helpers';
 
 test('the desktop rail (defect:#1409) remembers its 52-px icon column while the 375 px drawer stays expanded', async ({
 	page,
@@ -17,7 +18,7 @@ test('the desktop rail (defect:#1409) remembers its 52-px icon column while the 
 		}
 		sessionStorage.setItem('railCollapsePreferenceReset', 'true');
 	}, Boolean(isMobile));
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 
 	if (isMobile) {
 		await page.getByRole('button', { name: RAIL_DRAWER_OPEN_LABEL }).click();
@@ -70,7 +71,7 @@ test('the desktop rail (defect:#1409) remembers its 52-px icon column while the 
 	);
 	for (const [label, pathname] of [
 		['Playlists', '/playlists'],
-		['Library', '/']
+		['Library', LIBRARY_PATH]
 	]) {
 		const groupIcon = rail.getByRole('link', { name: new RegExp(`^${label}\\b`) });
 		await expect(groupIcon).toHaveAttribute('title', label);

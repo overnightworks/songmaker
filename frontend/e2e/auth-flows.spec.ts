@@ -80,7 +80,11 @@ import {
 	regainNetwork,
 	shellOf,
 	workspace,
-	type Shell
+	type Shell,
+	HOME_PATH,
+	HOME_URL,
+	LIBRARY_PATH,
+	LIBRARY_URL
 } from './helpers';
 import {
 	BASE_URL,
@@ -184,8 +188,6 @@ const DEEP_LINK_SONG_TITLE = 'Glass River';
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 
 const LOGIN_PAGE_URL = /\/login(\?|$)/;
-const WALL_URL = /\/(\?|$)/;
-const WALL_PATH = '/';
 
 // What the account this spec creates signs in with, and what it never signs in
 // with. Both satisfy the login form's own `minlength`, so the browser submits
@@ -304,7 +306,7 @@ async function submitLogin(page: Page, username: string, password: string): Prom
  * sign-in lands anyway.
  */
 function isSignInFor(url: URL, address: string): boolean {
-	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? WALL_PATH;
+	const returnTo = url.searchParams.get(SESSION_LOST_REDIRECT_PARAM) ?? LIBRARY_PATH;
 	return url.pathname === '/login' && returnTo === address;
 }
 
@@ -313,7 +315,7 @@ async function signIn(page: Page): Promise<void> {
 	await page.goto('/login');
 	const response = await submitLogin(page, account.username, account.password);
 	expect(response.status()).toBe(200);
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expect(workspace(page)).toBeVisible();
 }
 
@@ -759,7 +761,7 @@ test.describe("the run's admin on the Users tab", () => {
 test('a musician signs in and the shell shows whose session it is', async ({ page }, testInfo) => {
 	// A tab that knows nothing is sent to the door rather than shown a wall,
 	// and is not told about a session it never had.
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeHidden();
@@ -767,7 +769,7 @@ test('a musician signs in and the shell shows whose session it is', async ({ pag
 	const response = await submitLogin(page, account.username, account.password);
 	expect(response.status()).toBe(200);
 
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expectSignedInAs(page, testInfo);
 	expect(await sessionCookie(page.context())).toBeDefined();
 	await attachShot(page, testInfo, 'auth-signed-in');
@@ -779,7 +781,7 @@ test('the session survives a reload of the tab', async ({ page }, testInfo) => {
 
 	await page.reload();
 
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expect(workspace(page)).toBeVisible();
 	await expectSignedInAs(page, testInfo);
 	// The same session, not a new one: a reload re-proves the cookie it already
@@ -803,7 +805,7 @@ test('signing out ends the session on the server, not only in the browser', asyn
 	// cleared it, this would walk straight back in. B5's `verified_session_id`
 	// is what makes the stored session go with it.
 	await page.context().addCookies([signedIn as Cookie]);
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 
 	await expect(page).toHaveURL(LOGIN_PAGE_URL);
 	await expect(page.getByText(AUTH_SESSION_EXPIRED_MESSAGE)).toBeVisible();
@@ -826,7 +828,7 @@ test(
 
 		// Not an empty Library, and not the account menu's entry stepped through:
 		// the door, which brings the person back to the Library.
-		await expect(page).toHaveURL((url) => isSignInFor(url, WALL_PATH));
+		await expect(page).toHaveURL((url) => isSignInFor(url, LIBRARY_PATH));
 		await expect(page.getByLabel(USERNAME_LABEL)).toBeVisible();
 		expect(await appHistorySteps(page)).toEqual([]);
 		await attachShot(page, testInfo, 'auth-signed-out-back');
@@ -847,9 +849,9 @@ test(
 		await playTheTake(page, shell);
 		let leftFrom = songAddress;
 		if (shell === 'mobile') {
-			leftFrom = WALL_PATH;
+			leftFrom = LIBRARY_PATH;
 			await openLibraryWall(page, shell);
-			await expect(page).toHaveURL(WALL_URL);
+			await expect(page).toHaveURL(LIBRARY_URL);
 		}
 		await markSignedInDocument(page);
 
@@ -886,7 +888,7 @@ test(
 				.getByRole('alert')
 				.filter({ hasText: "Couldn't sign out. Check your connection and try again." })
 		).toBeVisible();
-		await expect(page).toHaveURL(WALL_URL);
+		await expect(page).toHaveURL(HOME_URL);
 		await attachShot(page, testInfo, 'auth-sign-out-offline');
 		await regainNetwork(page, context);
 		expect((await sessionCookie(context))?.value).toBe(signedIn?.value);
@@ -1087,5 +1089,5 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 		lastRefusedTryStartedAt,
 		`a try ${lastRefusedTryStartedAt - statedLiftAt}ms after the stated ${retryAfter}s was still refused`
 	).toBeLessThan(statedLiftAt);
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 });

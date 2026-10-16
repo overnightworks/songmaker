@@ -1,7 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
 import type { PlaybackDiagnosticsReport } from '../src/lib/api/types';
 import { PLAYBACK_DIAGNOSTICS_PATH } from '../src/lib/constants';
-import { accountCircle, ONLY_IN_SHELL } from './helpers';
+import { accountCircle, ONLY_IN_SHELL, HOME_PATH } from './helpers';
 
 /**
  * The playback recorder (#1187, #1250) tells the server what the player and the
@@ -29,7 +29,7 @@ const SENT_TRACE_KEY = 'sentPlaybackDiagnostics';
 type SentEvent = { session: string; sequence: number; kind: string };
 
 async function openSignedIn(page: Page): Promise<void> {
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 	await expect(accountCircle(page)).toBeVisible();
 }
 

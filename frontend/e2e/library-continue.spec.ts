@@ -11,7 +11,8 @@ import {
 	openLibraryWall,
 	shellOf,
 	workspace,
-	type Shell
+	type Shell,
+	HOME_PATH
 } from './helpers';
 import { readSeededLibrary } from './seed';
 
@@ -77,7 +78,7 @@ test('Continue shows up to six places listened in, follows a listen made elsewhe
 	});
 	expect(firstListen.status()).toBe(200);
 
-	await page.goto('/');
+	await page.goto(HOME_PATH);
 	const continueRow = page.getByRole('region', { name: 'Continue' });
 	const entries = continueRow.locator('.continue-item');
 	await expect(entries.first()).toBeVisible();

@@ -50,7 +50,8 @@ import {
 	ONLY_IN_SHELL,
 	nameStartingWith,
 	regainNetwork,
-	workspace
+	workspace,
+	HOME_PATH
 } from './helpers';
 import {
 	advanceGenerationJobPhase,
@@ -305,7 +306,7 @@ test.describe('a server the online browser cannot reach', () => {
 			page
 		}) => {
 			await serverFailsAfterSessionCheck(page, answer);
-			await page.goto('/');
+			await page.goto(HOME_PATH);
 
 			await expect(offlineStrip(page)).toBeVisible();
 			await expect(page.getByText(RESOURCE_SYNC_ERROR)).toHaveCount(0);
@@ -323,7 +324,7 @@ test.describe('a server the online browser cannot reach', () => {
 		const answeredSessionChecks = await serverFailsAfterSessionCheck(page, (route) =>
 			route.fulfill({ status: 429, body: 'too many requests' })
 		);
-		await page.goto('/');
+		await page.goto(HOME_PATH);
 
 		// The second rate-limited check follows the stream's first retry, long
 		// after the page acted on the first one.
