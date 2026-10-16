@@ -643,6 +643,12 @@ export const SONG_NEXT_LABEL = 'Next song';
 export const SETTINGS_NAV_LABEL = 'Settings sections';
 export const ADMIN_TABS_LABEL = 'Admin sections';
 export const ADMIN_SESSION_ALREADY_ENDED_MESSAGE = 'That session had already ended.';
+export const ADMIN_ACCOUNT_GONE_MESSAGE = 'That account no longer exists.';
+export const ADMIN_REVOKE_FAILED_MESSAGE = 'Could not revoke the session. Try again.';
+export const ADMIN_REVOKE_OFFLINE_MESSAGE =
+	'Could not reach the server. Try revoking the session again when connected.';
+export const ADMIN_REVOKE_RATE_LIMITED_MESSAGE =
+	'Too many requests. Wait before revoking the session again.';
 
 // The phone's account circle and the menu it opens (issue #1158).
 export const ACCOUNT_MENU_LABEL = 'Account';

@@ -211,9 +211,8 @@ const ADMIN_REFUSED_MESSAGE = 'Admin access required.';
 const OWN_SESSION_LABEL = 'This device';
 const REVOKE_LABEL = 'Revoke';
 const DISABLE_LABEL = 'Disable';
-// What the Users tab shows for an account the server no longer has: the server
-// words every /api 404 this way (`spa_fallback` in `server.py`).
-const USER_GONE_MESSAGE = 'Not Found';
+// The page maps the API's generic 404 to the missing account (#1447).
+const USER_GONE_MESSAGE = 'That account no longer exists.';
 const USERNAME_TAKEN_MESSAGE = 'Username already exists';
 // What the admin types onto the taken name, which makes it one the server does
 // not have yet.
@@ -738,6 +737,7 @@ test.describe("the run's admin on the Users tab", () => {
 				await goneRow.getByRole('button', { name: DISABLE_LABEL, exact: true }).click();
 				const usersTabError = page.getByText(USER_GONE_MESSAGE, { exact: true });
 				await expect(usersTabError).toBeVisible();
+				await expect(goneRow).toHaveCount(0);
 
 				const createRefusal = await refuseTakenUsername(page);
 				await expect(usersTabError).toBeVisible();
