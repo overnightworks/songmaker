@@ -66,3 +66,12 @@ einholen, dann bauen. Wording- und Fehlerkorrekturen brauchen kein Bild.
   20.09.2026 (Operator: „looks good" / „fine" mit den Rulings in #914 und
   #924). Besitzer jeder Komponentenform; jede UI-Lane zitiert sie, Farbwerte
   sind Tokens in `app.css`, Bedeutungen sind geregelt.
+- `share-player.html` — die geteilten Seiten (#1374): geteilter Song, Take,
+  Album und Playlist. Freigegeben am 15.10.2026 (Operator: „bei shuffle deine
+  empfehlung! und dann go!“), eingefroren am 16.10.2026 (#1432). Besitzer
+  dieser vier Seiten, am Telefon und am Desktop: jede geteilte Seite ist der
+  Player (Cover, Titel, ▶, Slider, Lyrics, bei Album und Playlist die Songs),
+  Play in Violett (#924). Überschreibt den Share-Seiten-Rahmen (f) in
+  `album-cover.html`. Die 16 gerulten Zeilen von #1374 stehen in der Datei; die
+  Vorher-Screenshots sind nicht übernommen (sie bleiben im Artefakt). Offen:
+  die Sammlungs-h1, entschieden in Slice 6 gegen dieses Bild.
