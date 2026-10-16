@@ -70,7 +70,8 @@ import {
 	shellOf,
 	workspace,
 	type Shell,
-	LIBRARY_PATH
+	LIBRARY_PATH,
+	LIBRARY_URL
 } from './helpers';
 import { readSeededLibrary, seedPlaylist, type SeededPlaylist } from './seed';
 
@@ -802,7 +803,7 @@ test(
 
 		await backOnPhone(page, RAIL_LIBRARY_LABEL);
 
-		await expect(page).toHaveURL(/\/$/);
+		await expect(page).toHaveURL(LIBRARY_URL);
 		await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 		await expect(album).toBeHidden();
 		expect(await page.evaluate(() => history.length)).toBe(tabLength);
@@ -1270,7 +1271,7 @@ test('#1354 rule 40: the word Library or Playlists opens its covers, the arrow o
 
 	await (await groupArrow(RAIL_LIBRARY_LABEL)).click();
 	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'false');
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(LIBRARY_URL);
 
 	await (await groupWord(RAIL_PLAYLISTS_LABEL)).click();
 	await expect(page).toHaveURL(/\/playlists$/);
@@ -1282,7 +1283,7 @@ test('#1354 rule 40: the word Library or Playlists opens its covers, the arrow o
 	await expect(page).toHaveURL(/\/playlists$/);
 
 	await (await groupWord(RAIL_LIBRARY_LABEL)).click();
-	await expect(page).toHaveURL(/\/$/);
+	await expect(page).toHaveURL(LIBRARY_URL);
 	await expect(surface.getByRole('heading', { name: RAIL_LIBRARY_LABEL })).toBeVisible();
 	await expect(await groupWord(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-current', 'page');
 	await expect(await groupArrow(RAIL_LIBRARY_LABEL)).toHaveAttribute('aria-expanded', 'true');

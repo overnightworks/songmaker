@@ -40,8 +40,24 @@ export const ONLY_IN_SHELL: Record<Shell, string> = {
 /** Where the Library wall lives; the Library moves off `/` with #1354 slice 6, so this changes then. */
 export const LIBRARY_PATH = '/';
 
-/** The app's first page, for flows that need only a loaded app; it stays `/` when the Library moves. */
+/**
+ * The app's first page, for flows that need only a loaded app. Once the
+ * Library leaves `/`, Home takes it, so such flows must not be tied to the
+ * Library's address.
+ */
 export const HOME_PATH = '/';
+
+/** The address of `path` on any origin, with or without a query: what `toHaveURL` waits for. */
+function urlOfPath(path: string): RegExp {
+	const escapedPath = path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return new RegExp(`^[^:]+://[^/]+${escapedPath}(\\?|$)`);
+}
+
+/** The address the Library wall stands at. */
+export const LIBRARY_URL = urlOfPath(LIBRARY_PATH);
+
+/** The address a signed-in person lands on first. */
+export const HOME_URL = urlOfPath(HOME_PATH);
 
 // Above 1099px Now Playing keeps its three columns and docks beside the
 // workspace rather than covering it, and above 768px the shell keeps its rail;

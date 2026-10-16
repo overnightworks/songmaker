@@ -50,7 +50,8 @@ import {
 	workspace,
 	type Shell,
 	HOME_PATH,
-	LIBRARY_PATH
+	LIBRARY_PATH,
+	LIBRARY_URL
 } from './helpers';
 import {
 	deleteVoiceProofData,
@@ -689,7 +690,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 		await page.goBack();
 
 		await expect(wall).toBeVisible();
-		await expect(page).toHaveURL(/\/$/);
+		await expect(page).toHaveURL(LIBRARY_URL);
 		await expect(wallTiles(page).locator(':focus')).toHaveCount(0);
 		guard.assertClean();
 	});
@@ -707,7 +708,7 @@ test.describe('Back and Forward between the library and Settings', () => {
 
 		await page.goBack();
 
-		await expect(page).toHaveURL(/\/$/);
+		await expect(page).toHaveURL(LIBRARY_URL);
 		await expect.poll(() => wallScrollTop(page)).toBe(leftAt);
 		guard.assertClean();
 	});
@@ -858,7 +859,7 @@ for (const gapMs of [30, 0]) {
 			await pressBackTwice(page, gapMs);
 
 			await expect(wall, `the wall after the two Backs of attempt ${attempt}`).toBeVisible();
-			await expect(page).toHaveURL(/\/$/);
+			await expect(page).toHaveURL(LIBRARY_URL);
 			await expect(settingsHeading(page)).toBeHidden();
 			await expect(album).toBeHidden();
 
@@ -919,7 +920,7 @@ test('two Backs in one task from Settings over a song show the album at its addr
 		await page.goBack();
 
 		await expect(wall, `the wall below the album on attempt ${attempt}`).toBeVisible();
-		await expect(page).toHaveURL(/\/$/);
+		await expect(page).toHaveURL(LIBRARY_URL);
 
 		await page.goForward();
 
@@ -1190,7 +1191,7 @@ test(
 
 		await expect(accountMenu(page)).toBeHidden();
 		await expect(wall).toBeVisible();
-		await expect(page).toHaveURL(/\/$/);
+		await expect(page).toHaveURL(LIBRARY_URL);
 		guard.assertClean();
 	}
 );
@@ -1350,7 +1351,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 			await expectSettingsStands(page);
 			await expect.poll(() => standsOnLayerEntry(page)).toBe(false);
 			await page.goBack();
-			await expect(page).toHaveURL(/\/$/);
+			await expect(page).toHaveURL(LIBRARY_URL);
 			guard.assertClean();
 		}
 	);

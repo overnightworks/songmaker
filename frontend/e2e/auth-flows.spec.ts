@@ -82,7 +82,9 @@ import {
 	workspace,
 	type Shell,
 	HOME_PATH,
-	LIBRARY_PATH
+	HOME_URL,
+	LIBRARY_PATH,
+	LIBRARY_URL
 } from './helpers';
 import {
 	BASE_URL,
@@ -186,7 +188,6 @@ const DEEP_LINK_SONG_TITLE = 'Glass River';
 const PHONE_VIEWPORT = { width: 375, height: 844 };
 
 const LOGIN_PAGE_URL = /\/login(\?|$)/;
-const WALL_URL = /\/(\?|$)/;
 
 // What the account this spec creates signs in with, and what it never signs in
 // with. Both satisfy the login form's own `minlength`, so the browser submits
@@ -314,7 +315,7 @@ async function signIn(page: Page): Promise<void> {
 	await page.goto('/login');
 	const response = await submitLogin(page, account.username, account.password);
 	expect(response.status()).toBe(200);
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expect(workspace(page)).toBeVisible();
 }
 
@@ -768,7 +769,7 @@ test('a musician signs in and the shell shows whose session it is', async ({ pag
 	const response = await submitLogin(page, account.username, account.password);
 	expect(response.status()).toBe(200);
 
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expectSignedInAs(page, testInfo);
 	expect(await sessionCookie(page.context())).toBeDefined();
 	await attachShot(page, testInfo, 'auth-signed-in');
@@ -780,7 +781,7 @@ test('the session survives a reload of the tab', async ({ page }, testInfo) => {
 
 	await page.reload();
 
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 	await expect(workspace(page)).toBeVisible();
 	await expectSignedInAs(page, testInfo);
 	// The same session, not a new one: a reload re-proves the cookie it already
@@ -850,7 +851,7 @@ test(
 		if (shell === 'mobile') {
 			leftFrom = LIBRARY_PATH;
 			await openLibraryWall(page, shell);
-			await expect(page).toHaveURL(WALL_URL);
+			await expect(page).toHaveURL(LIBRARY_URL);
 		}
 		await markSignedInDocument(page);
 
@@ -887,7 +888,7 @@ test(
 				.getByRole('alert')
 				.filter({ hasText: "Couldn't sign out. Check your connection and try again." })
 		).toBeVisible();
-		await expect(page).toHaveURL(WALL_URL);
+		await expect(page).toHaveURL(HOME_URL);
 		await attachShot(page, testInfo, 'auth-sign-out-offline');
 		await regainNetwork(page, context);
 		expect((await sessionCookie(context))?.value).toBe(signedIn?.value);
@@ -1088,5 +1089,5 @@ test('wrong passwords lock the account, in words and for as long as it says', as
 		lastRefusedTryStartedAt,
 		`a try ${lastRefusedTryStartedAt - statedLiftAt}ms after the stated ${retryAfter}s was still refused`
 	).toBeLessThan(statedLiftAt);
-	await expect(page).toHaveURL(WALL_URL);
+	await expect(page).toHaveURL(HOME_URL);
 });
