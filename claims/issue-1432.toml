@@ -1,0 +1,8 @@
+claim_id = "eac91c2fa64c4670b85eb572ad839181"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "ddf71f2a73f381ed3415bb3210fe973d70b739ce"
+branch = "claude/issue-1432-freeze-share-player-picture"
+scope = ["docs/design/README.md", "docs/design/share-player.html"]
+opened_commit = "67f0dc0bd36a8c2c2fd8eed137477a06b1b04fcd"
+whole_reason = "the blessed #1374 share-player picture frozen into docs/design and its README entry"
