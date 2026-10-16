@@ -114,6 +114,7 @@
 		flex: none;
 		border-radius: 3px;
 		--tile-initials-size: 0.85rem;
+		--playlist-initials-min: 14px;
 	}
 	.tile-meta.row {
 		flex: 1;

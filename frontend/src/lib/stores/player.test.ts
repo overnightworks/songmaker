@@ -93,6 +93,8 @@ vi.mock('$lib/api/songs', () => ({
 }));
 import { albumList, songList, upsertSongInList } from './libraryData';
 import {
+	collectionTransport,
+	toggleOrStartCollection,
 	buildQueueViewModel,
 	canPlayNextSong,
 	canPlayPrevSong,
@@ -5329,4 +5331,67 @@ describe('a share link that takes the player (#1391)', () => {
 		expect(lockScreenState.metadata).toBeNull();
 		expect(lockScreenState.playbackState).toBe('none');
 	});
+});
+
+describe('collection transport', () => {
+	it.each(['album', 'playlist'] as const)(
+		'names the %s queue even when browsing another collection',
+		(kind) => {
+			albumList.set([makeAlbum({ id: 'source', title: 'Source' })]);
+			queueContext.set(
+				kind === 'album'
+					? { type: 'album', albumId: 'source' }
+					: { type: 'playlist', playlist: { id: 'source', title: 'Source' }, entries: [], index: 0 }
+			);
+			audioPlayer.current = makePlayback(makeGen(), makeSong());
+			audioPlayer.status = 'playing';
+			openCollection.set({ kind, id: 'other' });
+			expect(get(collectionTransport)(kind, 'source')).toEqual({
+				current: true,
+				waiting: false,
+				transport: 'playing'
+			});
+			expect(get(collectionTransport)(kind, 'other')).toEqual({
+				current: false,
+				waiting: false,
+				transport: 'idle'
+			});
+		}
+	);
+
+	it('starts a new collection in order, but leaves shuffle alone when there is nothing to start', () => {
+		setShuffle(true);
+		toggleOrStartCollection('album', 'new', null);
+		expect(get(shuffleEnabled)).toBe(true);
+		let startedInOrder = false;
+		toggleOrStartCollection('album', 'new', () => {
+			startedInOrder = !get(shuffleEnabled);
+		});
+		expect(startedInOrder).toBe(true);
+	});
+
+	it.each(['awaiting-network', 'gave-up-on-network'] as const)(
+		'withdraws a %s album start without starting over or changing shuffle',
+		async (notice) => {
+			songList.set([makeSong({ ...queuedSongDefaults(), generations: [] })]);
+			reportResourceStreamReachable(false);
+			vi.mocked(fetchSong).mockRejectedValueOnce(networkLost('/api/songs/s1'));
+			await playAlbum('a1');
+			playStartNotice.set(notice);
+			setShuffle(true);
+			expect(get(collectionTransport)('album', 'a1')).toEqual({
+				current: false,
+				waiting: true,
+				transport: notice === 'awaiting-network' ? 'recovering' : 'waiting-for-network'
+			});
+			let restarted = false;
+			toggleOrStartCollection('album', 'a1', () => {
+				restarted = true;
+			});
+			expect(restarted).toBe(false);
+			expect(get(pendingStart)).toBeNull();
+			expect(get(playStartNotice)).toBe('idle');
+			expect(get(shuffleEnabled)).toBe(true);
+		}
+	);
 });

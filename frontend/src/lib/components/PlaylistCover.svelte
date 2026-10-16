@@ -95,7 +95,7 @@
 		color: var(--text-subtle);
 		font-family: var(--font-display);
 		/* A share of the cover's own width, so a cover sized '100%' by its tile reads like one in px (#1091). */
-		font-size: 32cqw;
+		font-size: max(var(--playlist-initials-min, 0px), 32cqw);
 		font-weight: 600;
 		line-height: 1;
 	}

@@ -879,6 +879,46 @@ export function transportOfTheStart(
 	return notice === 'gave-up-on-network' ? 'waiting-for-network' : 'recovering';
 }
 
+interface CollectionTransport {
+	current: boolean;
+	waiting: boolean;
+	transport: TransportState;
+}
+
+// Store inputs stay subscribed by the surface; reading the callable also tracks
+// the audio player's reactive transport without copying it into another store.
+export const collectionTransport = derived(
+	[playbackSource, playStartNotice, pendingStart],
+	([$source, $notice, $pending]) =>
+		(kind: PlaybackSource['kind'], id: string): CollectionTransport => {
+			const current = audioPlayer.current !== null && $source?.kind === kind && $source.id === id;
+			const waiting = kind === 'album' && waitingStartOf($notice, $pending)?.albumId === id;
+			return {
+				current,
+				waiting,
+				transport: waiting
+					? transportOfTheStart(null, $notice, 'idle')
+					: current
+						? audioPlayer.transport
+						: 'idle'
+			};
+		}
+);
+
+export function toggleOrStartCollection(
+	kind: PlaybackSource['kind'],
+	id: string,
+	onstart: (() => void) | null
+): void {
+	const state = get(collectionTransport)(kind, id);
+	if (state.waiting) stopStartAwaitingNetwork();
+	else if (state.current) audioPlayer.toggle();
+	else if (onstart) {
+		setShuffle(false);
+		onstart();
+	}
+}
+
 // The bar's and the header's press withdraw a waiting start altogether.
 export function stopStartAwaitingNetwork(): boolean {
 	if (!pauseStartAwaitingNetwork()) return false;

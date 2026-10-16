@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { AlbumItem, PlaylistItem } from '$lib/api/types';
+	import type { AlbumItem, PlaylistItem, SongItem } from '$lib/api/types';
 	import {
 		albumList,
 		allAlbumsLoad,
@@ -8,8 +8,7 @@
 		songList,
 		albumSongsLoad
 	} from '$lib/stores/libraryData';
-	import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-	import { playbackSource, playAlbum } from '$lib/stores/player';
+	import { collectionTransport, toggleOrStartCollection, playAlbum } from '$lib/stores/player';
 	import { albumHasPlayableTake } from '$lib/utils/playable';
 	import { openAlbum, openPlaylist } from '$lib/stores/navigation';
 	import { historyLayerState } from '$lib/stores/layers';
@@ -116,7 +115,16 @@
 		media.addEventListener('change', sync);
 		return () => media.removeEventListener('change', sync);
 	});
-	const songsByAlbum = $derived(Map.groupBy($songList, (song) => song.album_id));
+	const songsByAlbum = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- This local map is rebuilt by $derived whenever songList changes.
+		const grouped = new Map<string, SongItem[]>();
+		for (const song of $songList) {
+			const songs = grouped.get(song.album_id);
+			if (songs) songs.push(song);
+			else grouped.set(song.album_id, [song]);
+		}
+		return grouped;
+	});
 	const wallItems = $derived(
 		kind === 'library'
 			? inLibraryOrder('album', albums, $libraryPlaceOrder)
@@ -173,12 +181,6 @@
 		return lastPlayed ? activityTimeLabel(lastPlayed.at, labelledAt) : sizeLabel(item);
 	}
 
-	function isCurrent(id: string): boolean {
-		return (
-			audioPlayer.current !== null && $playbackSource?.kind === 'album' && $playbackSource.id === id
-		);
-	}
-
 	function rowPlay(item: AlbumItem | PlaylistItem): (() => void) | undefined {
 		if (
 			!('song_count' in item) ||
@@ -187,10 +189,7 @@
 			})
 		)
 			return undefined;
-		return () => {
-			if (isCurrent(item.id)) audioPlayer.toggle();
-			else void playAlbum(item.id);
-		};
+		return () => toggleOrStartCollection('album', item.id, () => void playAlbum(item.id));
 	}
 
 	// A failed read keeps what is on screen, and only an empty wall names it
@@ -303,6 +302,7 @@
 		{#if wallItems.length > 0}
 			<div class="tile-grid" style:--album-card-track={`${LIBRARY_ALBUM_CARD_TRACK_MAX_PX}px`}>
 				{#each wallItems as item (placeType + item.id)}
+					{@const transport = $collectionTransport(placeType, item.id)}
 					{@const content = {
 						title: item.title,
 						coverAlt: `${placeType === 'album' ? ALBUM_COVER_ALT_TYPE : 'Playlist cover for'} ${item.title}`,
@@ -324,8 +324,8 @@
 								openLabel={`Open ${placeType} ${item.title}`}
 								{onopen}
 								onplay={rowPlay(item)}
-								current={placeType === 'album' && isCurrent(item.id)}
-								playing={isCurrent(item.id) && audioPlayer.status === 'playing'}
+								current={placeType === 'album' && transport.current}
+								transport={transport.transport}
 							/>
 						{:else}
 							<button

@@ -12,9 +12,20 @@ import {
 	TRANSPORT_PAUSE_LABEL
 } from '$lib/constants';
 import { audioPlayer } from '$lib/services/audioPlayer.svelte';
-import { albumList } from '$lib/stores/libraryData';
-import { queueContext, setShuffle, shuffleEnabled } from '$lib/stores/player';
-import { makeAlbum, makeGeneration } from '$lib/test-utils/factories';
+import * as client from '$lib/api/client';
+import { NetworkError } from '$lib/api/fetch';
+import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
+import { albumList, songList } from '$lib/stores/libraryData';
+import {
+	queueContext,
+	setShuffle,
+	shuffleEnabled,
+	playAlbum,
+	playStartNotice,
+	pendingStart,
+	stopStartAwaitingNetwork
+} from '$lib/stores/player';
+import { makeAlbum, makeGeneration, makeSong } from '$lib/test-utils/factories';
 import { clearComponentStyles, injectComponentStyles } from '$lib/test-utils/component-styles';
 import CollectionHeader from './CollectionHeader.svelte';
 import collectionHeaderFrameSource from './CollectionHeaderFrame.svelte?raw';
@@ -101,6 +112,9 @@ beforeEach(() => {
 afterEach(async () => {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+	stopStartAwaitingNetwork();
+	resetConnectivityForTests();
+	songList.set([]);
 	setShuffle(false);
 	queueContext.set({ type: 'library' });
 	albumList.set([]);
@@ -513,3 +527,35 @@ describe('CollectionHeader', () => {
 		expect(target.querySelector('.editable-title-input')).not.toBeNull();
 	});
 });
+
+it.each(['awaiting-network', 'gave-up-on-network'] as const)(
+	'the header withdraws its %s start even when it has nothing new to play',
+	async (notice) => {
+		const props = { ...baseProps(), onplay: null };
+		albumList.set([makeAlbum({ id: props.collectionId })]);
+		songList.set([
+			makeSong({
+				id: 'waiting-song',
+				album_id: props.collectionId,
+				generations: [],
+				generation_count: 1
+			})
+		]);
+		reportResourceStreamReachable(false);
+		vi.spyOn(client, 'fetchSong').mockRejectedValueOnce(
+			new NetworkError('/api/songs/waiting-song', new TypeError('Failed to fetch'))
+		);
+		await playAlbum(props.collectionId);
+		playStartNotice.set(notice);
+		const root = await render(props);
+		const pause = getByRoleButton(root, collectionActionLabel(TRANSPORT_PAUSE_LABEL, props.kind));
+		expect(pause).toBeEnabled();
+		pause.click();
+		await tick();
+		expect(get(pendingStart)).toBeNull();
+		expect(get(playStartNotice)).toBe('idle');
+		expect(
+			getByRoleButton(root, collectionActionLabel(TRANSPORT_PLAY_LABEL, props.kind))
+		).toBeDisabled();
+	}
+);

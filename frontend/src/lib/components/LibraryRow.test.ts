@@ -40,10 +40,10 @@ it('1354_rule_10: open and play are separate keyboard buttons with separate outc
 	expect(buttons[0]).toHaveTextContent('8 songs');
 });
 
-it.each(['playing', 'paused'] as const)(
+it.each(['playing', 'paused', 'loading', 'recovering', 'waiting-for-network'] as const)(
 	'1354_rule_10: the %s source keeps its mark and offers the matching transport',
 	async (status) => {
-		audioPlayer.status = status;
+		audioPlayer.status = status === 'paused' ? 'paused' : 'playing';
 		mounted = mount(LibraryRow, {
 			target: document.body,
 			props: {
@@ -54,13 +54,13 @@ it.each(['playing', 'paused'] as const)(
 				onopen: () => undefined,
 				onplay: () => undefined,
 				current: true,
-				playing: status === 'playing'
+				transport: status
 			}
 		});
 		await tick();
 		expect(document.querySelector('[role="img"]')).toHaveAccessibleName('Playing');
 		expect(document.querySelector('.row-play')).toHaveAccessibleName(
-			`${status === 'playing' ? 'Pause' : 'Play'} Album`
+			`${status === 'paused' ? 'Play' : 'Pause'} Album`
 		);
 		expect(document.querySelector('.tile-subtitle')).toHaveTextContent('3 songs');
 	}
@@ -80,4 +80,5 @@ it('1354_rule_11: a row without a playable action has only its open button', asy
 	await tick();
 	expect(document.querySelectorAll('button')).toHaveLength(1);
 	expect(document.body).toHaveTextContent('0 songs');
+	expect(document.querySelector('.row-play-spacer')).toHaveAttribute('aria-hidden', 'true');
 });

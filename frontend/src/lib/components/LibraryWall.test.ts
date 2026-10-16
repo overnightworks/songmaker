@@ -22,7 +22,17 @@ import { libraryWallOrder } from '$lib/stores/ui';
 import { resetLibraryOrderForTests } from '$lib/stores/libraryOrder';
 import { playlistList, playlistLoad, resetPlaylistsForTests } from '$lib/stores/playlists';
 import { toasts } from '$lib/stores/toast';
-import { ApiError } from '$lib/api/fetch';
+import { getByRoleButton } from '$lib/test-utils/accessible-name';
+import { audioPlayer } from '$lib/services/audioPlayer.svelte';
+import {
+	playAlbum,
+	queueContext,
+	pendingStart,
+	playStartNotice,
+	stopStartAwaitingNetwork
+} from '$lib/stores/player';
+import { fetchSong } from '$lib/api/client';
+import { ApiError, NetworkError } from '$lib/api/fetch';
 import { LIBRARY_WALL_PLAYED_PAGE_SIZE } from '$lib/constants';
 
 const fetchPlaylists = vi.fn();
@@ -88,6 +98,11 @@ async function unmountAll(): Promise<void> {
 
 afterEach(async () => {
 	await unmountAll();
+	stopStartAwaitingNetwork();
+	queueContext.set({ type: 'library' });
+	audioPlayer.current = null;
+	audioPlayer.status = 'idle';
+	vi.restoreAllMocks();
 	vi.unstubAllGlobals();
 	songList.set([]);
 	albumSongsLoad.set({});
@@ -803,3 +818,52 @@ it.each(['library', 'playlists'] as const)(
 		if (kind === 'playlists') expect(root.querySelector('.row-play')).toBeNull();
 	}
 );
+
+it('1354_rule_10: opening album B keeps the mark and Pause on queue source A', async () => {
+	phoneViewport();
+	albumList.set([
+		album({ id: 'a', title: 'Album A', has_playable_take: true }),
+		album({ id: 'b', title: 'Album B', has_playable_take: true })
+	]);
+	queueContext.set({ type: 'album', albumId: 'a' });
+	audioPlayer.current = {
+		generation: makeGeneration(),
+		songId: 's',
+		songTitle: 'Song',
+		artist: 'Artist',
+		albumTitle: 'Album A',
+		lyrics: null
+	};
+	audioPlayer.status = 'playing';
+	const root = await render();
+	getByRoleButton(root, 'Open album Album B').click();
+	await tick();
+	expect(get(openCollection)).toMatchObject({ kind: 'album', id: 'b' });
+	expect(root.querySelector('[aria-label="Pause Album A"]')).not.toBeNull();
+	expect(root.querySelector('[aria-label="Play Album B"]')).not.toBeNull();
+	const marks = root.querySelectorAll('[role="img"][aria-label="Playing"]');
+	expect(marks).toHaveLength(1);
+	expect(marks[0].closest('.library-row')).toHaveTextContent('Album A');
+});
+
+it('1354_rule_10: the row withdraws an album start waiting for the network', async () => {
+	phoneViewport();
+	albumList.set([album({ id: 'waiting', title: 'Waiting', has_playable_take: true })]);
+	songList.set([
+		makeSong({ id: 'waiting-song', album_id: 'waiting', generations: [], generation_count: 1 })
+	]);
+	reportResourceStreamReachable(false);
+	vi.mocked(fetchSong).mockRejectedValue(
+		new NetworkError('/api/songs/waiting-song', new TypeError('Failed to fetch'))
+	);
+	await playAlbum('waiting');
+	expect(get(playStartNotice)).toBe('awaiting-network');
+	const root = await render();
+	const control = root.querySelector<HTMLButtonElement>('.row-play');
+	if (!control) throw new Error('Expected the waiting album transport');
+	control.click();
+	await tick();
+	expect(get(pendingStart)).toBeNull();
+	expect(get(playStartNotice)).toBe('idle');
+	expect(root.querySelector('.row-play')).toHaveAccessibleName('Play Waiting');
+});

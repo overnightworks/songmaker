@@ -1038,7 +1038,7 @@ async function listenInSeededAlbum(page: Page): Promise<void> {
 	expect(listen.status()).toBe(200);
 }
 
-test('1354_rule_13: the Library keeps phone counts and desktop listen timestamps under Last played, keeps the choice across reload and leaves Continue alone', async ({
+test('1354_rule_7 1354_rule_13: the Library keeps phone counts and desktop listen timestamps under Last played, keeps the choice across reload and leaves Continue alone', async ({
 	page
 }, testInfo) => {
 	const surface = workspace(page);

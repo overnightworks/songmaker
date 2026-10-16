@@ -103,6 +103,16 @@ test(
 		await expect(row(page, archived.title).locator('.tile-subtitle')).toHaveText('1 song');
 		await expect(row(page, archived.title).getByRole('button')).toHaveCount(1);
 		await expect(page.getByText('No takes', { exact: true })).toHaveCount(0);
+		const spacer = row(page, empty.title).locator('.row-play-spacer');
+		await expect(spacer).toHaveAttribute('aria-hidden', 'true');
+		const spacerBox = await spacer.boundingBox();
+		expect(spacerBox?.width).toBe(44);
+		expect(spacerBox?.height).toBe(44);
+		const textRight = async (title: string) =>
+			row(page, title)
+				.locator('.tile-meta')
+				.evaluate((el) => el.getBoundingClientRect().right);
+		expect(await textRight(empty.title)).toBe(await textRight(playable.title));
 		await screenshot(page, 'ordinary');
 		await row(page, empty.title).getByRole('button').click();
 		await expect(
@@ -128,7 +138,7 @@ test(
 		const scroll = workspace(page).locator('.wall-body');
 		const before = await scroll.evaluate((el) => el.scrollTop);
 		const audioResponse = page.waitForResponse(
-			(response) => new URL(response.url()).pathname === fixture.tracks[playable.id]
+			(response) => new URL(response.url()).pathname === fixture.tracks[playable.id][0].audioPath
 		);
 		await page.keyboard.press('Enter');
 		expect((await audioResponse).ok()).toBe(true);
@@ -153,6 +163,11 @@ test(
 			})
 		);
 		await screenshot(page, 'playing');
+		const secondTrack = fixture.tracks[playable.id][1];
+		const playerBar = page.locator('.player-bar');
+		await playerBar.getByRole('button', { name: 'Next', exact: true }).click();
+		await expect(playerBar).toContainText(secondTrack.title);
+		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(1);
 		await pause.click();
 		await expect(play).toBeVisible();
 		const paused = await audioState(page);
@@ -163,6 +178,8 @@ test(
 		const resumed = await audioState(page);
 		expect(resumed.src).toBe(paused.src);
 		expect(resumed.time).toBeGreaterThanOrEqual(paused.time);
+		await expect(playerBar).toContainText(secondTrack.title);
+		await expect.poll(async () => (await audioState(page)).time).toBeGreaterThan(paused.time + 0.2);
 		await row(page, empty.title).getByRole('button').click();
 		await page.getByRole('button', { name: 'Back to Library', exact: true }).click();
 		await expect(row(page, playable.title).getByRole('img', { name: 'Playing' })).toBeVisible();
@@ -200,7 +217,8 @@ test(
 		await expect(workspace(page).locator('.wall-tile').first()).toContainText(last.title);
 		await expect(workspace(page).locator('.wall-tile').nth(1)).toContainText(playable.title);
 		const counts = await workspace(page).locator('.wall-tile .tile-subtitle').allTextContents();
-		expect(counts.filter((text) => text.trim() === '1 song')).toHaveLength(4);
+		expect(counts.filter((text) => text.trim() === '1 song')).toHaveLength(3);
+		expect(counts.filter((text) => text.trim() === '2 songs')).toHaveLength(1);
 		await page.getByRole('button', { name: 'A–Z', exact: true }).click();
 		await expect(workspace(page).locator('.wall-tile .tile-title')).toHaveText(
 			fixture.albums.map((album) => album.title)
@@ -214,6 +232,7 @@ test(
 		);
 		expect((await playlistRow.boundingBox())?.height).toBe(58);
 		await expect(playlistRow.locator('.tile-subtitle')).toHaveText('0 songs');
+		await screenshot(page, 'playlist');
 		await page.getByRole('button', { name: 'Last played', exact: true }).click();
 		await expect(playlistRow.locator('.tile-subtitle')).toHaveText('0 songs');
 		expect(
