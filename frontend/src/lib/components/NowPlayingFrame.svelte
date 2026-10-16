@@ -51,6 +51,7 @@
 		source = null,
 		surface = 'full',
 		transportElement = $bindable(),
+		stacked = $bindable(false),
 		onclose,
 		onExpand,
 		onCollapse,
@@ -88,6 +89,7 @@
 		songs
 	}: {
 		transportElement?: HTMLDivElement;
+		stacked?: boolean;
 		collectionHead?: { title: string; subtitle: string; nowPlaying: string };
 		songs?: Snippet;
 		info: PlaybackInfo;
@@ -165,7 +167,6 @@
 	const sheetOpen = historyLayerState('now-playing-sheet', false);
 
 	let root: HTMLDivElement | undefined = $state();
-	let stacked = $state(false);
 	let mobilePanelSeeded = false;
 	let mobileSheet: HTMLDivElement | undefined = $state();
 

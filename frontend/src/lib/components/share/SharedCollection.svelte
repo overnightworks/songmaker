@@ -8,7 +8,6 @@
 	} from '$lib/share/sharedCollection';
 	import { SharePlayback, type ShareStreamFetcher } from '$lib/share/sharePlayback.svelte';
 	import {
-		NOW_PLAYING_STACKED_MEDIA,
 		NOW_PLAYING_SHUFFLE_LABEL_PREFIX,
 		NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
 	} from '$lib/constants/now-playing';
@@ -50,10 +49,6 @@
 	let pageElement: HTMLElement | undefined = $state();
 	let transportElement: HTMLDivElement | undefined = $state();
 	let playerOutOfView = $state(false);
-
-	$effect(() =>
-		subscribeCompactLayout((value) => (stackedPlayer = value), NOW_PLAYING_STACKED_MEDIA)
-	);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
@@ -199,6 +194,7 @@
 	{:else if stagedInfo}
 		<NowPlayingFrame
 			bind:transportElement
+			bind:stacked={stackedPlayer}
 			surface="page"
 			artwork={view?.kind === 'playlist' ? playlistCover : undefined}
 			{collectionHead}
