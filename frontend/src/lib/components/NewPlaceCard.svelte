@@ -4,24 +4,11 @@
 	// another album, is just as false once that kind of place exists. One toast
 	// per kind: a repeat takes the place of the one before it.
 	const failureToastByCard: Record<string, number | undefined> = {};
-
-	const FIRST_CLIENT_ERROR_STATUS = 400;
-	const FIRST_SERVER_ERROR_STATUS = 500;
-
-	// The server answered and said no: asking again with the same words gets the
-	// same answer, so only a retry after a server error or a lost network can help.
-	function retryCannotHelp(err: unknown): boolean {
-		return (
-			err instanceof ApiError &&
-			err.status >= FIRST_CLIENT_ERROR_STATUS &&
-			err.status < FIRST_SERVER_ERROR_STATUS
-		);
-	}
 </script>
 
 <script lang="ts">
 	import { untrack, type Snippet } from 'svelte';
-	import { ApiError, describeFailure } from '$lib/api/fetch';
+	import { ApiError, describeFailure, isTransientApiFailure } from '$lib/api/fetch';
 	import { dropTitleDraft, keepTitleDraft, titleDraft } from '$lib/stores/titleDrafts';
 	import { addToast, dismissToast } from '$lib/stores/toast';
 	import { NEW_PLACE_CREATE_LABEL, NEW_PLACE_OFFLINE } from '$lib/constants';
@@ -96,7 +83,9 @@
 	}
 
 	function createFailureMessage(err: unknown): string {
-		if (retryCannotHelp(err)) return describeFailure(err, refusedMessage);
+		if (err instanceof ApiError && !isTransientApiFailure(err)) {
+			return describeFailure(err, refusedMessage);
+		}
 		return describeFailure(err, failedMessage, {
 			offline: NEW_PLACE_OFFLINE,
 			withholdServerDetail: true

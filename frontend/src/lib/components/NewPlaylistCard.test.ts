@@ -131,6 +131,11 @@ describe('NewPlaylistCard', () => {
 			reason: 'The playlist could not be created. Try again.'
 		},
 		{
+			case: 'the server rate-limits it',
+			refusal: new ApiError(429, 'Too many requests', '/api/playlists', 30),
+			reason: 'The playlist could not be created. Try again.'
+		},
+		{
 			case: 'the network is gone',
 			refusal: new NetworkError('/api/playlists', new TypeError('Failed to fetch')),
 			reason: "You're offline, so nothing was created. Try again once you're back online."

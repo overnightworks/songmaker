@@ -137,6 +137,11 @@ describe('NewAlbumCard', () => {
 			reason: 'The album could not be created. Try again.'
 		},
 		{
+			case: 'the server rate-limits it',
+			refusal: new ApiError(429, 'Too many requests', '/api/albums', 30),
+			reason: 'The album could not be created. Try again.'
+		},
+		{
 			case: 'the network is gone',
 			refusal: new NetworkError('/api/albums', new TypeError('Failed to fetch')),
 			reason: "You're offline, so nothing was created. Try again once you're back online."

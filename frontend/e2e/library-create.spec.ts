@@ -37,7 +37,8 @@ import {
 	newSongCardLabel,
 	PLAYLISTS_WALL_EMPTY,
 	RAIL_LIBRARY_LABEL,
-	RAIL_PLAYLISTS_LABEL
+	RAIL_PLAYLISTS_LABEL,
+	RATE_LIMITED_TOAST_MESSAGE
 } from '../src/lib/constants';
 import {
 	boundingBoxes,
@@ -83,7 +84,7 @@ test.beforeEach(({ page }, testInfo) => {
 		? undefined
 		: new FlowGuard(page, {
 				refusalsExpectedOn: testInfo.tags.includes(REFUSED_CREATE_TAG)
-					? [{ path: ALBUMS_API, statuses: [422] }]
+					? [{ path: ALBUMS_API, statuses: [422, 429] }]
 					: [],
 				losesNetworkOnPurpose: testInfo.tags.includes(LOSES_NETWORK_TAG)
 			});
@@ -285,14 +286,18 @@ function toastMessages(page: Page): Locator {
 
 async function answerAlbumCreates(
 	page: Page,
-	answer: () => { status: number; detail: string } | null
+	answer: () => { status: number; detail: string; headers?: Record<string, string> } | null
 ): Promise<void> {
 	await page.route(
 		(url) => url.pathname === ALBUMS_API,
 		(route: Route) => {
 			const refusal = answer();
 			if (route.request().method() !== 'POST' || refusal === null) return route.fallback();
-			return route.fulfill({ status: refusal.status, json: { detail: refusal.detail } });
+			return route.fulfill({
+				status: refusal.status,
+				headers: refusal.headers,
+				json: { detail: refusal.detail }
+			});
 		}
 	);
 }
@@ -310,6 +315,8 @@ interface FailedCreate {
 	tag: string;
 	arrange: (page: Page, context: BrowserContext) => Promise<void>;
 	toast: string;
+	/** The app's generic rate-limit notice, which a 429 raises ahead of the card's own message. */
+	alsoSaid?: string;
 }
 
 const FAILED_CREATES: FailedCreate[] = [
@@ -327,6 +334,18 @@ const FAILED_CREATES: FailedCreate[] = [
 		toast: NEW_ALBUM_FAILED
 	},
 	{
+		failure: 'the server rate-limits it: Try again, without its details',
+		tag: REFUSED_CREATE_TAG,
+		arrange: (page) =>
+			answerAlbumCreates(page, () => ({
+				status: 429,
+				detail: 'Too many requests',
+				headers: { 'Retry-After': '30' }
+			})),
+		toast: NEW_ALBUM_FAILED,
+		alsoSaid: RATE_LIMITED_TOAST_MESSAGE
+	},
+	{
 		failure: 'the network is gone: Try again once back online',
 		tag: LOSES_NETWORK_TAG,
 		arrange: (page, context) => loseNetwork(page, context),
@@ -334,7 +353,7 @@ const FAILED_CREATES: FailedCreate[] = [
 	}
 ];
 
-for (const { failure, tag, arrange, toast } of FAILED_CREATES) {
+for (const { failure, tag, arrange, toast, alsoSaid } of FAILED_CREATES) {
 	test(
 		`915_E2 a create where ${failure}, with the card keeping its title`,
 		{ tag },
@@ -345,7 +364,7 @@ for (const { failure, tag, arrange, toast } of FAILED_CREATES) {
 
 			await card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL }).click();
 
-			await expect(toastMessages(page)).toHaveText([toast]);
+			await expect(toastMessages(page)).toHaveText(alsoSaid ? [alsoSaid, toast] : [toast]);
 			await expect(card.getByLabel(NEW_ALBUM_TITLE_LABEL)).toHaveValue(title);
 			await expect(card.getByRole('button', { name: NEW_PLACE_CREATE_LABEL })).toBeEnabled();
 		}

@@ -123,6 +123,11 @@ describe('NewSongCard', () => {
 			toast: SONG_NOT_CREATED
 		},
 		{
+			case: 'the server rate-limits it',
+			failure: new ApiError(429, 'Too many requests', '/api/songs', 30),
+			toast: SONG_NOT_CREATED
+		},
+		{
 			case: 'the network is gone',
 			failure: new NetworkError('/api/songs', new TypeError('Failed to fetch')),
 			toast: "You're offline, so nothing was created. Try again once you're back online."
