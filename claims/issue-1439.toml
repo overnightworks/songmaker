@@ -1,7 +1,0 @@
-claim_id = "f647cf0336454c90882ed523dbef2c03"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "73df88fdc65e5de8ab14bf08ba4cd05aa0635584"
-branch = "claude/issue-1439-back-settings-scroll-flake"
-scope = ["frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/helpers.ts"]
-opened_commit = "0cd820d4370307b2283a1afc6d61c29630bfe931"
