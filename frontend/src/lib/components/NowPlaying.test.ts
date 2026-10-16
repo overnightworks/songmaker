@@ -30,7 +30,7 @@ import {
 	nowPlayingTakeLabel
 } from '$lib/constants/now-playing';
 import { openCollection, resetCollectionForTests } from '$lib/stores/collection';
-import { albumList, songList } from '$lib/stores/libraryData';
+import { albumList, resetLibraryDataForTests, songList } from '$lib/stores/libraryData';
 import {
 	closeNowPlaying,
 	expandNowPlaying,
@@ -164,9 +164,13 @@ beforeEach(() => {
 	);
 });
 
-afterEach(async () => {
+async function unmountSurface() {
 	if (mounted) await unmount(mounted);
 	mounted = undefined;
+}
+
+afterEach(async () => {
+	await unmountSurface();
 	// vitest 4: restoreAllMocks only rewinds vi.spyOn spies — the module-level
 	// vi.fn() stubs from the takeActions mock factory above need an explicit
 	// clear or their call history leaks into the next test (see player.test.ts).
@@ -183,6 +187,9 @@ afterEach(async () => {
 	nowPlayingDockable.set(false);
 	songList.set([]);
 	albumList.set([]);
+	// Leaving the playing song loads its album's songs; a swallowed load arms
+	// the library's own reload, which would fire inside a later test.
+	resetLibraryDataForTests();
 	queueContext.set({ type: 'library' });
 	curationActive.set(false);
 	selectedPlaylistDetail.set(null);
@@ -728,6 +735,23 @@ describe('NowPlaying when the take details cannot load', () => {
 		expect(fetch).toHaveBeenCalledWith('/api/songs/s1', expect.anything());
 		const shown = [...get(toasts).map((toast) => toast.message), target.textContent];
 		expect(shown.join(' ')).not.toMatch(/Failed to (fetch|load take details)/);
+	});
+
+	it('loads nothing again for a take-details load the network swallowed after it unmounted', async () => {
+		vi.useFakeTimers();
+		let swallowTheLoad: (error: Error) => void = () => undefined;
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(() => new Promise((_, reject) => (swallowTheLoad = reject)))
+		);
+		await renderSurface(info());
+		await unmountSurface();
+
+		swallowTheLoad(new TypeError('Failed to fetch'));
+		await vi.advanceTimersByTimeAsync(UNREACHABLE_RELOAD_DELAYS_MS.reduce((a, b) => a + b, 0));
+
+		expect(fetch).toHaveBeenCalledTimes(1);
+		expect(get(toasts)).toEqual([]);
 	});
 
 	it('while no strip shows, loads again on a bounded backoff and then names the failure', async () => {
