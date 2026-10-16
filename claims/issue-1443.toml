@@ -1,0 +1,8 @@
+claim_id = "7211b8815f694f968ce3d7962e6edc77"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "c7bf907c68d225700cc7e84cc9cfdc71066b7d7a"
+branch = "claude/issue-1443-share-album-player"
+scope = ["docs/architecture.md", "frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/album-menu.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/library.spec.ts", "frontend/e2e/seed.ts", "frontend/e2e/share-album-player.spec.ts", "frontend/src/lib/components/NowPlayingFrame.svelte", "frontend/src/lib/components/NowPlayingQueue.svelte", "frontend/src/lib/components/NowPlayingQueue.test.ts", "frontend/src/lib/components/TransportBarFrame.svelte", "frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/components/share/share-import-boundary.test.ts", "frontend/src/lib/constants/share.ts", "frontend/src/routes/share/[slug]/page.test.ts"]
+opened_commit = "c837f4d7a950d54d623394868debc14457aaa0c4"
+whole_reason = "a shared album as the player view: the player and queue frames, the bar for D3, the share collection component and its tests, the share constants, the share e2e specs that pin the old album view, the seed's playlist share, and the share paragraph"
