@@ -380,7 +380,9 @@
 					{@render coverMeta()}
 					{@render transportControls()}
 					{@render progress()}
-					<div class="np-page-lyrics">{@render lyrics()}</div>
+					{#if unplayableNotice === null}
+						<div class="np-page-lyrics">{@render lyrics()}</div>
+					{/if}
 				</section>
 			</div>
 		{:else}

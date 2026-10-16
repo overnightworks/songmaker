@@ -124,7 +124,6 @@
 		contextLabel={view?.title ?? null}
 		currentSongTitle={playback.currentTrack?.title ?? view?.title ?? ''}
 		onJump={(index) => playback.jump(index)}
-		windowEnded={playback.windowEnded}
 		showTakeLabel={false}
 	/>
 {/snippet}
@@ -209,8 +208,8 @@
 		canNext={playback.canNext}
 		onPrev={() => playback.prev()}
 		onNext={() => playback.next()}
-		onTogglePlay={() => audioPlayer.toggle()}
-		onSeek={(seconds) => audioPlayer.seek(seconds)}
+		onTogglePlay={() => playback.play()}
+		onSeek={(seconds) => playback.seek(seconds)}
 		{trackInfo}
 		nowPlayingOpen={$nowPlayingOpen}
 		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
@@ -231,6 +230,9 @@
 		shuffle={playback.shuffle}
 		shuffleLabel={playback.shuffle ? 'Disable shuffle' : 'Shuffle'}
 		onToggleShuffle={() => playback.setShuffle(!playback.shuffle)}
+		onTogglePlay={() => playback.play()}
+		onSeek={(seconds) => playback.seek(seconds)}
+		ended={playback.ended}
 		upNextTitle={playback.queue.upNext?.songTitle ?? null}
 		rightPanelLabel="Queue"
 		sheetLabel={SHARE_NOW_PLAYING_SHEET_LABEL}

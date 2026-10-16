@@ -30,7 +30,6 @@ function sharedTakePayload(media: Record<string, unknown> = {}) {
 		artist: 'Artist',
 		album_title: 'Album',
 		generation_number: 3,
-		seed: 42,
 		audio_url: '/audio/take3.mp3',
 		generation_id: 'g3',
 		audio_duration: TAKE_DURATION_SEC,
@@ -157,10 +156,10 @@ describe('shared generation (take) page', () => {
 		expect(active).toEqual([SECOND_LINE]);
 	});
 
-	it('says in one line that a take is no longer shared, with a way back and no player', async () => {
+	it('defect:#1374 says in one line that a take is no longer shared, with a way back and no player', async () => {
 		const target = await openSharedTake({ ok: false, status: 404 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Generation not found');
+		expect(target.querySelector('h1')?.textContent).toBe('Take not found');
 		expect(target.querySelector('.share-status a')?.getAttribute('href')).toBe('/login');
 		expect(target.querySelector('.now-playing')).toBeNull();
 	});
@@ -168,6 +167,6 @@ describe('shared generation (take) page', () => {
 	it('shows the error status when the fetch fails', async () => {
 		const target = await openSharedTake({ ok: false, status: 500 });
 
-		expect(target.querySelector('h1')?.textContent).toBe('Could not load this generation');
+		expect(target.querySelector('h1')?.textContent).toBe('Could not load this take');
 	});
 });

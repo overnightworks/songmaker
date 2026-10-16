@@ -470,13 +470,15 @@ describe('SharedCollection player page (#1391)', () => {
 	});
 
 	it.each(['song', 'take'] as const)(
-		'dims Play on a shared %s without audio and says why',
+		'defect:#1374 dims Play on a shared %s without audio, says why and shows no lyrics block',
 		async (kind) => {
 			stubLayout(true);
 			const target = await renderSharedSong(kind, { audioUrl: null });
 
 			expect(getByRoleButton(target, TRANSPORT_PLAY_LABEL).disabled).toBe(true);
 			expect(target.querySelector('[role="status"]')?.textContent).toBe(SHARE_NO_AUDIO_NOTICE);
+			expect(target.querySelector('.np-page-lyrics')).toBeNull();
+			expect(target.textContent).not.toContain('No lyrics');
 		}
 	);
 });

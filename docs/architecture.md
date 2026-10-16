@@ -759,9 +759,11 @@ hears it go — before the share page shows anything (`SharedCollection` calls
 it untracked, so the player state those callbacks read never restarts the
 share and unloads what Play just started); it then installs its own
 `AudioPlayerCallbacks` via `audioPlayer.swapCallbacks()` (`onAuthLost: null`,
-`onCurrentChange` only resyncing its own queue position — never the app's
-media-session metadata or `windowEnded` store) and `stop()` calls
-`audioPlayer.restoreCallbacks()` then `audioPlayer.unload()`, so a logged-in
+`onCurrentChange` resyncing its own queue position and naming the playing
+song on the lock screen — title, artist and album only, no action handlers —
+while it holds the player; never the app's `windowEnded` store) and `stop()`
+clears that title, then calls `audioPlayer.restoreCallbacks()` and
+`audioPlayer.unload()`, so a logged-in
 tab that navigates into a share route and back never carries share state (or
 loses the app's callbacks) into the app. Both calls hand the player over
 through one place, which opens a new tenure (`audioPlayer.tenure`) and tells
@@ -778,6 +780,11 @@ restore, and clears the lock screen's title and playing state; and
 `preloadNextTake`) only while its own callbacks hold the player
 (`playsTheAppsTakes`), so the lock screen's Next, which runs the app's on a
 share page too, never puts a private take under a share page (#1391).
+A share has an end (#1374 rule 7): `SharePlayback` marks each stream
+manifest it receives `windowed`, so the engine stops after the last track and
+signals `window-end` instead of wrapping, classic mode's `canNext`/`canPrev`
+follow the play order's ends, and either way the last track running out sets
+`ended` — Play becomes '↻ Play again' and starts the first track.
 Shuffle on share is share-local
 (never touches `queueShuffleEnabled`) and, per product decision, switches
 playback to per-track `loadUrl` over a shuffled permutation while enabled,

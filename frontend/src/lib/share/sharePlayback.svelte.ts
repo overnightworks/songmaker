@@ -17,6 +17,7 @@ import {
 	type SharedCollectionView,
 	type SharedTrack
 } from './sharedCollection';
+import { updateMediaSessionMetadata } from '$lib/services/mediaSession';
 import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
 
 export type ShareStreamFetcher = () => Promise<QueueStreamManifest>;
@@ -59,10 +60,10 @@ function shuffleKeepingFirst(tracks: SharedTrack[], anchor: SharedTrack | null):
 
 export class SharePlayback {
 	shuffle = $state(false);
-	windowEnded = $state(false);
 	// The share played to its end: its last track ran out with nothing after
-	// it. The player itself goes back to 0:00 there; the page keeps the end
-	// in view and Play starts the share again from its first track.
+	// it, never wrapping to the first. The player itself goes back to 0:00
+	// there; the page keeps the end in view and Play starts the share again
+	// from its first track.
 	ended = $state(false);
 
 	private collection: SharedCollectionView | null = null;
@@ -87,11 +88,13 @@ export class SharePlayback {
 	readonly currentCues = $derived(this.currentTrack?.cues ?? null);
 
 	readonly canNext = $derived(
-		audioPlayer.mode === 'stream' ? audioPlayer.canNextStreamTrack : this.playOrder.length > 1
+		audioPlayer.mode === 'stream'
+			? audioPlayer.canNextStreamTrack
+			: this.activeIndex < this.playOrder.length - 1
 	);
 
 	readonly canPrev = $derived(
-		audioPlayer.mode === 'stream' ? audioPlayer.canPrevStreamTrack : this.playOrder.length > 1
+		audioPlayer.mode === 'stream' ? audioPlayer.canPrevStreamTrack : this.activeIndex > 0
 	);
 
 	readonly queueRows = $derived.by((): QueueRowItem[] =>
@@ -112,10 +115,7 @@ export class SharePlayback {
 	readonly queue = $derived.by((): QueueViewModel => {
 		const items = this.queueRows;
 		const currentIndex = this.activeIndex;
-		const upNext =
-			items.length > 1 && currentIndex >= 0
-				? (items[(currentIndex + 1) % items.length] ?? null)
-				: null;
+		const upNext = currentIndex >= 0 ? (items[currentIndex + 1] ?? null) : null;
 		return { items, currentIndex, upNext };
 	});
 
@@ -130,20 +130,14 @@ export class SharePlayback {
 		this.activeIndex = -1;
 		this.manifest = null;
 		this.shuffle = false;
-		this.windowEnded = false;
 		this.ended = false;
 		this.fetchStream = fetchStream;
 		this.previousCallbacks = audioPlayer.swapCallbacks({
 			onEnded: (reason) => {
-				if (reason === 'window-end') {
-					this.windowEnded = true;
-					return;
-				}
-				if (this.canNext) this.next();
-				else this.ended = true;
+				if (reason === 'window-end' || !this.canNext) this.ended = true;
+				else this.next();
 			},
 			onPlaybackStarted: () => {
-				this.windowEnded = false;
 				this.ended = false;
 			},
 			onAuthLost: null,
@@ -155,6 +149,7 @@ export class SharePlayback {
 	}
 
 	stop(): void {
+		if (this.holdsThePlayer()) updateMediaSessionMetadata(null);
 		audioPlayer.restoreCallbacks(this.previousCallbacks);
 		audioPlayer.unload();
 	}
@@ -268,11 +263,13 @@ export class SharePlayback {
 		return !audioPlayer.changedHandsSince(tenure);
 	}
 
+	private holdsThePlayer(): boolean {
+		return this.tenure !== null && this.stillHolds(this.tenure);
+	}
+
 	private advanceClassic(direction: 1 | -1): void {
-		if (this.playOrder.length <= 1) return;
-		const base = Math.max(0, this.activeIndex);
-		const target = (base + direction + this.playOrder.length) % this.playOrder.length;
-		void this.playTrack(this.playOrder[target]);
+		const target = this.playOrder[this.activeIndex + direction];
+		if (target) void this.playTrack(target);
 	}
 
 	private canUseStream(): boolean {
@@ -287,16 +284,22 @@ export class SharePlayback {
 			return this.manifest;
 		}
 		if (!this.fetchStream) throw new Error('Stream unavailable for this share');
-		const manifest = await this.fetchStream();
+		const manifest = await this.fetchWindowedStream(this.fetchStream);
 		if (this.stillHolds(tenure)) this.manifest = manifest;
 		return manifest;
+	}
+
+	// A share's stream has an end: marked windowed, the engine stops after the
+	// last track and signals it instead of wrapping to the first.
+	private async fetchWindowedStream(fetchStream: ShareStreamFetcher): Promise<QueueStreamManifest> {
+		return { ...(await fetchStream()), windowed: true };
 	}
 
 	private async rebuildManifest(): Promise<QueueStreamManifest | null> {
 		const tenure = this.tenure;
 		if (!this.fetchStream || tenure === null) return null;
 		try {
-			const fresh = await this.fetchStream();
+			const fresh = await this.fetchWindowedStream(this.fetchStream);
 			if (!this.stillHolds(tenure)) return null;
 			this.manifest = fresh;
 			return fresh;
@@ -317,6 +320,19 @@ export class SharePlayback {
 	}
 
 	private resyncActiveIndex(current: PlaybackInfo | null): void {
+		this.locateActiveIndex(current);
+		this.nameOnLockScreen();
+	}
+
+	private nameOnLockScreen(): void {
+		if (!this.holdsThePlayer()) return;
+		const track = this.currentTrack;
+		updateMediaSessionMetadata(
+			this.collection && track ? trackPlaybackInfo(this.collection, track) : null
+		);
+	}
+
+	private locateActiveIndex(current: PlaybackInfo | null): void {
 		if (!current) {
 			this.activeIndex = -1;
 			return;
