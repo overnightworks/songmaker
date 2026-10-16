@@ -1,0 +1,8 @@
+claim_id = "370ca934e6a146b68efe3af28de2876a"
+agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
+role = "builder"
+base = "dbed7273b21d653eb4526f1e16c439cb6adbd7f4"
+branch = "claude/issue-1455-share-playlist-player"
+scope = ["docs/architecture.md", "frontend/e2e/album-cover-rail-share.spec.ts", "frontend/e2e/album-menu.spec.ts", "frontend/e2e/back-closes-overlay.spec.ts", "frontend/e2e/seed.ts", "frontend/e2e/share-album-player.spec.ts", "frontend/e2e/share-playlist-fixtures.ts", "frontend/e2e/share-playlist-player.spec.ts", "frontend/src/lib/components/share/SharedCollection.svelte", "frontend/src/lib/components/share/SharedCollection.test.ts", "frontend/src/lib/components/share/share-import-boundary.test.ts", "frontend/src/lib/constants/share.ts", "frontend/src/lib/share/sharedCollection.test.ts", "frontend/src/lib/share/sharedCollection.ts", "frontend/src/routes/share/playlist/[slug]/page.test.ts"]
+opened_commit = "8b3dbdca5b19576cfe9d4d37c227d5b2dbfeedbf"
+whole_reason = "a shared playlist as the player view: the share adapter and collection component with their tests, the share constants, the boundary and playlist route tests, the playlist e2e spec and fixtures, the share specs that pin the old view, the seed, and the share paragraph"
