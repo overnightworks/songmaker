@@ -75,7 +75,8 @@ def unreferenced_symbols(source: Path) -> set[str]:
 
 def read_allowlist(path: Path) -> set[str]:
     entries = set()
-    for number, line in enumerate(path.read_text().splitlines(), 1):
+    lines = path.read_text().splitlines()  # NOSONAR(S8707) Operator-named CLI path.
+    for number, line in enumerate(lines, 1):
         if not line.strip() or line.lstrip().startswith("#"):
             continue
         symbol, separator, reason = line.partition("#")
