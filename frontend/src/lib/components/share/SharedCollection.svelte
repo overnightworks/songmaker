@@ -17,6 +17,7 @@
 	} from '$lib/constants/now-playing';
 	import {
 		SHARE_SONGS_HEADING,
+		SHARE_BACK_TO_PLAYER_LABEL,
 		shareAlbumSubtitle,
 		shareNowPlayingLine,
 		SHARE_NO_AUDIO_NOTICE,
@@ -50,6 +51,8 @@
 	const playback = new SharePlayback();
 	let coverFailed = $state(false);
 	let mobileTransport = $state(false);
+	let pageElement: HTMLElement | undefined = $state();
+	let playerOutOfView = $state(false);
 	const nowPlayingOpen = historyLayerState('shared-now-playing', false);
 
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
@@ -100,6 +103,27 @@
 			mobileTransport = value;
 		}, MOBILE_TRANSPORT_MEDIA);
 	});
+
+	// The transport sits in the keyed branch of the player, which a track
+	// change rebuilds, so the observer follows the current transport.
+	$effect(() => {
+		void stagedTrack?.key;
+		const transport = pageElement?.querySelector('.now-playing.page .transport');
+		if (!pageElement || !transport) {
+			playerOutOfView = false;
+			return;
+		}
+		const observer = new IntersectionObserver(
+			([entry]) => (playerOutOfView = !entry.isIntersecting),
+			{ root: pageElement }
+		);
+		observer.observe(transport);
+		return () => observer.disconnect();
+	});
+
+	function scrollBackToPlayer(): void {
+		pageElement?.querySelector('.now-playing.page')?.scrollIntoView({ behavior: 'smooth' });
+	}
 
 	function onRowClick(track: SharedTrack): void {
 		playback.toggle(track);
@@ -161,7 +185,7 @@
 	/>
 {/snippet}
 
-<div class="shared-page" class:player-page={opensAsPlayer}>
+<div class="shared-page" class:player-page={opensAsPlayer} bind:this={pageElement}>
 	<div class="bg-effects" aria-hidden="true">
 		<div class="glow glow-1"></div>
 		<div class="glow glow-2"></div>
@@ -248,7 +272,7 @@
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && !opensAsPlayer}
+{#if playback.currentTrack && (!opensAsPlayer || playerOutOfView)}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -267,6 +291,8 @@
 		onOpenNowPlaying={() => ($nowPlayingOpen = true)}
 		nowPlayingDisabled={false}
 		{mobileTransport}
+		nowPlayingTargetLabel={opensAsPlayer ? SHARE_BACK_TO_PLAYER_LABEL : undefined}
+		onReturnToPlayer={opensAsPlayer ? scrollBackToPlayer : undefined}
 	/>
 {/if}
 

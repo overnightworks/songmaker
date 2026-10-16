@@ -599,4 +599,41 @@ describe('Shared album player page', () => {
 		await tick();
 		expect(audioPlayer.transport).toBe('paused');
 	});
+
+	it('1374_rule_16 E5 shows the bar once the player leaves the view and a tap on it scrolls back', async () => {
+		stubLayout(true);
+		let reportView: (isIntersecting: boolean) => void = () => {};
+		vi.stubGlobal(
+			'IntersectionObserver',
+			class {
+				constructor(
+					callback: (entries: Pick<IntersectionObserverEntry, 'isIntersecting'>[]) => void
+				) {
+					reportView = (isIntersecting) => callback([{ isIntersecting }]);
+				}
+				observe(): void {}
+				disconnect(): void {}
+			}
+		);
+		const scrollIntoView = vi.fn();
+		Element.prototype.scrollIntoView = scrollIntoView;
+		const target = await renderShare({
+			tracks: [sharedTrack('first', 'Tide'), sharedTrack('second', 'Ebb')]
+		});
+		target.querySelector<HTMLButtonElement>('.queue-row')?.click();
+		await tick();
+		expect(target.ownerDocument.querySelector('footer.player-bar')).toBeNull();
+
+		reportView(false);
+		await tick();
+		expect(target.ownerDocument.querySelector('footer.player-bar')).not.toBeNull();
+		target.ownerDocument
+			.querySelector<HTMLButtonElement>('footer.player-bar .open-now-playing')
+			?.click();
+
+		expect(scrollIntoView).toHaveBeenCalled();
+		reportView(true);
+		await tick();
+		expect(target.ownerDocument.querySelector('footer.player-bar')).toBeNull();
+	});
 });

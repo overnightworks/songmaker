@@ -6,6 +6,7 @@ export const SHARE_NOW_PLAYING_SHEET_LABEL = 'Now playing';
 export const SHARE_NOW_PLAYING_NO_LYRICS = 'No lyrics';
 export const SHARE_NO_AUDIO_NOTICE = 'No audio available yet.';
 
+export const SHARE_BACK_TO_PLAYER_LABEL = 'Back to the player';
 export const SHARE_SONGS_HEADING = 'Songs';
 const SHARE_ALBUM_KIND_LABEL = 'Album';
 const SHARE_SEPARATOR = ' · ';

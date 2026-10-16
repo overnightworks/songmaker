@@ -727,7 +727,8 @@ duration, lyrics and cues without a stream manifest.
 
 A shared song or take opens as the player (#1391): `SharedCollection.svelte`
 renders `NowPlayingFrame` with `surface="page"` — no header or close, no
-dialog role, no bar, no song list, no shuffle or skip, no right panel — the
+dialog role, no right panel (and, for a song or take, no bar, song list,
+shuffle or skip) — the
 cover beside (wide) or above (stacked) the title, Play, the slider and the
 following lyrics. `SharePlayback` owns what Play means there (`play()`: start
 the first track, pause or resume, or start again once `ended`) and the end
@@ -739,9 +740,18 @@ the first Play readies the first track paused at that point
 player holds a restored take), so Play starts where the listener put it.
 Stacked, the frame fills the height the page shows and the lyrics take what
 the player leaves, so following keeps the sung line on a phone screen; the
-footer follows below. A shared album or playlist still
-composes `CollectionHeaderFrame` (read-only, no `…` menu),
-`TransportBarFrame`, and `NowPlayingFrame` with a queue-only right panel.
+footer follows below. A shared album is the same page surface with its
+songs (#1443): the frame gains a `collectionHead` (the album title as the h1,
+"Artist · Album", and "Now playing · song · n of N"), shuffle and Previous /
+Next, a lyrics label naming the song, and the `NowPlayingQueue` ("Songs", only
+the playable songs) under the lyrics, in a page that scrolls on `.shared-page`.
+A tap on a row plays it; a tap on the playing row pauses or resumes it. Once the
+player's transport leaves `.shared-page`'s view (one `IntersectionObserver` in
+`SharedCollection.svelte`, re-attached after every song change), the
+`TransportBarFrame` shows without its Now Playing pill, and a tap on it
+scrolls back up to the player. A shared playlist still composes
+`CollectionHeaderFrame` (read-only, no `…` menu), `TransportBarFrame`, and
+`NowPlayingFrame` with a queue-only right panel until #1374 slice 7.
 Every share page ends in `SharedFooter.svelte`: "Powered by" and
 `LegalLinks.svelte`, the one owner of the Impressum · Datenschutz ·
 Nutzungsbedingungen links the sign-in page uses too, opening its

@@ -1278,7 +1278,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 		}
 	});
 
-	test('Back closes the share page Now Playing, and its close button leaves no entry behind', async ({
+	test('Back closes the playlist share page Now Playing, and its close button leaves no entry behind', async ({
 		browser
 	}, testInfo) => {
 		const library = readSeededLibrary();
@@ -1292,12 +1292,12 @@ test.describe('Back closes the open overlay outside the library', () => {
 		try {
 			const sharePage = await loggedOut.newPage();
 			const guard = new FlowGuard(sharePage);
-			await sharePage.goto(library.albumShareUrl);
-			await expect(sharePage.getByRole('heading', { name: library.albumTitle })).toBeVisible();
+			await sharePage.goto(library.playlistShareUrl);
+			await expect(sharePage.locator('.header-title')).toBeVisible();
 			const shareAddress = sharePage.url();
 			await sharePage
 				.getByRole('button', {
-					name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'album'),
+					name: collectionActionLabel(TRANSPORT_PLAY_LABEL, 'playlist'),
 					exact: true
 				})
 				.click();
