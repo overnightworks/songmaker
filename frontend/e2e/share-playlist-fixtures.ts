@@ -62,7 +62,7 @@ async function rangeableAudio(route: Route, audio: Buffer): Promise<void> {
 
 export async function refusePlaylistStream(page: Page, api = PLAYLIST_API): Promise<void> {
 	await page.route(`**${api}/stream`, (route) =>
-		route.fulfill({ status: 503, json: { detail: 'Controlled classic fallback' } })
+		route.fulfill({ status: 404, json: { detail: 'Stream unavailable' } })
 	);
 }
 

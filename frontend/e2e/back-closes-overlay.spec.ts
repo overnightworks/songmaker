@@ -1295,7 +1295,7 @@ test.describe('Back closes the open overlay outside the library', () => {
 		});
 		const sharePage = await loggedOut.newPage();
 		const guard = new FlowGuard(sharePage, {
-			refusalsExpectedOn: [{ path: `${PLAYLIST_API}/stream`, statuses: [503] }]
+			refusalsExpectedOn: [{ path: `${PLAYLIST_API}/stream`, statuses: [404] }]
 		});
 		try {
 			await mockPlaylist(sharePage, playlistPayload(24));

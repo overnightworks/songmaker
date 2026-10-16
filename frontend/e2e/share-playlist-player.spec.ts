@@ -33,7 +33,7 @@ const test = base.extend<{ visitor: Page; realPlaylist: RealPlaylist }>({
 		const page = await context.newPage();
 		const guard = new FlowGuard(page, {
 			refusalsExpectedOn: [
-				{ path: `${PLAYLIST_API}/stream`, statuses: [503] },
+				{ path: `${PLAYLIST_API}/stream`, statuses: [404] },
 				{ path: '/shared/playlist/', statuses: [404] }
 			]
 		});
