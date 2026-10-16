@@ -7,6 +7,7 @@ import {
 } from './share-playlist-fixtures';
 import {
 	COLLECTION_MENU_LABEL,
+	COLLECTION_MENU_SHARE_LABEL,
 	collectionActionLabel,
 	DIALOG_CANCEL_LABEL,
 	EDITOR_TAB_EDIT_LABEL,
@@ -1151,7 +1152,10 @@ test(
 			const albumAddress = page.url();
 
 			await page.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-			await page.getByRole('dialog', { name: COLLECTION_MENU_LABEL }).locator('.share-btn').click();
+			await page
+				.getByRole('dialog', { name: COLLECTION_MENU_LABEL })
+				.getByRole('button', { name: COLLECTION_MENU_SHARE_LABEL, exact: true })
+				.click();
 			const warning = page.getByRole('dialog', { name: SHARE_WARNING_LABEL });
 			await expect(warning).toBeVisible();
 

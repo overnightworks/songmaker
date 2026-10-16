@@ -12,7 +12,6 @@ import { ApiError } from '$lib/api/fetch';
 import { lostNetwork, serverRefusal } from '$lib/test-utils/network';
 import { reportResourceStreamReachable, resetConnectivityForTests } from '$lib/stores/connectivity';
 import {
-	COLLECTION_MENU_COVER_HINT,
 	ALBUM_COVER_ALT_TYPE,
 	ALBUM_NO_SONGS,
 	HITBOX_FREQUENT_PX,
@@ -27,6 +26,7 @@ import {
 	TRANSPORT_RETRY_LABEL
 } from '$lib/constants';
 import { accessibleName, getByRoleButton, getByRoleHeading } from '$lib/test-utils/accessible-name';
+import { menuRowLabels } from '$lib/test-utils/collection-menu';
 import { shownTransportFace } from '$lib/test-utils/transport-face';
 import { describeBackClosesOverlay, standingHistoryEntry } from '$lib/test-utils/library-history';
 import { createButton, createSettled, field, type } from '$lib/test-utils/new-place-card';
@@ -554,10 +554,7 @@ describe('AlbumDetailView header', () => {
 		const target = await renderDetail();
 		const menu = await openCollectionMenu(target);
 		expect(menu.querySelector('.menu-heading')?.textContent).toBe('Album · Night Drive');
-		const rows = Array.from(menu.querySelectorAll('.menu-item, .menu-row-label')).map((el) =>
-			el.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim()
-		);
-		expect(rows).toEqual([
+		expect(menuRowLabels(menu)).toEqual([
 			'Edit details',
 			'Cover',
 			'Curate',

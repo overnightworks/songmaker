@@ -1,7 +1,8 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ShareResult } from '$lib/api/types';
-import { COLLECTION_MENU_COVER_HINT, COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
+import { COLLECTION_MENU_RENAME_LABEL } from '$lib/constants';
+import { menuRow, menuRowLabels } from '$lib/test-utils/collection-menu';
 import { describeBackClosesOverlay, plannedHistoryIndex } from '$lib/test-utils/library-history';
 import CollectionMenu from './CollectionMenu.svelte';
 
@@ -53,10 +54,14 @@ async function render(overrides: Partial<ComponentProps<typeof CollectionMenu>> 
 	return { target, props };
 }
 
-async function openMenuAndShare(target: HTMLElement) {
+async function openMenu(target: HTMLElement) {
 	target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 	await tick();
-	target.querySelector<HTMLButtonElement>('.share-btn')?.click();
+}
+
+async function openMenuAndShare(target: HTMLElement, shareLabel = 'Share') {
+	await openMenu(target);
+	menuRow(target, shareLabel).click();
 	await tick();
 	await tick();
 }
@@ -121,23 +126,90 @@ describe('CollectionMenu share warning', () => {
 				)
 		});
 
-		await openMenuAndShare(target);
+		await openMenuAndShare(target, 'Share playlist');
 
 		expect(shareWarningDialog(target)).toBeNull();
 	});
 });
 
-function menuItemLabels(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.menu-item')).map(
-		(item) => item.textContent?.trim() ?? ''
-	);
-}
+describe('CollectionMenu Share row', () => {
+	const shareRowKinds = [
+		{ kind: 'album', label: 'Share' },
+		{ kind: 'playlist', label: 'Share playlist' }
+	] as const;
 
-function menuRowLabels(target: HTMLElement): string[] {
-	return Array.from(target.querySelectorAll('.menu-item, .menu-row-label')).map(
-		(row) => row.textContent?.replace(COLLECTION_MENU_COVER_HINT, '').trim() ?? ''
+	it.each([
+		{ isShared: false, state: 'off' },
+		{ isShared: true, state: 'on' }
+	])('shows $state in words on the one Share control when isShared is $isShared', async (row) => {
+		const { target } = await render({ isShared: row.isShared });
+		await openMenu(target);
+
+		const share = menuRow(target, 'Share');
+
+		expect(share.querySelector('.menu-item-hint')?.textContent).toBe(row.state);
+		expect(share.getAttribute('aria-pressed')).toBe(String(row.isShared));
+		expect(share.querySelector('svg')).not.toBeNull();
+	});
+
+	it('draws a different icon once shared, so the state is not colour alone', async () => {
+		const iconOf = async (isShared: boolean) => {
+			const { target } = await render({ isShared });
+			await openMenu(target);
+			const icon = menuRow(target, 'Share').querySelector('svg')?.innerHTML;
+			await unmount(mounted.pop() as ReturnType<typeof mount>);
+			return icon;
+		};
+
+		expect(await iconOf(true)).not.toBe(await iconOf(false));
+	});
+
+	it.each(shareRowKinds)(
+		'shares and copies the link from a tap on the $kind row, keeping the menu open',
+		async ({ kind, label }) => {
+			const { target, props } = await render({ kind });
+			await openMenu(target);
+
+			menuRow(target, label).click();
+
+			await vi.waitFor(() =>
+				expect(navigator.clipboard.writeText).toHaveBeenCalledWith('https://example.test/share/abc')
+			);
+			expect(props.onshare).toHaveBeenCalledTimes(1);
+			expect(target.querySelector('.menu-panel')).not.toBeNull();
+		}
 	);
-}
+
+	it.each(shareRowKinds)(
+		'unshares a shared $kind from a tap on its row, without copying a link',
+		async ({ kind, label }) => {
+			const { target, props } = await render({ kind, isShared: true, shareSlug: 'abc' });
+			await openMenu(target);
+
+			menuRow(target, label).click();
+
+			await vi.waitFor(() => expect(props.onunshare).toHaveBeenCalledTimes(1));
+			expect(props.onshare).not.toHaveBeenCalled();
+			expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+		}
+	);
+
+	it('ignores a second tap while the first share is still under way', async () => {
+		let finishShare: (result: ShareResult) => void = () => {};
+		const onshare = vi.fn<() => Promise<ShareResult>>(
+			() => new Promise((resolve) => (finishShare = resolve))
+		);
+		const { target } = await render({ onshare });
+		await openMenu(target);
+
+		menuRow(target, 'Share').click();
+		menuRow(target, 'Share').click();
+		finishShare(shareResult());
+
+		await vi.waitFor(() => expect(navigator.clipboard.writeText).toHaveBeenCalledTimes(1));
+		expect(onshare).toHaveBeenCalledTimes(1);
+	});
+});
 
 function albumMenuProps() {
 	return {
@@ -173,17 +245,11 @@ describe('CollectionMenu album rows', () => {
 
 	it('tells on the Cover row what the cover editor offers: upload · suggest', async () => {
 		const { target } = await render(albumMenuProps());
-		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
-		await tick();
+		await openMenu(target);
 
-		const hints = Array.from(target.querySelectorAll('.menu-item-hint')).map((hint) => ({
-			row: hint
-				.closest('.menu-item')
-				?.textContent?.replace(hint.textContent ?? '', '')
-				.trim(),
-			hint: hint.textContent
-		}));
-		expect(hints).toEqual([{ row: 'Cover', hint: 'upload · suggest' }]);
+		expect(menuRow(target, 'Cover').querySelector('.menu-item-hint')?.textContent).toBe(
+			'upload · suggest'
+		);
 	});
 
 	it('opens the cover editor from Cover and closes the menu, leaving upload and remove to it', async () => {
@@ -211,8 +277,8 @@ describe('CollectionMenu Edit details', () => {
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 
-		expect(menuItemLabels(target)).toContain('Edit details');
-		expect(menuItemLabels(target)).not.toContain('Rename');
+		expect(menuRowLabels(target)).toContain('Edit details');
+		expect(menuRowLabels(target)).not.toContain('Rename');
 
 		Array.from(target.querySelectorAll<HTMLButtonElement>('.menu-item'))
 			.find((item) => item.textContent?.trim() === 'Edit details')
@@ -229,8 +295,8 @@ describe('CollectionMenu Edit details', () => {
 		target.querySelector<HTMLButtonElement>('.menu-trigger')?.click();
 		await tick();
 
-		expect(menuItemLabels(target)).toContain('Rename');
-		expect(menuItemLabels(target)).not.toContain('Edit details');
+		expect(menuRowLabels(target)).toContain('Rename');
+		expect(menuRowLabels(target)).not.toContain('Edit details');
 	});
 });
 

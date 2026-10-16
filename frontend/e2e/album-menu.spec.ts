@@ -13,7 +13,11 @@ import {
 	ALBUM_YEAR_LABEL,
 	COLLECTION_MENU_EDIT_DETAILS_LABEL,
 	COLLECTION_MENU_LABEL,
+	COLLECTION_MENU_SHARE_LABEL,
+	COLLECTION_MENU_SHARE_OFF_HINT,
+	COLLECTION_MENU_SHARE_ON_HINT,
 	collectionActionLabel,
+	HITBOX_FREQUENT_PX,
 	NEW_ALBUM_TITLE_LABEL,
 	TRANSPORT_PLAY_LABEL
 } from '../src/lib/constants';
@@ -106,10 +110,7 @@ function expectInside(inner: RenderedBox, outer: RenderedBox): void {
 	expect(bottomOf(inner)).toBeLessThanOrEqual(bottomOf(outer));
 }
 
-async function expectMenuFullyOnScreen(page: Page, header: Locator): Promise<void> {
-	await header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-	const menu = page.getByRole('dialog', { name: COLLECTION_MENU_LABEL });
-	await expect(menu).toBeVisible();
+async function expectMenuInsideViewport(page: Page, menu: Locator): Promise<void> {
 	const viewport = page.viewportSize();
 	if (!viewport) throw new Error('Expected a fixed viewport to measure against');
 	const [menuBox] = await boundingBoxes(menu);
@@ -122,6 +123,17 @@ async function expectMenuFullyOnScreen(page: Page, header: Locator): Promise<voi
 	const rows = await menu.getByRole('button').all();
 	expect(rows.length).toBeGreaterThan(0);
 	for (const rowBox of await boundingBoxes(...rows)) expectInside(rowBox, menuBox);
+}
+
+async function openMenu(page: Page, header: Locator): Promise<Locator> {
+	await header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
+	const menu = page.getByRole('dialog', { name: COLLECTION_MENU_LABEL });
+	await expect(menu).toBeVisible();
+	return menu;
+}
+
+async function expectMenuFullyOnScreen(page: Page, header: Locator): Promise<void> {
+	await expectMenuInsideViewport(page, await openMenu(page, header));
 }
 
 test('the album ⋯ opens fully on screen, under its own row of actions', async ({ page }) => {
@@ -195,11 +207,8 @@ test('the public playlist opens with the page-player order', async ({ browser },
 });
 
 async function openEditDetails(page: Page, header: Locator): Promise<Locator> {
-	await header.getByRole('button', { name: COLLECTION_MENU_LABEL, exact: true }).click();
-	await page
-		.getByRole('dialog', { name: COLLECTION_MENU_LABEL })
-		.getByRole('button', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL, exact: true })
-		.click();
+	const menu = await openMenu(page, header);
+	await menu.getByRole('button', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL, exact: true }).click();
 	const editor = header.getByRole('form', { name: COLLECTION_MENU_EDIT_DETAILS_LABEL });
 	await expect(editor).toBeVisible();
 	await expect(editor.getByLabel(NEW_ALBUM_TITLE_LABEL, { exact: true })).toBeFocused();
@@ -300,4 +309,84 @@ test('Back during a slow Edit details save keeps the form until the details are 
 		await expect(header.locator('.header-meta')).toHaveText('2026');
 		await expect(page).toHaveURL(new RegExp(`/album/${album.id}$`));
 	});
+});
+
+function shareRowOf(menu: Locator, label: string): Locator {
+	return menu.getByRole('button', { name: label, exact: true });
+}
+
+// The row's word sits left of its state: a tap there is the tap that used to
+// land on nothing, since only the icon beside it was a button.
+async function centreOfWord(row: Locator, word: string): Promise<{ x: number; y: number }> {
+	return row.evaluate((rowElement, wanted) => {
+		const text = Array.from(rowElement.childNodes).find(
+			(node) => node.textContent?.trim() === wanted
+		);
+		if (!text) throw new Error(`No text "${wanted}" in the row`);
+		const range = document.createRange();
+		range.selectNodeContents(text);
+		const wordBox = range.getBoundingClientRect();
+		const rowBox = rowElement.getBoundingClientRect();
+		return {
+			x: wordBox.x + wordBox.width / 2 - rowBox.x,
+			y: wordBox.y + wordBox.height / 2 - rowBox.y
+		};
+	}, word);
+}
+
+async function expectShareState(row: Locator, shared: boolean): Promise<void> {
+	await expect(row).toHaveAttribute('aria-pressed', String(shared));
+	await expect(row.locator('.menu-item-hint')).toHaveText(
+		shared ? COLLECTION_MENU_SHARE_ON_HINT : COLLECTION_MENU_SHARE_OFF_HINT
+	);
+}
+
+async function expectRowIsOneTarget(row: Locator): Promise<void> {
+	const [box] = await boundingBoxes(row);
+	expect(box.height).toBeCloseTo(HITBOX_FREQUENT_PX, 0);
+}
+
+test('the album Share row is one 44 px target that shows off and on, from a tap on its word or the keys', async ({
+	page
+}, testInfo) => {
+	await onOwnAlbum(page, testInfo, async (album) => {
+		const header = workspace(page).locator('.collection-header');
+		await expect(header.getByRole('heading', { name: album.title })).toBeVisible();
+		const menu = await openMenu(page, header);
+		const share = shareRowOf(menu, COLLECTION_MENU_SHARE_LABEL);
+
+		await expectRowIsOneTarget(share);
+		await expectShareState(share, false);
+
+		const sharing = page.waitForResponse(
+			(response) =>
+				response.url().endsWith(`/api/albums/${album.id}/share`) &&
+				response.request().method() === 'POST'
+		);
+		await share.click({ position: await centreOfWord(share, COLLECTION_MENU_SHARE_LABEL) });
+		expect((await sharing).ok()).toBe(true);
+		await expectShareState(share, true);
+		await expectRowIsOneTarget(share);
+		await expectMenuInsideViewport(page, menu);
+
+		await share.press('Enter');
+		await expectShareState(share, false);
+		await share.press('Space');
+		await expectShareState(share, true);
+		await expectMenuInsideViewport(page, menu);
+	});
+});
+
+test('the playlist Share row is the same 44 px target, named for the playlist', async ({
+	page,
+	request
+}) => {
+	const playlist = await seedPlaylist(request, readSeededLibrary());
+	await page.goto(`/playlist/${playlist.slug}`);
+	const menu = await openMenu(page, workspace(page).locator('.collection-header'));
+	const share = shareRowOf(menu, `${COLLECTION_MENU_SHARE_LABEL} playlist`);
+
+	await expectRowIsOneTarget(share);
+	await expectShareState(share, false);
+	await expectMenuInsideViewport(page, menu);
 });
