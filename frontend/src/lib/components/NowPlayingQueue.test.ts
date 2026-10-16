@@ -1,4 +1,5 @@
 import { mount, tick, unmount, type ComponentProps } from 'svelte';
+import { fromStore, writable } from 'svelte/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { QueueRowItem, QueueViewModel } from '$lib/stores/player';
 import NowPlayingQueue from './NowPlayingQueue.svelte';
@@ -31,24 +32,59 @@ async function render(props: Partial<NowPlayingQueueProps> = {}) {
 	target = document.createElement('div');
 	document.body.append(target);
 	const queue: QueueViewModel = props.queue ?? { items: [item()], currentIndex: 0, upNext: null };
+	const queueStore = writable(queue);
+	const reactiveQueue = fromStore(queueStore);
 	const onChoosePool = vi.fn();
 	const onJump = vi.fn();
 	mounted = mount(NowPlayingQueue, {
 		target,
 		props: {
-			queue,
 			contextLabel: null,
 			currentSongTitle: 'Tide',
 			takePool: { selected: 'picks', onChoose: onChoosePool },
 			onJump,
-			...props
+			...props,
+			get queue() {
+				return reactiveQueue.current;
+			}
 		}
 	});
 	await tick();
-	return { onChoosePool, onJump };
+	return { onChoosePool, onJump, setQueue: queueStore.set };
 }
 
 describe('NowPlayingQueue', () => {
+	it.each([undefined, new Map<string, string>()])(
+		'1374_rule_10 keeps subtitles with entry ids after reorder and leaves missing subtitles empty (%s)',
+		async (missingSubtitles) => {
+			const first = item({ key: 'entry-first', songTitle: 'Tide' });
+			const second = item({ key: 'entry-second', songTitle: 'Ebb' });
+			const third = item({ key: 'entry-third', songTitle: 'Shore' });
+			const subtitles = new Map([
+				['entry-first', 'Night Drive'],
+				['entry-second', 'Daybreak']
+			]);
+			const { setQueue } = await render({
+				queue: { items: [first, second, third], currentIndex: 0, upNext: null },
+				subtitleByEntryId: subtitles,
+				showTakeLabel: false
+			});
+			setQueue({ items: [third, second, first], currentIndex: 2, upNext: null });
+			await tick();
+			const rows = target.querySelectorAll('.queue-row');
+			expect(rows[0]).toHaveAccessibleName(/^Shore/);
+			expect(rows[0].querySelector('.queue-subtitle')).toBeNull();
+			expect(rows[1]).toHaveAccessibleName(/^Ebb Daybreak/);
+			expect(rows[2]).toHaveAccessibleName(/^Tide Night Drive/);
+			expect(rows[1].querySelector('.queue-title')?.textContent?.trim()).toBe('Ebb Daybreak');
+			if (mounted) await unmount(mounted);
+			mounted = undefined;
+			await render({ subtitleByEntryId: missingSubtitles });
+			expect(target.querySelector('.queue-subtitle')).toBeNull();
+			expect(target.querySelector('.queue-row')).toHaveAccessibleName(/^Tide/);
+		}
+	);
+
 	it('1374_rule_5 names an album list Songs and keeps row names starting with the title', async () => {
 		await render({
 			heading: 'Songs',

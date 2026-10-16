@@ -46,6 +46,7 @@
 	let {
 		info,
 		coverUrl,
+		artwork,
 		onCoverError,
 		source = null,
 		surface = 'full',
@@ -89,6 +90,7 @@
 		songs?: Snippet;
 		info: PlaybackInfo;
 		coverUrl: string | null;
+		artwork?: Snippet;
 		onCoverError?: () => void;
 		// Where the playing queue comes from. The stacked layout names it under
 		// the title as a way back there; everywhere else the album line stands.
@@ -234,7 +236,9 @@
 
 {#snippet coverArt()}
 	<div class="cover-art" aria-hidden="true">
-		{#if coverUrl}
+		{#if isPage && artwork}
+			{@render artwork()}
+		{:else if coverUrl}
 			<img src={coverUrl} alt="" onerror={onCoverError} />
 		{/if}
 	</div>
