@@ -876,8 +876,9 @@ providers pin API. Existing route rows are preserved. Reads without a valid
 route return 422. An omitted or null route in a Judge update keeps the saved
 route. The settings contract is ahead of the call: until #844's runtime handoff,
 a newly selected route can report ready while the worker still takes its
-existing path. The Models page also continues to display API for Scoring until
-#844's UI slice. Saving a row is a question of
+existing path. The Models page's Scoring row shows the saved route with that
+route's readiness and model list, greys the other route, and sends the route
+with every save. Saving a row is a question of
 form — a known provider, a known route, and a model the provider lists, the one
 the row already carries, or none while that catalogue lists nothing — never of
 reachability: whether the choice runs is what the row's status says, and an
