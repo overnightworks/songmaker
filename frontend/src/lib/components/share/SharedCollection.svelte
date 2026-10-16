@@ -51,7 +51,7 @@
 	const tracks = $derived(view ? playableTracks(view.tracks) : []);
 	const coverUrl = $derived(view?.cover && !coverFailed ? view.cover.detail : null);
 	const currentSubtitle = $derived(playback.currentTrack?.subtitle ?? view?.artist ?? '');
-	const hasScrollBar = $derived(view?.kind === 'album' || view?.kind === 'playlist');
+	const isCollection = $derived(view?.kind === 'album' || view?.kind === 'playlist');
 	const subtitleByEntryId = $derived(
 		view?.kind === 'playlist'
 			? new Map(tracks.map((track) => [track.key, track.albumTitle ?? '']))
@@ -63,10 +63,10 @@
 	let failedTransportCover = $state<string | null>(null);
 	const transportCoverUrl = $derived(transportCover?.card ?? null);
 	const stagedTrack = $derived(
-		playback.currentTrack ?? tracks[0] ?? (hasScrollBar ? null : view?.tracks[0]) ?? null
+		playback.currentTrack ?? tracks[0] ?? (isCollection ? null : view?.tracks[0]) ?? null
 	);
 	const collectionHead = $derived(
-		hasScrollBar && view && stagedTrack
+		isCollection && view && stagedTrack
 			? {
 					title: view.title,
 					subtitle:
@@ -110,7 +110,7 @@
 	$effect(() => {
 		void stagedTrack?.key;
 		const transport = pageElement?.querySelector('.now-playing.page .transport');
-		if (!hasScrollBar || !pageElement || !transport) {
+		if (!isCollection || !pageElement || !transport) {
 			playerOutOfView = false;
 			return;
 		}
@@ -176,7 +176,8 @@
 
 <div
 	class="shared-page player-page"
-	class:bar-room={hasScrollBar && playback.currentTrack !== null}
+	class:collection-page={isCollection}
+	class:bar-room={isCollection && playback.currentTrack !== null}
 	bind:this={pageElement}
 >
 	<div class="bg-effects" aria-hidden="true">
@@ -197,18 +198,18 @@
 			surface="page"
 			artwork={view?.kind === 'playlist' ? playlistCover : undefined}
 			{collectionHead}
-			songs={hasScrollBar ? collectionSongs : undefined}
+			songs={isCollection ? collectionSongs : undefined}
 			canPrev={playback.canPrev}
 			canNext={playback.currentTrack ? playback.canNext : tracks.length > 1}
-			onprev={hasScrollBar ? () => playback.prev() : undefined}
-			onnext={hasScrollBar
+			onprev={isCollection ? () => playback.prev() : undefined}
+			onnext={isCollection
 				? () => (playback.currentTrack ? playback.next() : playback.jump(1))
 				: undefined}
 			shuffle={playback.shuffle}
 			shuffleLabel={playback.shuffle
 				? NOW_PLAYING_SHUFFLE_DISABLE_PREFIX
 				: NOW_PLAYING_SHUFFLE_LABEL_PREFIX}
-			onToggleShuffle={hasScrollBar ? () => playback.setShuffle(!playback.shuffle) : undefined}
+			onToggleShuffle={isCollection ? () => playback.setShuffle(!playback.shuffle) : undefined}
 			info={stagedInfo}
 			onCoverError={() => (coverFailed = true)}
 			{coverUrl}
@@ -229,7 +230,7 @@
 	<SharedFooter />
 </div>
 
-{#if playback.currentTrack && hasScrollBar && playerOutOfView}
+{#if playback.currentTrack && isCollection && playerOutOfView}
 	<TransportBarFrame
 		transport={audioPlayer.transport}
 		errorMsg={audioPlayer.error}
@@ -384,10 +385,15 @@
 	   height, which the player fills on a phone to keep the sung line in view. */
 	.shared-page.player-page {
 		--player-height: 0px;
+		--share-player-room: calc(100dvh - 5rem);
 		display: flex;
 		flex-direction: column;
 		max-width: 1120px;
 		padding: 4rem 2rem 1rem;
+	}
+
+	.shared-page.player-page.collection-page {
+		max-width: 1320px;
 	}
 
 	@media (max-width: 768px) {
@@ -404,6 +410,7 @@
 	@media (max-height: 600px) {
 		.shared-page.player-page {
 			padding: 0.8rem 1.2rem;
+			--share-player-room: calc(100dvh - 1.6rem);
 		}
 	}
 

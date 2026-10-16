@@ -228,7 +228,9 @@ test('a shared playlist replaces its upload with the current mosaic and disappea
 		});
 		const publicPage = await publicContext.newPage();
 		const guard = new FlowGuard(publicPage, {
-			refusalsExpectedOn: [{ path: '/shared/playlist/', statuses: [404] }]
+			refusalsExpectedOn: [
+				{ path: new URL(share.share_url).pathname.replace('/share/', '/shared/'), statuses: [404] }
+			]
 		});
 		try {
 			await publicPage.goto(share.share_url);
@@ -334,3 +336,82 @@ test('a shared song shows Play and its words in one screen at every phone height
 		await deleteOwnedAlbum(page, album.id);
 	}
 });
+
+for (const kind of ['song', 'gen'] as const) {
+	for (const height of [900, 600]) {
+		test(`1374_rule_11 shared ${kind} keeps player and plain lyrics reachable at ${height}`, async ({
+			browser
+		}, info) => {
+			const phone = info.project.name === 'mobile';
+			const viewport = phone ? { width: 390, height: 844 } : { width: 1440, height };
+			const context = await browser.newContext({
+				storageState: undefined,
+				viewport,
+				isMobile: phone,
+				hasTouch: phone
+			});
+			const page = await context.newPage();
+			const guard = new FlowGuard(page);
+			const payload = {
+				title: 'Shared plain words',
+				artist: 'Share Artist',
+				album_title: 'Share Album',
+				generation_number: 1,
+				generation_id: 'shared-take',
+				audio_duration: 3,
+				audio_url: '/shared/layout-proof/audio',
+				album_cover: null,
+				whisper_cues: null,
+				lyrics: Array.from({ length: 100 }, (_, i) => `Plain line ${i + 1}`).join('\n')
+			};
+			try {
+				await page.route(`**/shared/${kind}/layout-proof`, (route) =>
+					route.fulfill({ json: payload })
+				);
+				await page.route('**/shared/layout-proof/audio', (route) =>
+					route.fulfill({ contentType: 'audio/mpeg', body: readFileSync(TAKE_FIXTURE) })
+				);
+				await page.goto(`${BASE_URL}/share/${kind}/layout-proof`);
+				const player = page.locator('.now-playing.page');
+				await expect(player.getByRole('button', { name: 'Play', exact: true })).toBeInViewport({
+					ratio: 1
+				});
+				await expect(player.getByRole('slider')).toBeInViewport({ ratio: 1 });
+				await expect(player.locator('.lyrics-text')).toHaveText(payload.lyrics);
+				const cover = await player.locator('.cover-art').boundingBox();
+				const title = await page.getByRole('heading', { level: 1 }).boundingBox();
+				const lyrics = await player.locator('.np-lyrics').boundingBox();
+				if (!cover || !title || !lyrics) throw new Error('Missing shared player geometry');
+				if (!phone) expect(cover.x + cover.width).toBeLessThanOrEqual(title.x);
+				expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(viewport.height);
+				expect(lyrics.height).toBeGreaterThanOrEqual(80);
+				await expect(page.locator('.queue-row, footer.player-bar')).toHaveCount(0);
+				await expect(player.getByRole('button', { name: 'Shuffle', exact: true })).toHaveCount(0);
+				const directory = process.env.SHARE_PLAYLIST_SCREENSHOTS;
+				if (directory)
+					await page.screenshot({
+						path: `${directory}/${kind}-${viewport.width}-${viewport.height}.png`
+					});
+				await player.getByRole('slider').fill('1');
+				await expect(player.getByRole('slider')).toHaveValue('1');
+				await player.getByRole('button', { name: 'Play', exact: true }).click();
+				await expect(player.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+				if (kind === 'gen') {
+					await page.route(`**/shared/${kind}/layout-proof`, (route) =>
+						route.fulfill({ json: { ...payload, audio_url: null } })
+					);
+					await page.reload();
+					await expect(page.getByRole('status')).toHaveText('No audio available yet.');
+					await expect(page.locator('.np-page-lyrics')).toHaveCount(0);
+					await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeDisabled();
+				}
+			} finally {
+				try {
+					guard.assertClean();
+				} finally {
+					await context.close();
+				}
+			}
+		});
+	}
+}

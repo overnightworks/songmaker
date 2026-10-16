@@ -387,8 +387,9 @@
 			<!-- The page reads like the picture a share link promises: the cover,
 				then the song, Play, the slider and the words under it. -->
 			<div class="np-body">
-				{@render coverArt()}
+				{#if !collectionHead}{@render coverArt()}{/if}
 				<section class="np-player-col">
+					{#if collectionHead}<div class="np-page-cover">{@render coverArt()}</div>{/if}
 					{#if collectionHead}
 						<div class="cover-meta">
 							<h1 class="cover-title">{collectionHead.title}</h1>
@@ -400,11 +401,14 @@
 					{/if}
 					{@render transportControls()}
 					{@render progress()}
-					{#if unplayableNotice === null}
+					{#if !collectionHead && unplayableNotice === null}
 						<div class="np-page-lyrics">{@render lyrics()}</div>
 					{/if}
-					{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
 				</section>
+				{#if collectionHead && unplayableNotice === null}
+					<div class="np-page-lyrics">{@render lyrics()}</div>
+				{/if}
+				{#if songs}<div class="np-page-songs">{@render songs()}</div>{/if}
 			</div>
 		{:else}
 			<header class="np-header">
@@ -1039,6 +1043,51 @@
 		display: grid;
 		grid-template-rows: minmax(0, 1fr);
 		text-align: left;
+	}
+	.now-playing.page:not(.stacked):not(.collection) .np-player-col {
+		height: var(--share-player-room);
+	}
+	.now-playing.page:not(.stacked):not(.collection) .np-page-lyrics {
+		flex: 1 1 0;
+		min-height: 6rem;
+		display: grid;
+		grid-template-rows: minmax(0, 1fr);
+	}
+	.now-playing.page.collection:not(.stacked) .np-body {
+		grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+		gap: 2.75rem;
+	}
+	.now-playing.page.collection:not(.stacked) .np-player-col {
+		position: sticky;
+		top: 0;
+		height: auto;
+		max-height: var(--share-player-room);
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) auto auto auto;
+	}
+	.np-page-cover {
+		display: contents;
+	}
+	.now-playing.page.collection:not(.stacked) .np-page-cover {
+		display: block;
+		align-self: stretch;
+		min-height: 0;
+		container-type: size;
+		aspect-ratio: 1;
+		width: 100%;
+		min-width: 0;
+	}
+	.now-playing.page.collection:not(.stacked) .cover-art {
+		width: min(100cqw, 100cqh);
+		height: auto;
+	}
+	.now-playing.page.collection:not(.stacked) .np-page-lyrics {
+		align-self: start;
+		position: sticky;
+		top: 0;
+		height: auto;
+		max-height: var(--share-player-room);
 	}
 	.np-page-songs {
 		align-self: stretch;

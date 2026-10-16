@@ -4,6 +4,7 @@
 // to end; the mocked one (share-album-fixtures.ts) holds a state still and
 // is long enough to scroll.
 
+import { mkdirSync } from 'node:fs';
 import { expect, test as base, type Locator, type Page } from '@playwright/test';
 import {
 	NOW_PLAYING_GO_TO_SONG,
@@ -15,7 +16,7 @@ import {
 } from '../src/lib/constants';
 import { NOW_PLAYING_PLAY_AGAIN_LABEL } from '../src/lib/constants/now-playing';
 import { SHARE_BACK_TO_PLAYER_LABEL, shareNowPlayingLine } from '../src/lib/constants/share';
-import { boundingBoxes, FlowGuard, nameStartingWith } from './helpers';
+import { boundingBoxes, FlowGuard, nameStartingWith, type ExpectedRefusal } from './helpers';
 import {
 	MOCK_ALBUM_TITLE,
 	MOCK_UNPLAYABLE_TITLE,
@@ -36,6 +37,7 @@ const PLAYER_SCROLL_ROOT = '.shared-page';
 interface Visitor {
 	page: Page;
 	guard: FlowGuard;
+	expectedRefusals: ExpectedRefusal[];
 }
 
 const test = base.extend<{ visitor: Visitor }>({
@@ -48,9 +50,10 @@ const test = base.extend<{ visitor: Visitor }>({
 			hasTouch
 		});
 		const page = await context.newPage();
-		const guard = new FlowGuard(page, { refusalsExpectedOn: [MOCK_STREAM_REFUSAL] });
+		const expectedRefusals: ExpectedRefusal[] = [];
+		const guard = new FlowGuard(page, { refusalsExpectedOn: expectedRefusals });
 		try {
-			await use({ page, guard });
+			await use({ page, guard, expectedRefusals });
 		} finally {
 			try {
 				guard.assertClean();
@@ -80,9 +83,10 @@ function control(page: Page, name: string): Locator {
 }
 
 async function openMockAlbum(
-	{ page, guard }: Visitor,
+	{ page, guard, expectedRefusals }: Visitor,
 	albumSongs = mockSongs(3)
 ): Promise<FlowGuard> {
+	expectedRefusals.push(MOCK_STREAM_REFUSAL);
 	await mockSharedAlbum(page, albumSongs);
 	await page.goto(MOCK_URL);
 	await expect(page.getByRole('heading', { level: 1 })).toHaveText(MOCK_ALBUM_TITLE);
@@ -111,32 +115,57 @@ async function scrollPageTo(page: Page, edge: 'top' | 'bottom'): Promise<void> {
 }
 
 test.describe('before Play', () => {
-	test('1374_rule_2 A1 A2: cover, title, line, controls, slider, lyrics, then Songs, the cover beside them wide', async ({
-		visitor
-	}, testInfo) => {
-		await openMockAlbum(visitor);
-		const { page } = visitor;
-		const stackedTop = [
-			page.getByRole('heading', { level: 1 }),
-			page.locator('.cover-line').first(),
-			page.locator('.now-playing-line'),
-			control(page, TRANSPORT_PLAY_LABEL),
-			page.getByRole('slider', { name: SEEK_PLAYBACK_LABEL }),
-			page.locator('.lyrics-heading'),
-			songs(page).getByRole('heading', { name: 'Songs' })
-		];
-		const boxes = await boundingBoxes(...stackedTop);
-		for (let index = 1; index < boxes.length; index++)
-			expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
+	for (const height of [900, 600]) {
+		test(`1374_rule_11 A1 A2 at ${height}: album keeps desktop columns and phone reading order`, async ({
+			visitor
+		}, testInfo) => {
+			if (testInfo.project.name === 'desktop')
+				await visitor.page.setViewportSize({ width: 1440, height });
+			await openMockAlbum(visitor);
+			const { page } = visitor;
+			const stackedTop = [
+				page.getByRole('heading', { level: 1 }),
+				page.locator('.cover-line').first(),
+				page.locator('.now-playing-line'),
+				control(page, TRANSPORT_PLAY_LABEL),
+				page.getByRole('slider', { name: SEEK_PLAYBACK_LABEL }),
+				page.locator('.lyrics-heading'),
+				songs(page).getByRole('heading', { name: 'Songs' })
+			];
+			const boxes = await boundingBoxes(...stackedTop);
+			const phone = (testInfo.project.use.viewport?.width ?? 0) <= 768;
+			for (let index = 1; index < (phone ? boxes.length : 5); index++)
+				expect(boxes[index].y).toBeGreaterThan(boxes[index - 1].y);
 
-		const [cover, title] = await boundingBoxes(
-			page.locator('.now-playing.page .cover-art'),
-			stackedTop[0]
-		);
-		const phone = (testInfo.project.use.viewport?.width ?? 0) <= 768;
-		if (phone) expect(cover.y + cover.height).toBeLessThanOrEqual(title.y);
-		else expect(cover.x + cover.width).toBeLessThanOrEqual(title.x);
-	});
+			const [cover, title] = await boundingBoxes(
+				page.locator('.now-playing.page .cover-art'),
+				stackedTop[0]
+			);
+			if (phone) expect(cover.y + cover.height).toBeLessThanOrEqual(title.y);
+			else {
+				expect(cover.y + cover.height).toBeLessThanOrEqual(title.y);
+				expect(cover.x + cover.width).toBeLessThanOrEqual(boxes[5].x);
+				expect(boxes[5].x + boxes[5].width).toBeLessThanOrEqual(boxes[6].x);
+			}
+			const [artwork] = await boundingBoxes(page.locator('.cover-art'));
+			expect(artwork.width).toBeGreaterThan(100);
+			expect(artwork.height).toBeCloseTo(artwork.width, 0);
+			const [lyrics] = await boundingBoxes(page.locator('.np-page-lyrics'));
+			if (!phone) expect(lyrics.y + lyrics.height).toBeLessThanOrEqual(height);
+			await songRow(page, mockSongTitle(2)).click();
+			await expectLyricsOf(page, mockSongTitle(2));
+			await expect(playingRow(page)).toHaveAccessibleName(nameStartingWith(mockSongTitle(2)));
+			await expect(page.getByRole('heading', { level: 1 })).toHaveText(MOCK_ALBUM_TITLE);
+			const directory = process.env.SHARE_PLAYLIST_SCREENSHOTS;
+			if (directory) {
+				mkdirSync(directory, { recursive: true });
+				await scrollPageTo(page, 'top');
+				await page.screenshot({
+					path: `${directory}/album-${page.viewportSize()?.width ?? 1440}-${page.viewportSize()?.height ?? 900}.png`
+				});
+			}
+		});
+	}
 
 	test('1374_rule_2 A3 A5: song 1 stands ready with its lyrics and the one h1 is the album title', async ({
 		visitor
@@ -359,36 +388,47 @@ test.describe('a long album', () => {
 		const { page } = visitor;
 
 		const [lyricsBox] = await boundingBoxes(page.locator('.np-page-lyrics'));
-		expect(lyricsBox.height).toBeLessThanOrEqual(LYRICS_BOX_MAX_PX);
+		expect(lyricsBox.height).toBeLessThanOrEqual(page.viewportSize()?.height ?? LYRICS_BOX_MAX_PX);
 		const lastRow = songRow(page, mockSongTitle(3));
 		await lastRow.scrollIntoViewIfNeeded();
 		await expect(lastRow).toBeInViewport();
 	});
 
-	test('1374_rule_16 E5 D3 after changing songs: scrolling the player out of view shows the bar, and a tap on it scrolls back up', async ({
-		visitor
-	}, testInfo) => {
-		await openMockAlbum(visitor, mockSongs(24));
-		const { page } = visitor;
-		const bar = page.locator('footer.player-bar');
-		await control(page, TRANSPORT_PLAY_LABEL).click();
-		await expect(bar).toBeHidden();
-		await control(page, SONG_NEXT_LABEL).click();
-		await expectNowPlayingLine(page, mockSongTitle(2), 2, 24);
+	for (const height of [900, 600]) {
+		test(`1374_rule_11 E5 D3 scrolling at ${height} keeps desktop transport and phone return available`, async ({
+			visitor
+		}, testInfo) => {
+			if (testInfo.project.name === 'desktop')
+				await visitor.page.setViewportSize({ width: 1440, height });
+			await openMockAlbum(visitor, mockSongs(24));
+			const { page } = visitor;
+			const bar = page.locator('footer.player-bar');
+			await control(page, TRANSPORT_PLAY_LABEL).click();
+			await expect(bar).toBeHidden();
+			await control(page, SONG_NEXT_LABEL).click();
+			await expectNowPlayingLine(page, mockSongTitle(2), 2, 24);
 
-		await scrollPageTo(page, 'bottom');
-		await expect(bar).toBeVisible();
-		await page.screenshot({ path: testInfo.outputPath('album-scroll-bar.png') });
-		const [barBox, footerBox] = await boundingBoxes(
-			bar,
-			page.getByRole('button', { name: 'Impressum' })
-		);
-		expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
+			const history = await page.evaluate(() => window.history.length);
+			await scrollPageTo(page, 'bottom');
+			if (testInfo.project.name === 'desktop') {
+				await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport({ ratio: 1 });
+				await expect(bar).toBeHidden();
+				return;
+			}
+			await expect(bar).toBeVisible();
+			await page.screenshot({ path: testInfo.outputPath('album-scroll-bar.png') });
+			const [barBox, footerBox] = await boundingBoxes(
+				bar,
+				page.getByRole('button', { name: 'Impressum' })
+			);
+			expect(footerBox.y + footerBox.height).toBeLessThanOrEqual(barBox.y);
 
-		await bar.getByRole('button', { name: SHARE_BACK_TO_PLAYER_LABEL }).first().click();
-		await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport();
-		await expect(bar).toBeHidden();
-	});
+			await bar.getByRole('button', { name: SHARE_BACK_TO_PLAYER_LABEL }).first().click();
+			await expect(control(page, TRANSPORT_PAUSE_LABEL)).toBeInViewport();
+			await expect(bar).toBeHidden();
+			expect(await page.evaluate(() => window.history.length)).toBe(history);
+		});
+	}
 });
 
 test.describe('rights and neighbours', () => {
@@ -418,7 +458,7 @@ test.describe('rights and neighbours', () => {
 		const context = await browser.newContext({ storageState: undefined });
 		const page = await context.newPage();
 		const guard = new FlowGuard(page, {
-			refusalsExpectedOn: [{ path: '/shared/', statuses: [404] }]
+			refusalsExpectedOn: [{ path: '/shared/no-such-share-1443', statuses: [404] }]
 		});
 
 		try {
