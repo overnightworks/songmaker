@@ -1,8 +1,0 @@
-claim_id = "a425e69194214c70933da688b1671c81"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "957427f3e8e82d5cfe40f6d3354ca15d241732c4"
-branch = "claude/issue-1450-playlist-share-album-title"
-scope = ["docs/architecture.md", "frontend/src/lib/api/types.ts", "frontend/src/lib/share/sharedCollection.test.ts", "src/songmaker_cli/api_models/playlists.py", "tests/test_sharing.py"]
-opened_commit = "ea7aa0e94c7626d813deef7f2fa5b5ce2759ddbc"
-whole_reason = "member album titles in the public playlist payload: the response model, its generated type, its tests, the share adapter test fixtures that build the payload, and the payload paragraph"
