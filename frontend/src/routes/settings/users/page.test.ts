@@ -222,10 +222,14 @@ function cowriterSettings(overrides: Partial<CowriterSettings> = {}): CowriterSe
 	};
 }
 
-function judgeSettings(provider: string, model: string): JudgeSettings {
+function judgeSettings(
+	provider: string,
+	model: string,
+	route: 'cli' | 'api' = 'api'
+): JudgeSettings {
 	return {
 		provider,
-		route: 'api',
+		route,
 		provider_routes_status: {},
 		model,
 		allowed_providers: ['claude', 'codex', 'grok'],
@@ -407,8 +411,9 @@ beforeEach(() => {
 		async (provider: string, route: 'cli' | 'api', model: string) => ({ provider, route, model })
 	);
 	api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-opus'));
-	api.updateJudgeSettings.mockImplementation(async (provider: string, model: string) =>
-		judgeSettings(provider, model)
+	api.updateJudgeSettings.mockImplementation(
+		async (provider: string, route: 'cli' | 'api', model: string) =>
+			judgeSettings(provider, model, route)
 	);
 	api.listWorkers.mockResolvedValue({ workers: [] });
 	api.getRegistry.mockResolvedValue({ models: [] });
@@ -1275,17 +1280,77 @@ describe('admin models tab', () => {
 		expect(rowNamed(target, 'Cover').textContent).toContain('Claude cannot draw');
 	});
 
-	it('keeps saving the scoring row against the judge settings', async () => {
+	it('saves the scoring row on its saved API route', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
 		await choose(providerSelect(target, 'Scoring'), 'codex');
 
-		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'gpt-5.4');
+		expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'api', 'gpt-5.4');
 		expect(statusText(rowNamed(target, 'Scoring'))).toBe('✓Ready · key set');
 	});
 
-	it('shows scoring its API route and greys the CLI it has no way to use', async () => {
+	describe('with the judge saved on the CLI route', () => {
+		beforeEach(() => {
+			api.fetchJudgeSettings.mockResolvedValue(judgeSettings('claude', 'claude-sonnet', 'cli'));
+		});
+
+		it('shows the saved route with its state and its own model list', async () => {
+			const target = await renderPage(true);
+			await selectTab(target, 'models');
+
+			const scoring = rowNamed(target, 'Scoring');
+			expect(routeButton(scoring, 'CLI')).toHaveClass('on');
+			expect(statusText(scoring)).toBe('✓Ready · CLI login');
+			expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual([
+				'claude-sonnet',
+				'claude-opus-cli'
+			]);
+			expect(modelSelect(target, 'Scoring').value).toBe('claude-sonnet');
+		});
+
+		it('greys the other route with the reason it has no way to score', async () => {
+			const target = await renderPage(true);
+			await selectTab(target, 'models');
+
+			const scoring = rowNamed(target, 'Scoring');
+			const apiRoute = routeButton(scoring, 'API');
+			expect(apiRoute).toHaveClass('dead');
+			expect(apiRoute.disabled).toBe(true);
+			expect(reasons(scoring)).toContain('API · not available for scoring');
+
+			apiRoute.click();
+			await flush();
+
+			expect(api.updateJudgeSettings).not.toHaveBeenCalled();
+		});
+
+		it('saves a model change on the saved route and says Saved.', async () => {
+			const target = await renderPage(true);
+			await selectTab(target, 'models');
+
+			await choose(modelSelect(target, 'Scoring'), 'claude-opus-cli');
+
+			expect(api.updateJudgeSettings).toHaveBeenCalledWith('claude', 'cli', 'claude-opus-cli');
+			const scoring = rowNamed(target, 'Scoring');
+			expect(scoring.textContent).toContain('Saved.');
+			expect(statusText(scoring)).toBe('✓Ready · CLI login');
+		});
+
+		it('saves a provider change on the saved route and shows that provider on it', async () => {
+			const target = await renderPage(true);
+			await selectTab(target, 'models');
+
+			await choose(providerSelect(target, 'Scoring'), 'codex');
+
+			expect(api.updateJudgeSettings).toHaveBeenCalledWith('codex', 'cli', 'gpt-5-codex');
+			const scoring = rowNamed(target, 'Scoring');
+			expect(routeButton(scoring, 'CLI')).toHaveClass('on');
+			expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual(['gpt-5-codex']);
+		});
+	});
+
+	it('greys the CLI a scoring row saved on the API route has no way to use', async () => {
 		const target = await renderPage(true);
 		await selectTab(target, 'models');
 
@@ -1295,6 +1360,7 @@ describe('admin models tab', () => {
 		expect(cli.disabled).toBe(true);
 		expect(reasons(scoring)).toContain('CLI · not available for scoring');
 		expect(routeButton(scoring, 'API')).toHaveClass('on');
+		expect(optionLabels(modelSelect(target, 'Scoring'))).toEqual(['claude-opus', 'claude-api']);
 
 		cli.click();
 		await flush();

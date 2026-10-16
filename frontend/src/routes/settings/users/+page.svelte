@@ -50,7 +50,6 @@
 		JudgeSettings,
 		ProviderRouteStatusResponse,
 		ProviderStatus,
-		ProviderSurfaceStatus,
 		SafeRouteReason
 	} from '$lib/api/types';
 	import type { VersionGenerationParams } from '$lib/api/types';
@@ -102,14 +101,7 @@
 		modelsRouteNotAvailablePhrase,
 		PASSWORD_MIN_LENGTH,
 		PASSWORD_TOO_SHORT_MESSAGE,
-		PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL,
-		PROVIDER_CLI_LOGIN_LABELS,
-		PROVIDER_STATUS_UNAVAILABLE_DETAIL,
-		PROVIDER_UNVERIFIED_DETAIL,
-		providerCliLoginNeedsApiKeyDetail,
-		providerConfiguredDetail,
-		providerMissingDependencyDetail,
-		providerMissingRequirementDetail
+		PROVIDER_STATUS_UNAVAILABLE_DETAIL
 	} from '$lib/constants';
 	import {
 		COMPACT_SELECT_CLASS,
@@ -450,34 +442,10 @@
 		return providerStatuses.find((status) => status.provider === provider);
 	}
 
-	function cliLoginLabel(surface: ProviderSurfaceStatus): string | undefined {
-		return surface.setup_method ? PROVIDER_CLI_LOGIN_LABELS[surface.setup_method] : undefined;
-	}
-
-	function surfaceDetail(surface: ProviderSurfaceStatus): string {
-		switch (surface.state) {
-			case 'unverified':
-				return PROVIDER_UNVERIFIED_DETAIL;
-			case 'missing_dependency':
-				return providerMissingDependencyDetail(surface.missing_dependency);
-			case 'unconfigured':
-				return surface.needs === 'cli_login'
-					? providerMissingRequirementDetail(PROVIDER_CLI_LOGIN_LABELS.claude_cli)
-					: providerMissingRequirementDetail(surface.environment_key);
-			case 'cli_login_needs_api_key':
-				return providerCliLoginNeedsApiKeyDetail(cliLoginLabel(surface));
-			case 'api_key_needs_cli_login':
-				return PROVIDER_API_KEY_NEEDS_CLI_LOGIN_DETAIL;
-			case 'configured':
-				return providerConfiguredDetail(cliLoginLabel(surface), surface.environment_key);
-		}
-	}
-
 	function isNonEmptyString(value: unknown): value is string {
 		return typeof value === 'string' && value.length > 0;
 	}
 
-	const JUDGE_ROUTE: ModelsRouteKey = 'api';
 	const FALLBACK_ROUTE: ModelsRouteKey = 'cli';
 
 	function loadModelsTab(): void {
@@ -583,18 +551,8 @@
 		);
 	}
 
-	function judgeReason(surface: ProviderSurfaceStatus): SafeRouteReason | null {
-		if (surface.state === 'configured' || surface.state === 'unverified') return null;
-		if (surface.state === 'missing_dependency') {
-			return { code: 'cli_binary_unavailable', message: surfaceDetail(surface) };
-		}
-		return surface.needs === 'cli_login'
-			? { code: 'cli_login_not_configured', message: surfaceDetail(surface) }
-			: { code: 'api_key_not_set', message: surfaceDetail(surface) };
-	}
-
 	function scoringRoute(provider: string, route: ModelsRouteKey): ModelsTaskRoute {
-		if (route !== JUDGE_ROUTE) {
+		if (route !== scoringSavedRoute) {
 			return {
 				ready: false,
 				reason: {
@@ -604,9 +562,7 @@
 				models: []
 			};
 		}
-		const surface = providerStatusFor(provider)?.judge;
-		if (!surface) return taskRoute(provider, route, false, null);
-		return taskRoute(provider, route, surface.state === 'configured', judgeReason(surface));
+		return transportRoute(provider, route);
 	}
 
 	function taskProviders(
@@ -642,12 +598,13 @@
 		route: coverSettings?.route ?? FALLBACK_ROUTE,
 		model: coverSettings?.model ?? ''
 	});
+	const scoringSavedRoute = $derived(judgeSettings?.route ?? FALLBACK_ROUTE);
 	const scoringProviders = $derived(
 		taskProviders(scoringRoute, judgeSettings?.allowed_providers ?? [])
 	);
 	const scoringSelection = $derived<ModelsTaskSelection>({
 		provider: judgeSettings?.provider ?? '',
-		route: JUDGE_ROUTE,
+		route: scoringSavedRoute,
 		model: judgeSettings?.model ?? ''
 	});
 
@@ -712,7 +669,11 @@
 
 	async function saveScoring(selection: ModelsTaskSelection): Promise<ModelsSaveOutcome> {
 		try {
-			judgeSettings = await updateJudgeSettings(selection.provider, selection.model);
+			judgeSettings = await updateJudgeSettings(
+				selection.provider,
+				selection.route,
+				selection.model
+			);
 			return { ok: true };
 		} catch (e) {
 			return {
