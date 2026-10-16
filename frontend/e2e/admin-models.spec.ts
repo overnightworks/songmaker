@@ -51,8 +51,8 @@ import { readSeededLibrary } from './seed';
  * What each test costs the API, measured on a green run against the CI recipe:
  * 11 for the table walked at four desktop widths, 24 for the Cover row's save,
  * reload and restore, 46 for the co-writer turn (a cold album open, the song,
- * the chat and the return to the tab), 9 for the phone cards, SCORING_COST for the
- * Scoring row's save, reload and restore. One ceiling for the file,
+ * the chat and the return to the tab), 9 for the phone cards, 24 (20 on the phone)
+ * for the Scoring row's save, reload and restore. One ceiling for the file,
  * the same way `album-address.spec.ts` carries one for its four, with headroom
  * for the retry CI allows. The budget is a ceiling, not a knob: a flow that
  * suddenly needs several more round trips is a regression, so find the extra
@@ -427,6 +427,9 @@ async function expectScoringRowOnItsSavedCliRoute(page: Page, provider: string):
 	await expect(taskStatus(page, MODELS_TASK_SCORING_LABEL)).toContainText(
 		`${provider} ${PROVIDER_ROUTE_CLI_LABEL} ${MODELS_ROUTE_NOT_LOGGED_IN_PHRASE}`
 	);
+}
+
+async function expectScoringListsNoModels(page: Page): Promise<void> {
 	const model = modelSelect(page, MODELS_TASK_SCORING_LABEL);
 	await expect(model).toHaveText(MODELS_NO_MODELS_LABEL);
 	await expect(model).toBeDisabled();
@@ -444,6 +447,13 @@ for (const { shell, viewport } of SCORING_VIEWPORTS) {
 			await openModelsTab(page);
 
 			await expectScoringRowOnItsSavedCliRoute(page, 'Claude');
+			// The CLI lists nothing here, so the row offers nothing but the model it
+			// already carries -- no list is invented for it.
+			const savedModel = await modelSelect(page, MODELS_TASK_SCORING_LABEL).inputValue();
+			expect(savedModel).not.toBe('');
+			await expect(modelSelect(page, MODELS_TASK_SCORING_LABEL).locator('option')).toHaveText([
+				savedModel
+			]);
 			await attachShot(
 				taskRow(page, MODELS_TASK_SCORING_LABEL),
 				testInfo,
@@ -464,10 +474,12 @@ for (const { shell, viewport } of SCORING_VIEWPORTS) {
 				});
 				await expectSaved(page, MODELS_TASK_SCORING_LABEL);
 				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
+				await expectScoringListsNoModels(page);
 
 				await openModelsTab(page);
 				await expect(providerSelect(page, MODELS_TASK_SCORING_LABEL)).toHaveValue('codex');
 				await expectScoringRowOnItsSavedCliRoute(page, 'Codex');
+				await expectScoringListsNoModels(page);
 			} finally {
 				// The judge is instance-wide and outlives the test, so it is put back
 				// through the same control for the next project and spec.
