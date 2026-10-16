@@ -51,7 +51,7 @@ import {
 	loadLibraryHistoryPageForTests,
 	resetLibraryContextForTests
 } from '$lib/stores/libraryContext';
-import { LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
+import { HOME_ROUTE_PATH, LIBRARY_ROUTE_PATH } from '$lib/routes/addresses';
 import { resetNavigationForTests } from '$lib/stores/navigation';
 import { songList } from '$lib/stores/libraryData';
 import {
@@ -867,7 +867,7 @@ describe('auth check failure', () => {
 	});
 
 	it.each([
-		['the library', LIBRARY_ROUTE_PATH, '/login'],
+		['the library', HOME_ROUTE_PATH, '/login'],
 		[
 			'a logged-out deep link',
 			'/album/northern-lights/glass-river',
@@ -935,7 +935,7 @@ describe('a reload over the phone Now Playing', () => {
 		startFakeRouter();
 		currentUser.set(null);
 		vi.mocked(checkAuth).mockImplementation(async () => null);
-		mountLayout(LIBRARY_ROUTE_PATH);
+		mountLayout(HOME_ROUTE_PATH);
 		await vi.waitFor(() =>
 			expect(goto).toHaveBeenCalledWith(expect.stringMatching(/^\/login/), { replaceState: true })
 		);
@@ -946,11 +946,11 @@ describe('a reload over the phone Now Playing', () => {
 			currentUser.set(USER);
 			return USER;
 		});
-		await goto(resolve(LIBRARY_ROUTE_PATH));
+		await goto(resolve(HOME_ROUTE_PATH));
 
 		await vi.waitFor(() => expect(isLibraryHistoryState(currentLibraryHistoryState())).toBe(true));
 		expect(currentLibraryHistoryState()).toMatchObject({ collection: null, surface: 'browse' });
-		expect(location.pathname).toBe(LIBRARY_ROUTE_PATH);
+		expect(location.pathname).toBe(HOME_ROUTE_PATH);
 	});
 });
 
@@ -1013,7 +1013,9 @@ describe('a session lost behind the open phone drawer', () => {
 			back.stop();
 		}
 
-		expect(documentLoads.replace).toHaveBeenCalledWith(`${window.location.origin}/`);
+		expect(documentLoads.replace).toHaveBeenCalledWith(
+			`${window.location.origin}${LIBRARY_ROUTE_PATH}`
+		);
 		expect(documentLoads.reload).not.toHaveBeenCalled();
 		expect(backPresses).toBe(0);
 	});
