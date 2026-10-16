@@ -1,8 +1,0 @@
-claim_id = "a4fb8388b3434ab28cd0bbb901277098"
-agent = "Claude 585afc85-94e3-4e0e-bca5-6169eb1d8b02"
-role = "builder"
-base = "ddf71f2a73f381ed3415bb3210fe973d70b739ce"
-branch = "claude/issue-1434-s9382-await-in-loop"
-scope = ["frontend/src/lib/services/continuousDeck.test.ts", "frontend/src/lib/services/continuousDeck.ts", "frontend/src/lib/stores/jobs.test.ts", "frontend/src/lib/stores/jobs.ts", "frontend/src/lib/stores/resourceSync.test.ts", "frontend/src/lib/stores/resourceSync.ts"]
-opened_commit = "c14cf00ddf338d91c13e9bf42888b241f205ed8a"
-whole_reason = "the six S9382 await-in-loop lines in continuousDeck, jobs and resourceSync with their colocated tests"
