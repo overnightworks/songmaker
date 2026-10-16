@@ -907,7 +907,6 @@ interface HistoryApply {
 }
 
 function startHistoryApply(): HistoryApply {
-	cancelPendingPlayIntent();
 	runningApply = { entry: showStandingPage() };
 	return runningApply;
 }
@@ -968,7 +967,6 @@ export function playlistWhoseDetailShows(
 }
 
 export function cancelLibraryHistoryApply(): void {
-	cancelPendingPlayIntent();
 	runningApply = null;
 }
 

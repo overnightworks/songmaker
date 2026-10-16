@@ -15,6 +15,7 @@ import { hydrateActiveGeneration, hydrateGenerationFailure } from '$lib/stores/j
 import { addToast } from '$lib/stores/toast';
 import { albumList, loadSongsForAlbum, songList } from '$lib/stores/libraryData';
 import {
+	cancelPendingPlayIntent,
 	selectedSongId,
 	selectedGenerationId,
 	selectedSong,
@@ -664,7 +665,10 @@ function onLanding(landing: Landing, landedState: unknown): void {
 	const state = libraryHistoryEntry(landedState);
 	let songPutBack = false;
 	void guardDirtyNavigation(
-		() => (songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state)),
+		() => {
+			cancelPendingPlayIntent();
+			return songPutBack ? stepBackOntoTraversalLanding() : applyLanding(state);
+		},
 		() => {
 			putTheSongBackOverTheLanding();
 			songPutBack = true;

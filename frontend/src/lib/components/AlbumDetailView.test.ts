@@ -55,11 +55,30 @@ import {
 	curationActive,
 	nowPlayingSurface,
 	queueContext,
-	selectedAlbumId
+	selectedAlbumId,
+	selectedSongId
 } from '$lib/stores/player';
 import { openCollection } from '$lib/stores/collection';
-import { openSongAddress } from '$lib/stores/libraryContext';
-import { mountAddressRoute } from '$lib/test-utils/library-history';
+import {
+	libraryHistoryUrl,
+	librarySurface,
+	openSongAddress,
+	resetLibraryContextForTests,
+	snapshotLibraryHistory
+} from '$lib/stores/libraryContext';
+import {
+	mountAddressRoute,
+	pressBack,
+	pressForward,
+	pushHistoryEntry
+} from '$lib/test-utils/library-history';
+import { installHistoryController } from '$lib/history/historyController';
+import { resetLibrarySearchForTests } from '$lib/stores/librarySearch';
+import {
+	resetResourceSyncForTests,
+	resourceSync,
+	startLibraryResourceSync
+} from '$lib/stores/resourceSync';
 
 const uploadAlbumCover = vi.fn();
 const updateAlbum = vi.fn();
@@ -68,11 +87,13 @@ const unarchiveAlbum = vi.fn();
 const fetchAlbumCoverSuggestions = vi.fn();
 const createSong = vi.fn();
 const fetchSong = vi.fn();
+const fetchAlbums = vi.fn();
 
 vi.mock('$lib/api/client', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('$lib/api/client')>();
 	return {
 		...actual,
+		fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 		uploadAlbumCover: (...args: unknown[]) => uploadAlbumCover(...args),
 		deleteAlbumCover: vi.fn(),
 		updateAlbum: (...args: unknown[]) => updateAlbum(...args),
@@ -88,12 +109,14 @@ vi.mock('$lib/api/client', async (importOriginal) => {
 });
 vi.mock('$app/state', async () => (await import('$lib/test-utils/app-navigation')).fakeAppState());
 vi.mock('$lib/api/songs', () => ({
+	fetchSong: (...args: unknown[]) => fetchSong(...args),
 	fetchSongs: vi
 		.fn()
 		.mockResolvedValue({ items: [], total: 0, offset: 0, limit: 200, has_more: false })
 }));
 vi.mock('$lib/api/albums', async (importOriginal) => ({
 	...(await importOriginal<typeof import('$lib/api/albums')>()),
+	fetchAlbums: (...args: unknown[]) => fetchAlbums(...args),
 	fetchAlbumCoverSuggestions: (...args: unknown[]) => fetchAlbumCoverSuggestions(...args)
 }));
 vi.mock('$lib/stores/toast', () => ({
@@ -126,7 +149,7 @@ vi.mock('$lib/stores/player', async (importOriginal) => {
 
 import AlbumDetailView from './AlbumDetailView.svelte';
 import songRowSource from './SongRow.svelte?raw';
-import { selectSong } from '$lib/stores/navigation';
+import { initNavigation, persistLibraryHistory, selectSong } from '$lib/stores/navigation';
 import {
 	pendingStart,
 	playAlbum,
@@ -952,9 +975,9 @@ describe('AlbumDetailView song row', () => {
 			const afterPendingMicrotasks = () => new Promise<void>((resolve) => setTimeout(resolve));
 
 			function holdRead(): {
-				answer: (outcome: 'archived-only' | 'fail') => void;
+				answer: (outcome: 'archived-only' | 'playable' | 'fail') => void;
 			} {
-				const settlers: Array<(outcome: 'archived-only' | 'fail') => void> = [];
+				const settlers: Array<(outcome: 'archived-only' | 'playable' | 'fail') => void> = [];
 				fetchSong.mockImplementation(
 					(id: string) =>
 						new Promise((resolve, reject) => {
@@ -982,6 +1005,92 @@ describe('AlbumDetailView song row', () => {
 				return { answer: (outcome) => settlers.forEach((settle) => settle(outcome)) };
 			}
 
+			async function expectTapOutcome(outcome: 'archived-only' | 'playable'): Promise<void> {
+				if (outcome === 'archived-only') {
+					await vi.waitFor(() => expect(selectSong).toHaveBeenCalledExactlyOnceWith('s-ebb'));
+					expect(playAlbumSong).not.toHaveBeenCalled();
+				} else {
+					await vi.waitFor(() =>
+						expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
+					);
+					expect(selectSong).not.toHaveBeenCalled();
+				}
+			}
+
+			function prepareAlbumHistory(): void {
+				resetLibraryContextForTests();
+				resetLibrarySearchForTests();
+				openCollection.set({ kind: 'album', id: 'a-local' });
+				selectedAlbumId.set('a-local');
+				selectedSongId.set(null);
+				librarySurface.set('detail');
+				const state = snapshotLibraryHistory(0);
+				mountAddressRoute(libraryHistoryUrl(state), state);
+				const stopHistory = installHistoryController();
+				const stopNavigation = initNavigation();
+				onTestFinished(() => {
+					stopNavigation();
+					stopHistory();
+					resetLibraryContextForTests();
+					resetLibrarySearchForTests();
+				});
+			}
+
+			it.each(['archived-only', 'playable'] as const)(
+				'defect:#1386: a pending tap survives same-page history persistence with %s takes',
+				async (outcome) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					await tick();
+
+					boxOf(target, 'Ebb').click();
+					await tick();
+					persistLibraryHistory();
+					read.answer(outcome);
+
+					await expectTapOutcome(outcome);
+				}
+			);
+
+			it.each(['archived-only', 'playable'] as const)(
+				'defect:#1386: a pending tap survives resource resync and hydration with %s takes',
+				async (outcome) => {
+					const read = holdRead();
+					const target = await renderSongs();
+					prepareAlbumHistory();
+					const albums = get(albumList);
+					fetchAlbums.mockResolvedValue({
+						items: albums,
+						total: albums.length,
+						offset: 0,
+						limit: 200,
+						has_more: false
+					});
+					vi.mocked(fetchSongs).mockResolvedValue(songsPage(get(songList)));
+					const stream = Object.assign(new EventTarget(), { close: vi.fn() });
+					vi.stubGlobal(
+						'EventSource',
+						vi.fn(function () {
+							return stream;
+						})
+					);
+					onTestFinished(resetResourceSyncForTests);
+					startLibraryResourceSync();
+					stream.dispatchEvent(new MessageEvent('hello', { data: '{"high_water_mark":"0"}' }));
+					await vi.waitFor(() => expect(get(resourceSync).status).toBe('live'));
+
+					boxOf(target, 'Ebb').click();
+					await tick();
+					stream.dispatchEvent(new MessageEvent('resync', { data: '{"high_water_mark":"1"}' }));
+					expect(get(resourceSync).status).toBe('bootstrapping');
+					await vi.waitFor(() => expect(get(resourceSync).status).toBe('live'));
+					read.answer(outcome);
+
+					await expectTapOutcome(outcome);
+				}
+			);
+
 			it('takes the play path when the takes cannot be read, so the player says so', async () => {
 				const read = holdRead();
 				const target = await renderSongs();
@@ -997,6 +1106,36 @@ describe('AlbumDetailView song row', () => {
 					expect(playAlbumSong).toHaveBeenCalledExactlyOnceWith('a-local', 's-ebb')
 				);
 				expect(selectSong).not.toHaveBeenCalled();
+			});
+
+			it.each([
+				['Back', pressBack],
+				['Forward', pressForward]
+			] as const)('defect:#1386: withdraws a pending tap on %s', async (direction, traverse) => {
+				const read = holdRead();
+				const target = await renderSongs();
+				prepareAlbumHistory();
+				fetchAlbums.mockResolvedValue({
+					items: get(albumList),
+					total: 1,
+					offset: 0,
+					limit: 200,
+					has_more: false
+				});
+				vi.mocked(fetchSongs).mockResolvedValue(songsPage(get(songList)));
+				const state = snapshotLibraryHistory(1);
+				pushHistoryEntry(libraryHistoryUrl(state), state);
+				if (direction === 'Forward') await pressBack();
+				await tick();
+
+				boxOf(target, 'Ebb').click();
+				await tick();
+				await traverse();
+				read.answer('archived-only');
+				await afterPendingMicrotasks();
+
+				expect(selectSong).not.toHaveBeenCalled();
+				expect(playAlbumSong).not.toHaveBeenCalled();
 			});
 
 			it.each([
